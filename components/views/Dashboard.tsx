@@ -893,7 +893,7 @@ const boardConfidence = useMemo(() => {
                  disabled={isJumping}
               />
               <TileButton label="HISTORIA" graphicSrc={historiaButton} onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)} disabled={isJumping} />
-              <TileButton label="AKADEMIA PILKARSKA" graphicSrc={akademiaButton} onClick={() => {}} disabled={isJumping || isResigned} />
+              <TileButton label="AKADEMIA PILKARSKA" graphicSrc={akademiaButton} onClick={() => navigateTo(ViewState.ACADEMY_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="RYNEK PRACY" graphicSrc={rynekPracyButton} onClick={() => navigateTo(ViewState.JOB_MARKET)} disabled={isJumping} />
               <TileButton
                 label="FINANSE KLUBOWE"

@@ -86,6 +86,7 @@ import { PreMatchPlayoffStudioView } from './PlayoffEngine/PreMatchPlayoffStudio
 import { PostMatchPlayoffStudioView } from './PlayoffEngine/PostMatchPlayoffStudioView';
 import { HospitalView } from './components/views/HospitalView';
 import { ReservesView } from './components/views/ReservesView';
+import { AcademyView } from './components/views/AcademyView';
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -188,6 +189,8 @@ case ViewState.HOSPITAL_VIEW:
   return <HospitalView />;
       case ViewState.RESERVES_VIEW:
         return <ReservesView />;
+      case ViewState.ACADEMY_VIEW:
+        return <AcademyView />;
   return <PreMatchCLFinalView />;
 case ViewState.POST_MATCH_CL_FINAL:
   return <PostMatchCLFinalView />;

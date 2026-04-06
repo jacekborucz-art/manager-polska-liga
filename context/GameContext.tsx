@@ -17,8 +17,13 @@ RelegationPlayoffLegResult,
 PromotionPlayoffSemiResults,
 PromotionPlayoffFinalResults,
 PromotionPlayoffSingleMatchResult,
-ActivePlayoffMatchData
+ActivePlayoffMatchData,
+ClubAcademy,
+AcademyScoutMission,
+Region,
+YouthPlayer
 } from '../types';
+import { AcademyService, CLUBS_WITH_PRESET_ACADEMY } from '../services/AcademyService';
 import { NationalTeamService } from '../services/NationalTeamService';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../resources/static_db/clubs/EuropeLeagueTeams';
@@ -248,6 +253,16 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
+  academy: ClubAcademy | null;
+  initAcademy: () => void;
+  submitUpgradeProposal: () => void;
+  startAcademyUpgrade: () => void;
+  promoteYouthPlayer: (youthId: string, target: 'RESERVES' | 'FIRST_TEAM') => void;
+  dismissYouthPlayer: (youthId: string) => void;
+  setYouthFocus: (youthId: string, attr: keyof import('../types').PlayerAttributes | null) => void;
+  startScoutMission: (targetYouthPlayerId?: string, regionFocus?: Region) => boolean;
+  setAcademyRegionFocus: (region: Region | undefined) => void;
+  setAcademyOperationalBudget: (amount: number) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -261,6 +276,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
   const [reserves, setReserves] = useState<Player[]>([]);
+  const [academy, setAcademy] = useState<ClubAcademy | null>(null);
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
@@ -1011,6 +1027,23 @@ const selectUserTeam = (clubId: string) => {
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
     setReserves(generatedReserves);
 
+    const presetLevel = CLUBS_WITH_PRESET_ACADEMY[clubId] as ClubAcademy['level'] | undefined;
+    if (presetLevel) {
+      setAcademy({
+        level: presetLevel,
+        youthPlayers: [],
+        lastIntakeYear: 0,
+        operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(presetLevel),
+        upgradeInProgress: false,
+        upgradeCompletionDate: undefined,
+        regionFocus: undefined,
+        activeMissions: [],
+        promotedHistory: [],
+      });
+    } else {
+      setAcademy(null);
+    }
+
     const lineup = LineupService.autoPickLineup(clubId, squad);
     setLineups(prev => ({ ...prev, [clubId]: lineup }));
     
@@ -1286,6 +1319,184 @@ setMessages([welcomeMail, fanMail]);
       setMessages(prev => [withdrawalMail, ...prev.filter(m2 => m2.id !== mail.id)]);
     });
   };
+
+  // ── AKADEMIA — akcje ────────────────────────────────────────────────────────
+
+  const initAcademy = useCallback(() => {
+    if (academy) return;
+    const newAcademy: ClubAcademy = {
+      level: 1,
+      youthPlayers: [],
+      lastIntakeYear: 0,
+      operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(1),
+      upgradeInProgress: false,
+      regionFocus: undefined,
+      activeMissions: [],
+      promotedHistory: [],
+    };
+    setAcademy(newAcademy);
+    const infoMail: MailMessage = {
+      id: `ACADEMY_INIT_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: 'Akademia Piłkarska – Otwarto!',
+      body: 'Gratulacje! Akademia Piłkarska Pierwszego Stopnia jest gotowa. Co roku (1 Sierpnia) przyjmiemy nowych wychowanków. Monitoruj ich rozwój, zlecaj skautom ocenę talentów i awansuj najlepszych do rezerw lub pierwszego składu.',
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 80,
+    };
+    setMessages(prev => [infoMail, ...prev]);
+  }, [academy, currentDate]);
+
+  const submitUpgradeProposal = useCallback(() => {
+    if (!academy || academy.level >= 5) return;
+    if (academy.upgradeInProgress) return;
+    if (academy.upgradeProposalStatus === 'PENDING') return;
+    if (academy.upgradeProposalStatus === 'APPROVED') return;
+    if (academy.upgradeProposalRejectedUntil) {
+      const rejectedUntil = new Date(academy.upgradeProposalRejectedUntil);
+      if (new Date(currentDate) < rejectedUntil) return;
+    }
+    const decisionDate = AcademyService.getProposalDecisionDate(academy.level, currentDate);
+    setAcademy(prev => prev ? {
+      ...prev,
+      upgradeProposalStatus: 'PENDING',
+      upgradeProposalDate: new Date(currentDate).toISOString().split('T')[0],
+      upgradeProposalDecisionDate: decisionDate,
+    } : prev);
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const cost = AcademyService.getUpgradeCostForClub(academy.level, userClub?.reputation ?? 5);
+    const proposalMail: MailMessage = {
+      id: `ACAD_PROPOSAL_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: `Propozycja rozbudowy Akademii (Poziom ${academy.level} → ${academy.level + 1})`,
+      body: `Złożono formalny wniosek do właściciela klubu o zgodę na rozbudowę Akademii do Poziomu ${academy.level + 1}. Szacowany koszt: ${cost?.toLocaleString('pl-PL') ?? '—'} PLN. Zarząd zapozna się z sytuacją finansową i sportową klubu i wyda decyzję do dnia ${decisionDate}.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 70,
+    };
+    setMessages(prev => [proposalMail, ...prev]);
+  }, [academy, currentDate, clubs, userTeamId]);
+
+  const startAcademyUpgrade = useCallback(() => {
+    if (!academy || academy.upgradeInProgress || academy.level >= 5) return;
+    if (academy.upgradeProposalStatus !== 'APPROVED') return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const cost = AcademyService.getUpgradeCostForClub(academy.level, userClub?.reputation ?? 5);
+    const days = AcademyService.getUpgradeDays(academy.level);
+    if (!cost || !days || !userTeamId) return;
+    if (!userClub || userClub.budget < cost) return;
+    const completionDate = new Date(currentDate);
+    completionDate.setDate(completionDate.getDate() + days);
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - cost } : c));
+    addFinanceLog(userTeamId, `Modernizacja Akademii (Poziom ${academy.level} → ${academy.level + 1})`, -cost, currentDate);
+    setAcademy(prev => prev ? {
+      ...prev,
+      upgradeInProgress: true,
+      upgradeCompletionDate: completionDate.toISOString().split('T')[0],
+      upgradeProposalStatus: undefined,
+      upgradeProposalDate: undefined,
+      upgradeProposalDecisionDate: undefined,
+    } : prev);
+  }, [academy, clubs, userTeamId, currentDate, addFinanceLog]);
+
+  const promoteYouthPlayer = useCallback((youthId: string, target: 'RESERVES' | 'FIRST_TEAM') => {
+    if (!academy || !userTeamId) return;
+    const youth = academy.youthPlayers.find(yp => yp.id === youthId);
+    if (!youth) return;
+    const promoted = AcademyService.promoteToPlayer(youth, userTeamId, currentDate);
+    const overallKeys: (keyof import('../types').PlayerAttributes)[] = [
+      'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
+      'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning',
+      'goalkeeping', 'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
+    ];
+    const overallRating = Math.round(
+      overallKeys.reduce((s, k) => s + youth.attributes[k], 0) / overallKeys.length
+    );
+    if (target === 'RESERVES') {
+      setReserves(prev => [...prev, promoted]);
+    } else {
+      setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), promoted] }));
+    }
+    setAcademy(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        youthPlayers: prev.youthPlayers.filter(yp => yp.id !== youthId),
+        promotedHistory: [
+          {
+            id: promoted.id,
+            firstName: youth.firstName,
+            lastName: youth.lastName,
+            position: youth.position,
+            promotedYear: currentDate.getFullYear(),
+            promotedTo: target,
+            overallAtPromotion: overallRating,
+          },
+          ...prev.promotedHistory,
+        ].slice(0, 30),
+      };
+    });
+    const infoMail: MailMessage = {
+      id: `ACAD_PROMOTED_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: `Awans wychowanka: ${youth.firstName} ${youth.lastName}`,
+      body: `${youth.firstName} ${youth.lastName} (${youth.age} l.) awansował do ${target === 'RESERVES' ? 'rezerw' : 'pierwszego składu'}. Ogólna ocena: ${overallRating}. Życzymy powodzenia!`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 60,
+    };
+    setMessages(prev => [infoMail, ...prev]);
+  }, [academy, userTeamId, currentDate]);
+
+  const dismissYouthPlayer = useCallback((youthId: string) => {
+    if (!academy) return;
+    setAcademy(prev => prev ? {
+      ...prev,
+      youthPlayers: prev.youthPlayers.filter(yp => yp.id !== youthId),
+    } : prev);
+  }, [academy]);
+
+  const setYouthFocus = useCallback((youthId: string, attr: keyof import('../types').PlayerAttributes | null) => {
+    if (!academy) return;
+    setAcademy(prev => prev ? {
+      ...prev,
+      youthPlayers: prev.youthPlayers.map(yp =>
+        yp.id === youthId ? { ...yp, developmentFocus: attr ?? undefined } : yp
+      ),
+    } : prev);
+  }, [academy]);
+
+  const startScoutMission = useCallback((targetYouthPlayerId?: string, regionFocus?: Region): boolean => {
+    if (!academy || !userTeamId) return false;
+    const mission = AcademyService.buildScoutMission(
+      targetYouthPlayerId,
+      regionFocus ?? academy.regionFocus,
+      academy.level,
+      currentDate
+    );
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub || userClub.budget < mission.cost) return false;
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - mission.cost } : c));
+    addFinanceLog(userTeamId, 'Misja skautingowa akademii', -mission.cost, currentDate);
+    setAcademy(prev => prev ? { ...prev, activeMissions: [...prev.activeMissions, mission] } : prev);
+    return true;
+  }, [academy, userTeamId, clubs, currentDate, addFinanceLog]);
+
+  const setAcademyRegionFocus = useCallback((region: Region | undefined) => {
+    setAcademy(prev => prev ? { ...prev, regionFocus: region } : prev);
+  }, []);
+
+  const setAcademyOperationalBudget = useCallback((amount: number) => {
+    setAcademy(prev => prev ? { ...prev, operationalBudgetWeekly: Math.max(0, amount) } : prev);
+  }, []);
+
+  // ── END AKADEMIA ────────────────────────────────────────────────────────────
 
   const advanceDay = useCallback(() => {
     if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW) return;
@@ -3221,6 +3432,176 @@ const finalResult: SimulationOutput = {
     }
     // --- END INCOMING TRANSFER OFFERS ---
 
+    // ── AKADEMIA: tygodniowy tick (każdy poniedziałek) ───────────────────────
+    if (academy && userTeamId && nextDay.getDay() === 1) {
+      setAcademy(prev => {
+        if (!prev) return prev;
+
+        // 1. Tygodniowy rozwój wychowanków
+        const developed = AcademyService.processWeeklyDevelopment(
+          prev.youthPlayers,
+          prev.level,
+          prev.operationalBudgetWeekly
+        );
+
+        // 2. Sprawdź zakończone misje skautingowe
+        const { updatedMissions, completedMissions, updatedYouthPlayers } =
+          AcademyService.processCompletedMissions({ ...prev, youthPlayers: developed }, nextDay);
+
+        // 3. Maile o zakończonych misjach
+        if (completedMissions.length > 0) {
+          const mails: MailMessage[] = completedMissions.map(m => {
+            const targetYouth = updatedYouthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
+            const body = targetYouth
+              ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}. Zalecamy dalszą obserwację.`
+              : `Zakończono skautowanie regionu. Raport dostępny w Akademii.`;
+            return {
+              id: `SCOUT_DONE_${m.id}`,
+              sender: 'Szef Skautingu Akademii',
+              role: 'Akademia Piłkarska',
+              subject: m.targetYouthPlayerId ? `Raport skautingowy: ${targetYouth?.lastName ?? '—'}` : 'Raport skautingowy z regionu',
+              body,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 50,
+            };
+          });
+          setMessages(msgs => [...mails, ...msgs]);
+        }
+
+        // 4. Sprawdź zakończenie upgrade'u akademii
+        const upgradeCheck = AcademyService.checkUpgradeCompletion(prev, nextDay);
+        const baseResult: ClubAcademy = {
+          ...prev,
+          youthPlayers: updatedYouthPlayers,
+          activeMissions: updatedMissions,
+        };
+        if (upgradeCheck.completed && upgradeCheck.newLevel) {
+          const upgradeMail: MailMessage = {
+            id: `ACAD_UPGRADE_${Date.now()}`,
+            sender: 'Dyrektor Akademii',
+            role: 'Akademia Piłkarska',
+            subject: `Modernizacja Akademii ukończona – Poziom ${upgradeCheck.newLevel}!`,
+            body: `Prace budowlane dobiegły końca. Akademia Piłkarska osiągnęła Poziom ${upgradeCheck.newLevel}. Zwiększono liczbę miejsc i jakość szkolenia.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 85,
+          };
+          setMessages(msgs => [upgradeMail, ...msgs]);
+          return {
+            ...baseResult,
+            level: upgradeCheck.newLevel,
+            upgradeInProgress: false,
+            upgradeCompletionDate: undefined,
+            operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(upgradeCheck.newLevel),
+          };
+        }
+        return baseResult;
+      });
+    }
+
+    // ── AKADEMIA: nabór wychowanków (1 Sierpnia każdego roku) ─────────────────
+    if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1) {
+      setAcademy(prev => {
+        if (!prev || prev.lastIntakeYear >= nextDay.getFullYear()) return prev;
+        const newYouths = AcademyService.generateYouthIntake(
+          prev.level,
+          prev.regionFocus,
+          nextDay.getFullYear(),
+          prev.youthPlayers.length
+        );
+        if (newYouths.length === 0) return prev;
+        const intakeMail: MailMessage = {
+          id: `ACAD_INTAKE_${nextDay.getFullYear()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: `Nowy Nabór Akademii ${nextDay.getFullYear()}`,
+          body: `Do akademii dołączyło ${newYouths.length} nowych wychowanków (rocznik ${nextDay.getFullYear()}). Ich ukryte talenty czekają na odkrycie przez skautów. Odwiedź Akademię, aby sprawdzić profil każdego zawodnika.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 75,
+        };
+        setMessages(msgs => [intakeMail, ...msgs]);
+        return {
+          ...prev,
+          youthPlayers: [...prev.youthPlayers, ...newYouths],
+          lastIntakeYear: nextDay.getFullYear(),
+        };
+      });
+    }
+
+    // ── AKADEMIA: decyzja właściciela o rozbudowie (sprawdzana codziennie) ────
+    if (academy && userTeamId && academy.upgradeProposalStatus === 'PENDING' && academy.upgradeProposalDecisionDate) {
+      const decisionDate = new Date(academy.upgradeProposalDecisionDate);
+      if (nextDay >= decisionDate) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const decision = AcademyService.evaluateUpgradeProposal(academy, userClub?.reputation ?? 5);
+        if (decision === 'APPROVED') {
+          const approveMail: MailMessage = {
+            id: `ACAD_APPROVED_${Date.now()}`,
+            sender: 'Właściciel Klubu',
+            role: 'Zarząd',
+            subject: `✅ Zgoda na rozbudowę Akademii do Poziomu ${academy.level + 1}`,
+            body: `Po dokładnej analizie sytuacji finansowej i sportowej klubu, zarząd wyraża zgodę na rozbudowę Akademii Piłkarskiej do Poziomu ${academy.level + 1}. Możesz teraz zlecić rozpoczęcie prac budowlanych w zakładce Infrastruktura.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 85,
+          };
+          setMessages(msgs => [approveMail, ...msgs]);
+          setAcademy(prev => prev ? {
+            ...prev,
+            upgradeProposalStatus: 'APPROVED',
+            upgradeProposalDecisionDate: undefined,
+          } : prev);
+        } else {
+          const rejectedUntil = new Date(nextDay);
+          rejectedUntil.setDate(rejectedUntil.getDate() + 90);
+          const rejectMail: MailMessage = {
+            id: `ACAD_REJECTED_${Date.now()}`,
+            sender: 'Właściciel Klubu',
+            role: 'Zarząd',
+            subject: `❌ Odmowa rozbudowy Akademii`,
+            body: `Zarząd przeanalizował sytuację i podjął decyzję o odmowie finansowania rozbudowy Akademii w chwili obecnej. Prosimy o poprawę wyników sportowych i sytuacji finansowej klubu. Kolejny wniosek można złożyć po ${rejectedUntil.toLocaleDateString('pl-PL')}.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 80,
+          };
+          setMessages(msgs => [rejectMail, ...msgs]);
+          setAcademy(prev => prev ? {
+            ...prev,
+            upgradeProposalStatus: 'REJECTED',
+            upgradeProposalDecisionDate: undefined,
+            upgradeProposalRejectedUntil: rejectedUntil.toISOString().split('T')[0],
+          } : prev);
+        }
+      }
+    }
+
+    // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────
+    if (academy && userTeamId && nextDay.getDate() === 1 && academy.youthPlayers.length > 0) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const eventMsg = AcademyService.tryGenerateEvent(academy, nextDay, userClub?.name ?? 'Klub');
+      if (eventMsg) {
+        setMessages(prev => [{
+          id: `ACAD_EVENT_${Date.now()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: 'Wiadomość z Akademii',
+          body: eventMsg,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 45,
+        }, ...prev]);
+      }
+    }
+    // ── END AKADEMIA ──────────────────────────────────────────────────────────
+
     // Nie przesuwamy daty jeśli gracz musi jeszcze zagrać mecz lub potwierdzić akcję tego dnia
     if (skipDayAdvance) {
       // Resetuj GUARD ref — następne wywołanie advanceDay dla tej samej daty
@@ -3231,7 +3612,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy]);
 
 
    const confirmCLGroupDraw = () => {
@@ -5493,7 +5874,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
-    reserves, setReserves
+    reserves, setReserves,
+    academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget,
     }}>
       {children}
     </GameContext.Provider>

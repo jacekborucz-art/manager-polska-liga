@@ -102,6 +102,7 @@ export enum ViewState {
   POST_MATCH_PLAYOFF_STUDIO = 'POST_MATCH_PLAYOFF_STUDIO',
   HOSPITAL_VIEW = 'HOSPITAL_VIEW',
   RESERVES_VIEW = 'RESERVES_VIEW',
+  ACADEMY_VIEW = 'ACADEMY_VIEW',
 }
 
 export interface PlayoffPair {
@@ -714,6 +715,60 @@ export interface Club {
   financeHistory?: FinanceLog[];
   europeanBonusPoints?: number;
   logoFile?: string;
+  academy?: ClubAcademy;
+}
+
+export interface YouthPlayer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  position: PlayerPosition;
+  nationality: Region;
+  attributes: PlayerAttributes;
+  hiddenTalent: number;
+  revealedTalentRating?: 'EXCEPTIONAL' | 'HIGH' | 'AVERAGE' | 'LOW';
+  developmentFocus?: keyof PlayerAttributes;
+  readinessScore: number;
+  monthsInAcademy: number;
+  contractEndDate: string;
+  loanClubId?: string;
+  scoutReportAvailableDate?: string;
+}
+
+export interface AcademyScoutMission {
+  id: string;
+  targetYouthPlayerId?: string;
+  regionFocus?: Region;
+  completionDate: string;
+  isRegionScouting: boolean;
+  cost: number;
+}
+
+export interface AcademyPromotedEntry {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position: PlayerPosition;
+  promotedYear: number;
+  promotedTo: 'RESERVES' | 'FIRST_TEAM';
+  overallAtPromotion: number;
+}
+
+export interface ClubAcademy {
+  level: 1 | 2 | 3 | 4 | 5;
+  youthPlayers: YouthPlayer[];
+  lastIntakeYear: number;
+  operationalBudgetWeekly: number;
+  upgradeInProgress: boolean;
+  upgradeCompletionDate?: string;
+  regionFocus?: Region;
+  activeMissions: AcademyScoutMission[];
+  promotedHistory: AcademyPromotedEntry[];
+  upgradeProposalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  upgradeProposalDate?: string;
+  upgradeProposalDecisionDate?: string;
+  upgradeProposalRejectedUntil?: string;
 }
 
 export interface EuropeanStatus {
