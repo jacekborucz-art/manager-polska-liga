@@ -6,7 +6,7 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
 
   const data = useMemo(() => {
     if (!viewedPlayerId) return null;
@@ -34,8 +34,13 @@ export const PlayerCard: React.FC = () => {
         return { player, club: clubData! };
       }
     }
+    const reservePlayer = reserves.find(p => p.id === viewedPlayerId);
+    if (reservePlayer) {
+      const clubData = clubs.find(c => c.id === reservePlayer.clubId);
+      return { player: reservePlayer, club: clubData! };
+    }
     return null;
-  }, [viewedPlayerId, players, clubs]);
+  }, [viewedPlayerId, players, reserves, clubs]);
 
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
@@ -168,7 +173,7 @@ const [showHistory, setShowHistory] = React.useState(false);
                  <div className="flex flex-col gap-1">
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Status Kontraktu</span>
                     <span className="text-xs font-black text-white italic uppercase tracking-tight">
-                       {club.id === 'FREE_AGENTS' ? 'Wolny Agent' : club.name}
+                       {club.id === 'FREE_AGENTS' ? 'Wolny Agent' : player.id.startsWith('RES_') ? `${club.name} II` : club.name}
                     </span>
                  </div>
                  <div className="w-10 h-10 rounded-xl flex flex-col overflow-hidden border border-white/20 shadow-lg">

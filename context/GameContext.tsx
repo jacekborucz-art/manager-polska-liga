@@ -246,6 +246,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
+  reserves: Player[];
+  setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -258,6 +260,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [clubs, setClubs] = useState<Club[]>([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
   const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
+  const [reserves, setReserves] = useState<Player[]>([]);
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
@@ -1003,6 +1006,10 @@ const selectUserTeam = (clubId: string) => {
     setUserTeamId(clubId);
     const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
+
+    const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
+    const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
+    setReserves(generatedReserves);
 
     const lineup = LineupService.autoPickLineup(clubId, squad);
     setLineups(prev => ({ ...prev, [clubId]: lineup }));
@@ -5485,7 +5492,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     confirmPromotionPlayoffSemi, confirmPromotionPlayoffFinal,
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
-    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults
+    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
+    reserves, setReserves
     }}>
       {children}
     </GameContext.Provider>

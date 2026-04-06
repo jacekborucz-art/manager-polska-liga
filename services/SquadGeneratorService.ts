@@ -684,5 +684,120 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
       annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
       marketValue: FinanceService.calculateMarketValue(p, reputation, tier)
     })) as Player[];
+  },
+
+  generateReservesSquad: (clubId: string, clubName: string, leagueTier: number, clubRep: number, clubBudget: number = 5000000): Player[] => {
+    const usedNames = new Set<string>();
+    const count = 21 + Math.floor(Math.random() * 5); // 21–25
+
+    const positionSlots: PlayerPosition[] = [
+      PlayerPosition.GK,
+      PlayerPosition.GK,
+      PlayerPosition.DEF,
+      PlayerPosition.DEF,
+      PlayerPosition.DEF,
+      PlayerPosition.DEF,
+      PlayerPosition.DEF,
+      PlayerPosition.MID,
+      PlayerPosition.MID,
+      PlayerPosition.MID,
+      PlayerPosition.MID,
+      PlayerPosition.MID,
+      PlayerPosition.FWD,
+      PlayerPosition.FWD,
+      PlayerPosition.FWD,
+    ];
+
+    while (positionSlots.length < count) {
+      const extra = positionSlots.length % 4;
+      if (extra === 0) positionSlots.push(PlayerPosition.DEF);
+      else if (extra === 1) positionSlots.push(PlayerPosition.MID);
+      else if (extra === 2) positionSlots.push(PlayerPosition.FWD);
+      else positionSlots.push(PlayerPosition.MID);
+    }
+
+    const resTier = Math.min(leagueTier + 1, 4);
+
+    const squadBase = positionSlots.slice(0, count).map((pos, index) => {
+      const age = 16 + Math.floor(Math.random() * 6); // 16–21
+      let namePair;
+      let fullName;
+      let attempts = 0;
+      do {
+        namePair = NameGeneratorService.getRandomName(Region.POLAND);
+        fullName = `${namePair.firstName} ${namePair.lastName}`;
+        attempts++;
+      } while (usedNames.has(fullName) && attempts < 50);
+      usedNames.add(fullName);
+
+      const genData = PlayerAttributesGenerator.generateAttributes(pos, resTier, Math.max(1, clubRep - 1), age);
+
+      return {
+        id: `RES_${clubId}_${String(index).padStart(2, '0')}`,
+        firstName: namePair.firstName,
+        lastName: namePair.lastName,
+        clubId: clubId,
+        position: pos,
+        nationality: Region.POLAND,
+        age,
+        fatigueDebt: 0,
+        overallRating: genData.overall,
+        attributes: genData.attributes,
+        stats: {
+          matchesPlayed: 0,
+          minutesPlayed: 0,
+          goals: 0,
+          assists: 0,
+          yellowCards: 0,
+          redCards: 0,
+          cleanSheets: 0,
+          seasonalChanges: {},
+          ratingHistory: []
+        },
+        health: { status: HealthStatus.HEALTHY },
+        condition: 100,
+        suspensionMatches: 0,
+        contractEndDate: new Date(new Date().getFullYear() + 1 + Math.floor(Math.random() * 3), 5, 30).toISOString(),
+        annualSalary: 0, // obliczone poniżej
+        marketValue: 0, // obliczone poniżej
+        isOnTransferList: false,
+        history: [{
+          clubName: clubName,
+          clubId: clubId,
+          fromYear: 2024,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null
+        }],
+        boardLockoutUntil: null,
+        isUntouchable: false,
+        negotiationStep: 0,
+        negotiationLockoutUntil: null,
+        contractLockoutUntil: null,
+        isNegotiationPermanentBlocked: false,
+        transferLockoutUntil: null,
+        freeAgentLockoutUntil: null,
+        freeAgentClubLockouts: {}
+      } as Player;
+    });
+
+    return squadBase.map(p => {
+      // Nieprofesjonalna umowa: 800–4 000 PLN/mies. (9 600–48 000 PLN/rok)
+      // Liniowo od OVR 30→55, z losowością ±10%
+      const ovrClamped = Math.min(55, Math.max(30, p.overallRating));
+      const baseMonthlySalary = 800 + ((ovrClamped - 30) / 25) * 3200;
+      const salaryJitter = 0.90 + Math.random() * 0.20;
+      const annualSalary = Math.round((baseMonthlySalary * salaryJitter * 12) / 100) * 100;
+
+      // Wartość rynkowa: skala juniorska oparta na OVR,
+      // pomnożona przez czynnik talentu (0.5–2.0) i czynnik młodości
+      const ovrBase = Math.max(0, p.overallRating - 30);
+      const baseMarketValue = ovrBase * ovrBase * 120;
+      const talentFactor = 0.5 + (p.attributes.talent / 99) * 1.5;
+      const youthFactor = p.age <= 17 ? 1.6 : p.age <= 18 ? 1.4 : p.age <= 19 ? 1.2 : p.age <= 20 ? 1.0 : 0.8;
+      const marketValue = Math.round(baseMarketValue * talentFactor * youthFactor / 1000) * 1000;
+
+      return { ...p, annualSalary, marketValue };
+    }) as Player[];
   }
 };

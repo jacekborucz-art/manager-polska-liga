@@ -880,7 +880,7 @@ const boardConfidence = useMemo(() => {
 
        <div className="w-full grid grid-cols-3 gap-0.5">
               <TileButton label="KADRA" graphicSrc={kadraButton} onClick={() => navigateTo(ViewState.SQUAD_VIEW)} disabled={isJumping || isResigned} />
-              <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => {}} disabled={isJumping || isResigned} />
+              <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => navigateTo(ViewState.RESERVES_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
               <TileButton label="ROZGRYWKI" graphicSrc={rozgrywkiButton} onClick={() => navigateTo(ViewState.LEAGUE_TABLES)} disabled={isJumping} />
               <TileButton label="PLANER" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />

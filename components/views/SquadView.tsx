@@ -12,7 +12,8 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
 
 export const SquadView: React.FC = () => {
-  const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate } = useGame();
+  const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
+          reserves, setReserves, setPlayers } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -21,6 +22,46 @@ export const SquadView: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playerId: string; loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+
+  const moveToReserves = (player: Player) => {
+    if (!userTeamId || !myLineup) return;
+
+    const slotIndex = myLineup.startingXI.indexOf(player.id);
+
+    // Jeśli zawodnik był w XI — szukamy zastępcy z rezerw taktycznych
+    let replacementId: string | null = null;
+    if (slotIndex >= 0) {
+      const slotRole = currentTactic.slots[slotIndex]?.role;
+      const availableReserves = myLineup.reserves
+        .map(id => myPlayers.find(p => p.id === id))
+        .filter((p): p is Player =>
+          !!p &&
+          (p.suspensionMatches || 0) === 0 &&
+          !(p.health.status === HealthStatus.INJURED &&
+            (p.health.injury?.severity === InjurySeverity.SEVERE ||
+              (p.health.injury?.daysRemaining ?? 0) > 2)) &&
+          p.condition >= 60
+        );
+      replacementId = (
+        availableReserves.find(p => p.position === slotRole) ??
+        availableReserves[0] ??
+        null
+      )?.id ?? null;
+    }
+
+    const removedFromReserves = new Set([player.id, ...(replacementId ? [replacementId] : [])]);
+
+    const newLineup = {
+      ...myLineup,
+      startingXI: myLineup.startingXI.map(id => (id === player.id ? replacementId : id)),
+      bench: myLineup.bench.filter(id => id !== player.id),
+      reserves: myLineup.reserves.filter(id => !removedFromReserves.has(id)),
+    };
+
+    updateLineup(userTeamId, newLineup);
+    setPlayers(prev => ({ ...prev, [userTeamId]: prev[userTeamId].filter(p => p.id !== player.id) }));
+    setReserves(prev => [...prev, player]);
+  };
 
   const currentTactic = useMemo(() => {
     return myLineup ? TacticRepository.getById(myLineup.tacticId) : TacticRepository.getDefault();
@@ -306,12 +347,19 @@ export const SquadView: React.FC = () => {
              </div>
            </div>
         </td>
+
       </tr>
     );
   };
 
-  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick') => {
+  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick' | 'reserves') => {
     if (!contextMenu || !userTeamId || !myClub) return;
+    if (action === 'reserves') {
+      const player = myPlayers.find(p => p.id === contextMenu.playerId);
+      if (player) moveToReserves(player);
+      setContextMenu(null);
+      return;
+    }
     setClubs(prev => prev.map(c => c.id !== userTeamId ? c : {
       ...c,
       captainId:       action === 'captain'   ? contextMenu.playerId : c.captainId,
@@ -655,6 +703,10 @@ export const SquadView: React.FC = () => {
           </button>
           <button onClick={() => handleContextAction('freekick')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors flex items-center gap-3">
             <span className="text-base">🎯</span> Wyznacz do wolnych
+          </button>
+          <div className="my-1 border-t border-white/10" />
+          <button onClick={() => handleContextAction('reserves')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-3">
+            <span className="text-base">↓</span> Przenieś do rezerw
           </button>
         </div>
       )}
