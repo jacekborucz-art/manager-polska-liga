@@ -2,12 +2,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import refereeBgImg from '../../Graphic/themes/refree.png';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Referee } from '../../types';
+import { ViewState, Referee, Region } from '../../types';
 import { RefereeService } from '../../services/RefereeService';
 
 export const RefereeListView: React.FC = () => {
   const { navigateTo, viewRefereeDetails } = useGame();
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'POLISH' | 'INTERNATIONAL'>('POLISH');
   const [referees, setReferees] = useState<Referee[]>([]);
 
   useEffect(() => {
@@ -17,9 +18,12 @@ export const RefereeListView: React.FC = () => {
   }, []);
 
   const filteredReferees = useMemo(() => {
+    const byTab = tab === 'POLISH'
+      ? referees.filter(r => r.nationality === Region.POLAND)
+      : referees.filter(r => r.nationality !== Region.POLAND && r.isInternational);
     const base = !search
-      ? referees
-      : referees.filter(r =>
+      ? byTab
+      : byTab.filter(r =>
           `${r.firstName} ${r.lastName}`.toLowerCase().includes(search.toLowerCase())
         );
     return [...base].sort((a, b) => {
@@ -30,7 +34,7 @@ export const RefereeListView: React.FC = () => {
       if (rB === null) return -1;
       return rB - rA;
     });
-  }, [search, referees]);
+  }, [search, referees, tab]);
 
   return (
     <div className="h-[calc(100vh-3rem)] max-w-[1200px] mx-auto flex flex-col gap-4 animate-fade-in overflow-hidden relative">
@@ -54,7 +58,7 @@ export const RefereeListView: React.FC = () => {
                <h1 className="text-xl font-black italic uppercase tracking-tighter text-white leading-none">
                   Baza Arbitrów
                </h1>
-               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Kolegium Sędziów PZPN • 2025/26</p>
+               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">{tab === 'POLISH' ? 'Kolegium Sędziów PZPN' : 'FIFA / UEFA'} • 2025/26</p>
             </div>
          </div>
 
@@ -75,6 +79,30 @@ export const RefereeListView: React.FC = () => {
               Powrót
             </button>
          </div>
+      </div>
+
+      {/* TABS */}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={() => setTab('POLISH')}
+          className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+            tab === 'POLISH'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+              : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          🇵🇱 Polscy
+        </button>
+        <button
+          onClick={() => setTab('INTERNATIONAL')}
+          className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+            tab === 'INTERNATIONAL'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+              : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          🌍 Międzynarodowi
+        </button>
       </div>
 
       {/* MAIN CONTENT AREA - SIMPLE LIST */}

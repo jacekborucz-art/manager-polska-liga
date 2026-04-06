@@ -19,6 +19,9 @@ import historiaButton from '../../Graphic/buttons/historia.png';
 import rynekPracyButton from '../../Graphic/buttons/rynek_pracy.png';
 import finanseButton from '../../Graphic/buttons/finanse.png';
 import trustButton from '../../Graphic/buttons/trust.png';
+import rezerwyButton from '../../Graphic/buttons/rezerwy.png';
+import akademiaButton from '../../Graphic/buttons/akademia.png';
+import szpitalButton from '../../Graphic/buttons/szpital.png';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -876,21 +879,24 @@ const boardConfidence = useMemo(() => {
            )}
 
        <div className="w-full grid grid-cols-3 gap-0.5">
-              <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
-              <TileButton label="PLANER" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />
               <TileButton label="KADRA" graphicSrc={kadraButton} onClick={() => navigateTo(ViewState.SQUAD_VIEW)} disabled={isJumping || isResigned} />
+              <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => {}} disabled={isJumping || isResigned} />
+              <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
+              <TileButton label="ROZGRYWKI" graphicSrc={rozgrywkiButton} onClick={() => navigateTo(ViewState.LEAGUE_TABLES)} disabled={isJumping} />
+              <TileButton label="PLANER" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />
+              <TileButton label="SZPITAL" graphicSrc={szpitalButton} onClick={() => navigateTo(ViewState.HOSPITAL_VIEW)} disabled={isJumping || isResigned} />
+              <TileButton label="STATYSTYKI" graphicSrc={statsButton} onClick={() => navigateTo(ViewState.LEAGUE_STATS)} disabled={isJumping} />
               <TileButton 
                  label="EUROPA I ŚWIAT" 
                  graphicSrc={europaSwiatButton}
                  onClick={() => navigateTo(ViewState.EUROPEAN_CLUBS)} 
                  disabled={isJumping}
               />
-              <TileButton label="ROZGRYWKI" graphicSrc={rozgrywkiButton} onClick={() => navigateTo(ViewState.LEAGUE_TABLES)} disabled={isJumping} />
-              <TileButton label="STATYSTYKI" graphicSrc={statsButton} onClick={() => navigateTo(ViewState.LEAGUE_STATS)} disabled={isJumping} />
-              <TileButton label="HISTORIA" graphicSrc={historiaButton} onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)} disabled={isJumping} />             
+              <TileButton label="HISTORIA" graphicSrc={historiaButton} onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)} disabled={isJumping} />
+              <TileButton label="AKADEMIA PILKARSKA" graphicSrc={akademiaButton} onClick={() => {}} disabled={isJumping || isResigned} />
               <TileButton label="RYNEK PRACY" graphicSrc={rynekPracyButton} onClick={() => navigateTo(ViewState.JOB_MARKET)} disabled={isJumping} />
               <TileButton
-                label="FINANSE"
+                label="FINANSE KLUBOWE"
                 graphicSrc={finanseButton}
                 onClick={() => setIsFinanceModalOpen(true)}
                 disabled={isJumping || isResigned}

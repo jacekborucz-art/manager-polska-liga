@@ -1,9 +1,10 @@
-import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType } from '../types';
+import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
 import { EuropeanWeatherService } from './EuropeanWeatherService';
 import { PlayerStatsService } from './PlayerStatsService';
+import { RefereeService } from './RefereeService';
 
 // ============================================================
 //  WYNIK MECZU CL — rozszerzony o zdarzenia z zawodnikami
@@ -14,7 +15,7 @@ interface CLMatchResult {
   penaltyHome?: number;
   penaltyAway?: number;
   wentToExtraTime: boolean;
-  goals: { playerName: string; minute: number; teamId: string; isPenalty: boolean }[];
+  goals: { playerName: string; playerId?: string; assistId?: string; minute: number; teamId: string; isPenalty: boolean; varDisallowed?: boolean }[];
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   substitutions: { playerOutName: string; playerInName: string; minute: number; teamId: string }[];
   updatedHomePlayers: Player[];
@@ -22,6 +23,7 @@ interface CLMatchResult {
   fatigueMap: Record<string, number>;
   fatigueDebtMap: Record<string, number>;
   injuryPenaltyMap: Record<string, number>;
+  ratings: Record<string, number>;
 }
 
 // ============================================================
@@ -30,6 +32,25 @@ interface CLMatchResult {
 const makeSeededRng = (seed: number) => (offset: number): number => {
   const x = Math.sin(seed + offset) * 10000;
   return x - Math.floor(x);
+};
+
+// ============================================================
+//  TACTIC CLASH MATRIX (identyczna jak w LeagueBackgroundMatchEngine)
+// ============================================================
+const TACTIC_CLASH_MATRIX: Record<string, Record<string, number>> = {
+  '4-4-2':        { '4-4-2': 4, '4-3-3': 3, '5-4-1': 2, '4-2-3-1': 4, '3-5-2': 5, '3-4-3': 3, '5-3-2': 3, '4-5-1': 4, '4-4-2-DIAMOND': 6 },
+  '4-3-3':        { '4-4-2': 5, '4-3-3': 4, '5-4-1': 2, '4-2-3-1': 5, '3-5-2': 4, '3-4-3': 6, '5-3-2': 2, '4-5-1': 3, '4-4-2-DIAMOND': 5 },
+  '5-4-1':        { '4-4-2': 6, '4-3-3': 7, '5-4-1': 4, '4-2-3-1': 5, '3-5-2': 3, '3-4-3': 6, '5-3-2': 4, '4-5-1': 4, '4-4-2-DIAMOND': 7 },
+  '4-2-3-1':      { '4-4-2': 4, '4-3-3': 3, '5-4-1': 3, '4-2-3-1': 4, '3-5-2': 6, '3-4-3': 4, '5-3-2': 4, '4-5-1': 5, '4-4-2-DIAMOND': 4 },
+  '3-5-2':        { '4-4-2': 3, '4-3-3': 4, '5-4-1': 5, '4-2-3-1': 2, '3-5-2': 4, '3-4-3': 5, '5-3-2': 5, '4-5-1': 3, '4-4-2-DIAMOND': 4 },
+};
+
+const getEffectivenessMult = (score: number): number => {
+  if (score <= 1) return 0.70;
+  if (score <= 3) return 0.85;
+  if (score === 4) return 1.00;
+  if (score <= 6) return 1.15;
+  return 1.35;
 };
 
 // ============================================================
@@ -55,9 +76,10 @@ const getGoalsPoissonLike = (
   isChaos: boolean
 ): number => {
   let g = 0;
-  let cur = Math.max(0.05, Math.min(isChaos ? 5.5 : 3.8, xg + (rng(baseOffset) - 0.5) * 0.35));
+  // Nasycenie (satiety): mniejszy pułap niż wcześniej — eliminuje hokejowe wyniki
+  let cur = Math.max(0.05, Math.min(isChaos ? 3.8 : 2.8, xg + (rng(baseOffset) - 0.5) * 0.35));
   for (let i = 0; i < 8; i++) {
-    if (rng(baseOffset + 10 + i) < cur / (i + 1.15)) { g++; cur *= (isChaos ? 0.85 : 0.68); }
+    if (rng(baseOffset + 10 + i) < cur / (i + 1.15)) { g++; cur *= (isChaos ? 0.72 : 0.62); }
   }
   return g;
 };
@@ -150,14 +172,16 @@ const attributeGoalsToPlayers = (
 };
 
 // ============================================================
-//  SYMULACJA KARTEK I KONTUZJI
+//  SYMULACJA KARTEK I KONTUZJI (z sędzią FIFA/UEFA)
 // ============================================================
 const simulateCardsAndInjuries = (
   lineup: Lineup,
   players: Player[],
   teamId: string,
   offset: number,
-  rng: (o: number) => number
+  rng: (o: number) => number,
+  referee: Referee,
+  isHomeTeam: boolean
 ): {
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   redCount: number;
@@ -173,16 +197,24 @@ const simulateCardsAndInjuries = (
   const fatigueDebtMap: Record<string, number> = {};
   const injuryPenaltyMap: Record<string, number> = {};
 
+  // Sędzia: im mniej doświadczony, tym więcej chaosu; strictness → surowość
+  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
+  const yellowProb = 0.087 * (referee.strictness / 50) * refExpFactor;
+  // Gospodarz korzysta z niewielkiego przywileju (advantageTendency)
+  const homeBias = isHomeTeam ? -(referee.advantageTendency / 5000) : (referee.advantageTendency / 10000);
+  const adjustedYellowProb = Math.max(0.02, yellowProb + homeBias);
+  const directRedProb = 0.0033 * (referee.strictness / 50) * refExpFactor;
+
   lineup.startingXI.forEach((pId, idx) => {
     if (!pId) return;
     const p = players.find(x => x.id === pId);
     if (!p) return;
     const playerName = `${p.firstName} ${p.lastName}`;
 
-    const isDirectRed = rng(offset + idx + 1500) < 0.0033;
+    const isDirectRed = rng(offset + idx + 1500) < directRedProb;
     const yellowRoll = rng(offset + idx + 1000);
-    const isSecondYellow = yellowRoll < 0.087 && rng(offset + idx + 1200) < 0.05;
-    const isNormalYellow = yellowRoll < 0.087 && !isSecondYellow;
+    const isSecondYellow = yellowRoll < adjustedYellowProb && rng(offset + idx + 1200) < 0.05;
+    const isNormalYellow = yellowRoll < adjustedYellowProb && !isSecondYellow;
 
     if (isDirectRed) {
       const m = Math.max(1, Math.floor(10 + rng(offset + idx + 550) * 85));
@@ -288,7 +320,7 @@ const simulateExtraTimeAndPenalties = (
 };
 
 // ============================================================
-//  GŁÓWNA FUNKCJA SYMULACJI MECZU Z ZAWODNIKAMI
+//  GŁÓWNA FUNKCJA SYMULACJI MECZU Z ZAWODNIKAMI (Stage 2)
 // ============================================================
 const simulateCLMatchFull = (
   homeClub: Club,
@@ -299,14 +331,33 @@ const simulateCLMatchFull = (
   awayLineup: Lineup,
   date: Date,
   seed: number,
+  referee: Referee,
+  homeCoach: Coach,
+  awayCoach: Coach,
   leg1Diff?: number,
   isFinalMatch?: boolean
 ): CLMatchResult => {
   const rng = makeSeededRng(seed);
 
-  // ── Taktyka ─────────────────────────────────────────────────────────
+  // ── Sędzia (Stage 2) ─────────────────────────────────────────────────
+  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
+
+  // ── Taktyka + Clash Matrix (Stage 2) ────────────────────────────────
   const hTactic = TacticRepository.getById(homeLineup.tacticId);
   const aTactic = TacticRepository.getById(awayLineup.tacticId);
+  const hClashBase = TACTIC_CLASH_MATRIX[homeLineup.tacticId]?.[awayLineup.tacticId] ?? 4;
+  const aClashBase = TACTIC_CLASH_MATRIX[awayLineup.tacticId]?.[homeLineup.tacticId] ?? 4;
+  const hClashFinal = Math.round(hClashBase + rng(900) * 1.5);
+  const aClashFinal = Math.round(aClashBase + rng(901) * 1.5);
+  const hTacticMod = getEffectivenessMult(hClashFinal);
+  const aTacticMod = getEffectivenessMult(aClashFinal);
+
+  // ── Trenerzy (Stage 2) ───────────────────────────────────────────────
+  // Normalizacja: atrybuty 0-100 → bonus ±%
+  const hCoachAtkMod = 1.0 + ((homeCoach.attributes.motivation - 50) * 0.002) + ((homeCoach.attributes.experience - 50) * 0.001);
+  const hCoachDefMod = 1.0 + ((homeCoach.attributes.decisionMaking - 50) * 0.002);
+  const aCoachAtkMod = 1.0 + ((awayCoach.attributes.motivation - 50) * 0.002) + ((awayCoach.attributes.experience - 50) * 0.001);
+  const aCoachDefMod = 1.0 + ((awayCoach.attributes.decisionMaking - 50) * 0.002);
 
   // ── Siła zawodników ─────────────────────────────────────────────────
   const hStr = getLineStrength(homePlayersAll, homeLineup.startingXI);
@@ -326,19 +377,21 @@ const simulateCLMatchFull = (
   const homeCountry = homeClub.country ?? 'POL';
   const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
 
-  // ── Pre-roll czerwonych kartek → korekta XG ─────────────────────────
+  // ── Pre-roll czerwonych kartek (z sędzią) → korekta XG ──────────────
+  const directRedProb = 0.0033 * (referee.strictness / 50) * refExpFactor;
+  const yellowProb    = 0.087  * (referee.strictness / 50) * refExpFactor;
   let homeRedPre = 0;
   let awayRedPre = 0;
   homeLineup.startingXI.forEach((_, idx) => {
-    if (rng(10000 + idx + 1500) < 0.0033) homeRedPre++;
-    else if (rng(10000 + idx + 1000) < 0.087 && rng(10000 + idx + 1200) < 0.05) homeRedPre++;
+    if (rng(10000 + idx + 1500) < directRedProb) homeRedPre++;
+    else if (rng(10000 + idx + 1000) < yellowProb && rng(10000 + idx + 1200) < 0.05) homeRedPre++;
   });
   awayLineup.startingXI.forEach((_, idx) => {
-    if (rng(20000 + idx + 1500) < 0.0033) awayRedPre++;
-    else if (rng(20000 + idx + 1000) < 0.087 && rng(20000 + idx + 1200) < 0.05) awayRedPre++;
+    if (rng(20000 + idx + 1500) < directRedProb) awayRedPre++;
+    else if (rng(20000 + idx + 1000) < yellowProb && rng(20000 + idx + 1200) < 0.05) awayRedPre++;
   });
 
-  // ── XG ──────────────────────────────────────────────────────────────
+  // ── XG z bonusami trenerów, taktyki i siły zawodników ───────────────
   const repDiff = homeClub.reputation - awayClub.reputation;
   let xgHome = 1.25
     + (repDiff * 0.015)
@@ -353,27 +406,49 @@ const simulateCLMatchFull = (
     + ((aStr.att - hStr.def) * 0.04)
     + awayDailyForm;
 
-  // Bonus XG dla dominującej drużyny (jak LeagueBackgroundMatchEngine linia 80-81)
   if (xgHome > xgAway + 1.2) xgHome += 0.5;
   if (xgAway > xgHome + 1.2) xgAway += 0.5;
 
-  // Korekta za czerwone kartki
-  xgHome = Math.max(0.05, xgHome * volatilityMult * (1 - homeRedPre * 0.25) * (1 + awayRedPre * 0.20) * weatherMod);
-  xgAway = Math.max(0.05, xgAway * volatilityMult * (1 - awayRedPre * 0.25) * (1 + homeRedPre * 0.20) * weatherMod);
+  // Aplikacja modyfikatorów taktyki, trenerów, czerwonych kartek, pogody
+  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * (1 - homeRedPre * 0.25) * (1 + awayRedPre * 0.20) * weatherMod);
+  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * (1 - awayRedPre * 0.25) * (1 + homeRedPre * 0.20) * weatherMod);
 
-  // ── Generowanie goli 90 min ──────────────────────────────────────────
-  const homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
-  const awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
+  // ── Generowanie goli 90 min (Poisson z nasyceniem) ───────────────────
+  let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
+  let awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
+
+  // ── Karne w trakcie meczu (Stage 2 — zależne od sędziego) ───────────
+  // Prawdopodobieństwo na mecz (suma ~95 minut): strictness/300 na drużynę
+  const penThreshold = (referee.strictness / 300) * refExpFactor;
+  const inMatchGoals: { playerName: string; playerId?: string; assistId?: string; minute: number; teamId: string; isPenalty: boolean; varDisallowed?: boolean }[] = [];
+
+  const tryPenalty = (side: 'H' | 'A', rollOffset: number) => {
+    if (rng(rollOffset) >= penThreshold) return;
+    const isScored = rng(rollOffset + 1) < 0.78;
+    const teamPlayers = side === 'H' ? homePlayersAll : awayPlayersAll;
+    const lineup     = side === 'H' ? homeLineup     : awayLineup;
+    const penMin     = Math.floor(5 + rng(rollOffset + 2) * 85);
+    const activeXI   = getActiveLineupAt(penMin, lineup.startingXI, []);
+    const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
+    if (!kicker) return;
+    if (isScored) {
+      if (side === 'H') homeScore90++; else awayScore90++;
+      inMatchGoals.push({ playerName: `${kicker.firstName} ${kicker.lastName}`, playerId: kicker.id, minute: penMin, teamId: side === 'H' ? homeClub.id : awayClub.id, isPenalty: true });
+    }
+    // chybiony karny — nie dodajemy do scorers
+  };
+  tryPenalty('H', 9100);
+  tryPenalty('A', 9200);
 
   // ── Zmiany ──────────────────────────────────────────────────────────
   const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5000, rng);
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
-  // ── Kartki i kontuzje (te same offsety co pre-roll — spójne wyniki) ─
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng);
+  // ── Kartki i kontuzje z sędzią (Stage 2) ────────────────────────────
+  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true);
+  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false);
 
-  // ── Zmęczenie: agregacja startowej XI + zmienniki (40% drenu) ────────
+  // ── Zmęczenie ────────────────────────────────────────────────────────
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
   const fatigueDebtMap: Record<string, number> = { ...homeCardData.fatigueDebtMap, ...awayCardData.fatigueDebtMap };
   const injuryPenaltyMap: Record<string, number> = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap };
@@ -389,7 +464,6 @@ const simulateCLMatchFull = (
     fatigueMap[id] = drain;
     fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40;
   });
-
   const awaySubIns = awaySubData.allPlayedIds.filter(id => !awayLineup.startingXI.includes(id));
   awaySubIns.forEach((id, idx) => {
     const p = awayPlayersAll.find(x => x.id === id);
@@ -402,9 +476,46 @@ const simulateCLMatchFull = (
     fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40;
   });
 
-  // ── Atrybuowanie goli ────────────────────────────────────────────────
-  const homeGoalEntries = attributeGoalsToPlayers(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeSubData.matchSubs, rng, 400);
-  const awayGoalEntries = attributeGoalsToPlayers(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awaySubData.matchSubs, rng, 450);
+  // ── Atrybuowanie goli z VAR (Stage 2) ───────────────────────────────
+  const attributeWithVAR = (
+    count: number,
+    teamId: string,
+    teamPlayers: Player[],
+    lineup: Lineup,
+    subs: { min: number; outId: string; inId: string }[],
+    baseOffset: number
+  ): { entries: typeof inMatchGoals; adjustedScore: number } => {
+    const entries: typeof inMatchGoals = [];
+    const usedMinutes = new Set<number>();
+    let adjustedScore = 0;
+    for (let i = 0; i < count; i++) {
+      let minute = Math.floor(1 + rng(baseOffset + i) * 94);
+      while (usedMinutes.has(minute)) { minute = minute >= 96 ? 1 : minute + 1; }
+      usedMinutes.add(minute);
+      const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs);
+      const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
+      const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;
+      const isVarDisallowed = rng(baseOffset + i + 502) < 0.04;
+      if (!isVarDisallowed) adjustedScore++;
+      entries.push({
+        playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?',
+        playerId: scorer?.id,
+        assistId: assist?.id,
+        minute,
+        teamId,
+        isPenalty: rng(baseOffset + i + 700) < 0.02,
+        varDisallowed: isVarDisallowed || undefined,
+      });
+    }
+    return { entries, adjustedScore };
+  };
+
+  const homeGoalData = attributeWithVAR(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeSubData.matchSubs, 400);
+  const awayGoalData = attributeWithVAR(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awaySubData.matchSubs, 450);
+
+  // Wynik po VAR
+  let finalHomeScore90 = homeGoalData.adjustedScore + inMatchGoals.filter(g => g.teamId === homeClub.id).length;
+  let finalAwayScore90 = awayGoalData.adjustedScore + inMatchGoals.filter(g => g.teamId === awayClub.id).length;
 
   // ── Zmiany → format historii ─────────────────────────────────────────
   const homeSubs = homeSubData.matchSubs.map(s => {
@@ -419,25 +530,23 @@ const simulateCLMatchFull = (
   });
 
   // ── Dogrywka / karne ─────────────────────────────────────────────────
-  let finalHomeScore = homeScore90;
-  let finalAwayScore = awayScore90;
+  let finalHomeScore = finalHomeScore90;
+  let finalAwayScore = finalAwayScore90;
   let penaltyHome: number | undefined;
   let penaltyAway: number | undefined;
   let wentToExtraTime = false;
 
   const homeWinProb = homeClub.reputation / (homeClub.reputation + awayClub.reputation);
 
-  if (leg1Diff !== undefined && homeScore90 - awayScore90 === leg1Diff) {
-    // Rewanż: agregat równy → dogrywka
-    const etResult = simulateExtraTimeAndPenalties(homeScore90, awayScore90, homeWinProb, rng, 1000, leg1Diff);
+  if (leg1Diff !== undefined && finalHomeScore90 - finalAwayScore90 === leg1Diff) {
+    const etResult = simulateExtraTimeAndPenalties(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1000, leg1Diff);
     finalHomeScore = etResult.homeScore;
     finalAwayScore = etResult.awayScore;
     penaltyHome = etResult.penaltyHome;
     penaltyAway = etResult.penaltyAway;
     wentToExtraTime = true;
-  } else if (isFinalMatch && homeScore90 === awayScore90) {
-    // Finał: remis po 90 min → dogrywka
-    const etResult = simulateExtraTimeAndPenalties(homeScore90, awayScore90, homeWinProb, rng, 1000, undefined);
+  } else if (isFinalMatch && finalHomeScore90 === finalAwayScore90) {
+    const etResult = simulateExtraTimeAndPenalties(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1000, undefined);
     finalHomeScore = etResult.homeScore;
     finalAwayScore = etResult.awayScore;
     penaltyHome = etResult.penaltyHome;
@@ -445,20 +554,56 @@ const simulateCLMatchFull = (
     wentToExtraTime = true;
   }
 
+  // ── Oceny zawodników (Stage 2) ───────────────────────────────────────
+  const ratings: Record<string, number> = {};
+  const homeWin = finalHomeScore > finalAwayScore;
+  const awayWin = finalAwayScore > finalHomeScore;
+  const isDraw  = finalHomeScore === finalAwayScore;
+  const allGoals = [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals];
+  const allCards = [...homeCardData.cards, ...awayCardData.cards];
+
+  const generateRating = (pId: string, isHome: boolean) => {
+    const p = (isHome ? homePlayersAll : awayPlayersAll).find(x => x.id === pId);
+    if (!p) return;
+    const teamWon = isHome ? homeWin : awayWin;
+    const r = rng(pId.length + 90 + 999);
+    let score = teamWon ? (6.2 + r * 1.5) : (isDraw ? (5.2 + r * 1.5) : (4.0 + r * 1.8));
+    // Bramki i asysty
+    const pGoals   = allGoals.filter(g => g.playerId === pId && !g.varDisallowed).length;
+    const pAssists = allGoals.filter(g => g.assistId === pId && !g.varDisallowed).length;
+    score += (pGoals * 1.0) + (pAssists * 0.6);
+    // GK / DEF — czyste konto
+    const conceded = isHome ? finalAwayScore : finalHomeScore;
+    if (p.position === PlayerPosition.GK || p.position === 'DEF' as any) {
+      if (conceded === 0) score += 1.2;
+      else score -= (conceded * 0.3);
+    }
+    // Kary za kartki
+    allCards.filter(c => c.playerId === pId).forEach(c => {
+      if (c.type === 'RED' || c.type === 'SECOND_YELLOW') score -= 3.0;
+      if (c.type === 'YELLOW') score -= 0.5;
+    });
+    ratings[pId] = parseFloat(Math.min(10, Math.max(1, score)).toFixed(1));
+  };
+
+  homeLineup.startingXI.filter((id): id is string => id !== null).forEach(id => generateRating(id, true));
+  awayLineup.startingXI.filter((id): id is string => id !== null).forEach(id => generateRating(id, false));
+
   return {
     homeScore: finalHomeScore,
     awayScore: finalAwayScore,
     penaltyHome,
     penaltyAway,
     wentToExtraTime,
-    goals: [...homeGoalEntries, ...awayGoalEntries],
-    cards: [...homeCardData.cards, ...awayCardData.cards],
+    goals: [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals],
+    cards: allCards,
     substitutions: [...homeSubs, ...awaySubs],
     updatedHomePlayers: homeCardData.updatedPlayers,
     updatedAwayPlayers: awayCardData.updatedPlayers,
     fatigueMap,
     fatigueDebtMap,
     injuryPenaltyMap,
+    ratings,
   };
 };
 
@@ -475,8 +620,10 @@ export const BackgroundMatchProcessorCL = {
     players: Record<string, Player[]>,
     lineups: Record<string, Lineup>,
     seasonNumber: number,
-    sessionSeed: number
+    sessionSeed: number,
+    coaches: Record<string, Coach> = {}
   ): { updatedFixtures: Fixture[]; updatedPlayers: Record<string, Player[]>; matchHistoryEntries: MatchHistoryEntry[] } => {
+    RefereeService.initializePool();
 
     const dateStr = currentDate.toDateString();
 
@@ -528,6 +675,8 @@ export const BackgroundMatchProcessorCL = {
     let updatedFixtures = [...fixtures];
     let updatedPlayersMap = { ...players };
     const matchHistoryEntries: MatchHistoryEntry[] = [];
+    // Zbiór sędziów już przydzielonych w tej kolejce — każdy sędzia tylko 1 mecz dziennie
+    const usedRefereeIds = new Set<string>();
 
     todayMatches.forEach(fixture => {
       const home = clubs.find(c => c.id === fixture.homeTeamId);
@@ -574,11 +723,47 @@ export const BackgroundMatchProcessorCL = {
         }
       }
 
+      // ── Arbiter: FIFA/UEFA, inny kraj niż obie drużyny ─────────────
+      const matchSeedStr = `${fixture.id}_${sessionSeed}`;
+      const referee = RefereeService.assignInternationalReferee(
+        matchSeedStr,
+        home.country ?? 'POL',
+        away.country ?? 'POL',
+        usedRefereeIds
+      );
+      usedRefereeIds.add(referee.id);
+
+      // ── Trenerzy (opcjonalni — domyślne atrybuty 50 jeśli brak) ──────
+      const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
+      const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+
+      // ── Frekwencja (ten sam wzór co PreMatchCLLiveStudioView) ────────
+      const homeRep = home.reputation;
+      const awayRep = away.reputation;
+      let attendance: number;
+      if (homeRep >= 18 || awayRep >= 18) {
+        attendance = home.stadiumCapacity ?? 50000;
+      } else {
+        const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
+        const combinedRep = homeRep + awayRep;
+        const repNorm = Math.max(0, Math.min(1, (combinedRep - 2) / 32));
+        const scatter = 0.10 * (1 - repNorm);
+        const randomOffset = (pseudoRng * 2 - 1) * scatter;
+        const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
+        const weatherMod = EuropeanWeatherService.getGoalModifier(home.country ?? 'POL', currentDate, pseudoRng);
+        const weatherPenalty = weatherMod < 0.995 ? 0.88 : 1.0;
+        attendance = Math.floor((home.stadiumCapacity ?? 20000) * Math.min(1, fillRate * weatherPenalty));
+      }
+
+      // ── Pogoda ───────────────────────────────────────────────────────
+      const weather = EuropeanWeatherService.getSnapshot(home.country ?? 'POL', currentDate, matchSeedStr);
+
       // ── Symulacja meczu ─────────────────────────────────────────────
       const result = simulateCLMatchFull(
         home, away, homePlayers, awayPlayers,
         homeLineup, awayLineup,
-        currentDate, seed, leg1Diff, isFinal
+        currentDate, seed, referee, homeCoach, awayCoach, leg1Diff, isFinal
       );
 
       // ── Aktualizacja fixtures ────────────────────────────────────────
@@ -630,6 +815,12 @@ export const BackgroundMatchProcessorCL = {
         updatedPlayersMap = PlayerStatsService.applyCard(updatedPlayersMap, card.playerId, eventType);
       });
 
+      // ── Statystyki sędziego ──────────────────────────────────────────
+      const yellowsInMatch = result.cards.filter(c => c.type === 'YELLOW' || c.type === 'SECOND_YELLOW').length;
+      const redsInMatch = result.cards.filter(c => c.type === 'RED' || c.type === 'SECOND_YELLOW').length;
+      const refereeRating = RefereeService.generateMatchRating(referee);
+      RefereeService.recordMatchStats(referee.id, refereeRating, yellowsInMatch, redsInMatch);
+
       // ── Historia meczu ───────────────────────────────────────────────
       matchHistoryEntries.push({
         matchId: fixture.id,
@@ -645,6 +836,9 @@ export const BackgroundMatchProcessorCL = {
         goals: result.goals,
         cards: result.cards,
         substitutions: result.substitutions,
+        refereeName: `${referee.firstName} ${referee.lastName}`,
+        attendance,
+        weather,
       });
     });
 

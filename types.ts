@@ -100,6 +100,7 @@ export enum ViewState {
   PRE_MATCH_PLAYOFF_STUDIO = 'PRE_MATCH_PLAYOFF_STUDIO',
   MATCH_LIVE_PLAYOFF = 'MATCH_LIVE_PLAYOFF',
   POST_MATCH_PLAYOFF_STUDIO = 'POST_MATCH_PLAYOFF_STUDIO',
+  HOSPITAL_VIEW = 'HOSPITAL_VIEW',
 }
 
 export interface PlayoffPair {
@@ -1207,6 +1208,7 @@ export interface Referee {
   totalYellowCardsShown: number;
   totalRedCardsShown: number;
   experience: number; // DOŚWIADCZENIE SĘDZIEGO
+  isInternational: boolean; // Arbiter FIFA/UEFA — może prowadzić mecze międzynarodowe
 }
 
 export interface WeatherSnapshot {

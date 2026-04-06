@@ -7,7 +7,7 @@ export interface BackgroundMatchResultV2 {
   homeScore: number;
   awayScore: number;
   // TUTAJ WSTAW TEN KOD (Dodano assistId i parametry urazu)
- scorers: { playerId: string; assistId?: string; minute: number; isPenalty: boolean }[];
+ scorers: { playerId: string; assistId?: string; minute: number; isPenalty: boolean; isMiss?: boolean; varDisallowed?: boolean }[];
   cards: { playerId: string; type: MatchEventType; minute: number }[];
   injuries: { playerId: string; severity: InjurySeverity; minute: number; days: number; type: string }[];
   playedPlayerIds: string[];
@@ -61,10 +61,12 @@ export const LeagueBackgroundMatchEngineV2 = {
     let hSubsUsed = 0;
     let aSubsUsed = 0;
 
-   const globalChaos = (seededRng(1) * 0.30) - 0.15;
+      // Im mniej doświadczony sędzia, tym większy chaos meczu
+   const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100; // domyślnie 1.0
+   const globalChaos = ((seededRng(1) * 0.30) - 0.15) * experienceFactor;
    
     const homeFieldBonus = 1.0015 + ((seededRng as any)(2) * 0.0085);
-    const weatherFinMod = weather.description.toLowerCase().includes('deszcz') ? 0.94 : 1.0;
+    const weatherFinMod = weather.description.toLowerCase().includes('deszcz') ? 0.99 : 1.1;
     const weatherHeatDrain = weather.tempC > 30 ? 1.2 : 1.0;
 
     // Inicjalizacja kondycji i stanu meczu
@@ -84,6 +86,11 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
     const homeFormBoost = calculateFormBoost(_homeClub.stats.form || []);
     const awayFormBoost = calculateFormBoost(_awayClub.stats.form || []);
+
+const allPlayedIds = new Set<string>([
+      ...homeLineup.startingXI.filter(id => id !== null),
+      ...awayLineup.startingXI.filter(id => id !== null)
+    ] as string[]);
 
     let homeScore = 0;
     let awayScore = 0;
@@ -136,25 +143,26 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
         // Zasada rezerwy: nie wykorzystuj 5. zmiany przed 88. minutą
         if (usedCount >= 5 || (usedCount === 4 && minute < 88)) return;
 
-        const tiredIdx = lineup.startingXI.findIndex(id => id && fMap[id] < 82);
+        const tiredIdx = lineup.startingXI.findIndex(id => id && fMap[id] < 88.5);
         if (tiredIdx !== -1) {
           const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[tiredIdx].role;
           const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id));
           if (candidate) {
             lineup.startingXI[tiredIdx] = candidate;
+            allPlayedIds.add(candidate);
             if (side === 'H') hSubsUsed++; else aSubsUsed++;
           }
         }
       };
 
       // Zmiany w przerwie (Losowe 1-2)
-      if (minute === 45 && seededRng(minute + 99) < 0.20) {
+      if (minute === 45 && seededRng(minute + 99) < 0.37) {
         performSub(homeLineup, homePlayers, homeFatigue, 'H');
         if (seededRng(minute + 101) < 0.5) performSub(homeLineup, homePlayers, homeFatigue, 'H');
       }
       
       // Główne okno zmian (70+)
-      if (minute >= 82 && minute % 4 === 0) {
+      if (minute >= 60 && minute % 4 === 0) {
         performSub(homeLineup, homePlayers, homeFatigue, 'H');
         performSub(awayLineup, awayPlayers, awayFatigue, 'A');
       }
@@ -166,8 +174,8 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
       // 2b. REALIZM WYNIKÓW (Nasycenie / Satiety) *********************************************************************************
       // Każdy kolejny gol jest trudniejszy do zdobycia (brak hokejowych wyników)
        // 2b. REALIZM WYNIKÓW (Nasycenie / Satiety) *********************************************************************************
-      const hSatiety = 1 / (1 + (homeScore * 0.3));
-      const aSatiety = 1 / (1 + (awayScore * 0.3));
+      const hSatiety = 1 / (1 + (homeScore * 0.31));
+      const aSatiety = 1 / (1 + (awayScore * 0.31));
 
       // WPŁYW TRENERÓW
       // Doświadczenie + decyzyjność -> kreacja / obrona
@@ -199,8 +207,8 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
       let hGkPanic = 1.0;
       let aGkPanic = 1.0;
 
-      let hGoalLambda = ((hPwr.atk * 0.4 + hPwr.fin * 0.6 + hCoachAtkBonus) / (aPwr.def + aPwr.gk + aCoachDefBonus)) * 0.020;
-      let aGoalLambda = ((aPwr.atk * 0.4 + aPwr.fin * 0.6 + aCoachAtkBonus) / (hPwr.def + hPwr.gk + hCoachDefBonus)) * 0.020;
+      let hGoalLambda = ((hPwr.atk * 0.4 + hPwr.fin * 0.6 + hCoachAtkBonus) / (aPwr.def + aPwr.gk + aCoachDefBonus)) * 0.018;
+      let aGoalLambda = ((aPwr.atk * 0.4 + aPwr.fin * 0.6 + aCoachAtkBonus) / (hPwr.def + hPwr.gk + hCoachDefBonus)) * 0.018;
 
       if (!hHasRealGk) aGkPanic = 1.2 + (seededRng(minute + 55) * 0.6); 
       if (!aHasRealGk) hGkPanic = 1.2 + (seededRng(minute + 55) * 0.6);
@@ -223,43 +231,46 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {
-        homeScore++;
         const scorer = GoalAttributionService.pickScorer(homePlayers, hActiveXI, false, () => seededRng(minute + 500));
-        const assistant = GoalAttributionService.pickAssistant(homePlayers, hActiveXI, scorer.id, false, () => seededRng(minute + 501));
-        scorers.push({ 
-          playerId: scorer.id, 
-          assistId: assistant?.id, 
-          minute, 
-          isPenalty: false 
-        });
+        if (scorer) {
+          const assistant = GoalAttributionService.pickAssistant(homePlayers, hActiveXI, scorer.id, false, () => seededRng(minute + 501));
+          const isVarDisallowed = seededRng(minute + 502) < 0.04;
+          if (!isVarDisallowed) homeScore++;
+          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false, varDisallowed: isVarDisallowed });
+        }
       }
 
- if (seededRng(minute + 200) < aGoalLambda) {
-        awayScore++;
+      if (seededRng(minute + 200) < aGoalLambda) {
         const scorer = GoalAttributionService.pickScorer(awayPlayers, aActiveXI, false, () => seededRng(minute + 600));
-        const assistant = GoalAttributionService.pickAssistant(awayPlayers, aActiveXI, scorer.id, false, () => seededRng(minute + 601));
-        scorers.push({ 
-          playerId: scorer.id, 
-          assistId: assistant?.id, 
-          minute, 
-          isPenalty: false 
-        });
+        if (scorer) {
+          const assistant = GoalAttributionService.pickAssistant(awayPlayers, aActiveXI, scorer.id, false, () => seededRng(minute + 601));
+          const isVarDisallowed = seededRng(minute + 602) < 0.04;
+          if (!isVarDisallowed) awayScore++;
+          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false, varDisallowed: isVarDisallowed });
+        }
       }
 
       // LOSOWANIE KARNYCH (Zależne od surowości sędziego)
-      const penaltyProb = (referee.strictness / 7000);
+            // Im mniej doświadczony sędzia, tym większa szansa na kontrowersyjny karny
+      const penaltyExperienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
+      const penaltyProb = (referee.strictness / 7000) * penaltyExperienceFactor;
       if (seededRng(minute + 700) < penaltyProb) {
         const side = seededRng(minute + 701) < 0.5 ? 'H' : 'A';
         const isScored = seededRng(minute + 702) < 0.78; // 78% skuteczności karnych
+        const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
+        if (!kicker) break; // brak kandydatów (np. czerwona kartka wyczyściła skład)
         if (isScored) {
           if (side === 'H') homeScore++; else awayScore++;
-          const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
           scorers.push({ playerId: kicker.id, minute, isPenalty: true });
+        } else {
+          scorers.push({ playerId: kicker.id, minute, isPenalty: true, isMiss: true });
         }
       }
 
       // LOSOWANIE KARTEK
-      const yellowBaseProb = 0.001 + (referee.strictness / 7500);
+            // Im mniej doświadczony sędzia, tym większa szansa na kartkę
+      const yellowExperienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
+      const yellowBaseProb = (0.001 + (referee.strictness / 7500)) * yellowExperienceFactor;
       const hCardRoll = seededRng(minute + 300);
       const aCardRoll = seededRng(minute + 300);
 
@@ -298,7 +309,8 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
 
 // 2c. SYMULACJA KONTUZJI (0.4% szansy na minutę na mecz)
-      const injuryChance = 0.004;
+       const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
+      const injuryChance = 0.004 * experienceFactor;
       if (seededRng(minute + 800) < injuryChance) {
         const side = seededRng(minute + 801) < 0.5 ? 'H' : 'A';
         const pPool = side === 'H' ? homePlayers : awayPlayers;
@@ -343,14 +355,14 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
 
       // DRENAŻ KONDYCJI (Co minutę)
-      const baseDrain = 0.1 * weatherHeatDrain;
+      const baseDrain = 0.22 * weatherHeatDrain;
 homeLineup.startingXI.forEach((id, idx) => {
   if (id) {
     const p = homePlayers.find(px => px.id === id);
     let currentDrain = baseDrain;
       if (p?.position === 'GK') {
       // Redukcja drenażu o losową wartość 10-30% (mnożnik 0.7 - 0.9)
-      const gkReduction = 0.7 + (seededRng(minute + idx + 500) * 0.2);
+      const gkReduction = 0.4 + (seededRng(minute + idx + 500) * 0.2);
       currentDrain *= gkReduction;
     }
         homeFatigue[id] = Math.max(0, homeFatigue[id] - currentDrain);
@@ -439,7 +451,7 @@ homeLineup.startingXI.forEach((id, idx) => {
       cards,
       ratings,
    injuries,
-      playedPlayerIds: [...homeLineup.startingXI, ...awayLineup.startingXI].filter(Boolean) as string[],
+     playedPlayerIds: Array.from(allPlayedIds),
       fatigue: { ...homeFatigue, ...awayFatigue },
       fatigueDebtMap
     };

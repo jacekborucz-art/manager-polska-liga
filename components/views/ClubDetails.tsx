@@ -49,7 +49,9 @@ export const ClubDetails: React.FC = () => {
   if (!club) return <div className="h-screen flex items-center justify-center text-slate-500 font-black uppercase tracking-widest">Klub nie znaleziony...</div>;
 
   const handleBack = () => {
-    if (club.leagueId === 'L_PL_4') {
+    if (previousViewState === ViewState.MATCH_HISTORY_BROWSER) {
+      navigateTo(ViewState.MATCH_HISTORY_BROWSER);
+    } else if (club.leagueId === 'L_PL_4') {
       navigateTo(ViewState.HIDDEN_LEAGUE);
     } else if (club.leagueId === 'L_SA' || previousViewState === ViewState.EUROPEAN_CLUBS) {
       navigateTo(ViewState.EUROPEAN_CLUBS);

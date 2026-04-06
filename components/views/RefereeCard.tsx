@@ -61,7 +61,7 @@ export const RefereeCard: React.FC = () => {
            <div className="relative z-10 text-center w-full">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-8">
                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                 <span className="text-[8px] font-black uppercase tracking-[0.3em] text-white/60">Profil Arbitra PZPN</span>
+                 <span className="text-[8px] font-black uppercase tracking-[0.3em] text-white/60">{referee.isInternational && referee.nationality !== 'POLAND' ? 'Profil Arbitra FIFA/UEFA' : 'Profil Arbitra PZPN'}</span>
               </div>
               
               <h2 className="text-5xl font-black text-white italic uppercase tracking-tighter leading-[0.8] mb-2 drop-shadow-2xl">
@@ -94,7 +94,7 @@ export const RefereeCard: React.FC = () => {
               <div className="flex items-center justify-between p-5 bg-black/40 rounded-[28px] border border-white/5">
                  <div className="flex flex-col gap-1">
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Organizacja</span>
-                    <span className="text-xs font-black text-white italic uppercase tracking-tight">Kolegium Sędziów PZPN</span>
+                    <span className="text-xs font-black text-white italic uppercase tracking-tight">{referee.isInternational && referee.nationality !== 'POLAND' ? 'FIFA / UEFA' : 'Kolegium Sędziów PZPN'}</span>
                  </div>
                  <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-xl border border-white/10 shadow-lg">
                     ⚖️

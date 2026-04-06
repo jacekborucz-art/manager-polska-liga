@@ -84,6 +84,7 @@ import { PromotionPlayoffSemiView } from './components/views/PromotionPlayoffSem
 import { PromotionPlayoffFinalView } from './components/views/PromotionPlayoffFinalView';
 import { PreMatchPlayoffStudioView } from './PlayoffEngine/PreMatchPlayoffStudioView';
 import { PostMatchPlayoffStudioView } from './PlayoffEngine/PostMatchPlayoffStudioView';
+import { HospitalView } from './components/views/HospitalView';
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -182,6 +183,8 @@ case ViewState.MATCH_LIVE_PLAYOFF:
   return <MatchLiveViewPolishCupSimulation />;
 case ViewState.POST_MATCH_PLAYOFF_STUDIO:
   return <PostMatchPlayoffStudioView />;
+case ViewState.HOSPITAL_VIEW:
+  return <HospitalView />;
 
   case ViewState.PRE_MATCH_CL_FINAL:
   return <PreMatchCLFinalView />;

@@ -4,11 +4,12 @@ import { useGame } from '../../context/GameContext';
 import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType } from '../../types';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { ChampionshipHistoryService } from '../../data/championship_history';
+import { RefereeService } from '../../services/RefereeService';
 import historiaBg from '../../Graphic/themes/historia.png';
 
 
 export const MatchHistoryView: React.FC = () => {
-  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners } = useGame();
+  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players } = useGame();
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonNumber);
   const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
@@ -517,8 +518,51 @@ export const MatchHistoryView: React.FC = () => {
 
               {/* Nagłówek */}
               <div className="pt-8 px-8 pb-0 text-center">
-                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">{selectedMatch.competition.replace('L_PL_', 'LIGA ')}</p>
-                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 mt-0.5">{selectedMatch.date}</p>
+                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">{(() => {
+                   const c = selectedMatch.competition;
+                   const map: Record<string, string> = {
+                     'CL_R1Q': 'Liga Mistrzów · 1. Runda Kwalifikacyjna',
+                     'CL_R1Q_RETURN': 'Liga Mistrzów · 1. Runda Kwalifikacyjna — Rewanż',
+                     'CL_R2Q': 'Liga Mistrzów · 2. Runda Kwalifikacyjna',
+                     'CL_R2Q_RETURN': 'Liga Mistrzów · 2. Runda Kwalifikacyjna — Rewanż',
+                     'CL_GROUP_STAGE': 'Liga Mistrzów · Faza Grupowa',
+                     'CL_R16': 'Liga Mistrzów · 1/8 Finału',
+                     'CL_R16_RETURN': 'Liga Mistrzów · 1/8 Finału — Rewanż',
+                     'CL_QF': 'Liga Mistrzów · Ćwierćfinał',
+                     'CL_QF_RETURN': 'Liga Mistrzów · Ćwierćfinał — Rewanż',
+                     'CL_SF': 'Liga Mistrzów · Półfinał',
+                     'CL_SF_RETURN': 'Liga Mistrzów · Półfinał — Rewanż',
+                     'CL_FINAL': 'Liga Mistrzów · Finał',
+                     'EL_R1Q': 'Liga Europy · 1. Runda Kwalifikacyjna',
+                     'EL_R1Q_RETURN': 'Liga Europy · 1. Runda Kwalifikacyjna — Rewanż',
+                     'EL_R2Q': 'Liga Europy · 2. Runda Kwalifikacyjna',
+                     'EL_R2Q_RETURN': 'Liga Europy · 2. Runda Kwalifikacyjna — Rewanż',
+                     'EL_R16': 'Liga Europy · 1/8 Finału',
+                     'EL_R16_RETURN': 'Liga Europy · 1/8 Finału — Rewanż',
+                     'EL_QF': 'Liga Europy · Ćwierćfinał',
+                     'EL_QF_RETURN': 'Liga Europy · Ćwierćfinał — Rewanż',
+                     'EL_SF': 'Liga Europy · Półfinał',
+                     'EL_SF_RETURN': 'Liga Europy · Półfinał — Rewanż',
+                     'EL_FINAL': 'Liga Europy · Finał',
+                     'CONF_R1Q': 'Liga Konferencji · 1. Runda Kwalifikacyjna',
+                     'CONF_R1Q_RETURN': 'Liga Konferencji · 1. Runda Kwalifikacyjna — Rewanż',
+                     'CONF_R2Q': 'Liga Konferencji · 2. Runda Kwalifikacyjna',
+                     'CONF_R2Q_RETURN': 'Liga Konferencji · 2. Runda Kwalifikacyjna — Rewanż',
+                     'CONF_R16': 'Liga Konferencji · 1/8 Finału',
+                     'CONF_R16_RETURN': 'Liga Konferencji · 1/8 Finału — Rewanż',
+                     'CONF_QF': 'Liga Konferencji · Ćwierćfinał',
+                     'CONF_QF_RETURN': 'Liga Konferencji · Ćwierćfinał — Rewanż',
+                     'CONF_SF': 'Liga Konferencji · Półfinał',
+                     'CONF_SF_RETURN': 'Liga Konferencji · Półfinał — Rewanż',
+                     'CONF_FINAL': 'Liga Konferencji · Finał',
+                     'POLISH_CUP': 'Puchar Polski',
+                     'PLAYOFF': 'Baraże',
+                   };
+                   if (map[c]) return map[c];
+                   if (c.startsWith('L_PL_')) return `Ekstraklasa · Kolejka ${c.replace('L_PL_', '')}`;
+                   return c;
+                 })()}</p>
+                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 mt-0.5">{new Date(selectedMatch.date).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
 
               {/* Karta meczu */}
@@ -529,16 +573,39 @@ export const MatchHistoryView: React.FC = () => {
                     <div className="flex gap-6 text-slate-400">
                        <span>Stadion: <span className="text-white">{homeClub?.stadiumName}</span></span>
                        {selectedMatch.attendance && <span>Widzów: <span className="text-white">{selectedMatch.attendance.toLocaleString('pl-PL')}</span></span>}
+                       {selectedMatch.weather && (
+                         <span>Pogoda: <span className="text-white">
+                           {(() => {
+                             const d = selectedMatch.weather!.description.toLowerCase();
+                             if (d.includes('zamieć') || d.includes('blizzard')) return '🌨️';
+                             if (d.includes('burza')) return '⛈️';
+                             if (d.includes('śnieg') || d.includes('snieg')) return '❄️';
+                             if (d.includes('ulewny') || d.includes('heavy rain')) return '🌧️';
+                             if (d.includes('deszcz') || d.includes('rain') || d.includes('lekki deszcz')) return '🌦️';
+                             if (d.includes('wiatr') || d.includes('wind')) return '💨';
+                             if (d.includes('zachmurzenie') || d.includes('pochmurno') || d.includes('cloudy')) return '☁️';
+                             return '☀️';
+                           })()}{' '}{selectedMatch.weather!.description} {selectedMatch.weather!.tempC}°C
+                         </span></span>
+                       )}
                     </div>
                     {selectedMatch.refereeName && (
-                      <span className="text-slate-400">Sędzia: <span className="text-white">{selectedMatch.refereeName}</span></span>
+                      <span className="text-slate-400">Sędzia: {(() => {
+                        const ref = RefereeService.pool.find(r => `${r.firstName} ${r.lastName}` === selectedMatch.refereeName);
+                        return ref
+                          ? <button onClick={e => { e.stopPropagation(); viewRefereeDetails(ref.id); }} className="text-white hover:text-amber-300 hover:underline cursor-pointer transition-colors">{selectedMatch.refereeName}</button>
+                          : <span className="text-white">{selectedMatch.refereeName}</span>;
+                      })()}</span>
                     )}
                  </div>
 
                  {/* Drużyny + wynik */}
                  <div className="flex items-center justify-between">
                     <div className="flex-1 flex items-center justify-end gap-3">
-                       <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight text-right">{homeClub?.name}</span>
+                       {homeClub
+                         ? <button onClick={e => { e.stopPropagation(); viewClubDetails(homeClub.id); }} className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight text-right hover:text-amber-300 transition-colors cursor-pointer">{homeClub.name}</button>
+                         : <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight text-right">{homeClub?.name}</span>
+                       }
                        {homeClub?.logoFile
                          ? <img src={new URL(`../../Graphic/logo/${homeClub.logoFile}`, import.meta.url).href} alt="" className="w-10 h-10 object-contain shrink-0" />
                          : <div className="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shrink-0">
@@ -560,7 +627,10 @@ export const MatchHistoryView: React.FC = () => {
                              <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[1] || awayClub?.colorsHex[0] }} />
                            </div>
                        }
-                       <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight">{awayClub?.name}</span>
+                       {awayClub
+                         ? <button onClick={e => { e.stopPropagation(); viewClubDetails(awayClub.id); }} className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight hover:text-amber-300 transition-colors cursor-pointer">{awayClub.name}</button>
+                         : <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight">{awayClub?.name}</span>
+                       }
                     </div>
                  </div>
 
@@ -593,7 +663,10 @@ export const MatchHistoryView: React.FC = () => {
                                  {homeGoals.map(g => (
                                    <span key={`hg-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
                                       <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
-                                      <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                      {g.playerId
+                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
+                                        : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                      }
                                    </span>
                                  ))}
                               </div>
@@ -601,7 +674,10 @@ export const MatchHistoryView: React.FC = () => {
                                  {awayGoals.map(g => (
                                    <span key={`ag-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
                                       <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
-                                      <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                      {g.playerId
+                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
+                                        : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                      }
                                    </span>
                                  ))}
                               </div>
@@ -613,7 +689,10 @@ export const MatchHistoryView: React.FC = () => {
                                  {homeCards.map(c => (
                                    <span key={`hc-${c.minute}-${c.type}`} className="inline-flex items-center gap-1.5">
                                       <span>{c.type === 'YELLOW' ? '🟨' : '🟥'}</span>
-                                      <span>{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</span>
+                                      {c.playerId
+                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(c.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</button>
+                                        : <span>{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</span>
+                                      }
                                    </span>
                                  ))}
                               </div>
@@ -621,7 +700,10 @@ export const MatchHistoryView: React.FC = () => {
                                  {awayCards.map(c => (
                                    <span key={`ac-${c.minute}-${c.type}`} className="inline-flex items-center gap-1.5">
                                       <span>{c.type === 'YELLOW' ? '🟨' : '🟥'}</span>
-                                      <span>{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</span>
+                                      {c.playerId
+                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(c.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</button>
+                                        : <span>{c.minute}' {c.playerName}{c.type === 'SECOND_YELLOW' ? ' (2. żółta)' : ''}</span>
+                                      }
                                    </span>
                                  ))}
                               </div>

@@ -1133,7 +1133,7 @@ setMessages([welcomeMail, fanMail]);
     // null zamiast userTeamId — gracz kliknął "Symuluj", więc symulujemy WSZYSTKIE mecze
     // łącznie z drużyną gracza (brak trybu live dla CL)
     const clResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-      currentDate, null, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed
+      currentDate, null, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
     );
     setGlobalFixtures(prev => {
       const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
@@ -2751,7 +2751,7 @@ const finalResult: SimulationOutput = {
 
     // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
     const clResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-      dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, sessionSeed
+      dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, sessionSeed, coaches
     );
     // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
     // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
