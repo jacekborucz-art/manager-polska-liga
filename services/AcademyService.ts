@@ -194,6 +194,53 @@ function pickRegion(regionFocus: Region | undefined, rng: () => number): Region 
   return Region.POLAND;
 }
 
+// ── Koszty i czas misji skautingowych (zewnętrznych) ─────────────────────────
+
+const SCOUT_REGION_BASE_COST: Partial<Record<Region, number>> = {
+  [Region.POLAND]:    5_000,
+  [Region.CZ_SK]:     8_000,
+  [Region.HUNGARIAN]: 8_000,
+  [Region.BALKANS]:   12_000,
+  [Region.GERMANY]:   15_000,
+  [Region.ROMANIA]:   12_000,
+  [Region.EX_USSR]:   18_000,
+  [Region.IBERIA]:    25_000,
+  [Region.FRANCE]:    25_000,
+  [Region.SSA]:       35_000,
+  [Region.BRAZIL]:    50_000,
+  [Region.ARGENTINA]: 50_000,
+};
+const SCOUT_REGION_BASE_COST_GLOBAL = 30_000;
+
+const SCOUT_REGION_BASE_DAYS: Partial<Record<Region, number>> = {
+  [Region.POLAND]:    30,
+  [Region.CZ_SK]:     35,
+  [Region.HUNGARIAN]: 35,
+  [Region.BALKANS]:   40,
+  [Region.GERMANY]:   42,
+  [Region.ROMANIA]:   40,
+  [Region.EX_USSR]:   45,
+  [Region.IBERIA]:    52,
+  [Region.FRANCE]:    52,
+  [Region.SSA]:       60,
+  [Region.BRAZIL]:    65,
+  [Region.ARGENTINA]: 65,
+};
+const SCOUT_REGION_BASE_DAYS_GLOBAL = 50;
+
+const SCOUT_LEVEL_COST_MULT: Record<number, number> = { 1: 1.0, 2: 1.0, 3: 0.80, 4: 0.65, 5: 0.50 };
+const SCOUT_LEVEL_DAYS_MULT: Record<number, number> = { 1: 1.0, 2: 1.0, 3: 0.85, 4: 0.70, 5: 0.55 };
+
+function calcScoutCost(regionFocus: Region | undefined, level: ClubAcademy['level']): number {
+  const base = regionFocus ? (SCOUT_REGION_BASE_COST[regionFocus] ?? SCOUT_REGION_BASE_COST_GLOBAL) : SCOUT_REGION_BASE_COST_GLOBAL;
+  return Math.round(base * (SCOUT_LEVEL_COST_MULT[level] ?? 1.0));
+}
+
+function calcScoutDays(regionFocus: Region | undefined, level: ClubAcademy['level']): number {
+  const base = regionFocus ? (SCOUT_REGION_BASE_DAYS[regionFocus] ?? SCOUT_REGION_BASE_DAYS_GLOBAL) : SCOUT_REGION_BASE_DAYS_GLOBAL;
+  return Math.round(base * (SCOUT_LEVEL_DAYS_MULT[level] ?? 1.0));
+}
+
 // ── Publiczne API serwisu ─────────────────────────────────────────────────────
 
 export const AcademyService = {
@@ -228,7 +275,7 @@ export const AcademyService = {
       const region = pickRegion(regionFocus, rng);
       const name = NameGeneratorService.getRandomName(region);
       const hiddenTalent = Math.round(20 + rng() * talentCap);
-      const age = 16 + Math.floor(rng() * 3); // 16–18
+      const age = 14 + Math.floor(rng() * 4); // 14–17
       const attrs = generateYouthAttributes(pos, hiddenTalent, rng);
       result.push({
         id: `YOUTH_${season}_${i}_${Math.floor(rng() * 99999)}`,
@@ -262,6 +309,7 @@ export const AcademyService = {
     const levelMult = 0.7 + (level - 1) * 0.15; // 0.70 – 1.30
 
     return youthPlayers.map(youth => {
+      if (youth.contractSigned === false) return youth;
       const talentMod = 0.6 + (youth.hiddenTalent / 100) * 0.8;
       const focusBonus = youth.developmentFocus ? 0.5 : 0;
       const rawGain = BASE_WEEKLY_READINESS_GAIN * talentMod * budgetMult * levelMult + focusBonus;
@@ -363,17 +411,27 @@ export const AcademyService = {
     return 'LOW';
   },
 
+  // Koszt zewnętrznej misji skautingowej zależny od regionu i poziomu akademii
+  getScoutMissionCost: calcScoutCost,
+  // Czas misji (dni) zależny od regionu i poziomu akademii
+  getScoutMissionDays: calcScoutDays,
+
   // Buduje misję skautingową
   buildScoutMission(
     targetYouthPlayerId: string | undefined,
     regionFocus: Region | undefined,
     level: ClubAcademy['level'],
-    currentDate: Date
+    currentDate: Date,
+    positionFilter?: import('../types').PlayerPosition,
+    ageMin?: number,
+    ageMax?: number,
   ): AcademyScoutMission {
-    const daysNeeded = level <= 2 ? 14 : level <= 3 ? 10 : 7;
+    const daysNeeded = targetYouthPlayerId
+      ? (level <= 2 ? 14 : level <= 3 ? 10 : 7)
+      : calcScoutDays(regionFocus, level);
+    const cost = targetYouthPlayerId ? 0 : calcScoutCost(regionFocus, level);
     const completion = new Date(currentDate);
     completion.setDate(completion.getDate() + daysNeeded);
-    const cost = level <= 2 ? 20_000 : level <= 3 ? 12_000 : 6_000;
     return {
       id: `SCOUT_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       targetYouthPlayerId,
@@ -381,6 +439,9 @@ export const AcademyService = {
       completionDate: completion.toISOString().split('T')[0],
       isRegionScouting: !targetYouthPlayerId,
       cost,
+      positionFilter,
+      ageMin,
+      ageMax,
     };
   },
 
@@ -539,5 +600,67 @@ export const AcademyService = {
       if (msg) return msg;
     }
     return null;
+  },
+
+  // Rozstrzyga wynik misji regionalnej — skaut może wrócić z pustymi rękami
+  resolveRegionalScoutingResult(
+    mission: AcademyScoutMission,
+    academyLevel: ClubAcademy['level'],
+    slotsAvailable: number,
+    networkDepth: number = 10,
+    completionDate: Date,
+  ): YouthPlayer[] {
+    if (!mission.isRegionScouting || slotsAvailable <= 0) return [];
+
+    // Szansa sukcesu: 45% (poziom 1) do 75% (poziom 5), +/-1% za punkt networkDepth względem 10
+    const baseChance: Record<number, number> = { 1: 0.45, 2: 0.52, 3: 0.60, 4: 0.68, 5: 0.75 };
+    const networkBonus = (networkDepth - 10) * 0.01;
+    const successChance = clamp((baseChance[academyLevel] ?? 0.50) + networkBonus, 0.20, 0.90);
+
+    if (Math.random() > successChance) return [];
+
+    const maxFind = academyLevel <= 2 ? 2 : 3;
+    const count = Math.min(slotsAvailable, 1 + Math.floor(Math.random() * maxFind));
+
+    const seed = completionDate.getTime() + Math.floor(Math.random() * 9999);
+    const rng = seededRng(seed);
+    const talentCap = INTAKE_TALENT_CAP[academyLevel];
+    const positionPool = [
+      PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.DEF,
+      PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID,
+      PlayerPosition.FWD, PlayerPosition.FWD,
+    ];
+    const contractEnd = new Date(completionDate);
+    contractEnd.setFullYear(contractEnd.getFullYear() + 3);
+
+    const result: YouthPlayer[] = [];
+    for (let i = 0; i < count; i++) {
+      const pos = mission.positionFilter ?? pick(positionPool, rng);
+      const region = mission.regionFocus ?? pickRegion(undefined, rng);
+      const name = NameGeneratorService.getRandomName(region);
+      const ageMin = mission.ageMin ?? 15;
+      const ageMax = mission.ageMax ?? 21;
+      const age = ageMin + Math.floor(rng() * (ageMax - ageMin + 1));
+      const hiddenTalent = Math.round(20 + rng() * talentCap);
+      const attrs = generateYouthAttributes(pos, hiddenTalent, rng);
+      result.push({
+        id: `YOUTH_SCOUT_${completionDate.getTime()}_${i}_${Math.floor(rng() * 99999)}`,
+        firstName: name.firstName,
+        lastName: name.lastName,
+        age,
+        position: pos,
+        nationality: region,
+        attributes: attrs,
+        hiddenTalent,
+        revealedTalentRating: undefined,
+        developmentFocus: undefined,
+        readinessScore: Math.round(rng() * 12),
+        monthsInAcademy: 0,
+        contractEndDate: contractEnd.toISOString().split('T')[0],
+        weeklyMaintenanceCost: Math.max(300, Math.round((age - 10) / 2) * 100),
+        contractSigned: false,
+      });
+    }
+    return result;
   },
 };

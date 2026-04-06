@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import {
-  ViewState, PlayerPosition, PlayerAttributes, Region, YouthPlayer, ClubAcademy,
+  ViewState, PlayerPosition, PlayerAttributes, Region, YouthPlayer, ClubAcademy, Scout,
 } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { AcademyService, ACADEMY_UPGRADE_COSTS, ACADEMY_UPGRADE_DAYS, ACADEMY_MAX_SLOTS } from '../../services/AcademyService';
+import { ScoutService } from '../../services/ScoutService';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 
 // ── Pomocnicze stałe ───────────────────────────────────────────────────────────
@@ -90,21 +91,28 @@ const SELECTABLE_REGIONS: Region[] = [
 
 // ── Komponent ─────────────────────────────────────────────────────────────────
 
-type Tab = 'players' | 'infra' | 'scout' | 'history';
+type Tab = 'players' | 'infra' | 'scout' | 'scouts' | 'history';
 
 export const AcademyView: React.FC = () => {
   const {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer,
     dismissYouthPlayer, setYouthFocus, startScoutMission,
-    setAcademyRegionFocus, setAcademyOperationalBudget,
+    setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     navigateTo, userTeamId, clubs, currentDate,
+    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
   } = useGame();
 
   const [tab, setTab] = useState<Tab>('players');
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
-  const [showFocusMenu, setShowFocusMenu] = useState<string | null>(null);
+
   const [showPromoteMenu, setShowPromoteMenu] = useState<string | null>(null);
   const [budgetInputValue, setBudgetInputValue] = useState<string>('');
+
+  // Formularz misji skautingowej
+  const [scoutPosition, setScoutPosition] = useState<PlayerPosition | ''>('');
+  const [scoutAgeMin, setScoutAgeMin] = useState<number>(15);
+  const [scoutAgeMax, setScoutAgeMax] = useState<number>(21);
+  const [selectedMissionScoutId, setSelectedMissionScoutId] = useState<string>('');
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -206,6 +214,7 @@ export const AcademyView: React.FC = () => {
               { id: 'players', label: '👦 Wychowankowie' },
               { id: 'infra',   label: '🏗️ Infrastruktura' },
               { id: 'scout',   label: '🔍 Skautowanie' },
+              { id: 'scouts',  label: '🕵️ Skauci' },
               { id: 'history', label: '🏆 Historia' },
             ] as { id: Tab; label: string }[]).map(t => (
               <button
@@ -229,7 +238,7 @@ export const AcademyView: React.FC = () => {
                   <div className="p-12 text-center">
                     <div className="text-5xl mb-4">⚽</div>
                     <p className="text-slate-500 text-sm uppercase tracking-widest font-black">Brak wychowanków</p>
-                    <p className="text-slate-600 text-xs mt-2">Nowi wychowankowie dołączą 1 Sierpnia каждego roku.</p>
+                    <p className="text-slate-600 text-xs mt-2">Zatrudnij skauta i wyślij go na poszukiwania — wychowankowie pojawią się po zakończeniu misji.</p>
                   </div>
                 ) : (
                   <table className="w-full text-xs border-collapse">
@@ -242,20 +251,24 @@ export const AcademyView: React.FC = () => {
                           <th key={a.key} className="px-1.5 py-2.5 text-center whitespace-nowrap">{a.label}</th>
                         ))}
                         <th className="px-3 py-2.5 text-center">Gotowość</th>
-                        <th className="px-3 py-2.5 text-center">Talent</th>
+                        <th className="px-3 py-2.5 text-center">Ocena Talentu</th>
                         <th className="px-3 py-2.5 text-center">Focus</th>
+                        <th className="px-3 py-2.5 text-center">Utrzym.</th>
                         <th className="px-3 py-2.5 text-center">Akcje</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedYouth.map((youth) => {
                         const isReady = youth.readinessScore >= readinessThreshold;
+                        const activeMission = academy?.activeMissions.find(m => m.targetYouthPlayerId === youth.id);
                         return (
                           <tr
                             key={youth.id}
                             onClick={() => setSelectedYouthId(prev => prev === youth.id ? null : youth.id)}
                             className={`border-t border-slate-700/30 cursor-pointer transition-colors ${
-                              selectedYouthId === youth.id ? 'bg-white/5' : 'hover:bg-white/[0.03]'
+                              youth.contractSigned === false
+                                ? 'bg-amber-500/5 border-l-2 border-l-amber-500/40'
+                                : selectedYouthId === youth.id ? 'bg-white/5' : 'hover:bg-white/[0.03]'
                             }`}
                           >
                             <td className="px-3 py-2">
@@ -293,6 +306,13 @@ export const AcademyView: React.FC = () => {
                                 <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${TALENT_LABEL[youth.revealedTalentRating].color}`}>
                                   {TALENT_LABEL[youth.revealedTalentRating].label}
                                 </span>
+                              ) : activeMission ? (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded border text-violet-300 border-violet-400/50 bg-violet-500/10">
+                                    Obserwowany
+                                  </span>
+                                  <span className="text-[8px] text-slate-500">Kolejny raport: {activeMission.completionDate}</span>
+                                </div>
                               ) : (
                                 <span className="text-slate-600 text-[9px] font-black">Nieznany</span>
                               )}
@@ -306,90 +326,105 @@ export const AcademyView: React.FC = () => {
                                 <span className="text-slate-600 text-[9px]">—</span>
                               )}
                             </td>
+                            <td className="px-3 py-2 text-center">
+                              {(youth.weeklyMaintenanceCost ?? 0) > 0 ? (
+                                <span className={`text-[9px] font-black ${youth.contractSigned === false ? 'text-amber-400' : 'text-slate-400'}`}>
+                                  {youth.weeklyMaintenanceCost} PLN/tydz
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 text-[9px]">—</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2">
-                              <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                                {/* Focus */}
-                                <div className="relative">
-                                  <button
-                                    onClick={() => setShowFocusMenu(prev => prev === youth.id ? null : youth.id)}
-                                    className="px-2 py-1 text-[9px] font-black uppercase rounded bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-all"
-                                    title="Ustaw focus"
-                                  >
-                                    🎯
-                                  </button>
-                                  {showFocusMenu === youth.id && (
-                                    <div className="absolute right-0 top-8 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 min-w-[160px] max-h-60 overflow-y-auto">
-                                      <button
-                                        onClick={() => { setYouthFocus(youth.id, null); setShowFocusMenu(null); }}
-                                        className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-all font-bold"
-                                      >
-                                        Brak fokusu
-                                      </button>
+                              <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
+                                {youth.contractSigned === false ? (
+                                  <>
+                                    <button
+                                      onClick={() => signYouthPlayerContract(youth.id)}
+                                      className="px-2 py-1 text-[9px] font-black uppercase rounded bg-amber-600/20 text-amber-300 border border-amber-500/40 hover:bg-amber-600/30 transition-all"
+                                      title="Podpisz kontrakt w ciemno — nie znasz talentu zawodnika"
+                                    >
+                                      Podpisz
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (window.confirm(`Odrzucić ${youth.firstName} ${youth.lastName}?`)) {
+                                          dismissYouthPlayer(youth.id);
+                                        }
+                                      }}
+                                      className="px-2 py-1 text-[9px] font-black uppercase rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
+                                      title="Odrzuć"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Focus */}
+                                    <select
+                                      value={youth.developmentFocus ?? ''}
+                                      onChange={e => setYouthFocus(youth.id, (e.target.value || null) as keyof PlayerAttributes | null)}
+                                      className="bg-slate-800 text-amber-400 border border-amber-500/30 rounded text-[9px] font-black px-1.5 py-1 cursor-pointer outline-none hover:border-amber-500/60 transition-all"
+                                      title="Ustaw focus"
+                                    >
+                                      <option value="" className="bg-slate-900 text-slate-400">Brak fokusu</option>
                                       {FOCUS_ATTRS.map(f => (
-                                        <button
-                                          key={f.key}
-                                          onClick={() => { setYouthFocus(youth.id, f.key); setShowFocusMenu(null); }}
-                                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 rounded-lg transition-all font-bold ${
-                                            youth.developmentFocus === f.key ? 'text-amber-400' : 'text-slate-300 hover:text-white'
-                                          }`}
-                                        >
-                                          {f.label}
-                                        </button>
+                                        <option key={f.key} value={f.key} className="bg-slate-900 text-slate-200">{f.label}</option>
                                       ))}
-                                    </div>
-                                  )}
-                                </div>
-                                {/* Scouting */}
-                                <button
-                                  onClick={() => {
-                                    const ok = startScoutMission(youth.id, undefined);
-                                    if (!ok) alert('Za mało budżetu lub misja już trwa!');
-                                  }}
-                                  disabled={!!youth.revealedTalentRating}
-                                  className="px-2 py-1 text-[9px] font-black uppercase rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Wyślij skaut"
-                                >
-                                  🔍
-                                </button>
-                                {/* Awans */}
-                                <div className="relative">
-                                  <button
-                                    onClick={() => setShowPromoteMenu(prev => prev === youth.id ? null : youth.id)}
-                                    disabled={!isReady}
-                                    className="px-2 py-1 text-[9px] font-black uppercase rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                    title="Awansuj"
-                                  >
-                                    ↑
-                                  </button>
-                                  {showPromoteMenu === youth.id && (
-                                    <div className="absolute right-0 top-8 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 min-w-[180px]">
+                                    </select>
+                                    {/* Ocena trenera */}
+                                    <button
+                                      onClick={() => {
+                                        const ok = startScoutMission(youth.id, undefined);
+                                        if (!ok) alert('Za mało budżetu na zlecenie raportu!');
+                                      }}
+                                      disabled={!!youth.revealedTalentRating || !!activeMission}
+                                      className="px-2 py-1 text-[9px] font-black uppercase rounded bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                      title={activeMission ? `Trener obserwuje — raport gotowy ${activeMission.completionDate}` : 'Zleć ocenę trenera (oceni potencjał zawodnika)'}
+                                    >
+                                      📌
+                                    </button>
+                                    {/* Awans */}
+                                    <div className="relative">
                                       <button
-                                        onClick={() => { promoteYouthPlayer(youth.id, 'RESERVES'); setShowPromoteMenu(null); }}
-                                        className="w-full text-left px-3 py-2 text-xs text-blue-300 hover:bg-white/5 rounded-lg transition-all font-black"
+                                        onClick={() => setShowPromoteMenu(prev => prev === youth.id ? null : youth.id)}
+                                        disabled={!isReady}
+                                        className="px-2 py-1 text-[9px] font-black uppercase rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title="Awansuj"
                                       >
-                                        ↑ Do Rezerw
+                                        ↑
                                       </button>
-                                      <button
-                                        onClick={() => { promoteYouthPlayer(youth.id, 'FIRST_TEAM'); setShowPromoteMenu(null); }}
-                                        className="w-full text-left px-3 py-2 text-xs text-emerald-300 hover:bg-white/5 rounded-lg transition-all font-black"
-                                      >
-                                        ↑↑ Do Pierwszego Składu
-                                      </button>
+                                      {showPromoteMenu === youth.id && (
+                                        <div className="absolute right-0 top-8 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 min-w-[180px]">
+                                          <button
+                                            onClick={() => { promoteYouthPlayer(youth.id, 'RESERVES'); setShowPromoteMenu(null); }}
+                                            className="w-full text-left px-3 py-2 text-xs text-blue-300 hover:bg-white/5 rounded-lg transition-all font-black"
+                                          >
+                                            ↑ Do Rezerw
+                                          </button>
+                                          <button
+                                            onClick={() => { promoteYouthPlayer(youth.id, 'FIRST_TEAM'); setShowPromoteMenu(null); }}
+                                            className="w-full text-left px-3 py-2 text-xs text-emerald-300 hover:bg-white/5 rounded-lg transition-all font-black"
+                                          >
+                                            ↑↑ Do Pierwszego Składu
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                                {/* Zwolnij */}
-                                <button
-                                  onClick={() => {
-                                    if (window.confirm(`Zwolnić ${youth.firstName} ${youth.lastName}?`)) {
-                                      dismissYouthPlayer(youth.id);
-                                    }
-                                  }}
-                                  className="px-2 py-1 text-[9px] font-black uppercase rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
-                                  title="Zwolnij"
-                                >
-                                  ✕
-                                </button>
+                                    {/* Zwolnij */}
+                                    <button
+                                      onClick={() => {
+                                        if (window.confirm(`Zwolnić ${youth.firstName} ${youth.lastName}?`)) {
+                                          dismissYouthPlayer(youth.id);
+                                        }
+                                      }}
+                                      className="px-2 py-1 text-[9px] font-black uppercase rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
+                                      title="Zwolnij"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -658,25 +693,104 @@ export const AcademyView: React.FC = () => {
               {/* Aktywne misje */}
               <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
                 <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Aktywne Misje Skautingowe</h3>
-                {academy.activeMissions.length === 0 ? (
-                  <p className="text-slate-600 text-sm">Brak aktywnych misji. Wyślij skautów z zakładki Wychowankowie.</p>
+                <p className="text-[10px] text-slate-500 mb-4">Skaut jedzie do wybranego regionu i szuka nowych talentów do rekrutacji do akademii.</p>
+
+                {/* Formularz nowej misji */}
+                {employedScouts.length === 0 ? (
+                  <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4 mb-4 text-center">
+                    <p className="text-2xl mb-2">🕵️</p>
+                    <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Brak zatrudnionych skautów</p>
+                    <p className="text-slate-600 text-[10px]">Przejdź do zakładki <span className="text-slate-400 font-black">Skauci</span>, aby zatrudnić skauta przed wysłaniem misji.</p>
+                  </div>
+                ) : (
+                <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3 mb-4 space-y-3">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Parametry misji</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Skaut (opcjonalnie)</label>
+                      <select
+                        value={selectedMissionScoutId}
+                        onChange={e => setSelectedMissionScoutId(e.target.value)}
+                        className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-2 py-1.5 outline-none"
+                      >
+                        <option value="">Bez skauta</option>
+                        {employedScouts.filter(s => !s.isOnMission).map(s => {
+                          const tier = ScoutService.getScoutTier(s);
+                          return (
+                            <option key={s.id} value={s.id}>
+                              {s.firstName} {s.lastName} [{tier.label}]
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Pozycja (opcjonalnie)</label>
+                      <select
+                        value={scoutPosition}
+                        onChange={e => setScoutPosition(e.target.value as PlayerPosition | '')}
+                        className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-2 py-1.5 outline-none"
+                      >
+                        <option value="">Dowolna pozycja</option>
+                        <option value={PlayerPosition.GK}>Bramkarz (BR)</option>
+                        <option value={PlayerPosition.DEF}>Obrońca (OBR)</option>
+                        <option value={PlayerPosition.MID}>Pomocnik (POM)</option>
+                        <option value={PlayerPosition.FWD}>Napastnik (NAP)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Wiek</label>
+                    <div className="flex items-center gap-1 w-full max-w-[180px]">
+                      <select
+                        value={scoutAgeMin}
+                        onChange={e => { const v = +e.target.value; setScoutAgeMin(v); if (v > scoutAgeMax) setScoutAgeMax(v); }}
+                        className="flex-1 bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-1.5 py-1.5 outline-none"
+                      >
+                        {[15,16,17,18,19,20,21].map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      <span className="text-slate-600 text-[10px]">-</span>
+                      <select
+                        value={scoutAgeMax}
+                        onChange={e => { const v = +e.target.value; setScoutAgeMax(v); if (v < scoutAgeMin) setScoutAgeMin(v); }}
+                        className="flex-1 bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-1.5 py-1.5 outline-none"
+                      >
+                        {[15,16,17,18,19,20,21].filter(a => a >= scoutAgeMin).map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const ok = startScoutMission(undefined, academy.regionFocus, scoutPosition || undefined, scoutAgeMin, scoutAgeMax, selectedMissionScoutId || undefined);
+                      if (!ok) alert('Za mało budżetu na misję skautingową!');
+                    }}
+                    className="w-full py-2.5 rounded-xl text-xs font-black bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 transition-all"
+                  >
+                    <div className="font-black uppercase tracking-wider">🔍 Wyślij skauta {academy.regionFocus ? `→ ${REGION_LABELS[academy.regionFocus] ?? academy.regionFocus}` : '→ Globalny'}</div>
+                    <div className="text-[9px] font-medium normal-case mt-0.5 text-blue-400/70">
+                      Koszt: {AcademyService.getScoutMissionCost(academy.regionFocus, academy.level).toLocaleString('pl-PL')} PLN · ~{AcademyService.getScoutMissionDays(academy.regionFocus, academy.level)} dni
+                    </div>
+                  </button>
+                </div>
+                )}
+
+                {/* Lista aktywnych misji */}
+                {academy.activeMissions.filter(m => m.isRegionScouting).length === 0 ? (
+                  <p className="text-slate-600 text-xs">Brak aktywnych misji.</p>
                 ) : (
                   <div className="space-y-2">
-                    {academy.activeMissions.map(m => {
-                      const targetYouth = academy.youthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
-                      return (
-                        <div key={m.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5 flex justify-between items-center">
-                          <div>
-                            <p className="text-xs font-black text-white">
-                              {targetYouth ? `${targetYouth.firstName} ${targetYouth.lastName}` : 'Skauting regionu'}
-                            </p>
-                            {m.regionFocus && <p className="text-[9px] text-slate-500">{REGION_LABELS[m.regionFocus] ?? m.regionFocus}</p>}
-                            <p className="text-[9px] text-blue-400">Zakończenie: {m.completionDate}</p>
-                          </div>
-                          <span className="text-lg">🔍</span>
+                    {academy.activeMissions.filter(m => m.isRegionScouting).map(m => (
+                      <div key={m.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5 flex justify-between items-start">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-black text-white">Misja: {m.regionFocus ? (REGION_LABELS[m.regionFocus] ?? m.regionFocus) : 'Globalny'}</p>
+                          <p className="text-[9px] text-slate-400">
+                            {m.positionFilter ? POSITION_LABEL[m.positionFilter] : 'Dowolna poz.'} · wiek {m.ageMin ?? 15}–{m.ageMax ?? 21}
+                          </p>
+                          <p className="text-[9px] text-blue-400">Zakończenie: {m.completionDate}</p>
                         </div>
-                      );
-                    })}
+                        <span className="text-lg">🔍</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -688,31 +802,202 @@ export const AcademyView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setAcademyRegionFocus(undefined)}
-                    className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                    className={`py-2 rounded-xl text-[10px] font-black border transition-all ${
                       !academy.regionFocus
                         ? 'bg-blue-600/30 border-blue-500/50 text-blue-300'
                         : 'bg-slate-800/40 border-white/5 text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    Globalny (losowy)
+                    <div className="uppercase tracking-wider">Globalny</div>
+                    <div className="text-[8px] font-medium normal-case opacity-60">{AcademyService.getScoutMissionCost(undefined, academy.level).toLocaleString('pl-PL')} PLN</div>
                   </button>
                   {SELECTABLE_REGIONS.map(region => (
                     <button
                       key={region}
                       onClick={() => setAcademyRegionFocus(region)}
-                      className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                      className={`py-2 rounded-xl text-[10px] font-black border transition-all ${
                         academy.regionFocus === region
                           ? 'bg-blue-600/30 border-blue-500/50 text-blue-300'
                           : 'bg-slate-800/40 border-white/5 text-slate-400 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      {REGION_LABELS[region] ?? region}
+                      <div className="uppercase tracking-wider">{REGION_LABELS[region] ?? region}</div>
+                      <div className="text-[8px] font-medium normal-case opacity-60">{AcademyService.getScoutMissionCost(region, academy.level).toLocaleString('pl-PL')} PLN</div>
                     </button>
                   ))}
                 </div>
               </div>
             </div>
           )}
+
+          {/* ── TAB: Skauci ── */}
+          {tab === 'scouts' && (() => {
+            const maxScouts = ScoutService.getMaxScouts(academy.level);
+            const userClub = clubs.find(c => c.id === userTeamId);
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                {/* Zatrudnieni skauci */}
+                <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Zatrudnieni Skauci</h3>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
+                      employedScouts.length >= maxScouts
+                        ? 'text-rose-400 border-rose-500/40 bg-rose-500/10'
+                        : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10'
+                    }`}>
+                      {employedScouts.length} / {maxScouts}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mb-4">
+                    Maks. skautów na Poziomie {academy.level}: <span className="text-white font-black">{maxScouts}</span>
+                    {academy.level < 5 && <span className="text-slate-600"> (rośnie z poziomem akademii)</span>}
+                  </p>
+
+                  {employedScouts.length === 0 ? (
+                    <p className="text-slate-600 text-xs text-center py-6">Brak zatrudnionych skautów. Zatrudnij ze rynku pracy →</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {employedScouts.map(scout => {
+                        const tier = ScoutService.getScoutTier(scout);
+                        const personality = ScoutService.getPersonalityLabel(scout.personality);
+                        return (
+                          <div key={scout.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div>
+                                <p className="text-white font-black text-sm">{scout.firstName} {scout.lastName}</p>
+                                <p className="text-slate-500 text-[9px] uppercase tracking-wider">{scout.age} lat · {scout.nationality}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                                {scout.isOnMission && (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border text-blue-300 border-blue-500/40 bg-blue-500/10 animate-pulse">W misji</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1 mb-2">
+                              {[
+                                { label: 'Ocena', value: scout.judgmentAccuracy },
+                                { label: 'Kontakty', value: scout.networkDepth },
+                                { label: 'Mobilność', value: scout.reportSpeed },
+                                { label: 'Doświad.', value: scout.experience },
+                              ].map(stat => (
+                                <div key={stat.label} className="text-center p-1 bg-slate-700/30 rounded-lg">
+                                  <p className={`text-xs font-black ${stat.value >= 15 ? 'text-emerald-400' : stat.value >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{stat.value}</p>
+                                  <p className="text-[8px] text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                                {scout.regionalSpecialty && (
+                                  <span className="text-[8px] text-slate-500">★ {scout.regionalSpecialty}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] text-amber-400 font-black">{scout.weeklySalary.toLocaleString('pl-PL')} PLN/tydz</span>
+                                <button
+                                  onClick={() => {
+                                    if (scout.isOnMission) {
+                                      if (!window.confirm(`${scout.firstName} ${scout.lastName} jest w trakcie misji. Na pewno zwolnić?`)) return;
+                                    }
+                                    fireScout(scout.id);
+                                  }}
+                                  className="px-2 py-1 text-[9px] font-black rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
+                                >
+                                  Zwolnij
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Rynek pracy */}
+                <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Rynek Pracy</h3>
+                    <button
+                      onClick={refreshScoutMarket}
+                      className="px-3 py-1 text-[9px] font-black rounded-lg bg-slate-800 border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase tracking-wider"
+                    >
+                      🔄 Odśwież
+                    </button>
+                  </div>
+                  {scoutMarketRefreshDate && (
+                    <p className="text-[9px] text-slate-600 mb-3">Ostatnie odświeżenie: {scoutMarketRefreshDate} · auto co 45 dni</p>
+                  )}
+
+                  {scoutMarket.length === 0 ? (
+                    <p className="text-slate-600 text-xs text-center py-6">Brak dostępnych skautów.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[9px]">
+                            <th className="px-2 py-2 text-left">Skaut</th>
+                            <th className="px-2 py-2 text-center">Tier</th>
+                            <th className="px-2 py-2 text-center" title="Dokładność oceny talentu">Ocena</th>
+                            <th className="px-2 py-2 text-center" title="Sieć kontaktów — zwiększa szansę znalezienia talentu i obniża koszt misji">Kontakty</th>
+                            <th className="px-2 py-2 text-center" title="Mobilność — skraca czas trwania misji">Mobilność</th>
+                            <th className="px-2 py-2 text-center" title="Doświadczenie — zmniejsza błąd w ocenie">Dośw.</th>
+                            <th className="px-2 py-2 text-center">Osobow.</th>
+                            <th className="px-2 py-2 text-right">PLN/tydz</th>
+                            <th className="px-2 py-2 text-center">Akcja</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scoutMarket.map(scout => {
+                            const tier = ScoutService.getScoutTier(scout);
+                            const personality = ScoutService.getPersonalityLabel(scout.personality);
+                            const canHire = employedScouts.length < maxScouts;
+                            const clubTooSmall = (userClub?.reputation ?? 5) < scout.minClubReputation;
+                            return (
+                              <tr key={scout.id} className={`border-t border-slate-700/30 transition-colors ${clubTooSmall ? 'opacity-40' : 'hover:bg-white/[0.03]'}`}>
+                                <td className="px-2 py-2">
+                                  <p className="font-black text-white text-[11px]">{scout.firstName} {scout.lastName}</p>
+                                  <p className="text-slate-500 text-[8px]">{scout.age} l. · {scout.nationality}{scout.regionalSpecialty ? ` · ★ ${scout.regionalSpecialty}` : ''}</p>
+                                </td>
+                                <td className="px-2 py-2 text-center">
+                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                                </td>
+                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.judgmentAccuracy >= 15 ? 'text-emerald-400' : scout.judgmentAccuracy >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.judgmentAccuracy}</td>
+                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.networkDepth >= 15 ? 'text-emerald-400' : scout.networkDepth >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.networkDepth}</td>
+                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.reportSpeed >= 15 ? 'text-emerald-400' : scout.reportSpeed >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.reportSpeed}</td>
+                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.experience >= 15 ? 'text-emerald-400' : scout.experience >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.experience}</td>
+                                <td className="px-2 py-2 text-center">
+                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                                </td>
+                                <td className="px-2 py-2 text-right text-amber-400 font-black text-[10px] whitespace-nowrap">{scout.weeklySalary.toLocaleString('pl-PL')}</td>
+                                <td className="px-2 py-2 text-center">
+                                  <button
+                                    onClick={() => {
+                                      if (clubTooSmall) { alert('Twój klub ma za niską reputację dla tego skauta.'); return; }
+                                      const ok = hireScout(scout.id);
+                                      if (!ok) alert('Osiągnięto limit skautów dla tego poziomu akademii.');
+                                    }}
+                                    disabled={!canHire || clubTooSmall}
+                                    className="px-2 py-1 text-[9px] font-black rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    {clubTooSmall ? 'Za niska rep.' : canHire ? 'Zatrudnij' : 'Limit'}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            );
+          })()}
 
           {/* ── TAB: Historia ── */}
           {tab === 'history' && (

@@ -732,6 +732,8 @@ export interface YouthPlayer {
   readinessScore: number;
   monthsInAcademy: number;
   contractEndDate: string;
+  weeklyMaintenanceCost?: number;  // PLN/tydz — tylko wychowankowie ze skauta
+  contractSigned?: boolean;        // undefined/true = w akademii; false = oczekuje na podpisanie
   loanClubId?: string;
   scoutReportAvailableDate?: string;
 }
@@ -743,6 +745,35 @@ export interface AcademyScoutMission {
   completionDate: string;
   isRegionScouting: boolean;
   cost: number;
+  positionFilter?: PlayerPosition;
+  ageMin?: number;
+  ageMax?: number;
+  scoutId?: string;
+}
+
+// ── SYSTEM SKAUTÓW ─────────────────────────────────────────────────────────────────────────────
+
+export type ScoutPersonality = 'RISK_TAKER' | 'CONSERVATIVE' | 'VERSATILE' | 'AMBITIOUS';
+
+export interface Scout {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  // Parametry 1–20
+  judgmentAccuracy: number;   // dokładność oceny talentu
+  networkDepth: number;       // szansa znalezienia talentu >80
+  reportSpeed: number;        // skraca czas misji
+  experience: number;         // zmniejsza szum w ocenie
+  regionalSpecialty?: Region; // bonus w swoim regionie
+  positionSpecialty?: PlayerPosition; // bonus dla tej pozycji
+  personality: ScoutPersonality;
+  minClubReputation: number;  // 1–10: nie pracuje poniżej tej wartości
+  weeklySalary: number;
+  contractEndDate?: string;
+  employedByClubId?: string;
+  isOnMission: boolean;
 }
 
 export interface AcademyPromotedEntry {
