@@ -113,6 +113,7 @@ export const AcademyView: React.FC = () => {
   const [scoutAgeMin, setScoutAgeMin] = useState<number>(15);
   const [scoutAgeMax, setScoutAgeMax] = useState<number>(21);
   const [selectedMissionScoutId, setSelectedMissionScoutId] = useState<string>('');
+  const [fireScoutConfirm, setFireScoutConfirm] = useState<{ id: string; name: string; isOnMission: boolean } | null>(null);
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -528,7 +529,7 @@ export const AcademyView: React.FC = () => {
                   if (proposalStatus === 'PENDING') {
                     return (
                       <div className="p-4 rounded-xl bg-blue-900/20 border border-blue-500/30">
-                        <p className="text-blue-400 text-xs font-black uppercase tracking-widest mb-1">⏳ Wniosek rozpatrzony zostaje...</p>
+                        <p className="text-blue-400 text-xs font-black uppercase tracking-widest mb-1">⏳ Pański wniosek jest w trakcie rozpatrywania...</p>
                         <p className="text-slate-400 text-[10px] mb-1">Właściciel analizuje sytuację finansową i sportową klubu.</p>
                         <p className="text-slate-500 text-[10px]">Decyzja do: <span className="text-blue-300 font-black">{academy.upgradeProposalDecisionDate}</span></p>
                       </div>
@@ -898,12 +899,7 @@ export const AcademyView: React.FC = () => {
                               <div className="flex items-center gap-2">
                                 <span className="text-[9px] text-amber-400 font-black">{scout.weeklySalary.toLocaleString('pl-PL')} PLN/tydz</span>
                                 <button
-                                  onClick={() => {
-                                    if (scout.isOnMission) {
-                                      if (!window.confirm(`${scout.firstName} ${scout.lastName} jest w trakcie misji. Na pewno zwolnić?`)) return;
-                                    }
-                                    fireScout(scout.id);
-                                  }}
+                                  onClick={() => setFireScoutConfirm({ id: scout.id, name: `${scout.firstName} ${scout.lastName}`, isOnMission: !!scout.isOnMission })}
                                   className="px-2 py-1 text-[9px] font-black rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
                                 >
                                   Zwolnij
@@ -1041,6 +1037,37 @@ export const AcademyView: React.FC = () => {
 
         </div>
       </div>
+
+      {fireScoutConfirm && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-900 border border-white/10 rounded-[32px] p-8 flex flex-col items-center gap-6 shadow-2xl w-80">
+            <span className="text-4xl">🔍</span>
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-white mb-2">ZWOLNIENIE SKAUTA</p>
+              <p className="text-[11px] text-slate-300 font-bold mb-1">{fireScoutConfirm.name}</p>
+              {fireScoutConfirm.isOnMission
+                ? <p className="text-[10px] text-amber-400 uppercase tracking-wider">Skaut jest w trakcie misji — zostanie przerwana</p>
+                : <p className="text-[10px] text-slate-400 uppercase tracking-wider">Ta decyzja jest nieodwracalna</p>
+              }
+            </div>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setFireScoutConfirm(null)}
+                className="flex-1 py-3 rounded-[20px] bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:border-white/20 transition-all"
+              >
+                ANULUJ
+              </button>
+              <button
+                onClick={() => { fireScout(fireScoutConfirm.id); setFireScoutConfirm(null); }}
+                className="flex-1 py-3 rounded-[20px] bg-rose-700 border border-rose-500 text-[10px] font-black uppercase tracking-widest text-white hover:bg-rose-600 transition-all"
+              >
+                ZWOLNIJ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 };

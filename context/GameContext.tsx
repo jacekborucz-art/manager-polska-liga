@@ -1549,10 +1549,15 @@ setMessages([welcomeMail, fanMail]);
     if (currentEmployed >= maxScouts) return false;
     const scout = scoutPool.find(s => s.id === scoutId);
     if (!scout || scout.employedByClubId) return false;
+    const hiringFee = scout.weeklySalary * 4;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub || userClub.budget < hiringFee) return false;
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - hiringFee } : c));
+    addFinanceLog(userTeamId, `Zatrudnienie skauta: ${scout.firstName} ${scout.lastName}`, -hiringFee, currentDate);
     setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, employedByClubId: userTeamId } : s));
     setScoutMarket(prev => prev.filter(s => s.id !== scoutId));
     return true;
-  }, [academy, userTeamId, scoutPool]);
+  }, [academy, userTeamId, scoutPool, clubs, currentDate, addFinanceLog]);
 
   const fireScout = useCallback((scoutId: string) => {
     if (!userTeamId) return;
