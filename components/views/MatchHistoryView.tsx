@@ -592,7 +592,7 @@ export const MatchHistoryView: React.FC = () => {
                               <div className="flex flex-wrap gap-x-3 gap-y-1 justify-start text-left text-sm text-slate-200">
                                  {homeGoals.map(g => (
                                    <span key={`hg-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
-                                      <span className="text-[13px] text-emerald-300">⚽</span>
+                                      <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
                                       <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
                                    </span>
                                  ))}
@@ -600,7 +600,7 @@ export const MatchHistoryView: React.FC = () => {
                               <div className="flex flex-wrap gap-x-3 gap-y-1 justify-end text-right text-sm text-slate-200">
                                  {awayGoals.map(g => (
                                    <span key={`ag-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
-                                      <span className="text-[13px] text-emerald-300">⚽</span>
+                                      <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
                                       <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
                                    </span>
                                  ))}

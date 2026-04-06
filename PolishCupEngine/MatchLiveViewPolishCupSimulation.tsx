@@ -1084,8 +1084,7 @@ useEffect(() => {
         // KOORDYNACJA BRAIN↔SERVICE: obliczamy sensory tutaj, przed Brain, by wykryć konflikty.
         // Sensory z AiMatchDecisionCupService mają pierwszeństwo nad generycznymi regułami Brain.
         const brainSyncDiffAi = aiSide === 'HOME' ? (prev.homeScore - prev.awayScore) : (prev.awayScore - prev.homeScore);
-        const isDefensiveSensorActive = (brainSyncDiffAi >= 1 && pPower > aPower + 10)            // winningWeaker
-                                     || (brainSyncDiffAi === 1 && nextMinute >= 70 && pPower > aPower)  // lateLeadUnderPressure
+        const isDefensiveSensorActive = (brainSyncDiffAi >= 1)                                        // prowadzi — zawsze sensor defensywny
                                      || (brainSyncDiffAi === 0 && nextMinute >= 70 && pPower > aPower);  // lateDrawUnderPressure
         const isAttackSensorActive = brainSyncDiffAi <= -2                                         // losingByTwo
                                   || (brainSyncDiffAi === -1 && nextMinute >= 70);                  // lateChase
@@ -1182,8 +1181,8 @@ useEffect(() => {
         const homeDisorder = getPositionalDisorder(nextHomeLineup.startingXI, ctx.homePlayers, nextHomeLineup.tacticId);
         const awayDisorder = getPositionalDisorder(nextAwayLineup.startingXI, ctx.awayPlayers, nextAwayLineup.tacticId);
         // Zaburzony skład: rywalowi łatwiej atakować (−próg), własny atak trudniejszy (+próg)
-        homeProgressionThreshold = Math.max(0.24, 0.52 + homeDisorder * 0.24 - awayDisorder * 0.42);
-        awayProgressionThreshold = Math.max(0.24, 0.52 + awayDisorder * 0.24 - homeDisorder * 0.42);
+        homeProgressionThreshold = Math.max(0.24, 0.57 + homeDisorder * 0.24 - awayDisorder * 0.42);
+        awayProgressionThreshold = Math.max(0.24, 0.57 + awayDisorder * 0.24 - homeDisorder * 0.42);
 
         // === ŚREDNIA KONDYCJA DRUŻYNY → BEZPOŚREDNI WPŁYW NA PRÓG ===
         // 4 kontuzjowanych graczy (cond ~45) ciągnie średnią z ~80 do ~65
@@ -1300,6 +1299,11 @@ useEffect(() => {
                 awayProgressionThreshold = Math.min(0.95, awayProgressionThreshold + fightBonus);
             }
         }
+
+        // === PREMIA GOSPODARSKA (ogólna) ===
+        // Każda drużyna grająca u siebie ma lekką przewagę: znajomość boiska, kibice, brak podróży.
+        // Dotyczy wszystkich tierów — wyrównuje statystyki H/A dla meczów równorzędnych.
+        homeProgressionThreshold = Math.max(0.24, homeProgressionThreshold - 0.035);
 
         // === BONUS GOSPODARZA Z NIŻSZEJ LIGI ===
         // Drużyna grająca u siebie z niższej ligi (niższa reputacja) dostaje +7% szans na akcję bramkową.
@@ -1627,8 +1631,8 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
         let effectiveYellowChance = YELLOW_CARD_CHANCE; // ~3.15 żółtych/mecz (normalnie)
 
         if (sideIntensity === 'AGGRESSIVE') {
-            effectiveRedChance    *= 1.50;  // +50% czerwone przy agresji
-            effectiveYellowChance *= 2.5;  // +100% żółte przy agresji (główna kara)
+            effectiveRedChance    *= 1.20;  // +20% czerwone przy agresji
+            effectiveYellowChance *= 1.65;  // +65% żółte przy agresji (główna kara)
         } else if (sideIntensity === 'CAUTIOUS') {
             effectiveRedChance    *= 0.5;
             effectiveYellowChance *= 0.5;
@@ -2087,17 +2091,24 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
             }
         } 
 
-        // === ZMĘCZENIE MID → mniej udanych podań ===
+        // === ZMĘCZENIE MID+FWD → mniej udanych podań ===
         // Zmęczony pomocnik gubi podania — każde 10 pkt poniżej 80 kradnie ~7% udanych podań
+        // FWD uwzględniony z wagą 30% — napastnicy cofający się do środka (np. 4-2-4) też mają znaczenie
         const attMidFatigue = getAvgPosFatigue(
             eventSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
             eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
             eventSide === 'HOME' ? localHomeFatigue : localAwayFatigue,
             PlayerPosition.MID
         );
-        if (attMidFatigue < 80 && successfulPasses > 0) {
-            // spillRatio: było 0.70 — za łagodne przy kontuzjach pomocników
-            const spillRatio = Math.max(0, (80 - attMidFatigue) / 100) * 0.85;
+        const attFwdFatigue = getAvgPosFatigue(
+            eventSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+            eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+            eventSide === 'HOME' ? localHomeFatigue : localAwayFatigue,
+            PlayerPosition.FWD
+        );
+        const attBlendedFatigue = attMidFatigue * 0.70 + attFwdFatigue * 0.30;
+        if (attBlendedFatigue < 80 && successfulPasses > 0) {
+            const spillRatio = Math.max(0, (80 - attBlendedFatigue) / 100) * 0.85;
             successfulPasses = Math.max(0, successfulPasses - Math.floor(successfulPasses * spillRatio));
         }
 
@@ -2209,10 +2220,10 @@ dynamicThreshold *= undedogThresholdMultiplier;
         const goalDiff = Math.abs(hScore - aScore);
         const leads = (eventSide === 'HOME' && hScore > aScore) || (eventSide === 'AWAY' && aScore > hScore);
 
-           // 1. Logika Nasycenia (PRO): zaczyna od 2:0, łagodna krzywa bez twardego blokowania.
-        // goalDiff=2 → ×1.17 | diff=3 → ×1.34 | diff=4 → ×1.51 | diff=5+ → cap 0.95
-        if (leads && goalDiff >= 2) {
-            const satietyFactor = 1 + (goalDiff - 1) * 0.22;
+           // 1. Logika Nasycenia (PRO): zaczyna od 1:0, łagodna krzywa bez twardego blokowania.
+        // goalDiff=1 → ×1.10 | diff=2 → ×1.22 | diff=3 → ×1.44 | diff=4 → ×1.66 | diff=5+ → cap 0.95
+        if (leads && goalDiff >= 1) {
+            const satietyFactor = goalDiff === 1 ? 1.10 : 1 + (goalDiff - 1) * 0.22;
             dynamicThreshold = Math.min(0.95, dynamicThreshold * satietyFactor);
             // --- BOOST: bezpośredni losowy wzrost momentum rywala po 5. bramce ---
             if (goalDiff >= 5) {
@@ -2241,18 +2252,22 @@ dynamicThreshold *= undedogThresholdMultiplier;
        const currentThreshold = dynamicThreshold;
 
         // === GIANT KILLER: minimalna szansa przebicia dla drużyny z niższego Tier ===
-        // Formuła: (10 - repGap) * 0.5% → repGap=4 → 3.0%/min | repGap=7 → 1.5%/min | repGap=9 → 0.5%/min
+        // Formuła: repGap≥5 → (11-repGap)*0.9%/min | repGap<5 → (11-repGap)*0.6%/min
         // Taktyka atakującej drużyny: ofensywna ×1.40 | neutralna ×1.00 | defensywna ×0.60
-        // Działa tylko gdy normalna progresja dała 0 podań (successfulPasses = 0)
+        // Działa niezależnie od successfulPasses — szansa co minutę bez względu na przebieg walki
+        let isGiantKillerShot = false;
         const giantKillerRepGap = Math.max(0, defendingClubRep - attackingClubRep);
-        if (giantKillerRepGap >= 4 && successfulPasses === 0) {
+        if (giantKillerRepGap >= 3 && !isCoolingDown) {
             const attackingTacticObj = eventSide === 'HOME' ? homeTacticObj : awayTacticObj;
             const giantKillerTacticMod = attackingTacticObj.attackBias > 55 ? 1.40
                 : attackingTacticObj.defenseBias > 65 ? 0.60
                 : 1.00;
-            const giantKillerChance = Math.max(0.005, Math.min(0.035, (10 - giantKillerRepGap) * 0.005)) * giantKillerTacticMod;
-            if (seededRng(currentSeed, nextMinute, 9988) < giantKillerChance) {
+            const gkBaseFactor = giantKillerRepGap >= 5 ? 0.009 : 0.006;
+            const giantKillerChance = Math.max(0.004, Math.min(0.050, (11 - giantKillerRepGap) * gkBaseFactor)) * giantKillerTacticMod;
+            const alreadyGettingShot = successfulPasses / diceRolls > currentThreshold;
+            if (!alreadyGettingShot && seededRng(currentSeed, nextMinute, 9988) < giantKillerChance) {
                 successfulPasses = Math.ceil(diceRolls * (currentThreshold + 0.05));
+                isGiantKillerShot = true;
             }
         }
 
@@ -2283,10 +2298,11 @@ dynamicThreshold *= undedogThresholdMultiplier;
             const shotPower = shotPowerCore * humanFactor() * 0.92 * randomShot * scorerFatigueMod;
             
             // Zmęczenie bramkarza obniża reflexy i decyzyjność przy wyjściu:
-            // cond=100→1.00, cond=80→0.88, cond=60→0.76, cond=40→0.64 (nie spada poniżej 0.55)
+            // cond=100→1.00, cond=80→0.88, cond=60→0.76, cond=40→0.64 (nie spada poniżej 0.42)
+            // Floor 0.42 (zbliżony do flooru strzelca 0.38) — symetria: wyczerpany bramkarz cierpi podobnie
             const defFatigueMap = eventSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
             const keeperFatigue = defFatigueMap[keeper.id] ?? keeper.condition;
-            const keeperFatigueMod = isRealKeeper ? Math.max(0.55, 0.40 + (keeperFatigue / 100) * 0.60) : 1.0;
+            const keeperFatigueMod = isRealKeeper ? Math.max(0.42, 0.40 + (keeperFatigue / 100) * 0.60) : 1.0;
             // Jeśli w bramce stoi gracz z pola, jego savePower jest niemal zerowy
             let savePower = (
               keeper.attributes.goalkeeping * 0.72 +
@@ -2334,20 +2350,32 @@ dynamicThreshold *= undedogThresholdMultiplier;
         const attackingPwr = eventSide === 'HOME' ? homePwr : awayPwr;
         const defendingPwr = eventSide === 'HOME' ? awayPwr : homePwr;
         const powerRatio = Math.min(1.5, attackingPwr / Math.max(1, defendingPwr));
-        const baseConversionMult = Math.max(0.50, 0.66 - (powerRatio - 1.0) * 0.40);
+        const baseConversionMult = isGiantKillerShot
+            ? Math.max(0.52, 0.60 - (powerRatio - 1.0) * 0.40)
+            : Math.max(0.45, 0.60 - (powerRatio - 1.0) * 0.40);
         // Współczynnik nasycenia bramkowego — progresywny spadek skuteczności atakującego lidera.
-        // Działa tylko dla strony która prowadzi o > 1 bramkę.
-        // diff=2 → ×0.82 | diff=3 → ×0.65 | diff=4 → ×0.50 | diff=5 → ×0.37 | diff=6 → ×0.25 | diff=7+ → prob cap 0.01
+        // Działa już od prowadzenia o 1 bramkę.
+        // diff=1 → ×0.91 | diff=2 → ×0.81 | diff=3 → ×0.67 | diff=4 → ×0.54 | diff=5 → ×0.44 | diff=7+ → prob cap 0.01
         const attackingScore = eventSide === 'HOME' ? hScore : aScore;
         const defendingScore = eventSide === 'HOME' ? aScore : hScore;
         const leadDiff = attackingScore - defendingScore;
         let satietyMult = 1.0;
+        // Gdy silniejsza drużyna (repGap attackera vs obrońcy ≥ 3) prowadzi, hamujemy mocniej:
+        // diff=2→0.68 | diff=3→0.46 | diff=4→0.31 | diff=5→0.21 — ogranicza wyniki hokejowe.
+        // Przy wyrównanych siłach (repGap<3) łagodniejszy hamulec: 0.76.
+        const dominanceRepGap = Math.max(0, attackingClubRep - defendingClubRep);
+        const satietyBase = dominanceRepGap >= 3 ? 0.68 : 0.76;
         if (leadDiff >= 7) {
             satietyMult = 0.0; // prob zostanie ucięte do 0.01 przez cap poniżej
         } else if (leadDiff >= 2) {
-            satietyMult = Math.pow(0.815, leadDiff - 1); // diff=2→0.81, 3→0.67, 4→0.54, 5→0.44, 6→0.36
+            satietyMult = Math.pow(satietyBase, leadDiff - 1);
+        } else if (leadDiff === 1) {
+            satietyMult = 0.91; // lekkie hamowanie przy prowadzeniu 1 bramką
         }
         let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult + luckyBonus;
+        // Giant Killer: bramkarz zostaje zaskoczony — gwarantowany minimalny próg konwersji.
+        // Bez flooru: T3 napastnik vs T1 bramkarz → ~18% → niknie w n=10. Z floorem 0.22 → ~1 niespodzianka/20 meczów.
+        if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.22);
         if (eventSide === userSide && pGoalMod !== 1.0) {
             rawGoalProbability *= pGoalMod;
         }

@@ -1,7 +1,6 @@
 
 import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, LeagueRoundResults, MatchResult, HealthStatus, InjurySeverity, Referee, WeatherSnapshot, Coach } from '../types';
 import { DebugLoggerService } from './DebugLoggerService';
-import { LeagueBackgroundMatchEngine } from './LeagueBackgroundMatchEngine';
 import { LeagueBackgroundMatchEngineV2 } from './LeagueBackgroundMatchEngine-ver2';
 import { RefereeService } from './RefereeService';
 import { PlayerStatsService } from './PlayerStatsService';
@@ -200,7 +199,9 @@ if (todayFixtures.length === 0) {
             playerName: p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany',
             minute: s.minute,
             teamId: p ? p.clubId : '?',
-            isPenalty: s.isPenalty 
+            isPenalty: s.isPenalty,
+            isMiss: s.isMiss,
+            varDisallowed: s.varDisallowed
           };
         }),
         cards: (() => {

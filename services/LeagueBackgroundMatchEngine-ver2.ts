@@ -7,7 +7,7 @@ export interface BackgroundMatchResultV2 {
   homeScore: number;
   awayScore: number;
   // TUTAJ WSTAW TEN KOD (Dodano assistId i parametry urazu)
- scorers: { playerId: string; assistId?: string; minute: number; isPenalty: boolean }[];
+ scorers: { playerId: string; assistId?: string; minute: number; isPenalty: boolean; isMiss?: boolean; varDisallowed?: boolean }[];
   cards: { playerId: string; type: MatchEventType; minute: number }[];
   injuries: { playerId: string; severity: InjurySeverity; minute: number; days: number; type: string }[];
   playedPlayerIds: string[];
@@ -231,20 +231,22 @@ const allPlayedIds = new Set<string>([
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {
-        homeScore++;
         const scorer = GoalAttributionService.pickScorer(homePlayers, hActiveXI, false, () => seededRng(minute + 500));
         if (scorer) {
           const assistant = GoalAttributionService.pickAssistant(homePlayers, hActiveXI, scorer.id, false, () => seededRng(minute + 501));
-          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false });
+          const isVarDisallowed = seededRng(minute + 502) < 0.04;
+          if (!isVarDisallowed) homeScore++;
+          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false, varDisallowed: isVarDisallowed });
         }
       }
 
       if (seededRng(minute + 200) < aGoalLambda) {
-        awayScore++;
         const scorer = GoalAttributionService.pickScorer(awayPlayers, aActiveXI, false, () => seededRng(minute + 600));
         if (scorer) {
           const assistant = GoalAttributionService.pickAssistant(awayPlayers, aActiveXI, scorer.id, false, () => seededRng(minute + 601));
-          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false });
+          const isVarDisallowed = seededRng(minute + 602) < 0.04;
+          if (!isVarDisallowed) awayScore++;
+          scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute, isPenalty: false, varDisallowed: isVarDisallowed });
         }
       }
 
@@ -255,11 +257,13 @@ const allPlayedIds = new Set<string>([
       if (seededRng(minute + 700) < penaltyProb) {
         const side = seededRng(minute + 701) < 0.5 ? 'H' : 'A';
         const isScored = seededRng(minute + 702) < 0.78; // 78% skuteczności karnych
+        const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
+        if (!kicker) break; // brak kandydatów (np. czerwona kartka wyczyściła skład)
         if (isScored) {
           if (side === 'H') homeScore++; else awayScore++;
-         const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
-if (!kicker) break; // brak kandydatów (np. czerwona kartka wyczyściła skład)
-scorers.push({ playerId: kicker.id, minute, isPenalty: true });
+          scorers.push({ playerId: kicker.id, minute, isPenalty: true });
+        } else {
+          scorers.push({ playerId: kicker.id, minute, isPenalty: true, isMiss: true });
         }
       }
 

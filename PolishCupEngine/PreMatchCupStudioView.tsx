@@ -305,7 +305,10 @@ export const PreMatchCupStudioView: React.FC = () => {
               <h3 className="text-5xl font-black italic text-white uppercase tracking-tighter leading-none">{roundTitle}</h3>
            </div>
 
-           <button onClick={() => navigateTo(ViewState.MATCH_LIVE_CUP)} className="group relative px-20 py-5 rounded-[30px] bg-rose-600 hover:bg-rose-500 text-white font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(225,29,72,0.3)] border-b-8 border-rose-800">ROZPOCZNIJ MECZ 🏆</button>
+           <div className="flex items-stretch justify-center gap-4">
+              <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="px-12 py-5 rounded-[30px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl">✏️ ZMIEŃ SKŁAD</button>
+              <button onClick={() => navigateTo(ViewState.MATCH_LIVE_CUP)} className="group relative px-20 py-5 rounded-[30px] bg-rose-600 hover:bg-rose-500 text-white font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(225,29,72,0.3)] border-b-8 border-rose-800">ROZPOCZNIJ MECZ 🏆</button>
+           </div>
 
            <div className="flex items-stretch justify-center gap-4 w-full max-w-4xl animate-slide-up" style={{ animationDelay: '0.4s' }}>
               <div className="bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-center flex-1">
