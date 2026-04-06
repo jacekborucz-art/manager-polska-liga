@@ -34,7 +34,7 @@ const TALENT_LABEL: Record<NonNullable<YouthPlayer['revealedTalentRating']>, { l
 };
 
 const LEVEL_ICON = ['', '⚽', '🏗️', '🏟️', '⭐', '🌟'];
-const LEVEL_LABEL = ['', 'Boisko ze słupkami', 'Centrum Szkoleniowe', 'Akademia Regionalna', 'Akademia Profesjonalna', 'Centrum Elitarne'];
+const LEVEL_LABEL = ['', 'Boisko treningowe', 'Centrum Szkoleniowe', 'Akademia Regionalna', 'Akademia Profesjonalna', 'Poziom Światowy'];
 
 const ATTR_DISPLAY: { key: keyof PlayerAttributes; label: string }[] = [
   { key: 'pace',       label: 'PRD' },
@@ -835,7 +835,7 @@ export const AcademyView: React.FC = () => {
             const maxScouts = ScoutService.getMaxScouts(academy.level);
             const userClub = clubs.find(c => c.id === userTeamId);
             return (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
 
                 {/* Zatrudnieni skauci */}
                 <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
@@ -849,13 +849,13 @@ export const AcademyView: React.FC = () => {
                       {employedScouts.length} / {maxScouts}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-500 mb-4">
-                    Maks. skautów na Poziomie {academy.level}: <span className="text-white font-black">{maxScouts}</span>
-                    {academy.level < 5 && <span className="text-slate-600"> (rośnie z poziomem akademii)</span>}
+                  <p className="text-[10px] text-gold-500 mb-4">
+                    Maks. skautów na tym poziomie:<span className="text-white font-black">{maxScouts}</span>
+                    {academy.level < 5 && <span className="text-slate-600"> </span>}
                   </p>
 
                   {employedScouts.length === 0 ? (
-                    <p className="text-slate-600 text-xs text-center py-6">Brak zatrudnionych skautów. Zatrudnij ze rynku pracy →</p>
+                    <p className="text-slate-600 text-xs text-center py-6">Brak zatrudnionych skautów.</p>
                   ) : (
                     <div className="space-y-2">
                       {employedScouts.map(scout => {

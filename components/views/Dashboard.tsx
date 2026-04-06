@@ -22,6 +22,10 @@ import trustButton from '../../Graphic/buttons/trust.png';
 import rezerwyButton from '../../Graphic/buttons/rezerwy.png';
 import akademiaButton from '../../Graphic/buttons/akademia.png';
 import szpitalButton from '../../Graphic/buttons/szpital.png';
+import saveButton from '../../Graphic/buttons/save.png';
+import edytorButton from '../../Graphic/buttons/edytor.png';
+import rezygnacjaButton from '../../Graphic/buttons/rezygnacja.png';
+import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -978,33 +982,27 @@ const boardConfidence = useMemo(() => {
            </Card>
         </div>
 
-        <div className="w-44 flex flex-col gap-3 shrink-0">
+        <div className="w-[123px] flex flex-col gap-3 shrink-0">
           <button onClick={() => navigateTo(ViewState.EDITOR)}
-            className="flex flex-col items-center justify-center gap-2 p-4 rounded-[24px] bg-slate-900/40 border border-white/5 hover:border-white/15 hover:bg-white/5 transition-all group">
-            <span className="text-2xl group-hover:scale-110 transition-transform">✍️</span>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors">EDYTOR</span>
+            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
+            <img src={edytorButton} alt="EDYTOR" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
           <button disabled
-            className="flex flex-col items-center justify-center gap-2 p-4 rounded-[24px] bg-slate-900/40 border border-white/5 opacity-30 cursor-not-allowed">
-            <span className="text-2xl">💾</span>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">ZAPIS GRY</span>
+            className="relative w-full overflow-hidden rounded-[24px] opacity-30 cursor-not-allowed">
+            <img src={saveButton} alt="ZAPIS GRY" className="w-full object-contain pointer-events-none" />
           </button>
           <button onClick={() => navigateTo(ViewState.GAME_MANUAL)}
-            className="flex flex-col items-center justify-center gap-2 p-4 rounded-[24px] bg-slate-900/40 border border-white/5 hover:border-white/15 hover:bg-white/5 transition-all group">
-            <span className="text-2xl group-hover:scale-110 transition-transform">📖</span>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors">INSTRUKCJA</span>
+            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
+            <img src={instrukcjaButton} alt="INSTRUKCJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
           <button
             onClick={() => !isResigned && setShowResignConfirm(true)}
             disabled={isResigned}
-            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-[24px] border transition-all group
+            className={`relative group w-full overflow-hidden rounded-[24px] transition-all
               ${isResigned
-                ? 'bg-slate-900/20 border-white/5 opacity-30 cursor-not-allowed'
-                : 'bg-amber-950/30 border-amber-900/20 hover:border-amber-500/30 hover:bg-amber-900/20'}`}>
-            <span className="text-2xl group-hover:scale-110 transition-transform">🏳️</span>
-            <span className={`text-[9px] font-black uppercase tracking-[0.2em] transition-colors ${isResigned ? 'text-slate-600' : 'text-amber-500/70 group-hover:text-amber-400'}`}>
-              {isResigned ? 'ZREZYGNOWANO' : 'REZYGNACJA'}
-            </span>
+                ? 'opacity-30 cursor-not-allowed'
+                : ''}`}>
+            <img src={rezygnacjaButton} alt="REZYGNACJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
           <div className="flex-1" />
           <button onClick={() => setShowExitConfirm(true)}
