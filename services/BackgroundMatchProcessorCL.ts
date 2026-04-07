@@ -644,8 +644,8 @@ export const BackgroundMatchProcessorCL = {
        f.leagueId === CompetitionType.EL_R16 || f.leagueId === CompetitionType.EL_R16_RETURN ||
        f.leagueId === CompetitionType.EL_QF || f.leagueId === CompetitionType.EL_QF_RETURN ||
        f.leagueId === CompetitionType.EL_SF || f.leagueId === CompetitionType.EL_SF_RETURN ||
-       f.leagueId === CompetitionType.EL_FINAL ||
-       // ── Liga Konferencji ───────────────────────────────────────────────────
+       f.leagueId === CompetitionType.EL_FINAL ||       // ── Superpuchar Europy ───────────────────────────────────────────────────
+       f.leagueId === CompetitionType.UEFA_SUPER_CUP ||       // ── Liga Konferencji ───────────────────────────────────────────────────
        f.leagueId === CompetitionType.CONF_R1Q || f.leagueId === CompetitionType.CONF_R1Q_RETURN ||
        f.leagueId === CompetitionType.CONF_R2Q || f.leagueId === CompetitionType.CONF_R2Q_RETURN ||
        f.leagueId === CompetitionType.CONF_GROUP_STAGE ||
@@ -665,6 +665,8 @@ export const BackgroundMatchProcessorCL = {
         // CL i EL FINAŁ: zawsze symulowany (mecz 1-mecz finałowy, brak live)
         f.leagueId === CompetitionType.CL_FINAL    ||
         f.leagueId === CompetitionType.EL_FINAL    ||
+        // Superpuchar Europy: zawsze symulowany w tle (brak udziału gracza)
+        f.leagueId === CompetitionType.UEFA_SUPER_CUP ||
         // CL i EL pozostałe rundy: pomijamy mecze drużyny gracza (on gra live)
         (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId)
       )
@@ -711,7 +713,8 @@ export const BackgroundMatchProcessorCL = {
 
       const isFinal = fixture.leagueId === CompetitionType.CL_FINAL
                    || fixture.leagueId === CompetitionType.EL_FINAL
-                   || fixture.leagueId === CompetitionType.CONF_FINAL;
+                   || fixture.leagueId === CompetitionType.CONF_FINAL
+                   || fixture.leagueId === CompetitionType.UEFA_SUPER_CUP;
 
       // Oblicz leg1Diff dla rewanżu
       let leg1Diff: number | undefined = undefined;

@@ -144,6 +144,12 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
 
 
   { day: 20, month: 7, type: SlotType.WEEKEND, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 5", priority: 10 },
+  
+  
+  //23 SIERPNIA - SuperPuchar Europy
+  { day: 23, month: 7, type: SlotType.MIDWEEK, comp: CompetitionType.UEFA_SUPER_CUP, label: "SUPERPUCHAR EUROPY", priority: 95 },
+  
+  
   { day: 25, month: 7, type: SlotType.WEEKEND, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 6", priority: 10 },
   { day: 30,  month: 7, type: SlotType.WEEKEND, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 7", priority: 10 },
 

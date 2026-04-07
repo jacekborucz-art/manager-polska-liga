@@ -22,7 +22,8 @@ ClubAcademy,
 AcademyScoutMission,
 Region,
 YouthPlayer,
-Scout
+Scout,
+MatchHistoryEntry
 } from '../types';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -57,6 +58,7 @@ import { BoardFinanceMonitorService } from '../services/BoardFinanceMonitorServi
 import { PolishCupDrawService } from '../services/PolishCupDrawService';
 import { CLDrawService } from '../services/CLDrawService';
 import { SuperCupService } from '../services/SuperCupService';
+import { UEFASuperCupService } from '../services/UEFASuperCupService';
 import { CoachService } from '../services/CoachService';
 import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
@@ -162,6 +164,10 @@ interface GameContextType {
   confGroups: string[][] | null;
   supercupWinners: { season: string; winner: string; year: number; }[];
   addSupercupWinner: (season: string, winner: string, year: number) => void;
+  currentCLWinnerId: string;
+  currentELWinnerId: string;
+  lastUEFASuperCupResult: MatchHistoryEntry | null;
+  setLastUEFASuperCupResult: React.Dispatch<React.SetStateAction<MatchHistoryEntry | null>>;
 
   activeIntensity: TrainingIntensity;
   setTrainingIntensity: (intensity: TrainingIntensity) => void;
@@ -347,6 +353,9 @@ const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(Traini
   const [isResigned, setIsResigned] = useState(false);
  const [currentPolishChampionId, setCurrentPolishChampionId] = useState<string>('PL_LECH_POZNAN');
  const [currentPolishCupWinnerId, setCurrentPolishCupWinnerId] = useState<string>('PL_LEGIA_WARSZAWA');
+ const [currentCLWinnerId, setCurrentCLWinnerId] = useState<string>('EU_CL_PARIS_SAINT_GERMAIN');
+ const [currentELWinnerId, setCurrentELWinnerId] = useState<string>('EU_CL_TOTTENHAM_HOTSPUR');
+ const [lastUEFASuperCupResult, setLastUEFASuperCupResult] = useState<MatchHistoryEntry | null>(null);
  // Polskie drużyny do CONF R2Q: sezon 1 = Jagiellonia + Raków, kolejne sezony = 2. i 3. miejsce Ekstraklasy z zabezpieczeniem PP
  const [confR2QPolishTeamIds, setConfR2QPolishTeamIds] = useState<string[]>(['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA']);
  const [supercupWinners, setSupercupWinners] = useState<{ season: string; winner: string; year: number; }[]>(() => {
@@ -616,7 +625,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setMessages([]);
     setProcessedDrawIds([]);
     const initialSuperCup = SuperCupService.generateFixture(2025, STATIC_CLUBS);
-    setGlobalFixtures([initialSuperCup]);
+    const initialUEFASuperCup = UEFASuperCupService.generateFixture(2025, STATIC_CLUBS);
+    setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
     setClubs([...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
     navigateTo(ViewState.MANAGER_CREATION);
   };
@@ -908,8 +918,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     // 5. Generowanie meczu Superpucharu na nowy sezon
     const nextSuperCup = SuperCupService.generateFixture(newYear, updatedClubs, champion?.id, cupWinnerId);
- 
-    setGlobalFixtures([nextSuperCup]); // Czyścimy stare puchary, zostawiamy tylko nowy Superpuchar
+    const nextUEFASuperCup = UEFASuperCupService.generateFixture(newYear, updatedClubs, currentCLWinnerId, currentELWinnerId);
+    setGlobalFixtures([nextSuperCup, nextUEFASuperCup]); // Czyścimy stare puchary, zostawiamy Superpuchary na nowy sezon
     if (champion?.id) setCurrentPolishChampionId(champion.id);
 
     // Ustal kto idzie do LE R2Q: zwycięzca PP, chyba że jest też mistrzem — wtedy przegrany finału
@@ -2120,6 +2130,7 @@ setMessages([welcomeMail, fanMail]);
               else winnerId = (elFinalFixture.homePenaltyScore ?? 0) >= (elFinalFixture.awayPenaltyScore ?? 0)
                 ? elFinalFixture.homeTeamId : elFinalFixture.awayTeamId;
               const winner = clubs.find(c => c.id === winnerId);
+              setCurrentELWinnerId(winnerId);
               const isUserWinner = winnerId === userTeamId;
               const mail: MailMessage = {
                 id: mailKey,
@@ -2338,6 +2349,7 @@ setMessages([welcomeMail, fanMail]);
               else winnerId = (finalFixture.homePenaltyScore ?? 0) >= (finalFixture.awayPenaltyScore ?? 0)
                 ? finalFixture.homeTeamId : finalFixture.awayTeamId;
               const winner = clubs.find(c => c.id === winnerId);
+              setCurrentCLWinnerId(winnerId);
               const isUserWinner = winnerId === userTeamId;
               const mail: MailMessage = {
                 id: mailKey,
@@ -2433,6 +2445,35 @@ setMessages([welcomeMail, fanMail]);
         case CompetitionType.SUPER_CUP: {
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
           navigateTo(ViewState.PRE_MATCH_CUP_STUDIO);
+          skipDayAdvance = true; break;
+        }
+
+        // ── SUPERPUCHAR EUROPY (23 Sierpnia) ─────────────────────────────────
+        // Mecz NPC — gracz jest tylko obserwatorem, symulacja w tle
+        case CompetitionType.UEFA_SUPER_CUP: {
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          const uefaScResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+            dateToProcess, null, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
+          );
+          setGlobalFixtures(prev => {
+            const clMap = new Map(uefaScResult.updatedFixtures.map(f => [f.id, f]));
+            return prev.map(f => {
+              const updated = clMap.get(f.id);
+              if (updated && (
+                updated.status !== f.status ||
+                updated.homeScore !== f.homeScore ||
+                updated.awayScore !== f.awayScore ||
+                updated.homePenaltyScore !== f.homePenaltyScore ||
+                updated.awayPenaltyScore !== f.awayPenaltyScore
+              )) return updated;
+              return f;
+            });
+          });
+          setPlayers(prev => ({ ...prev, ...uefaScResult.updatedPlayers }));
+          uefaScResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+          const uefaEntry = uefaScResult.matchHistoryEntries.find(e => e.competition === CompetitionType.UEFA_SUPER_CUP);
+          if (uefaEntry) setLastUEFASuperCupResult(uefaEntry);
+          navigateTo(ViewState.UEFA_SUPER_CUP_VIEW);
           skipDayAdvance = true; break;
         }
 
@@ -3331,9 +3372,10 @@ const finalResult: SimulationOutput = {
           return;
         }
 
+        const mailOfferId = mail.metadata.offerId;
         const duplicateExists = [...messages, ...newIncomingMails].some(existingMail =>
           existingMail.metadata?.type === 'INCOMING_TRANSFER_OFFER' &&
-          existingMail.metadata.offerId === mail.metadata.offerId &&
+          existingMail.metadata.offerId === mailOfferId &&
           existingMail.subject === mail.subject
         );
 
@@ -5998,7 +6040,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, 
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,

@@ -103,6 +103,7 @@ export enum ViewState {
   HOSPITAL_VIEW = 'HOSPITAL_VIEW',
   RESERVES_VIEW = 'RESERVES_VIEW',
   ACADEMY_VIEW = 'ACADEMY_VIEW',
+  UEFA_SUPER_CUP_VIEW = 'UEFA_SUPER_CUP_VIEW',
 }
 
 export interface PlayoffPair {
@@ -427,6 +428,8 @@ export enum CompetitionType {
   // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
   RELEGATION_PLAYOFF_1 = 'RELEGATION_PLAYOFF_1', // 26 maja — 1. mecze (13. i 14. 2.Ligi vs 3.Liga)
   RELEGATION_PLAYOFF_2 = 'RELEGATION_PLAYOFF_2', // 29 maja — rewanże + rozstrzygnięcie
+  // ── SUPERPUCHAR EUROPY ────────────────────────────────────────────────────
+  UEFA_SUPER_CUP = 'UEFA_SUPER_CUP', // 23 sierpnia — Superpuchar Europy (CL winner vs EL winner)
 }
 
 export enum SlotType {

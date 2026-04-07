@@ -52,6 +52,7 @@ import { PreMatchCLFinalView } from './components/views/PreMatchCLFinalView';
 import { PostMatchCLFinalView } from './components/views/PostMatchCLFinalView';
 import { EuropeanClubsView } from './components/views/EuropeanClubsView';
 import NationalTeamResultsView from './components/views/NationalTeamResultsView';
+import UEFASuperCupView from './components/views/UEFASuperCupView';
 import { ELDrawView } from './LECupEngine/ELDrawView';
 import { ELR2QDrawView } from './LECupEngine/ELR2QDrawView';
 import { ELHistoryView } from './LECupEngine/ELHistoryView';
@@ -337,6 +338,9 @@ case ViewState.CL_GROUP_DRAW:
 
       case ViewState.EUROPEAN_CLUBS:
         return <EuropeanClubsView />;
+
+      case ViewState.UEFA_SUPER_CUP_VIEW:
+        return <UEFASuperCupView />;
 
       default:
         return (
