@@ -144,5 +144,109 @@ export const TrainingService = {
     });
 
     return updatedMap;
+  },
+
+  /**
+   * Trening rezerw — zarządzany przez trenera rezerw (AI).
+   * Niższy bazowy wzrost niż 1. drużyna, ale wyższy mnożnik dla młodych (<21).
+   * Jakość trenera (coachTrainingAttr 0-99) modyfikuje efekty przez mnożnik 0.70–1.20.
+   */
+  processReserveTrainingEffects: (
+    reserves: Player[],
+    trainingId: string | null,
+    coachTrainingAttr: number,
+    clubReputation: number,
+    leagueTier: number
+  ): Player[] => {
+    const cycle = TRAINING_CYCLES.find(c => c.id === trainingId) || TRAINING_CYCLES[0];
+    const coachMultiplier = 0.70 + (coachTrainingAttr / 100) * 0.50; // 0.70 – 1.20
+
+    return reserves.map(player => {
+      if (player.health.status === HealthStatus.INJURED) return player;
+
+      let updated = { ...player };
+      const stats = { ...updated.stats };
+      const seasonalChanges = { ...(stats.seasonalChanges || {}) };
+      const attributes = { ...updated.attributes };
+
+      const attrKeys: (keyof PlayerAttributes)[] = [
+        'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
+        'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
+        'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
+      ];
+
+      attrKeys.forEach(key => {
+        // WZROST
+        let pGrowth = 0.015; // 1.5% bazowo (vs 2% dla 1. drużyny)
+
+        if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
+        if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
+        if (player.trainingFocus === key) pGrowth += 0.06;
+
+        // Rezerwy: młodzi (<21) rosną szybciej niż w 1. drużynie (2.0x vs 1.5x)
+        if (player.age < 21) pGrowth *= 2.0;
+        else if (player.age > 32) pGrowth *= 0.3;
+
+        const _talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
+        pGrowth *= _talentMod;
+        pGrowth *= coachMultiplier;
+
+        if (Math.random() < pGrowth) {
+          const currentChange = seasonalChanges[key] || 0;
+          if (currentChange < 3 && attributes[key] < 99) {
+            attributes[key] += 1;
+            seasonalChanges[key] = currentChange + 1;
+          }
+        }
+
+        // REGRES — identyczny jak dla 1. drużyny
+        // Rezerwy nie grają meczów systemowych — kara za brak gry zawsze aktywna
+        let pRegress = 0.003;
+        const age = player.age;
+        if (age >= 36) pRegress += 0.100;
+        else if (age >= 35) pRegress += 0.075;
+        else if (age >= 34) pRegress += 0.055;
+        else if (age >= 33) pRegress += 0.035;
+        else if (age >= 32) pRegress += 0.022;
+        else if (age >= 31) pRegress += 0.012;
+        else if (age >= 30) pRegress += 0.006;
+
+        if (age >= 32) pRegress += 0.035;
+        else if (age >= 28) pRegress += 0.020;
+        else if (age >= 24) pRegress += 0.012;
+        else pRegress += 0.006;
+
+        const physicalAttrs = ['pace', 'stamina', 'strength'];
+        const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
+        if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
+        if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
+
+        if (Math.random() < pRegress) {
+          const currentChange = seasonalChanges[key] || 0;
+          if (currentChange > -3 && attributes[key] > 10) {
+            attributes[key] -= 1;
+            seasonalChanges[key] = currentChange - 1;
+          }
+        }
+      });
+
+      const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
+      const updatedMarketValue = FinanceService.calculateMarketValue(
+        { ...updated, overallRating: newOvr },
+        clubReputation,
+        leagueTier
+      );
+      return {
+        ...updated,
+        attributes,
+        overallRating: newOvr,
+        stats: {
+          ...player.stats,
+          ratingHistory: player.stats.ratingHistory || [],
+          seasonalChanges
+        },
+        marketValue: updatedMarketValue
+      };
+    });
   }
 };

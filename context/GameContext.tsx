@@ -51,6 +51,7 @@ import { BackgroundMatchProcessorPolishCup } from '../services/BackgroundMatchPr
 import { RecoveryService } from '../services/RecoveryService';
 import { MailService, SeasonSummaryData } from '../services/MailService';
 import { TrainingService } from '../services/TrainingService';
+import { TrainingAssistantService } from '../services/TrainingAssistantService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
@@ -65,6 +66,7 @@ import { FreeAgentService } from '../services/FreeAgentService';
 import { AiContractService } from '@/services/AiContractService';
 import { AiScoutingService } from '../services/AiScoutingService';
 import { BackgroundMatchProcessorCL } from '../services/BackgroundMatchProcessorCL';
+import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
 import { MatchHistoryService } from '../services/MatchHistoryService';
 import { ScoutAssistantService } from '../services/ScoutAssistantService';
 import { ChampionshipHistoryService } from '../data/championship_history';
@@ -261,6 +263,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
+  reserveCoachId: string | null;
   academy: ClubAcademy | null;
   initAcademy: () => void;
   submitUpgradeProposal: () => void;
@@ -292,6 +295,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
   const [reserves, setReserves] = useState<Player[]>([]);
+  const [reserveCoachId, setReserveCoachId] = useState<string | null>(null);
   const [academy, setAcademy] = useState<ClubAcademy | null>(null);
   const [scoutPool, setScoutPool] = useState<Scout[]>([]);
   const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
@@ -1050,6 +1054,13 @@ const selectUserTeam = (clubId: string) => {
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
     setReserves(generatedReserves);
 
+    // Generuj trenera rezerw: 75% szansy na Polaka, 25% na zagranicznego
+    const isPolish = Math.random() < 0.75;
+    const newReserveCoach = CoachService.createRandomCoach(isPolish);
+    const reserveCoachWithClub = { ...newReserveCoach, currentClubId: clubId };
+    setCoaches(prev => ({ ...prev, [newReserveCoach.id]: reserveCoachWithClub }));
+    setReserveCoachId(newReserveCoach.id);
+
     const presetLevel = CLUBS_WITH_PRESET_ACADEMY[clubId] as ClubAcademy['level'] | undefined;
     if (presetLevel) {
       setAcademy({
@@ -1141,6 +1152,21 @@ setMessages([welcomeMail, fanMail]);
         activeIntensity                       
       );
       // KONIEC WSTAWKI
+
+      // Trening rezerw — automatyczny plan trenera rezerw
+      if (reserves.length > 0) {
+        const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
+        const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
+        const autoTrainingId = TrainingAssistantService.buildPlan(reserves).cycleId;
+        const updatedReserves = TrainingService.processReserveTrainingEffects(
+          reserves,
+          autoTrainingId,
+          coachTrainingAttr,
+          userClub?.reputation || 5,
+          tier
+        );
+        setReserves(updatedReserves);
+      }
     }
 
     setPlayers(prev => {
@@ -2452,8 +2478,8 @@ setMessages([welcomeMail, fanMail]);
         // Mecz NPC — gracz jest tylko obserwatorem, symulacja w tle
         case CompetitionType.UEFA_SUPER_CUP: {
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
-          const uefaScResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-            dateToProcess, null, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
+          const uefaScResult = BackgroundMatchUEFASuperCup.processSuperCupMatch(
+            dateToProcess, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
           );
           setGlobalFixtures(prev => {
             const clMap = new Map(uefaScResult.updatedFixtures.map(f => [f.id, f]));
@@ -3078,28 +3104,36 @@ const finalResult: SimulationOutput = {
     applySimulationResult(finalResult);
 
     // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
-    const clResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-      dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, sessionSeed, coaches
-    );
+    // Pomijamy dzień UEFA_SUPER_CUP — mecz jest przetwarzany bezpośrednio w case CompetitionType.UEFA_SUPER_CUP
+    const isUEFASuperCupDay = primaryEvent?.slot.competition === CompetitionType.UEFA_SUPER_CUP;
+    const clResult = isUEFASuperCupDay
+      ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
+      : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+          dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, sessionSeed, coaches
+        );
     // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
     // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
-    setGlobalFixtures(prev => {
-      const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
-      return prev.map(f => {
-        const clF = clMap.get(f.id);
-        if (clF && (
-          clF.status !== f.status ||
-          clF.homeScore !== f.homeScore ||
-          clF.awayScore !== f.awayScore ||
-          clF.homePenaltyScore !== f.homePenaltyScore ||
-          clF.awayPenaltyScore !== f.awayPenaltyScore
-        )) {
-          return clF;
-        }
-        return f;
+    // Pomijamy aktualizację fixtures i graczy z clResult gdy to dzień UEFA Super Cup,
+    // bo clResult.updatedFixtures = stare allFixtures (SCHEDULED) i nadpisałoby FINISHED z case UEFA_SUPER_CUP
+    if (!isUEFASuperCupDay) {
+      setGlobalFixtures(prev => {
+        const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
+        return prev.map(f => {
+          const clF = clMap.get(f.id);
+          if (clF && (
+            clF.status !== f.status ||
+            clF.homeScore !== f.homeScore ||
+            clF.awayScore !== f.awayScore ||
+            clF.homePenaltyScore !== f.homePenaltyScore ||
+            clF.awayPenaltyScore !== f.awayPenaltyScore
+          )) {
+            return clF;
+          }
+          return f;
+        });
       });
-    });
-    setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
+      setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
+    }
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
 
     // Przetwarzanie bonusów za Superpuchar Polski
@@ -3203,6 +3237,7 @@ const finalResult: SimulationOutput = {
 
       updatedClubsList.forEach(club => {
         if (club.id === userTeamId || !club.coachId) return;
+        if (club.leagueId !== 'L_PL_1' && club.leagueId !== 'L_PL_2' && club.leagueId !== 'L_PL_3') return;
         
         const coach = updatedCoaches[club.coachId];
         
@@ -6053,7 +6088,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
-    reserves, setReserves,
+    reserves, setReserves, reserveCoachId,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
     }}>

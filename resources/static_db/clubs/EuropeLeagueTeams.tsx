@@ -132,7 +132,6 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
 
   // Włochy (ITA) –  Serie A
   { name: "Bologna FC", country: "ITA", tier: 2, colors: ['#00529B', '#FFFFFF', '#FF0000'], stadium: "Stadio Renato Dall'Ara", capacity: 36462, reputation: 13 },
-  { name: "Torino FC", country: "ITA", tier: 2, colors: ['#FF0000', '#000000', '#FFFFFF'], stadium: "Stadio Olimpico Grande Torino", capacity: 27994, reputation: 11 },
   { name: "Udinese Calcio", country: "ITA", tier: 2, colors: ['#000000', '#FFFFFF', '#FFCC00'], stadium: "Bluenergy Stadium", capacity: 25132, reputation: 12 },
 
   // Kazachstan (KAZ)  top Premier Liga

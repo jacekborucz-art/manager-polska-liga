@@ -225,7 +225,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "FK Akhmat Grozny", country: "RUS", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FFD700'], stadium: "Akhmat-Arena", capacity: 30597, reputation: 6 },
 
   // Włochy (ITA) – tier 3, reputacja 8–11 (mid/niższe Serie A lub spadkowicze / solidni z Serie B)
-  { name: "Udinese Calcio", country: "ITA", tier: 3, colors: ['#000000', '#FFFFFF', '#FFCC00'], stadium: "Bluenergy Stadium", capacity: 25132, reputation: 10 },
+ 
   { name: "Torino FC", country: "ITA", tier: 3, colors: ['#FF0000', '#000000', '#FFFFFF'], stadium: "Stadio Olimpico Grande Torino", capacity: 27994, reputation: 10 },
   { name: "Genoa CFC", country: "ITA", tier: 3, colors: ['#FF0000', '#000000', '#FFFFFF'], stadium: "Stadio Luigi Ferraris", capacity: 36585, reputation: 9 },
 

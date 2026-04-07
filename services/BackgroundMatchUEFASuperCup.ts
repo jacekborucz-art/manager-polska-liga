@@ -1,4 +1,4 @@
-import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
+﻿import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
@@ -7,7 +7,7 @@ import { PlayerStatsService } from './PlayerStatsService';
 import { RefereeService } from './RefereeService';
 
 // ============================================================
-//  WYNIK MECZU CL — rozszerzony o zdarzenia z zawodnikami
+//  WYNIK MECZU CL â€” rozszerzony o zdarzenia z zawodnikami
 // ============================================================
 interface CLMatchResult {
   homeScore: number;
@@ -27,7 +27,7 @@ interface CLMatchResult {
 }
 
 // ============================================================
-//  RNG — deterministyczny hash (sin-based jak LeagueBackgroundMatchEngine)
+//  RNG â€” deterministyczny hash (sin-based jak LeagueBackgroundMatchEngine)
 // ============================================================
 const makeSeededRng = (seed: number) => (offset: number): number => {
   const x = Math.sin(seed + offset) * 10000;
@@ -54,7 +54,7 @@ const getEffectivenessMult = (score: number): number => {
 };
 
 // ============================================================
-//  SIŁA LINII ZAWODNIKÓW
+//  SIÅA LINII ZAWODNIKÃ“W
 // ============================================================
 const getLineStrength = (players: Player[], lineupIds: (string | null)[]) => {
   const ids = lineupIds.filter((id): id is string => id !== null);
@@ -76,7 +76,7 @@ const getGoalsPoissonLike = (
   isChaos: boolean
 ): number => {
   let g = 0;
-  // Nasycenie (satiety): mniejszy pułap niż wcześniej — eliminuje hokejowe wyniki
+  // Nasycenie (satiety): mniejszy puÅ‚ap niÅ¼ wczeÅ›niej â€” eliminuje hokejowe wyniki
   let cur = Math.max(0.05, Math.min(isChaos ? 3.8 : 2.8, xg + (rng(baseOffset) - 0.5) * 0.35));
   for (let i = 0; i < 8; i++) {
     if (rng(baseOffset + 10 + i) < cur / (i + 1.15)) { g++; cur *= (isChaos ? 0.72 : 0.62); }
@@ -85,7 +85,7 @@ const getGoalsPoissonLike = (
 };
 
 // ============================================================
-//  SYMULACJA ZMIAN (3-5 na drużynę)
+//  SYMULACJA ZMIAN (3-5 na druÅ¼ynÄ™)
 // ============================================================
 const simulateSubs = (
   lineup: Lineup,
@@ -122,7 +122,7 @@ const simulateSubs = (
 };
 
 // ============================================================
-//  AKTYWNY SKŁAD W DANEJ MINUCIE
+//  AKTYWNY SKÅAD W DANEJ MINUCIE
 // ============================================================
 const getActiveLineupAt = (
   min: number,
@@ -138,7 +138,7 @@ const getActiveLineupAt = (
 };
 
 // ============================================================
-//  ATRYBUOWANIE GOLI DO ZAWODNIKÓW
+//  ATRYBUOWANIE GOLI DO ZAWODNIKÃ“W
 // ============================================================
 const attributeGoalsToPlayers = (
   count: number,
@@ -172,7 +172,7 @@ const attributeGoalsToPlayers = (
 };
 
 // ============================================================
-//  SYMULACJA KARTEK I KONTUZJI (z sędzią FIFA/UEFA)
+//  SYMULACJA KARTEK I KONTUZJI (z sÄ™dziÄ… FIFA/UEFA)
 // ============================================================
 const simulateCardsAndInjuries = (
   lineup: Lineup,
@@ -197,7 +197,7 @@ const simulateCardsAndInjuries = (
   const fatigueDebtMap: Record<string, number> = {};
   const injuryPenaltyMap: Record<string, number> = {};
 
-  // Sędzia: im mniej doświadczony, tym więcej chaosu; strictness → surowość
+  // SÄ™dzia: im mniej doÅ›wiadczony, tym wiÄ™cej chaosu; strictness â†’ surowoÅ›Ä‡
   const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
   const yellowProb = 0.087 * (referee.strictness / 50) * refExpFactor;
   // Gospodarz korzysta z niewielkiego przywileju (advantageTendency)
@@ -242,7 +242,7 @@ const simulateCardsAndInjuries = (
         health: {
           status: 'INJURED' as any,
           injury: {
-            type: isSev ? 'Poważny uraz więzadeł' : 'Stłuczenie mięśnia',
+            type: isSev ? 'PowaÅ¼ny uraz wiÄ™zadeÅ‚' : 'StÅ‚uczenie miÄ™Å›nia',
             daysRemaining: days,
             severity: isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
             injuryDate: new Date().toISOString(),
@@ -265,7 +265,7 @@ const simulateCardsAndInjuries = (
 };
 
 // ============================================================
-//  DOGRYWKA + KARNE — poprawiona wersja
+//  DOGRYWKA + KARNE â€” poprawiona wersja
 // ============================================================
 const simulateExtraTimeAndPenalties = (
   homeScore: number,
@@ -290,7 +290,7 @@ const simulateExtraTimeAndPenalties = (
   let penaltyHome: number | undefined;
   let penaltyAway: number | undefined;
 
-  // Sprawdzenie remisu: dla rewanżu — agregat, dla finału — wynik meczu
+  // Sprawdzenie remisu: dla rewanÅ¼u â€” agregat, dla finaÅ‚u â€” wynik meczu
   const aggregateTied = leg1Diff !== undefined ? (h - a === leg1Diff) : (h === a);
 
   if (aggregateTied) {
@@ -305,7 +305,7 @@ const simulateExtraTimeAndPenalties = (
     penaltyHome = simSeries(homeWinProb, baseOffset + 100);
     penaltyAway = simSeries(1 - homeWinProb, baseOffset + 200);
 
-    // Sudden death — aż do rozstrzygnięcia
+    // Sudden death â€” aÅ¼ do rozstrzygniÄ™cia
     let sd = 0;
     while (penaltyHome === penaltyAway && sd < 20) {
       sd++;
@@ -320,7 +320,7 @@ const simulateExtraTimeAndPenalties = (
 };
 
 // ============================================================
-//  GŁÓWNA FUNKCJA SYMULACJI MECZU Z ZAWODNIKAMI (Stage 2)
+//  GÅÃ“WNA FUNKCJA SYMULACJI MECZU Z ZAWODNIKAMI (Stage 2)
 // ============================================================
 const simulateCLMatchFull = (
   homeClub: Club,
@@ -339,10 +339,10 @@ const simulateCLMatchFull = (
 ): CLMatchResult => {
   const rng = makeSeededRng(seed);
 
-  // ── Sędzia (Stage 2) ─────────────────────────────────────────────────
+  // â”€â”€ SÄ™dzia (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
 
-  // ── Taktyka + Clash Matrix (Stage 2) ────────────────────────────────
+  // â”€â”€ Taktyka + Clash Matrix (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const hTactic = TacticRepository.getById(homeLineup.tacticId);
   const aTactic = TacticRepository.getById(awayLineup.tacticId);
   const hClashBase = TACTIC_CLASH_MATRIX[homeLineup.tacticId]?.[awayLineup.tacticId] ?? 4;
@@ -352,32 +352,32 @@ const simulateCLMatchFull = (
   const hTacticMod = getEffectivenessMult(hClashFinal);
   const aTacticMod = getEffectivenessMult(aClashFinal);
 
-  // ── Trenerzy (Stage 2) ───────────────────────────────────────────────
-  // Normalizacja: atrybuty 0-100 → bonus ±%
+  // â”€â”€ Trenerzy (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Normalizacja: atrybuty 0-100 â†’ bonus Â±%
   const hCoachAtkMod = 1.0 + ((homeCoach.attributes.motivation - 50) * 0.002) + ((homeCoach.attributes.experience - 50) * 0.001);
   const hCoachDefMod = 1.0 + ((homeCoach.attributes.decisionMaking - 50) * 0.002);
   const aCoachAtkMod = 1.0 + ((awayCoach.attributes.motivation - 50) * 0.002) + ((awayCoach.attributes.experience - 50) * 0.001);
   const aCoachDefMod = 1.0 + ((awayCoach.attributes.decisionMaking - 50) * 0.002);
 
-  // ── Siła zawodników ─────────────────────────────────────────────────
+  // â”€â”€ SiÅ‚a zawodnikÃ³w â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const hStr = getLineStrength(homePlayersAll, homeLineup.startingXI);
   const aStr = getLineStrength(awayPlayersAll, awayLineup.startingXI);
 
-  // ── Forma dzienna ────────────────────────────────────────────────────
+  // â”€â”€ Forma dzienna â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeDailyForm = (rng(11) - 0.5) * 0.3;
   const awayDailyForm = (rng(12) - 0.5) * 0.3;
 
-  // ── Chaos / Stale factor ─────────────────────────────────────────────
+  // â”€â”€ Chaos / Stale factor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chaosRoll = rng(7);
   const isChaosMatch = chaosRoll < 0.035;
   const isStaleMatch = chaosRoll > 0.94;
   const volatilityMult = isChaosMatch ? 1.65 : (isStaleMatch ? 0.50 : 1.0);
 
-  // ── Pogoda (klimat kraju gospodarza) ────────────────────────────────
+  // â”€â”€ Pogoda (klimat kraju gospodarza) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeCountry = homeClub.country ?? 'POL';
   const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
 
-  // ── Pre-roll czerwonych kartek (z sędzią) → korekta XG ──────────────
+  // â”€â”€ Pre-roll czerwonych kartek (z sÄ™dziÄ…) â†’ korekta XG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const directRedProb = 0.0033 * (referee.strictness / 50) * refExpFactor;
   const yellowProb    = 0.087  * (referee.strictness / 50) * refExpFactor;
   let homeRedPre = 0;
@@ -391,7 +391,7 @@ const simulateCLMatchFull = (
     else if (rng(20000 + idx + 1000) < yellowProb && rng(20000 + idx + 1200) < 0.05) awayRedPre++;
   });
 
-  // ── XG z bonusami trenerów, taktyki i siły zawodników ───────────────
+  // â”€â”€ XG z bonusami trenerÃ³w, taktyki i siÅ‚y zawodnikÃ³w â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const repDiff = homeClub.reputation - awayClub.reputation;
   let xgHome = 1.25
     + (repDiff * 0.015)
@@ -409,16 +409,16 @@ const simulateCLMatchFull = (
   if (xgHome > xgAway + 1.2) xgHome += 0.5;
   if (xgAway > xgHome + 1.2) xgAway += 0.5;
 
-  // Aplikacja modyfikatorów taktyki, trenerów, czerwonych kartek, pogody
+  // Aplikacja modyfikatorÃ³w taktyki, trenerÃ³w, czerwonych kartek, pogody
   xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * (1 - homeRedPre * 0.25) * (1 + awayRedPre * 0.20) * weatherMod);
   xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * (1 - awayRedPre * 0.25) * (1 + homeRedPre * 0.20) * weatherMod);
 
-  // ── Generowanie goli 90 min (Poisson z nasyceniem) ───────────────────
+  // â”€â”€ Generowanie goli 90 min (Poisson z nasyceniem) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
   let awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
 
-  // ── Karne w trakcie meczu (Stage 2 — zależne od sędziego) ───────────
-  // Prawdopodobieństwo na mecz (suma ~95 minut): strictness/300 na drużynę
+  // â”€â”€ Karne w trakcie meczu (Stage 2 â€” zaleÅ¼ne od sÄ™dziego) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // PrawdopodobieÅ„stwo na mecz (suma ~95 minut): strictness/300 na druÅ¼ynÄ™
   const penThreshold = (referee.strictness / 300) * refExpFactor;
   const inMatchGoals: { playerName: string; playerId?: string; assistId?: string; minute: number; teamId: string; isPenalty: boolean; varDisallowed?: boolean }[] = [];
 
@@ -435,20 +435,20 @@ const simulateCLMatchFull = (
       if (side === 'H') homeScore90++; else awayScore90++;
       inMatchGoals.push({ playerName: `${kicker.firstName} ${kicker.lastName}`, playerId: kicker.id, minute: penMin, teamId: side === 'H' ? homeClub.id : awayClub.id, isPenalty: true });
     }
-    // chybiony karny — nie dodajemy do scorers
+    // chybiony karny â€” nie dodajemy do scorers
   };
   tryPenalty('H', 9100);
   tryPenalty('A', 9200);
 
-  // ── Zmiany ──────────────────────────────────────────────────────────
+  // â”€â”€ Zmiany â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5000, rng);
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
-  // ── Kartki i kontuzje z sędzią (Stage 2) ────────────────────────────
+  // â”€â”€ Kartki i kontuzje z sÄ™dziÄ… (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true);
   const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false);
 
-  // ── Zmęczenie ────────────────────────────────────────────────────────
+  // â”€â”€ ZmÄ™czenie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
   const fatigueDebtMap: Record<string, number> = { ...homeCardData.fatigueDebtMap, ...awayCardData.fatigueDebtMap };
   const injuryPenaltyMap: Record<string, number> = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap };
@@ -476,7 +476,7 @@ const simulateCLMatchFull = (
     fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40;
   });
 
-  // ── Atrybuowanie goli z VAR (Stage 2) ───────────────────────────────
+  // â”€â”€ Atrybuowanie goli z VAR (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const attributeWithVAR = (
     count: number,
     teamId: string,
@@ -517,7 +517,7 @@ const simulateCLMatchFull = (
   let finalHomeScore90 = homeGoalData.adjustedScore + inMatchGoals.filter(g => g.teamId === homeClub.id).length;
   let finalAwayScore90 = awayGoalData.adjustedScore + inMatchGoals.filter(g => g.teamId === awayClub.id).length;
 
-  // ── Zmiany → format historii ─────────────────────────────────────────
+  // â”€â”€ Zmiany â†’ format historii â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeSubs = homeSubData.matchSubs.map(s => {
     const out = homePlayersAll.find(p => p.id === s.outId);
     const inP = homePlayersAll.find(p => p.id === s.inId);
@@ -529,7 +529,7 @@ const simulateCLMatchFull = (
     return { playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInName: inP ? `${inP.firstName} ${inP.lastName}` : '?', minute: s.min, teamId: awayClub.id };
   });
 
-  // ── Dogrywka / karne ─────────────────────────────────────────────────
+  // â”€â”€ Dogrywka / karne â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let finalHomeScore = finalHomeScore90;
   let finalAwayScore = finalAwayScore90;
   let penaltyHome: number | undefined;
@@ -554,7 +554,7 @@ const simulateCLMatchFull = (
     wentToExtraTime = true;
   }
 
-  // ── Oceny zawodników (Stage 2) ───────────────────────────────────────
+  // â”€â”€ Oceny zawodnikÃ³w (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const ratings: Record<string, number> = {};
   const homeWin = finalHomeScore > finalAwayScore;
   const awayWin = finalAwayScore > finalHomeScore;
@@ -572,7 +572,7 @@ const simulateCLMatchFull = (
     const pGoals   = allGoals.filter(g => g.playerId === pId && !g.varDisallowed).length;
     const pAssists = allGoals.filter(g => g.assistId === pId && !g.varDisallowed).length;
     score += (pGoals * 1.0) + (pAssists * 0.6);
-    // GK / DEF — czyste konto
+    // GK / DEF â€” czyste konto
     const conceded = isHome ? finalAwayScore : finalHomeScore;
     if (p.position === PlayerPosition.GK || p.position === 'DEF' as any) {
       if (conceded === 0) score += 1.2;
@@ -608,13 +608,12 @@ const simulateCLMatchFull = (
 };
 
 // ============================================================
-//  GŁÓWNY PROCESOR CL / EL / CONF
+//  PROCESOR SUPERPUCHARU EUROPY (dedykowany silnik)
 // ============================================================
-export const BackgroundMatchProcessorCL = {
+export const BackgroundMatchUEFASuperCup = {
 
-  processChampionsLeagueEvent: (
+  processSuperCupMatch: (
     currentDate: Date,
-    userTeamId: string | null,
     fixtures: Fixture[],
     clubs: Club[],
     players: Record<string, Player[]>,
@@ -630,43 +629,7 @@ export const BackgroundMatchProcessorCL = {
     const todayMatches = fixtures.filter(f =>
       f.date.toDateString() === dateStr &&
       f.status === MatchStatus.SCHEDULED &&
-           (f.leagueId === CompetitionType.CL_R1Q || f.leagueId === CompetitionType.CL_R1Q_RETURN ||
-       f.leagueId === CompetitionType.CL_R2Q || f.leagueId === CompetitionType.CL_R2Q_RETURN ||
-       f.leagueId === CompetitionType.CL_GROUP_STAGE ||
-       f.leagueId === CompetitionType.CL_R16 || f.leagueId === CompetitionType.CL_R16_RETURN ||
-             f.leagueId === CompetitionType.CL_QF || f.leagueId === CompetitionType.CL_QF_RETURN ||
-             f.leagueId === CompetitionType.CL_SF || f.leagueId === CompetitionType.CL_SF_RETURN ||
-       f.leagueId === CompetitionType.CL_FINAL ||
-       // ── Liga Europy ────────────────────────────────────────────────────────
-       f.leagueId === CompetitionType.EL_R1Q || f.leagueId === CompetitionType.EL_R1Q_RETURN ||
-       f.leagueId === CompetitionType.EL_R2Q || f.leagueId === CompetitionType.EL_R2Q_RETURN ||
-       f.leagueId === CompetitionType.EL_GROUP_STAGE ||
-       f.leagueId === CompetitionType.EL_R16 || f.leagueId === CompetitionType.EL_R16_RETURN ||
-       f.leagueId === CompetitionType.EL_QF || f.leagueId === CompetitionType.EL_QF_RETURN ||
-       f.leagueId === CompetitionType.EL_SF || f.leagueId === CompetitionType.EL_SF_RETURN ||
-       f.leagueId === CompetitionType.EL_FINAL ||       // ── Liga Konferencji ───────────────────────────────────────────────────
-       f.leagueId === CompetitionType.CONF_R1Q || f.leagueId === CompetitionType.CONF_R1Q_RETURN ||
-       f.leagueId === CompetitionType.CONF_R2Q || f.leagueId === CompetitionType.CONF_R2Q_RETURN ||
-       f.leagueId === CompetitionType.CONF_GROUP_STAGE ||
-       f.leagueId === CompetitionType.CONF_R16 || f.leagueId === CompetitionType.CONF_R16_RETURN ||
-       f.leagueId === CompetitionType.CONF_QF || f.leagueId === CompetitionType.CONF_QF_RETURN ||
-       f.leagueId === CompetitionType.CONF_SF || f.leagueId === CompetitionType.CONF_SF_RETURN ||
-       f.leagueId === CompetitionType.CONF_FINAL) &&
-      (
-        // CONF: ZAWSZE symulowane w tle (nawet jeśli gra drużyna gracza)
-        f.leagueId === CompetitionType.CONF_R1Q    || f.leagueId === CompetitionType.CONF_R1Q_RETURN ||
-        f.leagueId === CompetitionType.CONF_R2Q    || f.leagueId === CompetitionType.CONF_R2Q_RETURN ||
-        f.leagueId === CompetitionType.CONF_GROUP_STAGE ||
-        f.leagueId === CompetitionType.CONF_R16    || f.leagueId === CompetitionType.CONF_R16_RETURN ||
-        f.leagueId === CompetitionType.CONF_QF     || f.leagueId === CompetitionType.CONF_QF_RETURN  ||
-        f.leagueId === CompetitionType.CONF_SF     || f.leagueId === CompetitionType.CONF_SF_RETURN  ||
-        f.leagueId === CompetitionType.CONF_FINAL  ||
-        // CL i EL FINAŁ: zawsze symulowany (mecz 1-mecz finałowy, brak live)
-        f.leagueId === CompetitionType.CL_FINAL    ||
-        f.leagueId === CompetitionType.EL_FINAL    ||
-        // CL i EL pozostałe rundy: pomijamy mecze drużyny gracza (on gra live)
-        (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId)
-      )
+      f.leagueId === CompetitionType.UEFA_SUPER_CUP
     );
 
     if (todayMatches.length === 0) return { updatedFixtures: fixtures, updatedPlayers: players, matchHistoryEntries: [] };
@@ -674,7 +637,6 @@ export const BackgroundMatchProcessorCL = {
     let updatedFixtures = [...fixtures];
     let updatedPlayersMap = { ...players };
     const matchHistoryEntries: MatchHistoryEntry[] = [];
-    // Zbiór sędziów już przydzielonych w tej kolejce — każdy sędzia tylko 1 mecz dziennie
     const usedRefereeIds = new Set<string>();
 
     todayMatches.forEach(fixture => {
@@ -682,47 +644,18 @@ export const BackgroundMatchProcessorCL = {
       const away = clubs.find(c => c.id === fixture.awayTeamId);
       if (!home || !away) return;
 
-      // Deterministyczny seed dla tej pary
       const matchHash = fixture.id.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
       const seed = (matchHash ^ sessionSeed) ^ (currentDate.getTime() / 1000 | 0);
 
-      // Pobierz lub wygeneruj składy
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
       const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers);
       const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers);
 
-      const isReturnLeg = fixture.leagueId === CompetitionType.CL_R1Q_RETURN
-                       || fixture.leagueId === CompetitionType.CL_R2Q_RETURN
-                       || fixture.leagueId === CompetitionType.CL_R16_RETURN
-                       || fixture.leagueId === CompetitionType.CL_QF_RETURN
-                       || fixture.leagueId === CompetitionType.CL_SF_RETURN
-                       || fixture.leagueId === CompetitionType.EL_R1Q_RETURN
-                       || fixture.leagueId === CompetitionType.EL_R2Q_RETURN
-                       || fixture.leagueId === CompetitionType.EL_R16_RETURN
-                       || fixture.leagueId === CompetitionType.EL_QF_RETURN
-                       || fixture.leagueId === CompetitionType.EL_SF_RETURN
-                       || fixture.leagueId === CompetitionType.CONF_R1Q_RETURN
-                       || fixture.leagueId === CompetitionType.CONF_R2Q_RETURN
-                       || fixture.leagueId === CompetitionType.CONF_R16_RETURN
-                       || fixture.leagueId === CompetitionType.CONF_QF_RETURN
-                       || fixture.leagueId === CompetitionType.CONF_SF_RETURN;
+      // Superpuchar Europy: zawsze mecz finaÅ‚owy, brak rewanÅ¼u
+      const isFinal = true;
+      const leg1Diff: number | undefined = undefined;
 
-      const isFinal = fixture.leagueId === CompetitionType.CL_FINAL
-                   || fixture.leagueId === CompetitionType.EL_FINAL
-                   || fixture.leagueId === CompetitionType.CONF_FINAL;
-
-      // Oblicz leg1Diff dla rewanżu
-      let leg1Diff: number | undefined = undefined;
-      if (isReturnLeg) {
-        const firstLegId = fixture.id.replace('_RETURN', '');
-        const firstLeg = updatedFixtures.find(f => f.id === firstLegId);
-        if (firstLeg && firstLeg.homeScore !== null && firstLeg.awayScore !== null) {
-          leg1Diff = (firstLeg.homeScore as number) - (firstLeg.awayScore as number);
-        }
-      }
-
-      // ── Arbiter: FIFA/UEFA, inny kraj niż obie drużyny ─────────────
       const matchSeedStr = `${fixture.id}_${sessionSeed}`;
       const referee = RefereeService.assignInternationalReferee(
         matchSeedStr,
@@ -732,12 +665,10 @@ export const BackgroundMatchProcessorCL = {
       );
       usedRefereeIds.add(referee.id);
 
-      // ── Trenerzy (opcjonalni — domyślne atrybuty 50 jeśli brak) ──────
       const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
       const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
       const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
 
-      // ── Frekwencja (ten sam wzór co PreMatchCLLiveStudioView) ────────
       const homeRep = home.reputation;
       const awayRep = away.reputation;
       let attendance: number;
@@ -755,17 +686,14 @@ export const BackgroundMatchProcessorCL = {
         attendance = Math.floor((home.stadiumCapacity ?? 20000) * Math.min(1, fillRate * weatherPenalty));
       }
 
-      // ── Pogoda ───────────────────────────────────────────────────────
       const weather = EuropeanWeatherService.getSnapshot(home.country ?? 'POL', currentDate, matchSeedStr);
 
-      // ── Symulacja meczu ─────────────────────────────────────────────
       const result = simulateCLMatchFull(
         home, away, homePlayers, awayPlayers,
         homeLineup, awayLineup,
         currentDate, seed, referee, homeCoach, awayCoach, leg1Diff, isFinal
       );
 
-      // ── Aktualizacja fixtures ────────────────────────────────────────
       updatedFixtures = updatedFixtures.map(f =>
         f.id === fixture.id
           ? {
@@ -779,7 +707,6 @@ export const BackgroundMatchProcessorCL = {
           : f
       );
 
-      // ── Aktualizacja zawodników (kontuzje + zmęczenie + dług zmęczenia) ─
       const applyFatigueToTeam = (teamPlayers: Player[]): Player[] =>
         teamPlayers.map(p => {
           let updatedP = { ...p };
@@ -806,7 +733,6 @@ export const BackgroundMatchProcessorCL = {
         [fixture.awayTeamId]: applyFatigueToTeam(result.updatedAwayPlayers),
       };
 
-      // ── Kartki → statystyki i zawieszenia (jak w BackgroundMatchProcessor) ─
       result.cards.forEach(card => {
         const eventType = card.type === 'RED' || card.type === 'SECOND_YELLOW'
           ? MatchEventType.RED_CARD
@@ -814,13 +740,11 @@ export const BackgroundMatchProcessorCL = {
         updatedPlayersMap = PlayerStatsService.applyCard(updatedPlayersMap, card.playerId, eventType);
       });
 
-      // ── Statystyki sędziego ──────────────────────────────────────────
       const yellowsInMatch = result.cards.filter(c => c.type === 'YELLOW' || c.type === 'SECOND_YELLOW').length;
       const redsInMatch = result.cards.filter(c => c.type === 'RED' || c.type === 'SECOND_YELLOW').length;
       const refereeRating = RefereeService.generateMatchRating(referee);
       RefereeService.recordMatchStats(referee.id, refereeRating, yellowsInMatch, redsInMatch);
 
-      // ── Historia meczu ───────────────────────────────────────────────
       matchHistoryEntries.push({
         matchId: fixture.id,
         date: currentDate.toISOString(),

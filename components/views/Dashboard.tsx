@@ -210,6 +210,15 @@ const boardConfidence = useMemo(() => {
 
         // ── Liga Mistrzów / Liga Europy / Liga Konferencji — mecz ───────
         case EventKind.MATCH_EURO: {
+          const isUEFASuperCup = todayEvent.slot.competition === CompetitionType.UEFA_SUPER_CUP;
+          if (isUEFASuperCup) {
+            return {
+              text: '⭐ SUPERPUCHAR EUROPY',
+              action: advanceDay,
+              isMatch: false,
+              disabled: isJumping,
+            };
+          }
           const isCLFinal = todayEvent.slot.competition === CompetitionType.CL_FINAL;
           const isELComp = todayEvent.slot.competition === CompetitionType.EL_R1Q ||
                            todayEvent.slot.competition === CompetitionType.EL_R1Q_RETURN ||
@@ -887,7 +896,7 @@ const boardConfidence = useMemo(() => {
               <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => navigateTo(ViewState.RESERVES_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
               <TileButton label="ROZGRYWKI" graphicSrc={rozgrywkiButton} onClick={() => navigateTo(ViewState.LEAGUE_TABLES)} disabled={isJumping} />
-              <TileButton label="PLANER" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />
+              <TileButton label="KALENDARZ" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />
               <TileButton label="SZPITAL" graphicSrc={szpitalButton} onClick={() => navigateTo(ViewState.HOSPITAL_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="STATYSTYKI" graphicSrc={statsButton} onClick={() => navigateTo(ViewState.LEAGUE_STATS)} disabled={isJumping} />
               <TileButton 

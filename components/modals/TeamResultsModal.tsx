@@ -19,6 +19,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
     if (comp.includes('L_PL_1')) return 'Ekstraklasa';
     if (comp.includes('L_PL_2')) return '1. Liga';
     if (comp.includes('L_PL_3')) return '2. Liga';
+    if (comp === 'UEFA_SUPER_CUP') return 'Superpuchar Europy';
     if (comp.includes('CUP')) return 'Puchar Polski';
     if (comp.includes('SUPER')) return 'Superpuchar';
     return comp;

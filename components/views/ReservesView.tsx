@@ -196,7 +196,8 @@ function generateCoachReport(players: Player[], seed: number): CoachReport {
 
 export const ReservesView: React.FC = () => {
   const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, currentDate, seasonNumber,
-          players, setPlayers, setReserves, lineups, updateLineup } = useGame();
+          players, setPlayers, setReserves, lineups, updateLineup,
+          coaches, viewCoachDetails, reserveCoachId } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; player: Player } | null>(null);
 
@@ -211,6 +212,7 @@ export const ReservesView: React.FC = () => {
   };
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
 
   const weekKey = useMemo(
     () => Math.floor(currentDate.getTime() / (7 * 24 * 3600 * 1000)) + seasonNumber * 1000,
@@ -261,6 +263,16 @@ export const ReservesView: React.FC = () => {
               <h1 className="text-5xl font-black italic uppercase tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-400 to-slate-600">REZERWY</h1>
               {myClub && (
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">{reserves.length} zawodników</p>
+              )}
+              {reserveCoach && (
+                <button
+                  onClick={() => viewCoachDetails(reserveCoach.id)}
+                  className="mt-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-amber-400/80 hover:text-amber-300 transition-colors group"
+                >
+                  <span className="text-amber-500/60 group-hover:text-amber-400 transition-colors">🎽</span>
+                  <span>Trener rezerw: {reserveCoach.firstName} {reserveCoach.lastName}</span>
+                  <span className="text-amber-600/50 group-hover:text-amber-400 transition-colors">{reserveCoach.nationalityFlag}</span>
+                </button>
               )}
             </div>
           </div>

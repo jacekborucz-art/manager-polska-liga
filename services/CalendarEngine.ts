@@ -1102,6 +1102,26 @@ export const CalendarEngine = {
         };
       }
 
+      // ── SUPERPUCHAR EUROPY (23 Sierpnia) — mecz NPC, gracz obserwator ────
+      case CompetitionType.UEFA_SUPER_CUP: {
+        const fixtureUEFASC = allFixtures.find(
+          f =>
+            f.date.toDateString() === dateStr &&
+            f.leagueId === CompetitionType.UEFA_SUPER_CUP &&
+            f.status === MatchStatus.SCHEDULED,
+        );
+        if (!fixtureUEFASC) return null;
+        return {
+          slot,
+          kind: EventKind.MATCH_EURO,
+          participation: 'player',
+          targetView: ViewState.UEFA_SUPER_CUP_VIEW,
+          fixture: undefined,
+          opponentClubId: undefined,
+          isHome: undefined,
+        };
+      }
+
       // ── OGŁOSZENIE PAR BARAŻOWYCH (24 maja) ──────────────────────────────
       case CompetitionType.PLAYOFF_DRAW_CEREMONY: {
         return {

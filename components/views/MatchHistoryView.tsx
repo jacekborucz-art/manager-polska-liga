@@ -226,7 +226,9 @@ export const MatchHistoryView: React.FC = () => {
   if (comp.includes('L_PL_1')) compName = 'EKSTRAKLASA';
   else if (comp.includes('L_PL_2')) compName = '1. LIGA';
   else if (comp.includes('L_PL_3')) compName = '2. LIGA';
-  else if (comp === CompetitionType.POLISH_CUP || comp.includes('POLISH_CUP') || comp.includes('CUP')) {
+  else if (comp === CompetitionType.UEFA_SUPER_CUP || comp.includes('UEFA_SUPER_CUP')) {
+    compName = 'SUPERPUCHAR EUROPY';
+  } else if (comp === CompetitionType.POLISH_CUP || comp.includes('POLISH_CUP') || comp.includes('CUP')) {
     compName = 'PUCHAR POLSKI';
   } else if (comp === CompetitionType.SUPER_CUP || comp.includes('SUPER_CUP')) {
     compName = 'SUPERPUCHAR POLSKI';

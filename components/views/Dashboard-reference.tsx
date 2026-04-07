@@ -678,7 +678,7 @@ const month = currentDate.getMonth();
 
        <div className="flex-1 grid grid-cols-2 gap-0.5">
               <TileButton label="TRENING" icon="🏋️‍♂️" onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping} />
-              <TileButton label="PLANER" icon="📅" onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping} />
+              <TileButton label="KALENDARZ" icon="📅" onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping} />
               <TileButton label="KADRA" icon="👕" onClick={() => navigateTo(ViewState.SQUAD_VIEW)} disabled={isJumping} />
               <TileButton 
                  label="TRANSFERY" 
