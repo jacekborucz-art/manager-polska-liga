@@ -432,7 +432,6 @@ const simulateCLMatchFull = (
     const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
     if (!kicker) return;
     if (isScored) {
-      if (side === 'H') homeScore90++; else awayScore90++;
       inMatchGoals.push({ playerName: `${kicker.firstName} ${kicker.lastName}`, playerId: kicker.id, minute: penMin, teamId: side === 'H' ? homeClub.id : awayClub.id, isPenalty: true });
     }
     // chybiony karny — nie dodajemy do scorers
