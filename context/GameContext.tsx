@@ -2478,6 +2478,7 @@ setMessages([welcomeMail, fanMail]);
         // Mecz NPC — gracz jest tylko obserwatorem, symulacja w tle
         case CompetitionType.UEFA_SUPER_CUP: {
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          if (processedDrawIds.includes(slot.id)) break; // mecz już przetworzony — dzień przesuwa się normalnie
           const uefaScResult = BackgroundMatchUEFASuperCup.processSuperCupMatch(
             dateToProcess, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
           );
@@ -2499,6 +2500,7 @@ setMessages([welcomeMail, fanMail]);
           uefaScResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
           const uefaEntry = uefaScResult.matchHistoryEntries.find(e => e.competition === CompetitionType.UEFA_SUPER_CUP);
           if (uefaEntry) setLastUEFASuperCupResult(uefaEntry);
+          setProcessedDrawIds(prev => [...prev, slot.id]);
           navigateTo(ViewState.UEFA_SUPER_CUP_VIEW);
           skipDayAdvance = true; break;
         }

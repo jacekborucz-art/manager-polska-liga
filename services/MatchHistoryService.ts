@@ -6,6 +6,10 @@ let matchHistory: MatchHistoryEntry[] = [];
 export const MatchHistoryService = {
   // Funkcja dodająca nowy wpis
   logMatch: (entry: MatchHistoryEntry) => {
+    const duplicate = matchHistory.some(
+      e => e.matchId === entry.matchId && e.season === entry.season
+    );
+    if (duplicate) return;
     matchHistory.push(entry);
     console.log(`[MatchHistory] Zapisano mecz: ${entry.homeTeamId} vs ${entry.awayTeamId}`);
   },

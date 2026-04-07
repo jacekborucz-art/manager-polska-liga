@@ -756,7 +756,7 @@ export const BackgroundMatchUEFASuperCup = {
         awayScore: result.awayScore,
         homePenaltyScore: result.penaltyHome,
         awayPenaltyScore: result.penaltyAway,
-        goals: result.goals,
+        goals: result.goals.filter(g => !g.varDisallowed),
         cards: result.cards,
         substitutions: result.substitutions,
         refereeName: `${referee.firstName} ${referee.lastName}`,
