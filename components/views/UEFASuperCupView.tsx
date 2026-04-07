@@ -52,10 +52,11 @@ const UEFASuperCupView: React.FC = () => {
   const homeClub = clubs.find(c => fixture && c.id === fixture.homeTeamId);
   const awayClub = clubs.find(c => fixture && c.id === fixture.awayTeamId);
 
-  const homeGoals = lastUEFASuperCupResult?.goals.filter(g => fixture && g.teamId === fixture.homeTeamId && !('varDisallowed' in g && g.varDisallowed)) ?? [];
-  const awayGoals = lastUEFASuperCupResult?.goals.filter(g => fixture && g.teamId === fixture.awayTeamId && !('varDisallowed' in g && g.varDisallowed)) ?? [];
+  const homeGoals = (lastUEFASuperCupResult?.goals.filter(g => fixture && g.teamId === fixture.homeTeamId) ?? []).sort((a, b) => a.minute - b.minute);
+  const awayGoals = (lastUEFASuperCupResult?.goals.filter(g => fixture && g.teamId === fixture.awayTeamId) ?? []).sort((a, b) => a.minute - b.minute);
 
   const hasPenalties = fixture?.homePenaltyScore != null;
+  const wentToET = hasPenalties || (lastUEFASuperCupResult?.goals.some(g => !g.varDisallowed && g.minute > 90) ?? false);
 
   // Wyznacz zwycięzcę
   const homeScore = fixture?.homeScore ?? 0;
@@ -135,16 +136,14 @@ const UEFASuperCupView: React.FC = () => {
                   <span className="text-3xl font-black text-slate-500">:</span>
                   <span className="text-6xl font-black tabular-nums text-white">{awayScore}</span>
                 </div>
-                {hasPenalties && (
-                  <div className="text-sm font-bold text-amber-300 tracking-widest">
-                    ({fixture.homePenaltyScore} : {fixture.awayPenaltyScore}) — karne
+                {wentToET && !hasPenalties && (
+                  <div className="text-sm font-bold text-amber-300/80 tracking-widest">
+                    po dog.
                   </div>
                 )}
                 {hasPenalties && (
-                  <div className="mt-2 px-4 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/30">
-                    <span className="text-xs text-amber-300 font-bold uppercase tracking-widest">
-                      Po dogrywce
-                    </span>
+                  <div className="text-sm font-bold text-amber-300 tracking-widest">
+                    ({fixture.homePenaltyScore}:{fixture.awayPenaltyScore} k.) po dog.
                   </div>
                 )}
               </div>
@@ -166,18 +165,18 @@ const UEFASuperCupView: React.FC = () => {
                   {/* Gole gospodarza */}
                   <div className="flex flex-col gap-1.5 items-end">
                     {homeGoals.map((g, i) => (
-                      <span key={i} className="text-sm text-slate-200">
-                        <span className="text-emerald-300 mr-1">⚽</span>
-                        {g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}
+                      <span key={i} className={`text-sm ${g.varDisallowed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                        <span className={`mr-1 ${g.varDisallowed ? 'grayscale opacity-40' : 'text-emerald-300'}`}>⚽</span>
+                        {g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}{g.varDisallowed ? ' VAR' : ''}
                       </span>
                     ))}
                   </div>
                   {/* Gole gościa */}
                   <div className="flex flex-col gap-1.5 items-start">
                     {awayGoals.map((g, i) => (
-                      <span key={i} className="text-sm text-slate-200">
-                        <span className="text-emerald-300 mr-1">⚽</span>
-                        {g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}
+                      <span key={i} className={`text-sm ${g.varDisallowed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                        <span className={`mr-1 ${g.varDisallowed ? 'grayscale opacity-40' : 'text-emerald-300'}`}>⚽</span>
+                        {g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}{g.varDisallowed ? ' VAR' : ''}
                       </span>
                     ))}
                   </div>

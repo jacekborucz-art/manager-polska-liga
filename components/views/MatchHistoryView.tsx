@@ -662,26 +662,36 @@ export const MatchHistoryView: React.FC = () => {
                          {(homeGoals.length > 0 || awayGoals.length > 0) && (
                            <div className="grid grid-cols-2 gap-6">
                               <div className="flex flex-wrap gap-x-3 gap-y-1 justify-start text-left text-sm text-slate-200">
-                                 {homeGoals.map(g => (
-                                   <span key={`hg-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
-                                      <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
-                                      {g.playerId
-                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
-                                        : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
-                                      }
-                                   </span>
-                                 ))}
+                                 {homeGoals.map(g => {
+                                   const isVAR = !!(g as any).varDisallowed;
+                                   return (
+                                     <span key={`hg-${g.minute}-${g.playerName}`} className={`inline-flex items-center gap-1.5 ${isVAR ? 'text-slate-500' : ''}`}>
+                                        <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : isVAR ? 'opacity-40' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
+                                        {isVAR
+                                          ? <s>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''} VAR</s>
+                                          : g.playerId
+                                            ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
+                                            : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                        }
+                                     </span>
+                                   );
+                                 })}
                               </div>
                               <div className="flex flex-wrap gap-x-3 gap-y-1 justify-end text-right text-sm text-slate-200">
-                                 {awayGoals.map(g => (
-                                   <span key={`ag-${g.minute}-${g.playerName}`} className="inline-flex items-center gap-1.5">
-                                      <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
-                                      {g.playerId
-                                        ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
-                                        : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
-                                      }
-                                   </span>
-                                 ))}
+                                 {awayGoals.map(g => {
+                                   const isVAR = !!(g as any).varDisallowed;
+                                   return (
+                                     <span key={`ag-${g.minute}-${g.playerName}`} className={`inline-flex items-center gap-1.5 ${isVAR ? 'text-slate-500' : ''}`}>
+                                        <span className={`text-[13px] ${(g as any).isMiss ? 'text-rose-400' : isVAR ? 'opacity-40' : 'text-emerald-300'}`}>{(g as any).isMiss ? '❌' : '⚽'}</span>
+                                        {isVAR
+                                          ? <s>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''} VAR</s>
+                                          : g.playerId
+                                            ? <button onClick={e => { e.stopPropagation(); viewPlayerDetails(g.playerId!); }} className="hover:text-amber-300 hover:underline cursor-pointer transition-colors">{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</button>
+                                            : <span>{g.minute}' {g.playerName}{(g as any).isPenalty ? ' (k.)' : ''}</span>
+                                        }
+                                     </span>
+                                   );
+                                 })}
                               </div>
                            </div>
                          )}

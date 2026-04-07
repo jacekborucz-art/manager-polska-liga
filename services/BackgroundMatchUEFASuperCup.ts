@@ -555,11 +555,35 @@ const simulateCLMatchFull = (
   }
 
   // â”€â”€ Oceny zawodnikÃ³w (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Bramki w dogrywce (min. 91-120) ──────────────────────────────────────────
+  const etGoals: typeof inMatchGoals = [];
+  if (wentToExtraTime) {
+    const etHomeCount = finalHomeScore - finalHomeScore90;
+    const etAwayCount = finalAwayScore - finalAwayScore90;
+    const usedETMin = new Set<number>();
+    for (let i = 0; i < etHomeCount; i++) {
+      let minute = Math.floor(91 + rng(2000 + i) * 30);
+      while (usedETMin.has(minute)) { minute = minute >= 120 ? 91 : minute + 1; }
+      usedETMin.add(minute);
+      const activeXI = getActiveLineupAt(minute, homeLineup.startingXI, homeSubData.matchSubs);
+      const scorer = GoalAttributionService.pickScorer(homePlayersAll, activeXI, false, () => rng(2000 + i + 500));
+      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
+    }
+    for (let i = 0; i < etAwayCount; i++) {
+      let minute = Math.floor(91 + rng(2100 + i) * 30);
+      while (usedETMin.has(minute)) { minute = minute >= 120 ? 91 : minute + 1; }
+      usedETMin.add(minute);
+      const activeXI = getActiveLineupAt(minute, awayLineup.startingXI, awaySubData.matchSubs);
+      const scorer = GoalAttributionService.pickScorer(awayPlayersAll, activeXI, false, () => rng(2100 + i + 500));
+      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
+    }
+  }
+
   const ratings: Record<string, number> = {};
   const homeWin = finalHomeScore > finalAwayScore;
   const awayWin = finalAwayScore > finalHomeScore;
   const isDraw  = finalHomeScore === finalAwayScore;
-  const allGoals = [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals];
+  const allGoals = [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals, ...etGoals];
   const allCards = [...homeCardData.cards, ...awayCardData.cards];
 
   const generateRating = (pId: string, isHome: boolean) => {
@@ -595,7 +619,7 @@ const simulateCLMatchFull = (
     penaltyHome,
     penaltyAway,
     wentToExtraTime,
-    goals: [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals],
+    goals: [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals, ...etGoals].sort((a, b) => a.minute - b.minute),
     cards: allCards,
     substitutions: [...homeSubs, ...awaySubs],
     updatedHomePlayers: homeCardData.updatedPlayers,
@@ -756,7 +780,7 @@ export const BackgroundMatchUEFASuperCup = {
         awayScore: result.awayScore,
         homePenaltyScore: result.penaltyHome,
         awayPenaltyScore: result.penaltyAway,
-        goals: result.goals.filter(g => !g.varDisallowed),
+        goals: result.goals,
         cards: result.cards,
         substitutions: result.substitutions,
         refereeName: `${referee.firstName} ${referee.lastName}`,

@@ -1153,6 +1153,7 @@ export interface MatchGoalEntry {
   isPenalty: boolean;
   assistantId?: string;
   assistantName?: string;
+  varDisallowed?: boolean;
 }
 
 export interface MatchCardEntry {
