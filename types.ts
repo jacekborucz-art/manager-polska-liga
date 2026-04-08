@@ -520,6 +520,15 @@ export interface PendingNegotiation {
   status: NegotiationStatus;
 }
 
+export interface PendingFriendlyRequest {
+  id: string;
+  proposedDate: string;      // 'YYYY-MM-DD' - data meczu
+  opponentClubId: string;
+  venue: 'HOME' | 'AWAY' | 'NEUTRAL';
+  chance: number;            // 0-100 (ukryte przed graczem, do losowania)
+  responseDate: string;      // 'YYYY-MM-DD' - dzień odpowiedzi (currentDate + 1)
+}
+
 export enum TransferOfferStatus {
   SELLER_REVIEW = 'SELLER_REVIEW',
   SELLER_REJECTED = 'SELLER_REJECTED',

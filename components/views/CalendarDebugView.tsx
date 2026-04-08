@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { FriendlySchedulerModal } from '../modals/FriendlySchedulerModal';
 
 export const CalendarDebugView: React.FC = () => {
-  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures } = useGame();
+  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures, pendingFriendlyRequests, addFriendlyRequest } = useGame();
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   
@@ -180,6 +180,24 @@ export const CalendarDebugView: React.FC = () => {
                  const scFix = isSuperCup ? fixtures.find(f => f.leagueId === CompetitionType.SUPER_CUP) : null;
                  const isClDraw = slot.competition === CompetitionType.CHAMPIONS_LEAGUE_DRAW;
                  const isFriendly = slot.competition === CompetitionType.FRIENDLY;
+
+                 // Zaplanowane sparingi w tym oknie czasowym
+                 const friendlyMatchesInSlot = isFriendly && userTeamId ? fixtures.filter(f => {
+                   if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+                   if (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId) return false;
+                   const fd = new Date(f.date); fd.setHours(0,0,0,0);
+                   const ss = new Date(slot.start); ss.setHours(0,0,0,0);
+                   const se = new Date(slot.end); se.setHours(0,0,0,0);
+                   return fd >= ss && fd <= se;
+                 }) : [];
+
+                 // Oczekujące propozycje sparingów w tym oknie
+                 const pendingInSlot = isFriendly ? pendingFriendlyRequests.filter(r => {
+                   const rd = new Date(r.proposedDate + 'T00:00:00');
+                   const ss = new Date(slot.start); ss.setHours(0,0,0,0);
+                   const se = new Date(slot.end); se.setHours(0,0,0,0);
+                   return rd >= ss && rd <= se;
+                 }) : [];
                  
                  return (
                    <div 
@@ -277,19 +295,76 @@ export const CalendarDebugView: React.FC = () => {
                            )}
 
                            {isFriendly && (
-                              <div className="animate-slide-up flex items-center gap-3 bg-green-900/30 border border-green-500/30 px-4 py-2 rounded-2xl shadow-xl">
-                                 <span className="text-xl">🤝</span>
-                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-green-400">Mecz towarzyski</span>
-                                    <span className="text-[11px] font-black text-white uppercase italic">Sparing</span>
-                                 </div>
-                                 {isTodayActive && (
-                                   <button
-                                     onClick={() => navigateTo(ViewState.PRE_MATCH_STUDIO)}
-                                     className="ml-2 px-3 py-1.5 rounded-xl bg-green-600/40 border border-green-400/50 text-[9px] font-black uppercase tracking-widest text-green-200 hover:bg-green-600/70 transition-all active:scale-95"
-                                   >
-                                     Zaplanuj sparing →
-                                   </button>
+                              <div className="animate-slide-up flex flex-col gap-2">
+                                 {/* Zaplanowane sparingi */}
+                                 {(friendlyMatchesInSlot as Fixture[]).map(f => {
+                                   const isHome = f.homeTeamId === userTeamId;
+                                   const oppId = isHome ? f.awayTeamId : f.homeTeamId;
+                                   const opp = clubs.find(c => c.id === oppId);
+                                   const matchDateStr = new Date(f.date).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+                                   return (
+                                     <div key={f.id} className="flex items-center gap-3 bg-green-900/30 border border-green-500/30 px-4 py-2 rounded-2xl shadow-xl">
+                                       <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 flex flex-col border border-white/10">
+                                         <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[0] }} />
+                                         <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[1] || opp?.colorsHex[0] }} />
+                                       </div>
+                                       <div className="flex flex-col">
+                                         <span className="text-[9px] font-black uppercase tracking-widest text-green-400">
+                                           {matchDateStr} · {isHome ? 'DOM' : 'WYJ'}
+                                         </span>
+                                         <span className="text-[11px] font-black text-white uppercase italic">
+                                           🤝 vs {opp?.name ?? oppId}
+                                           {f.status === 'FINISHED' && (
+                                             <span className="ml-2 px-1.5 py-0.5 bg-black/40 rounded border border-white/10 text-[9px] font-mono font-black text-emerald-400">
+                                               {f.homeScore}:{f.awayScore}
+                                             </span>
+                                           )}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   );
+                                 })}
+
+                                 {/* Oczekujące propozycje */}
+                                 {pendingInSlot.map(r => {
+                                   const opp = clubs.find(c => c.id === r.opponentClubId);
+                                   const [ry, rm, rd2] = r.proposedDate.split('-').map(Number);
+                                   const matchDateStr = new Date(ry, rm - 1, rd2).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+                                   return (
+                                     <div key={r.id} className="flex items-center gap-3 bg-amber-900/20 border border-amber-500/30 px-4 py-2 rounded-2xl">
+                                       <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 flex flex-col border border-white/10">
+                                         <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[0] }} />
+                                         <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[1] || opp?.colorsHex[0] }} />
+                                       </div>
+                                       <div className="flex flex-col">
+                                         <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
+                                           {matchDateStr} · Oczekuje na odpowiedź
+                                         </span>
+                                         <span className="text-[11px] font-black text-amber-200 uppercase italic">
+                                           ⏳ {opp?.name ?? r.opponentClubId}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   );
+                                 })}
+
+                                 {/* Brak meczu — przycisk planowania */}
+                                 {(friendlyMatchesInSlot as Fixture[]).length === 0 && pendingInSlot.length === 0 && (
+                                   <div className="flex items-center gap-3 bg-green-900/20 border border-green-500/20 px-4 py-2 rounded-2xl">
+                                     <span className="text-xl">🤝</span>
+                                     <div className="flex flex-col">
+                                       <span className="text-[9px] font-black uppercase tracking-widest text-green-400">Mecz towarzyski</span>
+                                       <span className="text-[11px] font-black text-white uppercase italic">Brak zaplanowanego sparingu</span>
+                                     </div>
+                                     {isTodayActive && (
+                                       <button
+                                         onClick={() => setShowFriendlyScheduler(true)}
+                                         className="ml-2 px-3 py-1.5 rounded-xl bg-green-600/40 border border-green-400/50 text-[9px] font-black uppercase tracking-widest text-green-200 hover:bg-green-600/70 transition-all active:scale-95"
+                                       >
+                                         Zaplanuj sparing →
+                                       </button>
+                                     )}
+                                   </div>
                                  )}
                               </div>
                            )}
@@ -341,6 +416,10 @@ export const CalendarDebugView: React.FC = () => {
         onClose={() => setShowFriendlyScheduler(false)}
         currentDate={new Date(currentDate)}
         slots={slots}
+        clubs={clubs}
+        userTeamId={userTeamId ?? ''}
+        pendingFriendlyRequests={pendingFriendlyRequests}
+        onConfirmFriendly={addFriendlyRequest}
       />
 
       <style>{`

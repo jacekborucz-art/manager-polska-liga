@@ -4,7 +4,7 @@ import {
   SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity,
-PendingNegotiation, NegotiationStatus,
+PendingNegotiation, NegotiationStatus, PendingFriendlyRequest,
 HealthStatus,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
@@ -230,6 +230,8 @@ interface GameContextType {
   toggleTransferList: (playerId: string) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
+  pendingFriendlyRequests: PendingFriendlyRequest[];
+  addFriendlyRequest: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
 finalizeFreeAgentContract: (mailId: string) => void;
   transferOffers: TransferOffer[];
   submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
@@ -322,6 +324,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
+ const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
  const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
@@ -1377,6 +1380,81 @@ setMessages([welcomeMail, fanMail]);
     });
   };
 
+  // ── SPARINGI — propozycje i odpowiedzi ──────────────────────────────────────
+
+  const addFriendlyRequest = useCallback((req: Omit<PendingFriendlyRequest, 'id'>) => {
+    const id = `FRIENDLY_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setPendingFriendlyRequests(prev => [...prev, { ...req, id }]);
+  }, []);
+
+  const processFriendlyRequests = (simDate: Date) => {
+    const todayMs = new Date(simDate).setHours(0, 0, 0, 0);
+    const due = pendingFriendlyRequests.filter(r =>
+      new Date(r.responseDate).setHours(0, 0, 0, 0) <= todayMs
+    );
+    if (due.length === 0) return;
+
+    const venueLabelMap: Record<string, string> = {
+      HOME: 'u siebie', AWAY: 'na wyjeździe', NEUTRAL: 'na terenie neutralnym',
+    };
+
+    due.forEach(req => {
+      const opponent = clubs.find(c => c.id === req.opponentClubId);
+      if (!opponent) return;
+
+      const roll = Math.random() * 100;
+      const accepted = roll < req.chance;
+
+      const [fy, fm, fd] = req.proposedDate.split('-').map(Number);
+      const matchDateStr = new Date(fy, fm - 1, fd).toLocaleDateString('pl-PL', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      });
+
+      if (accepted) {
+        const matchDate = new Date(fy, fm - 1, fd, 15, 0);
+        const homeTeamId = req.venue === 'HOME' ? (userTeamId ?? '') : req.venue === 'AWAY' ? req.opponentClubId : (userTeamId ?? '');
+        const awayTeamId = req.venue === 'HOME' ? req.opponentClubId : req.venue === 'AWAY' ? (userTeamId ?? '') : req.opponentClubId;
+        const fixture: Fixture = {
+          id: `FRIENDLY_${req.id}`,
+          leagueId: CompetitionType.FRIENDLY,
+          homeTeamId,
+          awayTeamId,
+          date: matchDate,
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+        };
+        setGlobalFixtures(prev => [...prev, fixture]);
+
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_OK_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `✅ Sparing zaakceptowany — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} zaakceptowała Waszą propozycję sparingu.\n\nData: ${matchDateStr}\nMiejsce: ${venueLabelMap[req.venue]}\n\nMecz został automatycznie dodany do kalendarza.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+      } else {
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_NO_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odrzucony — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} odrzuciła Waszą propozycję sparingu ${venueLabelMap[req.venue]}.\n\nData: ${matchDateStr}\n\nKlub nie mógł dopasować terminu lub nie wyraził zainteresowania. Możecie spróbować z innym terminem lub wybrać inną drużynę.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+      }
+    });
+
+    setPendingFriendlyRequests(prev => prev.filter(r => !due.find(d => d.id === r.id)));
+  };
+
   // ── AKADEMIA — akcje ────────────────────────────────────────────────────────
 
   const initAcademy = useCallback(() => {
@@ -1612,6 +1690,7 @@ setMessages([welcomeMail, fanMail]);
 
     processNegotiationResponses(dateToProcess);
     processExpiredAcceptances(dateToProcess);
+    processFriendlyRequests(dateToProcess);
 
 // --- BOARD FINANCE MONITOR ---
     if (userTeamId && !isResigned) {
@@ -6075,6 +6154,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeIntensity, setTrainingIntensity: setActiveIntensity,
       startNewGame, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, 
+      pendingFriendlyRequests, addFriendlyRequest,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
