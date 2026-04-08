@@ -104,6 +104,10 @@ export enum ViewState {
   RESERVES_VIEW = 'RESERVES_VIEW',
   ACADEMY_VIEW = 'ACADEMY_VIEW',
   UEFA_SUPER_CUP_VIEW = 'UEFA_SUPER_CUP_VIEW',
+  // ── SPARINGI ─────────────────────────────────────────────────────────────
+  PRE_MATCH_FRIENDLY_STUDIO = 'PRE_MATCH_FRIENDLY_STUDIO',
+  MATCH_LIVE_FRIENDLY = 'MATCH_LIVE_FRIENDLY',
+  POST_MATCH_FRIENDLY_STUDIO = 'POST_MATCH_FRIENDLY_STUDIO',
 }
 
 export interface PlayoffPair {
@@ -527,6 +531,13 @@ export interface PendingFriendlyRequest {
   venue: 'HOME' | 'AWAY' | 'NEUTRAL';
   chance: number;            // 0-100 (ukryte przed graczem, do losowania)
   responseDate: string;      // 'YYYY-MM-DD' - dzień odpowiedzi (currentDate + 1)
+}
+
+export interface FriendlyMatchConditions {
+  /** Co dzieje się po remisie w regulaminowym czasie */
+  drawRule: 'NONE' | 'PENALTIES' | 'ET_ONLY' | 'ET_THEN_PENALTIES';
+  /** Maksymalna liczba zmian na drużynę */
+  maxSubstitutions: 5 | 6 | 7 | 8 | 9;
 }
 
 export enum TransferOfferStatus {

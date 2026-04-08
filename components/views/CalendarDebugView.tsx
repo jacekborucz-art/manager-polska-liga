@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { FriendlySchedulerModal } from '../modals/FriendlySchedulerModal';
 
 export const CalendarDebugView: React.FC = () => {
-  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures, pendingFriendlyRequests, addFriendlyRequest } = useGame();
+  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures, pendingFriendlyRequests, addFriendlyRequest, cancelFriendly } = useGame();
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   
@@ -18,6 +18,18 @@ export const CalendarDebugView: React.FC = () => {
   const userSchedule = useMemo(() => leagueSchedules[userTier], [leagueSchedules, userTier]);
 
   const [showFriendlyScheduler, setShowFriendlyScheduler] = useState(false);
+
+  const confirmedFriendlyDates = useMemo(() => {
+    const set = new Set<string>();
+    fixtures.forEach(f => {
+      if (f.leagueId === CompetitionType.FRIENDLY &&
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)) {
+        const d = new Date(f.date);
+        set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+      }
+    });
+    return set;
+  }, [fixtures, userTeamId]);
 
   const getClub = (id: string) => clubs.find(c => c.id === id);
 
@@ -302,7 +314,11 @@ export const CalendarDebugView: React.FC = () => {
                                    const isHome = !isNeutral && f.homeTeamId === userTeamId;
                                    const oppId = f.homeTeamId === userTeamId ? f.awayTeamId : f.homeTeamId;
                                    const opp = clubs.find(c => c.id === oppId);
-                                   const matchDateStr = new Date(f.date).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+                                   const matchDate = new Date(f.date); matchDate.setHours(0,0,0,0);
+                                   const today = new Date(currentDate); today.setHours(0,0,0,0);
+                                   const isMatchDay = matchDate.getTime() === today.getTime();
+                                   const canCancel = !isMatchDay && f.status !== 'FINISHED';
+                                   const matchDateStr = matchDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
                                    const venueLabel = isNeutral ? 'NEU' : isHome ? 'DOM' : 'WYJ';
                                    return (
                                      <div key={f.id} className="flex items-center gap-3 bg-green-900/30 border border-green-500/30 px-4 py-2 rounded-2xl shadow-xl">
@@ -310,7 +326,7 @@ export const CalendarDebugView: React.FC = () => {
                                          <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[0] }} />
                                          <div className="flex-1" style={{ backgroundColor: opp?.colorsHex[1] || opp?.colorsHex[0] }} />
                                        </div>
-                                       <div className="flex flex-col">
+                                       <div className="flex flex-col flex-1">
                                          <span className="text-[9px] font-black uppercase tracking-widest text-green-400">
                                            {matchDateStr} · {venueLabel}
                                          </span>
@@ -323,6 +339,14 @@ export const CalendarDebugView: React.FC = () => {
                                            )}
                                          </span>
                                        </div>
+                                       {canCancel && (
+                                         <button
+                                           onClick={() => cancelFriendly(f.id)}
+                                           className="ml-auto px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[8px] font-black uppercase tracking-widest text-rose-400 hover:bg-rose-500/25 transition-all active:scale-95"
+                                         >
+                                           Anuluj
+                                         </button>
+                                       )}
                                      </div>
                                    );
                                  })}
@@ -421,6 +445,7 @@ export const CalendarDebugView: React.FC = () => {
         clubs={clubs}
         userTeamId={userTeamId ?? ''}
         pendingFriendlyRequests={pendingFriendlyRequests}
+        confirmedFriendlyDates={confirmedFriendlyDates}
         onConfirmFriendly={addFriendlyRequest}
       />
 

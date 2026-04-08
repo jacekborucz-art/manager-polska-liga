@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { CalendarSlot, CompetitionType, Club, PendingFriendlyRequest } from '../../types';
 
 interface FriendlySchedulerModalProps {
@@ -9,6 +9,7 @@ interface FriendlySchedulerModalProps {
   clubs: Club[];
   userTeamId: string;
   pendingFriendlyRequests: PendingFriendlyRequest[];
+  confirmedFriendlyDates: Set<string>;
   onConfirmFriendly: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
 }
 
@@ -76,6 +77,10 @@ function isPolishClub(club: Club): boolean {
   return club.leagueId.startsWith('L_PL') || club.country === 'POL' || !club.country;
 }
 
+function isEuropeanCupClub(club: Club): boolean {
+  return club.leagueId === 'L_CL' || club.leagueId === 'L_EL' || club.leagueId === 'L_CONF';
+}
+
 export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   isOpen,
   onClose,
@@ -84,6 +89,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   clubs,
   userTeamId,
   pendingFriendlyRequests,
+  confirmedFriendlyDates,
   onConfirmFriendly,
 }) => {
   const today = useMemo(() => new Date(currentDate), [currentDate]);
@@ -117,8 +123,20 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   const [manualVenue, setManualVenue] = useState<Venue>('AWAY');
   const [selectedOpponent, setSelectedOpponent] = useState<{ club: Club; venue: Venue; chance: number } | null>(null);
 
-  // Stable suggestion seed based on modal mount (randomised once per open)
+  // Stable suggestion seed — refreshed on every open
   const seedRef = useRef(Math.floor(Math.random() * 999999));
+
+  // Reset to step 1 every time the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      setSelectedDate(null);
+      setSelectedOpponent(null);
+      setSearchQuery('');
+      seedRef.current = Math.floor(Math.random() * 999999);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // ---------- friendly date set ----------
   const friendlyDates = useMemo(() => {
@@ -148,7 +166,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
 
     // Prefer Polish clubs (60% of list), rest European
     const polish  = pool.filter(c => isPolishClub(c));
-    const foreign = pool.filter(c => !isPolishClub(c));
+    const foreign = pool.filter(c => isEuropeanCupClub(c));
 
     const shuffled = (arr: Club[]) => [...arr].sort(() => rand() - 0.5);
     const pickN    = (arr: Club[], n: number) => shuffled(arr).slice(0, n);
@@ -185,12 +203,16 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   const isToday      = (day: number) => day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
 
   // Pending = already has a sent proposal waiting for response
-  const hasPending   = (day: number) => pendingFriendlyRequests.some(r => r.proposedDate === dateKey(day));
+  const hasPending    = (day: number) => pendingFriendlyRequests.some(r => r.proposedDate === dateKey(day));
 
-  // A date is bookable if: it's a friendly slot, at least 1 day in the future, no pending request yet
+  // Confirmed = accepted fixture already exists on this date
+  const hasConfirmed  = (day: number) => confirmedFriendlyDates.has(dateKey(day));
+
+  // A date is bookable if: it's a friendly slot, at least 1 day in the future, no pending/confirmed match
   const isBookable   = (day: number) => {
     if (!isFriendly(day)) return false;
     if (hasPending(day)) return false;
+    if (hasConfirmed(day)) return false;
     const [y, m, d] = [viewYear, viewMonth, day];
     const matchDate = new Date(y, m, d);
     matchDate.setHours(0, 0, 0, 0);
@@ -293,10 +315,11 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
               <div className="grid grid-cols-7 gap-2 pb-6">
                 {cells.map((day, idx) => {
                   if (!day) return <div key={`e-${idx}`} />;
-                  const avail   = isBookable(day);
-                  const pending = hasPending(day);
-                  const sel     = isSelected(day);
-                  const tod     = isToday(day);
+                  const avail     = isBookable(day);
+                  const pending   = hasPending(day);
+                  const confirmed = hasConfirmed(day);
+                  const sel       = isSelected(day);
+                  const tod       = isToday(day);
                   return (
                     <button
                       key={`d-${day}`}
@@ -305,21 +328,24 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                       className={`
                         relative aspect-square rounded-2xl border flex flex-col items-center justify-center
                         text-base font-black transition-all duration-150
-                        ${!avail && !pending
-                          ? 'bg-transparent border-transparent text-slate-700 cursor-not-allowed'
-                          : pending
-                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 cursor-not-allowed'
-                            : sel
-                              ? 'bg-white border-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] scale-105'
-                              : tod
-                                ? 'bg-white/20 border-white/50 text-white hover:bg-white/30 active:scale-95 cursor-pointer'
-                                : 'bg-white/5 border-white/15 text-white hover:bg-white/15 hover:border-white/40 active:scale-95 cursor-pointer'
+                        ${confirmed
+                          ? 'bg-green-500/15 border-green-500/40 text-green-300 cursor-not-allowed'
+                          : !avail && !pending
+                            ? 'bg-transparent border-transparent text-slate-700 cursor-not-allowed'
+                            : pending
+                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 cursor-not-allowed'
+                              : sel
+                                ? 'bg-white border-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] scale-105'
+                                : tod
+                                  ? 'bg-white/20 border-white/50 text-white hover:bg-white/30 active:scale-95 cursor-pointer'
+                                  : 'bg-white/5 border-white/15 text-white hover:bg-white/15 hover:border-white/40 active:scale-95 cursor-pointer'
                         }
                       `}
                     >
                       <span className="text-lg leading-none">{day}</span>
-                      {pending && <span className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-amber-400/80" title="Oczekuje na odpowiedź" />}
-                      {tod && !sel && avail && !pending && <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-white/60" />}
+                      {confirmed && <span className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-green-400/80" title="Sparing zaplanowany" />}
+                      {pending && !confirmed && <span className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-amber-400/80" title="Oczekuje na odpowiedź" />}
+                      {tod && !sel && avail && !pending && !confirmed && <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-white/60" />}
                     </button>
                   );
                 })}

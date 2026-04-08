@@ -4,7 +4,7 @@ import {
   SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity,
-PendingNegotiation, NegotiationStatus, PendingFriendlyRequest,
+PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
 HealthStatus,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
@@ -232,6 +232,10 @@ interface GameContextType {
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
   pendingFriendlyRequests: PendingFriendlyRequest[];
   addFriendlyRequest: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
+  cancelFriendly: (fixtureId: string) => void;
+  activeFriendlyFixtureId: string | null;
+  activeFriendlyConditions: FriendlyMatchConditions | null;
+  setActiveFriendlyConditions: React.Dispatch<React.SetStateAction<FriendlyMatchConditions | null>>;
 finalizeFreeAgentContract: (mailId: string) => void;
   transferOffers: TransferOffer[];
   submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
@@ -325,6 +329,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
+ const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
+ const [activeFriendlyConditions, setActiveFriendlyConditions] = useState<FriendlyMatchConditions | null>(null);
  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
  const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
@@ -1387,6 +1393,10 @@ setMessages([welcomeMail, fanMail]);
     setPendingFriendlyRequests(prev => [...prev, { ...req, id }]);
   }, []);
 
+  const cancelFriendly = useCallback((fixtureId: string) => {
+    setGlobalFixtures(prev => prev.filter(f => f.id !== fixtureId));
+  }, []);
+
   const processFriendlyRequests = (simDate: Date) => {
     const todayMs = new Date(simDate).setHours(0, 0, 0, 0);
     const due = pendingFriendlyRequests.filter(r =>
@@ -1883,6 +1893,25 @@ setMessages([welcomeMail, fanMail]);
           };
           setGlobalFixtures(prev => [...prev, finalFixture]);
         }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FRIENDLY MATCH CHECK: Jeśli dziś gracz ma zaplanowany sparing, zatrzymaj
+    // ─────────────────────────────────────────────────────────────────────────
+    if (userTeamId && !isResigned) {
+      const friendlyToday = allFixtures.find(f =>
+        f.leagueId === CompetitionType.FRIENDLY &&
+        f.date.toDateString() === dateToProcess.toDateString() &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        f.status === MatchStatus.SCHEDULED
+      );
+      if (friendlyToday) {
+        setActiveFriendlyFixtureId(friendlyToday.id);
+        setActiveFriendlyConditions(null); // reset warunków — gracz ustali je na widoku
+        setTargetJumpTime(null);
+        navigateTo(ViewState.PRE_MATCH_FRIENDLY_STUDIO);
+        return; // nie przesuwaj dnia
       }
     }
 
@@ -6188,7 +6217,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeIntensity, setTrainingIntensity: setActiveIntensity,
       startNewGame, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, 
-      pendingFriendlyRequests, addFriendlyRequest,
+      pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
+      activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
