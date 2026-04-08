@@ -62,6 +62,69 @@ import zaglebieLubinLogo         from '../Graphic/logo/zaglebie-lubin-2022-logo.
 import zaglebieSosnowiecLogo     from '../Graphic/logo/Zaglebie_Sosnowiec.png';
 import zawiszaBydgoszczLogo      from '../Graphic/logo/zawisza-bydgoszcz.png';
 import zniczPruszkow             from '../Graphic/logo/znicz-pruszkow.png';
+import aviaSwidnikLogo           from '../Graphic/logo/avia_swidnik.png';
+import bksSpartaKatowiceLogo     from '../Graphic/logo/bks_sparta_katowice.png';
+import blekitniStargardLogo      from '../Graphic/logo/blekitni_stargard.png';
+import carinaGubinLogo           from '../Graphic/logo/carina_gubin.png';
+import cartuziaKartuzyLogo       from '../Graphic/logo/cartuzia_kartuzy.png';
+import chelmiankaChelmLogo       from '../Graphic/logo/chelmianka_chelm.png';
+import chemikPoliceLogo          from '../Graphic/logo/chemik_police.png';
+import flotaSwinoujscieLogo      from '../Graphic/logo/flota_swinoujscie.png';
+import fotoHigenaLogo            from '../Graphic/logo/foto_higena.png';
+import gornikPolkowiceLogo       from '../Graphic/logo/gornik_polkowice.png';
+import gwardiaKoszalinLogo       from '../Graphic/logo/gwardia_koszalin.png';
+import karkonoszeLogo            from '../Graphic/logo/karkonosze_jelenia_gora.png';
+import kotwicaKolobrzegLogo      from '../Graphic/logo/kotiwca_kolobrzeg.png';
+import ksCkTroszynLogo           from '../Graphic/logo/ks_ck_troszyn.png';
+import ksWasilkowLogo            from '../Graphic/logo/ks_wasilkow.png';
+import ktsLuzinoLogo             from '../Graphic/logo/kts_luzino.png';
+import ktsWeszloLogo             from '../Graphic/logo/kts_weszlo.png';
+import lechiaDzierzoniowLogo     from '../Graphic/logo/lechia_dzierzoniow.png';
+import lechiaTomaszowLogo        from '../Graphic/logo/lechia_tomaszow_mazowiecki.png';
+import lechiaZielonaGoraLogo     from '../Graphic/logo/lechia_zielona_gora.png';
+import lipnoSteszewLogo          from '../Graphic/logo/lipno_steszew.png';
+import lksLomzaLogo              from '../Graphic/logo/lks_lomza.png';
+import lzsStarowiceLogo          from '../Graphic/logo/lzs_starowice.png';
+import mazoviaMinskLogo          from '../Graphic/logo/mazovia_minsk_mazowiecki.png';
+import mksCzarniPolaniecLogo     from '../Graphic/logo/mks_czarni-polaniec.png';
+import mksKluczborKLogo          from '../Graphic/logo/mks_kluczbork.png';
+import mksPodlasieLogo           from '../Graphic/logo/mks_podlasie_biala_podlaska.png';
+import mlawiankaLogo             from '../Graphic/logo/mlawianka_mlawa.png';
+import naprzodJedrzejowLogo      from '../Graphic/logo/naprzod_jedrzejow.png';
+import notecCzarnkowLogo         from '../Graphic/logo/notec_czarnkow.png';
+import olimpiaElblagLogo         from '../Graphic/logo/olimpia_elblag.png';
+import olimpiaZambrowLogo        from '../Graphic/logo/olimpia_zambrow.png';
+import pniowekPawlowiceLogo      from '../Graphic/logo/pniowek_pawlowice_slaskie.png';
+import pogonSokolLubaczowLogo    from '../Graphic/logo/pogon_sokol_lubaczow.png';
+import poloniaNysaLogo           from '../Graphic/logo/polonia_nysa.png';
+import poloniaSrodaLogo          from '../Graphic/logo/polonia_sroda_wielkopolska.png';
+import slezaWroclawLogo          from '../Graphic/logo/sleza_wroclaw.png';
+import slowianinWoliborzLogo     from '../Graphic/logo/slowianin_woliborz.png';
+import sokolKolbuszowaDolnaLogo  from '../Graphic/logo/sokol_kolbuszowa_dolna.png';
+import sokolOstrodaLogo          from '../Graphic/logo/sokol_ostroda.png';
+import spartaKazimierzWielkaLogo from '../Graphic/logo/sparta_kazimierz_wielka.png';
+import stalJasienLogo            from '../Graphic/logo/stal_jasien.png';
+import stalKrasnikLogo           from '../Graphic/logo/stal_krasnik.png';
+import starStarachowiceLogo      from '../Graphic/logo/star_starachowice.png';
+import stomilOlsztynLogo         from '../Graphic/logo/stomil_olsztyn.png';
+import swidniczankaLogo          from '../Graphic/logo/swidniczanka_swidnik.png';
+import switNowyDworLogo          from '../Graphic/logo/swit_nowy_dwor.png';
+import tluchowiaTluchowoLogo     from '../Graphic/logo/tluchowia_tluchowo.png';
+import uniaJanikowoLogo          from '../Graphic/logo/unia_janikowo.png';
+import uniaSwarzedzLogo          from '../Graphic/logo/unia_swarzedz.png';
+import victoriaCzestochowaLogo   from '../Graphic/logo/victoria_czestochowa.png';
+import vinetaWolinLogo           from '../Graphic/logo/vineta_wolin.png';
+import wartaGorzowLogo           from '../Graphic/logo/warta_gorzow_wielkopolski.png';
+import wartaSieradzLogo          from '../Graphic/logo/warta_sieradz.png';
+import wdaSwiecieLogo            from '../Graphic/logo/wda_swiecie.png';
+import wigryLogo                 from '../Graphic/logo/wigry_suwalki.png';
+import wikielecLogo              from '../Graphic/logo/wikielec.png';
+import wiktoriaWresniaLogo       from '../Graphic/logo/wiktoria_wrzesnia.png';
+import wislaPulawyLogo           from '../Graphic/logo/wisla_pulawy.png';
+import wislokaDebicaLogo         from '../Graphic/logo/wisloka_debica.png';
+import wislanieJaskowiceLogo     from '../Graphic/logo/wislanie_jaskowice.png';
+import wlokniarzCzestochowaLogo  from '../Graphic/logo/wlokniarz_czestochowa.png';
+import zniczBialaPiskaLogo       from '../Graphic/logo/znicz_biala_piska.png';
 
 
 //ENGLISH:
@@ -248,6 +311,69 @@ export const CLUB_LOGOS: Record<string, string> = {
   PL_ZAGLEBIE_SOSNOWIEC:             zaglebieSosnowiecLogo,
   PL_ZAWISZA_BYDGOSZCZ:              zawiszaBydgoszczLogo,
   PL_ZNICZ_PRUSZKOW:                 zniczPruszkow,
+  PL_AVIA_SWIDNIK:                   aviaSwidnikLogo,
+  PL_BKS_SPARTA_KATOWICE:            bksSpartaKatowiceLogo,
+  PL_BLEKITNI_STARGARD:              blekitniStargardLogo,
+  PL_MKP_CARINA_GUBIN:               carinaGubinLogo,
+  PL_CARTUSIA_KARTUZY:               cartuziaKartuzyLogo,
+  PL_CHELMIANKA_CHELM:               chelmiankaChelmLogo,
+  PL_CHEMIK_POLICE:                  chemikPoliceLogo,
+  PL_MKS_FLOTA_SWINOUJSCIE:          flotaSwinoujscieLogo,
+  PL_FOTO_HIGIENA_GAC:               fotoHigenaLogo,
+  PL_GORNIK_POLKOWICE:               gornikPolkowiceLogo,
+  PL_GWARDIA_KOSZALIN:               gwardiaKoszalinLogo,
+  PL_KARKONOSZE_JELENIA_GORA:        karkonoszeLogo,
+  PL_KOTWICA_KOLOBRZEG:              kotwicaKolobrzegLogo,
+  PL_KS_CK_TROSZYN:                  ksCkTroszynLogo,
+  PL_KS_WASILKOW:                    ksWasilkowLogo,
+  PL_KTS_K_LUZINO:                   ktsLuzinoLogo,
+  PL_KTS_WESZLO_WARSZAWA:            ktsWeszloLogo,
+  PL_LECHIA_DZIERZONIOW:             lechiaDzierzoniowLogo,
+  PL_LECHIA_TOMASZOW_MAZOWIECKI:     lechiaTomaszowLogo,
+  PL_LECHIA_ZIELONA_GORA:            lechiaZielonaGoraLogo,
+  PL_KS_LIPNO_STESZEW:               lipnoSteszewLogo,
+  PL_LKS_LOMZA:                      lksLomzaLogo,
+  PL_LZS_STAROWICE:                  lzsStarowiceLogo,
+  PL_MAZOVIA_MINSK_MAZOWIECKI:       mazoviaMinskLogo,
+  PL_MKS_CZARNI_POLANIEC:            mksCzarniPolaniecLogo,
+  PL_MKS_KLUCZBORK:                  mksKluczborKLogo,
+  PL_MKS_PODLASIE_BIALA_PODLASKA:   mksPodlasieLogo,
+  PL_MLAWIANKA_MLAWA:                mlawiankaLogo,
+  PL_KS_NAPRZOD_JEDRZEJOW:           naprzodJedrzejowLogo,
+  PL_NOTEC_CZARNKOW:                 notecCzarnkowLogo,
+  PL_OLIMPIA_ELBLAG:                 olimpiaElblagLogo,
+  PL_OLIMPIA_ZAMBROW:                olimpiaZambrowLogo,
+  PL_PNIOWEK_PAWLOWICE_SLASKIE:      pniowekPawlowiceLogo,
+  PL_POGON_SOKOL_LUBACZOW:           pogonSokolLubaczowLogo,
+  PL_POLONIA_NYSA:                   poloniaNysaLogo,
+  PL_POLONIA_SRODA_WIELKOPOLSKA:     poloniaSrodaLogo,
+  PL_SLEZA_WROCLAW:                  slezaWroclawLogo,
+  PL_SLOWIANIN_WOLIBORZ:             slowianinWoliborzLogo,
+  PL_SOKOL_KOLBUSZOWA_DOLNA:         sokolKolbuszowaDolnaLogo,
+  PL_SOKOL_OSTRODA:                  sokolOstrodaLogo,
+  PL_SPARTA_KAZIMIERZA_WIELKA:       spartaKazimierzWielkaLogo,
+  PL_MKS_STAL_JASIEN:                stalJasienLogo,
+  PL_FKS_STAL_KRASNIK:               stalKrasnikLogo,
+  PL_STAR_STARACHOWICE:              starStarachowiceLogo,
+  PL_STOMIL_OLSZTYN:                 stomilOlsztynLogo,
+  PL_SWIDNICZANKA_SWIDNIK:           swidniczankaLogo,
+  PL_SWIT_NOWY_DWOR_MAZOWIECKI:      switNowyDworLogo,
+  PL_GZS_TLUCHOVIA_TLUCHOWO:         tluchowiaTluchowoLogo,
+  PL_UNIA_JANIKOWO:                  uniaJanikowoLogo,
+  PL_SKS_UNIA_SWARZEDZ:              uniaSwarzedzLogo,
+  PL_VICTORIA_CZESTOCHOWA:           victoriaCzestochowaLogo,
+  PL_VINETA_WOLIN:                   vinetaWolinLogo,
+  PL_WARTA_GORZOW_WIELKOPOLSKI:      wartaGorzowLogo,
+  PL_WARTA_SIERADZ:                  wartaSieradzLogo,
+  PL_WDA_SWIECIE:                    wdaSwiecieLogo,
+  PL_WIGRY_SUWALKI:                  wigryLogo,
+  PL_WIKIELEC:                       wikielecLogo,
+  PL_MKS_VIKTORIA_WRZESNIA:          wiktoriaWresniaLogo,
+  PL_WISLA_PULAWY:                   wislaPulawyLogo,
+  PL_WISLOKA_DEBICA:                 wislokaDebicaLogo,
+  PL_WISLANIE_JASKOWICE:             wislanieJaskowiceLogo,
+  PL_WLOKNIARZ_CZESTOCHOWA:          wlokniarzCzestochowaLogo,
+  PL_MLKS_ZNICZ_BIALA_PISKA:         zniczBialaPiskaLogo,
 
 
 ///england
