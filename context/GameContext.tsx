@@ -1402,18 +1402,51 @@ setMessages([welcomeMail, fanMail]);
       const opponent = clubs.find(c => c.id === req.opponentClubId);
       if (!opponent) return;
 
-      const roll = Math.random() * 100;
-      const accepted = roll < req.chance;
-
       const [fy, fm, fd] = req.proposedDate.split('-').map(Number);
       const matchDateStr = new Date(fy, fm - 1, fd).toLocaleDateString('pl-PL', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       });
 
+      // ── Sprawdź konflikt kalendarza rywala (okno ±2 dni od daty sparingu) ──
+      const matchDay = new Date(fy, fm - 1, fd); matchDay.setHours(0, 0, 0, 0);
+      const rangeStart = new Date(matchDay); rangeStart.setDate(rangeStart.getDate() - 2);
+      const rangeEnd   = new Date(matchDay); rangeEnd.setDate(rangeEnd.getDate() + 2);
+      const allFix = Object.values(leagueSchedules)
+        .flatMap(s => s.matchdays.flatMap(m => m.fixtures))
+        .concat(globalFixtures);
+      const conflict = allFix.find(f => {
+        if (f.homeTeamId !== req.opponentClubId && f.awayTeamId !== req.opponentClubId) return false;
+        if (f.leagueId === CompetitionType.FRIENDLY) return false; // inne sparingi nie blokują
+        const fDay = new Date(f.date); fDay.setHours(0, 0, 0, 0);
+        return fDay >= rangeStart && fDay <= rangeEnd;
+      });
+
+      if (conflict) {
+        const conflictDateStr = new Date(conflict.date).toLocaleDateString('pl-PL', {
+          weekday: 'long', day: 'numeric', month: 'long',
+        });
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_CONFLICT_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odwołany — ${opponent.name}`,
+          body: `Niestety drużyna ${opponent.name} musi odwołać sparing w zaproponowanym terminie.\n\nData sparingu: ${matchDateStr}\n\nPowód: ${opponent.name} rozgrywa mecz ${conflictDateStr}, co koliduje z terminem sparingu (wymagany bufor 2 dni).\n\nProponujemy wybranie innej daty lub innego rywala.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+        return;
+      }
+
+      const roll = Math.random() * 100;
+      const accepted = roll < req.chance;
+
       if (accepted) {
         const matchDate = new Date(fy, fm - 1, fd, 15, 0);
-        const homeTeamId = req.venue === 'HOME' ? (userTeamId ?? '') : req.venue === 'AWAY' ? req.opponentClubId : (userTeamId ?? '');
-        const awayTeamId = req.venue === 'HOME' ? req.opponentClubId : req.venue === 'AWAY' ? (userTeamId ?? '') : req.opponentClubId;
+        const isNeutral = req.venue === 'NEUTRAL';
+        const homeTeamId = req.venue === 'AWAY' ? req.opponentClubId : (userTeamId ?? '');
+        const awayTeamId = req.venue === 'AWAY' ? (userTeamId ?? '') : req.opponentClubId;
         const fixture: Fixture = {
           id: `FRIENDLY_${req.id}`,
           leagueId: CompetitionType.FRIENDLY,
@@ -1423,6 +1456,7 @@ setMessages([welcomeMail, fanMail]);
           status: MatchStatus.SCHEDULED,
           homeScore: null,
           awayScore: null,
+          neutralVenue: isNeutral || undefined,
         };
         setGlobalFixtures(prev => [...prev, fixture]);
 

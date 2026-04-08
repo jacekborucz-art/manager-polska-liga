@@ -169,8 +169,8 @@ export const CalendarDebugView: React.FC = () => {
          </div>
       </div>
 
-      <div className="flex-1 bg-slate-900/30 rounded-[40px] border border-white/5 backdrop-blur-2xl shadow-2xl overflow-hidden flex flex-col">
-         <div className="overflow-y-auto custom-scrollbar flex-1 p-8">
+      <div className="flex-1 min-h-0 bg-slate-900/30 rounded-[40px] border border-white/5 backdrop-blur-2xl shadow-2xl flex flex-col">
+         <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0 p-8 rounded-[40px]">
             <div className="max-w-4xl mx-auto space-y-3">
                {slots.map((slot) => {
                  const theme = getCompTheme(slot.competition, slot.label);
@@ -298,10 +298,12 @@ export const CalendarDebugView: React.FC = () => {
                               <div className="animate-slide-up flex flex-col gap-2">
                                  {/* Zaplanowane sparingi */}
                                  {(friendlyMatchesInSlot as Fixture[]).map(f => {
-                                   const isHome = f.homeTeamId === userTeamId;
-                                   const oppId = isHome ? f.awayTeamId : f.homeTeamId;
+                                   const isNeutral = !!f.neutralVenue;
+                                   const isHome = !isNeutral && f.homeTeamId === userTeamId;
+                                   const oppId = f.homeTeamId === userTeamId ? f.awayTeamId : f.homeTeamId;
                                    const opp = clubs.find(c => c.id === oppId);
                                    const matchDateStr = new Date(f.date).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+                                   const venueLabel = isNeutral ? 'NEU' : isHome ? 'DOM' : 'WYJ';
                                    return (
                                      <div key={f.id} className="flex items-center gap-3 bg-green-900/30 border border-green-500/30 px-4 py-2 rounded-2xl shadow-xl">
                                        <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 flex flex-col border border-white/10">
@@ -310,7 +312,7 @@ export const CalendarDebugView: React.FC = () => {
                                        </div>
                                        <div className="flex flex-col">
                                          <span className="text-[9px] font-black uppercase tracking-widest text-green-400">
-                                           {matchDateStr} · {isHome ? 'DOM' : 'WYJ'}
+                                           {matchDateStr} · {venueLabel}
                                          </span>
                                          <span className="text-[11px] font-black text-white uppercase italic">
                                            🤝 vs {opp?.name ?? oppId}
@@ -423,10 +425,12 @@ export const CalendarDebugView: React.FC = () => {
       />
 
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+        .custom-scrollbar { scrollbar-gutter: stable; }
+        .custom-scrollbar::-webkit-scrollbar { width: 16px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); border-radius: 99px; margin: 16px 0; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 99px; min-height: 40px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.6); }
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.35) rgba(255,255,255,0.08); }
         @keyframes fade-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes slide-up { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

@@ -860,6 +860,7 @@ export interface Fixture {
   homePenaltyScore?: number;
   awayPenaltyScore?: number;
   attendance?: number;
+  neutralVenue?: boolean;
 }
 
 export interface Lineup {
