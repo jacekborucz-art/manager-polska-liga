@@ -62,6 +62,7 @@ export const BackgroundMatchProcessor = {
       CompetitionType.CONF_QF_DRAW, CompetitionType.CONF_QF, CompetitionType.CONF_QF_RETURN,
       CompetitionType.CONF_SF_DRAW, CompetitionType.CONF_SF, CompetitionType.CONF_SF_RETURN,
       CompetitionType.CONF_FINAL_DRAW, CompetitionType.CONF_FINAL,
+      CompetitionType.UEFA_SUPER_CUP,
     ]);
     const todayFixtures = fixtures.filter(f =>
       f.date.toDateString() === dateStr &&

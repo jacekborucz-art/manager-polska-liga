@@ -116,7 +116,7 @@ import victoriaCzestochowaLogo   from '../Graphic/logo/victoria_czestochowa.png'
 import vinetaWolinLogo           from '../Graphic/logo/vineta_wolin.png';
 import wartaGorzowLogo           from '../Graphic/logo/warta_gorzow_wielkopolski.png';
 import wartaSieradzLogo          from '../Graphic/logo/warta_sieradz.png';
-import wdaSwiecieLogo            from '../Graphic/logo/wda_swiecie.png';
+import wdaSwiecieLogo            from '../Graphic/logo/wda_swiece.png';
 import wigryLogo                 from '../Graphic/logo/wigry_suwalki.png';
 import wikielecLogo              from '../Graphic/logo/wikielec.png';
 import wiktoriaWresniaLogo       from '../Graphic/logo/wiktoria_wrzesnia.png';
@@ -511,8 +511,7 @@ export const CLUB_LOGOS: Record<string, string> = {
   NA_INTER_MIAMI_CF:                       interMiamiLogo,
   NA_CHICAGO_FIRE_FC:                      chicagoFireLogo,
 
-  // Ludogorets (reserved - add to tournament data first)
-  EU_EL_LUDOGORETS_RAZGRAD:               ludogoretsLogo,
+  EU_CL_LUDOGOREC_RAZGRAD:                ludogoretsLogo,
 };
 
 /**
