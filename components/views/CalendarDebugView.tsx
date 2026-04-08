@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, SlotType, Club, Fixture } from '../../types';
 import { Button } from '../ui/Button';
+import { FriendlySchedulerModal } from '../modals/FriendlySchedulerModal';
 
 export const CalendarDebugView: React.FC = () => {
   const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures } = useGame();
@@ -15,6 +16,8 @@ export const CalendarDebugView: React.FC = () => {
   }, [userClub]);
 
   const userSchedule = useMemo(() => leagueSchedules[userTier], [leagueSchedules, userTier]);
+
+  const [showFriendlyScheduler, setShowFriendlyScheduler] = useState(false);
 
   const getClub = (id: string) => clubs.find(c => c.id === id);
 
@@ -69,6 +72,8 @@ export const CalendarDebugView: React.FC = () => {
         return { color: 'text-slate-500', bg: 'bg-slate-500/5', border: 'border-slate-500/10', icon: '❄️' };
       case CompetitionType.OFF_SEASON: 
         return { color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', icon: '🏖️' };
+      case CompetitionType.FRIENDLY:
+        return { color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20', icon: '🤝' };
         case CompetitionType.BOARD:
         return { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: '🏛️' };
       default: 
@@ -148,12 +153,20 @@ export const CalendarDebugView: React.FC = () => {
             </div>
          </div>
 
-         <button 
-           onClick={() => navigateTo(ViewState.DASHBOARD)}
-           className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg"
-         >
-           &larr; Powrót do pulpitu
-         </button>
+         <div className="flex items-center gap-3">
+           <button
+             onClick={() => setShowFriendlyScheduler(true)}
+             className="px-8 py-3 rounded-2xl bg-green-500/10 border border-green-500/20 text-[10px] font-black uppercase tracking-widest text-green-300 hover:bg-green-500/20 transition-all active:scale-95 shadow-lg"
+           >
+             🤝 Zaplanuj sparing
+           </button>
+           <button 
+             onClick={() => navigateTo(ViewState.DASHBOARD)}
+             className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg"
+           >
+             &larr; Powrót do pulpitu
+           </button>
+         </div>
       </div>
 
       <div className="flex-1 bg-slate-900/30 rounded-[40px] border border-white/5 backdrop-blur-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -166,6 +179,7 @@ export const CalendarDebugView: React.FC = () => {
                  const isSuperCup = slot.competition === CompetitionType.SUPER_CUP;
                  const scFix = isSuperCup ? fixtures.find(f => f.leagueId === CompetitionType.SUPER_CUP) : null;
                  const isClDraw = slot.competition === CompetitionType.CHAMPIONS_LEAGUE_DRAW;
+                 const isFriendly = slot.competition === CompetitionType.FRIENDLY;
                  
                  return (
                    <div 
@@ -261,6 +275,24 @@ export const CalendarDebugView: React.FC = () => {
                                  )}
                               </div>
                            )}
+
+                           {isFriendly && (
+                              <div className="animate-slide-up flex items-center gap-3 bg-green-900/30 border border-green-500/30 px-4 py-2 rounded-2xl shadow-xl">
+                                 <span className="text-xl">🤝</span>
+                                 <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-green-400">Mecz towarzyski</span>
+                                    <span className="text-[11px] font-black text-white uppercase italic">Sparing</span>
+                                 </div>
+                                 {isTodayActive && (
+                                   <button
+                                     onClick={() => navigateTo(ViewState.PRE_MATCH_STUDIO)}
+                                     className="ml-2 px-3 py-1.5 rounded-xl bg-green-600/40 border border-green-400/50 text-[9px] font-black uppercase tracking-widest text-green-200 hover:bg-green-600/70 transition-all active:scale-95"
+                                   >
+                                     Zaplanuj sparing →
+                                   </button>
+                                 )}
+                              </div>
+                           )}
                         </div>
                      </div>
 
@@ -303,6 +335,13 @@ export const CalendarDebugView: React.FC = () => {
            </div>
          ))}
       </div>
+
+      <FriendlySchedulerModal
+        isOpen={showFriendlyScheduler}
+        onClose={() => setShowFriendlyScheduler(false)}
+        currentDate={new Date(currentDate)}
+        slots={slots}
+      />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
