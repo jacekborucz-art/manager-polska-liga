@@ -268,6 +268,10 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Real Valladolid", country: "ESP", tier: 3, colors: ['#FFFFFF', '#000000', '#FF6600'], stadium: "Estadio José Zorrilla", capacity: 26512, reputation:8 },
   { name: "UD Las Palmas", country: "ESP", tier: 3, colors: ['#FFD700', '#000000', '#FFFFFF'], stadium: "Estadio Gran Canaria", capacity: 32200, reputation: 8 },
 
+{ name: "Espanyol FC", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Estadio de Cornellà-El Prat", capacity: 40000, reputation: 9 },
+ { name: "Rayo Vallecano", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Campo de Fútbol de Vallecas", capacity: 14950, reputation: 8 },
+ { name: "Mallorca FC", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Visit Mallorca Stadium", capacity: 23000, reputation: 8 },
+ 
   // Holandia (NED) – niższe miejsce w Eredivisie
   { name: "FC Volendam", country: "NED", tier: 3, colors: ['#FF6600', '#FFFFFF', '#000000'], stadium: "Kras Stadion", capacity: 7384, reputation: 6 },
   { name: "Almere City FC", country: "NED", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Yanmar Stadion", capacity: 4501, reputation: 5 },

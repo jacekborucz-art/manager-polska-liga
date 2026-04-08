@@ -48,7 +48,7 @@ import { BackgroundMatchProcessorCL } from '../../services/BackgroundMatchProces
 import { RefereeService } from '../../services/RefereeService';
 import { PolandWeatherService } from '../../services/PolandWeatherService';
 import { DisciplineService } from '../../services/DisciplineService';
-import { AiMatchDecisionService } from '../../services/AiMatchDecisionService';
+import { AiMatchDecisionServiceFriendlyMatch } from '../../services/AiMatchDecisionServiceFriendlyMatch';
 import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
 import { PlayerStatsService } from '../../services/PlayerStatsService';
 import { MATCH_COMMENTARY_DB } from '../../data/match_commentary_pl';
@@ -651,41 +651,54 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            let nextLastAiActionMinute = prev.lastAiActionMinute;
            let updatedLogs = [newLog, ...prev.logs];
 
-           // --- HALFTIME AI DECISIONS ---
+           // --- HALFTIME AI DECISIONS (SPARING: masowa rotacja 5-7 zmian) ---
            if (prev.period === 1 || prev.period === 3) {
               const htMinute = prev.period === 1 ? 45 : 105;
               const aiSide: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
-              const decision = AiMatchDecisionService.makeDecisions(
-                { ...prev, minute: htMinute }, 
-                ctx, aiSide, false, true
-              );
-              
-              if (decision.subRecord) {
-                 if (aiSide === 'HOME') { 
-                   nextHomeLineup = decision.newLineup || nextHomeLineup; 
-                   nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome; 
-                   nextHomeSubsHistory.push(decision.subRecord); 
-                 }
-                 else { 
-                   nextAwayLineup = decision.newLineup || nextAwayLineup; 
-                   nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
-                   nextAwaySubsHistory.push(decision.subRecord); 
-                 }
-              }
-              if (decision.newTacticId) {
-                if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-                else nextAwayLineup.tacticId = decision.newTacticId;
-              }
-              if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
-              if (decision.logs) {
-                 decision.logs.forEach(l => {
+              const friendlyMaxSubs = activeFriendlyConditions?.maxSubstitutions ?? 5;
+              const targetHtSubs = Math.floor(Math.random() * 3) + 5; // 5, 6 lub 7 zmian
+
+              for (let htAttempt = 0; htAttempt < targetHtSubs; htAttempt++) {
+                const htState = {
+                  ...prev,
+                  minute: htMinute,
+                  homeLineup: nextHomeLineup,
+                  awayLineup: nextAwayLineup,
+                  homeSubsHistory: nextHomeSubsHistory,
+                  awaySubsHistory: nextAwaySubsHistory,
+                  subsCountHome: nextSubsCountHome,
+                  subsCountAway: nextSubsCountAway,
+                };
+                const currentAiSubs = aiSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
+                if (currentAiSubs >= friendlyMaxSubs) break;
+
+                const decision = AiMatchDecisionServiceFriendlyMatch.makeDecisions(
+                  htState, ctx, aiSide, true, true, friendlyMaxSubs
+                );
+
+                if (!decision.subRecord) break; // brak kandydatów — koniec rotacji
+
+                if (aiSide === 'HOME') {
+                  nextHomeLineup = decision.newLineup || nextHomeLineup;
+                  nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome;
+                  nextHomeSubsHistory.push(decision.subRecord);
+                } else {
+                  nextAwayLineup = decision.newLineup || nextAwayLineup;
+                  nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway;
+                  nextAwaySubsHistory.push(decision.subRecord);
+                }
+                if (decision.newTacticId) {
+                  if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+                  else nextAwayLineup.tacticId = decision.newTacticId;
+                }
+                if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
+                if (decision.logs) {
+                  decision.logs.forEach(l => {
                     updatedLogs = [{ id: `AI_HT_${Math.random()}`, minute: htMinute, text: l, type: MatchEventType.GENERIC }, ...updatedLogs];
-
-
-                          
-                 });
+                  });
+                }
               }
-             }
+           }
  const recoveredHomeFatigue = (prev.period === 1 || prev.period === 3) ? applyHalftimeRegen(prev.homeFatigue, ctx.homePlayers) : prev.homeFatigue;
            const recoveredAwayFatigue = (prev.period === 1 || prev.period === 3) ? applyHalftimeRegen(prev.awayFatigue, ctx.awayPlayers) : prev.awayFatigue;
            const baseReturn = {
@@ -758,11 +771,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let immediateAiTrigger = hasSevereHome || hasSevereAway || hasEmptySlotsAi;
 
         if (nextMinute % 5 === 0 || immediateAiTrigger) {
-           const decision = AiMatchDecisionService.makeDecisions(
+           const decision = AiMatchDecisionServiceFriendlyMatch.makeDecisions(
              { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: nextLastAiActionMinute }, 
              ctx, 
              aiSide, 
-             immediateAiTrigger
+             immediateAiTrigger,
+             false,
+             activeFriendlyConditions?.maxSubstitutions ?? 5
            );
            
            if (decision.subRecord) {
@@ -1397,9 +1412,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const carriedOffLogs: MatchLogEntry[] = [];
         const autoRemoveInjured = (lineup: (string | null)[], injuries: Record<string, InjurySeverity>, side: 'HOME' | 'AWAY') => {
-               const isUserWithoutSubs = side === userSide && (side === 'HOME' ? nextSubsCountHome : nextSubsCountAway) >= (activeFriendlyConditions?.maxSubstitutions ?? 5);
-          
-          if (side === userSide && !isUserWithoutSubs) return lineup;
+          // Zasada sparing: kontuzja krytyczna = zmiana awaryjna zawsze możliwa.
+          // Gracz decyduje sam przez modal; AI uzupełnia luki przez PRIORYTET 2.
+          if (side === userSide) return lineup;
 
           return lineup.map(id => {
             if (id && injuries[id] === InjurySeverity.SEVERE) {
@@ -1407,9 +1422,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                carriedOffLogs.push({
                  id: `CARRIED_${nextMinute}_${id}`,
                  minute: nextMinute,
-                 text: side === userSide 
-                    ? `🚑 ${p?.lastName} zniesiony na noszach! Brak zmian - gramy w osłabieniu!` 
-                    : `🚨 ${p?.lastName} zostaje zniesiony na noszach! Drużyna gra w dziesiątkę!`,
+                 text: `🚨 ${p?.lastName} zostaje zniesiony na noszach!`,
                  type: MatchEventType.GENERIC,
                  teamSide: side
                });
@@ -1431,18 +1444,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           setIsCelebratingGoal(true);
           setTimeout(() => {
             setIsCelebratingGoal(false);
-            const vd = varDataRef.current;
-            if (vd && Math.random() < 0.2) {
-              setActiveVAR({ ...vd, phase: 'CHECKING' });
-            }
-            varDataRef.current = null;
           }, 3500);
         }
 
         const momentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
 
      if (priorityAiTrigger) {
-           const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory }, ctx, aiSide, true);
+           const decision = AiMatchDecisionServiceFriendlyMatch.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory }, ctx, aiSide, true, false, activeFriendlyConditions?.maxSubstitutions ?? 5);
            
            // TUTAJ WSTAW TEN KOD - Obsługa wewnętrznych przesunięć (np. gracz z pola na bramkę)
            if (decision.newLineup) {
@@ -1560,8 +1568,8 @@ return {
     const sortedStandings = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     const homeRank = sortedStandings.findIndex(c => c.id === ctx.homeClub.id) + 1;
     
-    // Obliczamy frekwencję (korzystając z pogody zdefiniowanej w env.weather)
-    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather);
+    // Obliczamy frekwencję — dla sparingów mała liczba kibiców (20–500)
+    const attendance = Math.floor(20 + Math.random() * 480);
 
     // NAPRAWKA DUPLIKACJI WYNIKÓW:
     // Priorytet: wyniki z advanceDay (jeśli już uruchomił się dla daty meczu)
@@ -2878,7 +2886,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         <div className="fixed inset-0 z-[990] backdrop-blur-md bg-black/40 pointer-events-none" />
       )}
 
-      <MatchTacticsModal isOpen={isTacticsOpen} onClose={handleTacticsClose} club={userSide === 'HOME' ? ctx.homeClub : ctx.awayClub} lineup={userSide === 'HOME' ? matchState.homeLineup : matchState.awayLineup} players={userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers} fatigue={userSide === 'HOME' ? matchState.homeFatigue : matchState.awayFatigue} subsCount={userSide === 'HOME' ? matchState.subsCountHome : matchState.subsCountAway} subsHistory={userSide === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory} minute={matchState.minute} sentOffIds={matchState.sentOffIds} injs={userSide === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries} />
+      <MatchTacticsModal isOpen={isTacticsOpen} onClose={handleTacticsClose} club={userSide === 'HOME' ? ctx.homeClub : ctx.awayClub} lineup={userSide === 'HOME' ? matchState.homeLineup : matchState.awayLineup} players={userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers} fatigue={userSide === 'HOME' ? matchState.homeFatigue : matchState.awayFatigue} subsCount={userSide === 'HOME' ? matchState.subsCountHome : matchState.subsCountAway} subsHistory={userSide === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory} minute={matchState.minute} sentOffIds={matchState.sentOffIds} injs={userSide === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries} maxSubs={activeFriendlyConditions?.maxSubstitutions ?? 5} injuryEmergencyMode={hasMandatorySub} />
       <style>{`
         @keyframes shine { from { left: -150%; } to { left: 150%; } }
         .animate-shine { animation: shine 3s infinite linear; }

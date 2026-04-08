@@ -67,11 +67,121 @@ import zniczPruszkow             from '../Graphic/logo/znicz-pruszkow.png';
 //ENGLISH:
 import manchestercitylogo from '../Graphic/logo/england/man_city.png';
 import manchesterunitedlogo from '../Graphic/logo/england/man_utd.png';
+import chelsealondynlogo from '../Graphic/logo/england/chelsea.png';
+import liverpoolfcLogo from '../Graphic/logo/england/liverpool.png';
+import arsenallondynLogo from '../Graphic/logo/england/arsenal.png';
+import brightonLogo from '../Graphic/logo/england/brighton.png';
+import crystalPalaceLogo from '../Graphic/logo/england/crystal_palace.png';
+import evertonFcLogo from '../Graphic/logo/england/everton_fc.png';
+import ipswichTownLogo from '../Graphic/logo/england/ipswich_town.png';
+import leedsUnitedLogo from '../Graphic/logo/england/leeds_united.png';
+import wolverhamptonLogo from '../Graphic/logo/england/wolverhampton_wanderers.png';
+import tottenhamLogo from '../Graphic/logo/england/tottenham_hotspur.png';
+import southamptonLogo from '../Graphic/logo/england/southampton_fc.png';
+import qprLogo from '../Graphic/logo/england/qpr.png';
+import newcastleLogo from '../Graphic/logo/england/newcastle.png';
+import leicesterCityLogo from '../Graphic/logo/england/leicester_city.png';
 
 
 //SPAIN
 import barcelonaLogo from '../Graphic/logo/spain/barcelona.png';
-import realmadridlogo from '../Graphic/logo/spain/real_madrid.png'; // Placeholder, replace with actual Real Madrid logo when available
+import realmadridlogo from '../Graphic/logo/spain/real_madrid.png';
+import atleticoMadrytLogo from '../Graphic/logo/spain/atletico_madryt.png';
+import athleticBilbaoLogo from '../Graphic/logo/spain/athletic_bilbao.png';
+import sevillaFcLogo from '../Graphic/logo/spain/sevilla_fc.png';
+import villarrealCfLogo from '../Graphic/logo/spain/villarreal_cf.png';
+import realSociedadLogo from '../Graphic/logo/spain/real_sociedad.png';
+import valenciaCfLogo from '../Graphic/logo/spain/valencia_cf.png';
+import realBetisLogo from '../Graphic/logo/spain/real_betis.png';
+import osasunaLogo from '../Graphic/logo/spain/osasuna.png';
+import cdLeganesLogo from '../Graphic/logo/spain/cd_leganes.png';
+import realValladolidLogo from '../Graphic/logo/spain/real_valladolid.png';
+import udLasPalmasLogo from '../Graphic/logo/spain/ud_las_palmas.png';
+import espanyolFcLogo from '../Graphic/logo/spain/espanyol.png';
+import rayoVallecanoLogo from '../Graphic/logo/spain/rayo_vallecano.png';
+import mallorcaFcLogo from '../Graphic/logo/spain/mallorca.png';
+
+//ITALY
+import atalantaLogo from '../Graphic/logo/italian/atalanta.png';
+import interLogo from '../Graphic/logo/italian/inter.png';
+import juventusLogo from '../Graphic/logo/italian/juventus.png';
+import lazioLogo from '../Graphic/logo/italian/lazio.png';
+import milanLogo from '../Graphic/logo/italian/milan.png';
+import napoliLogo from '../Graphic/logo/italian/napoli.png';
+import romaLogo from '../Graphic/logo/italian/roma.png';
+import bolognaLogo from '../Graphic/logo/italian/bologina.png';
+import udineselogo from '../Graphic/logo/italian/udinese.png';
+import torinoLogo from '../Graphic/logo/italian/torino.png';
+import genoaLogo from '../Graphic/logo/italian/genoa.png';
+
+//GERMANY
+import bayernMunichenLogo from '../Graphic/logo/germany/bayer_munich.png';
+import bayerLeverkusenLogo from '../Graphic/logo/germany/bayer_leverkusen.png';
+import borussiaMonchengladbachLogo from '../Graphic/logo/germany/borussia_monchengladbach.png';
+import borussiadortmundLogo from '../Graphic/logo/germany/borussia_dortumnd.png';
+import eintrachtFrankfurtLogo from '../Graphic/logo/germany/eintracht_frankfurt.png';
+import unionBerlinLogo from '../Graphic/logo/germany/union_berlin.png';
+import rbLeipzigLogo from '../Graphic/logo/germany/rb_leipzig.png';
+import vfbStuttgartLogo from '../Graphic/logo/germany/vfb_stuttgart.png';
+import fcKoelnLogo from '../Graphic/logo/germany/fc_koeln.png';
+import wolfsburgLogo from '../Graphic/logo/germany/wolfsburg.png';
+import hannover96Logo from '../Graphic/logo/germany/hannover96.png';
+import stPauliLogo from '../Graphic/logo/germany/st_pauli.png';
+import nurnbergLogo from '../Graphic/logo/germany/nurnberg.png';
+import eintrachtBraunschweigLogo from '../Graphic/logo/germany/eintracht_braunschweig.png';
+
+//OTHERS
+import ajaxAmsterdamLogo from '../Graphic/logo/others/ajax_amsterdam.png';
+import anderlechtLogo from '../Graphic/logo/others/anderlecht.png';
+import ardaKardzaliLogo from '../Graphic/logo/others/arda_kardzali.png';
+import asMonacoLogo from '../Graphic/logo/others/as_monaco.png';
+import austriaWiedenLogo from '../Graphic/logo/others/austria_wieden.png';
+import banikOstrawaLogo from '../Graphic/logo/others/banik_ostrava.png';
+import basaksehirLogo from '../Graphic/logo/others/basaksehir.png';
+import benficaLizbonaLogo from '../Graphic/logo/others/benfica_lizbona.png';
+import besiktasLogo from '../Graphic/logo/others/besiktas.png';
+import celticGlasgowLogo from '../Graphic/logo/others/celtic_glasgow.png';
+import chicagoFireLogo from '../Graphic/logo/others/chicago_fire.png';
+import clubAfricanTunisLogo from '../Graphic/logo/others/club_africian_tunis.png';
+import clubBruggeLogo from '../Graphic/logo/others/club_brugge.png';
+import cskaSofiaLogo from '../Graphic/logo/others/cska_sofia.png';
+import dinamoKijowLogo from '../Graphic/logo/others/dinamo_kijow.png';
+import esperenceTunisLogo from '../Graphic/logo/others/esperence_tunis.png';
+import fenerbahceLogo from '../Graphic/logo/others/fenerbahce.png';
+import fcPortoLogo from '../Graphic/logo/others/fc_porto.png';
+import feyenoordLogo from '../Graphic/logo/others/feyenoord_rotterdam.png';
+import galatasarayLogo from '../Graphic/logo/others/galatasaray.png';
+import genkLogo from '../Graphic/logo/others/genk.png';
+import gentLogo from '../Graphic/logo/others/gent.png';
+import glasgowRangersLogo from '../Graphic/logo/others/glasgow_rangers.png';
+import heartsLogo from '../Graphic/logo/others/hearts.png';
+import hebarLogo from '../Graphic/logo/others/hebar.png';
+import interMiamiLogo from '../Graphic/logo/others/inter_miami.png';
+import jablonecLogo from '../Graphic/logo/others/jablonec.png';
+import levskiSofiaLogo from '../Graphic/logo/others/levski_sofia.png';
+import lilleLogo from '../Graphic/logo/others/lille.png';
+import lokomotivPlovdivLogo from '../Graphic/logo/others/lokomotiv_plovdiv.png';
+import lokomotivSofiaLogo from '../Graphic/logo/others/lokomotiv_sofia.png';
+import losAngelesGalaxyLogo from '../Graphic/logo/others/los_angeles_galaxy.png';
+import ludogoretsLogo from '../Graphic/logo/others/ludogorets.png';
+import niceLogo from '../Graphic/logo/others/nice.png';
+import olympiqueLyonLogo from '../Graphic/logo/others/olympique_lyon.png';
+import olympiqueMarsyliaLogo from '../Graphic/logo/others/olympique_marsylia.png';
+import psgLogo from '../Graphic/logo/others/psg.png';
+import psvEindhovenLogo from '../Graphic/logo/others/psv_eindhoven.png';
+import rapidWiedenLogo from '../Graphic/logo/others/rapid_wieden.png';
+import royalAntwerpLogo from '../Graphic/logo/others/royal_antwerp.png';
+import septemvriSofiaLogo from '../Graphic/logo/others/septemvri_sofia.png';
+import slaviaPragaLogo from '../Graphic/logo/others/slavia_praga.png';
+import slaviaSofiaLogo from '../Graphic/logo/others/slavia_sofia.png';
+import spartaPragaLogo from '../Graphic/logo/others/sparta_praga.png';
+import sportingLizbonaLogo from '../Graphic/logo/others/sporting_lizbona.png';
+import standardLiegeLogo from '../Graphic/logo/others/standard_liege.png';
+import sturmGrazLogo from '../Graphic/logo/others/sturm_graz.png';
+import szahtarDonieckLogo from '../Graphic/logo/others/szahtar_donieck.png';
+import tepliceLogo from '../Graphic/logo/others/teplice.png';
+import trabzonsporLogo from '../Graphic/logo/others/trabzonspor.png';
+import viktoriaPilznoLogo from '../Graphic/logo/others/viktoria_pilzno.png';
 
 // Mapa: clubId → URL loga
 export const CLUB_LOGOS: Record<string, string> = {
@@ -140,13 +250,143 @@ export const CLUB_LOGOS: Record<string, string> = {
   PL_ZNICZ_PRUSZKOW:                 zniczPruszkow,
 
 
-
+///england
   EU_CL_MANCHESTER_CITY:                 manchestercitylogo,
   EU_CL_MANCHESTER_UNITED:              manchesterunitedlogo,
+  EU_CL_CHELSEA_LONDYN:                        chelsealondynlogo,
+  EU_CL_LIVERPOOL_FC:                      liverpoolfcLogo,
+  EU_CL_ARSENAL_LONDYN:                        arsenallondynLogo,
+  EU_CL_TOTTENHAM_HOTSPUR:                     tottenhamLogo,
+  // Europa League
+  EU_EL_CRYSTAL_PALACE:                        crystalPalaceLogo,
+  EU_EL_BRIGHTON_HOVE_ALBION:                  brightonLogo,
+  EU_EL_WOLVERHAMPTON_WANDERERS:               wolverhamptonLogo,
+  EU_EL_NEWCASTLE_UNITED:                      newcastleLogo,
+  EU_EL_EVERTON_FC:                            evertonFcLogo,
+  // Conference League
+  EU_CONF_IPSWICH_TOWN:                        ipswichTownLogo,
+  EU_CONF_SOUTHAMPTON_FC:                      southamptonLogo,
+  EU_CONF_LEICESTER_CITY:                      leicesterCityLogo,
+  EU_CONF_LEEDS_UNITED:                        leedsUnitedLogo,
 
 
-EU_CL_FC_BARCELONA:                       barcelonaLogo,
-EU_CL_REAL_MADRYT:                       realmadridlogo, // Placeholder, replace with actual Real Madrid logo when available
+
+  // Champions League - Spain
+  EU_CL_FC_BARCELONA:                      barcelonaLogo,
+  EU_CL_REAL_MADRYT:                       realmadridlogo,
+  EU_CL_ATLETICO_MADRYT:                   atleticoMadrytLogo,
+  EU_CL_ATHLETIC_BILBAO:                   athleticBilbaoLogo,
+  EU_CL_SEVILLA_FC:                        sevillaFcLogo,
+  EU_CL_VILLARREAL_CF:                     villarrealCfLogo,
+  // Europa League - Spain
+  EU_EL_REAL_SOCIEDAD:                     realSociedadLogo,
+  EU_EL_VALENCIA_CF:                       valenciaCfLogo,
+  EU_EL_REAL_BETIS:                        realBetisLogo,
+  EU_EL_OSASUNA:                           osasunaLogo,
+  // Conference League - Spain
+  EU_CONF_CD_LEGANES:                      cdLeganesLogo,
+  EU_CONF_REAL_VALLADOLID:                 realValladolidLogo,
+  EU_CONF_UD_LAS_PALMAS:                   udLasPalmasLogo,
+  EU_CONF_ESPANYOL_FC:                     espanyolFcLogo,
+  EU_CONF_RAYO_VALLECANO:                  rayoVallecanoLogo,
+  EU_CONF_MALLORCA_FC:                     mallorcaFcLogo,
+
+  // Champions League - Italy
+  EU_CL_ATALANTA_BERGAMO:                  atalantaLogo,
+  EU_CL_INTER_MEDIOLAN:                    interLogo,
+  EU_CL_JUVENTUS_TURYN:                    juventusLogo,
+  EU_CL_LAZIO_RZYM:                        lazioLogo,
+  EU_CL_MILAN_AC:                          milanLogo,
+  EU_CL_NAPOLI:                            napoliLogo,
+  EU_CL_AS_ROMA:                           romaLogo,
+  // Europa League - Italy
+  EU_EL_BOLOGNA_FC:                        bolognaLogo,
+  EU_EL_UDINESE_CALCIO:                    udineselogo,
+  // Conference League - Italy
+  EU_CONF_TORINO_FC:                       torinoLogo,
+  EU_CONF_GENOA_CFC:                       genoaLogo,
+
+  // Champions League - Germany
+  EU_CL_BAYERN_MONACHIUM:                  bayernMunichenLogo,
+  EU_CL_BAYER_LEVERKUSEN:                  bayerLeverkusenLogo,
+  EU_CL_BORUSSIA_DORTMUND:                 borussiadortmundLogo,
+  EU_CL_BORUSSIA_MONCHENGLADBACH:          borussiaMonchengladbachLogo,
+  EU_CL_EINTRACHT_FRANKFURT:               eintrachtFrankfurtLogo,
+  EU_CL_UNION_BERLIN:                      unionBerlinLogo,
+  EU_CL_RB_LIPSK:                          rbLeipzigLogo,
+  // Europa League - Germany
+  EU_EL_VFB_STUTTGART:                     vfbStuttgartLogo,
+  EU_EL_EINTRACHT_FRANKFURT:               eintrachtFrankfurtLogo,
+  EU_EL_1_FC_KOLN:                         fcKoelnLogo,
+  EU_EL_VFL_WOLFSBURG:                     wolfsburgLogo,
+  // Conference League - Germany
+  EU_CONF_HANNOVER_96:                     hannover96Logo,
+  EU_CONF_ST_PAULI:                        stPauliLogo,
+  EU_CONF_1_FC_NURNBERG:                   nurnbergLogo,
+  EU_CONF_EINTRACHT_BRAUNSCHWEIG:          eintrachtBraunschweigLogo,
+
+  // Champions League - Others
+  EU_CL_AJAX_AMSTERDAM:                    ajaxAmsterdamLogo,
+  EU_CL_AS_MONACO:                         asMonacoLogo,
+  EU_CL_BENFICA_LIZBONA:                   benficaLizbonaLogo,
+  EU_CL_CELTIC_GLASGOW:                    celticGlasgowLogo,
+  EU_CL_CLUB_BRUGGE:                       clubBruggeLogo,
+  EU_CL_DINAMO_KIJOW:                      dinamoKijowLogo,
+  EU_CL_FENERBAHCE_STAMBU:                 fenerbahceLogo,
+  EU_CL_GALATASARAY_STAMBU:                galatasarayLogo,
+  EU_CL_FC_PORTO:                          fcPortoLogo,
+  EU_CL_PARIS_SAINT_GERMAIN:               psgLogo,
+  EU_CL_PSV_EINDHOVEN:                     psvEindhovenLogo,
+  EU_CL_SLAVIA_PRAGA:                      slaviaPragaLogo,
+  EU_CL_SPORTING_LIZBONA:                  sportingLizbonaLogo,
+  EU_CL_SZACHTAR_DONIECK:                  szahtarDonieckLogo,
+
+  // Europa League - Others
+  EU_EL_ANDERLECHT_BRUKSELA:               anderlechtLogo,
+  EU_EL_AUSTRIA_WIEDEN:                    austriaWiedenLogo,
+  EU_EL_BANIK_OSTRAWA:                     banikOstrawaLogo,
+  EU_EL_ISTANBUL_BASAKSEHIR:               basaksehirLogo,
+  EU_EL_BESIKTAS_JK:                       besiktasLogo,
+  EU_EL_CSKA_SOFIA:                        cskaSofiaLogo,
+  EU_EL_FEYENOORD_ROTTERDAM:               feyenoordLogo,
+  EU_EL_KRC_GENK:                          genkLogo,
+  EU_EL_GENT:                              gentLogo,
+  EU_EL_GLASGOW_RANGERS:                   glasgowRangersLogo,
+  EU_EL_HEART_OF_MIDLOTHIAN:               heartsLogo,
+  EU_EL_LEVSKI_SOFIA:                      levskiSofiaLogo,
+  EU_EL_LILLE_OSC:                         lilleLogo,
+  EU_EL_LOKOMOTIV_P_OWDIW:                lokomotivPlovdivLogo,
+  EU_EL_OGC_NICE:                          niceLogo,
+  EU_EL_OLYMPIQUE_LYON:                    olympiqueLyonLogo,
+  EU_EL_OLYMPIQUE_MARSYLIA:                olympiqueMarsyliaLogo,
+  EU_EL_RAPID_WIEDEN:                      rapidWiedenLogo,
+  EU_EL_ROYAL_ANTWERP:                     royalAntwerpLogo,
+  EU_EL_SPARTA_PRAGA:                      spartaPragaLogo,
+  EU_EL_STANDARD_LIEGE:                    standardLiegeLogo,
+  EU_EL_STURM_GRAZ:                        sturmGrazLogo,
+  EU_EL_TRABZONSPOR:                       trabzonsporLogo,
+  EU_EL_VIKTORIA_PILZNO:                   viktoriaPilznoLogo,
+
+  // Conference League - Others
+  EU_CONF_FK_ARDA_KARDZHALI:               ardaKardzaliLogo,
+  EU_CONF_FK_HEBAR_PAZARDZHIK:             hebarLogo,
+  EU_CONF_FK_JABLONEC:                     jablonecLogo,
+  EU_CONF_PFC_LOKOMOTIV_SOFIA_1929:        lokomotivSofiaLogo,
+  EU_CONF_PFC_SEPTEMVRI_SOFIA:             septemvriSofiaLogo,
+  EU_CONF_PFC_SLAVIA_SOFIA:                slaviaSofiaLogo,
+  EU_CONF_FK_TEPLICE:                      tepliceLogo,
+
+  // African teams
+  AFR_CLUB_AFRICAIN:                       clubAfricanTunisLogo,
+  AFR_ESP_RANCE_DE_TUNIS:                  esperenceTunisLogo,
+
+  // North American teams
+  NA_LA_GALAXY:                            losAngelesGalaxyLogo,
+  NA_INTER_MIAMI_CF:                       interMiamiLogo,
+  NA_CHICAGO_FIRE_FC:                      chicagoFireLogo,
+
+  // Ludogorets (reserved - add to tournament data first)
+  EU_EL_LUDOGORETS_RAZGRAD:               ludogoretsLogo,
 };
 
 /**

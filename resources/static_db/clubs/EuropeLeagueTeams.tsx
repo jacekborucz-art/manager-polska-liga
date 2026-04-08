@@ -27,6 +27,7 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
   { name: "Rapid Wiedeń", country: "AUT", tier: 2, colors: ['#006600', '#FFFFFF', '#000000'], stadium: "Allianz Stadion", capacity: 28345, reputation: 13 },
   { name: "Austria Wiedeń", country: "AUT", tier: 2, colors: ['#FFFFFF', '#000000', '#990000'], stadium: "Generali Arena", capacity: 17800, reputation: 13 },
   { name: "LASK Linz", country: "AUT", tier: 2, colors: ['#000000', '#FFFFFF', '#FFCC00'], stadium: "Raiffeisen Arena", capacity: 19009, reputation: 13 },
+ { name: "Sturm Graz", country: "AUT", tier: 2, colors: ['#FFFFFF', '#000000', '#FF0000'], stadium: "Merkur Arena", capacity: 16000, reputation: 12 },
 
   // Belgia (BEL) – 
   { name: "Royal Antwerp", country: "BEL", tier: 2, colors: ['#FFFFFF', '#C8102E', '#000000'], stadium: "Bosuilstadion", capacity: 23057, reputation: 12 },
@@ -267,6 +268,8 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
   { name: "Real Sociedad", country: "ESP", tier: 2, colors: ['#0033A0', '#FFFFFF', '#FF0000'], stadium: "Reale Arena", capacity: 40000, reputation: 14 },
   { name: "Valencia CF", country: "ESP", tier: 2, colors: ['#FFFFFF', '#FF0000', '#000000'], stadium: "Mestalla", capacity: 49000, reputation: 13 },
   { name: "Real Betis", country: "ESP", tier: 2, colors: ['#006633', '#FFFFFF', '#FFD700'], stadium: "Benito Villamarín", capacity: 60720, reputation: 13 },
+ { name: "Osasuna", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "El Sadar", capacity: 23189, reputation: 12 },
+
 
 // Słowenia (SVN) – mocne z PrvaLiga Telemach
   { name: "NK Koper", country: "SVN", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Štadion Bonifika", capacity: 4010, reputation: 8 },

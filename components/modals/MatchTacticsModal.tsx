@@ -16,10 +16,12 @@ interface MatchTacticsModalProps {
   minute: number;
   sentOffIds?: string[];
   injs?: Record<string, InjurySeverity>;
+  maxSubs?: number;
+  injuryEmergencyMode?: boolean;
 }
 
 export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
-  isOpen, onClose, club, lineup, players, fatigue, subsCount, subsHistory, minute, sentOffIds = [], injs = {}
+  isOpen, onClose, club, lineup, players, fatigue, subsCount, subsHistory, minute, sentOffIds = [], injs = {}, maxSubs, injuryEmergencyMode = false
 }) => {
   if (!isOpen) return null;
 
@@ -70,8 +72,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
       const isSub = (selectedSlot.loc !== loc);
       
       if (isSub) {
-        if (currentSubsCount >= 5) {
-          alert("LIMIT 5 ZMIAN WYCZERPANNY!");
+        if (currentSubsCount >= (maxSubs ?? 5) && !injuryEmergencyMode) {
+          alert(`LIMIT ${maxSubs ?? 5} ZMIAN WYCZERPANY!`);
           setSelectedSlot(null);
           return;
         }
@@ -258,7 +260,7 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
                     <div className="flex items-center gap-4">
                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.4em]">ZMIANY</span>
                        <div className="flex gap-2">
-                          {[1,2,3,4,5].map(i => (
+                          {Array.from({ length: maxSubs ?? 5 }, (_, i) => i + 1).map(i => (
                              <div key={i} className={`w-4 h-4 rounded-md border transition-all duration-500 ${i <= currentSubsCount ? 'bg-blue-500 border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'bg-black/40 border-white/10'}`} />
                           ))}
                        </div>

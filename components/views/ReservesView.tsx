@@ -51,6 +51,31 @@ const ATTR_LABELS: Record<string, string> = {
   workRate: 'PRA',
 };
 
+const ATTR_FULL_NAMES: Record<string, string> = {
+  strength: 'Siła fizyczna',
+  stamina: 'Wytrzymałość',
+  pace: 'Prędkość',
+  defending: 'Obrona',
+  passing: 'Podania',
+  attacking: 'Atak',
+  finishing: 'Skuteczność',
+  technique: 'Technika',
+  vision: 'Wizja gry',
+  dribbling: 'Drybling',
+  heading: 'Główkowanie',
+  positioning: 'Pozycjonowanie',
+  goalkeeping: 'Bramkarstwo',
+  freeKicks: 'Rzuty wolne',
+  talent: 'Talent',
+  penalties: 'Rzuty karne',
+  corners: 'Rozgrywanie',
+  aggression: 'Agresja',
+  crossing: 'Dośrodkowania',
+  leadership: 'Liderstwo',
+  mentality: 'Mentalność',
+  workRate: 'Pracowitość',
+};
+
 const POSITION_ORDER = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
 
 // Kluczowe atrybuty dla danej pozycji — jeśli wartość ≤ 35, atrybut oznaczony jako alarmująco niski
@@ -65,6 +90,13 @@ const WEAK_THRESHOLD = 35;
 const isWeakForPosition = (pos: PlayerPosition, attr: keyof PlayerAttributes, val: number): boolean =>
   val <= WEAK_THRESHOLD && POSITION_KEY_ATTRS[pos].includes(attr);
 
+const POSITION_FULL_NAME: Record<PlayerPosition, string> = {
+  [PlayerPosition.GK]:  'Bramkarz',
+  [PlayerPosition.DEF]: 'Obrońca',
+  [PlayerPosition.MID]: 'Pomocnik',
+  [PlayerPosition.FWD]: 'Napastnik',
+};
+
 const POSITION_BADGE_STYLE: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]:  'bg-yellow-500/20 border border-yellow-500/60 text-yellow-300',
   [PlayerPosition.DEF]: 'bg-blue-500/20 border border-blue-500/60 text-blue-300',
@@ -77,61 +109,61 @@ const POS_PRAISE: Record<PlayerPosition, string[]> = {
     'Dobry refleks, pewny na przedpolu.',
     'Spokojny pod presją, komenderuje obroną.',
     'Świetne wyjścia z bramki, nie boi się konfrontacji.',
-    'Praca nóg powyżej średniej, szybka dystrybucja.',
+    'Bardzo dobra gra na linii.',
     'Czyta grę rywalów lepiej niż większość zawodników w jego wieku.',
   ],
   [PlayerPosition.DEF]: [
-    'Silny w powietrzu — dominuje przy stałych fragmentach.',
+    'Silny w powietrzu i dominuje przy stałych fragmentach.',
     'Dobra praca nóg, wychodzi z pressingu bez strat.',
     'Dobry timing przy wślizgach, rzadko popełnia błędy pozycyjne.',
-    'Mocny fizycznie, ciężko go wyprzedzić w biegu.',
-    'Organizuje linię obrony, komunikatywny lider z tyłu.',
-    'Potrafi wyjść z piłką spod pressingu — cenny atrybut.',
+    'Mocny fizycznie, bardzo szybki',
+    'Bardzo dobry stoper',
+    'Potrafi bardzo dobrze uwolnić się spod pressingu.',
   ],
   [PlayerPosition.MID]: [
-    'Świetna wizja gry — widzi podania zanim inni.',
+    'Świetna wizja gry. Widzi więcej niż inni.',
     'Technicznie wyróżniający się w ciasnych sytuacjach.',
-    'Silny silnik — przebiega całe boisko przez 90 minut.',
+    'Mocno pracuje przez całe spotkanie, nie odpuszcza żadnej piłki.',
     'Aktywny w pressingu, odzyskuje cenne piłki.',
-    'Kreatywny w ostatniej tercji, potrafi zaskoczyć rywala.',
+    'Kreatywny i trudny do przewidzenia, potrafi zaskoczyć rywala.',
     'Inteligentne poruszanie bez piłki, zawsze dostępny do podania.',
   ],
   [PlayerPosition.FWD]: [
-    'Instynkt strzelecki ponad wiek — wie, gdzie stać.',
+    'Instynkt strzeleck, dobrze potrafi odnaleźć się w polu karnym.',
     'Szybki w akcjach 1 na 1, trudny do zatrzymania.',
     'Dobra gra głową, groźny przy dośrodkowaniach.',
     'Potrafi utrzymać piłkę i wciągnąć obrońców.',
     'Nieprzewidywalny w polu karnym, zawsze szuka wykończenia.',
-    'Ruch bez piłki na bardzo dobrym poziomie jak na ten etap kariery.',
+    'Świetna gra bez piłki.',
   ],
 };
 
 const POS_CONCERN: Record<PlayerPosition, string[]> = {
   [PlayerPosition.GK]: [
-    'Niepewny przy wyjściach — za często traci pozycję.',
-    'Słabe interwencje stopami, rywal może to wykorzystać.',
+    'Niepewny przy wyjściach.',
+    'Słaba gra nogami, rywal może to wykorzystać.',
   ],
   [PlayerPosition.DEF]: [
     'Problemy z powrotami po akcjach ofensywnych.',
-    'Za lekki w powietrzu jak na tę pozycję.',
+    'Za słaby w powietrzu jak na tę pozycję.',
   ],
   [PlayerPosition.MID]: [
-    'Za rzadko angażuje się bez piłki, traci przestrzeń.',
-    'Słabe pressowanie — nie wraca wystarczająco szybko.',
+    'Słaba gra bez piłki.',
+    'Słabe pressing, nie wraca wystarczająco szybko.',
   ],
   [PlayerPosition.FWD]: [
-    'Wykończenie wymaga dużej pracy — marnuje zbyt wiele okazji.',
-    'Maleje w kluczowych momentach meczu.',
+    'Wykończenie wymaga dużej pracy, gdyż marnuje zbyt wiele okazji.',
+    'Niepewny w kluczowych momentach meczu.',
   ],
 };
 
 const COACH_INTROS = [
   'Przejrzałem dokładnie kadrę. Oto moje obserwacje z ostatnich tygodni:',
   'Obserwowałem chłopaków na treningach i meczach sparingowych. Mam kilka uwag:',
-  'To ciekawy zespół — są tu zawodnicy z potencjałem, ale też tacy wymagający pracy:',
-  'Nie będę owijać w bawełnę — powiem wprost, co widzę na co dzień:',
+  'To ciekawy zespół, są tu zawodnicy z potencjałem, ale też tacy wymagający pracy:',
+  'Będąc obiektywnym widzę, że:',
   'Po ostatnim miesiącu intensywnych treningów mogę przedstawić moje spostrzeżenia:',
-  'Obserwuję kadrę od jakiegoś czasu i mam konkretne wnioski:',
+  'Obserwuję ich uważnie od jakiegoś czasu i mam konkretne wnioski:',
 ];
 
 interface ReportEntry {
@@ -301,7 +333,7 @@ export const ReservesView: React.FC = () => {
                 <th className="px-2 py-2 text-left sticky left-0 bg-slate-800 z-10 whitespace-nowrap">Poz</th>
                 <th className="px-2 py-2 text-left sticky left-[44px] bg-slate-800 z-10 whitespace-nowrap min-w-[130px]">Zawodnik</th>
                 {ATTR_KEYS.map(key => (
-                  <th key={key} className="px-1 py-2 text-center whitespace-nowrap">{ATTR_LABELS[key]}</th>
+                  <th key={key} title={ATTR_FULL_NAMES[key]} className="px-1 py-2 text-center whitespace-nowrap cursor-help">{ATTR_LABELS[key]}</th>
                 ))}
                 <th className="px-2 py-2 text-center whitespace-nowrap">Wiek</th>
               </tr>
@@ -315,12 +347,20 @@ export const ReservesView: React.FC = () => {
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }}
                 >
                   <td className={`px-1 py-1.5 sticky left-0 z-10 ${POSITION_ROW_BG[player.position]}`}>
-                    <div className={`w-9 h-7 rounded-full flex items-center justify-center text-[9px] font-black italic tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
-                      {POSITION_LABEL[player.position]}
+                    <div className="relative group/pos w-9">
+                      <div className={`w-9 h-7 rounded-full flex items-center justify-center text-[9px] font-black italic tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
+                        {POSITION_LABEL[player.position]}
+                      </div>
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 opacity-0 group-hover/pos:opacity-100 transition-opacity duration-150">
+                        <div className="bg-slate-900 border border-slate-600 text-slate-100 text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2 py-1 rounded-lg shadow-xl">
+                          {POSITION_FULL_NAME[player.position]}
+                        </div>
+                        <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-600 rotate-45 mx-auto -mt-1" />
+                      </div>
                     </div>
                   </td>
                   <td className={`px-2 py-1.5 sticky left-[44px] z-10 whitespace-nowrap ${POSITION_ROW_BG[player.position]}`}>
-                    <span className="font-black italic tracking-tight uppercase text-slate-100 text-[11px]">{player.firstName} {player.lastName}</span>
+                    <span className="font-semibold italic tracking-tight uppercase text-slate-100 text-[15px]">{player.firstName} {player.lastName}</span>
                   </td>
                   {ATTR_KEYS.map(key => {
                     const val = player.attributes[key];

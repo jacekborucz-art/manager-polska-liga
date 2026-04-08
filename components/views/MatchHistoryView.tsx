@@ -203,6 +203,7 @@ export const MatchHistoryView: React.FC = () => {
       if (selectedLeague === 'EL') return matchSeason && m.competition.startsWith('EL_');
       if (selectedLeague === 'CONF') return matchSeason && m.competition.startsWith('CONF_');
       if (selectedLeague === 'NT') return matchSeason && (nationalTeams.some(t => t.id === m.homeTeamId) || nationalTeams.some(t => t.id === m.awayTeamId));
+      if (selectedLeague === 'FRIENDLY') return matchSeason && m.competition === 'FRIENDLY';
 
       return matchSeason && m.competition === selectedLeague;
     });
@@ -234,12 +235,16 @@ export const MatchHistoryView: React.FC = () => {
     compName = 'SUPERPUCHAR POLSKI';
   } else if (comp.startsWith('CL_')) compName = 'LIGA MISTRZÓW';
   else if (comp.startsWith('EL_')) compName = 'LIGA EUROPY';
-  else if (comp.startsWith('CONF_')) compName = 'LIGA KONFERENCJI';
-  else if (nationalTeams.some(t => t.id === matches[0].homeTeamId) || nationalTeams.some(t => t.id === matches[0].awayTeamId)) compName = comp;
+  else if (comp.startsWith('CONF_')) compName = 'LIGA KONFERENCJI';  else if (comp === 'FRIENDLY' || comp === CompetitionType.FRIENDLY) compName = 'MECZ TOWARZYSKI';  else if (nationalTeams.some(t => t.id === matches[0].homeTeamId) || nationalTeams.some(t => t.id === matches[0].awayTeamId)) compName = comp;
 
   // Dodaj datę do labelu (opcjonalnie, ale czytelniej)
+  const rawDate = matches[0].date;
+  const parsedDate = new Date(rawDate);
+  const formattedDate = isNaN(parsedDate.getTime())
+    ? rawDate
+    : parsedDate.toLocaleDateString('pl-PL', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
   groups.push({
-    label: `${compName} • ${matches[0].date}`,
+    label: `${compName} • ${formattedDate}`,
     matches
   });
 });
@@ -296,7 +301,8 @@ export const MatchHistoryView: React.FC = () => {
               { id: 'CL', label: 'LIGA MISTRZÓW', icon: '⭐' },
               { id: 'EL', label: 'PUCHAR LIGI EUROPY', icon: '🟠' },
               { id: 'CONF', label: 'PUCHAR LIGI KONFERENCJI', icon: '🟢' },
-              { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', icon: '🌐' }
+              { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', icon: '🌐' },
+              { id: 'FRIENDLY', label: 'MECZE TOWARZYSKIE', icon: '🤝' }
             ].map(l => (
               <button 
                 key={l.id} 
@@ -338,7 +344,7 @@ export const MatchHistoryView: React.FC = () => {
                 <div className="flex items-center gap-6 px-4">
                   <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.5em] whitespace-nowrap">{group.label}</span>
                   <div className="h-px bg-white/5 flex-1" />
-                  <span className="text-[10px] font-mono text-slate-600 italic uppercase">{group.matches[0].date}</span>
+                  <span className="text-[10px] font-mono text-slate-600 italic uppercase">{(() => { const d = new Date(group.matches[0].date); return isNaN(d.getTime()) ? group.matches[0].date : d.toLocaleDateString('pl-PL', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase(); })()}</span>
                 </div>
                 
                 <div className="grid grid-cols-1 gap-3">

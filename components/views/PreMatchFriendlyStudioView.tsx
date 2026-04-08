@@ -120,7 +120,7 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
   }, [data]);
 
   // Bardzo niska frekwencja dla sparingów
-  const friendlyAttendance = useMemo(() => Math.floor(300 + Math.random() * 2700), []);
+  const friendlyAttendance = useMemo(() => Math.floor(20 + Math.random() * 480), []);
 
   // Stadion neutralny — mały europejski, nie polski, nie z kraju przeciwnika
   const venueInfo = useMemo(() => {
