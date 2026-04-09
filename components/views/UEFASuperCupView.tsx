@@ -56,7 +56,7 @@ const UEFASuperCupView: React.FC = () => {
   const awayGoals = (lastUEFASuperCupResult?.goals.filter(g => fixture && g.teamId === fixture.awayTeamId) ?? []).sort((a, b) => a.minute - b.minute);
 
   const hasPenalties = fixture?.homePenaltyScore != null;
-  const wentToET = hasPenalties || (lastUEFASuperCupResult?.goals.some(g => !g.varDisallowed && g.minute > 90) ?? false);
+  const wentToET = hasPenalties || (lastUEFASuperCupResult?.isExtraTime ?? false);
 
   // Wyznacz zwycięzcę
   const homeScore = fixture?.homeScore ?? 0;
@@ -114,6 +114,9 @@ const UEFASuperCupView: React.FC = () => {
             Superpuchar Europy
           </h1>
           <p className="text-slate-400 text-xs tracking-widest uppercase">UEFA Super Cup</p>
+          {lastUEFASuperCupResult?.venue && (
+            <p className="text-slate-500 text-xs tracking-wider mt-1">{lastUEFASuperCupResult.venue}</p>
+          )}
         </div>
 
         {/* Wynik meczu */}

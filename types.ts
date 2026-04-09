@@ -88,6 +88,8 @@ export enum ViewState {
   PRE_MATCH_CONF_LIVE_STUDIO = 'PRE_MATCH_CONF_LIVE_STUDIO',
   MATCH_LIVE_CONF = 'MATCH_LIVE_CONF',
   POST_MATCH_CONF_STUDIO = 'POST_MATCH_CONF_STUDIO',
+  // Studio pomeczowe dla meczów europejskich (CL/EL/CONF) z ocenami zawodników
+  POST_MATCH_EUROPEAN_STUDIO = 'POST_MATCH_EUROPEAN_STUDIO',
   // Wyniki meczów reprezentacji (wszystkie mecze grupy danego dnia)
   NATIONAL_TEAM_RESULTS = 'NATIONAL_TEAM_RESULTS',
   PLAYOFF_DRAW = 'PLAYOFF_DRAW',
@@ -1215,6 +1217,7 @@ export interface MatchHistoryEntry {
   awayScore: number;
   homePenaltyScore?: number;
   awayPenaltyScore?: number;
+  isExtraTime?: boolean;
   attendance?: number;
   venue?: string;
   weather?: WeatherSnapshot;

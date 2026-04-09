@@ -7,6 +7,44 @@ import { PlayerStatsService } from './PlayerStatsService';
 import { RefereeService } from './RefereeService';
 
 // ============================================================
+//  NEUTRALNE STADIONY FINAŁÓW
+// ============================================================
+const CL_FINAL_VENUES: { name: string; city: string; capacity: number; country: string }[] = [
+  { name: 'Wembley Stadium',           city: 'Londyn',      capacity: 90000, country: 'England'     },
+  { name: 'Stade de France',           city: 'Saint-Denis', capacity: 81338, country: 'France'      },
+  { name: 'Estadio Santiago Bernabéu', city: 'Madryt',      capacity: 81044, country: 'Spain'       },
+  { name: 'Allianz Arena',             city: 'Monachium',   capacity: 75000, country: 'Germany'     },
+  { name: 'Stadio Giuseppe Meazza',    city: 'Mediolan',    capacity: 75817, country: 'Italy'       },
+  { name: 'Signal Iduna Park',         city: 'Dortmund',    capacity: 81365, country: 'Germany'     },
+  { name: 'Olympiastadion',            city: 'Berlin',      capacity: 74475, country: 'Germany'     },
+  { name: 'Puskas Aréna',              city: 'Budapeszt',   capacity: 67215, country: 'Hungary'     },
+  { name: 'Estádio da Luz',            city: 'Lizbona',     capacity: 64642, country: 'Portugal'    },
+  { name: 'Tottenham Hotspur Stadium', city: 'Londyn',      capacity: 62850, country: 'England'     },
+];
+
+const EL_FINAL_VENUES: { name: string; city: string; capacity: number; country: string }[] = [
+  { name: 'Aviva Stadium',             city: 'Dublin',      capacity: 51700, country: 'Ireland'     },
+  { name: 'Estádio do Dragão',         city: 'Porto',       capacity: 50033, country: 'Portugal'    },
+  { name: 'Ramón Sánchez-Pizjuán',     city: 'Sewilla',     capacity: 43883, country: 'Spain'       },
+  { name: 'Volksparkstadion',          city: 'Hamburg',     capacity: 57000, country: 'Germany'     },
+  { name: 'Arena Nationala',           city: 'Bukareszt',   capacity: 55634, country: 'Romania'     },
+  { name: 'Philips Stadion',           city: 'Eindhoven',   capacity: 35000, country: 'Netherlands' },
+  { name: 'Estadio de La Cartuja',     city: 'Sewilla',     capacity: 57619, country: 'Spain'       },
+  { name: 'Estadio Olimpico',          city: 'Ateny',       capacity: 68000, country: 'Greece'      },
+];
+
+const CONF_FINAL_VENUES: { name: string; city: string; capacity: number; country: string }[] = [
+  { name: 'Stadion Narodowy',          city: 'Warszawa',    capacity: 58580, country: 'Poland'      },
+  { name: 'Lerkendal Stadion',         city: 'Trondheim',   capacity: 21166, country: 'Norway'      },
+  { name: 'Eden Arena',                city: 'Praga',       capacity: 19370, country: 'Czech'       },
+  { name: 'Parken',                    city: 'Kopenhaga',   capacity: 38065, country: 'Denmark'     },
+  { name: 'Estadio do Algarve',        city: 'Faro',        capacity: 30305, country: 'Portugal'    },
+  { name: 'Stade de Suisse',           city: 'Berno',       capacity: 31783, country: 'Switzerland' },
+  { name: 'GSP Stadium',               city: 'Nikozja',     capacity: 22700, country: 'Cyprus'      },
+  { name: 'OAKA Stadium',              city: 'Ateny',       capacity: 69618, country: 'Greece'      },
+];
+
+// ============================================================
 //  WYNIK MECZU CL — rozszerzony o zdarzenia z zawodnikami
 // ============================================================
 interface CLMatchResult {
@@ -393,14 +431,19 @@ const simulateCLMatchFull = (
 
   // ── XG z bonusami trenerów, taktyki i siły zawodników ───────────────
   const repDiff = homeClub.reputation - awayClub.reputation;
-  let xgHome = 1.25
+  // Na neutralnym stadionie (finał) obie drużyny mają równy base XG i brak przewagi domowej
+  const baseXg = isFinalMatch ? 1.15 : 1.25;
+  const baseXgAway = isFinalMatch ? 1.15 : 1.05;
+  const homeAdvantage = isFinalMatch ? 0 : 0.08;
+
+  let xgHome = baseXg
     + (repDiff * 0.015)
     + (hTactic.attackBias - 50) / 180
     + ((hStr.att - aStr.def) * 0.04)
     + homeDailyForm
-    + 0.08; // przewaga domowa
+    + homeAdvantage;
 
-  let xgAway = 1.05
+  let xgAway = baseXgAway
     - (repDiff * 0.015)
     + (aTactic.attackBias - 50) / 180
     + ((aStr.att - hStr.def) * 0.04)
@@ -736,26 +779,44 @@ export const BackgroundMatchProcessorCL = {
       const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
       const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
 
-      // ── Frekwencja (ten sam wzór co PreMatchCLLiveStudioView) ────────
-      const homeRep = home.reputation;
-      const awayRep = away.reputation;
+      // ── Frekwencja i stadion ──────────────────────────────────────────
+      const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
       let attendance: number;
-      if (homeRep >= 18 || awayRep >= 18) {
-        attendance = home.stadiumCapacity ?? 50000;
+      let venueLabel: string | undefined;
+      let weatherCountry = home.country ?? 'POL';
+
+      if (isFinal) {
+        // Neutralny stadion dla finału — rotacja co sezon
+        const venueList = fixture.leagueId === CompetitionType.CL_FINAL
+          ? CL_FINAL_VENUES
+          : fixture.leagueId === CompetitionType.EL_FINAL
+            ? EL_FINAL_VENUES
+            : CONF_FINAL_VENUES;
+        const venueIdx = ((seasonNumber - 1) % venueList.length + venueList.length) % venueList.length;
+        const venue = venueList[venueIdx];
+        const fillRate = 0.98 + pseudoRng * 0.02;
+        attendance = Math.floor(venue.capacity * fillRate);
+        venueLabel = `${venue.name}, ${venue.city}`;
+        weatherCountry = venue.country;
       } else {
-        const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
-        const combinedRep = homeRep + awayRep;
-        const repNorm = Math.max(0, Math.min(1, (combinedRep - 2) / 32));
-        const scatter = 0.10 * (1 - repNorm);
-        const randomOffset = (pseudoRng * 2 - 1) * scatter;
-        const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
-        const weatherMod = EuropeanWeatherService.getGoalModifier(home.country ?? 'POL', currentDate, pseudoRng);
-        const weatherPenalty = weatherMod < 0.995 ? 0.88 : 1.0;
-        attendance = Math.floor((home.stadiumCapacity ?? 20000) * Math.min(1, fillRate * weatherPenalty));
+        const homeRep = home.reputation;
+        const awayRep = away.reputation;
+        if (homeRep >= 18 || awayRep >= 18) {
+          attendance = home.stadiumCapacity ?? 50000;
+        } else {
+          const combinedRep = homeRep + awayRep;
+          const repNorm = Math.max(0, Math.min(1, (combinedRep - 2) / 32));
+          const scatter = 0.10 * (1 - repNorm);
+          const randomOffset = (pseudoRng * 2 - 1) * scatter;
+          const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
+          const weatherMod = EuropeanWeatherService.getGoalModifier(home.country ?? 'POL', currentDate, pseudoRng);
+          const weatherPenalty = weatherMod < 0.995 ? 0.88 : 1.0;
+          attendance = Math.floor((home.stadiumCapacity ?? 20000) * Math.min(1, fillRate * weatherPenalty));
+        }
       }
 
       // ── Pogoda ───────────────────────────────────────────────────────
-      const weather = EuropeanWeatherService.getSnapshot(home.country ?? 'POL', currentDate, matchSeedStr);
+      const weather = EuropeanWeatherService.getSnapshot(weatherCountry, currentDate, matchSeedStr);
 
       // ── Symulacja meczu ─────────────────────────────────────────────
       const result = simulateCLMatchFull(
@@ -836,6 +897,7 @@ export const BackgroundMatchProcessorCL = {
         substitutions: result.substitutions,
         refereeName: `${referee.firstName} ${referee.lastName}`,
         attendance,
+        venue: venueLabel,
         weather,
       });
     });

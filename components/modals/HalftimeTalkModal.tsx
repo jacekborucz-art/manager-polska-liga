@@ -87,6 +87,12 @@ export const HalftimeTalkModal = ({
   const userClubName = userSide === 'HOME' ? homeClubName : awayClubName;
   const oppClubName  = userSide === 'HOME' ? awayClubName : homeClubName;
 
+  // Scoreboard oriented by side: HOME always on the left, AWAY on the right
+  const leftClubName  = userSide === 'HOME' ? userClubName : oppClubName;
+  const rightClubName = userSide === 'HOME' ? oppClubName  : userClubName;
+  const leftScore     = userSide === 'HOME' ? userScore    : oppScore;
+  const rightScore    = userSide === 'HOME' ? oppScore     : userScore;
+
   const getContextLabel = (): string => {
     if (context === 'DRAW_LOW')     return 'Remis bez bramek';
     if (context === 'DRAW_HIGH')    return 'Remis';
@@ -194,7 +200,7 @@ export const HalftimeTalkModal = ({
 
           <div className="flex-1 flex flex-col gap-1">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]"></span>
-            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{userClubName}</h2>
+            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{leftClubName}</h2>
           </div>
 
           <div className="flex flex-col items-center gap-2 px-10">
@@ -202,14 +208,14 @@ export const HalftimeTalkModal = ({
               {getContextLabel()}
             </span>
             <div className="text-7xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
-              {userScore}<span className="text-white/20 mx-2">:</span>{oppScore}
+              {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
             </div>
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">PRZERWA</span>
           </div>
 
           <div className="flex-1 flex flex-col items-end gap-1">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]"></span>
-            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none text-right">{oppClubName}</h2>
+            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none text-right">{rightClubName}</h2>
           </div>
 
         </div>

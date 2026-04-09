@@ -184,7 +184,7 @@ export const AcademyView: React.FC = () => {
       </div>
 
       <div className="min-h-screen text-slate-50 p-4 relative z-10">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-[92rem] mx-auto">
 
           {/* ── Nagłówek ── */}
           <div className="flex items-center justify-between mb-5">

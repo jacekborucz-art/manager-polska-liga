@@ -631,6 +631,27 @@ const simulateCLMatchFull = (
 };
 
 // ============================================================
+//  NEUTRALNE STADIONY SUPERPUCHARU EUROPY
+// ============================================================
+const SUPER_CUP_VENUES: { name: string; city: string; capacity: number; country: string }[] = [
+  { name: 'Wembley Stadium',              city: 'Londyn',       capacity: 90000, country: 'England' },
+  { name: 'Stade de France',              city: 'Saint-Denis',  capacity: 81338, country: 'France'  },
+  { name: 'Signal Iduna Park',            city: 'Dortmund',     capacity: 81365, country: 'Germany' },
+  { name: 'Estadio Santiago Bernabéu',    city: 'Madryt',       capacity: 81044, country: 'Spain'   },
+  { name: 'Allianz Arena',                city: 'Monachium',    capacity: 75000, country: 'Germany' },
+  { name: 'Stadio Giuseppe Meazza',       city: 'Mediolan',     capacity: 75817, country: 'Italy'   },
+  { name: 'Olympiastadion',               city: 'Berlin',       capacity: 74475, country: 'Germany' },
+  { name: 'Stadio Olimpico',              city: 'Rzym',         capacity: 72698, country: 'Italy'   },
+  { name: 'Puskas Aréna',                 city: 'Budapeszt',    capacity: 67215, country: 'Hungary' },
+  { name: 'Tottenham Hotspur Stadium',    city: 'Londyn',       capacity: 62850, country: 'England' },
+  { name: 'Estádio da Luz',               city: 'Lizbona',      capacity: 64642, country: 'Portugal'},
+  { name: 'Stadion Narodowy',             city: 'Warszawa',     capacity: 58580, country: 'Poland'  },
+  { name: 'Johan Cruyff Arena',           city: 'Amsterdam',    capacity: 54990, country: 'Netherlands' },
+  { name: 'Aviva Stadium',                city: 'Dublin',       capacity: 51700, country: 'Ireland' },
+  { name: 'Volksparkstadion',             city: 'Hamburg',      capacity: 57000, country: 'Germany' },
+];
+
+// ============================================================
 //  PROCESOR SUPERPUCHARU EUROPY (dedykowany silnik)
 // ============================================================
 export const BackgroundMatchUEFASuperCup = {
@@ -692,24 +713,15 @@ export const BackgroundMatchUEFASuperCup = {
       const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
       const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
 
-      const homeRep = home.reputation;
-      const awayRep = away.reputation;
-      let attendance: number;
-      if (homeRep >= 18 || awayRep >= 18) {
-        attendance = home.stadiumCapacity ?? 50000;
-      } else {
-        const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
-        const combinedRep = homeRep + awayRep;
-        const repNorm = Math.max(0, Math.min(1, (combinedRep - 2) / 32));
-        const scatter = 0.10 * (1 - repNorm);
-        const randomOffset = (pseudoRng * 2 - 1) * scatter;
-        const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
-        const weatherMod = EuropeanWeatherService.getGoalModifier(home.country ?? 'POL', currentDate, pseudoRng);
-        const weatherPenalty = weatherMod < 0.995 ? 0.88 : 1.0;
-        attendance = Math.floor((home.stadiumCapacity ?? 20000) * Math.min(1, fillRate * weatherPenalty));
-      }
+      // Superpuchar Europy — neutralny stadion, rotacja co sezon
+      const venueIndex = ((seasonNumber - 1) % SUPER_CUP_VENUES.length + SUPER_CUP_VENUES.length) % SUPER_CUP_VENUES.length;
+      const venue = SUPER_CUP_VENUES[venueIndex];
+      // Zawsze wypełniony stadion (98-100% pojemności)
+      const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
+      const fillRate = 0.98 + pseudoRng * 0.02;
+      const attendance = Math.floor(venue.capacity * fillRate);
 
-      const weather = EuropeanWeatherService.getSnapshot(home.country ?? 'POL', currentDate, matchSeedStr);
+      const weather = EuropeanWeatherService.getSnapshot(venue.country, currentDate, matchSeedStr);
 
       const result = simulateCLMatchFull(
         home, away, homePlayers, awayPlayers,
@@ -779,11 +791,13 @@ export const BackgroundMatchUEFASuperCup = {
         awayScore: result.awayScore,
         homePenaltyScore: result.penaltyHome,
         awayPenaltyScore: result.penaltyAway,
+        isExtraTime: result.wentToExtraTime || undefined,
         goals: result.goals,
         cards: result.cards,
         substitutions: result.substitutions,
         refereeName: `${referee.firstName} ${referee.lastName}`,
         attendance,
+        venue: `${venue.name}, ${venue.city}`,
         weather,
       });
     });

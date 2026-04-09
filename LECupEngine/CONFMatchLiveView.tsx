@@ -1960,7 +1960,7 @@ const summary: MatchSummary = {
 
     setLastMatchSummary(summary);
     setMatchState(null);
-    navigateTo(ViewState.POST_MATCH_CONF_STUDIO);
+    navigateTo(ViewState.POST_MATCH_EUROPEAN_STUDIO);
   };
 
   if (!matchState || !ctx || !env || !kitColors) return null;

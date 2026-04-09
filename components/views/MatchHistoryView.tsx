@@ -22,7 +22,7 @@ export const MatchHistoryView: React.FC = () => {
   // SUPERPUCHAR POLSKI - ostatni mecz turnieju
   const supercupWinnersFromMatches = useMemo(() => {
     const supercupMatches = history.filter(m => 
-      m.competition.includes('SUPER') &&
+      m.competition === CompetitionType.SUPER_CUP &&
       m.homeScore !== null
     );
     
@@ -166,6 +166,114 @@ export const MatchHistoryView: React.FC = () => {
     const result = Object.values(winners).sort((a, b) => b.year - a.year);
     console.log('⭐ Liga Mistrzów:', result);
     return result;
+  }, [history, clubs]);
+
+  // LIGA EUROPY - Finał
+  const elWinner = useMemo(() => {
+    const matches = history.filter(m =>
+      m.competition === 'EL_FINAL' &&
+      m.homeScore !== null
+    );
+    const winners: Record<string, any> = {};
+    matches.forEach(match => {
+      let winnerId: string | null = null;
+      let runnerId: string | null = null;
+      if (match.homeScore > match.awayScore) { winnerId = match.homeTeamId; runnerId = match.awayTeamId; }
+      else if (match.awayScore > match.homeScore) { winnerId = match.awayTeamId; runnerId = match.homeTeamId; }
+      else if (match.homePenaltyScore !== undefined && match.awayPenaltyScore !== undefined) {
+        const hw = match.homePenaltyScore > match.awayPenaltyScore;
+        winnerId = hw ? match.homeTeamId : match.awayTeamId;
+        runnerId = hw ? match.awayTeamId : match.homeTeamId;
+      }
+      if (winnerId && runnerId) {
+        const winnerClub = clubs.find(c => c.id === winnerId);
+        const runnerClub = clubs.find(c => c.id === runnerId);
+        if (winnerClub && runnerClub) {
+          const date = new Date(match.date);
+          const year = date.getFullYear();
+          const seasonKey = `${year}/${year + 1}`;
+          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year: year + 1 };
+        }
+      }
+    });
+    return Object.values(winners).sort((a, b) => b.year - a.year);
+  }, [history, clubs]);
+
+  // LIGA KONFERENCJI - Finał
+  const confWinner = useMemo(() => {
+    const matches = history.filter(m =>
+      m.competition === 'CONF_FINAL' &&
+      m.homeScore !== null
+    );
+    const winners: Record<string, any> = {};
+    matches.forEach(match => {
+      let winnerId: string | null = null;
+      let runnerId: string | null = null;
+      if (match.homeScore > match.awayScore) { winnerId = match.homeTeamId; runnerId = match.awayTeamId; }
+      else if (match.awayScore > match.homeScore) { winnerId = match.awayTeamId; runnerId = match.homeTeamId; }
+      else if (match.homePenaltyScore !== undefined && match.awayPenaltyScore !== undefined) {
+        const hw = match.homePenaltyScore > match.awayPenaltyScore;
+        winnerId = hw ? match.homeTeamId : match.awayTeamId;
+        runnerId = hw ? match.awayTeamId : match.homeTeamId;
+      }
+      if (winnerId && runnerId) {
+        const winnerClub = clubs.find(c => c.id === winnerId);
+        const runnerClub = clubs.find(c => c.id === runnerId);
+        if (winnerClub && runnerClub) {
+          const date = new Date(match.date);
+          const year = date.getFullYear();
+          const seasonKey = `${year}/${year + 1}`;
+          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year: year + 1 };
+        }
+      }
+    });
+    return Object.values(winners).sort((a, b) => b.year - a.year);
+  }, [history, clubs]);
+
+  // SUPERPUCHAR EUROPY - zwycięzcy z historii meczów
+  const uefaSupercupWinner = useMemo(() => {
+    const matches = history.filter(m =>
+      m.competition === CompetitionType.UEFA_SUPER_CUP &&
+      m.homeScore !== null
+    );
+
+    const winners: Record<string, any> = {};
+    matches.forEach(match => {
+      let winnerId: string | null = null;
+      let loserId: string | null = null;
+
+      if (match.homeScore > match.awayScore) {
+        winnerId = match.homeTeamId;
+        loserId = match.awayTeamId;
+      } else if (match.awayScore > match.homeScore) {
+        winnerId = match.awayTeamId;
+        loserId = match.homeTeamId;
+      } else if (match.homePenaltyScore !== undefined && match.awayPenaltyScore !== undefined) {
+        const homeWins = match.homePenaltyScore > match.awayPenaltyScore;
+        winnerId = homeWins ? match.homeTeamId : match.awayTeamId;
+        loserId = homeWins ? match.awayTeamId : match.homeTeamId;
+      }
+
+      if (winnerId) {
+        const winnerClub = clubs.find(c => c.id === winnerId);
+        const loserClub = loserId ? clubs.find(c => c.id === loserId) : null;
+        if (winnerClub) {
+          const date = new Date(match.date);
+          const month = date.getMonth();
+          const year = date.getFullYear();
+          const seasonStart = month >= 6 ? year : year - 1;
+          const seasonKey = `${seasonStart}/${seasonStart + 1}`;
+          winners[seasonKey] = {
+            season: seasonKey,
+            winner: winnerClub.name,
+            runnerUp: loserClub?.name ?? '-',
+            year: seasonStart + 1
+          };
+        }
+      }
+    });
+
+    return Object.values(winners).sort((a, b) => b.year - a.year);
   }, [history, clubs]);
 
   // Odśwież dane gdy komponent się montuje
@@ -482,6 +590,39 @@ export const MatchHistoryView: React.FC = () => {
                 </div>
               </div>
 
+              {/* SUPERPUCHAR EUROPY */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">☀️</span>
+                  <h3 className="text-lg font-black uppercase tracking-wider italic text-white">SUPERPUCHAR EUROPY</h3>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-amber-600/20 border-b border-white/5">
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Sezon</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Zwycięzca</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Finalista</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {uefaSupercupWinner.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
+                          <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp}</td>
+                        </tr>
+                      ))}
+                      {uefaSupercupWinner.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {/* LIGA MISTRZÓW */}
               <div>
                 <div className="flex items-center gap-3 mb-4">
@@ -502,9 +643,71 @@ export const MatchHistoryView: React.FC = () => {
                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
                           <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
-                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runner || '-'}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp || '-'}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* LIGA EUROPY */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🟠</span>
+                  <h3 className="text-lg font-black uppercase tracking-wider italic text-white">LIGA EUROPY UEFA</h3>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-orange-600/20 border-b border-white/5">
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Sezon</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Zwycięzca</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Finalista</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {elWinner.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
+                          <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp}</td>
+                        </tr>
+                      ))}
+                      {elWinner.length === 0 && (
+                        <tr><td colSpan={3} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* LIGA KONFERENCJI */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🟢</span>
+                  <h3 className="text-lg font-black uppercase tracking-wider italic text-white">LIGA KONFERENCJI UEFA</h3>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-green-700/20 border-b border-white/5">
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Sezon</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Zwycięzca</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Finalista</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {confWinner.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
+                          <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp}</td>
+                        </tr>
+                      ))}
+                      {confWinner.length === 0 && (
+                        <tr><td colSpan={3} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

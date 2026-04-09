@@ -40,6 +40,7 @@ import { CLGroupDrawView } from './components/views/CLGroupDrawView';
 import { PolishCupBracketView } from './components/views/PolishCupBracketView';
 import { PolishCupFinalistsView } from './PolishCupEngine/PolishCupFinalistsView';
 import { PostMatchCLStudioView } from './CLEngine/PostMatchCLStudioView';
+import { PostMatchEuropeanStudioView } from './CLEngine/PostMatchEuropeanStudioView';
 import { PreMatchCLStudioView } from './CLEngine/PreMatchCLStudioView';
 import { PreMatchCLLiveStudioView } from './CLEngine/PreMatchCLLiveStudioView';
 import { CLMatchLiveView } from './CLEngine/CLMatchLiveView';
@@ -144,6 +145,9 @@ case ViewState.MATCH_LIVE_CL:
 
 case ViewState.POST_MATCH_CL_STUDIO:
   return <PostMatchCLStudioView />;
+
+case ViewState.POST_MATCH_EUROPEAN_STUDIO:
+  return <PostMatchEuropeanStudioView />;
 
 case ViewState.PRE_MATCH_EL_STUDIO:
   return <PreMatchELStudioView />;
