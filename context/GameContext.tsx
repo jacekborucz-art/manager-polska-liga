@@ -1222,7 +1222,12 @@ setMessages([welcomeMail, fanMail]);
       });
       return updatedSchedules;
     });
-    setGlobalFixtures(prev => prev.map(f => simulation.updatedFixtures.find(uf => uf.id === f.id) || f));
+    setGlobalFixtures(prev => prev.map(f => {
+      const updated = simulation.updatedFixtures.find(uf => uf.id === f.id);
+      if (!updated) return f;
+      if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
+      return updated;
+    }));
   }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups]);
 
   const processBackgroundCupMatches = useCallback(() => {

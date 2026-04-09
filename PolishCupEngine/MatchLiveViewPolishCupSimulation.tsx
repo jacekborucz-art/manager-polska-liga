@@ -3157,6 +3157,24 @@ if (activePlayerTempo === 'SLOW') {
            </div>
          )}
 
+         {side === userSide && (
+           <div className="bg-black/40 px-3 py-2 rounded-xl border border-white/5 mb-2 flex flex-col gap-1.5 shadow-inner">
+             <div className="flex justify-between items-center">
+               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">USTAWIENIE I TAKTYKA</span>
+               <span className="text-[8px] font-black text-emerald-400 italic">
+                 {TacticRepository.getById(lineup.tacticId)?.name ?? lineup.tacticId}
+               </span>
+             </div>
+             <div className="flex flex-wrap gap-1">
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{matchState.userInstructions.tempo}</span>
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{matchState.userInstructions.mindset}</span>
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">{matchState.userInstructions.intensity}</span>
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">{matchState.userInstructions.passing}</span>
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">{matchState.userInstructions.pressing}</span>
+               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{matchState.userInstructions.counterAttack}</span>
+             </div>
+           </div>
+         )}
 
             {lineup.startingXI.map(pid => {
                if (!pid) return null;
@@ -3797,7 +3815,7 @@ if (activePlayerTempo === 'SLOW') {
 )}
 
         {/* UNIFIED BOTTOM HUD */}
-<div className="fixed bottom-[180px] z-50 pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+<div className="fixed bottom-[150px] z-50 pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
   <div className="pointer-events-auto bg-slate-900/25 backdrop-blur-3xl border border-white/10 rounded-none shadow-2xl flex items-stretch overflow-hidden" style={{ zoom: 1.3 }}>
 
     {/* SEKCJA: PRĘDKOŚĆ */}

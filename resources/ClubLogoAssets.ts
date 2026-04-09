@@ -144,6 +144,13 @@ import southamptonLogo from '../Graphic/logo/england/southampton_fc.png';
 import qprLogo from '../Graphic/logo/england/qpr.png';
 import newcastleLogo from '../Graphic/logo/england/newcastle.png';
 import leicesterCityLogo from '../Graphic/logo/england/leicester_city.png';
+import astonVillaLogo from '../Graphic/logo/england/aston-villa.png';
+import nottinghamForestLogo from '../Graphic/logo/england/nottingham-forest.png';
+import westHamLogo from '../Graphic/logo/england/west-ham.png';
+import fulhamLogo from '../Graphic/logo/england/fulham.png';
+import sunderlandLogo from '../Graphic/logo/england/sunderland.png';
+import hullCityLogo from '../Graphic/logo/england/hull-city.png';
+import bournemouthLogo from '../Graphic/logo/england/bournemouth.png';
 
 
 //SPAIN
@@ -394,6 +401,16 @@ export const CLUB_LOGOS: Record<string, string> = {
   EU_CONF_SOUTHAMPTON_FC:                      southamptonLogo,
   EU_CONF_LEICESTER_CITY:                      leicesterCityLogo,
   EU_CONF_LEEDS_UNITED:                        leedsUnitedLogo,
+  EU_CONF_QPR:                                 qprLogo,
+  // Europa League - England
+  EU_EL_ASTON_VILLA:                           astonVillaLogo,
+  EU_EL_NOTTINGHAM_FOREST:                     nottinghamForestLogo,
+  // Conference League - England (new)
+  EU_CONF_WEST_HAM_UNITED:                     westHamLogo,
+  EU_CONF_FULHAM:                              fulhamLogo,
+  EU_CONF_SUNDERLAND_AFC:                      sunderlandLogo,
+  EU_CONF_HULL_CITY:                           hullCityLogo,
+  EU_CONF_BOURNEMOUTH_AFC:                     bournemouthLogo,
 
 
 

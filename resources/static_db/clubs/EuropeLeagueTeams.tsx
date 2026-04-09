@@ -11,7 +11,9 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
   { name: "Wolverhampton Wanderers", country: "ENG", tier: 2, colors: ['#FDB913', '#000000', '#FFFFFF'], stadium: "Molineux Stadium", capacity: 32050, reputation: 14 },
 { name: "Newcastle United", country: "ENG", tier: 2, colors: ['#000000', '#FFFFFF', '#41B6E6'], stadium: "St James' Park", capacity: 52305, reputation: 12 },
   { name: "Everton FC", country: "ENG", tier: 2, colors: ['#003399', '#FFFFFF', '#FF0000'], stadium: "Goodison Park", capacity: 39214, reputation: 12 },
-  
+  { name: "Aston Villa", country: "ENG", tier: 3, colors: ['#882525', '#134ac0', '#ffffff'], stadium: "Villa Park", capacity: 42682, reputation: 10 },
+{ name: "Nottingham Forest", country: "ENG", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "City Ground", capacity: 30000, reputation: 9 },
+
   
   // Armenia (ARM)
   { name: "Ararat-Armenia", country: "ARM", tier: 4, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "FFA Academy Stadium", capacity: 1400, reputation: 6 },

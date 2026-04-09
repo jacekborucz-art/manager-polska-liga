@@ -6,6 +6,7 @@ import { KitSelectionService } from '../services/KitSelectionService';
 import { ChampionshipHistoryService } from '../data/championship_history';
 import { PostMatchCommentSelector } from './PostMatchCommentSelector';
 import PucharPolskiBg from '../Graphic/themes/PucharPolski.png';
+import { getClubLogo } from '../resources/ClubLogoAssets';
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -271,10 +272,15 @@ export const PostMatchCupStudioView: React.FC = () => {
            <div className="flex items-center justify-between relative z-10">
               {/* Home */}
               <div className="flex-1 flex flex-col items-end gap-2">
-                 <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter text-right">{homeClub.name}</h2>
-                 <div className="flex gap-2">
-                    <div className="w-1.5 h-6" style={{ backgroundColor: homeClub.colorsHex[0] }} />
-                    <div className="w-1.5 h-6" style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} />
+                 <div className="flex items-center gap-3 justify-end">
+                    <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter text-right">{homeClub.name}</h2>
+                    {getClubLogo(homeClub.id)
+                      ? <img src={getClubLogo(homeClub.id)!} alt={homeClub.name} className="w-40 h-40 object-contain shrink-0" />
+                      : <div className="w-30 h-30 rounded-md shrink-0 flex flex-col overflow-hidden border border-white/10">
+                          <div className="flex-1" style={{ backgroundColor: homeClub.colorsHex[0] }} />
+                          <div className="flex-1" style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} />
+                        </div>
+                    }
                  </div>
               </div>
 
@@ -298,10 +304,15 @@ export const PostMatchCupStudioView: React.FC = () => {
 
               {/* Away */}
               <div className="flex-1 flex flex-col items-start gap-2">
-                 <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter text-left">{awayClub.name}</h2>
-                 <div className="flex gap-2">
-                    <div className="w-1.5 h-6" style={{ backgroundColor: awayClub.colorsHex[0] }} />
-                    <div className="w-1.5 h-6" style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} />
+                 <div className="flex items-center gap-3">
+                    {getClubLogo(awayClub.id)
+                      ? <img src={getClubLogo(awayClub.id)!} alt={awayClub.name} className="w-40 h-40 object-contain shrink-0" />
+                      : <div className="w-40 h-40 rounded-md shrink-0 flex flex-col overflow-hidden border border-white/10">
+                          <div className="flex-1" style={{ backgroundColor: awayClub.colorsHex[0] }} />
+                          <div className="flex-1" style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} />
+                        </div>
+                    }
+                    <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter text-left">{awayClub.name}</h2>
                  </div>
               </div>
            </div>

@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
 import PucharPolskiBg from '../Graphic/themes/PucharPolski.png';
+import { getClubLogo } from '../resources/ClubLogoAssets';
 
 export const ScoreResultsPolishCup: React.FC = () => {
   const { fixtures, clubs, currentDate, navigateTo, advanceDay, userTeamId, setActiveMatchState: setMatchState } = useGame();
@@ -90,12 +91,26 @@ export const ScoreResultsPolishCup: React.FC = () => {
                 return (
                   <div 
                     key={result.id} 
-                    className="flex items-center justify-between py-2.5 px-8 border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors group"
+                    className="flex items-center justify-between py-2.5 px-8 rounded-2xl transition-colors group relative overflow-visible mb-[15px]"
+                    style={{
+                      background: `linear-gradient(to right, ${home.colorsHex[0]}33 0%, ${home.colorsHex[1] || home.colorsHex[0]}22 25%, transparent 42%, transparent 58%, ${away.colorsHex[1] || away.colorsHex[0]}22 75%, ${away.colorsHex[0]}33 100%)`
+                    }}
                   >
+                     {/* Logo gospodarzy - wystające po lewej */}
+                     <div className="absolute -left-7 top-1/2 -translate-y-1/2 w-14 h-14 z-10 drop-shadow-xl opacity-90" style={{ transform: 'translateY(-50%) rotate(-8deg)' }}>
+                       {getClubLogo(home.id)
+                         ? <img src={getClubLogo(home.id)!} alt={home.name} className="w-full h-full object-contain" />
+                         : <div className="w-full h-full rounded-lg flex flex-col overflow-hidden border border-white/20">
+                             <div className="flex-1" style={{ backgroundColor: home.colorsHex[0] }} />
+                             <div className="flex-1" style={{ backgroundColor: home.colorsHex[1] || home.colorsHex[0] }} />
+                           </div>
+                       }
+                     </div>
+
                      <div className={`flex-1 flex items-center justify-end gap-2 truncate transition-colors ${isHomeWinner ? 'text-amber-400 font-black' : 'text-slate-400 group-hover:text-slate-200'}`}>
-                        <span className="text-[11px] uppercase italic tracking-tight truncate">{home.name}</span>
+                        <span className="text-[15px] uppercase italic tracking-tight truncate">{home.name}</span>
                         {(() => { const b = getTierBadge(home.leagueId); return (
-                          <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded leading-none border" style={{ color: b.color, borderColor: `${b.color}55`, backgroundColor: `${b.color}18` }}>{b.label}</span>
+                          <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded leading-none border" style={{ color: b.color, borderColor: `${b.color}55`, backgroundColor: `${b.color}18` }}>{b.label}</span>
                         ); })()}
                      </div>
 
@@ -104,7 +119,7 @@ export const ScoreResultsPolishCup: React.FC = () => {
                            <div className="w-1.5 h-4 rounded-full overflow-hidden border border-white/10">
                               <div style={{ backgroundColor: home.colorsHex[0] }} className="h-full w-full" />
                            </div>
-                           <span className="text-sm font-black font-mono text-white tracking-tighter tabular-nums">
+                           <span className="text-xl font-black font-mono text-white tracking-tighter tabular-nums">
                               {result.homeScore} : {result.awayScore}
                            </span>
                            <div className="w-1.5 h-4 rounded-full overflow-hidden border border-white/10">
@@ -120,9 +135,20 @@ export const ScoreResultsPolishCup: React.FC = () => {
 
                      <div className={`flex-1 flex items-center justify-start gap-2 truncate transition-colors ${isAwayWinner ? 'text-amber-400 font-black' : 'text-slate-400 group-hover:text-slate-200'}`}>
                         {(() => { const b = getTierBadge(away.leagueId); return (
-                          <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded leading-none border" style={{ color: b.color, borderColor: `${b.color}55`, backgroundColor: `${b.color}18` }}>{b.label}</span>
+                          <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded leading-none border" style={{ color: b.color, borderColor: `${b.color}55`, backgroundColor: `${b.color}18` }}>{b.label}</span>
                         ); })()}
-                        <span className="text-[11px] uppercase italic tracking-tight truncate">{away.name}</span>
+                        <span className="text-[15px] uppercase italic tracking-tight truncate">{away.name}</span>
+                     </div>
+
+                     {/* Logo gości - wystające po prawej */}
+                     <div className="absolute -right-7 top-1/2 -translate-y-1/2 w-14 h-14 z-10 drop-shadow-xl opacity-90" style={{ transform: 'translateY(-50%) rotate(8deg)' }}>
+                       {getClubLogo(away.id)
+                         ? <img src={getClubLogo(away.id)!} alt={away.name} className="w-full h-full object-contain" />
+                         : <div className="w-full h-full rounded-lg flex flex-col overflow-hidden border border-white/20">
+                             <div className="flex-1" style={{ backgroundColor: away.colorsHex[0] }} />
+                             <div className="flex-1" style={{ backgroundColor: away.colorsHex[1] || away.colorsHex[0] }} />
+                           </div>
+                       }
                      </div>
                   </div>
                 );

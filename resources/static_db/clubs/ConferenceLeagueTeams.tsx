@@ -170,6 +170,8 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "St. Pauli", country: "GER", tier: 3, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Millerntor-Stadion", capacity: 29000, reputation: 9 },
   { name: "1. FC Nürnberg", country: "GER", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Max-Morlock-Stadion", capacity: 50000, reputation: 9 },
   { name: "Eintracht Braunschweig", country: "GER", tier: 3, colors: ['#FFD700', '#000000', '#FFFFFF'], stadium: "Eintracht-Stadion", capacity: 25000, reputation: 8 },
+ { name: "Mainz 05", country: "GER", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Mewa Arena", capacity: 34000, reputation: 8 },
+
 
   // Norwegia (NOR) – tier 4
   { name: "Viking FK", country: "NOR", tier: 3, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "SR-Bank Arena", capacity: 15600, reputation: 6 },
@@ -240,8 +242,12 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Southampton FC", country: "ENG", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "St Mary's Stadium", capacity: 32384, reputation: 10},
   { name: "Leicester City", country: "ENG", tier: 3, colors: ['#0033A0', '#FFFFFF', '#FFCC00'], stadium: "King Power Stadium", capacity: 32312, reputation: 11 },
 { name: "Leeds United", country: "ENG", tier: 3, colors: ['#FFFFFF', '#1E90FF', '#FFD700'], stadium: "Elland Road", capacity: 53000, reputation: 10 },
-
-
+{ name: "West Ham United", country: "ENG", tier: 3, colors: ['#7A263A', '#FFFFFF', '#000000'], stadium: "London Stadium", capacity: 60000, reputation: 10 },
+{ name: "Fulham", country: "ENG", tier: 3, colors: ['#FFFFFF', '#000000', '#FF0000'], stadium: "Craven Cottage", capacity: 25700, reputation: 9 },
+{ name: "Sunderland AFC", country: "ENG", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stadium of Light", capacity: 49000, reputation: 9 },
+{ name: "Bournemouth AFC", country: "ENG", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Vitality Stadium", capacity: 11000, reputation: 8 },
+{ name: "QPR", country: "ENG", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Loftus Road", capacity: 18800, reputation: 8 },
+{ name: "Hull City", country: "ENG", tier: 3, colors: ['#ff8800', '#FFFFFF', '#000000'], stadium: "KCOM Stadium", capacity: 25000, reputation: 8 },
 
   // Belgia (BEL) – niższe miejsce w Jupiler Pro League
   { name: "KVC Westerlo", country: "BEL", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Het Kuipje", capacity: 8035, reputation: 6 },
@@ -257,6 +263,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Le Havre AC", country: "FRA", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stade Oceane", capacity: 25178, reputation: 7 },
   { name: "Stade de Reims", country: "FRA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade Auguste-Delaune", capacity: 21684, reputation: 7 },
   { name: "FC Lorient", country: "FRA", tier: 3, colors: ['#FF6600', '#000000', '#FFFFFF'], stadium: "Stade du Moustoir", capacity: 18970, reputation: 7 },
+ { name: "Strasbourg", country: "FRA", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stade de la Meinau", capacity: 29000, reputation: 8 },
 
   // Grecja (GRE) – niższe miejsce w Super League
   { name: "Panetolikos GFS", country: "GRE", tier: 3, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "Panetolikos Stadium", capacity: 7321, reputation: 6 },
@@ -271,7 +278,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
 { name: "Espanyol FC", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Estadio de Cornellà-El Prat", capacity: 40000, reputation: 9 },
  { name: "Rayo Vallecano", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Campo de Fútbol de Vallecas", capacity: 14950, reputation: 8 },
  { name: "Mallorca FC", country: "ESP", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Visit Mallorca Stadium", capacity: 23000, reputation: 8 },
- 
+
   // Holandia (NED) – niższe miejsce w Eredivisie
   { name: "FC Volendam", country: "NED", tier: 3, colors: ['#FF6600', '#FFFFFF', '#000000'], stadium: "Kras Stadion", capacity: 7384, reputation: 6 },
   { name: "Almere City FC", country: "NED", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Yanmar Stadion", capacity: 4501, reputation: 5 },
