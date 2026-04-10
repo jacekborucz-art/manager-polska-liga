@@ -24,6 +24,7 @@ export const NATIONAL_TEAMS_EUROPE = [
   { name: "Hiszpania", continent: "Europe", tier: 1, colors: ["#AA151B","#F1BF00","#AA151B"], stadium: "Santiago Bernabéu", capacity: 81044, reputation: 20, region: Region.SPAIN },
   { name: "Holandia", continent: "Europe", tier: 1, colors: ["#FF4F00","#FFFFFF","#0000FF"], stadium: "Johan Cruijff Arena", capacity: 55500, reputation: 18, region: Region.BENELUX },
   { name: "Irlandia", continent: "Europe", tier: 3, colors: ["#169B62","#FFFFFF","#FF883E"], stadium: "Aviva Stadium", capacity: 51711, reputation: 11, region: Region.ENGLAND },
+  { name: "Irlandia Północna", continent: "Europe", tier: 4, colors: ["#007A37","#FFFFFF","#007A37"], stadium: "Windsor Park", capacity: 18500, reputation: 7, region: Region.ENGLAND },
   { name: "Islandia", continent: "Europe", tier: 3, colors: ["#02529C","#FFFFFF","#DC1E35"], stadium: "Laugardalsvöllur", capacity: 15000, reputation: 9, region: Region.SCANDINAVIA },
   { name: "Izrael", continent: "Europe", tier: 3, colors: ["#0038B8","#FFFFFF","#0038B8"], stadium: "Sammy Ofer Stadium", capacity: 30858, reputation: 12, region: Region.ISRAELI },
   { name: "Kazachstan", continent: "Europe", tier: 4, colors: ["#00AFCA","#FEC50C","#00AFCA"], stadium: "Astana Arena", capacity: 30000, reputation: 7, region: Region.KAZAKH },

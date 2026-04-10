@@ -23,7 +23,8 @@ AcademyScoutMission,
 Region,
 YouthPlayer,
 Scout,
-MatchHistoryEntry
+MatchHistoryEntry,
+WCQPlayoffState
 } from '../types';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -78,6 +79,7 @@ import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
+import { WCQPlayoffService } from '../services/WCQPlayoffService';
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -267,6 +269,9 @@ finalizeFreeAgentContract: (mailId: string) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
+  // Baraże MŚ 2026
+  wcqPlayoffState: WCQPlayoffState | null;
+  setWcqPlayoffState: React.Dispatch<React.SetStateAction<WCQPlayoffState | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
   reserveCoachId: string | null;
@@ -340,6 +345,8 @@ const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(Traini
   const [nationalTeams, setNationalTeams] = useState<NationalTeam[]>([]);
   // Przechowuje wyniki ostatniego dnia meczowego reprezentacji (wszystkie mecze grupy)
   const [lastNTMatchResults, setLastNTMatchResults] = useState<NTMatchResult[] | null>(null);
+  // Baraże MŚ 2026
+  const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
   const [europeanViewTab, setEuropeanViewTab] = useState<'clubs' | 'nt'>('clubs');
   const [selectedNTId, setSelectedNTId] = useState<string | null>(null);
   const [gameNotification, setGameNotification] = useState<GameNotificationState | null>(null);
@@ -3094,6 +3101,50 @@ setMessages([welcomeMail, fanMail]);
       if (matchDay) {
         // Seed = timestamp daty gry — gwarantuje powtarzalność wyników przy tym samym dniu
         const dateSeed = dateToProcess.getTime();
+
+        // ── Baraże MŚ 2026: Losowanie (29 listopada 2025) ──────────────────────
+        if (matchDay.eventType === 'WCQ_PLAYOFF_DRAW') {
+          const playoffState = WCQPlayoffService.conductDraw(
+            nationalTeams,
+            dateToProcess.getFullYear(),
+            seasonNumber,
+            dateSeed
+          );
+          setWcqPlayoffState(playoffState);
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_DRAW_VIEW);
+          return;
+        }
+
+        // ── Baraże MŚ 2026: Półfinały (17 marca 2026) ─────────────────────────
+        if (matchDay.eventType === 'WCQ_PLAYOFF_SF') {
+          if (wcqPlayoffState) {
+            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, dateSeed);
+            setWcqPlayoffState(updatedState);
+          }
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_RESULTS_SF);
+          return;
+        }
+
+        // ── Baraże MŚ 2026: Finały (20 marca 2026) ────────────────────────────
+        if (matchDay.eventType === 'WCQ_PLAYOFF_FINAL') {
+          if (wcqPlayoffState) {
+            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, dateSeed);
+            setWcqPlayoffState(updatedState);
+          }
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_RESULTS_FINAL);
+          return;
+        }
+
+        // ── Normalne mecze reprezentacji ─────────────────────────────────────
         const ntSimulation = NationalTeamSimulator.simulateMatchDay(
           matchDay,
           dateSeed,
@@ -6229,6 +6280,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
+    wcqPlayoffState, setWcqPlayoffState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
     gameNotification, showGameNotification, clearGameNotification,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────

@@ -110,6 +110,43 @@ export enum ViewState {
   PRE_MATCH_FRIENDLY_STUDIO = 'PRE_MATCH_FRIENDLY_STUDIO',
   MATCH_LIVE_FRIENDLY = 'MATCH_LIVE_FRIENDLY',
   POST_MATCH_FRIENDLY_STUDIO = 'POST_MATCH_FRIENDLY_STUDIO',
+  // ── BARAŻE MŚ 2026 — PLAYOFF KWALIFIKACYJNY UEFA ────────────────────────
+  WCQ_PLAYOFF_DRAW_VIEW = 'WCQ_PLAYOFF_DRAW_VIEW',         // 29 listopada — animowana ceremonia losowania
+  WCQ_PLAYOFF_RESULTS_SF = 'WCQ_PLAYOFF_RESULTS_SF',       // 17 marca — wyniki półfinałów
+  WCQ_PLAYOFF_RESULTS_FINAL = 'WCQ_PLAYOFF_RESULTS_FINAL', // 20 marca — wyniki finałów + kwalifikacja
+}
+
+// ── BARAŻE WCQ 2026 — typy ────────────────────────────────────────────────
+
+export interface WCQPlayoffMatchResult {
+  homeTeam: string;
+  awayTeam: string;
+  homeGoals: number;
+  awayGoals: number;
+}
+
+export interface WCQPlayoffPath {
+  pathLabel: 'A' | 'B' | 'C' | 'D';
+  sf1Home: string;
+  sf1Away: string;
+  sf2Home: string;
+  sf2Away: string;
+  sf1Result?: WCQPlayoffMatchResult;
+  sf2Result?: WCQPlayoffMatchResult;
+  sf1Winner?: string;
+  sf2Winner?: string;
+  finalHome?: string;
+  finalAway?: string;
+  finalResult?: WCQPlayoffMatchResult;
+  qualifier?: string;
+}
+
+export interface WCQPlayoffState {
+  seasonYear: number;
+  drawCompleted: boolean;
+  sfCompleted: boolean;
+  finalCompleted: boolean;
+  paths: WCQPlayoffPath[];
 }
 
 export interface PlayoffPair {
@@ -436,6 +473,10 @@ export enum CompetitionType {
   RELEGATION_PLAYOFF_2 = 'RELEGATION_PLAYOFF_2', // 29 maja — rewanże + rozstrzygnięcie
   // ── SUPERPUCHAR EUROPY ────────────────────────────────────────────────────
   UEFA_SUPER_CUP = 'UEFA_SUPER_CUP', // 23 sierpnia — Superpuchar Europy (CL winner vs EL winner)
+  // ── BARAŻE MŚ 2026 — PLAYOFF KWALIFIKACYJNY UEFA ─────────────────────────
+  WCQ_PLAYOFF_DRAW = 'WCQ_PLAYOFF_DRAW',   // 29 listopada — losowanie par
+  WCQ_PLAYOFF_SF = 'WCQ_PLAYOFF_SF',       // 17 marca — półfinały
+  WCQ_PLAYOFF_FINAL = 'WCQ_PLAYOFF_FINAL', // 20 marca — finały
 }
 
 export enum SlotType {
@@ -1251,6 +1292,8 @@ export interface NTMatchResult {
   awayGoals: number;
   /** Etykieta rozgrywek wyświetlana graczowi, np. "Kwalifikacje MŚ 2026 – Gr. A". */
   competitionLabel: string;
+  /** Etykieta grupy (np. 'A', 'G'). Opcjonalna — używana do filtrowania wyników w widoku. */
+  group?: string;
   /** Trwale identyfikowalny identyfikator meczu. */
   matchId?: string;
   /** Id gospodarza i goscia w modelu NationalTeam. */

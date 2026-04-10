@@ -274,7 +274,7 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
     { day: 27, month: 10, type: SlotType.MIDWEEK, comp: CompetitionType.CONF_GROUP_STAGE, label: "LK: Faza Grupowa - Kolejka 4", priority: 84 },
   
 
-
+//29 LISTOPADA - MIEDZYNARODOWE ROZGRYWKI LUB INNE WYDARZENIA ZWIĄZANE Z REPREZENTACJĄ
   
 
 

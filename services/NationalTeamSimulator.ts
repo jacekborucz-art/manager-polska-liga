@@ -404,16 +404,16 @@ const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, L
 
 const fallback = (match: NTGroupMatch, comp: string, date: Date, seed: number): NTMatchResult => {
   const rng = new Rng(hash(`${match.home}|${match.away}|${seed}`));
-  return { home: match.home, away: match.away, homeGoals: rng.int(0, 3), awayGoals: rng.int(0, 3), competitionLabel: comp, matchId: `NT_FALLBACK_${date.getTime()}_${hash(match.home + match.away)}`, goals: [], cards: [], substitutions: [], injuries: [], timeline: [] };
+  return { home: match.home, away: match.away, homeGoals: rng.int(0, 3), awayGoals: rng.int(0, 3), competitionLabel: comp, group: match.group, matchId: `NT_FALLBACK_${date.getTime()}_${hash(match.home + match.away)}`, goals: [], cards: [], substitutions: [], injuries: [], timeline: [] };
 };
 
 const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: number, season: number, updated: Record<string, Player[]>, locs: Record<string, Loc>, byName: Map<string, NationalTeam>, coaches: Record<string, Coach>) => {
   const homeTeam = byName.get(match.home) ?? null;
   const awayTeam = byName.get(match.away) ?? null;
-  if (!homeTeam || !awayTeam) return { result: fallback(match, md.competitionLabel, date, seed), history: null as MatchHistoryEntry | null };
+  if (!homeTeam || !awayTeam) return { result: fallback(match, match.competitionLabel ?? md.competitionLabel, date, seed), history: null as MatchHistoryEntry | null };
   const squadOf = (team: NationalTeam) => team.squadPlayerIds.map(id => { const loc = locs[id]; return loc ? updated[loc.clubId]?.[loc.index] ?? null : null; }).filter(Boolean) as Player[];
   const homeSquad = squadOf(homeTeam); const awaySquad = squadOf(awayTeam);
-  if (homeSquad.length < 11 || awaySquad.length < 11) return { result: fallback(match, md.competitionLabel, date, seed), history: null as MatchHistoryEntry | null };
+  if (homeSquad.length < 11 || awaySquad.length < 11) return { result: fallback(match, match.competitionLabel ?? md.competitionLabel, date, seed), history: null as MatchHistoryEntry | null };
   const homeCoach = homeTeam.coachId ? (coaches[homeTeam.coachId] ?? fallbackCoach(homeTeam.id)) : fallbackCoach(homeTeam.id);
   const awayCoach = awayTeam.coachId ? (coaches[awayTeam.coachId] ?? fallbackCoach(awayTeam.id)) : fallbackCoach(awayTeam.id);
   const hs = NationalTeamLineupService.buildMatchSelection(homeTeam, homeSquad, homeCoach);
@@ -453,8 +453,8 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
     addedTime = clamp(2 + Math.floor(stop), 2, 7);
   }
   updatePlayers(updated, locs, date, home, away, goals, cards, injuries);
-  const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: md.competitionLabel, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute) };
-  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: md.competitionLabel, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [] };
+  const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: (match.competitionLabel ?? md.competitionLabel), group: match.group, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute) };
+  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [] };
   return { result, history };
 };
 

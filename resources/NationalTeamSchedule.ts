@@ -31,7 +31,20 @@ export interface NTGroupMatch {
   home: string;
   /** Nazwa drużyny gościa (w języku polskim). */
   away: string;
+  /** Etykieta grupy (np. 'A', 'G'). Opcjonalna — używana do filtrowania wyników. */
+  group?: string;
+  /** Etykieta rozgrywek dla tego meczu (nadrzędna nad poziomem dnia meczowego). */
+  competitionLabel?: string;
 }
+
+/**
+ * Typ specjalnego zdarzenia:
+ *   - 'GROUP_MATCH'     — normalny dzień meczowy grupy (domyślny, brak pola = GROUP_MATCH)
+ *   - 'WCQ_PLAYOFF_DRAW' — losowanie bar aży eliminacyjnych MŚ (29 listopada)
+ *   - 'WCQ_PLAYOFF_SF'   — półfinały baraży (17 marca)
+ *   - 'WCQ_PLAYOFF_FINAL' — finały baraży (20 marca)
+ */
+export type NTEventType = 'GROUP_MATCH' | 'WCQ_PLAYOFF_DRAW' | 'WCQ_PLAYOFF_SF' | 'WCQ_PLAYOFF_FINAL';
 
 /** Dzień meczowy reprezentacji — jedna data = jeden blok meczów. */
 export interface NTMatchDay {
@@ -43,6 +56,8 @@ export interface NTMatchDay {
   competitionLabel: string;
   /** Lista wszystkich meczów rozgrywanych w tym dniu. */
   matches: NTGroupMatch[];
+  /** Typ specjalnego zdarzenia. undefined = normalny dzień meczowy. */
+  eventType?: NTEventType;
 }
 
 // ─── Dane ─────────────────────────────────────────────────────────────────────
@@ -58,77 +73,232 @@ export interface NTMatchDay {
  */
 export const NT_SCHEDULE_BY_YEAR: Record<number, NTMatchDay[]> = {
 
-  // ── Sezon 2025/26 — Kwalifikacje do Mistrzostw Świata 2026, Grupa G ─────────
-  // Polska, Holandia, Finlandia, Litwa, Malta
-  // Kolejki 4–9 (kolejki 1–3 rozegrano w marcu 2025, przed startem gry)
+  // ── Sezon 2025/26 — Kwalifikacje do Mistrzostw Świata 2026, Grupy A–L ───────
+  // Polska (Gr. G): Holandia, Finlandia, Litwa, Malta
+  // Kolejki 4–9 Gr. G / kolejki 1–6 Gr. A–F / kolejki 5–10 Gr. H–L
   2025: [
     {
-      // Kolejka 4: 4 września 2025
+      // 4 września 2025 — okno wrześniowe, mecz 1
       day: 4,
       month: 8, // wrzesień
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Holandia', away: 'Polska' },
-        { home: 'Litwa',    away: 'Malta'  },
+        { home: 'Luksemburg',          away: 'Irlandia Północna',    group: 'A' },
+        { home: 'Słowacja',            away: 'Niemcy',               group: 'A' },
+        { home: 'Szwecja',             away: 'Słowenia',             group: 'B' },
+        { home: 'Kosovo',              away: 'Szwajcaria',           group: 'B' },
+        { home: 'Białoruś',            away: 'Grecja',               group: 'C' },
+        { home: 'Dania',               away: 'Szkocja',              group: 'C' },
+        { home: 'Azerbejdżan',         away: 'Islandia',             group: 'D' },
+        { home: 'Ukraina',             away: 'Francja',              group: 'D' },
+        { home: 'Bułgaria',            away: 'Gruzja',               group: 'E' },
+        { home: 'Turcja',              away: 'Hiszpania',            group: 'E' },
+        { home: 'Armenia',             away: 'Węgry',                group: 'F' },
+        { home: 'Irlandia',            away: 'Portugalia',           group: 'F' },
+        { home: 'Holandia',            away: 'Polska',               group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Litwa',               away: 'Malta',                group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'San Marino',          away: 'Austria',              group: 'H' },
+        { home: 'Cypr',                away: 'Rumunia',              group: 'H' },
+        { home: 'Mołdawia',            away: 'Norwegia',             group: 'I' },
+        { home: 'Estonia',             away: 'Izrael',               group: 'I' },
+        { home: 'Liechtenstein',       away: 'Walia',                group: 'J' },
+        { home: 'Kazachstan',          away: 'Macedonia Północna',   group: 'J' },
+        { home: 'Andora',              away: 'Serbia',               group: 'K' },
+        { home: 'Łotwa',               away: 'Albania',              group: 'K' },
+        { home: 'Gibraltar',           away: 'Wyspy Owcze',          group: 'L' },
+        { home: 'Czarnogóra',          away: 'Czechy',               group: 'L' },
       ],
     },
     {
-      // Kolejka 5: 7 września 2025
+      // 7 września 2025 — okno wrześniowe, mecz 2
       day: 7,
       month: 8, // wrzesień
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Polska',   away: 'Finlandia' },
-        { home: 'Litwa',    away: 'Holandia'  },
+        { home: 'Luksemburg',          away: 'Słowacja',             group: 'A' },
+        { home: 'Niemcy',              away: 'Irlandia Północna',    group: 'A' },
+        { home: 'Szwecja',             away: 'Kosovo',               group: 'B' },
+        { home: 'Szwajcaria',          away: 'Słowenia',             group: 'B' },
+        { home: 'Białoruś',            away: 'Dania',                group: 'C' },
+        { home: 'Szkocja',             away: 'Grecja',               group: 'C' },
+        { home: 'Azerbejdżan',         away: 'Ukraina',              group: 'D' },
+        { home: 'Francja',             away: 'Islandia',             group: 'D' },
+        { home: 'Bułgaria',            away: 'Turcja',               group: 'E' },
+        { home: 'Hiszpania',           away: 'Gruzja',               group: 'E' },
+        { home: 'Armenia',             away: 'Irlandia',             group: 'F' },
+        { home: 'Portugalia',          away: 'Węgry',                group: 'F' },
+        { home: 'Polska',              away: 'Finlandia',            group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Litwa',               away: 'Holandia',             group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Austria',             away: 'Cypr',                 group: 'H' },
+        { home: 'Bośnia i Hercegowina', away: 'San Marino',          group: 'H' },
+        { home: 'Norwegia',            away: 'Włochy',               group: 'I' },
+        { home: 'Izrael',              away: 'Mołdawia',             group: 'I' },
+        { home: 'Belgia',              away: 'Liechtenstein',        group: 'J' },
+        { home: 'Walia',               away: 'Kazachstan',           group: 'J' },
+        { home: 'Anglia',              away: 'Andora',               group: 'K' },
+        { home: 'Albania',             away: 'Serbia',               group: 'K' },
+        { home: 'Chorwacja',           away: 'Gibraltar',            group: 'L' },
+        { home: 'Wyspy Owcze',         away: 'Czarnogóra',           group: 'L' },
       ],
     },
     {
-      // Kolejka 6: 8 października 2025
+      // 8 października 2025 — okno październikowe, mecz 1
       day: 8,
       month: 9, // październik
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Finlandia', away: 'Litwa'    },
-        { home: 'Malta',     away: 'Holandia' },
+        { home: 'Irlandia Północna',   away: 'Słowacja',             group: 'A' },
+        { home: 'Niemcy',              away: 'Luksemburg',           group: 'A' },
+        { home: 'Słowenia',            away: 'Kosovo',               group: 'B' },
+        { home: 'Szwajcaria',          away: 'Szwecja',              group: 'B' },
+        { home: 'Grecja',              away: 'Dania',                group: 'C' },
+        { home: 'Szkocja',             away: 'Białoruś',             group: 'C' },
+        { home: 'Islandia',            away: 'Ukraina',              group: 'D' },
+        { home: 'Francja',             away: 'Azerbejdżan',          group: 'D' },
+        { home: 'Gruzja',              away: 'Turcja',               group: 'E' },
+        { home: 'Hiszpania',           away: 'Bułgaria',             group: 'E' },
+        { home: 'Węgry',               away: 'Irlandia',             group: 'F' },
+        { home: 'Portugalia',          away: 'Armenia',              group: 'F' },
+        { home: 'Finlandia',           away: 'Litwa',                group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Malta',               away: 'Holandia',             group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Rumunia',             away: 'Austria',              group: 'H' },
+        { home: 'Cypr',                away: 'Bośnia i Hercegowina', group: 'H' },
+        { home: 'Włochy',              away: 'Estonia',              group: 'I' },
+        { home: 'Mołdawia',            away: 'Izrael',               group: 'I' },
+        { home: 'Macedonia Północna',  away: 'Belgia',               group: 'J' },
+        { home: 'Kazachstan',          away: 'Liechtenstein',        group: 'J' },
+        { home: 'Serbia',              away: 'Łotwa',                group: 'K' },
+        { home: 'Andora',              away: 'Albania',              group: 'K' },
+        { home: 'Czechy',              away: 'Chorwacja',            group: 'L' },
+        { home: 'Czarnogóra',          away: 'Gibraltar',            group: 'L' },
       ],
     },
     {
-      // Kolejka 7: 11 października 2025
+      // 11 października 2025 — okno październikowe, mecz 2
       day: 11,
       month: 9, // październik
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Holandia', away: 'Finlandia' },
-        { home: 'Litwa',    away: 'Polska'    },
+        { home: 'Irlandia Północna',   away: 'Niemcy',               group: 'A' },
+        { home: 'Słowacja',            away: 'Luksemburg',           group: 'A' },
+        { home: 'Słowenia',            away: 'Szwajcaria',           group: 'B' },
+        { home: 'Kosovo',              away: 'Szwecja',              group: 'B' },
+        { home: 'Grecja',              away: 'Szkocja',              group: 'C' },
+        { home: 'Dania',               away: 'Białoruś',             group: 'C' },
+        { home: 'Islandia',            away: 'Francja',              group: 'D' },
+        { home: 'Ukraina',             away: 'Azerbejdżan',          group: 'D' },
+        { home: 'Gruzja',              away: 'Hiszpania',            group: 'E' },
+        { home: 'Turcja',              away: 'Bułgaria',             group: 'E' },
+        { home: 'Węgry',               away: 'Portugalia',           group: 'F' },
+        { home: 'Irlandia',            away: 'Armenia',              group: 'F' },
+        { home: 'Holandia',            away: 'Finlandia',            group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Litwa',               away: 'Polska',               group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Austria',             away: 'Bośnia i Hercegowina', group: 'H' },
+        { home: 'San Marino',          away: 'Rumunia',              group: 'H' },
+        { home: 'Estonia',             away: 'Norwegia',             group: 'I' },
+        { home: 'Włochy',              away: 'Mołdawia',             group: 'I' },
+        { home: 'Walia',               away: 'Macedonia Północna',   group: 'J' },
+        { home: 'Belgia',              away: 'Kazachstan',           group: 'J' },
+        { home: 'Albania',             away: 'Anglia',               group: 'K' },
+        { home: 'Łotwa',               away: 'Serbia',               group: 'K' },
+        { home: 'Wyspy Owcze',         away: 'Czechy',               group: 'L' },
+        { home: 'Chorwacja',           away: 'Czarnogóra',           group: 'L' },
       ],
     },
     {
-      // Kolejka 8: 14 listopada 2025
+      // 14 listopada 2025 — okno listopadowe, mecz 1
       day: 14,
       month: 10, // listopad
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Finlandia', away: 'Malta'    },
-        { home: 'Polska',    away: 'Holandia' },
+        { home: 'Luksemburg',          away: 'Niemcy',               group: 'A' },
+        { home: 'Słowacja',            away: 'Irlandia Północna',    group: 'A' },
+        { home: 'Szwecja',             away: 'Szwajcaria',           group: 'B' },
+        { home: 'Kosovo',              away: 'Słowenia',             group: 'B' },
+        { home: 'Białoruś',            away: 'Szkocja',              group: 'C' },
+        { home: 'Dania',               away: 'Grecja',               group: 'C' },
+        { home: 'Azerbejdżan',         away: 'Francja',              group: 'D' },
+        { home: 'Ukraina',             away: 'Islandia',             group: 'D' },
+        { home: 'Bułgaria',            away: 'Hiszpania',            group: 'E' },
+        { home: 'Turcja',              away: 'Gruzja',               group: 'E' },
+        { home: 'Armenia',             away: 'Portugalia',           group: 'F' },
+        { home: 'Irlandia',            away: 'Węgry',                group: 'F' },
+        { home: 'Finlandia',           away: 'Malta',                group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Polska',              away: 'Holandia',             group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Bośnia i Hercegowina', away: 'Rumunia',             group: 'H' },
+        { home: 'Austria',             away: 'San Marino',           group: 'H' },
+        { home: 'Norwegia',            away: 'Izrael',               group: 'I' },
+        { home: 'Estonia',             away: 'Mołdawia',             group: 'I' },
+        { home: 'Liechtenstein',       away: 'Macedonia Północna',   group: 'J' },
+        { home: 'Walia',               away: 'Belgia',               group: 'J' },
+        { home: 'Serbia',              away: 'Albania',              group: 'K' },
+        { home: 'Anglia',              away: 'Łotwa',                group: 'K' },
+        { home: 'Czechy',              away: 'Wyspy Owcze',          group: 'L' },
+        { home: 'Gibraltar',           away: 'Czarnogóra',           group: 'L' },
       ],
     },
     {
-      // Kolejka 9: 17 listopada 2025
+      // 17 listopada 2025 — okno listopadowe, mecz 2
       day: 17,
       month: 10, // listopad
-      competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G',
+      competitionLabel: 'Kwalifikacje MŚ 2026',
       matches: [
-        { home: 'Holandia', away: 'Litwa'  },
-        { home: 'Malta',    away: 'Polska' },
+        { home: 'Irlandia Północna',   away: 'Luksemburg',           group: 'A' },
+        { home: 'Niemcy',              away: 'Słowacja',             group: 'A' },
+        { home: 'Słowenia',            away: 'Szwecja',              group: 'B' },
+        { home: 'Szwajcaria',          away: 'Kosovo',               group: 'B' },
+        { home: 'Grecja',              away: 'Białoruś',             group: 'C' },
+        { home: 'Szkocja',             away: 'Dania',                group: 'C' },
+        { home: 'Islandia',            away: 'Azerbejdżan',          group: 'D' },
+        { home: 'Francja',             away: 'Ukraina',              group: 'D' },
+        { home: 'Gruzja',              away: 'Bułgaria',             group: 'E' },
+        { home: 'Hiszpania',           away: 'Turcja',               group: 'E' },
+        { home: 'Węgry',               away: 'Armenia',              group: 'F' },
+        { home: 'Portugalia',          away: 'Irlandia',             group: 'F' },
+        { home: 'Holandia',            away: 'Litwa',                group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Malta',               away: 'Polska',               group: 'G', competitionLabel: 'Kwalifikacje MŚ 2026 – Gr. G' },
+        { home: 'Rumunia',             away: 'Cypr',                 group: 'H' },
+        { home: 'San Marino',          away: 'Bośnia i Hercegowina', group: 'H' },
+        { home: 'Izrael',              away: 'Włochy',               group: 'I' },
+        { home: 'Mołdawia',            away: 'Estonia',              group: 'I' },
+        { home: 'Kazachstan',          away: 'Walia',                group: 'J' },
+        { home: 'Macedonia Północna',  away: 'Liechtenstein',        group: 'J' },
+        { home: 'Andora',              away: 'Łotwa',                group: 'K' },
+        { home: 'Albania',             away: 'Anglia',               group: 'K' },
+        { home: 'Czarnogóra',          away: 'Chorwacja',            group: 'L' },
+        { home: 'Wyspy Owcze',         away: 'Gibraltar',            group: 'L' },
       ],
+    },
+    {
+      // 29 listopada 2025 — Losowanie par baraży MŚ 2026 UEFA
+      day: 29,
+      month: 10, // listopad
+      competitionLabel: 'Baraże MŚ 2026 – Losowanie',
+      eventType: 'WCQ_PLAYOFF_DRAW',
+      matches: [],
     },
   ],
 
-  // ── Sezon 2026/27 — PRZYKŁAD (do uzupełnienia) ──────────────────────────────
-  // Np. Liga Narodów, kwalifikacje Euro 2028 itp.
-  // 2026: [
-  //   { day: 5, month: 8, competitionLabel: 'Liga Narodów UEFA – Gr. B', matches: [...] },
-  // ],
+  // ── Sezon 2026 — Baraże MŚ 2026 (mecze w marcu 2026) ────────────────────────
+  // Klucz: 2026 (rok kalendarzowy marca 2026; CalendarEngine używa getFullYear = 2026)
+  2026: [
+    {
+      // 17 marca 2026 — Półfinały baraży
+      day: 17,
+      month: 2, // marzec
+      competitionLabel: 'Baraże MŚ 2026 – Półfinały',
+      eventType: 'WCQ_PLAYOFF_SF',
+      matches: [],
+    },
+    {
+      // 20 marca 2026 — Finały baraży
+      day: 20,
+      month: 2, // marzec
+      competitionLabel: 'Baraże MŚ 2026 – Finały',
+      eventType: 'WCQ_PLAYOFF_FINAL',
+      matches: [],
+    },
+  ],
 };
 
 /**

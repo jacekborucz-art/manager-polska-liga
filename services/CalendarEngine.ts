@@ -1069,17 +1069,27 @@ export const CalendarEngine = {
           const slotMonth = slot.start.getMonth(); // 0-11
           const slotDay   = slot.start.getDate();
           const yearSchedule = NT_SCHEDULE_BY_YEAR[slotYear];
-          const hasMatchDay = yearSchedule
-            ? yearSchedule.some(md => md.day === slotDay && md.month === slotMonth)
-            : false;
+          const matchDayEntry = yearSchedule
+            ? yearSchedule.find(md => md.day === slotDay && md.month === slotMonth)
+            : undefined;
+          const hasMatchDay = !!matchDayEntry;
 
-          if (hasMatchDay) {
+          if (hasMatchDay && matchDayEntry) {
+            // Określ targetView na podstawie eventType w NTMatchDay
+            let targetView: ViewState = ViewState.NATIONAL_TEAM_RESULTS;
+            if (matchDayEntry.eventType === 'WCQ_PLAYOFF_DRAW') {
+              targetView = ViewState.WCQ_PLAYOFF_DRAW_VIEW;
+            } else if (matchDayEntry.eventType === 'WCQ_PLAYOFF_SF') {
+              targetView = ViewState.WCQ_PLAYOFF_RESULTS_SF;
+            } else if (matchDayEntry.eventType === 'WCQ_PLAYOFF_FINAL') {
+              targetView = ViewState.WCQ_PLAYOFF_RESULTS_FINAL;
+            }
             // Mecze reprezentacji zaplanowane na ten dzień — symuluj w tle
             return {
               slot,
               kind: EventKind.NATIONAL_TEAM_MATCH,
               participation: 'background',
-              targetView: ViewState.NATIONAL_TEAM_RESULTS,
+              targetView,
             };
           }
         }

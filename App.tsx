@@ -53,6 +53,8 @@ import { PreMatchCLFinalView } from './components/views/PreMatchCLFinalView';
 import { PostMatchCLFinalView } from './components/views/PostMatchCLFinalView';
 import { EuropeanClubsView } from './components/views/EuropeanClubsView';
 import NationalTeamResultsView from './components/views/NationalTeamResultsView';
+import { WCQPlayoffDrawView } from './components/views/WCQPlayoffDrawView';
+import { WCQPlayoffResultsView } from './components/views/WCQPlayoffResultsView';
 import UEFASuperCupView from './components/views/UEFASuperCupView';
 import { ELDrawView } from './LECupEngine/ELDrawView';
 import { ELR2QDrawView } from './LECupEngine/ELR2QDrawView';
@@ -175,6 +177,12 @@ case ViewState.POST_MATCH_CONF_STUDIO:
 
 case ViewState.NATIONAL_TEAM_RESULTS:
   return <NationalTeamResultsView />;
+case ViewState.WCQ_PLAYOFF_DRAW_VIEW:
+  return <WCQPlayoffDrawView />;
+case ViewState.WCQ_PLAYOFF_RESULTS_SF:
+  return <WCQPlayoffResultsView mode="SF" />;
+case ViewState.WCQ_PLAYOFF_RESULTS_FINAL:
+  return <WCQPlayoffResultsView mode="FINAL" />;
 case ViewState.PLAYOFF_DRAW:
   return <PlayoffDrawView />;
 // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
