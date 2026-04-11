@@ -1,5 +1,6 @@
 import { Club, Player, TransferOffer } from '../types';
 import { FinanceService } from './FinanceService';
+import { PlayerCareerService } from './PlayerCareerService';
 
 interface TransferExecutionResult {
   updatedClubs: Club[];
@@ -46,22 +47,12 @@ export const TransferExecutionService = {
     const currentMonth = currentDate.getMonth() + 1;
     const buyerTier = FinanceService.getClubTier(buyerClub);
 
-    const updatedHistory = [...(player.history || [])];
-    if (updatedHistory.length > 0) {
-      updatedHistory[updatedHistory.length - 1] = {
-        ...updatedHistory[updatedHistory.length - 1],
-        toYear: currentYear,
-        toMonth: currentMonth
-      };
-    }
-    updatedHistory.push({
-      clubName: buyerClub.name,
-      clubId: buyerClub.id,
-      fromYear: currentYear,
-      fromMonth: currentMonth,
-      toYear: null,
-      toMonth: null
-    });
+    const updatedHistory = PlayerCareerService.movePlayer(
+      player,
+      { clubName: buyerClub.name, clubId: buyerClub.id },
+      currentYear,
+      currentMonth
+    );
 
     const transferredPlayer: Player = {
       ...player,

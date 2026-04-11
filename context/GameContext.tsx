@@ -80,6 +80,7 @@ import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationSer
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
+import { PlayerCareerService } from '../services/PlayerCareerService';
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -5945,29 +5946,15 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const transferLockoutDate = new Date(currentDate);
     transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
    // AKTUALIZACJA HISTORII - TUTAJ WSTAW TEN KOD
-    const updatedHistory = [...(playerToSign.history || [])];
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
     const userClub = clubs.find(c => c.id === userTeamId);
-
-    // 1. Zamknij okres bezrobocia
-    if (updatedHistory.length > 0) {
-      updatedHistory[updatedHistory.length - 1] = {
-        ...updatedHistory[updatedHistory.length - 1],
-        toYear: currentYear,
-        toMonth: currentMonth
-      };
-    }
-
-    // 2. Dodaj nowy klub do historii
-    updatedHistory.push({
-      clubName: userClub?.name || "Nieznany Klub",
-      clubId: userTeamId,
-      fromYear: currentYear,
-      fromMonth: currentMonth,
-      toYear: null,
-      toMonth: null
-    });
+    const updatedHistory = PlayerCareerService.movePlayer(
+      playerToSign,
+      { clubName: userClub?.name || 'Nieznany Klub', clubId: userTeamId },
+      currentYear,
+      currentMonth
+    );
 
     const updatedPlayer = { 
       ...playerToSign, 

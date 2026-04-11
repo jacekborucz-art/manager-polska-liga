@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
+import { PlayerCareerService } from '../../services/PlayerCareerService';
 
 export const PlayerCard: React.FC = () => {
  const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
@@ -28,7 +29,7 @@ export const PlayerCard: React.FC = () => {
             isDefaultActive: true,
             rosterIds: [],
             stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-            budget: 0, boardStrictness: 0, signingBonusPool: 0
+            budget: 0, boardStrictness: 0, signingBonusPool: 0, transferBudget: 0
           };
         }
         return { player, club: clubData! };
@@ -45,7 +46,6 @@ export const PlayerCard: React.FC = () => {
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
   const { player, club } = data;
-const [showHistory, setShowHistory] = React.useState(false);
   const isContractLocked = player.contractLockoutUntil && new Date(currentDate) < new Date(player.contractLockoutUntil);
   const isTransferLocked = player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil);
   const visibleInterestedClubs = (player.interestedClubs || []).filter(clubId => clubId !== player.clubId);
@@ -88,7 +88,7 @@ const [showHistory, setShowHistory] = React.useState(false);
     return (
       <div className="group flex flex-col gap-[2px] mb-1">
         <div className="flex justify-between items-center px-1">
-           <span className="text-[8px] font-black text-white uppercase tracking-widest drop-shadow">{label}</span>
+           <span className="text-[8px] font-black italic text-white uppercase tracking-tighter drop-shadow">{label}</span>
            <div className="flex items-center gap-1">
              {change !== undefined && change > 0 && <span className="text-emerald-400 text-[8px] font-black leading-none">▲</span>}
              {change !== undefined && change < 0 && <span className="text-rose-400 text-[8px] font-black leading-none">▼</span>}
@@ -104,6 +104,28 @@ const [showHistory, setShowHistory] = React.useState(false);
 
   const attrs = player.attributes || {} as PlayerAttributes;
   const seasonalChanges = player.stats?.seasonalChanges || {};
+  const formatCareerDate = (month: number | null, year: number | null) => {
+    if (!month || !year) return 'obecnie';
+    return `${String(month).padStart(2, '0')}/${year}`;
+  };
+  const careerRows = useMemo(() => {
+    return [...(player.history || [])]
+      .map((entry, index) => {
+        const isCurrentClubEntry = entry.toYear === null && entry.clubId === player.clubId;
+        const statsSnapshot: PlayerCareerStatsSnapshot | null = isCurrentClubEntry
+          ? PlayerCareerService.buildStatsSnapshot(player)
+          : entry.statsSnapshot || null;
+
+        return {
+          key: `${entry.clubId}-${entry.fromYear}-${entry.fromMonth}-${index}`,
+          entry,
+          isCurrentClubEntry,
+          periodLabel: `${formatCareerDate(entry.fromMonth, entry.fromYear)} - ${formatCareerDate(entry.toMonth, entry.toYear)}`,
+          statsSnapshot
+        };
+      })
+      .reverse();
+  }, [clubs, player]);
 
 
 
@@ -189,13 +211,6 @@ const [showHistory, setShowHistory] = React.useState(false);
               </div>
 
 <button 
-                onClick={() => setShowHistory(!showHistory)}
-                className="w-full py-2.5 rounded-[20px] bg-blue-600/20 border border-blue-500/30 text-blue-400 font-black italic uppercase tracking-widest text-[10px] transition-all hover:bg-blue-600/30 active:scale-95 shadow-xl mb-1"
-              >
-                {showHistory ? 'Ukryj Historię ↑' : 'Historia Zawodnika 📜'}
-              </button>
-
-              <button 
                 onClick={() => navigateWithoutHistory(closeTarget)}
                 className="w-full py-2.5 rounded-[20px] bg-white text-slate-900 font-black italic uppercase tracking-widest text-xs transition-all hover:scale-[1.02] active:scale-95 shadow-2xl"
               >
@@ -210,10 +225,10 @@ const [showHistory, setShowHistory] = React.useState(false);
 
         <div className="flex-1 p-4 overflow-hidden flex gap-4">
 
-          {/* ŚRODKOWY PANEL: atrybuty + statystyki + zdrowie */}
+          {/* ÅšRODKOWY PANEL: atrybuty + statystyki + zdrowie */}
           <div className="w-[480px] flex-shrink-0 flex flex-col gap-3 overflow-hidden">
 
-            {/* BOX ATRYBUTÓW */}
+            {/* BOX ATRYBUTÃ“W */}
             <div className="flex-1 bg-transparent rounded-[24px] border border-white/5 p-5 flex flex-col justify-center">
               <div className="grid grid-cols-2 gap-x-8">
                 <div>
@@ -303,7 +318,7 @@ const [showHistory, setShowHistory] = React.useState(false);
                     </div>
                   </div>
                   <div className="h-1.5 w-full bg-red-900/20 rounded-full overflow-hidden border border-white/5 relative">
-                    {/* Czerwona strefa długu */}
+                    {/* Czerwona strefa dÅ‚ugu */}
                     <div className="absolute inset-0 bg-black/60" style={{ left: `${100 - (player.fatigueDebt || 0)}%` }} />
                     {/* Pasek kondycji */}
                     <div className={`h-full ${condColor} transition-all duration-1000 relative z-10`} style={{ width: `${player.condition}%` }} />
@@ -313,12 +328,68 @@ const [showHistory, setShowHistory] = React.useState(false);
             </div>
 
           </div>
-
-          {/* PRAWY PANEL: kontrakt i wynagrodzenie */}
+          {/* PRAWY PANEL: historia + kontrakt i wynagrodzenie */}
           <div className="w-[300px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
-            <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
-              <span className="w-8 h-px bg-amber-400/30" /> Kontrakt i Wynagrodzenie
-            </h3>
+            <div className="rounded-[18px] border border-white/20 px-3 py-2" style={{ backgroundColor: 'rgba(30,41,59,0.92)' }}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="h-px w-5 bg-sky-400" />
+                <h3 className="text-[9px] font-black uppercase tracking-[0.28em] text-sky-300 drop-shadow">
+                  Przebieg Kariery
+                </h3>
+              </div>
+              {careerRows.length > 0 ? (
+                <div className="overflow-hidden rounded-[10px]" style={{ border: '1px solid rgba(180,140,60,0.5)' }}>
+                  <table className="w-full text-left" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'rgba(180,140,60,0.22)' }}>
+                        <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Okres</th>
+                        <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Klub</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>M</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\u26BD' }</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDC5F' }</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE8' }</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE5' }</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDCCA' }</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {careerRows.slice(0, 6).map(({ key, entry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
+                        <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? 'rgba(96,165,250,0.15)' : 'transparent' }}>
+                          <td className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
+                            {periodLabel}
+                          </td>
+                          <td className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
+                            <span className="block max-w-[92px] truncate">
+                              {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : entry.clubName}
+                            </span>
+                          </td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.yellowCards : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.redCards : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)' }}>
+                            {statsSnapshot?.averageRating !== null && statsSnapshot?.averageRating !== undefined
+                              ? statsSnapshot.averageRating.toFixed(1)
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-[10px] border border-dashed border-white/30 px-2 py-4 text-center font-black italic uppercase tracking-tighter text-[7px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  Brak historii
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
+                <span className="w-8 h-px bg-amber-400/30" /> Kontrakt i Wynagrodzenie
+              </h3>
+            </div>
             <div className="grid grid-cols-1 gap-2">
               <div className="bg-transparent p-3 rounded-[20px] border border-white/5 flex items-center justify-between group hover:border-emerald-500/30 transition-colors">
                 <div>
@@ -376,11 +447,11 @@ const [showHistory, setShowHistory] = React.useState(false);
               </div>
             </div>
 
-            {/* ── ZAINTERESOWANIE TRANSFEROWE ────────────────────────────────────
-                Wyświetla kluby AI, które aktualnie obserwują tego zawodnika.
-                Lista jest aktualizowana raz na miesiąc przez AiScoutingService.
-                W przyszłości: kliknięcie klubu → złożenie/odrzucenie oferty transferowej.
-            ────────────────────────────────────────────────────────────────────── */}
+            {/* â”€â”€ ZAINTERESOWANIE TRANSFEROWE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                WyÅ›wietla kluby AI, ktÃ³re aktualnie obserwujÄ… tego zawodnika.
+                Lista jest aktualizowana raz na miesiÄ…c przez AiScoutingService.
+                W przyszÅ‚oÅ›ci: klikniÄ™cie klubu â†’ zÅ‚oÅ¼enie/odrzucenie oferty transferowej.
+            â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {visibleInterestedClubs.length > 0 && (
               <div className="flex flex-col gap-2 mt-1">
                 <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
@@ -398,9 +469,9 @@ const [showHistory, setShowHistory] = React.useState(false);
                         <div
                           key={clubId}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-[12px] bg-white/5 border border-white/10 hover:border-violet-500/30 transition-all"
-                          // TODO: Po implementacji ofert transferowych — wnawigateTo(ViewState.TRANSFER_OFFER) lub podobne
+                          // TODO: Po implementacji ofert transferowych â€” wnawigateTo(ViewState.TRANSFER_OFFER) lub podobne
                         >
-                          {/* Mini podgląd barw klubu */}
+                          {/* Mini podglÄ…d barw klubu */}
                           <div className="w-5 h-5 rounded-md overflow-hidden border border-white/10 flex-shrink-0 flex flex-col">
                             <div className="flex-1" style={{ backgroundColor: interestedClub.colorsHex[0] }} />
                             <div className="flex-1" style={{ backgroundColor: interestedClub.colorsHex[1] || interestedClub.colorsHex[0] }} />
@@ -408,7 +479,7 @@ const [showHistory, setShowHistory] = React.useState(false);
                           <span className="text-[9px] font-black text-white uppercase tracking-tight drop-shadow">
                             {interestedClub.shortName}
                           </span>
-                          {/* Placeholder na przyszły przycisk akcji (oferta transferowa) */}
+                          {/* Placeholder na przyszÅ‚y przycisk akcji (oferta transferowa) */}
                           <span className="text-[8px] text-violet-400 opacity-60">👁️</span>
                         </div>
                       );
@@ -490,7 +561,7 @@ const [showHistory, setShowHistory] = React.useState(false);
                   >
                     {activeFreeAgentLockoutUntil
                       ? `Kontakt możliwy po ${new Date(activeFreeAgentLockoutUntil).toLocaleDateString('pl-PL')}`
-                      : "OTWÓRZ BIURO NEGOCJACJI 🤝"}
+                      : "OTWÓRZ BIURO NEGOCJACJI 🤝"}
                   </button>
                 ) : !isResigned ? (
                   <button
@@ -510,37 +581,6 @@ const [showHistory, setShowHistory] = React.useState(false);
           </div>
 
         </div>
-
-{showHistory && (
-          <div className="absolute left-[48%] top-[10%] w-[20%] max-h-[400px] bg-slate-900/95 border border-blue-500/30 rounded-[35px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-2xl z-[300] flex flex-col overflow-hidden animate-slide-up">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-blue-500/10">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em]">Przebieg Kariery</span>
-              <button onClick={() => setShowHistory(false)} className="text-slate-500 hover:text-white">&times;</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-3">
-              {player.history && player.history.length > 0 ? (
-                player.history.map((entry, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:bg-white/10 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center text-lg">⚽</div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-black text-white uppercase italic">{entry.clubId === 'FREE_AGENTS' ? 'BEZ KLUBU' : entry.clubName}</span>
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                          {entry.fromMonth}/{entry.fromYear} — {entry.toYear ? `${entry.toMonth}/${entry.toYear}` : '-'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-10 text-center opacity-30 italic text-xs font-black uppercase tracking-widest">Brak danych historycznych w rejestrze</div>
-              )}
-            </div>
-          </div>
-        )}
-
-
-
       </div>
 
       <style>{`
@@ -554,3 +594,5 @@ const [showHistory, setShowHistory] = React.useState(false);
     </div>
   );
 };
+
+

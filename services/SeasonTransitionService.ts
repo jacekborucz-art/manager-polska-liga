@@ -2,6 +2,7 @@ import { Player, PlayerPosition, Club, HealthStatus, Region, RetirementInfo } fr
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
+import { PlayerCareerService } from './PlayerCareerService';
 
 export const SeasonTransitionService = {
   /**
@@ -37,11 +38,12 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             ...player,
             clubId: 'FREE_AGENTS',
             annualSalary: 0,
-            history: [
-              ...player.history.slice(0, -1),
-              { ...player.history[player.history.length - 1], toYear: seasonEndDate.getFullYear(), toMonth: 7 },
-              { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS', fromYear: seasonEndDate.getFullYear(), fromMonth: 7, toYear: null, toMonth: null }
-            ]
+            history: PlayerCareerService.movePlayer(
+              player,
+              { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+              seasonEndDate.getFullYear(),
+              7
+            )
           };
           releasedPlayers.push(released);
           return; // nie trafia do nextSquad

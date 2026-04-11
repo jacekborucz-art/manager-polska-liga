@@ -4,6 +4,7 @@ import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { MailService } from '../../services/MailService';
+import { PlayerCareerService } from '../../services/PlayerCareerService';
 
 export const ContractManagementView: React.FC = () => {
   const { 
@@ -206,28 +207,14 @@ export const ContractManagementView: React.FC = () => {
    const playerToRelease = squad.find(p => p.id === viewedPlayerId)!;
     
     // AKTUALIZACJA HISTORII - TUTAJ WSTAW TEN KOD
-    const updatedHistory = [...(playerToRelease.history || [])];
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
-
-    // 1. Zamknij obecny kontrakt
-    if (updatedHistory.length > 0) {
-      updatedHistory[updatedHistory.length - 1] = {
-        ...updatedHistory[updatedHistory.length - 1],
-        toYear: currentYear,
-        toMonth: currentMonth
-      };
-    }
-
-    // 2. Dodaj wpis o bezrobociu
-    updatedHistory.push({
-      clubName: "BEZ KLUBU",
-      clubId: 'FREE_AGENTS',
-      fromYear: currentYear,
-      fromMonth: currentMonth,
-      toYear: null,
-      toMonth: null
-    });
+    const updatedHistory = PlayerCareerService.movePlayer(
+      playerToRelease,
+      { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+      currentYear,
+      currentMonth
+    );
 
     const releasedPlayer = { 
       ...playerToRelease, 

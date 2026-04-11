@@ -554,7 +554,15 @@ export interface PlayerStats {
   ratingHistory: number[]; 
 }
 
-// TUTAJ WSTAW TEN KOD:
+export interface PlayerCareerStatsSnapshot {
+  matchesPlayed: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  averageRating: number | null;
+}
+
 export interface PlayerHistoryEntry {
   clubName: string;
   clubId: string | 'FREE_AGENTS';
@@ -562,6 +570,7 @@ export interface PlayerHistoryEntry {
   fromMonth: number;
   toYear: number | null;
   toMonth: number | null;
+  statsSnapshot?: PlayerCareerStatsSnapshot;
 }
 
 export enum NegotiationStatus {

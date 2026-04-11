@@ -3,6 +3,7 @@ import { FinanceService as FinanceLogic } from './FinanceService';
 import { TransferSellerLogicService } from './TransferSellerLogicService';
 import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
 import { FreeAgentNegotiationService } from './FreeAgentNegotiationService';
+import { PlayerCareerService } from './PlayerCareerService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -438,22 +439,12 @@ processAiRecruitment: (
 
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
-        const updatedHistory = [...(fa.history || [])];
-        if (updatedHistory.length > 0) {
-          updatedHistory[updatedHistory.length - 1] = {
-            ...updatedHistory[updatedHistory.length - 1],
-            toYear: currentYear,
-            toMonth: currentMonth
-          };
-        }
-        updatedHistory.push({
-          clubName: aiClub.name,
-          clubId: aiClub.id,
-          fromYear: currentYear,
-          fromMonth: currentMonth,
-          toYear: null,
-          toMonth: null
-        });
+        const updatedHistory = PlayerCareerService.movePlayer(
+          fa,
+          { clubName: aiClub.name, clubId: aiClub.id },
+          currentYear,
+          currentMonth
+        );
 
         const signedPlayer: Player = {
           ...fa,
@@ -982,22 +973,12 @@ processAiRecruitment: (
 
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
-        const updatedHistory = [...(player.history || [])];
-        if (updatedHistory.length > 0) {
-          updatedHistory[updatedHistory.length - 1] = {
-            ...updatedHistory[updatedHistory.length - 1],
-            toYear: currentYear,
-            toMonth: currentMonth
-          };
-        }
-        updatedHistory.push({
-          clubName: buyerClub.name,
-          clubId: buyerClubId,
-          fromYear: currentYear,
-          fromMonth: currentMonth,
-          toYear: null,
-          toMonth: null
-        });
+        const updatedHistory = PlayerCareerService.movePlayer(
+          player,
+          { clubName: buyerClub.name, clubId: buyerClubId },
+          currentYear,
+          currentMonth
+        );
 
         const transferredPlayer: Player = {
           ...player,
@@ -1188,26 +1169,14 @@ performSeasonSquadReview: (
           if (decision === 'RELEASE') {
             const cost = candidate.annualSalary * 0.4;
             if (currentClub.budget >= cost) {
-              const updatedHistory = [...(candidate.history || [])];
               const currentYear = currentDate.getFullYear();
               const currentMonth = currentDate.getMonth() + 1;
-
-              if (updatedHistory.length > 0) {
-                updatedHistory[updatedHistory.length - 1] = {
-                  ...updatedHistory[updatedHistory.length - 1],
-                  toYear: currentYear,
-                  toMonth: currentMonth
-                };
-              }
-
-              updatedHistory.push({
-                clubName: 'BEZ KLUBU',
-                clubId: 'FREE_AGENTS',
-                fromYear: currentYear,
-                fromMonth: currentMonth,
-                toYear: null,
-                toMonth: null
-              });
+              const updatedHistory = PlayerCareerService.movePlayer(
+                candidate,
+                { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+                currentYear,
+                currentMonth
+              );
 
               const releasedPlayer: Player = {
                 ...candidate,
@@ -1323,22 +1292,12 @@ performSeasonSquadReview: (
             if (canRelease) {
               const currentYear = currentDate.getFullYear();
               const currentMonth = currentDate.getMonth() + 1;
-              const updatedHistory = [...(player.history || [])];
-              if (updatedHistory.length > 0) {
-                updatedHistory[updatedHistory.length - 1] = {
-                  ...updatedHistory[updatedHistory.length - 1],
-                  toYear: currentYear,
-                  toMonth: currentMonth
-                };
-              }
-              updatedHistory.push({
-                clubName: 'BEZ KLUBU',
-                clubId: 'FREE_AGENTS',
-                fromYear: currentYear,
-                fromMonth: currentMonth,
-                toYear: null,
-                toMonth: null
-              });
+              const updatedHistory = PlayerCareerService.movePlayer(
+                player,
+                { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+                currentYear,
+                currentMonth
+              );
               const releasedPlayer: Player = {
                 ...player,
                 clubId: 'FREE_AGENTS',

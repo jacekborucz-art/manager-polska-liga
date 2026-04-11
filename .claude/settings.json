@@ -9,7 +9,11 @@
       "Bash(grep -rl \"MOJA LISTA\\\\|FUNDUSZE TRANSFEROWE\\\\|DOSTĘPNE FUNDUSZE\" 'c:/Users/Jack Cave/Documents/FM google studio/Last version' --include=*.tsx)",
       "Bash(npx tsx:*)",
       "Bash(npx ts-node:*)",
-      "Bash(grep -v \"^//\")"
+      "Bash(grep -v \"^//\")",
+      "Bash(python _fix_encoding.py)",
+      "Bash(python _check.py)",
+      "Bash(python _debug.py)",
+      "Bash(python _fix2.py)"
     ]
   }
 }
