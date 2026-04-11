@@ -212,7 +212,7 @@ export const AiScoutingService = {
       // F) Scouting młodych talentów — zawsze aktywny, niezależnie od pilności potrzeb.
       //    Klub może wziąć na oko perspektywicznego gracza z gorszego klubu,
       //    nawet jeśli aktualna kadra jest kompletna.
-      const youngTalents = AiScoutingService._youngTalentScouting(club, allPlayers, clubs, coachSeed);
+      const youngTalents = AiScoutingService._youngTalentScouting(club, allPlayers, clubs, coachSeed, currentDate);
       candidates.push(...youngTalents);
 
       // G) Scouting gemów z tier 4 — zawodnik zbyt dobry na swoją ligę.
@@ -566,7 +566,8 @@ export const AiScoutingService = {
     club: Club,
     allPlayers: Player[],
     allClubs: Club[],
-    coachSeed: number
+    coachSeed: number,
+    currentDate: Date
   ): { player: Player; score: number }[] => {
     const idealOvr = 30 + club.reputation * 4.5;
 
