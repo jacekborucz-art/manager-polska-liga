@@ -280,6 +280,18 @@ export interface CoachHistoryEntry {
   toMonth: number | null;
 }
 
+export interface CoachSeasonStats {
+  season: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  finalRank: number;
+  leagueId: string;
+  cupReached: 'NONE' | 'R64' | 'R32' | 'R16' | 'R8' | 'QUARTER' | 'SEMI' | 'FINAL' | 'WINNER';
+}
+
 export interface Coach {
   id: string;
   firstName: string;
@@ -299,6 +311,7 @@ export interface Coach {
     neutral: string;
     defensive: string;
   };
+  seasonStats: CoachSeasonStats[];
 }
 
 export interface MailMessage {

@@ -24,7 +24,8 @@ Region,
 YouthPlayer,
 Scout,
 MatchHistoryEntry,
-WCQPlayoffState
+WCQPlayoffState,
+CoachSeasonStats
 } from '../types';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -772,16 +773,56 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 // 4. Aktualizacja Klubów i Trenerów (Nagrody i Kary)
     const updatedCoaches = { ...coaches };
     
-    // Funkcja pomocnicza do zmiany parametrów trenera
-    const adjustCoach = (coachId: string | undefined, min: number, max: number) => {
+    // Funkcja pomocnicza do zmiany parametrów trenera (per-atrybut)
+    const adjustCoachIndividual = (coachId: string | undefined, exp: number, dec: number, mot: number, tra: number) => {
       if (!coachId || !updatedCoaches[coachId]) return;
-      const amount = Math.floor(Math.random() * (max - min + 1)) + min;
       const c = updatedCoaches[coachId];
-      Object.keys(c.attributes).forEach(attr => {
-        const key = attr as keyof typeof c.attributes;
-        c.attributes[key] = Math.max(1, Math.min(99, c.attributes[key] + amount));
-      });
+      c.attributes.experience     = Math.max(1, Math.min(99, c.attributes.experience     + exp));
+      c.attributes.decisionMaking = Math.max(1, Math.min(99, c.attributes.decisionMaking + dec));
+      c.attributes.motivation     = Math.max(1, Math.min(99, c.attributes.motivation     + mot));
+      c.attributes.training       = Math.max(1, Math.min(99, c.attributes.training       + tra));
     };
+
+    // Pomocnicza: ustal najgłębszą rundę pucharu na podstawie historii meczów
+    const getCupReached = (clubId: string): CoachSeasonStats['cupReached'] => {
+      if (clubId === cupWinnerId) return 'WINNER';
+      const cupFixtures = allFixtures.filter(f =>
+        f.leagueId === CompetitionType.POLISH_CUP &&
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === clubId || f.awayTeamId === clubId)
+      );
+      if (cupFixtures.length === 0) return 'NONE';
+      const roundPriority: Array<[string, CoachSeasonStats['cupReached']]> = [
+        ['FINAŁ', 'FINAL'],
+        ['1/2',   'SEMI'],
+        ['1/4',   'QUARTER'],
+        ['1/8',   'R8'],
+        ['1/16',  'R16'],
+        ['1/32',  'R32'],
+        ['1/64',  'R64'],
+      ];
+      for (const [keyword, level] of roundPriority) {
+        if (cupFixtures.some(f => f.id.includes(keyword))) return level;
+      }
+      return 'NONE';
+    };
+
+    // Zapis statystyk sezonu do trenera (przed resetem club.stats)
+    clubs.forEach(club => {
+      if (!club.coachId || !updatedCoaches[club.coachId]) return;
+      if (club.leagueId !== 'L_PL_1' && club.leagueId !== 'L_PL_2' && club.leagueId !== 'L_PL_3') return;
+      const leagueClubs = clubs.filter(c => c.leagueId === club.leagueId);
+      const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+      const finalRank = sorted.findIndex(c => c.id === club.id) + 1;
+      const stat: CoachSeasonStats = {
+        season: newYear - 1,
+        wins: club.stats.wins, draws: club.stats.draws, losses: club.stats.losses,
+        goalsFor: club.stats.goalsFor, goalsAgainst: club.stats.goalsAgainst,
+        finalRank, leagueId: club.leagueId, cupReached: getCupReached(club.id)
+      };
+      const c = updatedCoaches[club.coachId];
+      c.seasonStats = [...(c.seasonStats || []).slice(-4), stat];
+    });
 
     const updatedClubs = clubs.map(club => {
       let newLeagueId = club.leagueId;
@@ -789,35 +830,88 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       const isUser = club.id === userTeamId;
 
       // Logika awansów / spadków i kar/nagród dla trenerów AI
-      if (relegateFromL1Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_2'; newReputation = Math.max(1, newReputation - 1); 
-        if (!isUser) adjustCoach(club.coachId, -1, -1);
+      if (relegateFromL1Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_2'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
       }
-      else if (promoteFromL2Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_1'; newReputation = Math.min(10, newReputation + 1); 
-        if (!isUser) adjustCoach(club.coachId, 1, 2);
+      else if (promoteFromL2Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_1'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
       }
-      else if (relegateFromL2Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_3'; newReputation = Math.max(1, newReputation - 1); 
-        if (!isUser) adjustCoach(club.coachId, -1, -1);
+      else if (relegateFromL2Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_3'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
       }
-      else if (promoteFromL3Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_2'; newReputation = Math.min(10, newReputation + 1); 
-        if (!isUser) adjustCoach(club.coachId, 1, 2);
+      else if (promoteFromL3Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_2'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
       }
-      else if (relegateFromL3Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_4'; newReputation = Math.max(1, newReputation - 1); 
-        if (!isUser) adjustCoach(club.coachId, -1, -1);
+      else if (relegateFromL3Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_4'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
       }
-      else if (promoteFromL4Ids.includes(club.id)) { 
-        newLeagueId = 'L_PL_3'; newReputation = Math.min(10, newReputation + 1); 
-        if (!isUser) adjustCoach(club.coachId, 1, 2);
+      else if (promoteFromL4Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_3'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
       }
 
       // Nagroda za Mistrzostwo i Puchar
       if (!isUser) {
-        if (club.id === champion?.id) adjustCoach(club.coachId, 1, 3);
-        if (club.id === cupWinnerId) adjustCoach(club.coachId, 1, 3);
+        if (club.id === champion?.id) adjustCoachIndividual(club.coachId, 3, 2, 3, 1);
+        if (club.id === cupWinnerId) adjustCoachIndividual(club.coachId, 2, 1, 3, 1);
+      }
+
+      // Ewaluacja per-statystyki (tylko AI, ligi polskie)
+      if (!isUser && club.coachId && (club.leagueId === 'L_PL_1' || club.leagueId === 'L_PL_2' || club.leagueId === 'L_PL_3')) {
+        const leagueClubs = clubs.filter(c => c.leagueId === club.leagueId);
+        const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const rank = sorted.findIndex(c => c.id === club.id) + 1;
+        const teamCount = leagueClubs.length;
+        const expectedRank = Math.max(1, 15 - club.reputation);
+        const overperform = expectedRank - rank;
+        const played = club.stats.played || 34;
+        const winRate = played > 0 ? club.stats.wins / played : 0;
+
+        // Doświadczenie: +1 za przeżycie pełnego sezonu
+        if (played >= 25) adjustCoachIndividual(club.coachId, 1, 0, 0, 0);
+
+        // Decyzyjność: rank vs oczekiwany
+        if (overperform >= 5 && Math.random() < 0.5)  adjustCoachIndividual(club.coachId, 0, 1, 0, 0);
+        if (overperform <= -5 && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, -1, 0, 0);
+
+        // Motywacja: win rate
+        if (winRate >= 0.55) adjustCoachIndividual(club.coachId, 0, 0, 1, 0);
+        if (winRate <= 0.30) adjustCoachIndividual(club.coachId, 0, 0, -1, 0);
+
+        // Trening: bramki zdobyte vs średnia ligowa
+        const tierGoalAvg = club.leagueId === 'L_PL_1' ? 35 : club.leagueId === 'L_PL_2' ? 30 : 28;
+        if (club.stats.goalsFor >= tierGoalAvg * 1.2) adjustCoachIndividual(club.coachId, 0, 0, 0, 1);
+        if (club.stats.goalsFor <= tierGoalAvg * 0.8) adjustCoachIndividual(club.coachId, 0, 0, 0, -1);
+
+        // Top 3 bez awansu — losowy bonus motywacji
+        const alreadyPromoted = promoteFromL2Ids.includes(club.id) || promoteFromL3Ids.includes(club.id) || promoteFromL4Ids.includes(club.id);
+        if (rank <= 3 && !alreadyPromoted && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, 0, 1, 0);
+
+        // Ostatnie 3 bez spadku — losowa kara
+        const alreadyRelegated = relegateFromL1Ids.includes(club.id) || relegateFromL2Ids.includes(club.id) || relegateFromL3Ids.includes(club.id);
+        if (rank >= teamCount - 2 && !alreadyRelegated && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, -1, -1, 0);
+
+        // Puchar — bonusy i kary na podstawie getCupReached
+        const coachStat = updatedCoaches[club.coachId]?.seasonStats?.slice(-1)[0];
+        if (coachStat) {
+          // Kara dla silnej drużyny za wylot w 1. rundzie
+          if (club.reputation >= 7 && coachStat.cupReached === 'R64' && Math.random() < 0.4) {
+            adjustCoachIndividual(club.coachId, 0, 0, -1, 0);
+          }
+          // Bonus dla słabej drużyny za finał lub półfinał
+          if (club.reputation <= 3 && (coachStat.cupReached === 'FINAL' || coachStat.cupReached === 'SEMI') && Math.random() < 0.7) {
+            adjustCoachIndividual(club.coachId, 1, 1, 1, 0);
+          }
+          // Bonus za dotarcie do finału (finalista, nie zwycięzca)
+          if (coachStat.cupReached === 'FINAL' && Math.random() < 0.5) {
+            adjustCoachIndividual(club.coachId, 1, 0, 1, 0);
+          }
+        }
       }
 
       const newTier = parseInt(newLeagueId.split('_')[2]) || 4;

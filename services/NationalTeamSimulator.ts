@@ -100,6 +100,7 @@ const fallbackCoach = (teamId: string): Coach => ({
   hiredDate: new Date(2025, 0, 1).toISOString(),
   blacklist: {},
   favoriteTactics: { offensive: '4-3-3 Atak', neutral: '4-4-2', defensive: '5-3-2' },
+  seasonStats: [],
 });
 
 const activePlayers = (lt: LiveTeam) => lt.activeXI.map(id => lt.squad.find(p => p.id === id) ?? null).filter(Boolean) as Player[];

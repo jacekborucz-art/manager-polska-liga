@@ -122,7 +122,8 @@ createRandomCoach: (isPolish: boolean): Coach => {
         neutral: randomTactic(TACTICS_NEUTRAL),
         defensive: randomTactic(TACTICS_DEFENSIVE)
       },
-      history: []
+      history: [],
+      seasonStats: []
     };
   },
 
@@ -165,7 +166,8 @@ createRandomCoach: (isPolish: boolean): Coach => {
             neutral: randomTactic(TACTICS_NEUTRAL),
             defensive: randomTactic(TACTICS_DEFENSIVE)
           },
-          history: []
+          history: [],
+          seasonStats: []
         });
       }
     });

@@ -68,25 +68,33 @@ export const CoachCard: React.FC = () => {
     </div>
   );
 
+  const clubLogoUrl = currentClub?.logoFile
+    ? new URL(`../../Graphic/logo/${currentClub.logoFile}`, import.meta.url).href
+    : null;
+
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in" style={{ backgroundImage: "url('/Graphic/themes/trener.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in font-black italic uppercase tracking-tighter" style={{ backgroundImage: "url('/Graphic/themes/trener.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <div className="absolute inset-0 bg-black/80" />
       <div className="max-w-4xl w-full bg-slate-900/20 backdrop-blur-sm rounded-[45px] border border-white/10 shadow-2xl flex overflow-hidden h-[700px] relative z-10">
-        
+
         {/* Left Profile */}
         <div className="w-1/3 bg-black/20 p-10 flex flex-col items-center border-r border-white/5">
           <div className="w-32 h-32 rounded-full bg-slate-800 border-4 border-white/5 flex items-center justify-center text-5xl mb-6">👨‍💼</div>
-          <h2 className="text-2xl font-black text-white text-center uppercase italic">{coach.firstName} {coach.lastName}</h2>
-          <span className="text-blue-500 font-bold mt-2">{coach.nationalityFlag} {coach.nationality} • {coach.age} lat</span>
-          
-          <div className="mt-10 w-full p-6 bg-white/5 rounded-3xl border border-white/5">
-            <span className="block text-[8px] font-black text-slate-500 uppercase mb-2">Obecny Klub</span>
-            <span className="text-sm font-bold text-white uppercase italic">{currentClub?.name || currentNT?.name || 'Bezrobotny'}</span>
+          <h2 className="text-2xl text-white text-center">{coach.firstName} {coach.lastName}</h2>
+          <span className="text-blue-500 mt-2 text-xs">{coach.nationalityFlag} • {coach.age} lat</span>
+
+          <div className="mt-10 w-full p-6 bg-white/5 rounded-3xl border border-white/5 flex flex-col items-center gap-3">
+            <span className="block text-[8px] text-slate-500 tracking-[0.3em] self-start">Obecny Klub</span>
+            {clubLogoUrl
+              ? <img src={clubLogoUrl} alt="" className="w-16 h-16 object-contain" />
+              : <div className="w-16 h-16 flex items-center justify-center text-3xl">🏟️</div>
+            }
+            <span className="text-sm text-white text-center">{currentClub?.name || currentNT?.name || 'Bezrobotny'}</span>
           </div>
 
-          <button 
+          <button
             onClick={() => navigateTo(previousViewState || ViewState.DASHBOARD)}
-            className="mt-auto w-full py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl text-xs hover:scale-105 transition-all"
+            className="mt-auto w-full py-4 bg-white text-black text-xs hover:scale-105 transition-all rounded-2xl tracking-[0.2em]"
           >
             Zamknij
           </button>
@@ -94,7 +102,7 @@ export const CoachCard: React.FC = () => {
 
         {/* Right Stats & History */}
         <div className="flex-1 p-10 overflow-y-auto custom-scrollbar">
-          <h3 className="text-xs font-black text-yellow-500 uppercase tracking-[0.4em] mb-8">Atrybuty Trenerskie</h3>
+          <h3 className="text-xs text-yellow-500 tracking-[0.4em] mb-8">Atrybuty Trenerskie</h3>
           <div className="grid grid-cols-2 gap-x-10">
             <StatBar label="Doświadczenie" value={coach.attributes.experience} />
             <StatBar label="Motywacja" value={coach.attributes.motivation} />
@@ -102,7 +110,7 @@ export const CoachCard: React.FC = () => {
             <StatBar label="Trening" value={coach.attributes.training} />
           </div>
 
-          <h3 className="text-xs font-black text-yellow-500 uppercase tracking-[0.4em] mt-12 mb-6">Ulubione Taktyki</h3>
+          <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-6">Ulubione Taktyki</h3>
           <div className="grid grid-cols-3 gap-4 mb-12">
             {[
               { label: 'Ofensywna',  tactic: coach.favoriteTactics.offensive,  color: 'text-orange-400', accent: '#f97316' },
@@ -110,25 +118,102 @@ export const CoachCard: React.FC = () => {
               { label: 'Defensywna', tactic: coach.favoriteTactics.defensive,  color: 'text-teal-400',   accent: '#2dd4bf' },
             ].map(({ label, tactic, color, accent }) => (
               <div key={label} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center gap-3">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${color}`}>{label}</span>
+                <span className={`text-[9px] tracking-[0.3em] ${color}`}>{label}</span>
                 <TacticDiagram tactic={tactic} accent={accent} />
-                <span className="text-[10px] font-bold text-white text-center">{tactic}</span>
+                <span className="text-[10px] text-white text-center">{tactic}</span>
               </div>
             ))}
           </div>
 
-          <h3 className="text-xs font-black text-yellow-500 uppercase tracking-[0.4em] mt-12 mb-6">Historia Kariery</h3>
-          <div className="space-y-3">
-            {coach.history.map((h, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                <div>
-                  <span className="block text-sm font-bold text-white uppercase italic">{h.clubName}</span>
-                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{h.fromMonth}/{h.fromYear} — {h.toYear ? `${h.toMonth}/${h.toYear}` : 'obecnie'}</span>
-                </div>
-                <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center">🏟️</div>
-              </div>
-            ))}
+          <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-4">Historia Kariery</h3>
+          <div className="rounded-2xl overflow-hidden border border-white/10">
+            <table className="w-full text-[10px] border-collapse">
+              <thead>
+                <tr className="bg-white/5 border-b border-white/10">
+                  <th className="text-left py-2 px-3 text-slate-500 tracking-[0.2em] font-black">Od</th>
+                  <th className="text-left py-2 px-3 text-slate-500 tracking-[0.2em] font-black">Klub</th>
+                  <th className="text-center py-2 px-3 text-green-500 tracking-[0.2em] font-black">W</th>
+                  <th className="text-center py-2 px-3 text-yellow-500 tracking-[0.2em] font-black">R</th>
+                  <th className="text-center py-2 px-3 text-red-500 tracking-[0.2em] font-black">P</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coach.history.map((h, i) => {
+                  const matchingStats = (coach.seasonStats || []).filter(s =>
+                    s.season >= h.fromYear && (h.toYear === null || s.season < h.toYear)
+                  );
+                  const totalW = matchingStats.reduce((acc, s) => acc + s.wins, 0);
+                  const totalD = matchingStats.reduce((acc, s) => acc + s.draws, 0);
+                  const totalL = matchingStats.reduce((acc, s) => acc + s.losses, 0);
+                  const hasStats = matchingStats.length > 0;
+                  return (
+                    <tr key={i} className={`border-b border-white/5 ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                      <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{h.fromMonth}/{h.fromYear}</td>
+                      <td className="py-2 px-3 text-white">{h.clubName}</td>
+                      <td className="py-2 px-3 text-center text-green-400">{hasStats ? totalW : '—'}</td>
+                      <td className="py-2 px-3 text-center text-yellow-400">{hasStats ? totalD : '—'}</td>
+                      <td className="py-2 px-3 text-center text-red-400">{hasStats ? totalL : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+
+          {coach.seasonStats && coach.seasonStats.length > 0 && (
+            <>
+              <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-4">Statystyki Sezonów</h3>
+              <div className="rounded-2xl overflow-hidden border border-white/10">
+                <table className="w-full text-[10px] border-collapse">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="text-left py-2 px-3 text-slate-500 tracking-[0.2em] font-black">Sezon</th>
+                      <th className="text-left py-2 px-3 text-slate-500 tracking-[0.2em] font-black">Liga</th>
+                      <th className="text-center py-2 px-2 text-slate-500 tracking-[0.2em] font-black">#</th>
+                      <th className="text-center py-2 px-2 text-green-500 tracking-[0.2em] font-black">W</th>
+                      <th className="text-center py-2 px-2 text-yellow-500 tracking-[0.2em] font-black">R</th>
+                      <th className="text-center py-2 px-2 text-red-500 tracking-[0.2em] font-black">P</th>
+                      <th className="text-center py-2 px-2 text-slate-500 tracking-[0.2em] font-black">Bramki</th>
+                      <th className="text-left py-2 px-3 text-amber-500 tracking-[0.2em] font-black">Puchar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...coach.seasonStats].reverse().map((s, i) => {
+                      const gd = s.goalsFor - s.goalsAgainst;
+                      const cupLabel: Record<string, string> = {
+                        'WINNER':  '🏆 Zdobywca',
+                        'FINAL':   'Finalista',
+                        'SEMI':    '1/2 finału',
+                        'QUARTER': '1/4 finału',
+                        'R8':      '1/8 finału',
+                        'R16':     '1/16',
+                        'R32':     '1/32',
+                        'R64':     '1/64',
+                        'NONE':    '—',
+                      };
+                      const leagueLabel: Record<string, string> = {
+                        'L_PL_1': 'Ekstraklasa',
+                        'L_PL_2': '1. Liga',
+                        'L_PL_3': '2. Liga',
+                      };
+                      return (
+                        <tr key={i} className={`border-b border-white/5 ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                          <td className="py-2 px-3 text-white whitespace-nowrap">{s.season}/{s.season + 1}</td>
+                          <td className="py-2 px-3 text-slate-300">{leagueLabel[s.leagueId] || s.leagueId}</td>
+                          <td className="py-2 px-2 text-center text-slate-400">#{s.finalRank}</td>
+                          <td className="py-2 px-2 text-center text-green-400">{s.wins}</td>
+                          <td className="py-2 px-2 text-center text-yellow-400">{s.draws}</td>
+                          <td className="py-2 px-2 text-center text-red-400">{s.losses}</td>
+                          <td className="py-2 px-2 text-center text-white whitespace-nowrap">{s.goalsFor}:{s.goalsAgainst} <span className={gd >= 0 ? 'text-green-400' : 'text-red-400'}>({gd >= 0 ? '+' : ''}{gd})</span></td>
+                          <td className="py-2 px-3 text-amber-400">{cupLabel[s.cupReached]}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
