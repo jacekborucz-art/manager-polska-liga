@@ -3252,6 +3252,9 @@ setMessages([welcomeMail, fanMail]);
       const review = AiContractService.performSeasonSquadReview(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
       postReviewClubs = review.updatedClubs;
       postReviewPlayers = review.updatedPlayers;
+      const weakReviewSummer = AiContractService.processWeakPlayerContractCuts(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = weakReviewSummer.updatedClubs;
+      postReviewPlayers = weakReviewSummer.updatedPlayers;
       postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       

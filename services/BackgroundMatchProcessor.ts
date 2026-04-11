@@ -82,28 +82,35 @@ if (todayFixtures.length === 0) {
       const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId);
       const transferResolvedUpdate = AiContractService.resolveAiTransferPending(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
 
-      // Miesięczna aktualizacja zainteresowań transferowych (tylko 1. dzień miesiąca).
+      // Aktualizacja zainteresowań transferowych: 1. każdego miesiąca + 12 stycznia (otwarcie okna zimowego).
       // AI-kluby przeglądają rynek i aktualizują swoje listy obserwowanych zawodników.
+      let scoutedClubs = transferResolvedUpdate.updatedClubs;
       let scoutedPlayers = transferResolvedUpdate.updatedPlayers;
-      if (currentDate.getDate() === 1) {
+      const isScoutingDay = currentDate.getDate() === 1 || (currentDate.getMonth() === 0 && currentDate.getDate() === 12);
+      if (isScoutingDay) {
         scoutedPlayers = AiScoutingService.updateTransferInterests(
-          transferResolvedUpdate.updatedClubs,
-          transferResolvedUpdate.updatedPlayers,
+          scoutedClubs,
+          scoutedPlayers,
           currentDate,
           userTeamId,
           sessionSeed
         );
         scoutedPlayers = AiContractService.processMonthlyPlayerReview(
-          transferResolvedUpdate.updatedClubs,
+          scoutedClubs,
           scoutedPlayers,
           currentDate,
           userTeamId
         ).updatedPlayers;
       }
+      if (currentDate.getMonth() === 0 && currentDate.getDate() === 12) {
+        const weakReviewWinter = AiContractService.processWeakPlayerContractCuts(scoutedClubs, scoutedPlayers, currentDate, userTeamId);
+        scoutedClubs = weakReviewWinter.updatedClubs;
+        scoutedPlayers = weakReviewWinter.updatedPlayers;
+      }
 
       return {
         updatedFixtures: fixtures,
-        updatedClubs: transferResolvedUpdate.updatedClubs,
+        updatedClubs: scoutedClubs,
         updatedPlayers: scoutedPlayers,
         updatedLineups: newLineups,
         newOffers: recruitmentUpdate.newOffers,
@@ -466,8 +473,9 @@ if (todayFixtures.length === 0) {
     currentPlayers = transferResolvedFinal.updatedPlayers;
     const newOffers = finalUpdate.newOffers;
 
-    // Miesięczna aktualizacja zainteresowań transferowych — dotyczy też dni meczowych.
-    if (currentDate.getDate() === 1) {
+    // Aktualizacja zainteresowań transferowych — dotyczy też dni meczowych.
+    const isScoutingDayMatch = currentDate.getDate() === 1 || (currentDate.getMonth() === 0 && currentDate.getDate() === 12);
+    if (isScoutingDayMatch) {
       currentPlayers = AiScoutingService.updateTransferInterests(
         currentClubs,
         currentPlayers,
@@ -482,11 +490,16 @@ if (todayFixtures.length === 0) {
         userTeamId
       ).updatedPlayers;
     }
+    if (currentDate.getMonth() === 0 && currentDate.getDate() === 12) {
+      const weakReviewWinterMatch = AiContractService.processWeakPlayerContractCuts(currentClubs, currentPlayers, currentDate, userTeamId);
+      currentClubs = weakReviewWinterMatch.updatedClubs;
+      currentPlayers = weakReviewWinterMatch.updatedPlayers;
+    }
 
-    return { 
-      
-      updatedFixtures: currentFixtures, 
-      updatedClubs: currentClubs, 
+    return {
+
+      updatedFixtures: currentFixtures,
+      updatedClubs: currentClubs,
       updatedPlayers: currentPlayers, 
       updatedLineups: newLineups,
       newOffers: newOffers,

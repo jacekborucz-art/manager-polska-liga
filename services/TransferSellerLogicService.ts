@@ -170,7 +170,7 @@ export const TransferSellerLogicService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
 
-    if (player.isOnTransferList) multiplier -= 0.18;
+    if (player.isOnTransferList) multiplier -= Math.random() * 0.25;
     if (daysLeft > 0 && daysLeft < 180) multiplier -= 0.20;
     else if (daysLeft > 0 && daysLeft < 365) multiplier -= 0.10;
 
@@ -193,7 +193,7 @@ export const TransferSellerLogicService = {
     const financialPressure = sellerClub.budget < Math.max(baseValue * 0.75, 3_000_000);
     if (financialPressure) multiplier -= 0.05;
 
-    let minimumMultiplier = player.isOnTransferList ? 0.82 : 1.0;
+    let minimumMultiplier = player.isOnTransferList ? 0.75 : 1.0;
     if (daysLeft > 365 && !player.isOnTransferList) {
       minimumMultiplier = Math.max(minimumMultiplier, 1.02);
     }

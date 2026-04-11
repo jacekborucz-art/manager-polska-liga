@@ -205,7 +205,7 @@ export const AiScoutingService = {
       // E) Jeśli klub nie ma pilnych potrzeb ale ma budżet → "okazjonalne scouting"
       //    Symuluje sytuację gdy skaut natknął się na ciekawego zawodnika przypadkowo
       if (needs.length === 0 && club.budget > 300_000) {
-        const opportunistic = AiScoutingService._opportunisticScouting(club, allPlayers, coachSeed);
+        const opportunistic = AiScoutingService._opportunisticScouting(club, allPlayers, coachSeed, clubs);
         candidates.push(...opportunistic);
       }
 
@@ -384,6 +384,13 @@ export const AiScoutingService = {
         idealOvr
       );
       if (estimatedCost > maxAffordableValue * affordabilityMultiplier && p.clubId !== 'FREE_AGENTS') return false;
+      // Filtr reputacyjny: zawodnik nie zgodzi się na zbyt duży spadek reputacyjny.
+      // 2% szansy na pominięcie filtru — symuluje rzadki "transfer życia" wbrew logice.
+      if (sellerClub && p.clubId !== 'FREE_AGENTS' && Math.random() >= 0.02) {
+        const repGap = sellerClub.reputation - club.reputation;
+        const maxRepGap = p.isOnTransferList ? 6 : 4;
+        if (repGap > maxRepGap) return false;
+      }
       // Nie kontuzjowany ciężko (klub nie interesuje się kontuzjowanymi na długo)
       if (p.health.status === HealthStatus.INJURED && (p.health.injury?.daysRemaining || 0) > 60) return false;
       return true;
@@ -459,7 +466,8 @@ export const AiScoutingService = {
   _opportunisticScouting: (
     club: Club,
     allPlayers: Player[],
-    coachSeed: number
+    coachSeed: number,
+    allClubs: Club[]
   ): { player: Player; score: number }[] => {
 
     const idealOvr = 30 + club.reputation * 4.5;
@@ -467,12 +475,18 @@ export const AiScoutingService = {
     const minOvr = idealOvr - 20;
     const maxOvr = idealOvr + 8;
 
-    const pool = allPlayers.filter(p =>
-      p.clubId !== club.id &&
-      p.overallRating >= minOvr &&
-      p.overallRating <= maxOvr &&
-      p.health.status !== HealthStatus.INJURED
-    );
+    const pool = allPlayers.filter(p => {
+      if (p.clubId === club.id) return false;
+      if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;
+      if (p.health.status === HealthStatus.INJURED) return false;
+      // Filtr reputacyjny: nie "przypadkowo odkrywamy" zawodników z klubów o znacznie wyższej reputacji.
+      // 2% szansy na pominięcie filtru — rzadki "transfer życia".
+      if (p.clubId !== 'FREE_AGENTS' && Math.random() >= 0.02) {
+        const playerClub = allClubs.find(c => c.id === p.clubId);
+        if (playerClub && playerClub.reputation > club.reputation + 4) return false;
+      }
+      return true;
+    });
 
     if (pool.length === 0) return [];
 
@@ -559,6 +573,8 @@ export const AiScoutingService = {
     const talents = allPlayers.filter(p => {
       // Wyklucz własnych zawodników
       if (p.clubId === club.id) return false;
+      // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
+      if (p.transferOfferBanUntil && currentDate < new Date(p.transferOfferBanUntil)) return false;
       // Tylko wąskie okno wiekowe "talent discovery"
       if (p.age < 17 || p.age > 21) return false;
       // OVR musi być sensowny dla obserwującego klubu (nie poniżej progu)
@@ -631,6 +647,8 @@ export const AiScoutingService = {
 
     const gems = allPlayers.filter(p => {
       if (!tier4ClubIds.has(p.clubId || '')) return false;
+      // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
+      if (p.transferOfferBanUntil && currentDate < new Date(p.transferOfferBanUntil)) return false;
       const playerClub = allClubs.find(c => c.id === p.clubId);
       if (!playerClub) return false;
       const clubIdealOvr = 30 + playerClub.reputation * 4.5;

@@ -96,7 +96,12 @@ export const TransferPlayerDecisionService = {
 
     // Rezerwowi/rotacyjni powyżej 24 lat mogą zejść o więcej niż 2 szczeble reputacji (chcą grać)
     // Młodzi (≤24) i podstawowi trzymają twardą granicę -2
-    const hardReputationLimit = (isNotFirstTeamPlayer && player.age > 24) ? -4 : -2;
+    // Zawodnik na liście transferowej ma losową tolerancję 0-3 punkty niżej (niezależną per oferta)
+    let hardReputationLimit = (isNotFirstTeamPlayer && player.age > 24) ? -4 : -2;
+    if (player.isOnTransferList) {
+      const repTolerance = Math.floor(Math.random() * 4);
+      hardReputationLimit = Math.min(hardReputationLimit, -repTolerance);
+    }
     if (reputationDelta < hardReputationLimit) {
       return {
         willingToTalk: false,
@@ -218,7 +223,31 @@ export const TransferPlayerDecisionService = {
       !!targetClub.country &&
       currentClub.country !== targetClub.country;
 
-    const salaryFit = clamp(offer.salary / Math.max(negotiationPlan.desiredSalary, 1), 0, 1.3);
+    let effectiveDesiredSalary = negotiationPlan.desiredSalary;
+    let transferListSalaryDiscountApplied = false;
+    if (player.isOnTransferList && offer.salary < currentSalaryBase * 0.90) {
+      const interestedCount = player.interestedClubs?.length ?? 0;
+      let acceptChance: number;
+      if (interestedCount === 0) acceptChance = 0.70;
+      else if (interestedCount === 1) acceptChance = 0.50;
+      else if (interestedCount <= 3) acceptChance = 0.30;
+      else acceptChance = 0.10;
+      if (Math.random() < acceptChance) {
+        const discount = Math.random() * 0.20;
+        effectiveDesiredSalary = Math.max(50_000, roundMoney(currentSalaryBase * (1 - discount)));
+        transferListSalaryDiscountApplied = true;
+      } else {
+        return {
+          accepted: false,
+          reason: 'Zawodnik oczekuje lepszych warunków finansowych. Oferta jest zbyt niska wzgledem obecnej pensji.',
+          stayScore: 0,
+          offerScore: 0,
+          targetRole: negotiationPlan.targetRole
+        };
+      }
+    }
+
+    const salaryFit = clamp(offer.salary / Math.max(effectiveDesiredSalary, 1), 0, 1.3);
     const bonusFit = clamp(offer.bonus / Math.max(negotiationPlan.desiredBonus, 1), 0, 1.35);
     const yearsFit = clamp(offer.years / Math.max(negotiationPlan.desiredYears, 1), 0.5, 1.2);
     const financialWeights = getAgeFinancialWeights(player.age);
@@ -282,7 +311,7 @@ export const TransferPlayerDecisionService = {
 
     const margin = offerScore - stayScore;
     const requiredFinancialFit = player.age >= 30 ? 0.98 : 0.92;
-    const lowerClubMoveWithoutPremium = reputationDelta < 0 && financialFit < 1.02;
+    const lowerClubMoveWithoutPremium = reputationDelta < 0 && financialFit < 1.02 && !transferListSalaryDiscountApplied;
     const flatForeignMoveWithoutUpgrade = reputationDelta === 0 && isForeignMove && financialFit < 0.96;
 
     if (
