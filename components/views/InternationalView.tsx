@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { WCQPlayoffPath } from '../../types';
 import polskaBgImg from '../../Graphic/themes/polska.png';
 
 const SUBHEADING = 'text-[10px] font-black uppercase tracking-[0.25em] text-slate-500';
@@ -64,7 +65,7 @@ const WCQ_GROUP_B_PLAYED: PlayedMatch[] = [
   // Wyniki kolejek 1–4 rozegranych przed startem gry — do uzupełnienia
 ];
 
-const GROUP_B_TEAMS = ['Szwajcaria', 'Kosowo', 'Słowenia', 'Szwecja'];
+const GROUP_B_TEAMS = ['Szwajcaria', 'Kosovo', 'Słowenia', 'Szwecja'];
 
 const WCQ_GROUP_C_PLAYED: PlayedMatch[] = [
   // Wyniki kolejek 1–4 rozegranych przed startem gry — do uzupełnienia
@@ -109,17 +110,17 @@ const WCQ_GROUP_A_SCHEDULE: ScheduledMatch[] = [
 
 const WCQ_GROUP_B_SCHEDULE: ScheduledMatch[] = [
   { round: 1, dateLabel: '4 WRZ',  home: 'Szwecja',    away: 'Słowenia'   },
-  { round: 1, dateLabel: '4 WRZ',  home: 'Kosowo',     away: 'Szwajcaria' },
-  { round: 2, dateLabel: '7 WRZ',  home: 'Szwecja',    away: 'Kosowo'     },
+  { round: 1, dateLabel: '4 WRZ',  home: 'Kosovo',     away: 'Szwajcaria' },
+  { round: 2, dateLabel: '7 WRZ',  home: 'Szwecja',    away: 'Kosovo'     },
   { round: 2, dateLabel: '7 WRZ',  home: 'Szwajcaria', away: 'Słowenia'   },
-  { round: 3, dateLabel: '8 PAŹ',  home: 'Słowenia',   away: 'Kosowo'     },
+  { round: 3, dateLabel: '8 PAŹ',  home: 'Słowenia',   away: 'Kosovo'     },
   { round: 3, dateLabel: '8 PAŹ',  home: 'Szwajcaria', away: 'Szwecja'    },
   { round: 4, dateLabel: '11 PAŹ', home: 'Słowenia',   away: 'Szwajcaria' },
-  { round: 4, dateLabel: '11 PAŹ', home: 'Kosowo',     away: 'Szwecja'    },
+  { round: 4, dateLabel: '11 PAŹ', home: 'Kosovo',     away: 'Szwecja'    },
   { round: 5, dateLabel: '14 LIS', home: 'Szwecja',    away: 'Szwajcaria' },
-  { round: 5, dateLabel: '14 LIS', home: 'Kosowo',     away: 'Słowenia'   },
+  { round: 5, dateLabel: '14 LIS', home: 'Kosovo',     away: 'Słowenia'   },
   { round: 6, dateLabel: '17 LIS', home: 'Słowenia',   away: 'Szwecja'    },
-  { round: 6, dateLabel: '17 LIS', home: 'Szwajcaria', away: 'Kosowo'     },
+  { round: 6, dateLabel: '17 LIS', home: 'Szwajcaria', away: 'Kosovo'     },
 ];
 
 const WCQ_GROUP_C_SCHEDULE: ScheduledMatch[] = [
@@ -341,6 +342,7 @@ const fixtureKey = (home: string, away: string) => `${home}__${away}`;
 
 function computeStandings(played: PlayedMatch[], allTeams?: string[]): GroupTeam[] {
   const map: Record<string, GroupTeam> = {};
+  const awayGF: Record<string, number> = {};
 
   const ensure = (name: string) => {
     if (!map[name]) {
@@ -353,6 +355,8 @@ function computeStandings(played: PlayedMatch[], allTeams?: string[]): GroupTeam
   for (const match of played) {
     ensure(match.home);
     ensure(match.away);
+
+    awayGF[match.away] = (awayGF[match.away] ?? 0) + match.awayGoals;
 
     const home = map[match.home];
     const away = map[match.away];
@@ -380,9 +384,57 @@ function computeStandings(played: PlayedMatch[], allTeams?: string[]): GroupTeam
     }
   }
 
-  return Object.values(map).sort(
-    (a, b) => b.pts - a.pts || (b.GF - b.GA) - (a.GF - a.GA) || b.GF - a.GF
-  );
+  // UEFA tiebreaker: h2h first, then overall
+  const h2hStats = (a: GroupTeam, b: GroupTeam) => {
+    const h2h = played.filter(m =>
+      (m.home === a.name && m.away === b.name) ||
+      (m.home === b.name && m.away === a.name)
+    );
+    if (h2h.length === 0) return null;
+    let aPts = 0, bPts = 0, aGF = 0, aGA = 0, bGF = 0, bGA = 0;
+    for (const m of h2h) {
+      if (m.home === a.name) {
+        aGF += m.homeGoals; aGA += m.awayGoals;
+        bGF += m.awayGoals; bGA += m.homeGoals;
+        if (m.homeGoals > m.awayGoals) aPts += 3;
+        else if (m.homeGoals < m.awayGoals) bPts += 3;
+        else { aPts += 1; bPts += 1; }
+      } else {
+        bGF += m.homeGoals; bGA += m.awayGoals;
+        aGF += m.awayGoals; aGA += m.homeGoals;
+        if (m.homeGoals > m.awayGoals) bPts += 3;
+        else if (m.homeGoals < m.awayGoals) aPts += 3;
+        else { aPts += 1; bPts += 1; }
+      }
+    }
+    return { aPts, bPts, aGF, aGA, bGF, bGA };
+  };
+
+  return Object.values(map).sort((a, b) => {
+    // 0. Overall points
+    if (b.pts !== a.pts) return b.pts - a.pts;
+
+    const h2h = h2hStats(a, b);
+    if (h2h) {
+      // 1. H2H points
+      if (h2h.bPts !== h2h.aPts) return h2h.bPts - h2h.aPts;
+      // 2. H2H goal difference
+      const aH2hGD = h2h.aGF - h2h.aGA;
+      const bH2hGD = h2h.bGF - h2h.bGA;
+      if (bH2hGD !== aH2hGD) return bH2hGD - aH2hGD;
+      // 3. H2H goals scored
+      if (h2h.bGF !== h2h.aGF) return h2h.bGF - h2h.aGF;
+    }
+
+    // 4. Overall goal difference
+    const aGD = a.GF - a.GA;
+    const bGD = b.GF - b.GA;
+    if (bGD !== aGD) return bGD - aGD;
+    // 5. Overall goals scored
+    if (b.GF !== a.GF) return b.GF - a.GF;
+    // 6. Away goals in all group matches
+    return (awayGF[b.name] ?? 0) - (awayGF[a.name] ?? 0);
+  });
 }
 
 const formatDateLabel = (dateValue: string) => {
@@ -419,6 +471,16 @@ const StandingRow: React.FC<{ team: GroupTeam; rank: number }> = ({ team, rank }
         <span className={`text-sm font-black uppercase italic tracking-tight ${isPoland ? 'text-amber-300' : 'text-slate-300'}`}>
           {team.name}
         </span>
+        {rank === 1 && (
+          <span className="ml-2 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 align-middle">
+            AWANS
+          </span>
+        )}
+        {rank === 2 && (
+          <span className="ml-2 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded bg-sky-400/20 text-sky-400 border border-sky-400/40 align-middle">
+            PLAYOFF
+          </span>
+        )}
       </td>
       <td className={`text-center font-bold text-slate-400 font-mono text-sm w-10 ${rowCellClass}`}>{team.M}</td>
       <td className={`text-center font-bold text-slate-500 font-mono text-xs w-10 ${rowCellClass}`}>{team.W}</td>
@@ -492,9 +554,70 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ home, away, dateLabel, play
 const GROUP_TABS = ['A','B','C','D','E','F','G','H','I','J','K','L'] as const;
 type GroupTab = typeof GROUP_TABS[number];
 
+type WcqSubTab = 'groups' | 'playoff';
+
+const PATH_COLORS: Record<string, { border: string; text: string; bg: string }> = {
+  A: { border: 'border-amber-400/50',  text: 'text-amber-300',  bg: 'bg-amber-400/10' },
+  B: { border: 'border-sky-400/50',    text: 'text-sky-300',    bg: 'bg-sky-400/10' },
+  C: { border: 'border-emerald-400/50',text: 'text-emerald-300',bg: 'bg-emerald-400/10' },
+  D: { border: 'border-rose-400/50',   text: 'text-rose-300',   bg: 'bg-rose-400/10' },
+};
+
+const PlayoffPathCard: React.FC<{ path: WCQPlayoffPath }> = ({ path }) => {
+  const col = PATH_COLORS[path.pathLabel] ?? PATH_COLORS['A'];
+  const isPolandIn = [path.sf1Home, path.sf1Away, path.sf2Home, path.sf2Away].includes('Polska');
+
+  const SFRow: React.FC<{ home: string; away: string; result?: { homeGoals: number; awayGoals: number }; winner?: string }> = ({ home, away, result, winner }) => (
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+      (home === 'Polska' || away === 'Polska') ? 'border-amber-400/40 bg-amber-400/5' : 'border-white/5 bg-white/[0.02]'
+    }`}>
+      <span className={`flex-1 text-right text-sm font-black uppercase italic tracking-tight ${
+        home === 'Polska' ? 'text-amber-300' : winner && winner !== home ? 'text-slate-600 line-through' : 'text-slate-200'
+      }`}>{home}</span>
+      <div className="w-20 flex-shrink-0 flex items-center justify-center">
+        {result ? (
+          <span className="text-base font-black font-mono text-emerald-400">{result.homeGoals} : {result.awayGoals}</span>
+        ) : (
+          <span className="text-xs font-black text-slate-700 tracking-widest">VS</span>
+        )}
+      </div>
+      <span className={`flex-1 text-left text-sm font-black uppercase italic tracking-tight ${
+        away === 'Polska' ? 'text-amber-300' : winner && winner !== away ? 'text-slate-600 line-through' : 'text-slate-200'
+      }`}>{away}</span>
+    </div>
+  );
+
+  return (
+    <div className={`rounded-[20px] border ${col.border} ${isPolandIn ? 'shadow-[0_0_20px_rgba(251,191,36,0.12)]' : ''} bg-black/20 overflow-hidden`}>
+      <div className={`px-5 py-3 flex items-center gap-3 ${col.bg} border-b ${col.border}`}>
+        <span className={`text-base font-black uppercase tracking-widest ${col.text}`}>Ścieżka {path.pathLabel}</span>
+        {isPolandIn && <span className="text-[9px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/30">★ Polska</span>}
+        {path.qualifier && <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/30">Kwalifikacja: {path.qualifier}</span>}
+      </div>
+      <div className="p-4 space-y-2">
+        <p className={`${SUBHEADING} mb-2`}>Półfinały</p>
+        <SFRow home={path.sf1Home} away={path.sf1Away} result={path.sf1Result} winner={path.sf1Winner} />
+        <SFRow home={path.sf2Home} away={path.sf2Away} result={path.sf2Result} winner={path.sf2Winner} />
+        {(path.finalHome || path.sf1Winner) && (
+          <>
+            <p className={`${SUBHEADING} mt-4 mb-2`}>Finał</p>
+            <SFRow
+              home={path.finalHome ?? path.sf1Winner ?? '?'}
+              away={path.finalAway ?? path.sf2Winner ?? '?'}
+              result={path.finalResult}
+              winner={path.qualifier}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const InternationalView: React.FC = () => {
-  const { nationalTeams, currentDate, lastNTMatchResults } = useGame();
+  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState } = useGame();
   const [activeTournament, setActiveTournament] = useState<string>('wcq2026');
+  const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
   const upcomingSchedule = NT_SCHEDULE_BY_YEAR[2025] ?? [];
 
@@ -504,7 +627,9 @@ const InternationalView: React.FC = () => {
       const round = 5 + roundOffset;
       const dateLabel = `${matchDay.day} ${MONTH_SHORT[matchDay.month] ?? '???'}`;
       matchDay.matches.forEach(match => {
-        scheduleMeta.set(fixtureKey(match.home, match.away), { round, dateLabel });
+        if (!match.group || match.group === 'G') {
+          scheduleMeta.set(fixtureKey(match.home, match.away), { round, dateLabel });
+        }
       });
     });
 
@@ -515,8 +640,10 @@ const InternationalView: React.FC = () => {
     });
     upcomingSchedule.forEach(matchDay => {
       matchDay.matches.forEach(match => {
-        groupTeams.add(match.home);
-        groupTeams.add(match.away);
+        if (!match.group || match.group === 'G') {
+          groupTeams.add(match.home);
+          groupTeams.add(match.away);
+        }
       });
     });
 
@@ -662,6 +789,55 @@ const InternationalView: React.FC = () => {
 
       {activeTournament === 'wcq2026' && (
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+
+          {/* Sub-tabs: Faza Grupowa / Playoff */}
+          <div className="flex gap-1 px-6 pt-4 pb-0 shrink-0">
+            {(['groups', 'playoff'] as WcqSubTab[]).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setWcqSubTab(tab)}
+                className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.22em] transition-all border-b-2 -mb-px rounded-t-lg ${
+                  wcqSubTab === tab
+                    ? 'border-amber-400 text-white bg-white/[0.04]'
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {tab === 'groups' ? 'Faza Grupowa' : 'Playoff'}
+                {tab === 'playoff' && wcqPlayoffState?.drawCompleted && (
+                  <span className="ml-2 text-[8px] text-amber-400/70">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Playoff view */}
+          {wcqSubTab === 'playoff' && (
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
+              {!wcqPlayoffState?.drawCompleted ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-3">
+                  <p className="text-slate-500 text-sm font-black uppercase tracking-widest">Losowanie baraży</p>
+                  <p className="text-slate-600 text-xs uppercase tracking-widest">29 listopada 2025</p>
+                </div>
+              ) : (
+                <div className="max-w-5xl w-full mx-auto">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className={SUBHEADING}>Baraże MŚ 2026 — 4 ścieżki</span>
+                    <div className="flex-1 h-px bg-white/5" />
+                    {wcqPlayoffState.finalCompleted && <span className={`${SUBHEADING} text-emerald-500`}>Zakończone</span>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {wcqPlayoffState.paths.map(path => (
+                      <PlayoffPathCard key={path.pathLabel} path={path} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Group stage view */}
+          {wcqSubTab === 'groups' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex gap-2 px-6 pt-4 pb-4 shrink-0 flex-wrap border-b border-white/5">
             {GROUP_TABS.map(g => (
               <button
@@ -688,12 +864,12 @@ const InternationalView: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-            <div className="max-w-5xl mx-auto flex flex-col gap-8">
+          <div className="flex-1 flex flex-col overflow-hidden px-6 pt-6">
+            <div className="max-w-5xl w-full mx-auto flex flex-col flex-1 overflow-hidden"> {/* groups content */}
 
               {activeGroup === 'G' && (
                 <>
-                  <section>
+                  <section className="shrink-0 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className={SUBHEADING}>{POLAND_GROUP_LABEL}</span>
                       <div className="flex-1 h-px bg-white/5" />
@@ -735,7 +911,7 @@ const InternationalView: React.FC = () => {
                     </div>
                   </section>
 
-                  <section>
+                  <section className="flex-1 overflow-y-auto custom-scrollbar pb-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className={SUBHEADING}>Terminarz — {POLAND_GROUP_LABEL}</span>
                       <div className="flex-1 h-px bg-white/5" />
@@ -763,7 +939,10 @@ const InternationalView: React.FC = () => {
                     {upcomingSchedule.map((matchDay, roundOffset) => {
                       const roundNum = 5 + roundOffset;
                       const dateLabel = `${matchDay.day} ${MONTH_SHORT[matchDay.month] ?? '???'}`;
-                      const matchesForRound = matchDay.matches.filter(match => !scheduledResults.has(fixtureKey(match.home, match.away)));
+                      const matchesForRound = matchDay.matches.filter(match =>
+                        (!match.group || match.group === 'G') &&
+                        !scheduledResults.has(fixtureKey(match.home, match.away))
+                      );
                       if (!matchesForRound.length) return null;
 
                       return (
@@ -787,7 +966,7 @@ const InternationalView: React.FC = () => {
 
               {activeGroup !== 'G' && activeGroupData && (
                 <>
-                  <section>
+                  <section className="shrink-0 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className={SUBHEADING}>Grupa {activeGroup}</span>
                       <div className="flex-1 h-px bg-white/5" />
@@ -829,7 +1008,7 @@ const InternationalView: React.FC = () => {
                   </section>
 
                   {(Object.keys(activeGroupData.groupedPlayed).length > 0 || Object.keys(activeGroupData.groupedSchedule).length > 0) && (
-                    <section>
+                    <section className="flex-1 overflow-y-auto custom-scrollbar pb-6">
                       <div className="flex items-center gap-3 mb-4">
                         <span className={SUBHEADING}>Terminarz — Grupa {activeGroup}</span>
                         <div className="flex-1 h-px bg-white/5" />
@@ -877,6 +1056,8 @@ const InternationalView: React.FC = () => {
 
             </div>
           </div>
+          </div>
+          )} {/* end wcqSubTab === 'groups' */}
         </div>
       )}
     </div>

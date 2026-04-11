@@ -322,6 +322,40 @@ const boardConfidence = useMemo(() => {
 
     // ── Zdarzenia tła (participation === 'background') ────────────────────
     if (todayEvent?.participation === 'background') {
+      // ── Reprezentacja — losowanie baraży lub mecze ─────────────────────
+      if (todayEvent.kind === EventKind.NATIONAL_TEAM_MATCH) {
+        if (todayEvent.targetView === ViewState.WCQ_PLAYOFF_DRAW_VIEW) {
+          return {
+            text: '🎯 LOSOWANIE BARAŻY MŚ 2026',
+            action: advanceDay,
+            isMatch: false,
+            disabled: isJumping,
+            info: 'Losowanie par playoff MŚ 2026',
+          };
+        }
+        if (todayEvent.targetView === ViewState.WCQ_PLAYOFF_RESULTS_SF) {
+          return {
+            text: '🌍 BARAŻE MŚ 2026 – PÓŁFINAŁY',
+            action: advanceDay,
+            isMatch: false,
+            disabled: isJumping,
+          };
+        }
+        if (todayEvent.targetView === ViewState.WCQ_PLAYOFF_RESULTS_FINAL) {
+          return {
+            text: '🌍 BARAŻE MŚ 2026 – FINAŁY',
+            action: advanceDay,
+            isMatch: false,
+            disabled: isJumping,
+          };
+        }
+        return {
+          text: '🇵🇱 MECZE REPREZENTACJI',
+          action: advanceDay,
+          isMatch: false,
+          disabled: isJumping,
+        };
+      }
       if (todayEvent.slot.competition === CompetitionType.SUPER_CUP) {
         return {
           text: 'SUPERPUCHAR POLSKI ✨ (wyniki)',

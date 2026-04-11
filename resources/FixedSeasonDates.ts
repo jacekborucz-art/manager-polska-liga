@@ -275,7 +275,7 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
   
 
 //29 LISTOPADA - MIEDZYNARODOWE ROZGRYWKI LUB INNE WYDARZENIA ZWIĄZANE Z REPREZENTACJĄ
-  
+  { day: 29, month: 10, type: SlotType.MIDWEEK, comp: CompetitionType.BREAK, label: "REPREZENTACJA", priority: 30 },
 
 
   // --- GRUDZIEŃ ----------------------------------------------------------------------------------------------------------------------------

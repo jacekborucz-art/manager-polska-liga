@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import ntBgImg from '../../Graphic/themes/national_teams_view.png';
+import bojoImg from '../../Graphic/themes/bojo.png';
 import saWorldBgImg from '../../Graphic/themes/innekluby.png';
 import allTeamsBgImg from '../../Graphic/themes/allteams.png';
 import allCupsBgImg from '../../Graphic/themes/allcups.png';
@@ -13,6 +14,9 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { CLUBS_SOUTH_AMERICA } from '../../resources/static_db/clubs/SouthamericanTeams';
 import { generateSAClubId } from '../../resources/static_db/clubs/SouthamericanTeams';
 import { CLUBS_AFRICAN, generateAfricanClubId } from '../../resources/static_db/clubs/african_teams';
+import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
+import { TacticRepository } from '../../resources/tactics_db';
 import { CLUBS_ASIAN, generateAsianClubId } from '../../resources/static_db/clubs/asian_teams';
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../../resources/static_db/clubs/northAME_teams';
 
@@ -539,7 +543,68 @@ const NT_FLAG_MAP: Record<string, string> = {
 
 const getNTFlag = (name: string): string => NT_FLAG_MAP[name] ?? '🏳';
 
-const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, onPlayerClick }) => {
+type NTScheduleFilter = 'upcoming' | 'played' | 'all';
+
+interface TeamScheduleItem {
+  id: string;
+  date: Date;
+  dateLabel: string;
+  home: string;
+  away: string;
+  competitionLabel: string;
+  group?: string;
+  result?: {
+    homeGoals: number;
+    awayGoals: number;
+  };
+  played: boolean;
+}
+
+const NT_MONTH_SHORT = ['STY', 'LUT', 'MAR', 'KWI', 'MAJ', 'CZE', 'LIP', 'SIE', 'WRZ', 'PAŹ', 'LIS', 'GRU'];
+
+interface TacticalLineupSlot {
+  slot: {
+    index: number;
+    role: PlayerPosition;
+    x: number;
+    y: number;
+  };
+  player: Player | null;
+}
+
+const TacticalKitIcon: React.FC<{
+  primary: string;
+  secondary: string;
+  trim: string;
+  shorts: string;
+  label: string;
+}> = ({ primary, secondary, trim, shorts, label }) => {
+  const shirtText = primary.toLowerCase() === '#ffffff' || primary.toLowerCase() === '#f8fafc' ? '#0f172a' : '#ffffff';
+
+  return (
+    <div className="relative flex flex-col items-center">
+        <div className="relative w-[22px] h-[22px] rounded-xl overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/12 to-transparent z-10 pointer-events-none" />
+          <svg viewBox="0 0 24 24" className="absolute inset-[2px] w-[18px] h-[18px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
+            <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={primary} />
+            <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.8" />
+            <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={secondary} fillOpacity="0.35" />
+            <path d="M12 7.2v11.8" stroke={trim} strokeWidth="1.3" strokeOpacity="0.85" />
+            <text x="12" y="15.6" textAnchor="middle" fontSize="3.6" fontWeight="900" fontStyle="italic" fill={shirtText}>
+              {label}
+            </text>
+          </svg>
+          <div className="absolute -inset-full bg-gradient-to-tr from-transparent via-white/10 to-transparent rotate-45 pointer-events-none" />
+        </div>
+        <svg viewBox="0 0 28 18" className="-mt-1 w-[14px] h-[9px] drop-shadow-[0_3px_4px_rgba(0,0,0,0.35)]">
+          <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={shorts} stroke={trim} strokeWidth="1.4" strokeLinejoin="round" />
+          <path d="M14 3v12" stroke={trim} strokeWidth="1.1" strokeOpacity="0.65" />
+        </svg>
+    </div>
+  );
+};
+
+const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; nationalTeamIdByName: Record<string, string>; currentDate: Date; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, nationalTeamIdByName, currentDate, onPlayerClick }) => {
   const squad = team.squadPlayerIds.map(id => playerById[id]).filter(Boolean) as Player[];
 
   const POS_ORDER: Record<PlayerPosition, number> = {
@@ -552,6 +617,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 
   const avg = avgRating(squad);
   const accent = team.colorsHex[0] || '#6366f1';
+  const tactic = team.tacticId ? TacticRepository.getById(team.tacticId) : null;
 
   const POS_ROW_BG: Record<PlayerPosition, string> = {
     [PlayerPosition.GK]:  'bg-yellow-500/[0.08]',
@@ -578,12 +644,111 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
     return 'text-white font-black italic';
   };
 
-  const GRID = '52px 1fr minmax(0,200px) 38px 38px 38px 38px 38px 52px';
+  const GRID = '52px 1fr minmax(0,140px) 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 52px';
 
   const T = 'font-black italic uppercase tracking-wide text-white';
+  const [scheduleFilter, setScheduleFilter] = useState<NTScheduleFilter>('upcoming');
+  const positionCounts = squad.reduce<Record<PlayerPosition, number>>((acc, player) => {
+    acc[player.position] += 1;
+    return acc;
+  }, {
+    [PlayerPosition.GK]: 0,
+    [PlayerPosition.DEF]: 0,
+    [PlayerPosition.MID]: 0,
+    [PlayerPosition.FWD]: 0,
+  });
+  const injuredCount = squad.filter(player => player.health.status === 'INJURED').length;
+  const availableCount = squad.length - injuredCount;
+  const leaders = [...squad].sort((a, b) => b.overallRating - a.overallRating).slice(0, 5);
+  const attributeProfile = [
+    { label: 'Tempo', short: 'PAC', value: Math.round(squad.reduce((sum, player) => sum + player.attributes.pace, 0) / Math.max(squad.length, 1)) },
+    { label: 'Atak', short: 'ATT', value: Math.round(squad.reduce((sum, player) => sum + player.attributes.attacking, 0) / Math.max(squad.length, 1)) },
+    { label: 'Obrona', short: 'DEF', value: Math.round(squad.reduce((sum, player) => sum + player.attributes.defending, 0) / Math.max(squad.length, 1)) },
+    { label: 'Podania', short: 'PAS', value: Math.round(squad.reduce((sum, player) => sum + player.attributes.passing, 0) / Math.max(squad.length, 1)) },
+    { label: 'Technika', short: 'TEC', value: Math.round(squad.reduce((sum, player) => sum + player.attributes.technique, 0) / Math.max(squad.length, 1)) },
+  ];
+  const squadSections = [
+    { label: 'Bramkarze', short: 'BR', value: positionCounts[PlayerPosition.GK], tone: 'text-yellow-400', bg: 'from-yellow-500/20 to-transparent' },
+    { label: 'Obrońcy', short: 'OBR', value: positionCounts[PlayerPosition.DEF], tone: 'text-blue-400', bg: 'from-blue-500/20 to-transparent' },
+    { label: 'Pomocnicy', short: 'POL', value: positionCounts[PlayerPosition.MID], tone: 'text-emerald-400', bg: 'from-emerald-500/20 to-transparent' },
+    { label: 'Napastnicy', short: 'NAP', value: positionCounts[PlayerPosition.FWD], tone: 'text-red-400', bg: 'from-red-500/20 to-transparent' },
+  ];
+  const tacticalLineup = useMemo<TacticalLineupSlot[]>(() => {
+    if (!tactic) return [];
+
+    const pools: Record<PlayerPosition, Player[]> = {
+      [PlayerPosition.GK]: squad.filter(player => player.position === PlayerPosition.GK).sort((a, b) => b.overallRating - a.overallRating),
+      [PlayerPosition.DEF]: squad.filter(player => player.position === PlayerPosition.DEF).sort((a, b) => b.overallRating - a.overallRating),
+      [PlayerPosition.MID]: squad.filter(player => player.position === PlayerPosition.MID).sort((a, b) => b.overallRating - a.overallRating),
+      [PlayerPosition.FWD]: squad.filter(player => player.position === PlayerPosition.FWD).sort((a, b) => b.overallRating - a.overallRating),
+    };
+    const fallback = [...squad].sort((a, b) => b.overallRating - a.overallRating);
+    const used = new Set<string>();
+
+    const pickPlayer = (role: PlayerPosition): Player | null => {
+      const fromRole = pools[role].find(player => !used.has(player.id));
+      if (fromRole) return fromRole;
+      return fallback.find(player => !used.has(player.id)) ?? null;
+    };
+
+    return tactic.slots.map(slot => {
+      const player = pickPlayer(slot.role);
+      if (player) used.add(player.id);
+      return { slot, player };
+    });
+  }, [squad, tactic]);
+
+  const kitPrimary = team.colorsHex[0] || '#ffffff';
+  const kitSecondary = team.colorsHex[1] || '#dc2626';
+  const kitTrim = team.colorsHex[2] || kitSecondary;
+  const shortsColor = kitPrimary.toLowerCase() === '#ffffff' ? kitSecondary : kitPrimary;
+  const teamSchedule = useMemo<TeamScheduleItem[]>(() => {
+    const seasonStartYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+    const historyById = new Map(
+      MatchHistoryService.getTeamHistory(team.id).map(entry => [entry.matchId, entry] as const)
+    );
+
+    return (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
+      .flatMap(matchDay => matchDay.matches
+        .filter(match => match.home === team.name || match.away === team.name)
+        .map(match => {
+          const matchYear = matchDay.month >= 6 ? seasonStartYear : seasonStartYear + 1;
+          const date = new Date(matchYear, matchDay.month, matchDay.day);
+          const homeId = nationalTeamIdByName[match.home];
+          const awayId = nationalTeamIdByName[match.away];
+          const matchId = homeId && awayId
+            ? ['NT', date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0'), homeId, awayId].join('_')
+            : `NT_${date.getTime()}_${match.home}_${match.away}`;
+          const historyEntry = historyById.get(matchId);
+
+          return {
+            id: matchId,
+            date,
+            dateLabel: `${date.getDate()} ${NT_MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`,
+            home: match.home,
+            away: match.away,
+            competitionLabel: match.competitionLabel ?? matchDay.competitionLabel,
+            group: match.group,
+            result: historyEntry ? { homeGoals: historyEntry.homeScore, awayGoals: historyEntry.awayScore } : undefined,
+            played: Boolean(historyEntry),
+          };
+        }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [currentDate, nationalTeamIdByName, team.id, team.name]);
+
+  const filteredSchedule = useMemo(() => {
+    const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).getTime();
+    const upcoming = teamSchedule.filter(match => !match.played && match.date.getTime() >= today);
+    const played = teamSchedule.filter(match => match.played || match.date.getTime() < today);
+
+    if (scheduleFilter === 'upcoming') return upcoming;
+    if (scheduleFilter === 'played') return [...played].sort((a, b) => b.date.getTime() - a.date.getTime());
+    return [...teamSchedule].sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [currentDate, scheduleFilter, teamSchedule]);
 
   return (
-    <div>
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.92fr)] gap-5 items-start">
+      <div className="min-w-0">
       {/* ── Nagłówek drużyny ── */}
       <div
         className="rounded-2xl overflow-hidden mb-5 border border-white/[0.07] relative"
@@ -616,13 +781,15 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
           </div>
           <div className="flex-1 px-5 py-2.5">
             <div className={`text-[8px] tracking-widest mb-0.5 ${T}`}>Taktyka</div>
-            <div className={`text-xs truncate ${T}`}>{team.tacticId || '—'}</div>
+            <div className={`text-xs truncate ${T}`}>{tactic?.name || '—'}</div>
           </div>
         </div>
       </div>
 
       {/* ── Tabela składu ── */}
       <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+        <div className="overflow-x-auto">
+          <div className="min-w-[860px]">
         {/* Nagłówek kolumn */}
         <div
           className={`grid px-4 py-2.5 bg-slate-800/80 border-b border-white/[0.10] text-[9px] ${T}`}
@@ -630,13 +797,22 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         >
           <span>Poz</span>
           <span>Zawodnik</span>
-          <span>Klub</span>
-          <span className="text-center">PAC</span>
-          <span className="text-center">ATT</span>
-          <span className="text-center">DEF</span>
-          <span className="text-center">PAS</span>
-          <span className="text-center">TEC</span>
-          <span className="text-right">OVR</span>
+          <span className="text-center">Klub</span>
+          <span className="text-center border-r border-amber-400/10">TMP</span>
+          <span className="text-center border-r border-amber-400/10">ATK</span>
+          <span className="text-center border-r border-amber-400/10">OBR</span>
+          <span className="text-center border-r border-amber-400/10">POD</span>
+          <span className="text-center border-r border-amber-400/10">TEC</span>
+          <span className="text-center border-r border-amber-400/10">WYT</span>
+          <span className="text-center border-r border-amber-400/10">STR</span>
+          <span className="text-center border-r border-amber-400/10">WIZ</span>
+          <span className="text-center border-r border-amber-400/10">DRY</span>
+          <span className="text-center border-r border-amber-400/10">POZ</span>
+          <span className="text-center border-r border-amber-400/10">GŁO</span>
+          <span className="text-center border-r border-amber-400/10">R.W</span>
+          <span className="text-center border-r border-amber-400/10">TAL</span>
+          <span className="text-center border-r border-amber-400/10">AGR</span>
+          <span className="text-right">OVL</span>
         </div>
         {/* Wiersze zawodników */}
         {sorted.map(p => {
@@ -646,7 +822,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
             <button
               key={p.id}
               onClick={() => onPlayerClick(p.id)}
-              className={`group w-full grid text-left px-4 py-2.5 transition-all duration-100 border-b border-white/[0.04] hover:bg-white/[0.07] ${POS_ROW_BG[p.position]} ${injured ? 'opacity-50' : ''} relative`}
+              className={`group w-full grid text-left px-4 py-2.5 transition-all duration-100 border-b border-amber-400/15 hover:bg-white/[0.07] ${POS_ROW_BG[p.position]} ${injured ? 'opacity-50' : ''} relative`}
               style={{ gridTemplateColumns: GRID }}
             >
               {injured && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-red-500" />}
@@ -658,24 +834,261 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               </span>
               {/* Zawodnik */}
               <span className="flex items-center gap-1.5 min-w-0">
-                <span className={`text-xs truncate ${T}`}>
+                <span className="text-xs truncate font-normal italic uppercase tracking-wide text-white">
                   {p.firstName} {p.lastName}
                 </span>
                 {injured && <span className={`text-[8px] text-red-400 shrink-0 ${T}`}>⛌</span>}
               </span>
               {/* Klub */}
-              <span className={`text-[10px] truncate self-center ${T}`}>{clubName}</span>
+              <span className={`text-[8px] truncate self-stretch flex items-center justify-center px-2 -my-2.5 bg-slate-950 ${T}`}>{clubName}</span>
               {/* Atrybuty */}
-              <span className={`text-[11px] tabular-nums text-center self-center ${attrColor(p.attributes.pace)}`}>{p.attributes.pace}</span>
-              <span className={`text-[11px] tabular-nums text-center self-center ${attrColor(p.attributes.attacking)}`}>{p.attributes.attacking}</span>
-              <span className={`text-[11px] tabular-nums text-center self-center ${attrColor(p.attributes.defending)}`}>{p.attributes.defending}</span>
-              <span className={`text-[11px] tabular-nums text-center self-center ${attrColor(p.attributes.passing)}`}>{p.attributes.passing}</span>
-              <span className={`text-[11px] tabular-nums text-center self-center ${attrColor(p.attributes.technique)}`}>{p.attributes.technique}</span>
+              <span title="Tempo" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.pace)}`}>{p.attributes.pace}</span>
+              <span title="Atak" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.attacking)}`}>{p.attributes.attacking}</span>
+              <span title="Obrona" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.defending)}`}>{p.attributes.defending}</span>
+              <span title="Podania" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.passing)}`}>{p.attributes.passing}</span>
+              <span title="Technika" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.technique)}`}>{p.attributes.technique}</span>
+              <span title="Wytrzymałość" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.stamina)}`}>{p.attributes.stamina}</span>
+              <span title="Strzały" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.finishing)}`}>{p.attributes.finishing}</span>
+              <span title="Wizja gry" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.vision)}`}>{p.attributes.vision}</span>
+              <span title="Drybling" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.dribbling)}`}>{p.attributes.dribbling}</span>
+              <span title="Pozycjonowanie" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.positioning)}`}>{p.attributes.positioning}</span>
+              <span title="Gra głową" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.heading)}`}>{p.attributes.heading}</span>
+              <span title="Rzuty wolne" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.freeKicks)}`}>{p.attributes.freeKicks}</span>
+              <span title="Talent" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.talent)}`}>{p.attributes.talent}</span>
+              <span title="Agresja" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.aggression)}`}>{p.attributes.aggression}</span>
               {/* OVR */}
-              <span className={`text-sm tabular-nums text-right self-center ${T} ${ratingColor(p.overallRating)}`}>{p.overallRating}</span>
+              <span title="Ocena ogólna" className={`text-sm tabular-nums text-right self-center cursor-help ${T} ${ratingColor(p.overallRating)}`}>{p.overallRating}</span>
             </button>
           );
         })}
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div className="min-w-0 space-y-4 xl:sticky xl:top-6">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px] gap-4 items-start">
+          <div className="rounded-2xl border border-white/[0.08] overflow-hidden bg-green-500/15">
+            <div className="px-4 pt-4 pb-3 border-b border-white/[0.08]">
+              <div>
+                <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Taktyka</div>
+                <div className={`text-sm mt-1 ${T}`}>{tactic?.name || 'Ustawienie reprezentacji'}</div>
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="relative w-full max-w-[420px] mx-auto aspect-[1024/891] rounded-xl p-[2px] bg-gradient-to-br from-white/25 via-white/5 to-white/15">
+                <div className="relative w-full h-full overflow-hidden rounded-xl bg-slate-950/80">
+                  <img src={bojoImg} alt="Boisko taktyczne" className="absolute inset-0 w-full h-full object-contain opacity-50" />
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-transparent to-slate-950/35" />
+                {tacticalLineup.length === 0 ? (
+                  <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                    <div>
+                      <div className="text-[10px] font-black italic uppercase tracking-[0.22em] text-slate-500">Brak slotów taktyki</div>
+                      <div className={`mt-2 text-xs ${T}`}>Ta reprezentacja nie ma jeszcze ustawienia do wyrenderowania.</div>
+                    </div>
+                  </div>
+                ) : (
+                  tacticalLineup.map(({ slot, player }) => {
+                    const fullName = player
+                      ? `${player.firstName[0]}. ${player.lastName}`
+                      : POS_SHORT[slot.role];
+                    const label = (player?.lastName || POS_SHORT[slot.role]).slice(0, 2).toUpperCase();
+                    return (
+                      <div
+                        key={`${slot.index}-${player?.id ?? slot.role}`}
+                        className="absolute flex flex-col items-center gap-1"
+                        style={{ left: `${slot.x * 100}%`, top: `${slot.y * 100}%`, transform: 'translate(-50%, calc(-50% - 30px))' }}
+                      >
+                        <TacticalKitIcon
+                          primary={slot.role === PlayerPosition.GK ? '#facc15' : kitPrimary}
+                          secondary={slot.role === PlayerPosition.GK ? '#1e293b' : kitSecondary}
+                          trim={slot.role === PlayerPosition.GK ? '#000000' : kitTrim}
+                          shorts={slot.role === PlayerPosition.GK ? '#111827' : shortsColor}
+                          label={label}
+                        />
+                        <div className="text-[9px] font-black italic uppercase text-white whitespace-nowrap" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)' }}>
+                          {fullName}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="rounded-2xl border border-white/[0.08] overflow-hidden"
+            style={{ background: `linear-gradient(160deg, ${accent}20 0%, rgba(15,23,42,0.92) 55%, rgba(2,6,23,0.96) 100%)` }}
+          >
+            <div className="px-4 pt-4 pb-3 border-b border-white/[0.08]">
+              <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Szybki przegląd</div>
+            </div>
+            <div className="p-3 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Fit', value: availableCount, tone: 'text-emerald-400' },
+                { label: 'Kont.', value: injuredCount, tone: 'text-red-400' },
+                ...squadSections.map(s => ({ label: s.short, value: s.value, tone: s.tone })),
+              ].map(item => (
+                <div key={item.label} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-2.5 py-2.5 text-center">
+                  <div className="text-[9px] font-black italic uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                  <div className={`mt-1 text-lg tabular-nums ${T} ${item.tone}`}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.08] bg-slate-950/75 overflow-hidden">
+            <div className="px-4 pt-4 pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Terminarz</div>
+                  <div className={`text-sm mt-1 ${T}`}>{team.name}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {[
+                  { id: 'upcoming' as const, label: 'Nadchodzące' },
+                  { id: 'played' as const, label: 'Wyniki' },
+                  { id: 'all' as const, label: 'Wszystkie' },
+                ].map(filter => (
+                  <button
+                    key={filter.id}
+                    onClick={() => setScheduleFilter(filter.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] border transition-all ${MANAGER_BUTTON_FONT} ${
+                      scheduleFilter === filter.id
+                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300'
+                        : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-3 max-h-[300px] overflow-y-auto">
+              {filteredSchedule.length === 0 ? (
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-6 text-center">
+                  <div className="text-[10px] font-black italic uppercase tracking-[0.22em] text-slate-500">Brak spotkań</div>
+                  <div className="mt-2 text-xs font-black italic uppercase tracking-[0.16em] text-slate-300">
+                    Dla wybranego filtra nie ma jeszcze meczów do pokazania.
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+                  {filteredSchedule.map(match => {
+                    const opponent = match.home === team.name ? match.away : match.home;
+                    const isHome = match.home === team.name;
+                    return (
+                      <div
+                        key={match.id}
+                        className={`px-4 py-3 border-b last:border-b-0 ${
+                          match.result
+                            ? 'border-white/[0.06] bg-amber-400/[0.04]'
+                            : 'border-white/[0.05] bg-white/[0.02]'
+                        }`}
+                      >
+                        <div className="text-[11px] font-black italic uppercase tracking-[0.08em] text-slate-100 break-words">
+                          <span className="text-slate-300">{match.dateLabel}</span>
+                          <span className={`mx-1.5 ${isHome ? 'text-emerald-300' : 'text-sky-300'}`}>
+                            ({isHome ? 'DOM' : 'WYJ.'})
+                          </span>
+                          <span className="text-white">{opponent}</span>
+                          <span className={`mx-1.5 ${match.result ? 'text-amber-300' : 'text-slate-500'}`}>-</span>
+                          <span className={match.result ? 'text-amber-300' : 'text-slate-500'}>
+                            {match.result ? `${match.result.homeGoals}:${match.result.awayGoals}` : '—'}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[10px] font-black italic uppercase tracking-[0.16em] text-slate-500 truncate">
+                            {match.competitionLabel}{match.group ? ` · GRUPA ${match.group}` : ''}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.08] bg-slate-950/70 overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-white/[0.08]">
+            <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Liderzy</div>
+            <div className={`text-lg mt-1 ${T}`}>Kluczowi zawodnicy</div>
+          </div>
+          <div className="p-3 space-y-2">
+            {leaders.map((player, index) => {
+              const clubName = player.clubId === 'FREE_AGENTS' ? 'Wolny agent' : (clubById[player.clubId] || '—');
+              return (
+                <button
+                  key={player.id}
+                  onClick={() => onPlayerClick(player.id)}
+                  className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-left transition-all hover:bg-white/[0.06] hover:border-white/[0.12]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-7 h-7 rounded-lg border border-white/[0.08] bg-white/[0.04] flex items-center justify-center text-[10px] font-black italic text-slate-300 shrink-0">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`text-xs truncate ${T}`}>{player.firstName} {player.lastName}</div>
+                        <div className="text-[10px] font-black italic uppercase tracking-[0.2em] text-slate-500 truncate">
+                          {clubName}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`text-xl tabular-nums shrink-0 ${T} ${ratingColor(player.overallRating)}`}>
+                      {player.overallRating}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.08] bg-slate-950/70 overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-white/[0.08]">
+            <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Profil</div>
+            <div className={`text-lg mt-1 ${T}`}>Charakterystyka zespołu</div>
+          </div>
+          <div className="p-4 space-y-4">
+            {attributeProfile.map(stat => (
+              <div key={stat.short}>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <div className="text-[10px] font-black italic uppercase tracking-[0.22em] text-slate-400">{stat.label}</div>
+                  <div className={`text-sm tabular-nums ${T} ${attrColor(stat.value)}`}>{stat.value}</div>
+                </div>
+                <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${Math.max(8, Math.min(stat.value, 100))}%`, background: `linear-gradient(90deg, ${accent}, ${team.colorsHex[1] || accent})` }}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {tactic && (
+              <div className="pt-2 grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+                  <div className="text-[9px] font-black italic uppercase tracking-[0.18em] text-slate-500">Atak</div>
+                  <div className="mt-2 text-lg font-black italic text-white tabular-nums">{tactic.attackBias}</div>
+                </div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+                  <div className="text-[9px] font-black italic uppercase tracking-[0.18em] text-slate-500">Obrona</div>
+                  <div className="mt-2 text-lg font-black italic text-white tabular-nums">{tactic.defenseBias}</div>
+                </div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+                  <div className="text-[9px] font-black italic uppercase tracking-[0.18em] text-slate-500">Pressing</div>
+                  <div className="mt-2 text-lg font-black italic text-white tabular-nums">{tactic.pressingIntensity}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -686,7 +1099,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 export const EuropeanClubsView: React.FC = () => {
   const { navigateTo, viewClubDetails, viewPlayerDetails, nationalTeams, coaches, players, clubs,
           europeanViewTab: activeTab, setEuropeanViewTab: setActiveTab,
-          selectedNTId, setSelectedNTId, previousViewState } = useGame();
+          selectedNTId, setSelectedNTId, previousViewState, currentDate } = useGame();
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [activeContinent, setActiveContinent] = useState<string>('Europe');
   const [activeWorldRegion, setActiveWorldRegion] = useState<WorldRegionKey>('SA');
@@ -718,6 +1131,12 @@ export const EuropeanClubsView: React.FC = () => {
     clubs.forEach(c => { map[c.id] = c.name; });
     return map;
   }, [clubs]);
+
+  const nationalTeamIdByName = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    nationalTeams.forEach(nt => { map[nt.name] = nt.id; });
+    return map;
+  }, [nationalTeams]);
 
   const continentTeams = useMemo(() => {
     if (activeContinent === 'RANKING') {
@@ -798,7 +1217,7 @@ export const EuropeanClubsView: React.FC = () => {
           style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
       </div>
 
-      <div className={`relative z-10 w-full transition-all duration-300 ${activeTab === 'clubs' && selectedCountry === 'POL' ? 'max-w-[1600px]' : activeTab === 'clubs' && selectedCountry === 'WORLD' ? 'max-w-5xl' : activeTab === 'clubs' && selectedCountry && selectedCountry !== 'POL' ? 'max-w-4xl' : activeTab === 'clubs' ? 'max-w-[1500px]' : selectedNT ? 'max-w-[80vw]' : 'max-w-[1280px]'}`}>
+      <div className={`relative z-10 w-full transition-all duration-300 ${activeTab === 'clubs' && selectedCountry === 'POL' ? 'max-w-[1600px]' : activeTab === 'clubs' && selectedCountry === 'WORLD' ? 'max-w-5xl' : activeTab === 'clubs' && selectedCountry && selectedCountry !== 'POL' ? 'max-w-4xl' : activeTab === 'clubs' ? 'max-w-[1500px]' : selectedNT ? 'max-w-[92vw]' : 'max-w-[1280px]'}`}>
 
         {/* Header */}
         <div className="flex items-center gap-4 mb-5">
@@ -1095,6 +1514,8 @@ export const EuropeanClubsView: React.FC = () => {
                   coachName={getCoachName(selectedNT)}
                   playerById={playerById}
                   clubById={clubById}
+                  nationalTeamIdByName={nationalTeamIdByName}
+                  currentDate={currentDate}
                   onPlayerClick={viewPlayerDetails}
                 />
               </div>

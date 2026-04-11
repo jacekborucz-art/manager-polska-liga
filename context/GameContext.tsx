@@ -3121,7 +3121,7 @@ setMessages([welcomeMail, fanMail]);
         // ── Baraże MŚ 2026: Półfinały (17 marca 2026) ─────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_SF') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, dateSeed);
+            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
             setWcqPlayoffState(updatedState);
           }
           setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
@@ -3134,7 +3134,7 @@ setMessages([welcomeMail, fanMail]);
         // ── Baraże MŚ 2026: Finały (20 marca 2026) ────────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_FINAL') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, dateSeed);
+            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
             setWcqPlayoffState(updatedState);
           }
           setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
@@ -3158,6 +3158,16 @@ setMessages([welcomeMail, fanMail]);
         setPlayers(ntSimulation.updatedPlayers);
         ntSimulation.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
         setLastNTMatchResults(ntSimulation.results);
+        // ── Po ostatniej kolejce fazy grupowej MŚ (17 listopada) → email-podsumowanie ──
+        if (dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
+          const wcqSummaryKey = `WCQ_GROUPS_SUMMARY_${seasonNumber}`;
+          if (!sentMailIdsRef.current.has(wcqSummaryKey)) {
+            sentMailIdsRef.current.add(wcqSummaryKey);
+            const wcqSummary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
+            const wcqMail = MailService.generateWCQGroupsSummaryMail(wcqSummary.groups, wcqSummary.extras, dateToProcess);
+            setMessages(prev => [wcqMail, ...prev]);
+          }
+        }
         setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
         setTargetJumpTime(null);
         navigateTo(ViewState.NATIONAL_TEAM_RESULTS);

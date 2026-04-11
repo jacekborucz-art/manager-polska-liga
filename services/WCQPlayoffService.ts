@@ -8,8 +8,9 @@
  *  4. Symulację finałów ścieżek (20 marca 2026) + wyłonienie 4 kwalifikantów
  */
 
-import { NationalTeam, WCQPlayoffMatchResult, WCQPlayoffPath, WCQPlayoffState } from '../types';
+import { Coach, NationalTeam, Player, WCQPlayoffMatchResult, WCQPlayoffPath, WCQPlayoffState } from '../types';
 import { MatchHistoryService } from './MatchHistoryService';
+import { simulateSinglePlayoffMatch } from './NationalTeamSimulator';
 
 // ─── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -45,10 +46,7 @@ function strHash(v: string): number {
 
 // ─── GROUP DATA ────────────────────────────────────────────────────────────────
 
-/**
- * Pełne składy grup A-F, H-L (bez Grupy G — ta pochodzi z historii meczów).
- * Kolejność: [lider, drużyna 2, drużyna 3, ...]
- */
+/** Pełne składy grup A-L. */
 const GROUP_TEAMS: Record<string, string[]> = {
   A: ['Niemcy', 'Słowacja', 'Irlandia Północna', 'Luksemburg'],
   B: ['Szwajcaria', 'Kosovo', 'Słowenia', 'Szwecja'],
@@ -56,6 +54,7 @@ const GROUP_TEAMS: Record<string, string[]> = {
   D: ['Francja', 'Ukraina', 'Islandia', 'Azerbejdżan'],
   E: ['Hiszpania', 'Turcja', 'Gruzja', 'Bułgaria'],
   F: ['Portugalia', 'Irlandia', 'Węgry', 'Armenia'],
+  G: ['Polska', 'Holandia', 'Finlandia', 'Litwa', 'Malta'],
   H: ['Austria', 'Bośnia i Hercegowina', 'Rumunia', 'Cypr', 'San Marino'],
   I: ['Norwegia', 'Włochy', 'Izrael', 'Estonia', 'Mołdawia'],
   J: ['Belgia', 'Walia', 'Macedonia Północna', 'Kazachstan', 'Liechtenstein'],
@@ -63,57 +62,84 @@ const GROUP_TEAMS: Record<string, string[]> = {
   L: ['Chorwacja', 'Czechy', 'Wyspy Owcze', 'Czarnogóra', 'Gibraltar'],
 };
 
-/**
- * Mecze Grupy G rozegrane przed startem gry (kolejki 1–3 = 3 okna FIFA = 8 meczów).
- * Pary [gospodarz, gość] wg fikcyjnego kalendarza kwalifikacji.
- */
-const GROUP_G_PREGAME_MATCHES: Array<[string, string]> = [
-  ['Polska',    'Litwa'],
-  ['Polska',    'Malta'],
-  ['Finlandia', 'Polska'],
-  ['Finlandia', 'Holandia'],
-  ['Holandia',  'Malta'],
-  ['Litwa',     'Finlandia'],
-  ['Malta',     'Finlandia'],
-  ['Malta',     'Litwa'],
-];
+interface StaticMatch {
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+}
 
-/** Grupy G — drużyny rozgrywające mecze (w tej kolejności). */
-const GROUP_G_TEAMS = ['Polska', 'Holandia', 'Finlandia', 'Litwa', 'Malta'];
+/**
+ * Wyniki rozegrane przed startem gry (kolejki 1–4 dla grup G/H/I/J/K/L).
+ * Grupy A-F startują od kolejki 1 wewnątrz gry — tu pusta lista.
+ */
+const PREGAME_BY_GROUP: Record<string, StaticMatch[]> = {
+  G: [
+    { home: 'Malta',     away: 'Finlandia',           homeGoals: 0, awayGoals: 1 },
+    { home: 'Polska',    away: 'Litwa',                homeGoals: 1, awayGoals: 0 },
+    { home: 'Polska',    away: 'Malta',                homeGoals: 2, awayGoals: 0 },
+    { home: 'Litwa',     away: 'Finlandia',            homeGoals: 2, awayGoals: 2 },
+    { home: 'Finlandia', away: 'Holandia',             homeGoals: 0, awayGoals: 2 },
+    { home: 'Malta',     away: 'Litwa',                homeGoals: 0, awayGoals: 0 },
+    { home: 'Finlandia', away: 'Polska',               homeGoals: 2, awayGoals: 1 },
+    { home: 'Holandia',  away: 'Malta',                homeGoals: 8, awayGoals: 0 },
+  ],
+  H: [
+    { home: 'Cypr',                away: 'San Marino',           homeGoals: 2, awayGoals: 0 },
+    { home: 'Rumunia',             away: 'Bośnia i Hercegowina', homeGoals: 0, awayGoals: 1 },
+    { home: 'Bośnia i Hercegowina', away: 'Cypr',                homeGoals: 2, awayGoals: 1 },
+    { home: 'San Marino',          away: 'Rumunia',              homeGoals: 1, awayGoals: 5 },
+    { home: 'Bośnia i Hercegowina', away: 'San Marino',          homeGoals: 1, awayGoals: 0 },
+    { home: 'Austria',             away: 'Rumunia',              homeGoals: 2, awayGoals: 1 },
+    { home: 'Rumunia',             away: 'Cypr',                 homeGoals: 2, awayGoals: 0 },
+    { home: 'San Marino',          away: 'Austria',              homeGoals: 0, awayGoals: 4 },
+  ],
+  I: [
+    { home: 'Mołdawia', away: 'Norwegia', homeGoals: 0, awayGoals: 5 },
+    { home: 'Izrael',   away: 'Estonia',  homeGoals: 2, awayGoals: 1 },
+    { home: 'Izrael',   away: 'Norwegia', homeGoals: 2, awayGoals: 4 },
+    { home: 'Mołdawia', away: 'Estonia',  homeGoals: 2, awayGoals: 3 },
+    { home: 'Estonia',  away: 'Izrael',   homeGoals: 1, awayGoals: 3 },
+    { home: 'Norwegia', away: 'Włochy',   homeGoals: 3, awayGoals: 0 },
+    { home: 'Estonia',  away: 'Norwegia', homeGoals: 0, awayGoals: 1 },
+    { home: 'Włochy',   away: 'Mołdawia', homeGoals: 2, awayGoals: 0 },
+  ],
+  J: [
+    { home: 'Liechtenstein',      away: 'Macedonia Północna', homeGoals: 0, awayGoals: 3 },
+    { home: 'Walia',              away: 'Kazachstan',         homeGoals: 3, awayGoals: 1 },
+    { home: 'Liechtenstein',      away: 'Kazachstan',         homeGoals: 0, awayGoals: 2 },
+    { home: 'Macedonia Północna', away: 'Walia',              homeGoals: 1, awayGoals: 1 },
+    { home: 'Macedonia Północna', away: 'Belgia',             homeGoals: 1, awayGoals: 1 },
+    { home: 'Walia',              away: 'Liechtenstein',      homeGoals: 3, awayGoals: 0 },
+    { home: 'Kazachstan',         away: 'Macedonia Północna', homeGoals: 0, awayGoals: 1 },
+    { home: 'Belgia',             away: 'Walia',              homeGoals: 4, awayGoals: 3 },
+  ],
+  K: [
+    { home: 'Andora',  away: 'Łotwa',   homeGoals: 0, awayGoals: 1 },
+    { home: 'Anglia',  away: 'Albania', homeGoals: 2, awayGoals: 0 },
+    { home: 'Albania', away: 'Andora',  homeGoals: 3, awayGoals: 0 },
+    { home: 'Anglia',  away: 'Łotwa',   homeGoals: 3, awayGoals: 0 },
+    { home: 'Andora',  away: 'Anglia',  homeGoals: 0, awayGoals: 1 },
+    { home: 'Albania', away: 'Serbia',  homeGoals: 0, awayGoals: 0 },
+    { home: 'Łotwa',   away: 'Albania', homeGoals: 1, awayGoals: 1 },
+    { home: 'Serbia',  away: 'Andora',  homeGoals: 3, awayGoals: 0 },
+  ],
+  L: [
+    { home: 'Czarnogóra',  away: 'Gibraltar',   homeGoals: 3, awayGoals: 1 },
+    { home: 'Czechy',      away: 'Wyspy Owcze', homeGoals: 2, awayGoals: 1 },
+    { home: 'Gibraltar',   away: 'Czechy',      homeGoals: 0, awayGoals: 4 },
+    { home: 'Czarnogóra',  away: 'Wyspy Owcze', homeGoals: 1, awayGoals: 0 },
+    { home: 'Czechy',      away: 'Czarnogóra',  homeGoals: 2, awayGoals: 0 },
+    { home: 'Gibraltar',   away: 'Chorwacja',   homeGoals: 0, awayGoals: 7 },
+    { home: 'Wyspy Owcze', away: 'Gibraltar',   homeGoals: 2, awayGoals: 1 },
+    { home: 'Chorwacja',   away: 'Czechy',      homeGoals: 5, awayGoals: 1 },
+  ],
+};
 
 // ─── HELPER: REPUTATION ────────────────────────────────────────────────────────
 
 function getReputation(name: string, nationalTeams: NationalTeam[]): number {
   return nationalTeams.find(t => t.name === name)?.reputation ?? 8;
-}
-
-// ─── MATCH SIMULATION ─────────────────────────────────────────────────────────
-
-/**
- * Symuluje pojedynczy mecz na podstawie reputacji drużyn + seeded RNG.
- * Zwraca wynik bramkowy.
- */
-function simMatch(homeRep: number, awayRep: number, rng: Rng): { h: number; a: number } {
-  const diff = (homeRep - awayRep) / 20;
-  const homeAdvantage = 0.08;
-  const hwRaw = 0.42 + diff * 0.28 + homeAdvantage;
-  const awRaw = 0.42 - diff * 0.28 - homeAdvantage;
-  const hw = Math.max(0.1, Math.min(0.72, hwRaw));
-  const aw = Math.max(0.1, Math.min(0.72, awRaw));
-  const dr = Math.max(0.15, 1 - hw - aw);
-  const total = hw + dr + aw;
-  const r = rng.next() * total;
-
-  if (r < hw) {
-    const hg = 1 + (rng.next() < 0.52 ? 1 : 0) + (rng.next() < 0.18 ? 1 : 0);
-    return { h: hg, a: rng.next() < 0.27 ? 1 : 0 };
-  } else if (r < hw + dr) {
-    const g = rng.next() < 0.38 ? 0 : rng.next() < 0.52 ? 1 : 2;
-    return { h: g, a: g };
-  } else {
-    const ag = 1 + (rng.next() < 0.52 ? 1 : 0) + (rng.next() < 0.18 ? 1 : 0);
-    return { h: rng.next() < 0.27 ? 1 : 0, a: ag };
-  }
 }
 
 // ─── GROUP STANDINGS ─────────────────────────────────────────────────────────
@@ -141,134 +167,158 @@ function sortStandings(standings: Record<string, GroupStanding>): GroupStanding[
   );
 }
 
-// ─── SIMULATED GROUP RESULT (Groups A-F, H-L) ─────────────────────────────────
+// ─── GROUP RESULT FROM ACTUAL DATA ───────────────────────────────────────────
 
-function computeGroupResult(
+/**
+ * Oblicza miejsce w grupie na podstawie rzeczywistych wyników:
+ *   1. Wyniki sprzed gry (hardcode w PREGAME_BY_GROUP — grupy G/H/I/J/K/L).
+ *   2. Wyniki z gry pobrane z MatchHistoryService.
+ */
+function computeGroupFromActualData(
   groupLetter: string,
   nationalTeams: NationalTeam[],
-  seed: number
-): { winner: string; runnerUp: string } {
+  seasonNumber: number
+): { winner: string; runnerUp: string; thirdPlace: string } {
   const teams = GROUP_TEAMS[groupLetter];
-  if (!teams) return { winner: '?', runnerUp: '?' };
+  if (!teams) return { winner: '?', runnerUp: '?', thirdPlace: '?' };
 
-  const rng = new Rng(seed ^ strHash(groupLetter));
   const standings: Record<string, GroupStanding> = {};
   teams.forEach(t => { standings[t] = { teamName: t, pts: 0, gd: 0, gf: 0 }; });
 
-  // Pełna podwójna eliminacja (każda para gra u siebie i u rywala)
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = 0; j < teams.length; j++) {
-      if (i === j) continue;
-      const homeRep = getReputation(teams[i], nationalTeams);
-      const awayRep = getReputation(teams[j], nationalTeams);
-      const { h, a } = simMatch(homeRep, awayRep, rng);
-      applyMatchToStandings(standings, teams[i], teams[j], h, a);
-    }
+  // 1. Wyniki sprzed gry (kolejki 1–4 dla G/H-L; puste dla A-F)
+  for (const m of PREGAME_BY_GROUP[groupLetter] ?? []) {
+    applyMatchToStandings(standings, m.home, m.away, m.homeGoals, m.awayGoals);
   }
 
-  const sorted = sortStandings(standings);
-
-  // Grupa E: Hispania wygrywa i idzie na MŚ bezpośrednio (Mistrz Świata)
-  if (groupLetter === 'E') {
-    const nonHispania = sorted.filter(s => s.teamName !== 'Hiszpania');
-    return { winner: 'Hiszpania', runnerUp: nonHispania[0].teamName };
-  }
-
-  return { winner: sorted[0].teamName, runnerUp: sorted[1].teamName };
-}
-
-// ─── GROUP G RESULT (from actual match history + pre-game) ────────────────────
-
-function computeGroupGResult(
-  nationalTeams: NationalTeam[],
-  seasonNumber: number,
-  seed: number
-): { winner: string; runnerUp: string } {
-  const teamIdToName = new Map(
-    nationalTeams.filter(t => GROUP_G_TEAMS.includes(t.name)).map(t => [t.id, t.name])
+  // 2. Wyniki z gry — z MatchHistoryService
+  const teamSet = new Set(teams);
+  const teamNameById = new Map(
+    nationalTeams.filter(t => teamSet.has(t.name)).map(t => [t.id, t.name])
   );
-
-  const standings: Record<string, GroupStanding> = {};
-  GROUP_G_TEAMS.forEach(t => { standings[t] = { teamName: t, pts: 0, gd: 0, gf: 0 }; });
-
-  // 1. Mecze przed grą (kolejki 1–3) — deterministycznie symulowane
-  const preRng = new Rng(seed ^ strHash('GRP_G_PRE'));
-  for (const [home, away] of GROUP_G_PREGAME_MATCHES) {
-    const { h, a } = simMatch(getReputation(home, nationalTeams), getReputation(away, nationalTeams), preRng);
-    applyMatchToStandings(standings, home, away, h, a);
-  }
-
-  // 2. Mecze z gry (kolejki 4–9) — z MatchHistoryService
-  const competition = 'Kwalifikacje MŚ 2026 – Gr. G';
-  const inGameMatches = MatchHistoryService.getAll().filter(
-    m => m.competition === competition && m.season === seasonNumber
+  const inGameMatches = MatchHistoryService.getAll().filter(m =>
+    m.season === seasonNumber &&
+    m.competition.includes('Kwalifikacje') &&
+    teamNameById.has(m.homeTeamId) &&
+    teamNameById.has(m.awayTeamId)
   );
   for (const m of inGameMatches) {
-    const homeName = teamIdToName.get(m.homeTeamId);
-    const awayName = teamIdToName.get(m.awayTeamId);
-    if (homeName && awayName) {
-      applyMatchToStandings(standings, homeName, awayName, m.homeScore, m.awayScore);
-    }
+    const home = teamNameById.get(m.homeTeamId)!;
+    const away = teamNameById.get(m.awayTeamId)!;
+    applyMatchToStandings(standings, home, away, m.homeScore, m.awayScore);
   }
 
   const sorted = sortStandings(standings);
-  return { winner: sorted[0].teamName, runnerUp: sorted[1].teamName };
+  return {
+    winner: sorted[0]?.teamName ?? '?',
+    runnerUp: sorted[1]?.teamName ?? '?',
+    thirdPlace: sorted[2]?.teamName ?? '?',
+  };
 }
 
 // ─── BUILD 16-TEAM PLAYOFF FIELD ──────────────────────────────────────────────
 
 function buildPlayoffField(
   nationalTeams: NationalTeam[],
-  seasonNumber: number,
-  seed: number
+  seasonNumber: number
 ): { all16: string[]; groupWinners: string[] } {
   const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
   const runnerUps: string[] = [];
   const groupWinners: string[] = [];
+  const thirdPlaces: string[] = [];
 
   for (const letter of groupLetters) {
-    const result = letter === 'G'
-      ? computeGroupGResult(nationalTeams, seasonNumber, seed)
-      : computeGroupResult(letter, nationalTeams, seed);
+    const result = computeGroupFromActualData(letter, nationalTeams, seasonNumber);
     groupWinners.push(result.winner);
     runnerUps.push(result.runnerUp);
+    thirdPlaces.push(result.thirdPlace);
   }
 
-  // 4 dodatkowe drużyny: najwyższa reputacja z puli europejskich
-  // nieuwzględnionych w wicemistrzach ani mistrzach grup
-  const excluded = new Set([...runnerUps, ...groupWinners, 'Hiszpania']);
-  const extras = nationalTeams
-    .filter(t => t.continent === 'Europe' && !excluded.has(t.name))
-    .sort((a, b) => b.reputation - a.reputation)
-    .slice(0, 4)
-    .map(t => t.name);
+  // 4 dodatkowe drużyny: najlepsze 4 z trzecich miejsc (najwyższy overall/reputacja)
+  const extras = thirdPlaces
+    .filter(name => name !== '?')
+    .sort((a, b) => getReputation(b, nationalTeams) - getReputation(a, nationalTeams))
+    .slice(0, 4);
 
   return { all16: [...runnerUps, ...extras], groupWinners };
 }
 
 // ─── PLAYOFF MATCH SIMULATION ─────────────────────────────────────────────────
 
-function simulatePlayoffMatch(
+function runPlayoffMatch(
   homeTeam: string,
   awayTeam: string,
   nationalTeams: NationalTeam[],
-  seed: number
+  players: Record<string, Player[]>,
+  coaches: Record<string, Coach>,
+  seed: number,
+  season: number = 0,
+  matchDate: Date = new Date(2026, 2, 17),
+  usedRefereeIds: Set<string> = new Set(),
 ): WCQPlayoffMatchResult {
-  const rng = new Rng(seed ^ strHash(`${homeTeam}|${awayTeam}`));
-  const { h, a } = simMatch(getReputation(homeTeam, nationalTeams), getReputation(awayTeam, nationalTeams), rng);
-  return { homeTeam, awayTeam, homeGoals: h, awayGoals: a };
+  const label = 'Baraże MŚ 2026';
+  const res = simulateSinglePlayoffMatch(homeTeam, awayTeam, label, matchDate, seed, nationalTeams, players, coaches, season, usedRefereeIds);
+  if (res.matchHistoryEntry) {
+    MatchHistoryService.logMatch(res.matchHistoryEntry);
+  }
+  return {
+    homeTeam,
+    awayTeam,
+    homeGoals: res.homeGoalsAET ?? res.homeGoals,
+    awayGoals: res.awayGoalsAET ?? res.awayGoals,
+    penaltyWinner: res.penaltyWinner,
+    homePenaltyGoals: res.homePenaltyGoals,
+    awayPenaltyGoals: res.awayPenaltyGoals,
+    wentToExtraTime: res.homeGoals === res.awayGoals,
+    refereeName: res.refereeName,
+    homeTeamId: res.homeTeamId,
+    awayTeamId: res.awayTeamId,
+    goals: res.goals,
+    cards: res.cards,
+    venue: res.venue,
+    attendance: res.attendance,
+    weather: res.weather,
+  };
 }
 
-function resolveSFWinner(result: WCQPlayoffMatchResult, tieBreakSeed: number): string {
-  if (result.homeGoals > result.awayGoals) return result.homeTeam;
-  if (result.homeGoals < result.awayGoals) return result.awayTeam;
-  // Remis → losowanie (dogrywka + karne w grze)
-  return new Rng(tieBreakSeed).next() < 0.5 ? result.homeTeam : result.awayTeam;
+function resolveSFWinner(result: WCQPlayoffMatchResult): { winner: string; penaltyWinner?: string } {
+  if (result.penaltyWinner) return { winner: result.penaltyWinner, penaltyWinner: result.penaltyWinner };
+  if (result.homeGoals > result.awayGoals) return { winner: result.homeTeam };
+  if (result.homeGoals < result.awayGoals) return { winner: result.awayTeam };
+  // Shouldn't reach here — simulateSinglePlayoffMatch always produces a winner
+  return { winner: result.homeTeam };
 }
 
 // ─── MAIN EXPORT ──────────────────────────────────────────────────────────────
 
 export const WCQPlayoffService = {
+
+  /**
+   * Zwraca podsumowanie fazy grupowej: zwycięzcy, wicemistrzowie i 4 dodatkowe
+   * drużyny z 3. miejsc zakwalifikowane do baraży.
+   * Używane do generowania emaila-podsumowania po ostatniej kolejce (17 listopada).
+   */
+  getWCQGroupSummary(
+    nationalTeams: NationalTeam[],
+    seasonNumber: number
+  ): {
+    groups: Array<{ group: string; winner: string; runnerUp: string; thirdPlace: string }>;
+    directQualifiers: string[];
+    runnerUps: string[];
+    extras: string[];
+  } {
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    const groups = groupLetters.map(letter => {
+      const result = computeGroupFromActualData(letter, nationalTeams, seasonNumber);
+      return { group: letter, winner: result.winner, runnerUp: result.runnerUp, thirdPlace: result.thirdPlace };
+    });
+    const directQualifiers = groups.map(g => g.winner);
+    const runnerUps = groups.map(g => g.runnerUp);
+    const thirdPlaces = groups.map(g => g.thirdPlace).filter(name => name !== '?');
+    const extras = [...thirdPlaces]
+      .sort((a, b) => getReputation(b, nationalTeams) - getReputation(a, nationalTeams))
+      .slice(0, 4);
+    return { groups, directQualifiers, runnerUps, extras };
+  },
 
   /**
    * Przeprowadza losowanie baraży — zwraca gotowy WCQPlayoffState z 4 ścieżkami.
@@ -284,7 +334,7 @@ export const WCQPlayoffService = {
     seasonNumber: number,
     seed: number
   ): WCQPlayoffState {
-    const { all16 } = buildPlayoffField(nationalTeams, seasonNumber, seed);
+    const { all16 } = buildPlayoffField(nationalTeams, seasonNumber);
 
     // Sortuj 16 drużyn wg reputacji → Pot1 (top 8) i Pot2 (bottom 8)
     const sorted16 = [...all16].sort(
@@ -325,17 +375,23 @@ export const WCQPlayoffService = {
   simulateSF(
     state: WCQPlayoffState,
     nationalTeams: NationalTeam[],
+    players: Record<string, Player[]>,
+    coaches: Record<string, Coach>,
     seed: number
   ): WCQPlayoffState {
+    const sfDate = new Date(2026, 2, 17);
+    const usedRefereeIds = new Set<string>();
     const newPaths = state.paths.map(path => {
       const sf1Seed = seed ^ strHash(`SF1_${path.pathLabel}`);
       const sf2Seed = seed ^ strHash(`SF2_${path.pathLabel}`);
 
-      const sf1Result = simulatePlayoffMatch(path.sf1Home, path.sf1Away, nationalTeams, sf1Seed);
-      const sf2Result = simulatePlayoffMatch(path.sf2Home, path.sf2Away, nationalTeams, sf2Seed);
+      const sf1Result = runPlayoffMatch(path.sf1Home, path.sf1Away, nationalTeams, players, coaches, sf1Seed, state.seasonYear, sfDate, usedRefereeIds);
+      const sf2Result = runPlayoffMatch(path.sf2Home, path.sf2Away, nationalTeams, players, coaches, sf2Seed, state.seasonYear, sfDate, usedRefereeIds);
 
-      const sf1Winner = resolveSFWinner(sf1Result, sf1Seed ^ 0xDEAD);
-      const sf2Winner = resolveSFWinner(sf2Result, sf2Seed ^ 0xDEAD);
+      const sf1Resolved = resolveSFWinner(sf1Result);
+      const sf2Resolved = resolveSFWinner(sf2Result);
+      const sf1Winner = sf1Resolved.winner;
+      const sf2Winner = sf2Resolved.winner;
 
       // Reguła rewanżu: zwycięzca grał u siebie → gra na wyjeździe w finale i vice versa
       const sf1WonHome = sf1Winner === path.sf1Home;
@@ -371,14 +427,19 @@ export const WCQPlayoffService = {
   simulateFinal(
     state: WCQPlayoffState,
     nationalTeams: NationalTeam[],
+    players: Record<string, Player[]>,
+    coaches: Record<string, Coach>,
     seed: number
   ): WCQPlayoffState {
+    const usedRefereeIds = new Set<string>();
     const newPaths = state.paths.map(path => {
       if (!path.finalHome || !path.finalAway) return path;
 
       const finalSeed = seed ^ strHash(`FINAL_${path.pathLabel}`);
-      const finalResult = simulatePlayoffMatch(path.finalHome, path.finalAway, nationalTeams, finalSeed);
-      const qualifier = resolveSFWinner(finalResult, finalSeed ^ 0xBEEF);
+      const finalDate = new Date(2026, 2, 20);
+      const finalResult = runPlayoffMatch(path.finalHome, path.finalAway, nationalTeams, players, coaches, finalSeed, state.seasonYear, finalDate, usedRefereeIds);
+      const finalResolved = resolveSFWinner(finalResult);
+      const qualifier = finalResolved.winner;
 
       return { ...path, finalResult, qualifier };
     });

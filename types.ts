@@ -123,6 +123,20 @@ export interface WCQPlayoffMatchResult {
   awayTeam: string;
   homeGoals: number;
   awayGoals: number;
+  /** Wygrany po karnych (ustawione tylko gdy po 90 min był remis). */
+  penaltyWinner?: string;
+  homePenaltyGoals?: number;
+  awayPenaltyGoals?: number;
+  wentToExtraTime?: boolean;
+  refereeName?: string;
+  // Detale meczu — dostępne po symulacji pełnym silnikiem
+  homeTeamId?: string;
+  awayTeamId?: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
 }
 
 export interface WCQPlayoffPath {
@@ -1310,6 +1324,7 @@ export interface NTMatchResult {
   substitutions?: MatchSubstitutionEntry[];
   injuries?: MatchInjuryEntry[];
   timeline?: MatchEvent[];
+  refereeName?: string;
 }
 
 export interface CalendarSlot {

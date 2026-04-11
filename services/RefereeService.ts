@@ -222,6 +222,56 @@ export const RefereeService = {
   },
 
   /**
+   * Assigns a European referee for a national team match.
+   * Referee must be European, from a different region than both teams, and not already used in this matchday.
+   */
+  assignEuropeanRefereeByRegion: (
+    seedStr: string,
+    homeRegion: Region,
+    awayRegion: Region,
+    usedRefereeIds: Set<string> = new Set()
+  ): Referee => {
+    RefereeService.initializePool();
+
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+      hash |= 0;
+    }
+
+    const EUR_ONLY: Region[] = [
+      Region.POLAND, Region.BALKANS, Region.CZ_SK, Region.IBERIA, Region.SWEDEN, Region.SCANDINAVIA,
+      Region.EX_USSR, Region.SPAIN, Region.ENGLAND, Region.GERMANY, Region.ITALY,
+      Region.FRANCE, Region.TURKEY, Region.FINLAND, Region.GEORGIA, Region.ARMENIA,
+      Region.ALBANIA, Region.ROMANIA, Region.BALTIC, Region.BENELUX, Region.HUNGARIAN,
+      Region.MALTESE, Region.ISRAELI, Region.GREEK, Region.AZERBAIJANI, Region.KAZAKH,
+    ];
+    const isEuropean = (r: Referee) => EUR_ONLY.includes(r.nationality);
+    const notConflict = (r: Referee) => r.nationality !== homeRegion && r.nationality !== awayRegion;
+
+    // Pula 1: UEFA/FIFA, europejski, dobra jakość, inny region, nie sędziował dziś
+    const eligible = RefereeService.pool.filter(r =>
+      r.isInternational && isEuropean(r) && r.consistency > 55 && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligible.length > 0) return eligible[Math.abs(hash) % eligible.length];
+
+    // Pula 2: Dowolny UEFA/FIFA europejski, inny region, nie sędziował dziś
+    const eligible2 = RefereeService.pool.filter(r =>
+      r.isInternational && isEuropean(r) && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligible2.length > 0) return eligible2[Math.abs(hash) % eligible2.length];
+
+    // Pula 3: Dowolny europejski, nie sędziował dziś (ignorujemy konflikt)
+    const eligible3 = RefereeService.pool.filter(r => isEuropean(r) && !usedRefereeIds.has(r.id));
+    if (eligible3.length > 0) return eligible3[Math.abs(hash) % eligible3.length];
+
+    // Fallback: Dowolny europejski
+    const anyEur = RefereeService.pool.filter(r => isEuropean(r));
+    const lastResort = anyEur.length > 0 ? anyEur : RefereeService.pool;
+    return lastResort[Math.abs(hash) % lastResort.length];
+  },
+
+  /**
    * Deterministically assigns a referee based on match criteria.
    */
   assignReferee: (seedStr: string, importance: number): Referee => {

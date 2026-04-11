@@ -3,12 +3,15 @@ import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 
 export const CoachCard: React.FC = () => {
-  const { viewedCoachId, coaches, clubs, navigateTo, previousViewState } = useGame();
+  const { viewedCoachId, coaches, clubs, nationalTeams, navigateTo, previousViewState } = useGame();
   const coach = viewedCoachId ? coaches[viewedCoachId] : null;
 
   if (!coach) return null;
 
   const currentClub = clubs.find(c => c.id === coach.currentClubId);
+  const currentNT = !currentClub && coach.currentNationalTeamId
+    ? nationalTeams.find(t => t.id === coach.currentNationalTeamId)
+    : undefined;
 
   const FORMATION_MAP: Record<string, number[]> = {
     '4-3-3 Atak':          [4, 3, 3],
@@ -78,7 +81,7 @@ export const CoachCard: React.FC = () => {
           
           <div className="mt-10 w-full p-6 bg-white/5 rounded-3xl border border-white/5">
             <span className="block text-[8px] font-black text-slate-500 uppercase mb-2">Obecny Klub</span>
-            <span className="text-sm font-bold text-white uppercase italic">{currentClub?.name || 'Bezrobotny'}</span>
+            <span className="text-sm font-bold text-white uppercase italic">{currentClub?.name || currentNT?.name || 'Bezrobotny'}</span>
           </div>
 
           <button 

@@ -129,7 +129,7 @@ function formatWeather(result: NTMatchResult): string | null {
 }
 
 function formatMeta(result: NTMatchResult): string {
-  return ['20:45', result.venue, formatAttendance(result.attendance), formatWeather(result)].filter(Boolean).join(' • ');
+  return ['20:45', result.venue, formatAttendance(result.attendance), formatWeather(result), result.refereeName ? `Sędzia: ${result.refereeName}` : null].filter(Boolean).join(' • ');
 }
 
 function teamGoals(result: NTMatchResult, side: 'home' | 'away'): MatchGoalEntry[] {
@@ -225,11 +225,15 @@ const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
       className={`
         px-8 py-4 rounded-2xl mb-3 transition-all
         ${isHighlighted
-          ? 'border border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)]'
+          ? 'border border-amber-400/50 shadow-[0_0_28px_rgba(251,191,36,0.22)]'
           : 'border border-white/[0.08]'
         }
       `}
-      style={{ background: gradientBg }}
+      style={{
+        background: isHighlighted
+          ? `linear-gradient(to right, rgba(251,191,36,0.07) 0%, rgba(251,191,36,0.04) 100%), ${gradientBg}`
+          : gradientBg,
+      }}
     >
       <div className="mb-4 flex justify-center">
         <div className="max-w-full rounded-xl border border-white/10 bg-slate-950/85 px-4 py-2 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-white shadow-[0_10px_25px_rgba(0,0,0,0.35)]">
@@ -239,7 +243,7 @@ const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
 
       <div className="flex items-center justify-between">
         <div className="flex-1 text-right">
-          <span className={`inline-flex items-center justify-end gap-2 ${HEADING_FONT} text-2xl ${homeNameColor}`}>
+          <span className={`inline-flex items-center justify-end gap-2 ${HEADING_FONT} text-3xl ${homeNameColor}`}>
             <NTFlagBadge teamName={result.home} className="h-6 w-8 shrink-0" />
             <span>{result.home}</span>
           </span>
@@ -252,7 +256,7 @@ const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
         </div>
 
         <div className="flex-1 text-left">
-          <span className={`inline-flex items-center justify-start gap-2 ${HEADING_FONT} text-2xl ${awayNameColor}`}>
+          <span className={`inline-flex items-center justify-start gap-2 ${HEADING_FONT} text-3xl ${awayNameColor}`}>
             <span>{result.away}</span>
             <NTFlagBadge teamName={result.away} className="h-6 w-8 shrink-0" />
           </span>
@@ -373,16 +377,29 @@ const NationalTeamResultsView: React.FC = () => {
           backgroundPosition: 'center top',
           backgroundRepeat: 'no-repeat',
           backgroundAttachment: 'fixed',
-          filter: 'brightness(0.38)',
+          filter: 'brightness(0.6)',
         }}
       />
-      <div className="absolute inset-0 bg-black/82 pointer-events-none" />
-      <div className="absolute inset-0 bg-slate-950/65 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+      <div className="absolute inset-0 bg-slate-950/40 pointer-events-none" />
 
       <div className={`${GLASS_CARD} relative z-10 w-full max-w-[1100px] mx-4 p-8`}>
         <div className={GLOSS_LAYER} />
 
-        <div className="text-center mb-2">
+        <div className="text-center mb-2 relative">
+          <button
+            onClick={handleContinue}
+            className={`
+              ${BTN_FONT}
+              absolute top-0 right-0
+              px-5 py-2 rounded-2xl text-sm tracking-widest
+              bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700
+              text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)]
+              transition-all duration-200
+            `}
+          >
+            Kontynuuj
+          </button>
           <p className="text-xs text-slate-400 tracking-[0.2em] uppercase mb-1">{dateLabel}</p>
           <h1 className={`${HEADING_FONT} text-white text-2xl mb-1`}>Wyniki Reprezentacji</h1>
           <p className="text-sm text-slate-300 tracking-widest uppercase font-semibold">Kwalifikacje MŚ 2026</p>
@@ -403,7 +420,13 @@ const NationalTeamResultsView: React.FC = () => {
                   <div className="space-y-4">
                     {groupKeys.map(g => (
                       <div key={g}>
-                        <p className="text-sm font-black uppercase tracking-[0.25em] text-slate-200 mb-2 text-center">Gr. {g}</p>
+                        <div className="relative flex flex-col items-center mb-3">
+                          <div className="relative w-full flex justify-center py-1 mb-1 overflow-hidden rounded-lg">
+                            <div className="absolute inset-0 opacity-25" style={{ background: 'linear-gradient(to right, transparent 0%, #dc2626 25%, #ffffff 50%, #dc2626 75%, transparent 100%)' }} />
+                            <p className="text-xl font-black italic uppercase tracking-tighter text-white text-center relative z-10">Grupa {g}</p>
+                          </div>
+                          <div className="w-full h-[3px] rounded-full opacity-70" style={{ background: 'linear-gradient(to right, transparent 0%, #dc2626 20%, #ffffff 50%, #dc2626 80%, transparent 100%)' }} />
+                        </div>
                         {resultsByGroup[g].map((r, i) => (
                           <MatchRow key={i} result={r} />
                         ))}

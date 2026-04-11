@@ -376,7 +376,86 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     };
   },
 
- generateCoachFiredMail: (clubName: string, coachName: string, rank: number): MailMessage => {
+/**
+   * Generuje email-newsa po zakończeniu fazy grupowej kwalifikacji MŚ 2026 (17 listopada).
+   * Format: artykuł z dziennika sportowego z listą awansujących i uczestników baraży.
+   */
+  generateWCQGroupsSummaryMail: (
+    groups: Array<{ group: string; winner: string; runnerUp: string }>,
+    extras: string[],
+    date: Date
+  ): MailMessage => {
+    const sep = '─────────────────────────────────────────────────';
+
+    const polandWon  = groups.find(g => g.winner === 'Polska');
+    const polandRU   = groups.find(g => g.runnerUp === 'Polska');
+    const polandExtra = extras.includes('Polska');
+
+    let lead = 'Europejskie kwalifikacje do Mistrzostw Świata 2026 dobiegły końca. Dwanaście grup, tygodnie zaciekłych batalii — Europa zna już komplet uczestników mundialu oraz szesnaścioro śmiałków, którzy powalczą o ostatnie bilety w marcowych barażach.';
+    if (polandWon) {
+      lead = `TO JEST TO! POLSKA JEDZIE NA MUNDIAL! Biało-Czerwoni wygrali Grupę ${polandWon.group} i zapewnili sobie bezpośredni awans do Mistrzostw Świata 2026. Europejskie kwalifikacje zakończyły się dla nas w najlepszy możliwy sposób.`;
+    } else if (polandRU) {
+      lead = `Biało-Czerwoni kończą fazę grupową kwalifikacji z 2. miejsca w Grupie ${polandRU.group}. Bezpośredni awans uciekł, ale Polska zagra w marcowych barażach i walka o MŚ 2026 jest wciąż otwarta!`;
+    } else if (polandExtra) {
+      lead = `Polska z 3. miejsca w grupie wywalczyła jedno z czterech dodatkowych miejsc barażowych. Biało-Czerwoni będą jednym z szesnastu uczestników barażów o MŚ 2026 — losowanie już 29 listopada.`;
+    }
+
+    let body = `════════════════════════════════════════════════\n`;
+    body += `  SPORT EXPRESS  —  WYDANIE SPECJALNE\n`;
+    body += `  KWALIFIKACJE MŚ 2026 — KONIEC FAZY GRUPOWEJ\n`;
+    body += `════════════════════════════════════════════════\n\n`;
+    body += `${lead}\n\n`;
+    body += `${sep}\n`;
+    body += `  🏆  BEZPOŚREDNI AWANS — ZWYCIĘZCY 12 GRUP\n`;
+    body += `${sep}\n\n`;
+    groups.forEach(g => {
+      const star = g.winner === 'Polska' ? '  ★  POLSKA!' : '';
+      body += `  Gr. ${g.group.padEnd(2)}  ●  ${g.winner}${star}\n`;
+    });
+    body += `\n${sep}\n`;
+    body += `  🥊  BARAŻE MŚ 2026 — 16 UCZESTNIKÓW\n`;
+    body += `${sep}\n\n`;
+    body += `  Wicemistrzowie grup (miejsca 2.):\n\n`;
+    groups.forEach(g => {
+      const star = g.runnerUp === 'Polska' ? '  ★  POLSKA!' : '';
+      body += `  Gr. ${g.group.padEnd(2)}  →  ${g.runnerUp}${star}\n`;
+    });
+    if (extras.length > 0) {
+      body += `\n  Najlepsze 4 drużyny z 3. miejsc (dodatkowe bilety):\n\n`;
+      extras.forEach(name => {
+        const star = name === 'Polska' ? '  ★  POLSKA!' : '';
+        body += `  ●  ${name}${star}\n`;
+      });
+    }
+    body += `\n${sep}\n\n`;
+    body += `  📅  LOSOWANIE DRABINKI BARAŻOWEJ: 29 listopada 2025, Nyon\n\n`;
+    body += `UEFA wyznaczy 4 ścieżki eliminacyjne — każda z półfinałem i finałem\n`;
+    body += `w marcu 2026. Czterej triumfatorzy uzyskają ostatnie europejskie bilety\n`;
+    body += `do USA, Meksyku i Kanady.\n\n`;
+    body += `${sep}\n`;
+    body += `  © Sport Express / Redakcja Sport Express`;
+
+    const polandInvolved = polandWon || polandRU || polandExtra;
+    const subject = polandWon
+      ? '🏆 POLSKA NA MUNDIALU! Komplet awansów z kwalifikacji do MŚ 2026'
+      : polandRU || polandExtra
+        ? '🥊 Polska zagra w barażach! Faza grupowa kwalifikacji zakończona'
+        : 'Kwalifikacje MŚ 2026 — Europa wyłoniła 12 bezpośrednich uczestników mundialu';
+
+    return {
+      id: `WCQ_GROUPS_NEWS_${date.getFullYear()}`,
+      sender: 'Sport Express',
+      role: 'Redakcja Sportowa',
+      subject,
+      body,
+      date: new Date(date),
+      isRead: false,
+      type: MailType.MEDIA,
+      priority: polandInvolved ? 140 : 110,
+    };
+  },
+
+  generateCoachFiredMail: (clubName: string, coachName: string, rank: number): MailMessage => {
     return MailService.createFromTemplate('media_coach_fired', {
       'CLUB': clubName,
       'COACH': coachName,
