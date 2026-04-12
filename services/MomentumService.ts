@@ -98,6 +98,12 @@ export const MomentumService = {
     // forma HOME przesuwa cel w górę (+), forma AWAY przesuwa w dół (-)
     target += homeFormBonus - awayFormBonus;
 
+    // --- MORALE DRUŻYNY ---
+    // morale 0-100, środek = 50 → bonus/kara max ±6
+    const homeMoraleBonus = ((ctx.homeClub.morale ?? 50) - 50) / 50 * 6;
+    const awayMoraleBonus = ((ctx.awayClub.morale ?? 50) - 50) / 50 * 6;
+    target += homeMoraleBonus - awayMoraleBonus;
+
     // Przy serii 5+ przegranych — dolna granica naturalTarget spada do -92
     // (drużyna w dołku nie może wrócić do równowagi tylko przez chwilowy impuls)
     const homeDeepSlump = ctx.homeClub.stats.form.slice(-5).every(r => r === 'P');

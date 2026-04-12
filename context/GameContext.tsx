@@ -295,6 +295,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   fireScout: (scoutId: string) => void;
   refreshScoutMarket: () => void;
   scoutMarketRefreshDate: string;
+  applyWeeklyMotivation: (moraleDelta: number) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -988,18 +989,71 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         });
       }
 
+      // Premie za osiągnięcia wypłacane z budżetu (koszt dla klubu)
+      const hojnosc = club.board?.hojnosc ?? 'przecietna';
+      let achievementBonusCost = 0;
+      let achievementDesc = '';
+
+      if (club.leagueId === 'L_PL_1') {
+        if (club.id === champion?.id) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('CHAMPION', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za Mistrzostwo Polski';
+        } else if (leagueRanking === 2) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('RUNNER_UP', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 2. miejsce w Ekstraklasie';
+        } else if (leagueRanking === 3) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('THIRD', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 3. miejsce w Ekstraklasie';
+        } else if (leagueRanking === 4) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('FOURTH', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 4. miejsce w Ekstraklasie';
+        }
+      }
+      if (promoteFromL2Ids.includes(club.id)) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('PROMOTE_L2_L1', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za awans do Ekstraklasy';
+      } else if (promoteFromL3Ids.includes(club.id)) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('PROMOTE_L3_L2', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za awans do 1. Ligi';
+      }
+      if (club.id === cupWinnerId) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_WINNER', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za Puchar Polski';
+      } else if (club.id === cupLoserId) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_FINALIST', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za finał Pucharu Polski';
+      } else {
+        const cupReached = getCupReached(club.id);
+        if (cupReached === 'SEMI') {
+          achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_SEMI', club.reputation, hojnosc);
+          achievementDesc = achievementDesc || 'Premia dla sztabu za półfinał Pucharu Polski';
+        }
+      }
+
+      if (achievementBonusCost > 0) {
+        const balanceAfterInjection = club.budget + nextSeasonInjection;
+        financeLogsToAdd.push({
+          id: Math.random().toString(36).substring(2, 9),
+          date: currentDate.toISOString().split('T')[0],
+          amount: -achievementBonusCost,
+          type: 'EXPENSE' as const,
+          description: achievementDesc,
+          previousBalance: balanceAfterInjection
+        });
+      }
+
       return {
         ...club,
         leagueId: newLeagueId,
         reputation: newReputation,
-        budget: club.budget + nextSeasonInjection,
+        budget: club.budget + nextSeasonInjection - achievementBonusCost,
         transferBudget: (() => {
           const KOMPETENCJA_BUDGET_MULT: Record<string, number> = {
             bardzo_wysoka: 1.25, wysoka: 1.12, przecietna: 1.00, niska: 0.90, bardzo_niska: 0.80,
           };
           const kompMult = club.board ? (KOMPETENCJA_BUDGET_MULT[club.board.kompetencja] ?? 1.00) : 1.00;
           const boostedInjection = nextSeasonInjection * kompMult;
-          return Math.floor((club.budget + boostedInjection) * (0.25 + Math.random() * 0.45));
+          return Math.floor((club.budget + boostedInjection - achievementBonusCost) * (0.25 + Math.random() * 0.45));
         })(),
         boardBudgetRequestsThisSeason: 0,
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
@@ -1840,6 +1894,15 @@ setMessages([welcomeMail, fanMail]);
   }, [userTeamId]);
 
   // ── END AKADEMIA ────────────────────────────────────────────────────────────
+
+  const applyWeeklyMotivation = useCallback((moraleDelta: number) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, (c.morale ?? 50) + moraleDelta));
+      return { ...c, morale: newMorale, lastMotivationDate: currentDate.toISOString().split('T')[0] };
+    }));
+  }, [userTeamId, currentDate]);
 
   const advanceDay = useCallback(() => {
     if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW) return;
@@ -6430,6 +6493,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserves, setReserves, reserveCoachId,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
+    applyWeeklyMotivation,
     }}>
       {children}
     </GameContext.Provider>

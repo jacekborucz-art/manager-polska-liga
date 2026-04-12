@@ -20,6 +20,14 @@ export const ClubDetails: React.FC = () => {
 
   const club = useMemo(() => clubs.find(c => c.id === viewedClubId), [clubs, viewedClubId]);
 
+  const getMoraleInfo = (morale: number): { label: string; color: string } => {
+    if (morale <= 20) return { label: 'BARDZO NISKIE', color: 'text-red-500' };
+    if (morale <= 35) return { label: 'NISKIE', color: 'text-orange-400' };
+    if (morale <= 64) return { label: 'NEUTRALNE', color: 'text-white' };
+    if (morale <= 79) return { label: 'WYSOKIE', color: 'text-green-400' };
+    return { label: 'BARDZO WYSOKIE', color: 'text-yellow-400' };
+  };
+
   const clubCoach = useMemo(() => {
     if (!club || !club.coachId) return null;
     return coaches[club.coachId];
@@ -204,13 +212,22 @@ export const ClubDetails: React.FC = () => {
          </div>
 
        <div className="flex gap-4">
-            <button 
+            {(() => {
+              const info = getMoraleInfo(club.morale ?? 50);
+              return (
+                <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white/5 border border-white/10">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">MORALE:</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${info.color}`}>{info.label}</span>
+                </div>
+              );
+            })()}
+            <button
               onClick={() => setIsResultsModalOpen(true)}
               className="px-8 py-4 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-600/30 transition-all active:scale-95 shadow-lg"
             >
               📊 Wyniki
             </button>
-            <button 
+            <button
               onClick={handleBack}
               className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg"
             >

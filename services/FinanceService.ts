@@ -1061,4 +1061,35 @@ export const FinanceService = {
     return prizes[competition]?.[event] ?? 0;
   },
 
+  // Premie dla zawodników i sztabu za osiągnięcia — wypłacane z budżetu klubu
+  calculateAchievementBonus: (
+    achievement: 'CHAMPION' | 'RUNNER_UP' | 'THIRD' | 'FOURTH' | 'PROMOTE_L2_L1' | 'PROMOTE_L3_L2' | 'CUP_WINNER' | 'CUP_FINALIST' | 'CUP_SEMI',
+    reputation: number,
+    hojnosc: string
+  ): number => {
+    const BASE_RANGES: Record<string, [number, number]> = {
+      CHAMPION:      [1_500_000, 2_500_000],
+      RUNNER_UP:     [  800_000, 1_400_000],
+      THIRD:         [  500_000,   900_000],
+      FOURTH:        [  200_000,   500_000],
+      PROMOTE_L2_L1: [  600_000, 1_000_000],
+      PROMOTE_L3_L2: [  200_000,   400_000],
+      CUP_WINNER:    [  700_000, 1_200_000],
+      CUP_FINALIST:  [  200_000,   500_000],
+      CUP_SEMI:      [   50_000,   150_000],
+    };
+    const REP_MULTIPLIER = reputation >= 7 ? 3.0 : reputation >= 4 ? 1.5 : 1.0;
+    const HOJNOSC_MULTIPLIER: Record<string, number> = {
+      bardzo_wysoka: 2.0,
+      wysoka:        1.5,
+      przecietna:    1.0,
+      niska:         0.6,
+      bardzo_niska:  0.3,
+    };
+    const [min, max] = BASE_RANGES[achievement] ?? [0, 0];
+    const base = min + Math.random() * (max - min);
+    const hMult = HOJNOSC_MULTIPLIER[hojnosc] ?? 1.0;
+    return Math.floor(base * REP_MULTIPLIER * hMult);
+  },
+
 };

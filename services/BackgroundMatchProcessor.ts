@@ -271,6 +271,18 @@ if (todayFixtures.length === 0) {
           const resultChar: "W" | "R" | "P" = pts === 3 ? 'W' : (pts === 1 ? 'R' : 'P');
           const newForm = [...(c.stats.form || []), resultChar].slice(-5) as ("W" | "R" | "P")[];
 
+          const _scoreDiff = isHome ? result.homeScore - result.awayScore : result.awayScore - result.homeScore;
+          const _moraleDelta = resultChar === 'W' ? (_scoreDiff >= 2 ? 8 : 5) : resultChar === 'P' ? (_scoreDiff <= -3 ? -10 : -5) : 0;
+          const _recentTwo = (c.stats.form || []).slice(-2);
+          const _seriesBonus = (resultChar === 'W' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'W')) ? 3 : (resultChar === 'P' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'P')) ? -4 : 0;
+          const _clubCoach = c.id === home.id ? hCoach : aCoach;
+          const _coachMotivation = _clubCoach?.attributes?.motivation ?? 50;
+          // im wyższa motywacja trenera tym mniejszy negatywny wpływ porażek (mot=0 → ×1.0, mot=50 → ×0.6, mot=100 → ×0.2)
+          const _motivationFactor = resultChar === 'P' ? (1.0 - (_coachMotivation / 100) * 0.8) : 1.0;
+          const _adjustedMoraleDelta = _moraleDelta < 0 ? Math.round(_moraleDelta * _motivationFactor) : _moraleDelta;
+          const _adjustedSeriesBonus = _seriesBonus < 0 ? Math.round(_seriesBonus * _motivationFactor) : _seriesBonus;
+          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + (50 - (c.morale ?? 50)) * 0.05)));
+
           const matchExpenses = isHome ? homeMatchExpenses : awayMatchExpenses;
           const { revenue: ticketRevenue, avgPrice: ticketAvgPrice } = isHome
             ? FinanceService.calculateMatchTicketRevenueForClub(fixture.attendance || 0, c)
@@ -378,6 +390,7 @@ if (todayFixtures.length === 0) {
             ...c,
             budget: c.budget + netChange,
             financeHistory: [...financeLogsToAdd, ...(c.financeHistory || [])].slice(0, 50),
+            morale: newMorale,
             stats: fixture.leagueId === CompetitionType.SUPER_CUP ? {
               ...c.stats,
               form: newForm

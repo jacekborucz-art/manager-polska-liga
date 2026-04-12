@@ -10,10 +10,14 @@ import { TeamAnalysisService } from '../../services/TeamAnalysisService';
 import szatnia from '../../Graphic/themes/szatnia.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
+import { WeeklyMotivationModal } from '../modals/WeeklyMotivationModal';
+import { WeeklyMotivationService } from '../../services/WeeklyMotivationService';
+import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
+import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
-          reserves, setReserves, setPlayers } = useGame();
+          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -22,6 +26,30 @@ export const SquadView: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playerId: string; loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  const [isMotivationOpen, setIsMotivationOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE'>('SQUAD');
+
+  const getMoraleInfo = (morale: number): { label: string; color: string; barColor: string; bg: string; border: string; description: string } => {
+    if (morale <= 20) return { label: 'BARDZO NISKIE', color: 'text-red-500', barColor: 'bg-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', description: 'Szatnia podzielona. Brak wiary w sukces. Każda porażka boli podwójnie — drużyna wchodzi na boisko bez przekonania.' };
+    if (morale <= 35) return { label: 'NISKIE', color: 'text-orange-400', barColor: 'bg-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30', description: 'Nastroje wyraźnie przygnębione. Drużyna potrzebuje pozytywnego impulsu — wystarczy jedna wygrana, by odwrócić trend.' };
+    if (morale <= 64) return { label: 'NEUTRALNE', color: 'text-white', barColor: 'bg-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30', description: 'Stabilna atmosfera w szatni. Zespół gotowy — ani przesadny optymizm, ani defetyzm. Solidna baza do pracy.' };
+    if (morale <= 79) return { label: 'WYSOKIE', color: 'text-green-400', barColor: 'bg-green-500', bg: 'bg-green-500/10', border: 'border-green-500/30', description: 'Pozytywna atmosfera w szatni. Drużyna wierzy w swoje możliwości i wchodzi na boisko z głową wysoko.' };
+    return { label: 'BARDZO WYSOKIE', color: 'text-yellow-400', barColor: 'bg-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', description: 'Znakomite morale! Seria sukcesów podbija pewność siebie całego zespołu. Drużyna jest w stanie szczytowej gotowości.' };
+  };
+
+  const leagueClubs = useMemo(() => myClub ? clubs.filter(c => c.leagueId === myClub.leagueId) : [], [clubs, myClub]);
+  const leaguePosition = useMemo(() => {
+    if (!myClub) return 0;
+    const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+    return sorted.findIndex(c => c.id === myClub.id) + 1;
+  }, [leagueClubs, myClub]);
+
+  const canMotivate = useMemo(() => myClub ? WeeklyMotivationService.canMotivate(myClub, currentDate) : false, [myClub, currentDate]);
+
+  const handleMotivationConfirm = (talk: MotivationTalkOption, result: MotivationTalkResult) => {
+    applyWeeklyMotivation(result.moraleDelta);
+    setIsMotivationOpen(false);
+  };
 
   const moveToReserves = (player: Player) => {
     if (!userTeamId || !myLineup) return;
@@ -430,6 +458,18 @@ export const SquadView: React.FC = () => {
 
          <div className="flex items-center gap-5">
             <button
+              onClick={() => canMotivate && setIsMotivationOpen(true)}
+              className={`relative group px-8 py-5 rounded-[24px] text-[11px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-xl overflow-hidden border ${
+                canMotivate
+                  ? 'bg-violet-600/10 border-violet-500/30 text-violet-300 hover:bg-violet-600/20 hover:border-violet-400 cursor-pointer'
+                  : 'bg-white/[0.02] border-white/5 text-slate-600 cursor-not-allowed'
+              }`}
+              title={canMotivate ? 'Przeprowadź tygodniową rozmowę motywacyjną' : 'Dostępne raz na tydzień'}
+            >
+              <span className="relative z-10 flex items-center gap-2">💬 MOTYWACJA{!canMotivate && <span className="text-[8px] normal-case not-italic font-bold text-slate-600">· użyta</span>}</span>
+              {canMotivate && <div className="absolute inset-0 bg-gradient-to-tr from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />}
+            </button>
+            <button
               onClick={() => setIsAnalysisOpen(true)}
               className="relative group px-8 py-5 rounded-[24px] bg-emerald-600/10 border border-emerald-500/30 text-[11px] font-black uppercase italic tracking-widest text-emerald-300 hover:bg-emerald-600/20 hover:border-emerald-400 transition-all active:scale-95 shadow-xl overflow-hidden"
             >
@@ -551,7 +591,76 @@ export const SquadView: React.FC = () => {
 
 {/* RIGHT: SQUAD MANAGEMENT (GLASS LISTS) */}
         <div className="flex-1 flex flex-col gap-6 min-w-0 overflow-y-auto custom-scrollbar">
-           
+
+          {/* TABS */}
+          <div className="shrink-0 flex gap-2 px-1">
+            <button
+              onClick={() => setActiveTab('SQUAD')}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'SQUAD' ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.15)]' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+            >SKŁAD</button>
+            <button
+              onClick={() => setActiveTab('MORALE')}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border ${getMoraleInfo(myClub.morale ?? 50).border} ${getMoraleInfo(myClub.morale ?? 50).color} shadow-lg` : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+            >MORALE</button>
+          </div>
+
+          {activeTab === 'MORALE' && (() => {
+            const morale = myClub.morale ?? 50;
+            const info = getMoraleInfo(morale);
+            const form = myClub.stats.form || [];
+            return (
+              <div className="shrink-0 flex flex-col gap-4">
+
+                {/* MAIN MORALE CARD */}
+                <div className={`rounded-[40px] border ${info.border} ${info.bg} backdrop-blur-3xl p-10 flex flex-col gap-6`}>
+                  <div className="flex flex-col gap-1">
+                    <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500">MORALE DRUŻYNY</div>
+                    <div className={`text-4xl font-black italic uppercase tracking-tight ${info.color}`}>{info.label}</div>
+                  </div>
+
+                  {/* BAR */}
+                  <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                    <div
+                      className={`h-full ${info.barColor} rounded-full transition-all duration-700`}
+                      style={{ width: `${morale}%` }}
+                    />
+                  </div>
+
+                  {/* LEVELS LEGEND */}
+                  <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                    <span className="text-red-500">Bardzo niskie</span>
+                    <span className="text-orange-400">Niskie</span>
+                    <span className="text-white">Neutralne</span>
+                    <span className="text-green-400">Wysokie</span>
+                    <span className="text-yellow-400">Bardzo wysokie</span>
+                  </div>
+
+                  {/* DESCRIPTION */}
+                  <p className="text-[11px] text-slate-400 leading-relaxed border-t border-white/5 pt-4">{info.description}</p>
+                </div>
+
+                {/* FORMA CONTEXT */}
+                <div className="rounded-[32px] border border-white/10 bg-white/[0.02] backdrop-blur-xl p-6 flex flex-col gap-3">
+                  <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600">Ostatnie wyniki</div>
+                  <div className="flex gap-2">
+                    {form.length === 0 && <span className="text-[10px] text-slate-600 italic">Brak rozegranych meczów</span>}
+                    {form.map((r, i) => (
+                      <div key={i} className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-black border
+                        ${r === 'W' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' :
+                          r === 'R' ? 'bg-slate-500/20 border-slate-500/30 text-slate-400' :
+                          'bg-red-500/20 border-red-500/30 text-red-400'}`}
+                      >{r === 'W' ? 'W' : r === 'R' ? 'R' : 'P'}</div>
+                    ))}
+                  </div>
+                </div>
+
+
+              </div>
+            );
+          })()}
+
+          {activeTab === 'SQUAD' && <>
+
            {/* STARTING XI LIST */}
            <div className="shrink-0 bg-slate-900/40 rounded-[50px] border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col overflow-hidden relative">
               <div className="px-8 py-3 border-b border-white/10 flex items-center bg-white/5 relative z-10">
@@ -672,6 +781,8 @@ export const SquadView: React.FC = () => {
               </div>
            </div>
 
+          </>}
+
         </div>
 </div>
 
@@ -716,6 +827,17 @@ export const SquadView: React.FC = () => {
           club={myClub}
           report={teamAnalysisReport}
           onClose={() => setIsAnalysisOpen(false)}
+        />
+      )}
+
+      {isMotivationOpen && myClub && (
+        <WeeklyMotivationModal
+          club={myClub}
+          leaguePosition={leaguePosition}
+          teamCount={leagueClubs.length}
+          seed={(sessionSeed ?? 1) + (myClub.stats.played ?? 0) * 37 + currentDate.getTime()}
+          onConfirm={handleMotivationConfirm}
+          onClose={() => setIsMotivationOpen(false)}
         />
       )}
 

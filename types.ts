@@ -831,6 +831,8 @@ export interface Club {
   academy?: ClubAcademy;
   board?: ClubBoard;
   boardConfidence?: number;
+  morale?: number;
+  lastMotivationDate?: string;
 }
 
 export interface YouthPlayer {
