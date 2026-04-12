@@ -1,4 +1,4 @@
-import { Scout, ScoutPersonality, Region, PlayerPosition, ClubAcademy } from '../types';
+import { Scout, ScoutPersonality, Region, PlayerPosition, ClubAcademy, BoardAttributeLevel } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { AcademyService } from './AcademyService';
 
@@ -130,14 +130,24 @@ export const ScoutService = {
   },
 
   // Generuje rynek dostępnych skautów (filtruje po reputacji i zatrudnieniu)
-  generateMarket(pool: Scout[], clubReputation: number): Scout[] {
+  generateMarket(pool: Scout[], clubReputation: number, boardKompetencja?: BoardAttributeLevel): Scout[] {
+    const KOMPETENCJA_SCOUT_OFFSET: Record<BoardAttributeLevel, number> = {
+      bardzo_wysoka:  3,
+      wysoka:         1,
+      przecietna:     0,
+      niska:         -1,
+      bardzo_niska:  -2,
+    };
+    const offset = boardKompetencja ? KOMPETENCJA_SCOUT_OFFSET[boardKompetencja] : 0;
+    const effectiveSize = Math.max(1, MARKET_SIZE + offset);
+
     const available = pool.filter(s =>
       !s.employedByClubId &&
       s.minClubReputation <= clubReputation
     );
-    // Miesza i bierze pierwszych MARKET_SIZE
+    // Miesza i bierze pierwszych effectiveSize
     const shuffled = [...available].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, MARKET_SIZE);
+    return shuffled.slice(0, effectiveSize);
   },
 
   // Liczba dni do odświeżenia rynku

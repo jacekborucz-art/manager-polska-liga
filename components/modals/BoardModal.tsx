@@ -145,6 +145,35 @@ const EXPECTATIONS_TEXTS: Record<BoardAttributeLevel, Record<RepTier, string[]>>
   },
 };
 
+// Dla drużyn 1. i 2. ligowej (L_PL_2, L_PL_3) — awans / baraż / utrzymanie
+const LOWER_DIVISION_EXPECTATIONS: Record<BoardAttributeLevel, string[]> = {
+  bardzo_wysoka: [
+    'Oczekujemy bezpośredniego awansu. Miejsca 1-2 to jedyny akceptowalny wynik tego sezonu.',
+    'Cel jest jasny: awans bezpośredni. Nie zadowolimy się niczym poniżej pierwszych dwóch miejsc w tabeli.',
+    'Ten sezon ma zakończyć się awansem. Miejsca 1-2 to nasz priorytet absolutny i nie ma od niego odstępstw.',
+  ],
+  wysoka: [
+    'Oczekujemy awansu, najlepiej bezpośredniego. Jeśli nie pierwsze dwa miejsca, to przynajmniej baraż jest obowiązkowy.',
+    'Awans jest naszym celem. Miejsca 1-2 to ideał, ale baraż też nas satysfakcjonuje. Ważne, żebyśmy wyszli z tej ligi.',
+    'Celujemy w górę tabeli. Bezpośredni awans lub przynajmniej baraż, to minimum, które zaakceptujemy na koniec sezonu.',
+  ],
+  przecietna: [
+    'Chcemy walczyć o baraże. Miejsca 3-6 dają nam szansę na awans i taki jest nasz cel na ten sezon.',
+    'Oczekujemy zakończenia sezonu w strefie barażowej. Miejsca 3-6 to realny i ambitny cel dla tej drużyny.',
+    'Baraże to nasz cel. Chcemy być w górnej połowie tabeli i walczyć o szansę na awans w barażach.',
+  ],
+  niska: [
+    'Priorytetem jest trzymanie się z dala od strefy spadkowej. Spokojny sezon bez zbędnych nerwów.',
+    'Oczekujemy bezpiecznej pozycji w tabeli. Nie chcemy walczyć o utrzymanie, środek stawki nas zadowoli.',
+    'Naszym celem jest stabilność. Chcemy unikać bezpośredniego zagrożenia spadkiem i tyle na ten sezon.',
+  ],
+  bardzo_niska: [
+    'Jedynym celem jest utrzymanie w lidze. Każdy zdobyty punkt będzie na wagę złota.',
+    'Walczymy o przetrwanie. Utrzymanie się w tej klasie rozgrywkowej będzie dla nas pełnym sukcesem.',
+    'Priorytetem numer jeden jest unikanie spadku. Nic innego nas w tej chwili nie interesuje.',
+  ],
+};
+
 // Dla klubów o wysokiej reputacji (7-10) ambicja zarządu decyduje o aspiracjach,
 // bo nawet skromny zarząd Legii nie może zejść poniżej miejsc pucharowych.
 const HIGH_REP_EXPECTATIONS: Record<BoardAttributeLevel, string[]> = {
@@ -175,7 +204,10 @@ const HIGH_REP_EXPECTATIONS: Record<BoardAttributeLevel, string[]> = {
   ],
 };
 
-const getExpectationsText = (oczekiwania: BoardAttributeLevel, reputation: number, ambicja: BoardAttributeLevel, seed: number): string => {
+const getExpectationsText = (oczekiwania: BoardAttributeLevel, reputation: number, ambicja: BoardAttributeLevel, leagueId: string, seed: number): string => {
+  if (leagueId === 'L_PL_2' || leagueId === 'L_PL_3') {
+    return pick(LOWER_DIVISION_EXPECTATIONS[oczekiwania], seed + 17);
+  }
   const tier = getRepTier(reputation);
   if (tier === 'high') {
     return pick(HIGH_REP_EXPECTATIONS[ambicja], seed + 17);
@@ -474,7 +506,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
             {board && (
               <p className={`text-base font-normal italic tracking-tight leading-relaxed ${infoColor}`}>
-                {getExpectationsText(board.oczekiwania, club.reputation, board.ambicja, seed)} {HOJNOSC_TEXT[board.hojnosc]}
+                {getExpectationsText(board.oczekiwania, club.reputation, board.ambicja, club.leagueId, seed)} {HOJNOSC_TEXT[board.hojnosc]}
               </p>
             )}
 

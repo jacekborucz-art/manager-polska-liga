@@ -1,4 +1,4 @@
-import { Club, Player, PlayerPosition, TransferClubBidInput, TransferTiming } from '../types';
+import { Club, Player, PlayerPosition, TransferClubBidInput, TransferTiming, BoardAttributeLevel } from '../types';
 import { FinanceService } from './FinanceService';
 
 interface SellerDecisionResult {
@@ -62,13 +62,15 @@ export const TransferSellerLogicService = {
     buyerClub: Club,
     sellerSquad: Player[],
     currentDate: Date,
-    timing: TransferTiming = TransferTiming.IMMEDIATE
+    timing: TransferTiming = TransferTiming.IMMEDIATE,
+    boardKompetencja?: BoardAttributeLevel
   ): SellerOpeningStance => {
     const baseAskingPrice = TransferSellerLogicService.estimateAskingPrice(
       player,
       sellerClub,
       sellerSquad,
-      currentDate
+      currentDate,
+      boardKompetencja
     );
     const askingPrice = roundToNearest50k(baseAskingPrice * getTimingPriceMultiplier(timing));
 
@@ -160,10 +162,20 @@ export const TransferSellerLogicService = {
     player: Player,
     sellerClub: Club,
     sellerSquad: Player[],
-    currentDate: Date
+    currentDate: Date,
+    boardKompetencja?: BoardAttributeLevel
   ): number => {
     const tier = FinanceService.getClubTier(sellerClub);
-    const baseValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, tier);
+    const rawBaseValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, tier);
+    const KOMPETENCJA_SELL_MULTIPLIER: Record<BoardAttributeLevel, number> = {
+      bardzo_wysoka: 1.15,
+      wysoka:        1.07,
+      przecietna:    1.00,
+      niska:         0.95,
+      bardzo_niska:  0.88,
+    };
+    const kompMult = boardKompetencja ? KOMPETENCJA_SELL_MULTIPLIER[boardKompetencja] : 1.00;
+    const baseValue = rawBaseValue * kompMult;
 
     let multiplier = 1.0;
     const daysLeft = Math.floor(

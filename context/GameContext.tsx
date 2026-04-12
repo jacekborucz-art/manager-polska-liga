@@ -993,7 +993,14 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         leagueId: newLeagueId,
         reputation: newReputation,
         budget: club.budget + nextSeasonInjection,
-        transferBudget: Math.floor((club.budget + nextSeasonInjection) * (0.25 + Math.random() * 0.45)),
+        transferBudget: (() => {
+          const KOMPETENCJA_BUDGET_MULT: Record<string, number> = {
+            bardzo_wysoka: 1.25, wysoka: 1.12, przecietna: 1.00, niska: 0.90, bardzo_niska: 0.80,
+          };
+          const kompMult = club.board ? (KOMPETENCJA_BUDGET_MULT[club.board.kompetencja] ?? 1.00) : 1.00;
+          const boostedInjection = nextSeasonInjection * kompMult;
+          return Math.floor((club.budget + boostedInjection) * (0.25 + Math.random() * 0.45));
+        })(),
         boardBudgetRequestsThisSeason: 0,
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
         stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
@@ -1195,7 +1202,7 @@ const selectUserTeam = (clubId: string) => {
     const pool = ScoutService.generateScoutPool(Date.now());
     setScoutPool(pool);
     const userClub = clubs.find(c => c.id === clubId);
-    const market = ScoutService.generateMarket(pool, userClub?.reputation ?? 5);
+    const market = ScoutService.generateMarket(pool, userClub?.reputation ?? 5, userClub?.board?.kompetencja);
     setScoutMarket(market);
     setScoutMarketRefreshDate(new Date().toISOString().split('T')[0]);
 
@@ -1804,7 +1811,7 @@ setMessages([welcomeMail, fanMail]);
     if (!userTeamId) return;
     const userClub = clubs.find(c => c.id === userTeamId);
     if (!userClub) return;
-    const market = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5);
+    const market = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5, userClub.board?.kompetencja);
     setScoutMarket(market);
     setScoutMarketRefreshDate(new Date(currentDate).toISOString().split('T')[0]);
   }, [scoutPool, userTeamId, clubs, currentDate]);
@@ -4040,7 +4047,7 @@ const finalResult: SimulationOutput = {
         if (daysSince >= 45) {
           const userClub = clubs.find(c => c.id === userTeamId);
           if (userClub) {
-            const newMarket = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5);
+            const newMarket = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5, userClub.board?.kompetencja);
             setScoutMarket(newMarket);
             setScoutMarketRefreshDate(nextDay.toISOString().split('T')[0]);
           }
@@ -5492,7 +5499,8 @@ const finalResult: SimulationOutput = {
       buyerClub,
       sellerSquad,
       currentDate,
-      offerInput.timing
+      offerInput.timing,
+      sellerClub.board?.kompetencja
     );
     const latestClubOffer = transferOffers.find(
       offer =>

@@ -17,15 +17,15 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: 'Objęcie stanowiska Pierwszego Trenera — oczekiwania Zarządu',
-    body: 'Szanowny Panie Managerze,\n\nW imieniu Zarządu {CLUB} formalnie witamy Pana na stanowisku Pierwszego Trenera i wyrażamy zadowolenie z podjętej decyzji o współpracy.\n\nPragnę jednak od razu nakreślić ramy, w jakich będziemy oceniać naszą współpracę. {CLUB} jest klubem o ugruntowanej pozycji i ogólnopolskiej rozpoznawalności. Oczekiwania Zarządu oraz kibiców są jednoznaczne: Mistrzostwo Polski i Puchar Polski to cele, które traktujemy jako obowiązek, nie aspirację. Dysponuje Pan kadrą o najwyższym potencjale w lidze — jej odpowiednie wykorzystanie leży wyłącznie w Pana gestii.\n\nJesteśmy do dyspozycji w sprawach organizacyjnych i budżetowych. Oczekujemy regularnych raportów i pełnej determinacji na boisku.\n\nZ poważaniem,\nWojciech Marcin Jankowski\nPrezes Zarządu, {CLUB}'
+    subject: 'Objęcie stanowiska Pierwszego Trenera. Przesyłamy oczekiwania Zarządu klubu',
+    body: 'Szanowny Panie Managerze,\n\nW imieniu Zarządu {CLUB} formalnie witamy Pana na stanowisku Pierwszego Trenera i wyrażamy zadowolenie z podjętej decyzji o współpracy.\n\nPragnę jednak od razu nakreślić ramy, w jakich będziemy oceniać naszą współpracę. {CLUB} jest klubem o ugruntowanej pozycji i ogólnopolskiej rozpoznawalności. Oczekiwania Zarządu oraz kibiców są jednoznaczne: Mistrzostwo Polski i Puchar Polski to cele, które traktujemy jako obowiązek, nie aspirację. Dysponuje Pan kadrą o najwyższym potencjale w lidze więc jej odpowiednie wykorzystanie leży wyłącznie w Pana gestii.\n\nJesteśmy do dyspozycji w sprawach organizacyjnych i budżetowych. Oczekujemy regularnych raportów i pełnej determinacji na boisku.\n\nZ poważaniem,\nWojciech Marcin Jankowski\nPrezes Zarządu, {CLUB}'
   },
   {
     id: 'board_welcome_pro',
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: 'Witamy w {CLUB} — cele na nadchodzący sezon',
+    subject: 'Witamy w {CLUB}. Oto nasze cele na nadchodzący sezon',
     body: 'Szanowny Panie Managerze,\n\nZ przyjemnością witamy Pana w strukturach {CLUB}. Cieszymy się, że podjął się Pan tego wyzwania i wierzymy, że wniesie Pan do klubu nową jakość zarówno pod względem sportowym, jak i organizacyjnym.\n\nW nadchodzącym sezonie naszym priorytetem jest regularna rywalizacja o miejsca w europejskich pucharach oraz realna walka o Puchar Polski. Zdajemy sobie sprawę, że liga jest wyrównana, jednak potencjał naszej kadry powinien plasować nas wyraźnie w czołówce tabeli.\n\nLiczymy na Pana profesjonalizm i zapraszamy do współpracy.\n\nZ poważaniem,\nMarcin Wiśniewski\nPrezes Zarządu, {CLUB}'
   },
   {
@@ -33,7 +33,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: 'Objęcie stanowiska Pierwszego Trenera — mandat Zarządu',
+    subject: 'Objęcie stanowiska Pierwszego Trenera.',
     body: 'Szanowny Panie Managerze,\n\nWitamy Pana w {CLUB}. Dziękujemy za podjęcie się tego odpowiedzialnego zadania w szczególnym momencie dla naszego klubu.\n\nBędę bezpośredni: obecny szczebel rozgrywkowy jest stanem przejściowym, który nie odpowiada ani historii, ani ambicjom {CLUB}. Zarząd stawia przed Panem jeden, niepodlegający dyskusji cel — awans do {TARGET_LEAGUE} w tym sezonie. Dysponuje Pan kadrą znacząco przewyższającą poziom tej ligi.\n\nOczekujemy pełnego profesjonalizmu i skupienia na realizacji tego mandatu.\n\nZ poważaniem,\nTomasz Adamski\nPrezes Zarządu, {CLUB}'
   },
   {
@@ -41,7 +41,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Dyrektor Sportowy',
-    subject: 'Witamy w {CLUB} — priorytety sportowe sezonu',
+    subject: 'Witamy w {CLUB} . Lista priorytetów nadchodzącego sezonu',
     body: 'Szanowny Panie Managerze,\n\nW imieniu Zarządu oraz Dyrekcji Sportowej {CLUB} serdecznie witamy Pana na nowym stanowisku. Doceniamy Pana zdecydowanie przy podejmowaniu tego wyzwania.\n\nNasze oczekiwania względem bieżącego sezonu są klarowne: priorytetem jest zajęcie miejsca gwarantującego awans do {TARGET_LEAGUE}. Ambicje klubu sięgają wyżej niż obecny szczebel rozgrywkowy, a posiadana kadra daje realne podstawy do osiągnięcia tego celu.\n\nDyrekcja Sportowa pozostaje do Pana dyspozycji we wszelkich kwestiach kadrowych i organizacyjnych.\n\nZ poważaniem,\nPaweł Nowak\nDyrektor Sportowy, {CLUB}'
   },
   {
@@ -57,7 +57,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Właściciel Klubu',
-    subject: 'Witamy w {CLUB} — pilna kwestia do omówienia',
+    subject: 'Witamy w {CLUB}. Pilne!',
     body: 'Szanowny Panie Managerze,\n\nWitamy Pana w {CLUB}. Rozumiemy, że dołącza Pan do klubu w trudnym momencie, i doceniamy gotowość do podjęcia tego wyzwania.\n\nNie będę owijał w bawełnę — sytuacja sportowa jest poważna i wymaga natychmiastowych działań. Priorytetem absolutnym na ten sezon jest utrzymanie miejsca w lidze. Każdy zdobyty punkt ma dla nas kluczowe znaczenie. Proszę skupić się na stabilizacji gry defensywnej i odbudowie morale szatni — to fundament, od którego musimy zacząć.\n\nZarząd zapewnia Panu pełne wsparcie w granicach dostępnych zasobów. Oczekujemy regularnego kontaktu i rzetelnej oceny sytuacji.\n\nZ poważaniem,\nAndrzej Karpowicz\nWłaściciel, {CLUB}'
   },
 
@@ -101,6 +101,32 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     role: 'Prezes Zarządu',
     subject: 'Obserwujemy sytuację w tabeli',
     body: 'Zarząd uważnie śledzi poczynania {CLUB} na boisku i w tabeli. Zdajemy sobie sprawę, że sezon jest jeszcze w toku, dlatego cierpliwie czekamy na przełom. Liczymy jednak, że w nadchodzących kolejkach drużyna potwierdzi swój potencjał i zacznie wspinać się w klasyfikacji.'
+  },
+
+  // --- BOARD WEEKLY PRESSURE MAILS ---
+  {
+    id: 'board_pressure_concern',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Dyrektor Sportowy',
+    subject: 'Obecna pozycja w tabeli',
+    body: 'Panie Trenerze,\n\nchcielibyśmy zwrócić Pana uwagę na obecną sytuację {CLUB} w tabeli ligowej. Pozycja, którą aktualnie zajmujemy, odbiega od naszych oczekiwań. Jesteśmy przekonani, że drużyna ma potencjał, by wypracować lepszy wynik, jednak czas gra na niekorzyść. Oczekujemy wyraźnej poprawy w najbliższych kolejkach.\n\nZarząd Klubu'
+  },
+  {
+    id: 'board_pressure_warning',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Wyniki poniżej oczekiwań',
+    body: 'Panie Trenerze,\n\nprzesyłamy niniejsze pismo jako formalne wyrażenie niezadowolenia zarządu z obecnych wyników sportowych {CLUB}. Jesteśmy poważnie zaniepokojeni tempem i jakością pracy. Pozycja w tabeli jest nie do zaakceptowania i wymaga natychmiastowej, zdecydowanej reakcji z Pana strony.\n\nNasz kredyt zaufania maleje. Zarząd Klubu'
+  },
+  {
+    id: 'board_pressure_critical',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Właściciel Klubu',
+    subject: 'PILNE: Wymagane działania',
+    body: 'Panie Trenerze,\n\nsytuacja sportowa {CLUB} osiągnęła punkt krytyczny. Obecna pozycja w tabeli jest katastrofalna i stanowi zagrożenie dla celów całego klubu. Zarząd jest zdecydowany podjąć wszelkie niezbędne kroki, by odwrócić tę sytuację.\n\nOczekujemy NATYCHMIASTOWEJ poprawy. Jeśli wyniki nie zmienią się w ciągu najbliższych kolejek, zarząd będzie zmuszony rozważyć radykalne decyzje kadrowe.\n\nZ całą powagą,\nZarząd Klubu'
   },
 
   // --- MATCH EVENTS (FIXED LOGIC) ---
@@ -298,7 +324,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Dział Marketingu',
     role: 'Dyrektor ds. Sprzedaży',
-    subject: 'Raport przedsprzedaży karnetów — Sezon {SEASON}',
+    subject: 'Raport przedsprzedaży karnetów. Sezon {SEASON}',
     body: 'Szanowny Panie Managerze,\n\nZ przyjemnością przedstawiamy raport z przedsprzedaży karnetów sezonowych dla {CLUB} przed startem nowych rozgrywek.\n\n🏟️ STADION: {STADIUM}\n📊 POJEMNOŚĆ: {CAPACITY} miejsc\n\n--- WYNIKI PRZEDSPRZEDAŻY ---\n\n🎫 Sprzedane karnety: {TICKETS_SOLD} szt.\n💰 Przychód netto: {REVENUE}\n💳 Cena karnetu: {TICKET_PRICE}\n\nZainteresowanie kibiców przed tym sezonem oceniamy jako {DEMAND_LEVEL}. Pieniądze z przedsprzedaży zostały doliczone do budżetu klubu.\n\nZ poważaniem,\nDział Marketingu {CLUB}'
   },
   // --- EUROPEJSKIE GRATULACJE — FAZA GRUPOWA ---
@@ -315,7 +341,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: 'Awans do Fazy Grupowej Ligi Europy — Gratulacje!',
+    subject: 'Awans do Fazy Grupowej Ligi Europy. Gratulacje!',
     body: 'Szanowny Panie Managerze,\n\nZ wielką przyjemnością gratulujemy awansu do fazy grupowej Ligi Europy! To znakomity wynik, który potwierdza rosnącą siłę {CLUB} na arenie europejskiej. Cały klub jest z Pana dumny — powodzenia w dalszych zmaganiach!\n\nZ poważaniem,\nZarząd {CLUB}'
   },
   {
@@ -323,7 +349,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: 'Awans do Fazy Grupowej Ligi Konferencji — Gratulacje!',
+    subject: 'Awans do Fazy Grupowej Ligi Konferencji. Gratulacje!',
     body: 'Panie Managerze,\n\nW imieniu Zarządu {CLUB} gratulujemy awansu do fazy grupowej Ligi Konferencji UEFA! To ważny krok w europejskiej rywalizacji i powód do dumy dla całego klubu. Liczymy na dalsze sukcesy!\n\nZ poważaniem,\nZarząd {CLUB}'
   },
   // --- EUROPEJSKIE GRATULACJE — 1/8 FINAŁU ---
