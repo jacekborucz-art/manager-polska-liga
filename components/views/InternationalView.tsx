@@ -443,10 +443,17 @@ const formatDateLabel = (dateValue: string) => {
   return `${date.getDate()} ${MONTH_SHORT[date.getMonth()] ?? '???'}`;
 };
 
-const StandingRow: React.FC<{ team: GroupTeam; rank: number }> = ({ team, rank }) => {
+const StandingRow: React.FC<{ team: GroupTeam; rank: number; allStandings: GroupTeam[] }> = ({ team, rank, allStandings }) => {
   const isPoland = team.name === 'Polska';
   const gd = team.GF - team.GA;
   const gdDisplay = gd > 0 ? `+${gd}` : `${gd}`;
+
+  const numTeams = allStandings.length;
+  const totalMatchesPerTeam = (numTeams - 1) * 2;
+  const maxPossiblePts = (t: GroupTeam) => t.pts + (totalMatchesPerTeam - t.M) * 3;
+  const clinched1st = rank === 1 && allStandings.slice(1).every(t => maxPossiblePts(t) < team.pts);
+  const clinched2nd = rank === 2 && (allStandings[2] ? maxPossiblePts(allStandings[2]) < team.pts : true);
+
   const rowCellClass =
     rank === 1 ? 'bg-amber-400/30' :
     rank === 2 ? 'bg-sky-400/20' :
@@ -471,23 +478,23 @@ const StandingRow: React.FC<{ team: GroupTeam; rank: number }> = ({ team, rank }
         <span className={`text-sm font-black uppercase italic tracking-tight ${isPoland ? 'text-amber-300' : 'text-slate-300'}`}>
           {team.name}
         </span>
-        {rank === 1 && (
+        {clinched1st && (
           <span className="ml-2 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 align-middle">
             AWANS
           </span>
         )}
-        {rank === 2 && (
+        {clinched2nd && (
           <span className="ml-2 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded bg-sky-400/20 text-sky-400 border border-sky-400/40 align-middle">
             PLAYOFF
           </span>
         )}
       </td>
-      <td className={`text-center font-bold text-slate-400 font-mono text-sm w-10 ${rowCellClass}`}>{team.M}</td>
-      <td className={`text-center font-bold text-slate-500 font-mono text-xs w-10 ${rowCellClass}`}>{team.W}</td>
-      <td className={`text-center font-bold text-slate-500 font-mono text-xs w-10 ${rowCellClass}`}>{team.D}</td>
-      <td className={`text-center font-bold text-slate-500 font-mono text-xs w-10 ${rowCellClass}`}>{team.L}</td>
-      <td className={`text-center font-bold text-slate-600 font-mono text-[10px] w-16 ${rowCellClass}`}>{team.GF}:{team.GA}</td>
-      <td className={`text-center font-bold text-slate-500 font-mono text-xs w-14 ${rowCellClass}`}>{gdDisplay}</td>
+      <td className={`text-center font-bold text-white font-mono text-sm w-10 ${rowCellClass}`}>{team.M}</td>
+      <td className={`text-center font-bold text-white font-mono text-xs w-10 ${rowCellClass}`}>{team.W}</td>
+      <td className={`text-center font-bold text-white font-mono text-xs w-10 ${rowCellClass}`}>{team.D}</td>
+      <td className={`text-center font-bold text-white font-mono text-xs w-10 ${rowCellClass}`}>{team.L}</td>
+      <td className={`text-center font-bold text-white font-mono text-[10px] w-16 ${rowCellClass}`}>{team.GF}:{team.GA}</td>
+      <td className={`text-center font-bold text-white font-mono text-xs w-14 ${rowCellClass}`}>{gdDisplay}</td>
       <td className={`text-center pr-6 w-16 ${rowCellClass}`}>
         <span className={`text-lg font-black font-mono tabular-nums ${isPoland ? 'text-amber-300' : 'text-slate-300'}`}>
           {team.pts}
@@ -893,7 +900,7 @@ const InternationalView: React.FC = () => {
                         </thead>
                         <tbody>
                           {standings.map((team, index) => (
-                            <StandingRow key={team.name} team={team} rank={index + 1} />
+                            <StandingRow key={team.name} team={team} rank={index + 1} allStandings={standings} />
                           ))}
                         </tbody>
                       </table>
@@ -989,7 +996,7 @@ const InternationalView: React.FC = () => {
                         </thead>
                         <tbody>
                           {activeGroupData.standings.map((team, index) => (
-                            <StandingRow key={team.name} team={team} rank={index + 1} />
+                            <StandingRow key={team.name} team={team} rank={index + 1} allStandings={activeGroupData.standings} />
                           ))}
                         </tbody>
                       </table>
