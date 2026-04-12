@@ -39,7 +39,7 @@ import { CLUBS_SOUTH_AMERICA, generateSAClubId } from '../resources/static_db/cl
 import { CLUBS_ASIAN, generateAsianClubId } from '../resources/static_db/clubs/asian_teams';
 import { CLUBS_AFRICAN, generateAfricanClubId } from '../resources/static_db/clubs/african_teams';
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../resources/static_db/clubs/northAME_teams';
-import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS, STATIC_SA_CLUBS, STATIC_ASIAN_CLUBS, STATIC_AFRICAN_CLUBS, STATIC_NA_CLUBS, START_DATE, UNEMPLOYED_MANAGER_CLUB, UNEMPLOYED_MANAGER_CLUB_ID } from '../constants';
+import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS, STATIC_SA_CLUBS, STATIC_ASIAN_CLUBS, STATIC_AFRICAN_CLUBS, STATIC_NA_CLUBS, START_DATE, UNEMPLOYED_MANAGER_CLUB, UNEMPLOYED_MANAGER_CLUB_ID, generateRandomBoard } from '../constants';
 import { SeasonTemplateGenerator } from '../services/SeasonTemplateGenerator';
 import { LeagueScheduleGenerator } from '../services/LeagueScheduleGenerator';
 import { CalendarEngine } from '../services/CalendarEngine';
@@ -998,7 +998,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
         stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
         europeanBonusPoints: 0,
-        isInPolishCup: false
+        isInPolishCup: false,
+        board: generateRandomBoard(),
+        boardConfidence: 75
       };
     });
 
@@ -3498,7 +3500,33 @@ const finalResult: SimulationOutput = {
       return club;
     });
     
-    setClubs(updatedClubsForSuperCup);
+    // Aktualizacja boardConfidence dla wszystkich klubów
+    const leagueGroups = new Map<string, { id: string; points: number; goalDifference: number }[]>();
+    updatedClubsForSuperCup.forEach(c => {
+      const arr = leagueGroups.get(c.leagueId) || [];
+      arr.push({ id: c.id, points: c.stats.points, goalDifference: c.stats.goalDifference });
+      leagueGroups.set(c.leagueId, arr);
+    });
+    const leagueSortedIds = new Map<string, string[]>();
+    leagueGroups.forEach((arr, lId) => {
+      const sorted = [...arr].sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference);
+      leagueSortedIds.set(lId, sorted.map(c => c.id));
+    });
+    const updatedClubsWithConfidence = updatedClubsForSuperCup.map(club => {
+      const resultScore = (club.stats.wins * 4) - (club.stats.losses * 6);
+      let newConfidence: number;
+      if (club.leagueId === 'NONE') {
+        const base = 100 - (club.reputation * 2);
+        newConfidence = Math.min(99, Math.max(5, base + resultScore + (club.europeanBonusPoints ?? 0)));
+      } else {
+        const rankList = leagueSortedIds.get(club.leagueId) || [];
+        const rank = rankList.indexOf(club.id) + 1 || 1;
+        const rankImpact = (18 - rank) * 2;
+        newConfidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (club.reputation * 2)));
+      }
+      return { ...club, boardConfidence: newConfidence };
+    });
+    setClubs(updatedClubsWithConfidence);
 
     // 5. Integracja NOWYCH OFERT AI do stanu
 
@@ -3515,8 +3543,14 @@ const finalResult: SimulationOutput = {
       const userRank = sorted.findIndex(c => c.id === userTeamId) + 1;
       
       const resultScore = (userClub.stats.wins * 4) - (userClub.stats.losses * 6);
-      const rankImpact = (18 - userRank) * 2;
-      const confidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (userClub.reputation * 2)));
+      let confidence: number;
+      if (userClub.leagueId === 'NONE') {
+        const base = 100 - (userClub.reputation * 2);
+        confidence = Math.min(99, Math.max(5, base + resultScore + (userClub.europeanBonusPoints ?? 0)));
+      } else {
+        const rankImpact = (18 - userRank) * 2;
+        confidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (userClub.reputation * 2)));
+      }
       
       const recentFixture = allFixtures.find(f => f.date.toDateString() === dateToProcess.toDateString() && (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId));
       

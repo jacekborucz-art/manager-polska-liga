@@ -1,5 +1,5 @@
 
-import { League, LeagueLevel, Club, Player, PlayerPosition, Region, HealthStatus, PlayerAttributes, NationalTeam } from './types';
+import { League, LeagueLevel, Club, Player, PlayerPosition, Region, HealthStatus, PlayerAttributes, NationalTeam, ClubBoard, BoardAttributeLevel } from './types';
 import { RAW_PL_CLUBS, generateClubId } from './resources/static_db/clubs/pl_clubs';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from './resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from './resources/static_db/clubs/EuropeLeagueTeams';
@@ -18,6 +18,16 @@ import { NATIONAL_TEAMS_CONMEBOL } from './resources/static_db/NationalTeams/Nat
 import { NATIONAL_TEAMS_OFC } from './resources/static_db/NationalTeams/NationalTeamsOFC';
 
 // (Dodaj resztę importów analogicznie...)
+
+const BOARD_LEVELS: BoardAttributeLevel[] = ['bardzo_niska', 'niska', 'przecietna', 'wysoka', 'bardzo_wysoka'];
+export const generateRandomBoard = (): ClubBoard => ({
+  hojnosc:     BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  ambicja:     BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  cierpliwosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  chciwosc:    BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  oczekiwania: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  kompetencja: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+});
 
 export const REGION_NATIONALITY_LABEL: Record<Region, string> = {
   [Region.POLAND]:      'Polska',
@@ -119,7 +129,9 @@ const generatePlaceholderClub = (leagueId: string, index: number, tier: number):
     boardStrictness: Math.floor(Math.random() * 10) + 1,
     transferBudget: Math.floor(FinanceService.calculateInitialBudget(tier, 1) * (0.25 + Math.random() * 0.45)),
     boardBudgetRequestsThisSeason: 0,
-    signingBonusPool: 0
+    signingBonusPool: 0,
+    board: generateRandomBoard(),
+    boardConfidence: 75
   };
 };
 
@@ -152,6 +164,8 @@ const loadClubsForTier = (tier: number, leagueId: string, limit: number): Club[]
         raw.reputation
       ),
       logoFile: raw.logoFile,
+      board: generateRandomBoard(),
+      boardConfidence: 75,
       colorPrimary: raw.colors[0],
       colorSecondary: raw.colors[1] || '#FFFFFF',
       rosterIds: [],
@@ -216,6 +230,8 @@ export const STATIC_CL_CLUBS: Club[] = RAW_CHAMPIONS_LEAGUE_CLUBS.map(raw => {
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
     stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
     isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75,
   };
 });
 
@@ -243,6 +259,8 @@ export const STATIC_EL_CLUBS: Club[] = RAW_EUROPA_LEAGUE_CLUBS.map(raw => {
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
     stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
     isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75,
   };
 });
 
@@ -302,6 +320,8 @@ const buildInternationalClub = (
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
     stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
     isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75,
   };
 };
 

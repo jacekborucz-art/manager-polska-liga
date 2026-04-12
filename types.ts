@@ -786,6 +786,17 @@ export interface FinanceLog {
   previousBalance?: number; // Saldo przed operacją
 }
 
+export type BoardAttributeLevel = 'bardzo_niska' | 'niska' | 'przecietna' | 'wysoka' | 'bardzo_wysoka';
+
+export interface ClubBoard {
+  hojnosc: BoardAttributeLevel;
+  ambicja: BoardAttributeLevel;
+  cierpliwosc: BoardAttributeLevel;
+  chciwosc: BoardAttributeLevel;
+  oczekiwania: BoardAttributeLevel;
+  kompetencja: BoardAttributeLevel;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -818,6 +829,8 @@ export interface Club {
   europeanBonusPoints?: number;
   logoFile?: string;
   academy?: ClubAcademy;
+  board?: ClubBoard;
+  boardConfidence?: number;
 }
 
 export interface YouthPlayer {

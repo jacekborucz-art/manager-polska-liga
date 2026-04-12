@@ -7,6 +7,7 @@ import { Card } from '../ui/Card';
 import { LineupService } from '../../services/LineupService';
 import { MailDetailsModal } from '../modals/MailDetailsModal';
 import { FinanceHistoryModal } from '../modals/FinanceHistoryModal';
+import { BoardModal } from '../modals/BoardModal';
 import { FinanceService } from '../../services/FinanceService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import treningButton from '../../Graphic/buttons/trening.png';
@@ -19,6 +20,7 @@ import historiaButton from '../../Graphic/buttons/historia.png';
 import rynekPracyButton from '../../Graphic/buttons/rynek_pracy.png';
 import finanseButton from '../../Graphic/buttons/finanse.png';
 import trustButton from '../../Graphic/buttons/trust.png';
+import managementButton from '../../Graphic/buttons/management.png';
 import rezerwyButton from '../../Graphic/buttons/rezerwy.png';
 import akademiaButton from '../../Graphic/buttons/akademia.png';
 import szpitalButton from '../../Graphic/buttons/szpital.png';
@@ -68,6 +70,7 @@ export const Dashboard: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
+  const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
 
   useEffect(() => {
     setIsProcessing(false);
@@ -95,6 +98,11 @@ export const Dashboard: React.FC = () => {
 const boardConfidence = useMemo(() => {
     if (!myClub) return 50;
     const resultScore = (myClub.stats.wins * 4) - (myClub.stats.losses * 6);
+    if (myClub.leagueId === 'NONE') {
+      const base = 100 - (myClub.reputation * 2);
+      const total = base + resultScore + (myClub.europeanBonusPoints ?? 0);
+      return Math.min(99, Math.max(5, total));
+    }
     const rankImpact = (18 - userRank) * 2;
     const total = 75 + resultScore + rankImpact - (myClub.reputation * 2) + (myClub.europeanBonusPoints ?? 0);
     return Math.min(100, Math.max(5, total));
@@ -610,6 +618,16 @@ const boardConfidence = useMemo(() => {
         />
       )}
 
+      {isBoardModalOpen && myClub && (
+        <BoardModal
+          club={myClub}
+          confidence={boardConfidence}
+          rank={userRank}
+          fixtures={fixtures}
+          onClose={() => setIsBoardModalOpen(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl">
          <div className="flex items-center gap-5">
             <div className="w-10 h-10 rounded-xl flex flex-col overflow-hidden border border-white/20 shadow-lg group cursor-pointer" onClick={() => viewClubDetails(myClub?.id || '')}>
@@ -883,19 +901,12 @@ const boardConfidence = useMemo(() => {
            </Card>
 
            {!isResigned && (
-            <div className="relative overflow-hidden p-3.5 rounded-[24px] border border-white/5 flex flex-col gap-2 justify-end min-h-[80px] backdrop-blur-md hover:border-white/10 transition-all group shadow-xl shrink-0 bg-slate-950/40">
+            <div className="relative overflow-hidden rounded-[24px] border border-white/5 backdrop-blur-md hover:border-white/10 transition-all group shadow-xl shrink-0 bg-slate-950/40 cursor-pointer min-h-[65px] -mt-[30px]" onClick={() => setIsBoardModalOpen(true)}>
               <img
-                src={trustButton}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                src={managementButton}
+                alt="Zarząd Klubu"
+                className="w-full h-full object-cover"
               />
-              <div className="relative z-10 flex items-center gap-2 justify-end">
-                <div className="h-[3px] w-3/4 bg-black/40 rounded-full overflow-hidden">
-                  <div className="h-full transition-all duration-1000" style={{ width: `${boardConfidence}%`, backgroundColor: boardConfidence > 70 ? '#34d399' : (boardConfidence > 40 ? '#fbbf24' : '#ef4444') }} />
-                </div>
-                <span className={`text-xs font-black italic ${boardConfidence > 70 ? 'text-emerald-400' : (boardConfidence > 40 ? 'text-amber-400' : 'text-red-500')}`}>{boardConfidence}%</span>
-              </div>
             </div>
            )}
 
@@ -925,7 +936,7 @@ const boardConfidence = useMemo(() => {
            </div>
            )}
 
-       <div className="w-full grid grid-cols-3 gap-0.5">
+       <div className="w-full grid grid-cols-3 gap-x-[1px] gap-y-0 -mt-[20px]">
               <TileButton label="KADRA" graphicSrc={kadraButton} onClick={() => navigateTo(ViewState.SQUAD_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => navigateTo(ViewState.RESERVES_VIEW)} disabled={isJumping || isResigned} />
               <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
