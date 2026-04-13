@@ -184,29 +184,29 @@ const WCQ_GROUP_F_SCHEDULE: ScheduledMatch[] = [
 ];
 
 const WCQ_GROUP_H_PLAYED: PlayedMatch[] = [
-  { round: 1, dateLabel: '21 MAR', home: 'Rumunia',              away: 'Cypr',                 homeGoals: 2,  awayGoals: 0 },
-  { round: 1, dateLabel: '21 MAR', home: 'Austria',              away: 'San Marino',           homeGoals: 10, awayGoals: 0 },
-  { round: 2, dateLabel: '24 MAR', home: 'Austria',              away: 'Rumunia',              homeGoals: 2,  awayGoals: 1 },
-  { round: 2, dateLabel: '24 MAR', home: 'San Marino',           away: 'Cypr',                 homeGoals: 0,  awayGoals: 4 },
-  { round: 3, dateLabel: '7 CZE',  home: 'Cypr',                 away: 'Bośnia i Hercegowina', homeGoals: 2,  awayGoals: 2 },
-  { round: 3, dateLabel: '7 CZE',  home: 'Rumunia',              away: 'San Marino',           homeGoals: 7,  awayGoals: 1 },
-  { round: 4, dateLabel: '10 CZE', home: 'Cypr',                 away: 'Austria',              homeGoals: 0,  awayGoals: 2 },
-  { round: 4, dateLabel: '10 CZE', home: 'Bośnia i Hercegowina', away: 'Rumunia',              homeGoals: 3,  awayGoals: 1 },
+  { round: 1, dateLabel: '21 MAR', home: 'Rumunia',              away: 'San Marino',           homeGoals: 7,  awayGoals: 1 },
+  { round: 1, dateLabel: '21 MAR', home: 'Bośnia i Hercegowina', away: 'Cypr',                 homeGoals: 2,  awayGoals: 1 },
+  { round: 2, dateLabel: '24 MAR', home: 'Austria',              away: 'Bośnia i Hercegowina', homeGoals: 2,  awayGoals: 0 },
+  { round: 2, dateLabel: '24 MAR', home: 'Cypr',                 away: 'San Marino',           homeGoals: 2,  awayGoals: 0 },
+  { round: 3, dateLabel: '7 CZE',  home: 'Austria',              away: 'Cypr',                 homeGoals: 1,  awayGoals: 0 },
+  { round: 3, dateLabel: '7 CZE',  home: 'Bośnia i Hercegowina', away: 'Rumunia',              homeGoals: 3,  awayGoals: 1 },
+  { round: 4, dateLabel: '10 CZE', home: 'Austria',              away: 'San Marino',           homeGoals: 10, awayGoals: 0 },
+  { round: 4, dateLabel: '10 CZE', home: 'Cypr',                 away: 'Rumunia',              homeGoals: 2,  awayGoals: 2 },
 ];
 
 const GROUP_H_TEAMS = ['Austria', 'Bośnia i Hercegowina', 'Rumunia', 'Cypr', 'San Marino'];
 
 const WCQ_GROUP_H_SCHEDULE: ScheduledMatch[] = [
-  { round: 5,  dateLabel: '4 WRZ',  home: 'Cypr',                 away: 'Rumunia'              },
+  { round: 5,  dateLabel: '4 WRZ',  home: 'Austria',              away: 'Rumunia'              },
   { round: 5,  dateLabel: '4 WRZ',  home: 'Bośnia i Hercegowina', away: 'San Marino'           },
-  { round: 6,  dateLabel: '7 WRZ',  home: 'Austria',              away: 'Cypr'                 },
-  { round: 6,  dateLabel: '7 WRZ',  home: 'Rumunia',              away: 'Bośnia i Hercegowina' },
-  { round: 7,  dateLabel: '8 PAŹ',  home: 'San Marino',           away: 'Austria'              },
-  { round: 7,  dateLabel: '8 PAŹ',  home: 'Bośnia i Hercegowina', away: 'Cypr'                 },
-  { round: 8,  dateLabel: '11 PAŹ', home: 'Austria',              away: 'Bośnia i Hercegowina' },
-  { round: 8,  dateLabel: '11 PAŹ', home: 'San Marino',           away: 'Rumunia'              },
-  { round: 9,  dateLabel: '14 LIS', home: 'Bośnia i Hercegowina', away: 'Austria'              },
-  { round: 9,  dateLabel: '14 LIS', home: 'Cypr',                 away: 'San Marino'           },
+  { round: 6,  dateLabel: '7 WRZ',  home: 'San Marino',           away: 'Rumunia'              },
+  { round: 6,  dateLabel: '7 WRZ',  home: 'Cypr',                 away: 'Bośnia i Hercegowina' },
+  { round: 7,  dateLabel: '8 PAŹ',  home: 'Bośnia i Hercegowina', away: 'Austria'              },
+  { round: 7,  dateLabel: '8 PAŹ',  home: 'San Marino',           away: 'Cypr'                 },
+  { round: 8,  dateLabel: '11 PAŹ', home: 'Cypr',                 away: 'Austria'              },
+  { round: 8,  dateLabel: '11 PAŹ', home: 'Rumunia',              away: 'Bośnia i Hercegowina' },
+  { round: 9,  dateLabel: '14 LIS', home: 'San Marino',           away: 'Austria'              },
+  { round: 9,  dateLabel: '14 LIS', home: 'Rumunia',              away: 'Cypr'                 },
   { round: 10, dateLabel: '17 LIS', home: 'Rumunia',              away: 'Austria'              },
   { round: 10, dateLabel: '17 LIS', home: 'San Marino',           away: 'Bośnia i Hercegowina' },
 ];
