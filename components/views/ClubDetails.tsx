@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Player, Club, Lineup, Tactic } from '../../types';
+import { ViewState, Player, Club, Lineup, Tactic, NationalTeam } from '../../types';
 import { TacticRepository } from '../../resources/tactics_db';
 import { LineupService } from '../../services/LineupService';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
@@ -9,7 +9,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import bojoPitch from '../../Graphic/themes/bojo.png';
 
 export const ClubDetails: React.FC = () => {
-   const { viewedClubId, clubs, getOrGenerateSquad, lineups, updateLineup, navigateTo, viewPlayerDetails, coaches, viewCoachDetails, currentDate, previousViewState } = useGame();
+   const { viewedClubId, clubs, getOrGenerateSquad, lineups, updateLineup, navigateTo, viewPlayerDetails, coaches, viewCoachDetails, currentDate, previousViewState, nationalTeams } = useGame();
   
   const [startingXI, setStartingXI] = useState<Player[]>([]);
   const [bench, setBench] = useState<Player[]>([]);
@@ -17,6 +17,14 @@ export const ClubDetails: React.FC = () => {
   const [currentTactic, setCurrentTactic] = useState<Tactic | null>(null);
   const [currentLineup, setCurrentLineup] = useState<Lineup | null>(null);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+
+  const nationalTeamByPlayerId = useMemo(() => {
+    const map = new Map<string, NationalTeam>();
+    nationalTeams.forEach(nt => {
+      nt.squadPlayerIds.forEach(id => map.set(id, nt));
+    });
+    return map;
+  }, [nationalTeams]);
 
   const club = useMemo(() => clubs.find(c => c.id === viewedClubId), [clubs, viewedClubId]);
 
@@ -116,7 +124,14 @@ export const ClubDetails: React.FC = () => {
           INT
         </span>
       )}
-
+      {nationalTeamByPlayerId.has(player.id) && (
+        <span
+          title={`Powołany do reprezentacji: ${nationalTeamByPlayerId.get(player.id)?.name ?? ''}`}
+          className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[7px] font-black rounded-sm border border-purple-500/30 shadow-sm cursor-help"
+        >
+          REP
+        </span>
+      )}
 
               {isNegotiationBlocked && (
                 <span className="px-1.5 py-0.5 bg-red-500/20 text-red-500 text-[6px] font-black rounded-sm border border-red-500/30">⛔</span>

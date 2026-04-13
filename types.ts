@@ -738,6 +738,7 @@ export interface Player {
   contractEndDate: string; // Data w formacie ISO
   annualSalary: number;    // Kwota roczna w PLN
   isOnTransferList?: boolean;
+  transferListPrice?: number;
   marketValue?: number;
    history: PlayerHistoryEntry[];
     boardLockoutUntil: string | null; // Data ISO, do której nie można ponowić próby zwolnienia

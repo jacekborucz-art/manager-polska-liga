@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
@@ -8,6 +8,9 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 
 export const PlayerCard: React.FC = () => {
  const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
+  const [showPricePanel, setShowPricePanel] = useState(false);
+  const [transferPrice, setTransferPrice] = useState(0);
+  const [priceStep, setPriceStep] = useState(50000);
 
   const data = useMemo(() => {
     if (!viewedPlayerId) return null;
@@ -109,7 +112,19 @@ export const PlayerCard: React.FC = () => {
     return `${String(month).padStart(2, '0')}/${year}`;
   };
   const careerRows = useMemo(() => {
-    return [...(player.history || [])]
+    const baseHistory = [...(player.history || [])];
+    if (baseHistory.length === 0 && player.clubId && player.clubId !== 'FREE_AGENTS') {
+      const d = new Date(currentDate);
+      baseHistory.push({
+        clubId: player.clubId,
+        clubName: club.name,
+        fromYear: d.getFullYear(),
+        fromMonth: d.getMonth() + 1,
+        toYear: null,
+        toMonth: null
+      });
+    }
+    return baseHistory
       .map((entry, index) => {
         const isCurrentClubEntry = entry.toYear === null && entry.clubId === player.clubId;
         const statsSnapshot: PlayerCareerStatsSnapshot | null = isCurrentClubEntry
@@ -125,7 +140,7 @@ export const PlayerCard: React.FC = () => {
         };
       })
       .reverse();
-  }, [clubs, player]);
+  }, [clubs, player, club, currentDate]);
 
 
 
@@ -395,7 +410,7 @@ export const PlayerCard: React.FC = () => {
                 <div>
                   <span className="block text-[8px] font-black text-white uppercase tracking-widest mb-1 drop-shadow">Roczne Wynagrodzenie</span>
                   <span className="text-sm font-black text-emerald-400 font-mono italic drop-shadow">
-                    {player.annualSalary ? player.annualSalary.toLocaleString('pl-PL') : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span>
+                    {player.annualSalary ? (() => { const s = player.annualSalary; const step = s >= 1_000_000 ? 100_000 : s >= 100_000 ? 10_000 : 5_000; return (Math.round(s / step) * step).toLocaleString('pl-PL'); })() : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span>
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20 shadow-inner">💰</div>
@@ -453,39 +468,13 @@ export const PlayerCard: React.FC = () => {
                 W przyszÅ‚oÅ›ci: klikniÄ™cie klubu â†’ zÅ‚oÅ¼enie/odrzucenie oferty transferowej.
             â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {visibleInterestedClubs.length > 0 && (
-              <div className="flex flex-col gap-2 mt-1">
+              <div className="flex flex-col gap-1 mt-1">
                 <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
                   <span className="w-8 h-px bg-violet-400/30" /> Zainteresowanie Transferowe
                 </h3>
-                <div className="bg-slate-900/20 p-3 rounded-[20px] border border-violet-500/20">
-                  <p className="text-[8px] font-black text-white uppercase tracking-widest mb-2 drop-shadow">
-                    Kluby obserwujące zawodnika ({visibleInterestedClubs.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {visibleInterestedClubs.map(clubId => {
-                      const interestedClub = clubs.find(c => c.id === clubId);
-                      if (!interestedClub) return null;
-                      return (
-                        <div
-                          key={clubId}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-[12px] bg-white/5 border border-white/10 hover:border-violet-500/30 transition-all"
-                          // TODO: Po implementacji ofert transferowych â€” wnawigateTo(ViewState.TRANSFER_OFFER) lub podobne
-                        >
-                          {/* Mini podglÄ…d barw klubu */}
-                          <div className="w-5 h-5 rounded-md overflow-hidden border border-white/10 flex-shrink-0 flex flex-col">
-                            <div className="flex-1" style={{ backgroundColor: interestedClub.colorsHex[0] }} />
-                            <div className="flex-1" style={{ backgroundColor: interestedClub.colorsHex[1] || interestedClub.colorsHex[0] }} />
-                          </div>
-                          <span className="text-[9px] font-black text-white uppercase tracking-tight drop-shadow">
-                            {interestedClub.shortName}
-                          </span>
-                          {/* Placeholder na przyszÅ‚y przycisk akcji (oferta transferowa) */}
-                          <span className="text-[8px] text-violet-400 opacity-60">👁️</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <p className="text-[9px] font-black text-white/80 drop-shadow">
+                  {visibleInterestedClubs.map(clubId => clubs.find(c => c.id === clubId)?.name).filter(Boolean).join(', ')}
+                </p>
               </div>
             )}
 
@@ -532,18 +521,73 @@ export const PlayerCard: React.FC = () => {
             )}
 
             {player.clubId === userTeamId && !isMatchContext && (
-              <button
-                disabled={hasPendingTransfer}
-                onClick={() => toggleTransferList(player.id)}
-                className={`w-full mt-1 py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-2 active:scale-95 drop-shadow
-                  ${hasPendingTransfer
-                    ? "relative bg-slate-800 border-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
-                    : player.isOnTransferList
-                    ? 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'
-                    : 'bg-amber-600/20 border-amber-500/40 text-amber-500 hover:bg-amber-600/30'}`}
-              >
-                {player.isOnTransferList ? '❌ Zdejmij z listy transferowej' : '📥 Wystaw na listę transferową'}
-              </button>
+              <div className="mt-1">
+                {showPricePanel && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowPricePanel(false)}>
+                    <div className="w-80 bg-slate-900/60 border border-amber-500/40 rounded-2xl p-5 shadow-2xl backdrop-blur-md" onClick={e => e.stopPropagation()}>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-amber-400 mb-4">Ustaw cenę</div>
+                      <div className="text-center text-white text-[18px] font-black italic uppercase tracking-tighter mb-1">
+                        {transferPrice.toLocaleString('pl-PL')} <span className="text-slate-400 text-[11px]">PLN</span>
+                      </div>
+                      <input
+                        type="number"
+                        value={transferPrice}
+                        onChange={e => setTransferPrice(Math.max(0, Number(e.target.value)))}
+                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-white text-[11px] font-black italic uppercase tracking-tighter text-right mb-3"
+                      />
+                      <div className="flex items-center gap-2 mb-5">
+                        <button onClick={() => setTransferPrice(p => Math.max(0, p - priceStep))}
+                          className="w-10 h-10 rounded-lg bg-red-900/40 border border-red-500/30 text-red-400 text-[18px] font-black italic uppercase tracking-tighter active:scale-95 hover:bg-red-900/70 flex items-center justify-center shrink-0">
+                          −
+                        </button>
+                        <select
+                          value={priceStep}
+                          onChange={e => setPriceStep(Number(e.target.value))}
+                          className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-white text-[10px] font-black italic uppercase tracking-tighter text-center">
+                          <option value={10000}>10 000</option>
+                          <option value={50000}>50 000</option>
+                          <option value={100000}>100 000</option>
+                          <option value={250000}>250 000</option>
+                          <option value={500000}>500 000</option>
+                        </select>
+                        <button onClick={() => setTransferPrice(p => p + priceStep)}
+                          className="w-10 h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/30 text-emerald-400 text-[18px] font-black italic uppercase tracking-tighter active:scale-95 hover:bg-emerald-900/70 flex items-center justify-center shrink-0">
+                          +
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowPricePanel(false)}
+                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-slate-700 border border-slate-600 text-slate-400 active:scale-95">
+                          Anuluj
+                        </button>
+                        <button onClick={() => { toggleTransferList(player.id, transferPrice); setShowPricePanel(false); }}
+                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-amber-600/20 border border-amber-500/40 text-amber-500 active:scale-95">
+                          Wystaw
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <button
+                  disabled={hasPendingTransfer}
+                  onClick={() => {
+                    if (player.isOnTransferList) {
+                      toggleTransferList(player.id);
+                    } else {
+                      setTransferPrice(player.marketValue || 1_000_000);
+                      setShowPricePanel(true);
+                    }
+                  }}
+                  className={`w-full py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-2 active:scale-95 drop-shadow
+                    ${hasPendingTransfer
+                      ? "relative bg-slate-800 border-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
+                      : player.isOnTransferList
+                      ? 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'
+                      : 'bg-amber-600/20 border-amber-500/40 text-amber-500 hover:bg-amber-600/30'}`}
+                >
+                  {player.isOnTransferList ? '❌ Zdejmij z listy transferowej' : '📥 Wystaw na listę transferową'}
+                </button>
+              </div>
             )}
 
             {player.clubId !== userTeamId && !isMatchContext && (

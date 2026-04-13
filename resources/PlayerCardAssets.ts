@@ -1,34 +1,52 @@
 // Import kart generycznych (fallback)
-import genericWhite   from '../Graphic/players/white_black_shirt.png';
-import genericBlack   from '../Graphic/players/black_shirt.png';
-import genericRed     from '../Graphic/players/red_shirt.png';
-import genericBlue    from '../Graphic/players/blue_shirt.png';
-import genericYellow  from '../Graphic/players/yellow_shirt.png';
-import genericGreen   from '../Graphic/players/green_shirt.png';
-import genericOrange  from '../Graphic/players/orange_shirt.png';
+import genericWhite   from '../Graphic/players/other shirts/white_black_shirt.png';
+import genericBlack   from '../Graphic/players/other shirts/black_shirt.png';
+import genericRed     from '../Graphic/players/other shirts/red_shirt.png';
+import genericBlue    from '../Graphic/players/other shirts/blue_shirt.png';
+import genericYellow  from '../Graphic/players/other shirts/yellow_shirt.png';
+import genericGreen   from '../Graphic/players/other shirts/green_shirt.png';
+import genericOrange  from '../Graphic/players/other shirts/orange_shirt.png';
 
 // Import kart brandowanych — Arka Gdynia
-import arkaBlue       from '../Graphic/players/Arka_Gdynia_blue_shirt.png';
-import arkaYellow     from '../Graphic/players/Arka_Gdynia_yellow_shirt.png';
+import arkaYellow     from '../Graphic/players/Arka_Gdynia_yellow.png';
+import arkaBlue       from '../Graphic/players/Arka_Gdynia_blue.png';
+import arkaBlack      from '../Graphic/players/Arka_Gdynia_black.png';
+import arkaPink       from '../Graphic/players/Arka_Gdynia_pink.png';
 
 // Import kart brandowanych — Cracovia
-import cracoviaBlack       from '../Graphic/players/Cracovia_black_shirt.png';
-import cracoviaRedBlack    from '../Graphic/players/Cracovia_red_black_shirt.png';
-import cracoviaRedWhite    from '../Graphic/players/Cracovia_red_white_shirt.png';
+import cracoviaRedWhite    from '../Graphic/players/Cracovia_red_white.png';
+import cracoviaBlue        from '../Graphic/players/Cracovia_blue.png';
+import cracoviaBlack       from '../Graphic/players/Cracovia_black.png';
+
+// Import kart brandowanych — GKS Katowice
+import gksKatowiceBlack   from '../Graphic/players/gks_katowice_black.png';
+import gksKatowiceGreen   from '../Graphic/players/gks_katowice_green.png';
+import gksKatowiceYellow  from '../Graphic/players/gks_katowice_yellow.png';
+
+// Import kart brandowanych — Górnik Zabrze
+import gornikZabrze_black from '../Graphic/players/gornik_zabrze_black.png';
+import gornikZabrze_blue  from '../Graphic/players/gornik_zabrze_blue.png';
+import gornikZabrze_white from '../Graphic/players/gornik_zabrze_white.png';
 
 // Import kart brandowanych — Jagiellonia
-import jagielloniaYellowRed from '../Graphic/players/Jagiellonia_yellow_red_shirt.png';
+import jagielloniaYellowRed    from '../Graphic/players/Jagiellonia_yellow_red.png';
+import jagielloniaBlack        from '../Graphic/players/Jagiellonia_black.png';
+import jagielloniaYellowViolet from '../Graphic/players/Jagiellonia_yellow_violet.png';
 
 // Import kart brandowanych — Korona
-import koronaYellowRed from '../Graphic/players/Korona_yellow_red_shirt.png';
+import koronaYellowRed   from '../Graphic/players/Korona_yellow_red.png';
+import koronaYellowBlack from '../Graphic/players/Korona_yellow_black.png';
+import koronaYellowBrown from '../Graphic/players/Korona_yellow_brown.png';
 
 // Import kart brandowanych — Lechia Gdańsk
-import lechiaGreen      from '../Graphic/players/lechia_gdansk_green_shirt.png';
-import lechiaGreenWhite from '../Graphic/players/lechia_gdansk_green_white_shirt.png';
+import lechiaGreen      from '../Graphic/players/lechia_gdansk_green.png';
+import lechiaWhiteGreen from '../Graphic/players/lechia_gdansk__white_green.png';
+import lechiaRed        from '../Graphic/players/lechia_gdansk_red.png';
 
 // Import kart brandowanych — Lech Poznań
 import lechBlue  from '../Graphic/players/lech_poznan_blue.png';
 import lechWhite from '../Graphic/players/lech_poznan_white.png';
+import lechBeige from '../Graphic/players/lech_poznan_beige.png';
 
 // Import kart brandowanych — Legia Warszawa
 import legiaWhite from '../Graphic/players/legia_white.png';
@@ -36,23 +54,50 @@ import legiaGreen from '../Graphic/players/legia_green.png';
 import legiaRed   from '../Graphic/players/legia_red.png';
 import legiaGrey  from '../Graphic/players/legia_grey.png';
 
+// Import kart brandowanych — Motor Lublin
+import motorLublinBlue   from '../Graphic/players/motor_lublin_blue.png';
+import motorLublinGrey   from '../Graphic/players/motor_lublin_grey.png';
+import motorLublinYellow from '../Graphic/players/motor_lublin_yellow.png';
+
+// Import kart brandowanych — Piast Gliwice
+import piastGliwiceBlue    from '../Graphic/players/piast_gliwice_blue.png';
+import piastGliwiceBlueRed from '../Graphic/players/piast_gliwice_blue_red.png';
+import piastGliwicePink    from '../Graphic/players/piast_gliwice_pink.png';
+
 // Import kart brandowanych — Pogoń Szczecin
-import pogonBlueRed from '../Graphic/players/pogon_szcz_bluered.png';
-import pogonWhite   from '../Graphic/players/pogon_szcz_white.png';
+import pogonBlueRed from '../Graphic/players/pogon_szczecin_blue_red.png';
+import pogonWhite   from '../Graphic/players/pogon_szczecin_white.png';
+import pogonCyan    from '../Graphic/players/pogon_szczecin_cyan.png';
 
 // Import kart brandowanych — Polonia Warszawa
-import poloniaBlack  from '../Graphic/players/polonia_wawa_black.png';
-import poloniaRed    from '../Graphic/players/polonia_wawa_red.png';
-import poloniaYellow from '../Graphic/players/polonia_wawa_yellow.png';
+import poloniaBlack  from '../Graphic/players/polonia_warszawa_black.png';
+import poloniaRed    from '../Graphic/players/polonia_warszawa_red.png';
+import poloniaYellow from '../Graphic/players/polonia_warszawa_yellow.png';
+
+// Import kart brandowanych — Radomiak Radom
+import radomiakGreen from '../Graphic/players/radomiak_green.png';
+import radomiakRed   from '../Graphic/players/radomiak_red.png';
+import radomiakWhite from '../Graphic/players/radomiak_white.png';
+
+// Import kart brandowanych — Raków Częstochowa
+import rakowBlue  from '../Graphic/players/rakow_czestochowa_blue.png';
+import rakowRed   from '../Graphic/players/rakow_czestochowa_red.png';
+import rakowWhite from '../Graphic/players/rakow_czestochowa_white.png';
 
 // Import kart brandowanych — Termalica Nieciecza
-import termalicaBlue   from '../Graphic/players/termalica_blue_shirt.png';
-import termalicaOrange from '../Graphic/players/termalica_orange_shirt.png';
+import termalicaOrange from '../Graphic/players/termalica_orange.png';
+import termalicaBlue   from '../Graphic/players/termalica_blue.png';
+import termalicaViolet from '../Graphic/players/termalica_violet.png';
 
 // Import kart brandowanych — Widzew Łódź
 import widzewRed    from '../Graphic/players/widzew_red.png';
 import widzewWhite  from '../Graphic/players/Widzew_white.png';
 import widzewYellow from '../Graphic/players/widzew_yellow.png';
+
+// Import kart brandowanych — Wisła Płock
+import wislaPlockBlue from '../Graphic/players/wisla_plock_blue.png';
+import wislaPlockGrey from '../Graphic/players/wisla_plock_grey.png';
+import wislaPlockRed  from '../Graphic/players/wisla_plock_red.png';
 
 // Import kart brandowanych — Zagłębie Lubin
 import zaglebieBlack  from '../Graphic/players/zaglebie_lubin_black.png';
@@ -83,33 +128,56 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     kits: [
       { hex: '#FFFF00', image: arkaYellow },
       { hex: '#0000FF', image: arkaBlue },
+      { hex: '#000000', image: arkaBlack },
+      { hex: '#FF69B4', image: arkaPink },
     ]
   },
   {
     clubId: 'PL_CRACOVIA',
     kits: [
-      { hex: '#FFFFFF', image: cracoviaRedWhite },
-      { hex: '#FF0000', image: cracoviaRedBlack },
+      { hex: '#FF0000', image: cracoviaRedWhite },
+      { hex: '#0000FF', image: cracoviaBlue },
       { hex: '#000000', image: cracoviaBlack },
+    ]
+  },
+  {
+    clubId: 'PL_GKS_KATOWICE',
+    kits: [
+      { hex: '#000000', image: gksKatowiceBlack },
+      { hex: '#008000', image: gksKatowiceGreen },
+      { hex: '#FFFF00', image: gksKatowiceYellow },
+    ]
+  },
+  {
+    clubId: 'PL_GORNIK_ZABRZE',
+    kits: [
+      { hex: '#000000', image: gornikZabrze_black },
+      { hex: '#0000FF', image: gornikZabrze_blue },
+      { hex: '#FFFFFF', image: gornikZabrze_white },
     ]
   },
   {
     clubId: 'PL_JAGIELLONIA_BIALYSTOK',
     kits: [
       { hex: '#FFFF00', image: jagielloniaYellowRed },
+      { hex: '#000000', image: jagielloniaBlack },
+      { hex: '#8B008B', image: jagielloniaYellowViolet },
     ]
   },
   {
     clubId: 'PL_KORONA_KIELCE',
     kits: [
       { hex: '#FFFF00', image: koronaYellowRed },
+      { hex: '#000000', image: koronaYellowBlack },
+      { hex: '#8B4513', image: koronaYellowBrown },
     ]
   },
   {
     clubId: 'PL_LECHIA_GDANSK',
     kits: [
       { hex: '#008000', image: lechiaGreen },
-      { hex: '#FFFFFF', image: lechiaGreenWhite },
+      { hex: '#FFFFFF', image: lechiaWhiteGreen },
+      { hex: '#FF0000', image: lechiaRed },
     ]
   },
   {
@@ -117,6 +185,7 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     kits: [
       { hex: '#0000FF', image: lechBlue },
       { hex: '#FFFFFF', image: lechWhite },
+      { hex: '#F5DEB3', image: lechBeige },
     ]
   },
   {
@@ -129,10 +198,27 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     ]
   },
   {
+    clubId: 'PL_MOTOR_LUBLIN',
+    kits: [
+      { hex: '#0000FF', image: motorLublinBlue },
+      { hex: '#808080', image: motorLublinGrey },
+      { hex: '#FFFF00', image: motorLublinYellow },
+    ]
+  },
+  {
+    clubId: 'PL_PIAST_GLIWICE',
+    kits: [
+      { hex: '#0000FF', image: piastGliwiceBlue },
+      { hex: '#000080', image: piastGliwiceBlueRed },
+      { hex: '#FF69B4', image: piastGliwicePink },
+    ]
+  },
+  {
     clubId: 'PL_POGON_SZCZECIN',
     kits: [
       { hex: '#000080', image: pogonBlueRed },
       { hex: '#FFFFFF', image: pogonWhite },
+      { hex: '#00FFFF', image: pogonCyan },
     ]
   },
   {
@@ -144,10 +230,27 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     ]
   },
   {
+    clubId: 'PL_RADOMIAK_RADOM',
+    kits: [
+      { hex: '#008000', image: radomiakGreen },
+      { hex: '#FF0000', image: radomiakRed },
+      { hex: '#FFFFFF', image: radomiakWhite },
+    ]
+  },
+  {
+    clubId: 'PL_RAKOW_CZESTOCHOWA',
+    kits: [
+      { hex: '#FF0000', image: rakowRed },
+      { hex: '#0000FF', image: rakowBlue },
+      { hex: '#FFFFFF', image: rakowWhite },
+    ]
+  },
+  {
     clubId: 'PL_TERMALICA_NIECIECZA',
     kits: [
       { hex: '#FF5F1F', image: termalicaOrange },
       { hex: '#0000FF', image: termalicaBlue },
+      { hex: '#8B008B', image: termalicaViolet },
     ]
   },
   {
@@ -156,6 +259,14 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
       { hex: '#FF0000', image: widzewRed },
       { hex: '#FFFFFF', image: widzewWhite },
       { hex: '#FFFF00', image: widzewYellow },
+    ]
+  },
+  {
+    clubId: 'PL_WISLA_PLOCK',
+    kits: [
+      { hex: '#0000FF', image: wislaPlockBlue },
+      { hex: '#808080', image: wislaPlockGrey },
+      { hex: '#FF0000', image: wislaPlockRed },
     ]
   },
   {

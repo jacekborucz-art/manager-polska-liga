@@ -248,7 +248,7 @@ export const TransferPlayerDecisionService = {
     }
 
     const salaryFit = clamp(offer.salary / Math.max(effectiveDesiredSalary, 1), 0, 1.3);
-    const bonusFit = clamp(offer.bonus / Math.max(negotiationPlan.desiredBonus, 1), 0, 1.35);
+    const bonusFit = clamp((offer.bonus ?? 0) / Math.max(negotiationPlan.desiredBonus, 1), 0, 1.35);
     const yearsFit = clamp(offer.years / Math.max(negotiationPlan.desiredYears, 1), 0.5, 1.2);
     const financialWeights = getAgeFinancialWeights(player.age);
 

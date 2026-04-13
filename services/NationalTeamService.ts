@@ -318,7 +318,101 @@ export const NationalTeamService = {
     return { updatedTeams, newPlayers: allNewPlayers, playerUpdates: allPlayerUpdates };
   },
 
-  // ─── 7. DZIENNY PRZEGLĄD KONTUZJI ────────────────────────────────────────────
+  // ─── 7. MIESIĘCZNY PRZEGLĄD KADRY ───────────────────────────────────────────
+
+  reviewMonthlySquad: (
+    nationalTeams: NationalTeam[],
+    coaches: Record<string, Coach>,
+    allPlayers: Record<string, Player[]>
+  ): { updatedTeams: NationalTeam[]; playerUpdates: { id: string; assignedNationalTeamId: string | null }[]; calledUpFromClub: { playerId: string; teamName: string }[] } => {
+    // Priorytet 1: zawodnicy klubowi (nie wolni agenci, nie generowani przez NT)
+    const clubPlayersList = Object.entries(allPlayers)
+      .filter(([key]) => key !== 'FREE_AGENTS')
+      .flatMap(([, arr]) => arr)
+      .filter(p => !p.id.startsWith('NT_'));
+
+    // Priorytet 2 (ostateczność): wolni agenci niebędący generowanymi zawodnikami NT
+    const freeAgentsList = (allPlayers['FREE_AGENTS'] || [])
+      .filter(p => !p.id.startsWith('NT_'));
+
+    const playerMap: Record<string, Player> = {};
+    Object.values(allPlayers).flat().forEach(p => { playerMap[p.id] = p; });
+
+    const updatedTeams: NationalTeam[] = [];
+    const allPlayerUpdates: { id: string; assignedNationalTeamId: string | null }[] = [];
+    const calledUpFromClub: { playerId: string; teamName: string }[] = [];
+
+    const getThreshold = (exp: number): number => {
+      if (exp >= 80) return 1;
+      if (exp >= 60) return 2;
+      if (exp >= 40) return 3;
+      return 5;
+    };
+
+    const POSITIONS: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+
+    for (const team of nationalTeams) {
+      const coach = team.coachId ? coaches[team.coachId] : null;
+      const coachExp = coach ? coach.attributes.experience : 50;
+      const threshold = getThreshold(coachExp);
+      const isPolishTeam = team.region === Region.POLAND;
+
+      const squadIds = [...team.squadPlayerIds];
+      let changed = false;
+
+      for (const pos of POSITIONS) {
+        const squadAtPos = squadIds
+          .map((id, idx) => ({ id, idx, player: playerMap[id] }))
+          .filter(entry => entry.player?.position === pos);
+
+        if (squadAtPos.length === 0) continue;
+
+        const weakest = squadAtPos.sort((a, b) =>
+          (a.player?.overallRating ?? 0) - (b.player?.overallRating ?? 0)
+        )[0];
+
+        const weakestOvr = weakest.player?.overallRating ?? 0;
+
+        const isEligible = (p: Player): boolean => {
+          if (p.nationality !== team.region) return false;
+          if (p.position !== pos) return false;
+          if (p.health.status !== HealthStatus.HEALTHY) return false;
+          if (squadIds.includes(p.id)) return false;
+          if (p.assignedNationalTeamId && p.assignedNationalTeamId !== team.id) return false;
+          if (isPolishTeam) {
+            const club = STATIC_CLUBS.find(c => c.id === p.clubId);
+            if (club && club.leagueId !== 'L_PL_1') return false;
+          }
+          return true;
+        };
+
+        // Priorytet 1: najlepszy kandydat klubowy
+        const clubCandidate = clubPlayersList
+          .filter(isEligible)
+          .sort((a, b) => b.overallRating - a.overallRating)[0] ?? null;
+
+        // Priorytet 2 (ostateczność): wolny agent — tylko gdy brak kandydatów klubowych
+        const candidate = clubCandidate ?? (
+          freeAgentsList.find(isEligible) ?? null
+        );
+
+        if (!candidate) continue;
+        if (candidate.overallRating - weakestOvr < threshold) continue;
+
+        squadIds[weakest.idx] = candidate.id;
+        allPlayerUpdates.push({ id: weakest.id, assignedNationalTeamId: null });
+        allPlayerUpdates.push({ id: candidate.id, assignedNationalTeamId: team.id });
+        calledUpFromClub.push({ playerId: candidate.id, teamName: team.name });
+        changed = true;
+      }
+
+      updatedTeams.push(changed ? { ...team, squadPlayerIds: squadIds } : team);
+    }
+
+    return { updatedTeams, playerUpdates: allPlayerUpdates, calledUpFromClub };
+  },
+
+  // ─── 8. DZIENNY PRZEGLĄD KONTUZJI ────────────────────────────────────────────
 
   reviewDailyInjuries: (
     nationalTeams: NationalTeam[],

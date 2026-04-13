@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity } from '../../types';
+import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -17,7 +17,7 @@ import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
-          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed } = useGame();
+          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -43,6 +43,14 @@ export const SquadView: React.FC = () => {
     const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     return sorted.findIndex(c => c.id === myClub.id) + 1;
   }, [leagueClubs, myClub]);
+
+  const nationalTeamByPlayerId = useMemo(() => {
+    const map = new Map<string, NationalTeam>();
+    nationalTeams.forEach(nt => {
+      nt.squadPlayerIds.forEach(id => map.set(id, nt));
+    });
+    return map;
+  }, [nationalTeams]);
 
   const canMotivate = useMemo(() => myClub ? WeeklyMotivationService.canMotivate(myClub, currentDate) : false, [myClub, currentDate]);
 
@@ -306,6 +314,14 @@ export const SquadView: React.FC = () => {
                   className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[8px] font-black rounded border border-blue-500/30 shadow-sm shrink-0 leading-none cursor-help"
                 >
                   INT
+                </span>
+              )}
+              {nationalTeamByPlayerId.has(player.id) && (
+                <span
+                  title={`Powołany do reprezentacji: ${nationalTeamByPlayerId.get(player.id)?.name ?? ''}`}
+                  className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-[8px] font-black rounded border border-purple-500/30 shadow-sm shrink-0 leading-none cursor-help"
+                >
+                  REP
                 </span>
               )}
            </div>

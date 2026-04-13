@@ -166,7 +166,9 @@ export const TransferSellerLogicService = {
     boardKompetencja?: BoardAttributeLevel
   ): number => {
     const tier = FinanceService.getClubTier(sellerClub);
-    const rawBaseValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, tier);
+    const rawBaseValue = player.transferListPrice
+      ? player.transferListPrice
+      : FinanceService.calculateMarketValue(player, sellerClub.reputation, tier);
     const KOMPETENCJA_SELL_MULTIPLIER: Record<BoardAttributeLevel, number> = {
       bardzo_wysoka: 1.15,
       wysoka:        1.07,
@@ -182,7 +184,7 @@ export const TransferSellerLogicService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
 
-    if (player.isOnTransferList) multiplier -= Math.random() * 0.25;
+    if (player.isOnTransferList && !player.transferListPrice) multiplier -= 0.10 + Math.random() * 0.30;
     if (daysLeft > 0 && daysLeft < 180) multiplier -= 0.20;
     else if (daysLeft > 0 && daysLeft < 365) multiplier -= 0.10;
 

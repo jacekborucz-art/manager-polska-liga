@@ -1251,8 +1251,7 @@ performSeasonSquadReview: (
       const eligible = squad.filter(p =>
         !p.isOnTransferList &&
         !p.transferPendingClubId &&
-        !p.isNegotiationPermanentBlocked &&
-        !p.isUntouchable
+        !p.isNegotiationPermanentBlocked
       );
       if (eligible.length === 0) continue;
 
@@ -1333,6 +1332,39 @@ performSeasonSquadReview: (
     }
 
     return { updatedClubs, updatedPlayers: updatedPlayersMap };
+  },
+
+  updateClubStars: (
+    clubs: Club[],
+    playersMap: Record<string, Player[]>,
+    userTeamId: string | null
+  ): Record<string, Player[]> => {
+    const updatedPlayersMap = { ...playersMap };
+
+    const getStarCount = (reputation: number): number => {
+      if (reputation >= 18) return 11;
+      if (reputation >= 15) return 7;
+      if (reputation >= 12) return 4;
+      if (reputation >= 6)  return 3;
+      return 2;
+    };
+
+    for (const club of clubs) {
+      if (club.id === userTeamId) continue;
+      const squad = updatedPlayersMap[club.id];
+      if (!squad || squad.length === 0) continue;
+
+      const starCount = getStarCount(club.reputation);
+      const sorted = [...squad].sort((a, b) => b.overallRating - a.overallRating);
+      const starIds = new Set(sorted.slice(0, starCount).map(p => p.id));
+
+      updatedPlayersMap[club.id] = squad.map(p => ({
+        ...p,
+        isUntouchable: starIds.has(p.id)
+      }));
+    }
+
+    return updatedPlayersMap;
   }
 
 };

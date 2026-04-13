@@ -949,4 +949,18 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       priority: 1,
     };
   },
+
+  generateNTCallUpMail: (player: Player, nationalTeamName: string, date: Date): MailMessage => {
+    return {
+      id: `NT_CALLUP_${player.id}_${date.getFullYear()}_${date.getMonth()}`,
+      sender: 'Biuro Ligowe',
+      role: 'Administrator rozgrywek',
+      subject: `Powołanie reprezentacyjne: ${player.firstName} ${player.lastName}`,
+      body: `Informujemy, że Twój zawodnik ${player.firstName} ${player.lastName} (${player.position}, ${player.overallRating} OVR) został powołany do reprezentacji narodowej ${nationalTeamName}.\n\nW terminach zgrupowań i meczów reprezentacyjnych zawodnik będzie niedostępny dla Twojego klubu.`,
+      date,
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 70,
+    };
+  },
 };

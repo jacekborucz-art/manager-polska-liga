@@ -16,6 +16,8 @@ export const ContractManagementView: React.FC = () => {
   const [boardDecision, setBoardDecision] = useState<{status: string, reason: string, woz: number} | null>(null);
 
   const [managementMode, setManagementMode] = useState<'RELEASE' | 'NEGOTIATE'>(contractManagementInitialMode);
+  const [salaryStep, setSalaryStep] = useState(5000);
+  const [bonusStep, setBonusStep] = useState(5000);
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerBonus, setOfferBonus] = useState(0);
   const [offerYears, setOfferYears] = useState(1);
@@ -263,7 +265,7 @@ export const ContractManagementView: React.FC = () => {
         <div className="absolute inset-0 bg-[url('https://i.ibb.co/JwgrBtvC/biuro2-1.png')] bg-cover bg-center opacity-42 brightness-110" />
       </div>
 
-      <div className="max-w-5xl w-full bg-slate-900/72 border border-white/8 rounded-[50px] backdrop-blur-xl shadow-2xl relative z-10 overflow-hidden flex flex-col h-[850px]">
+      <div className="max-w-5xl w-full bg-slate-900/72 border border-white/8 rounded-[50px] backdrop-blur-xl shadow-2xl relative z-10 overflow-hidden flex flex-col h-[96vh]">
         
         <div className="p-10 border-b border-white/5 bg-white/[0.035] flex justify-between items-center shrink-0">
            <div className="flex items-center gap-6">
@@ -416,51 +418,72 @@ export const ContractManagementView: React.FC = () => {
                         </div>
 
                         <div className="space-y-8 shrink-0">
-                           <div className="space-y-4">
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Długość Nowej Umowy (Lata)</span>
-                              <div className="flex gap-2">
+                           <div className="space-y-2">
+                              <div className="flex justify-between items-end px-1">
+                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Długość Nowej Umowy</span>
+                                 <span className="text-2xl font-black italic text-white">{offerYears} <span className="text-[11px] text-slate-500">{offerYears === 1 ? 'ROK' : offerYears < 5 ? 'LATA' : 'LAT'}</span></span>
+                              </div>
+                              <input
+                                 type="range" min={1} max={5} step={1}
+                                 value={offerYears} onChange={(e) => setOfferYears(parseInt(e.target.value))}
+                                 className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-white"
+                              />
+                              <div className="flex justify-between px-1 pt-0.5">
                                  {[1, 2, 3, 4, 5].map(y => (
-                                    <button 
-                                       key={y} onClick={() => setOfferYears(y)}
-                                       className={`flex-1 py-4 rounded-2xl font-black border transition-all ${offerYears === y ? 'bg-white text-black border-white shadow-xl scale-105' : 'bg-black/40 text-slate-500 border-white/5 hover:border-white/20'}`}
-                                    >
-                                       {y}
+                                    <span key={y} className={`text-[8px] font-black italic uppercase tracking-tighter ${offerYears === y ? 'text-white' : 'text-slate-600'}`}>{y}</span>
+                                 ))}
+                              </div>
+                           </div>
+
+                           <div className="space-y-2">
+                              <div className="flex justify-between items-end px-1">
+                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nowa Pensja Roczna</span>
+                                 <div className="text-right">
+                                    <span className="text-2xl font-black text-blue-400 font-mono italic">{(Math.round(offerSalary / salaryStep) * salaryStep).toLocaleString('pl-PL')}</span>
+                                    <span className="text-[10px] text-slate-600 ml-2 font-black">PLN / ROK</span>
+                                 </div>
+                              </div>
+                              <input
+                                 type="range" min={Math.floor(player.annualSalary * 0.5)} max={Math.floor(player.annualSalary * 3)} step={salaryStep}
+                                 value={offerSalary} onChange={(e) => setOfferSalary(parseInt(e.target.value))}
+                                 className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                              />
+                              <div className="flex gap-1 pt-1">
+                                 {[1000, 2500, 5000, 10000, 100000, 250000, 500000].map(v => (
+                                    <button key={v} onClick={() => setSalaryStep(v)}
+                                       className={`flex-1 py-1 rounded text-[10px] font-black italic uppercase tracking-tighter border transition-all active:scale-95
+                                          ${salaryStep === v ? 'bg-blue-600/40 border-blue-400/60 text-blue-300' : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+                                       {v >= 1000000 ? `${v/1000000}M` : v >= 1000 ? `${v/1000}k` : v}
                                     </button>
                                  ))}
                               </div>
                            </div>
 
-                           <div className="space-y-4">
-                              <div className="flex justify-between items-end px-1">
-                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nowa Pensja Roczna</span>
-                                 <div className="text-right">
-                                    <span className="text-2xl font-black text-blue-400 font-mono italic">{offerSalary.toLocaleString()}</span>
-                                    <span className="text-[10px] text-slate-600 ml-2 font-black">PLN / ROK</span>
-                                 </div>
-                              </div>
-                              <input 
-                                 type="range" min={Math.floor(player.annualSalary * 0.5)} max={Math.floor(player.annualSalary * 3)} step={5000}
-                                 value={offerSalary} onChange={(e) => setOfferSalary(parseInt(e.target.value))}
-                                 className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                              />
-                           </div>
-
-                           <div className="space-y-4">
+                           <div className="space-y-2">
                               <div className="flex justify-between items-end px-1">
                                  <div className="flex flex-col">
                                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Jednorazowy Bonus za podpis</span>
-                                    <span className="text-[8px] font-black text-emerald-500 uppercase mt-1">Dostępna pula: {club.signingBonusPool.toLocaleString()} PLN</span>
+                                    <span className="text-[8px] font-black text-emerald-500 uppercase mt-1">Dostępna pula: {club.signingBonusPool.toLocaleString('pl-PL')} PLN</span>
                                  </div>
                                  <div className="text-right">
-                                    <span className="text-2xl font-black text-emerald-400 font-mono italic">{offerBonus.toLocaleString()}</span>
+                                    <span className="text-2xl font-black text-emerald-400 font-mono italic">{(Math.round(offerBonus / bonusStep) * bonusStep).toLocaleString('pl-PL')}</span>
                                     <span className="text-[10px] text-slate-600 ml-2 font-black">PLN</span>
                                  </div>
                               </div>
-                              <input 
-                                 type="range" min={0} max={club.signingBonusPool} step={1000}
+                              <input
+                                 type="range" min={0} max={club.signingBonusPool} step={bonusStep}
                                  value={offerBonus} onChange={(e) => setOfferBonus(parseInt(e.target.value))}
                                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                               />
+                              <div className="flex gap-1 pt-1">
+                                 {[1000, 2500, 5000, 10000, 100000, 250000, 500000].map(v => (
+                                    <button key={v} onClick={() => setBonusStep(v)}
+                                       className={`flex-1 py-1 rounded text-[10px] font-black italic uppercase tracking-tighter border transition-all active:scale-95
+                                          ${bonusStep === v ? 'bg-emerald-600/40 border-emerald-400/60 text-emerald-300' : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+                                       {v >= 1000000 ? `${v/1000000}M` : v >= 1000 ? `${v/1000}k` : v}
+                                    </button>
+                                 ))}
+                              </div>
                            </div>
                         </div>
 

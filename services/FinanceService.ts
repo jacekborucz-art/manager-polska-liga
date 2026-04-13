@@ -311,7 +311,8 @@ export const FinanceService = {
     const fairMarketCapMultiplier = overall >= 70 ? 0.55 : 0.40;
     const cappedSalary = Math.min(salary, fairMarketSalary * fairMarketCapMultiplier);
 
-    return Math.max(15_000, Math.round(cappedSalary / 5_000) * 5_000);
+    const salaryStep = cappedSalary >= 1_000_000 ? 100_000 : cappedSalary >= 100_000 ? 10_000 : 5_000;
+    return Math.max(15_000, Math.round(cappedSalary / salaryStep) * salaryStep);
   },
 
   // Koszty organizacji meczu — progresywna formuła wg. ligi, reputacji i frekwencji
@@ -444,7 +445,8 @@ export const FinanceService = {
     const randomFactor = 0.97 + (Math.random() * 0.06);
     const rawValue = baseValue * multiplier * randomFactor;
     const cappedValue = tierCap ? Math.min(rawValue, tierCap) : rawValue;
-    return Math.round(cappedValue / 100) * 100;
+    const step = cappedValue >= 10_000_000 ? 500_000 : cappedValue >= 1_000_000 ? 100_000 : cappedValue >= 100_000 ? 50_000 : 10_000;
+    return Math.round(cappedValue / step) * step;
   },
 
   /**
@@ -668,7 +670,8 @@ export const FinanceService = {
   // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
    getFairMarketSalary: (ovr: number): number => {
     const base = Math.pow(ovr / 50, 4) * 125000;
-    return Math.floor(base);
+    const step = base >= 1_000_000 ? 100_000 : base >= 100_000 ? 10_000 : 5_000;
+    return Math.round(base / step) * step;
   },
 
   calculateFAExpectations: (player: Player, clubReputation: number, avgSquadSalary: number): number => {

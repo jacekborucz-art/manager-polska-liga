@@ -81,8 +81,9 @@ export const TransferExecutionService = {
           currentDate,
           club.budget
         );
+        const bonus = offer.bonus ?? 0;
         const buyerBonusLog = buildFinanceLog(
-          -offer.bonus,
+          -bonus,
           `Bonus za podpis dla ${player.firstName} ${player.lastName}`,
           currentDate,
           club.budget - offer.fee
@@ -90,8 +91,8 @@ export const TransferExecutionService = {
 
         return {
           ...club,
-          transferBudget: club.transferBudget - offer.fee - offer.bonus - (offer.salary || 0) * (offer.years || 0),
-          signingBonusPool: Math.max(0, club.signingBonusPool - offer.bonus),
+          transferBudget: club.transferBudget - offer.fee - bonus - (offer.salary || 0) * (offer.years || 0),
+          signingBonusPool: Math.max(0, club.signingBonusPool - bonus),
           rosterIds: [...club.rosterIds, player.id],
           financeHistory: [buyerBonusLog, buyerFeeLog, ...(club.financeHistory || [])].slice(0, 50)
         };

@@ -231,7 +231,7 @@ interface GameContextType {
   processBackgroundCupMatches: () => void;
     processCLMatchDay: () => void;
   updatePlayer: (clubId: string, playerId: string, newData: Partial<Player>) => void;
-  toggleTransferList: (playerId: string) => void;
+  toggleTransferList: (playerId: string, price?: number) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
   pendingFriendlyRequests: PendingFriendlyRequest[];
@@ -2013,6 +2013,39 @@ setMessages([welcomeMail, fanMail]);
           return updated;
         });
       }
+
+      // ── Tygodniowy przegląd kadry (każdy poniedziałek) ───────────────────────
+      if (dateToProcess.getDay() === 1) {
+        const ntMonthly = NationalTeamService.reviewMonthlySquad(nationalTeams, coaches, players);
+        const monthlyAnyChanged = ntMonthly.updatedTeams.some((t, i) => t !== nationalTeams[i]);
+        if (monthlyAnyChanged) setNationalTeams(ntMonthly.updatedTeams);
+        if (ntMonthly.playerUpdates.length > 0) {
+          const monthlyUpdateMap: Record<string, string | null> = {};
+          ntMonthly.playerUpdates.forEach(u => { monthlyUpdateMap[u.id] = u.assignedNationalTeamId; });
+          setPlayers(prev => {
+            const updated: Record<string, Player[]> = {};
+            for (const [clubId, squad] of Object.entries(prev)) {
+              updated[clubId] = squad.map(p =>
+                p.id in monthlyUpdateMap ? { ...p, assignedNationalTeamId: monthlyUpdateMap[p.id] } : p
+              );
+            }
+            return updated;
+          });
+        }
+        if (userTeamId && ntMonthly.calledUpFromClub.length > 0) {
+          const userSquad = players[userTeamId] || [];
+          const callupMails: MailMessage[] = [];
+          ntMonthly.calledUpFromClub.forEach(({ playerId, teamName }) => {
+            const player = userSquad.find(p => p.id === playerId);
+            if (player) {
+              callupMails.push(MailService.generateNTCallUpMail(player, teamName, dateToProcess));
+            }
+          });
+          if (callupMails.length > 0) {
+            setMessages(prev => [...callupMails, ...prev]);
+          }
+        }
+      }
     }
     // ── Koniec przeglądu kontuzji NT ─────────────────────────────────────────
 
@@ -3416,6 +3449,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 2) {
+      postReviewPlayers = AiContractService.updateClubStars(postReviewClubs, postReviewPlayers, userTeamId);
       const review = AiContractService.performSeasonSquadReview(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
       postReviewClubs = review.updatedClubs;
       postReviewPlayers = review.updatedPlayers;
@@ -3920,14 +3954,15 @@ const finalResult: SimulationOutput = {
               userClub,
               processed,
               seed,
-              nextDay
+              nextDay,
+              userSquad
             );
             if (!offerDecision.shouldGenerate) return;
             const { fee, aiMaxFee, aiUrgency, timing } = IncomingTransferService.calculateOffer(
               p, aiClub, userClub, isInsideWindow, seed
             );
             if (fee <= 0 || fee > aiClub.budget) return;
-            const boardPressure = IncomingTransferService.evaluateBoardPressure({ fee }, p, userClub);
+            const boardPressure = IncomingTransferService.evaluateBoardPressure({ fee }, p, userClub, aiClub, seed);
             const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
             const newOffer: IncomingTransferOffer = {
               id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -5311,13 +5346,16 @@ const finalResult: SimulationOutput = {
     }));
   };
 
-  const toggleTransferList = (playerId: string) => {
+  const toggleTransferList = (playerId: string, price?: number) => {
     if (!userTeamId) return;
     const squad = players[userTeamId] || [];
     const player = squad.find(p => p.id === playerId);
     if (player) {
       if (player.transferPendingClubId) return;
-      updatePlayer(userTeamId, playerId, { isOnTransferList: !player.isOnTransferList });
+      updatePlayer(userTeamId, playerId, {
+        isOnTransferList: !player.isOnTransferList,
+        transferListPrice: !player.isOnTransferList ? price : undefined
+      });
     }
   };
 

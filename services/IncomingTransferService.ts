@@ -40,7 +40,8 @@ export const IncomingTransferService = {
     sellerClub: Club,
     activeIncomingOffers: IncomingTransferOffer[],
     seed: number,
-    currentDate: Date | string
+    currentDate: Date | string,
+    sellerPlayers?: Player[]
   ): { shouldGenerate: boolean; source: 'SHORTLIST' | 'SPONTANEOUS' | null } {
     const hasActiveOffer = activeIncomingOffers.some(
       o =>
@@ -75,19 +76,39 @@ export const IncomingTransferService = {
     if (buyerClub.rosterIds.length >= 30) return { shouldGenerate: false, source: null };
     if (buyerClub.id === sellerClub.id) return { shouldGenerate: false, source: null };
 
+    if (player.isUntouchable) {
+      const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
+      const contractExpiring = daysLeft > 0 && daysLeft < 180;
+      const sellerSquad = sellerPlayers || [];
+      const monthlyWageBill = sellerSquad.reduce((s, p) => s + (p.annualSalary || 0), 0) / 12;
+      const clubBankrupt = monthlyWageBill > 0 && sellerClub.budget < monthlyWageBill * 5;
+      if (!contractExpiring && !clubBankrupt) {
+        return { shouldGenerate: false, source: null };
+      }
+    }
+
     const isShortlisted = !!player.interestedClubs?.includes(buyerClub.id);
-    const isExceptionalTarget = IncomingTransferService.isExceptionalSpontaneousTarget(
+    const priority = IncomingTransferService.isExceptionalSpontaneousTarget(
       player,
       buyerClub,
       sellerClub,
-      currentDate
+      currentDate,
+      sellerPlayers
     );
 
-    let prob = 0.004;
+    const PRIORITY_PROB: Record<1 | 2 | 3 | 4 | 5, number> = {
+      1: 0.012,
+      2: 0.008,
+      3: 0.006,
+      4: 0.006,
+      5: 0.003,
+    };
+
+    let prob = priority !== false ? PRIORITY_PROB[priority] : 0;
     let source: 'SHORTLIST' | 'SPONTANEOUS' | null = null;
 
-    if (player.isOnTransferList) prob *= 3.0;
-    if (player.overallRating >= 75) prob *= 2.0;
+    if (player.isOnTransferList) prob *= 4.0;
+
     if (player.contractEndDate) {
       const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
       if (daysLeft < 180) prob *= 1.8;
@@ -96,20 +117,21 @@ export const IncomingTransferService = {
     if (buyerClub.reputation > sellerClub.reputation) prob *= 1.3;
 
     if (isShortlisted) {
+      prob = Math.max(prob, 0.004);
       prob *= 3.0;
       prob *= 0.85;
       source = 'SHORTLIST';
     } else {
-      if (!isExceptionalTarget) {
+      if (priority === false) {
         return { shouldGenerate: false, source: null };
       }
 
       const discoveryRoll = IncomingTransferService.seededRandom(seed + 17);
-      if (discoveryRoll >= 0.15) {
+      const discoveryThreshold = priority === 1 ? 0.35 : priority === 2 ? 0.25 : priority <= 4 ? 0.18 : 0.12;
+      if (discoveryRoll >= discoveryThreshold) {
         return { shouldGenerate: false, source: null };
       }
 
-      prob *= 0.15;
       source = 'SPONTANEOUS';
     }
 
@@ -151,7 +173,11 @@ export const IncomingTransferService = {
     }
 
     const feeMultiplier = feeMin + rng2 * (feeMax - feeMin);
-    const fee = Math.round(marketValue * feeMultiplier / 1000) * 1000;
+    const isLowerRepBuyer = buyerClub.reputation < sellerClub.reputation;
+    const repPenalty = isLowerRepBuyer
+      ? 0.50 + IncomingTransferService.seededRandom(seed + 4) * 0.20
+      : 1.0;
+    const fee = Math.round(marketValue * feeMultiplier * repPenalty / 1000) * 1000;
 
     const maxMultiplier = 1.10 + rng3 * 0.20;
     const aiMaxFee = Math.min(
@@ -177,12 +203,23 @@ export const IncomingTransferService = {
   evaluateBoardPressure(
     offer: Pick<IncomingTransferOffer, 'fee'>,
     player: Player,
-    sellerClub: Club
+    sellerClub: Club,
+    buyerClub?: Club,
+    seed?: number
   ): boolean {
     const sellerTier = IncomingTransferService.getClubTier(sellerClub);
     if (sellerClub.budget < 0) return true;
     const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier);
     if (offer.fee > marketValue * 1.8) return true;
+    if (
+      player.isOnTransferList &&
+      buyerClub &&
+      seed !== undefined &&
+      buyerClub.reputation < sellerClub.reputation &&
+      offer.fee < marketValue
+    ) {
+      if (IncomingTransferService.seededRandom(seed + 99) < 0.40) return true;
+    }
     return false;
   },
 
@@ -322,19 +359,53 @@ export const IncomingTransferService = {
     return d.toISOString().split('T')[0];
   },
 
+  getAvgRating(player: Player): number {
+    const h = player.stats.ratingHistory;
+    if (!h || h.length === 0) return 0;
+    return h.reduce((s, r) => s + r, 0) / h.length;
+  },
+
   isExceptionalSpontaneousTarget(
     player: Player,
     buyerClub: Club,
     sellerClub: Club,
-    currentDate: Date | string
-  ): boolean {
-    const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
-    const isElitePlayer = player.overallRating >= 80;
-    const isWonderkid = player.age <= 21 && player.overallRating >= 72;
-    const isContractOpportunity = daysLeft > 0 && daysLeft < 150 && player.overallRating >= 70;
-    const isStepUpMove = buyerClub.reputation >= sellerClub.reputation + 4 && player.overallRating >= 74;
+    currentDate: Date | string,
+    sellerPlayers?: Player[]
+  ): 1 | 2 | 3 | 4 | 5 | false {
+    if (player.isOnTransferList) {
+      let isBestPlayerListed = false;
+      if (sellerPlayers) {
+        const squadBestOvr = Math.max(...sellerPlayers.map(p => p.overallRating));
+        isBestPlayerListed = player.overallRating >= squadBestOvr;
+      }
+      return isBestPlayerListed ? 1 : 3;
+    }
 
-    return isElitePlayer || isWonderkid || isContractOpportunity || isStepUpMove;
+    const ovr = player.overallRating;
+    const age = player.age;
+    const avgRating = IncomingTransferService.getAvgRating(player);
+    const goals = player.stats.goals;
+    const assists = player.stats.assists;
+    const talent = player.attributes.talent;
+    const isFwd = player.position === 'FWD' || player.position === 'CF' || player.position === 'ST' || player.position === 'LW' || player.position === 'RW';
+    const isMid = player.position === 'MID' || player.position === 'CAM' || player.position === 'CDM' || player.position === 'CM' || player.position === 'LM' || player.position === 'RM';
+
+    // Priorytet 1: talent/elite + młody
+    if (ovr >= 80 && talent >= 80 && age >= 16 && age <= 24) return 1;
+
+    // Priorytet 2: elite + do 28 lat + wysoka forma
+    if (ovr >= 80 && age <= 28 && avgRating >= 7.5) return 2;
+
+    // Priorytet 3: napastnik elite + gole + forma
+    if (isFwd && ovr >= 80 && age <= 30 && goals >= 10 && avgRating >= 7.2) return 3;
+
+    // Priorytet 4: pomocnik elite + asysty + forma
+    if (isMid && ovr >= 80 && age <= 30 && assists >= 10 && avgRating >= 7.2) return 4;
+
+    // Priorytet 5: wysoka forma niezależnie od wieku
+    if (avgRating >= 7.2) return 5;
+
+    return false;
   },
 
   hashString(value: string): number {
