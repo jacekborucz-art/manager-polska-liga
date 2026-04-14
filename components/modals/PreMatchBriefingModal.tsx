@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { PREMATCH_BRIEFINGS } from '../../data/prematch_briefing_pl';
 import {
   BriefingScenario,
   BriefingEffect,
   detectScenario,
   calculateBriefingEffect,
+  getBriefingsForScenario,
   getSilenceEffect,
 } from '../../services/PreMatchBriefingService';
 
@@ -36,10 +36,18 @@ export const PreMatchBriefingModal = ({
   if (!isOpen) return null;
 
   const scenario: BriefingScenario = detectScenario(userRep, oppRep);
+  const availableBriefings = getBriefingsForScenario(scenario);
 
   const handleSelect = (index: number) => {
-    const speech = PREMATCH_BRIEFINGS[index];
-    const effect = calculateBriefingEffect(speech.hiddenType, scenario, sessionSeed, index);
+    const speech = availableBriefings[index];
+    if (!speech) return;
+
+    const effect = calculateBriefingEffect(
+      speech.hiddenType,
+      scenario,
+      sessionSeed,
+      speech.originalIndex
+    );
     setReactionText(effect.reactionText);
     setPendingEffect(effect);
     setPhase('REACTING');
@@ -142,7 +150,7 @@ export const PreMatchBriefingModal = ({
             </div>
 
             <div className="overflow-y-auto custom-scrollbar max-h-[340px] px-8 pb-4 flex flex-col gap-2">
-              {PREMATCH_BRIEFINGS.map((speech, index) => (
+              {availableBriefings.map((speech, index) => (
                 <button
                   key={speech.id}
                   onClick={() => handleSelect(index)}

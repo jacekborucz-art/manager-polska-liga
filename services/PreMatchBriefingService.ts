@@ -1,8 +1,13 @@
+import type { BriefingSpeech } from '../data/prematch_briefing_pl';
 import { BriefingSpeechType, PREMATCH_BRIEFINGS } from '../data/prematch_briefing_pl';
 export { PREMATCH_BRIEFINGS };
 export type { BriefingSpeechType };
 
 export type BriefingScenario = 'UNDERDOG' | 'EQUAL' | 'FAVORITE';
+
+export interface ScenarioBriefingOption extends BriefingSpeech {
+  originalIndex: number;
+}
 
 export interface BriefingEffect {
   actionMod: number;
@@ -23,6 +28,24 @@ export const detectScenario = (userRep: number, oppRep: number): BriefingScenari
   if (gap <= -4) return 'FAVORITE';
   return 'EQUAL';
 };
+
+const BRIEFING_SCENARIO_RULES: Record<BriefingSpeechType, BriefingScenario[]> = {
+  UPRISING: ['UNDERDOG'],
+  FORTRESS: ['UNDERDOG', 'EQUAL'],
+  WOUNDED_PRIDE: ['UNDERDOG', 'EQUAL'],
+  KAMIKAZE: ['UNDERDOG', 'EQUAL'],
+  TACTICIAN: ['UNDERDOG', 'EQUAL', 'FAVORITE'],
+  BLITZ: ['UNDERDOG', 'EQUAL', 'FAVORITE'],
+  PATIENCE: ['UNDERDOG', 'EQUAL', 'FAVORITE'],
+  PROFESSIONALISM: ['UNDERDOG', 'EQUAL', 'FAVORITE'],
+  LOOSE: ['FAVORITE'],
+  DOMINANCE: ['EQUAL', 'FAVORITE'],
+};
+
+export const getBriefingsForScenario = (scenario: BriefingScenario): ScenarioBriefingOption[] =>
+  PREMATCH_BRIEFINGS
+    .map((speech, originalIndex) => ({ ...speech, originalIndex }))
+    .filter((speech) => BRIEFING_SCENARIO_RULES[speech.hiddenType].includes(scenario));
 
 // ─── SEEDED RNG ───────────────────────────────────────────────────────────────
 const seededRng = (seed: number, offset: number): number => {
@@ -60,7 +83,7 @@ const REACTION_POOL: Record<ReactionQuality, string[]> = {
   ],
   SURPRISE_NEG: [
     'Zbyt wiele naraz. Widać, że kilku zawodników myśli za dużo i nie jest skoncentrowanych na meczu.',
-    'Cisza jest głucha. Jakbyś powiedział złe słowo w złym miejscu i o złym czasie.',
+    'Cisza taka, jakby ktoś powiedział coś w nieodpowiednim momencie.',
     'Coś pękło w złą stronę. Kilku liderów ma kamienne, nieprzeniknione miny.',
   ],
 };
