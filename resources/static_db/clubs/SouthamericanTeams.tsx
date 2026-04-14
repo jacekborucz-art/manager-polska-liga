@@ -7,7 +7,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#FFFFFF", "#E30613", "#000000"], 
     stadium: "Estadio Más Monumental", 
     capacity: 85018, 
-    reputation: 19 
+    reputation: 16 
   },
   { 
     name: "Boca Juniors", 
@@ -16,7 +16,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#003087", "#F5C518", "#FFFFFF"], 
     stadium: "La Bombonera", 
     capacity: 57200, 
-    reputation: 19 
+    reputation: 15 
   },
   { 
     name: "Racing Club", 
@@ -25,7 +25,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#003087", "#FFFFFF", "#E30613"], 
     stadium: "Estadio Presidente Perón", 
     capacity: 55000, 
-    reputation: 16 
+    reputation: 13 
   },
   { 
     name: "Independiente", 
@@ -54,7 +54,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#E30613", "#000000", "#F5C518"], 
     stadium: "Maracanã", 
     capacity: 78838, 
-    reputation: 20 
+    reputation: 16 
   },
   { 
     name: "Palmeiras", 
@@ -63,7 +63,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#006633", "#FFFFFF"], 
     stadium: "Allianz Parque", 
     capacity: 43713, 
-    reputation: 19 
+    reputation: 15 
   },
   { 
     name: "São Paulo", 
@@ -72,7 +72,7 @@ export const CLUBS_SOUTH_AMERICA = [
     colors: ["#E30613", "#FFFFFF", "#000000"], 
     stadium: "Morumbi", 
     capacity: 66795, 
-    reputation: 17 
+    reputation: 15 
   },
   { 
     name: "Fluminense", 

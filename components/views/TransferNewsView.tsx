@@ -145,7 +145,10 @@ export const TransferNewsView: React.FC = () => {
     currentDate,
     navigateTo,
     viewPlayerDetails,
+    messages,
+    transferOffers,
     incomingOffers,
+    aiTransferLog,
     navigateToIncomingOffer,
     transferNewsActiveTab,
     setTransferNewsActiveTab,
@@ -314,6 +317,58 @@ export const TransferNewsView: React.FC = () => {
       );
   }, [players, seasonStart, leagueFilter, clubMap]);
 
+  const completedTransferLogDates = useMemo(() => {
+    const dateMap = new Map<string, Date>();
+
+    aiTransferLog
+      .filter(entry => entry.status === 'TRANSFER_SIGNED')
+      .forEach(entry => {
+        const entryDate = new Date(entry.date);
+        if (Number.isNaN(entryDate.getTime())) return;
+        dateMap.set(`${entry.playerName}::${entry.fromClub}::${entry.toClub}`, entryDate);
+      });
+
+    return dateMap;
+  }, [aiTransferLog]);
+
+  const completedTransferOfferDates = useMemo(() => {
+    const dateMap = new Map<string, Date>();
+
+    transferOffers
+      .filter(offer => offer.status === 'COMPLETED' && offer.effectiveDate)
+      .forEach(offer => {
+        const entryDate = new Date(offer.effectiveDate!);
+        if (Number.isNaN(entryDate.getTime())) return;
+        dateMap.set(`${offer.playerId}::${offer.sellerClubId}::${offer.buyerClubId}`, entryDate);
+      });
+
+    return dateMap;
+  }, [transferOffers]);
+
+  const completedTransferMessageDates = useMemo(() => {
+    const dateMap = new Map<string, Date>();
+
+    messages.forEach(message => {
+      if (!(message.subject.startsWith('Transfer potwierdzony:') || message.subject.startsWith('Transfer wszedl w zycie:'))) {
+        return;
+      }
+
+      const playerFullName = message.subject.split(': ')[1];
+      if (!playerFullName) return;
+
+      const entryDate = new Date(message.date);
+      if (Number.isNaN(entryDate.getTime())) return;
+
+      const toClubMatch = message.body.match(/do ([^.]+?)(?:\.| zgodnie)/);
+      const toClubName = toClubMatch?.[1]?.trim();
+      if (!toClubName) return;
+
+      dateMap.set(`${playerFullName}::${toClubName}`, entryDate);
+    });
+
+    return dateMap;
+  }, [messages]);
+
   const completed = useMemo(() => {
     return allPlayers
       .filter(player => {
@@ -335,6 +390,8 @@ export const TransferNewsView: React.FC = () => {
           player,
           toClub,
           fromClub,
+          fromClubId: previousEntry.clubId,
+          toClubId: lastEntry.clubId,
           fromClubName: previousEntry.clubName,
           toClubName: lastEntry.clubName,
           fromMonth: lastEntry.fromMonth!,
@@ -348,11 +405,31 @@ export const TransferNewsView: React.FC = () => {
         }
         return toClub?.leagueId === leagueFilter || fromClub?.leagueId === leagueFilter;
       })
+      .map(entry => {
+        const fallbackDate = new Date(entry.fromYear, entry.fromMonth - 1, 1);
+        const offerDate = completedTransferOfferDates.get(`${entry.player.id}::${entry.fromClubId}::${entry.toClubId}`);
+        const logDate = completedTransferLogDates.get(`${playerName(entry.player)}::${entry.fromClubName}::${entry.toClubName}`);
+        const messageDate = completedTransferMessageDates.get(`${entry.player.firstName} ${entry.player.lastName}::${entry.toClubName}`);
+
+        return {
+          ...entry,
+          completedDate: offerDate || logDate || messageDate || fallbackDate,
+        };
+      })
       .sort((a, b) => {
-        if (b.fromYear !== a.fromYear) return b.fromYear - a.fromYear;
-        return b.fromMonth - a.fromMonth;
+        const timeDiff = b.completedDate.getTime() - a.completedDate.getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return a.player.lastName.localeCompare(b.player.lastName);
       });
-  }, [allPlayers, clubMap, leagueFilter, seasonStart]);
+  }, [
+    allPlayers,
+    clubMap,
+    completedTransferLogDates,
+    completedTransferMessageDates,
+    completedTransferOfferDates,
+    leagueFilter,
+    seasonStart,
+  ]);
 
   const activityCount = trsf.length + freeAgentNeg.length;
 
@@ -400,12 +477,20 @@ export const TransferNewsView: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => navigateTo(ViewState.JOB_MARKET)}
-          className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
-        >
-          <span className="group-hover:text-emerald-400 transition-colors">&larr; Centrum transferowe</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigateTo(ViewState.AI_MARKET_NEWS)}
+            className="px-6 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+          >
+            <span className="group-hover:text-yellow-400 transition-colors">📊 Market News</span>
+          </button>
+          <button
+            onClick={() => navigateTo(ViewState.JOB_MARKET)}
+            className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+          >
+            <span className="group-hover:text-emerald-400 transition-colors">&larr; Centrum transferowe</span>
+          </button>
+        </div>
       </header>
 
       <div className="w-full max-w-[1680px] mx-auto flex items-center justify-between shrink-0 px-1 gap-4">
@@ -725,39 +810,64 @@ export const TransferNewsView: React.FC = () => {
             )}
 
             {completed.length > 0 && (
-              <div className="rounded-2xl border border-emerald-400/15 bg-white/[0.02] overflow-hidden">
-                <div className="grid grid-cols-[80px_140px_1fr] gap-4 px-5 py-3 border-b border-white/10 text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">
-                  <p>Nr</p>
-                  <p>Data</p>
-                  <p>Komunikat</p>
+              <div className="rounded-2xl border border-emerald-400/15 bg-white/[0.02] overflow-x-auto">
+                <div className="grid min-w-[1180px] grid-cols-[70px_150px_minmax(220px,2.2fr)_70px_90px_90px_minmax(260px,1.8fr)] gap-4 px-5 py-3 border-b border-white/10 text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">
+                  <p>Lp.</p>
+                  <p>Pelna data</p>
+                  <p>Imie i nazwisko zawodnika</p>
+                  <p>Wiek</p>
+                  <p>Pozycja</p>
+                  <p>Overall</p>
+                  <p>Stary klub -&gt; nowy klub</p>
                 </div>
 
-                {completed.map(({ player, toClubName, fromClubName, fromClub, fromMonth, fromYear }, index) => (
-                  <div
-                    key={player.id}
-                    className="grid grid-cols-[80px_140px_1fr] gap-4 px-5 py-4 border-b border-white/5 last:border-b-0 text-[11px] text-slate-200 hover:bg-white/[0.03] transition-all"
-                  >
-                    <div>
-                      <p className="font-black text-emerald-300">{index + 1}.</p>
-                    </div>
+                {completed.map(({ player, toClubName, fromClubName, fromClub, fromMonth, fromYear, completedDate }, index) => {
+                  const fromLabel = fromClub?.leagueId ? fromClubName : 'wolny transfer';
 
-                    <div>
-                      <p className="font-semibold text-slate-300">{MONTHS_PL[fromMonth - 1]} {fromYear}</p>
-                    </div>
+                  return (
+                    <div
+                      key={`${player.id}_${toClubName}_${fromYear}_${fromMonth}`}
+                      className="grid min-w-[1180px] grid-cols-[70px_150px_minmax(220px,2.2fr)_70px_90px_90px_minmax(260px,1.8fr)] gap-4 px-5 py-4 border-b border-white/5 last:border-b-0 text-[11px] text-slate-200 hover:bg-white/[0.03] transition-all"
+                    >
+                      <div>
+                        <p className="font-black text-emerald-300">{index + 1}.</p>
+                      </div>
 
-                    <div>
-                      <p className="font-black text-white">
+                      <div>
+                        <p className="font-semibold text-slate-300">{completedDate.toLocaleDateString('pl-PL')}</p>
+                      </div>
+
+                      <div>
                         <button
                           onClick={() => viewPlayerDetails(player.id)}
-                          className="text-yellow-300 hover:text-yellow-200 transition-colors"
+                          className="font-black text-yellow-300 hover:text-yellow-200 transition-colors text-left"
                         >
-                          {playerName(player)}
-                        </button>{' '}
-                        ({fromClub?.leagueId ? fromClubName : 'wolny transfer'}) podpisal kontrakt z <span className="text-emerald-300">{toClubName}</span>
-                      </p>
+                          {player.firstName} {player.lastName}
+                        </button>
+                      </div>
+
+                      <div>
+                        <p className="font-semibold text-slate-300">{player.age}</p>
+                      </div>
+
+                      <div>
+                        <p className={`font-black ${POS_COLOR[player.position] ?? 'text-slate-300'}`}>{player.position}</p>
+                      </div>
+
+                      <div>
+                        <p className="font-black text-white">{player.overallRating}</p>
+                      </div>
+
+                      <div>
+                        <p className="font-semibold text-slate-300">
+                          <span className="text-slate-200">{fromLabel}</span>
+                          <span className="mx-2 text-slate-500">-&gt;</span>
+                          <span className="text-emerald-300">{toClubName}</span>
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

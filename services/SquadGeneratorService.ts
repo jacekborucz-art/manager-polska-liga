@@ -171,6 +171,123 @@ const getRandomGlobalClubForeignRegion = (mexicoChance = 0): Region => {
   return NameGeneratorService.getRandomForeignRegion();
 };
 
+type RegionalTalentProfile = {
+  firstTalentChance: number;
+  secondTalentChance: number;
+  minBase: number;
+  maxBase: number;
+  hardCap: number;
+  minAge: number;
+  maxAge: number;
+  preferredRegions?: Region[];
+};
+
+const injectRegionalStarProspects = (
+  squad: Player[],
+  leagueTier: number,
+  clubReputation: number,
+  profile?: RegionalTalentProfile
+): void => {
+  if (!profile || Math.random() >= profile.firstTalentChance) return;
+
+  const candidateIndexes = squad
+    .map((player, index) => ({ player, index }))
+    .filter(({ player }) => !profile.preferredRegions || profile.preferredRegions.includes(player.nationality))
+    .map(({ index }) => index);
+
+  if (candidateIndexes.length === 0) return;
+
+  const chosenIndexes: number[] = [];
+  const pickUniqueIndex = (): number | null => {
+    const available = candidateIndexes.filter(index => !chosenIndexes.includes(index));
+    if (available.length === 0) return null;
+    return available[Math.floor(Math.random() * available.length)];
+  };
+
+  const firstIndex = pickUniqueIndex();
+  if (firstIndex === null) return;
+  chosenIndexes.push(firstIndex);
+
+  if (candidateIndexes.length > 1 && Math.random() < profile.secondTalentChance) {
+    const secondIndex = pickUniqueIndex();
+    if (secondIndex !== null) {
+      chosenIndexes.push(secondIndex);
+    }
+  }
+
+  chosenIndexes.forEach(index => {
+    const player = squad[index];
+    const talentAge = profile.minAge + Math.floor(Math.random() * (profile.maxAge - profile.minAge + 1));
+    const genData = PlayerAttributesGenerator.generateAttributes(
+      player.position,
+      leagueTier,
+      clubReputation,
+      talentAge,
+      true,
+      {
+        minBase: profile.minBase,
+        maxBase: profile.maxBase,
+        hardCap: profile.hardCap,
+      }
+    );
+
+    squad[index] = {
+      ...player,
+      age: talentAge,
+      overallRating: genData.overall,
+      attributes: genData.attributes,
+    };
+  });
+};
+
+const getSouthAmericanTalentProfile = (country: string, localRegion: Region): RegionalTalentProfile | undefined => {
+  if (country === 'BRA') {
+    return {
+      firstTalentChance: 0.22,
+      secondTalentChance: 0.06,
+      minBase: 84,
+      maxBase: 94,
+      hardCap: 98,
+      minAge: 16,
+      maxAge: 21,
+      preferredRegions: [localRegion],
+    };
+  }
+
+  if (country === 'ARG') {
+    return {
+      firstTalentChance: 0.20,
+      secondTalentChance: 0.05,
+      minBase: 83,
+      maxBase: 93,
+      hardCap: 97,
+      minAge: 16,
+      maxAge: 21,
+      preferredRegions: [localRegion],
+    };
+  }
+
+  return undefined;
+};
+
+const getIntercontinentalTalentProfile = (
+  continent: 'Asia' | 'Africa' | 'North America',
+  localRegion: Region
+): RegionalTalentProfile | undefined => {
+  if (continent !== 'Africa') return undefined;
+
+  return {
+    firstTalentChance: 0.10,
+    secondTalentChance: 0.025,
+    minBase: 76,
+    maxBase: 86,
+    hardCap: 92,
+    minAge: 16,
+    maxAge: 22,
+    preferredRegions: [localRegion],
+  };
+};
+
 export const SquadValidator = {
   isValidSize: (count: number) => count >= 29 && count <= 35,
   
@@ -590,6 +707,13 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
       } as Player;
     });
 
+    injectRegionalStarProspects(
+      squad,
+      tier,
+      reputation,
+      getSouthAmericanTalentProfile(country, localRegion)
+    );
+
     const clubBudget = FinanceService.calculateInitialBudget(tier, reputation);
     const wagePool = FinanceService.getWagePool(clubBudget);
     const totalSquadWeight = squad.reduce((sum, p) =>
@@ -672,6 +796,13 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
         history: []
       } as Player;
     });
+
+    injectRegionalStarProspects(
+      squad,
+      tier,
+      reputation,
+      getIntercontinentalTalentProfile(continent, localRegion)
+    );
 
     const clubBudget = FinanceService.calculateInitialBudget(tier, reputation);
     const wagePool = FinanceService.getWagePool(clubBudget);

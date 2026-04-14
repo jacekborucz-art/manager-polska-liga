@@ -1,5 +1,5 @@
 
-import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, LeagueRoundResults, MatchResult, HealthStatus, InjurySeverity, Referee, WeatherSnapshot, Coach } from '../types';
+import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, LeagueRoundResults, MatchResult, HealthStatus, InjurySeverity, Referee, WeatherSnapshot, Coach, AiTransferLogEntry } from '../types';
 import { DebugLoggerService } from './DebugLoggerService';
 import { LeagueBackgroundMatchEngineV2 } from './LeagueBackgroundMatchEngine-ver2';
 import { RefereeService } from './RefereeService';
@@ -27,15 +27,16 @@ export const BackgroundMatchProcessor = {
     // Opcjonalne ziarno sesji — używane przez scouting transferowy.
     // Jeśli nie podane, scouting działa z seed=0 (mniej różnorodny, ale funkcjonalny).
     sessionSeed: number = 0
-  ): { 
-    updatedFixtures: Fixture[], 
-    updatedClubs: Club[], 
+  ): {
+    updatedFixtures: Fixture[],
+    updatedClubs: Club[],
     updatedPlayers: Record<string, Player[]>,
     updatedLineups: Record<string, Lineup>,
     newOffers: PendingNegotiation[],
     roundResults: LeagueRoundResults | null,
     seasonNumber: number,
-    ratings: Record<string, number>;
+    ratings: Record<string, number>,
+    aiTransferLogEntries: AiTransferLogEntry[],
   } => {
     
        const dateStr = currentDate.toDateString();
@@ -82,6 +83,12 @@ if (todayFixtures.length === 0) {
       const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId);
       const transferResolvedUpdate = AiContractService.resolveAiTransferPending(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
 
+      const aiTransferLogEntries: AiTransferLogEntry[] = [
+        ...transferSigningsUpdate.logEntries,
+        ...interestedTargetingUpdate.logEntries,
+        ...transferResolvedUpdate.logEntries,
+      ];
+
       // Aktualizacja zainteresowań transferowych: 1. każdego miesiąca + 12 stycznia (otwarcie okna zimowego).
       // AI-kluby przeglądają rynek i aktualizują swoje listy obserwowanych zawodników.
       let scoutedClubs = transferResolvedUpdate.updatedClubs;
@@ -116,7 +123,8 @@ if (todayFixtures.length === 0) {
         newOffers: recruitmentUpdate.newOffers,
         seasonNumber: seasonNumber,
         roundResults: null,
-        ratings: {}
+        ratings: {},
+        aiTransferLogEntries,
       };
     }
 
@@ -482,6 +490,12 @@ if (todayFixtures.length === 0) {
     const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId);
     const transferResolvedFinal = AiContractService.resolveAiTransferPending(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
 
+    const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [
+      ...transferSigningsFinal.logEntries,
+      ...interestedTargetingFinal.logEntries,
+      ...transferResolvedFinal.logEntries,
+    ];
+
     currentClubs = transferResolvedFinal.updatedClubs;
     currentPlayers = transferResolvedFinal.updatedPlayers;
     const newOffers = finalUpdate.newOffers;
@@ -510,15 +524,15 @@ if (todayFixtures.length === 0) {
     }
 
     return {
-
       updatedFixtures: currentFixtures,
       updatedClubs: currentClubs,
-      updatedPlayers: currentPlayers, 
+      updatedPlayers: currentPlayers,
       updatedLineups: newLineups,
       newOffers: newOffers,
       roundResults: roundResults,
       seasonNumber: seasonNumber,
-      ratings: {} 
+      ratings: {},
+      aiTransferLogEntries: aiTransferLogEntriesMatch,
     };
   }
 };

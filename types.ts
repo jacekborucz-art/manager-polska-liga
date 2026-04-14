@@ -80,6 +80,7 @@ export enum ViewState {
   POST_MATCH_CL_FINAL = 'POST_MATCH_CL_FINAL',
   EUROPEAN_CLUBS = 'EUROPEAN_CLUBS',
   TRANSFER_NEWS = 'TRANSFER_NEWS',
+  AI_MARKET_NEWS = 'AI_MARKET_NEWS',
   PRE_MATCH_EL_STUDIO = 'PRE_MATCH_EL_STUDIO',
   PRE_MATCH_EL_LIVE_STUDIO = 'PRE_MATCH_EL_LIVE_STUDIO',
   MATCH_LIVE_EL = 'MATCH_LIVE_EL',
@@ -696,6 +697,26 @@ export interface IncomingTransferOffer {
   playerNegotiationResolvesAt?: string;
   playerNegotiationResult?: 'accepted' | 'refused';
   boardPressure: boolean;
+}
+
+export type AiTransferLogStatus =
+  | 'OFFER_MADE'
+  | 'TRANSFER_SIGNED'
+  | 'PLAYER_REJECTED'
+  | 'CANCELLED_NO_BUDGET'
+  | 'CANCELLED_OTHER';
+
+export interface AiTransferLogEntry {
+  id: string;
+  date: string;
+  playerName: string;
+  playerOvr: number;
+  playerPosition: string;
+  fromClub: string;
+  toClub: string;
+  status: AiTransferLogStatus;
+  reason?: string;
+  fee?: number;
 }
 
 export interface TransferContractInput {

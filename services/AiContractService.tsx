@@ -1,4 +1,4 @@
-import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput } from '../types';
+import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput, AiTransferLogEntry } from '../types';
 import { FinanceService as FinanceLogic } from './FinanceService';
 import { TransferSellerLogicService } from './TransferSellerLogicService';
 import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
@@ -582,9 +582,10 @@ processAiRecruitment: (
     playersMap: Record<string, Player[]>,
     currentDate: Date,
     userTeamId: string | null
-  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]> } => {
+  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
+    const logEntries: AiTransferLogEntry[] = [];
 
     // Poza oknem: negocjacje dozwolone, ale rzadsze — zawodnik przejdzie w kolejnym oknie
     const windowOpen = _isTransferWindowOpen(currentDate);
@@ -611,7 +612,7 @@ processAiRecruitment: (
         p.clubId !== userTeamId
       );
 
-    if (transferListed.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap };
+    if (transferListed.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
 
     // Mutable kopia listy by usuwać zajętych kandydatów w trakcie pętli
     const available = [...transferListed];
@@ -648,12 +649,14 @@ processAiRecruitment: (
         if (!needTL) return false;
 
         // OVR range zależy od pilności: CRITICAL szuka szerzej (desperacja), LOW tylko wąski upgrade
-        const ovrLow = needTL.urgency === 'CRITICAL' ? idealOvr - 14 :
-                       needTL.urgency === 'HIGH'     ? idealOvr - 11 :
-                       needTL.urgency === 'LOW'      ? idealOvr - 4  : idealOvr - 8;
-        const ovrHigh = needTL.urgency === 'LOW' ? idealOvr + 5 : idealOvr + 10;
+        // ovrCap: idealOvr powyżej 95 jest nieosiągalne — klampujemy by top kluby w ogóle widziały kandydatów
+        const ovrCap = Math.min(idealOvr, 95);
+        const ovrLow = needTL.urgency === 'CRITICAL' ? ovrCap - 14 :
+                       needTL.urgency === 'HIGH'     ? ovrCap - 11 :
+                       needTL.urgency === 'LOW'      ? ovrCap - 4  : ovrCap - 8;
+        const ovrHigh = needTL.urgency === 'LOW' ? ovrCap + 5 : ovrCap + 10;
         const normalRange = p.overallRating >= ovrLow && p.overallRating <= ovrHigh;
-        const bargainRange = p.overallRating > ovrHigh && p.overallRating <= idealOvr + 20;
+        const bargainRange = p.overallRating > ovrHigh && p.overallRating <= ovrCap + 20;
         if (!normalRange && !bargainRange) return false;
 
         // Kandydat musi być lepszy od obecnego najsłabszego na tej pozycji (upgrade check)
@@ -674,7 +677,7 @@ processAiRecruitment: (
         if (bargainRange && askingPrice > club.budget * budgetCapBargain) return false;
         if (normalRange && askingPrice > club.budget * budgetCapNormal) return false;
         if (clubStrategy === 1 && p.age > 26) return false;
-        if (club.budget < askingPrice + proposedSalary) return false;
+        if (club.budget < askingPrice + proposedSalary * 0.5) return false;
 
         return true;
       });
@@ -739,15 +742,35 @@ processAiRecruitment: (
       if (sellerDecision.verdict !== 'ACCEPT') continue;
 
       // Sprawdź czy zawodnik chce przejść
-      const proposedSalary = FinanceLogic.getFairMarketSalary(best.overallRating);
-      const proposedBonus = Math.floor(proposedSalary * 0.4);
-      const contractYears = best.age <= 27 ? 3 : best.age <= 31 ? 2 : 1;
+      // Bonus zależy od kierunku ruchu reputacyjnego: ruch w dół wymaga wyższego bonusu by zawodnik zaakceptował
+      const repDeltaTL = club.reputation - sellerClub.reputation;
+      const salaryMultAI_TL = repDeltaTL <= -2 ? 1.40 : repDeltaTL === -1 ? 1.25 : 1.12;
+      const proposedSalary = Math.max(FinanceLogic.getFairMarketSalary(best.overallRating), Math.round(best.annualSalary * salaryMultAI_TL));
+      const ageBonusMult_TL = best.age < 24 ? 0.40 : best.age <= 29 ? 0.65 : best.age <= 33 ? 1.00 : 1.30;
+      const repBonusPremium_TL = repDeltaTL < 0 ? 0.40 : repDeltaTL === 0 ? 0.10 : 0;
+      const negRandTL = 0.75 + Math.random() * 0.50;
+      const proposedBonus = Math.floor(best.annualSalary * (ageBonusMult_TL + repBonusPremium_TL) * negRandTL);
+      const contractYears = best.age <= 27 ? 4 : best.age <= 30 ? 3 : best.age <= 34 ? 2 : 1;
       const contractInput: TransferContractInput = { salary: proposedSalary, bonus: proposedBonus, years: contractYears };
 
       const playerDecision = TransferPlayerDecisionService.evaluateMove(
         contractInput, best, sellerClub, club, sellerSquad, squad, currentDate
       );
-      if (!playerDecision.accepted) continue;
+      if (!playerDecision.accepted) {
+        logEntries.push({
+          id: `TL_REJ_${best.id}_${club.id}_${currentDate.getTime()}`,
+          date: currentDate.toISOString(),
+          playerName: `${best.lastName} ${best.firstName}`,
+          playerOvr: best.overallRating,
+          playerPosition: best.position,
+          fromClub: sellerClub.name,
+          toClub: club.name,
+          status: 'PLAYER_REJECTED',
+          reason: playerDecision.reason,
+          fee: askingPrice,
+        });
+        continue;
+      }
 
       // Obie strony OK → tag TRSF + data meldunku
       // W oknie: za 3 dni. Poza oknem: start kolejnego okna transferowego.
@@ -762,6 +785,18 @@ processAiRecruitment: (
           : p
       );
 
+      logEntries.push({
+        id: `TL_OFFER_${best.id}_${club.id}_${currentDate.getTime()}`,
+        date: currentDate.toISOString(),
+        playerName: `${best.lastName} ${best.firstName}`,
+        playerOvr: best.overallRating,
+        playerPosition: best.position,
+        fromClub: sellerClub.name,
+        toClub: club.name,
+        status: 'OFFER_MADE',
+        fee: askingPrice,
+      });
+
       // Usuń zawodnika z dostępnej listy by inne kluby go nie wybrały w tej samej iteracji
       const idx = available.findIndex(p => p.id === best.id);
       if (idx !== -1) available.splice(idx, 1);
@@ -774,7 +809,7 @@ processAiRecruitment: (
       });
     }
 
-    return { updatedClubs, updatedPlayers: updatedPlayersMap };
+    return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
   },
 
   /**
@@ -788,9 +823,10 @@ processAiRecruitment: (
     playersMap: Record<string, Player[]>,
     currentDate: Date,
     userTeamId: string | null
-  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]> } => {
+  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
+    const logEntries: AiTransferLogEntry[] = [];
 
     // Poza oknem: podejścia dozwolone, ale rzadsze — transfer nastąpi w kolejnym oknie
     const windowOpen = _isTransferWindowOpen(currentDate);
@@ -839,8 +875,8 @@ processAiRecruitment: (
           !p.isOnTransferList &&
           !p.transferPendingClubId &&
           needsITMap.has(p.position) &&
-          p.overallRating >= (needsITMap.get(p.position)!.urgency === 'CRITICAL' ? idealOvr - 14 : idealOvr - 8) &&
-          p.overallRating <= idealOvr + 12
+          p.overallRating >= (needsITMap.get(p.position)!.urgency === 'CRITICAL' ? Math.min(idealOvr, 95) - 14 : Math.min(idealOvr, 95) - 8) &&
+          p.overallRating <= Math.min(idealOvr, 95) + 12
         );
 
       if (targets.length === 0) continue;
@@ -853,8 +889,10 @@ processAiRecruitment: (
       const askingPrice = TransferSellerLogicService.estimateAskingPrice(target, sellerClub, sellerSquad, currentDate);
       const proposedSalary = FinanceLogic.getFairMarketSalary(target.overallRating);
 
-      if (club.budget < askingPrice + proposedSalary) continue;
-      if (askingPrice > club.budget * 0.55) continue;
+      if (club.budget < askingPrice + proposedSalary * 0.5) continue;
+      // Bogatsze kluby mogą przeznaczyć większy % budżetu na jeden transfer: rep=10→60%, rep=15→67.5%, rep=20→70%
+      const budgetCapIT = Math.min(0.70, 0.45 + club.reputation * 0.015);
+      if (askingPrice > club.budget * budgetCapIT) continue;
 
       // Poza oknem: timing IN_SIX_MONTHS — poprawna premia cenowa i klasyfikacja ochrony rywala.
       const transferTimingInt = windowOpen ? TransferTiming.IMMEDIATE : TransferTiming.IN_SIX_MONTHS;
@@ -869,14 +907,35 @@ processAiRecruitment: (
       );
       if (sellerDecision.verdict !== 'ACCEPT') continue;
 
-      const proposedBonus = Math.floor(proposedSalary * 0.4);
-      const contractYears = target.age <= 27 ? 3 : target.age <= 31 ? 2 : 1;
-      const contractInput: TransferContractInput = { salary: proposedSalary, bonus: proposedBonus, years: contractYears };
+      // Bonus zależy od kierunku ruchu reputacyjnego: ruch w dół wymaga wyższego bonusu by zawodnik zaakceptował
+      const repDeltaIT = club.reputation - sellerClub.reputation;
+      const salaryMultAI_IT = repDeltaIT <= -2 ? 1.40 : repDeltaIT === -1 ? 1.25 : 1.12;
+      const proposedSalaryIT = Math.max(FinanceLogic.getFairMarketSalary(target.overallRating), Math.round(target.annualSalary * salaryMultAI_IT));
+      const ageBonusMult_IT = target.age < 24 ? 0.40 : target.age <= 29 ? 0.65 : target.age <= 33 ? 1.00 : 1.30;
+      const repBonusPremium_IT = repDeltaIT < 0 ? 0.40 : repDeltaIT === 0 ? 0.10 : 0;
+      const negRandIT = 0.75 + Math.random() * 0.50;
+      const proposedBonus = Math.floor(target.annualSalary * (ageBonusMult_IT + repBonusPremium_IT) * negRandIT);
+      const contractYears = target.age <= 27 ? 4 : target.age <= 30 ? 3 : target.age <= 34 ? 2 : 1;
+      const contractInput: TransferContractInput = { salary: proposedSalaryIT, bonus: proposedBonus, years: contractYears };
 
       const playerDecision = TransferPlayerDecisionService.evaluateMove(
         contractInput, target, sellerClub, club, sellerSquad, squad, currentDate
       );
-      if (!playerDecision.accepted) continue;
+      if (!playerDecision.accepted) {
+        logEntries.push({
+          id: `IT_REJ_${target.id}_${club.id}_${currentDate.getTime()}`,
+          date: currentDate.toISOString(),
+          playerName: `${target.lastName} ${target.firstName}`,
+          playerOvr: target.overallRating,
+          playerPosition: target.position,
+          fromClub: sellerClub.name,
+          toClub: club.name,
+          status: 'PLAYER_REJECTED',
+          reason: playerDecision.reason,
+          fee: askingPrice,
+        });
+        continue;
+      }
 
       // W oknie: za 3 dni. Poza oknem: start kolejnego okna transferowego.
       const reportDate = windowOpen
@@ -890,6 +949,18 @@ processAiRecruitment: (
           : p
       );
 
+      logEntries.push({
+        id: `IT_OFFER_${target.id}_${club.id}_${currentDate.getTime()}`,
+        date: currentDate.toISOString(),
+        playerName: `${target.lastName} ${target.firstName}`,
+        playerOvr: target.overallRating,
+        playerPosition: target.position,
+        fromClub: sellerClub.name,
+        toClub: club.name,
+        status: 'OFFER_MADE',
+        fee: askingPrice,
+      });
+
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
       updatedClubs = updatedClubs.map(c => {
         if (c.id === club.id) return { ...c, budget: c.budget - askingPrice };
@@ -898,7 +969,7 @@ processAiRecruitment: (
       });
     }
 
-    return { updatedClubs, updatedPlayers: updatedPlayersMap };
+    return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
   },
 
   /**
@@ -916,14 +987,15 @@ processAiRecruitment: (
     playersMap: Record<string, Player[]>,
     currentDate: Date,
     userTeamId: string | null
-  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]> } => {
+  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
+    const logEntries: AiTransferLogEntry[] = [];
     const today = currentDate.getTime();
 
     // Okno transferowe zamknięte — zawodnicy z tagiem TRSF czekają, nie są przenoszeni
     if (!_isTransferWindowOpen(currentDate)) {
-      return { updatedClubs, updatedPlayers: updatedPlayersMap };
+      return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
     }
 
     for (const sellerClubId of Object.keys(updatedPlayersMap)) {
@@ -948,8 +1020,13 @@ processAiRecruitment: (
           continue;
         }
 
-        const proposedSalary = FinanceLogic.getFairMarketSalary(player.overallRating);
-        const proposedBonus = Math.floor(proposedSalary * 0.4);
+        // Spójna z logiką negocjacji: bonus zależy od kierunku ruchu reputacyjnego
+        const repDeltaRes = buyerClub.reputation - sellerClub.reputation;
+        const salaryMultAI_Res = repDeltaRes <= -2 ? 1.40 : repDeltaRes === -1 ? 1.25 : 1.12;
+        const proposedSalary = Math.max(FinanceLogic.getFairMarketSalary(player.overallRating), Math.round(player.annualSalary * salaryMultAI_Res));
+        const ageBonusMult_Res = player.age < 24 ? 0.40 : player.age <= 29 ? 0.65 : player.age <= 33 ? 1.00 : 1.30;
+        const repBonusPremium_Res = repDeltaRes < 0 ? 0.40 : repDeltaRes === 0 ? 0.10 : 0;
+        const proposedBonus = Math.floor(player.annualSalary * (ageBonusMult_Res + repBonusPremium_Res));
 
         // Opłata transferowa została już pobrana przy podpisaniu umowy (processAiTransferListSignings / processAiInterestedPlayerTargeting)
         // Weryfikacja: czy kupujący ma środki na bonus dla zawodnika przy meldunku
@@ -965,10 +1042,22 @@ processAiRecruitment: (
           updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
             p.id === player.id ? { ...p, transferPendingClubId: undefined, transferReportDate: undefined } : p
           );
+          logEntries.push({
+            id: `RES_NOBUDGET_${player.id}_${buyerClubId}_${currentDate.getTime()}`,
+            date: currentDate.toISOString(),
+            playerName: `${player.lastName} ${player.firstName}`,
+            playerOvr: player.overallRating,
+            playerPosition: player.position,
+            fromClub: sellerClub.name,
+            toClub: buyerClub.name,
+            status: 'CANCELLED_NO_BUDGET',
+            reason: `Kupujący nie miał środków na bonus przy meldunku (potrzeba: ${proposedBonus.toLocaleString('pl-PL')} PLN)`,
+            fee: refundFee,
+          });
           continue;
         }
 
-        const contractYears = player.age <= 27 ? 3 : player.age <= 31 ? 2 : 1;
+        const contractYears = player.age <= 27 ? 4 : player.age <= 30 ? 3 : player.age <= 34 ? 2 : 1;
         const newEndDate = new Date(currentDate.getFullYear() + contractYears, 5, 30).toISOString();
 
         const currentYear = currentDate.getFullYear();
@@ -998,6 +1087,17 @@ processAiRecruitment: (
         updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).filter(p => p.id !== player.id);
         updatedPlayersMap[buyerClubId] = [...(updatedPlayersMap[buyerClubId] || []), transferredPlayer];
 
+        logEntries.push({
+          id: `RES_SIGNED_${player.id}_${buyerClubId}_${currentDate.getTime()}`,
+          date: currentDate.toISOString(),
+          playerName: `${player.lastName} ${player.firstName}`,
+          playerOvr: player.overallRating,
+          playerPosition: player.position,
+          fromClub: sellerClub.name,
+          toClub: buyerClub.name,
+          status: 'TRANSFER_SIGNED',
+        });
+
         // Tylko bonus dla zawodnika przy meldunku — opłata transferowa zapłacona już przy podpisaniu
         updatedClubs = updatedClubs.map(c => {
           if (c.id === buyerClubId) return { ...c, budget: c.budget - proposedBonus };
@@ -1006,7 +1106,7 @@ processAiRecruitment: (
       }
     }
 
-    return { updatedClubs, updatedPlayers: updatedPlayersMap };
+    return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
   },
 
 /**

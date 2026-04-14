@@ -25,7 +25,8 @@ YouthPlayer,
 Scout,
 MatchHistoryEntry,
 WCQPlayoffState,
-CoachSeasonStats
+CoachSeasonStats,
+AiTransferLogEntry,
 } from '../types';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -67,6 +68,7 @@ import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
 import { AiContractService } from '@/services/AiContractService';
 import { AiScoutingService } from '../services/AiScoutingService';
+import { AiTransferDecisionService } from '../services/AiTransferDecisionService';
 import { BackgroundMatchProcessorCL } from '../services/BackgroundMatchProcessorCL';
 import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
 import { MatchHistoryService } from '../services/MatchHistoryService';
@@ -104,6 +106,7 @@ interface SimulationOutput {
   // KONIEC KODU
   seasonNumber: number;
   roundResults: LeagueRoundResults | null;
+  aiTransferLogEntries?: AiTransferLogEntry[];
 }
 
 type GameNotificationTone = 'success' | 'info' | 'warning';
@@ -253,6 +256,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setTransferNewsActiveTab: React.Dispatch<React.SetStateAction<'scouting' | 'released' | 'activity' | 'completed' | 'incoming'>>;
   contractManagementInitialMode: 'RELEASE' | 'NEGOTIATE';
   setContractManagementInitialMode: React.Dispatch<React.SetStateAction<'RELEASE' | 'NEGOTIATE'>>;
+  aiTransferLog: AiTransferLogEntry[];
 
  europeanStatus: Record<string, EuropeanStatus>;
   setEuropeanStatus: React.Dispatch<React.SetStateAction<Record<string, EuropeanStatus>>>;
@@ -343,6 +347,7 @@ const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(Traini
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
  const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
  const [transferNewsActiveTab, setTransferNewsActiveTab] = useState<'scouting' | 'released' | 'activity' | 'completed' | 'incoming'>('activity');
+ const [aiTransferLog, setAiTransferLog] = useState<AiTransferLogEntry[]>([]);
  const [contractManagementInitialMode, setContractManagementInitialMode] = useState<'RELEASE' | 'NEGOTIATE'>('NEGOTIATE');
  const [europeanStatus, setEuropeanStatus] = useState<Record<string, EuropeanStatus>>({});
   const [nationalTeams, setNationalTeams] = useState<NationalTeam[]>([]);
@@ -1294,6 +1299,9 @@ setMessages([welcomeMail, fanMail]);
   }, []);
 
   const applySimulationResult = useCallback((simulation: SimulationOutput) => {
+    if (simulation.aiTransferLogEntries && simulation.aiTransferLogEntries.length > 0) {
+      setAiTransferLog(prev => [...simulation.aiTransferLogEntries!, ...prev].slice(0, 1000));
+    }
     setClubs(simulation.updatedClubs);
     
    let finalPlayers = simulation.updatedPlayers;
@@ -3457,6 +3465,9 @@ setMessages([welcomeMail, fanMail]);
       postReviewClubs = weakReviewSummer.updatedClubs;
       postReviewPlayers = weakReviewSummer.updatedPlayers;
       postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
+      const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, coaches, dateToProcess, userTeamId);
+      postReviewClubs = seasonDecision.updatedClubs;
+      postReviewPlayers = seasonDecision.updatedPlayers;
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       
       // Wyplata pensji zawodników na start sezonu
@@ -6512,7 +6523,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, 
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
-      setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus,
+      setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
