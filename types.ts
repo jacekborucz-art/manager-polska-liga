@@ -1215,6 +1215,15 @@ isPenalties?: boolean;
   halftimeMomentumBonus?: number;
   oppHalftimeMomentumBonus?: number;
   aiNextInstructionMinute?: number;
+  preMatchMotivation?: {
+    actionMod: number;
+    goalMod: number;
+    momentumBonus: number;
+    expiryMinute: number;
+    fatigueMult: number;
+    rivalBoost: number;
+    label: string;
+  };
   userInstructions: TacticalInstructions;
 }
 

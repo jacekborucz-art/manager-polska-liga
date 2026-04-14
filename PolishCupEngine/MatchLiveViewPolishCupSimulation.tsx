@@ -24,6 +24,8 @@ import { DisciplineService } from '../services/DisciplineService';
 import { PostMatchCommentSelector } from './PostMatchCommentSelector';
 import { MailService } from '../services/MailService';
 import { MatchCupTacticsModal } from '../components/modals/MatchCupTacticsModal';
+import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
+import { BriefingEffect } from '../services/PreMatchBriefingService';
 // -> tutaj wstaw kod (ZMIANA SERWISU NA CUP)
 import { AiMatchDecisionCupService } from '../services/AiMatchDecisionCupService';
 import { AiMatchPreparationService } from '@/services/AiMatchPreparationService';
@@ -406,6 +408,7 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
   const [isUserPaused, setIsUserPaused] = useState(false);
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
+  const [showBriefing, setShowBriefing] = useState(true);
   const [penaltyNotice, setPenaltyNotice] = useState<string | null>(null);
   const [redCardNotice, setRedCardNotice] = useState<string | null>(null);
   const [isCommentaryOpen, setIsCommentaryOpen] = useState(false);
@@ -493,6 +496,25 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, mi
   }, [ctx, userTeamId]);
 
   const kitColors = useMemo(() => ctx ? KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub) : null, [ctx]);
+
+  const handleBriefingClose = (effect: BriefingEffect) => {
+    setShowBriefing(false);
+    setMatchState(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        preMatchMotivation: {
+          actionMod:     effect.actionMod,
+          goalMod:       effect.goalMod,
+          momentumBonus: effect.momentumBonus,
+          expiryMinute:  effect.expiryMinute,
+          fatigueMult:   effect.fatigueMult,
+          rivalBoost:    effect.rivalBoost,
+          label:         effect.label,
+        },
+      };
+    });
+  };
 
   // Raport zwiadowczy AI — generowany raz przed meczem na podstawie atrybutu experience trenera AI.
   // Wpływa na decyzje taktyczne AI w pierwszych ~25 minutach meczu.
@@ -977,6 +999,11 @@ useEffect(() => {
         let nextHomeInjuries = { ...prev.homeInjuries };
         let nextAwayInjuries = { ...prev.awayInjuries };
         let nextMomentum = prev.momentum;
+        // PRE-MATCH BRIEFING — jednorazowy impuls momentum przy minucie 1
+        if (nextMinute === 1 && prev.preMatchMotivation?.momentumBonus) {
+          const dir = userSide === 'HOME' ? 1 : -1;
+          nextMomentum = clamp(nextMomentum + prev.preMatchMotivation.momentumBonus * dir, -100, 100);
+        }
         // === BALANS 2025 – stałe do łatwego tuningu ===
         const RED_CARD_CHANCE        = 0.00001;  // ~0.065 czerwonych/mecz
         const SEVERE_INJURY_CHANCE   = 0.00004;   // (-20%)
@@ -1528,7 +1555,13 @@ if (prev.isExtraTime && nextMinute >= 121) {
           pRiskMod *= 1 + (clamp(-instructionAssessments.counterAttack.score, 0, 24) / 340) * rf;
         }
 
-        pActionMod = clamp(pActionMod, 0.92, 1.08);
+        // PRE-MATCH BRIEFING MOTIVATION — aktywne dopóki nie wygaśnie
+        if (prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute) {
+          pActionMod  += prev.preMatchMotivation.actionMod;
+          pGoalMod    += prev.preMatchMotivation.goalMod;
+          pFatigueMod += (prev.preMatchMotivation.fatigueMult - 1.0);
+        }
+        pActionMod = clamp(pActionMod, 0.88, 1.12);
         pFatigueMod = clamp(pFatigueMod, 0.92, 1.14);
         pRiskMod = clamp(pRiskMod, 0.88, 1.12);
 
@@ -2263,7 +2296,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
                 : attackingTacticObj.defenseBias > 65 ? 0.60
                 : 1.00;
             const gkBaseFactor = giantKillerRepGap >= 5 ? 0.009 : 0.006;
-            const giantKillerChance = Math.max(0.004, Math.min(0.050, (11 - giantKillerRepGap) * gkBaseFactor)) * giantKillerTacticMod;
+            const rivalBoostMod = eventSide !== userSide ? (prev.preMatchMotivation?.rivalBoost ?? 0) : 0;
+            const giantKillerChance = Math.max(0.004, Math.min(0.050, (11 - giantKillerRepGap) * gkBaseFactor)) * giantKillerTacticMod * (1 + rivalBoostMod);
             const alreadyGettingShot = successfulPasses / diceRolls > currentThreshold;
             if (!alreadyGettingShot && seededRng(currentSeed, nextMinute, 9988) < giantKillerChance) {
                 successfulPasses = Math.ceil(diceRolls * (currentThreshold + 0.05));
@@ -4193,8 +4227,20 @@ if (activePlayerTempo === 'SLOW') {
         );
       })()}
 
+  {showBriefing && ctx && matchState && (
+        <PreMatchBriefingModal
+          isOpen={showBriefing}
+          onClose={handleBriefingClose}
+          userClubName={userSide === 'HOME' ? ctx.homeClub.name : ctx.awayClub.name}
+          oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
+          userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
+          oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          sessionSeed={matchState.sessionSeed}
+        />
+      )}
+
   {isTacticsOpen && (
-        <MatchCupTacticsModal 
+        <MatchCupTacticsModal
           isOpen={isTacticsOpen} 
           onClose={handleTacticsClose} 
           club={userSide === 'HOME' ? ctx.homeClub : ctx.awayClub} 
