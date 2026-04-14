@@ -61,6 +61,8 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
+import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
+import { BriefingEffect } from '../../services/PreMatchBriefingService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-16 h-16" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -85,6 +87,7 @@ export const MatchLiveView = () => {
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
+  const [showBriefing, setShowBriefing] = useState(true);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [activePenalty, setActivePenalty] = useState<{
@@ -153,6 +156,25 @@ export const MatchLiveView = () => {
     if (!ctx || !userTeamId) return 'HOME';
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
+
+  const handleBriefingClose = (effect: BriefingEffect) => {
+    setShowBriefing(false);
+    setMatchState(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        preMatchMotivation: {
+          actionMod:     effect.actionMod,
+          goalMod:       effect.goalMod,
+          momentumBonus: effect.momentumBonus,
+          expiryMinute:  effect.expiryMinute,
+          fatigueMult:   effect.fatigueMult,
+          rivalBoost:    effect.rivalBoost,
+          label:         effect.label,
+        },
+      };
+    });
+  };
 
 const isPausedForSevereInjury = useMemo(() => {
     if (!matchState || !matchState.isPaused) return false;
@@ -1022,6 +1044,18 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
         // ────────────────────────────────────────────────────────────────────────
+
+        // PRE-MATCH BRIEFING MOTIVATION — aktywne dopóki nie wygaśnie
+        if (prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute) {
+          if (isUserAttacking) {
+            shotThreshold += prev.preMatchMotivation.actionMod * 0.12;
+          }
+        }
+        // PRE-MATCH BRIEFING — jednorazowy impuls momentum przy minucie 1
+        if (nextMinute === 1 && prev.preMatchMotivation?.momentumBonus && isUserAttacking) {
+          const dir = userSide === 'HOME' ? 1 : -1;
+          shotThreshold += (prev.preMatchMotivation.momentumBonus / 100) * 0.018 * dir;
+        }
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;
@@ -3000,6 +3034,18 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       </div>
     )}
 
+
+      {showBriefing && ctx && matchState && (
+        <PreMatchBriefingModal
+          isOpen={showBriefing}
+          onClose={handleBriefingClose}
+          userClubName={userSide === 'HOME' ? ctx.homeClub.name : ctx.awayClub.name}
+          oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
+          userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
+          oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          sessionSeed={matchState.sessionSeed}
+        />
+      )}
 
       {isTacticsOpen && (
         <div className="fixed inset-0 z-[990] backdrop-blur-md bg-black/40 pointer-events-none" />
