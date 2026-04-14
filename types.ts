@@ -585,6 +585,7 @@ export interface PlayerHistoryEntry {
   toYear: number | null;
   toMonth: number | null;
   statsSnapshot?: PlayerCareerStatsSnapshot;
+  transferFee?: number;
 }
 
 export enum NegotiationStatus {
@@ -717,6 +718,9 @@ export interface AiTransferLogEntry {
   status: AiTransferLogStatus;
   reason?: string;
   fee?: number;
+  playerId?: string;
+  fromClubId?: string;
+  toClubId?: string;
 }
 
 export interface TransferContractInput {
@@ -782,6 +786,8 @@ export interface Player {
   aiNegotiationResponseDate?: string;
   /** ID klubu AI który kupuje zawodnika z listy transferowej — tag TRSF, blokuje inne oferty */
   transferPendingClubId?: string;
+  /** Kwota transferu zapłacona przy złożeniu oferty — używana przy finalizacji do zapisania w historii kariery */
+  transferPendingFee?: number;
   /** Data ISO kiedy zawodnik "melduje się" w nowym klubie (currentDate + 3 dni) */
   transferReportDate?: string;
   trainingFocus?: keyof PlayerAttributes | null;

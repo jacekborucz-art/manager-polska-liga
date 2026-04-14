@@ -14,9 +14,9 @@ const POS_COLOR: Record<string, string> = {
 
 const STATUS_LABEL: Record<AiTransferLogStatus, string> = {
   OFFER_MADE: 'Oferta złożona',
-  TRANSFER_SIGNED: 'Transfer podpisany',
+  TRANSFER_SIGNED: 'SFINALIZOWANO',
   PLAYER_REJECTED: 'Zawodnik odrzucił',
-  CANCELLED_NO_BUDGET: 'Anulowano — brak budżetu',
+  CANCELLED_NO_BUDGET: 'Brak budżetu',
   CANCELLED_OTHER: 'Anulowano',
 };
 
@@ -49,7 +49,7 @@ const ALL_STATUSES: AiTransferLogStatus[] = [
 const ALL_POSITIONS = ['GK', 'DEF', 'MID', 'FWD'];
 
 export const AiMarketNewsView: React.FC = () => {
-  const { aiTransferLog, navigateTo } = useGame();
+  const { aiTransferLog, navigateTo, viewPlayerDetails, viewClubDetails } = useGame();
 
   const [statusFilter, setStatusFilter] = useState<AiTransferLogStatus | 'ALL'>('ALL');
   const [posFilter, setPosFilter] = useState<string>('ALL');
@@ -219,9 +219,12 @@ export const AiMarketNewsView: React.FC = () => {
 
                     {/* Zawodnik */}
                     <td className="px-3 py-3 max-w-0">
-                      <span className="text-[11px] font-bold text-slate-200 truncate block">
+                      <button
+                        onClick={() => entry.playerId && viewPlayerDetails(entry.playerId)}
+                        className={`text-[11px] font-bold text-slate-200 truncate block text-left w-full ${entry.playerId ? 'hover:text-yellow-400 cursor-pointer' : 'cursor-default'}`}
+                      >
                         {entry.playerName}
-                      </span>
+                      </button>
                     </td>
 
                     {/* OVR */}
@@ -236,16 +239,22 @@ export const AiMarketNewsView: React.FC = () => {
 
                     {/* Obecny klub */}
                     <td className="px-3 py-3 max-w-0">
-                      <span className="text-[10px] text-slate-300 truncate block">
+                      <button
+                        onClick={() => entry.fromClubId && viewClubDetails(entry.fromClubId)}
+                        className={`text-[10px] text-slate-300 truncate block text-left w-full ${entry.fromClubId ? 'hover:text-emerald-400 cursor-pointer' : 'cursor-default'}`}
+                      >
                         {entry.fromClub}
-                      </span>
+                      </button>
                     </td>
 
                     {/* Oferujący klub */}
                     <td className="px-3 py-3 max-w-0">
-                      <span className="text-[10px] text-slate-300 truncate block">
+                      <button
+                        onClick={() => entry.toClubId && viewClubDetails(entry.toClubId)}
+                        className={`text-[10px] text-slate-300 truncate block text-left w-full ${entry.toClubId ? 'hover:text-emerald-400 cursor-pointer' : 'cursor-default'}`}
+                      >
                         {entry.toClub}
-                      </span>
+                      </button>
                     </td>
 
                     {/* Opłata */}

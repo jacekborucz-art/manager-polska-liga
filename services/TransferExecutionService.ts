@@ -51,7 +51,9 @@ export const TransferExecutionService = {
       player,
       { clubName: buyerClub.name, clubId: buyerClub.id },
       currentYear,
-      currentMonth
+      currentMonth,
+      { clubName: sellerClub.name, clubId: sellerClub.id },
+      offer.fee
     );
 
     const transferredPlayer: Player = {

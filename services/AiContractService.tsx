@@ -768,6 +768,9 @@ processAiRecruitment: (
           status: 'PLAYER_REJECTED',
           reason: playerDecision.reason,
           fee: askingPrice,
+          playerId: best.id,
+          fromClubId: sellerClub.id,
+          toClubId: club.id,
         });
         continue;
       }
@@ -781,7 +784,7 @@ processAiRecruitment: (
       const sellerClubId = best.clubId || '';
       updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
         p.id === best.id
-          ? { ...p, transferPendingClubId: club.id, transferReportDate: reportDate.toISOString() }
+          ? { ...p, transferPendingClubId: club.id, transferReportDate: reportDate.toISOString(), transferPendingFee: askingPrice }
           : p
       );
 
@@ -795,6 +798,9 @@ processAiRecruitment: (
         toClub: club.name,
         status: 'OFFER_MADE',
         fee: askingPrice,
+        playerId: best.id,
+        fromClubId: sellerClub.id,
+        toClubId: club.id,
       });
 
       // Usuń zawodnika z dostępnej listy by inne kluby go nie wybrały w tej samej iteracji
@@ -933,6 +939,9 @@ processAiRecruitment: (
           status: 'PLAYER_REJECTED',
           reason: playerDecision.reason,
           fee: askingPrice,
+          playerId: target.id,
+          fromClubId: sellerClub.id,
+          toClubId: club.id,
         });
         continue;
       }
@@ -945,7 +954,7 @@ processAiRecruitment: (
       const sellerClubId = target.clubId || '';
       updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
         p.id === target.id
-          ? { ...p, transferPendingClubId: club.id, transferReportDate: reportDate.toISOString() }
+          ? { ...p, transferPendingClubId: club.id, transferReportDate: reportDate.toISOString(), transferPendingFee: askingPrice }
           : p
       );
 
@@ -959,6 +968,9 @@ processAiRecruitment: (
         toClub: club.name,
         status: 'OFFER_MADE',
         fee: askingPrice,
+        playerId: target.id,
+        fromClubId: sellerClub.id,
+        toClubId: club.id,
       });
 
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
@@ -1051,8 +1063,11 @@ processAiRecruitment: (
             fromClub: sellerClub.name,
             toClub: buyerClub.name,
             status: 'CANCELLED_NO_BUDGET',
-            reason: `Kupujący nie miał środków na bonus przy meldunku (potrzeba: ${proposedBonus.toLocaleString('pl-PL')} PLN)`,
+            reason: `Brak środków na bonus ( ${proposedBonus.toLocaleString('pl-PL')} PLN)`,
             fee: refundFee,
+            playerId: player.id,
+            fromClubId: sellerClub.id,
+            toClubId: buyerClub.id,
           });
           continue;
         }
@@ -1062,11 +1077,16 @@ processAiRecruitment: (
 
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
+        const playerForHistory = (!player.history || player.history.length === 0)
+          ? { ...player, history: [{ clubName: sellerClub.name, clubId: sellerClubId, fromYear: currentYear - 1, fromMonth: 7, toYear: null as null, toMonth: null as null }] }
+          : player;
         const updatedHistory = PlayerCareerService.movePlayer(
-          player,
+          playerForHistory,
           { clubName: buyerClub.name, clubId: buyerClubId },
           currentYear,
-          currentMonth
+          currentMonth,
+          { clubName: sellerClub.name, clubId: sellerClubId },
+          player.transferPendingFee
         );
 
         const transferredPlayer: Player = {
@@ -1076,6 +1096,7 @@ processAiRecruitment: (
           contractEndDate: newEndDate,
           transferPendingClubId: undefined,
           transferReportDate: undefined,
+          transferPendingFee: undefined,
           isOnTransferList: false,
           interestedClubs: (player.interestedClubs || []).filter(clubId => clubId !== buyerClubId),
           history: updatedHistory,
@@ -1096,6 +1117,10 @@ processAiRecruitment: (
           fromClub: sellerClub.name,
           toClub: buyerClub.name,
           status: 'TRANSFER_SIGNED',
+          fee: player.transferPendingFee,
+          playerId: player.id,
+          fromClubId: sellerClub.id,
+          toClubId: buyerClub.id,
         });
 
         // Tylko bonus dla zawodnika przy meldunku — opłata transferowa zapłacona już przy podpisaniu

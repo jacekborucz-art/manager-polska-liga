@@ -111,6 +111,12 @@ export const PlayerCard: React.FC = () => {
     if (!month || !year) return 'obecnie';
     return `${String(month).padStart(2, '0')}/${year}`;
   };
+  const formatTransferFee = (fee?: number) => {
+    if (!fee) return '—';
+    if (fee >= 1_000_000) return `${(fee / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (fee >= 1_000) return `${Math.round(fee / 1_000)}K`;
+    return fee.toString();
+  };
   const careerRows = useMemo(() => {
     const baseHistory = [...(player.history || [])];
     if (baseHistory.length === 0 && player.clubId && player.clubId !== 'FREE_AGENTS') {
@@ -359,6 +365,7 @@ export const PlayerCard: React.FC = () => {
                       <tr style={{ backgroundColor: 'rgba(180,140,60,0.22)' }}>
                         <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Okres</th>
                         <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Klub</th>
+                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Opłata</th>
                         <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>M</th>
                         <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\u26BD' }</th>
                         <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDC5F' }</th>
@@ -378,6 +385,7 @@ export const PlayerCard: React.FC = () => {
                               {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : entry.clubName}
                             </span>
                           </td>
+                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>
                           <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
                           <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
                           <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>

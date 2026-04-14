@@ -47,7 +47,8 @@ export const PlayerCareerService = {
     history: PlayerHistoryEntry[],
     target: CareerEntryTarget,
     year: number,
-    month: number
+    month: number,
+    transferFee?: number
   ): PlayerHistoryEntry[] {
     return [
       ...history,
@@ -57,7 +58,8 @@ export const PlayerCareerService = {
         fromYear: year,
         fromMonth: month,
         toYear: null,
-        toMonth: null
+        toMonth: null,
+        ...(transferFee !== undefined && { transferFee })
       }
     ];
   },
@@ -66,9 +68,22 @@ export const PlayerCareerService = {
     player: Player,
     target: CareerEntryTarget,
     year: number,
-    month: number
+    month: number,
+    currentClubInfo?: CareerEntryTarget,
+    transferFee?: number
   ): PlayerHistoryEntry[] {
-    const closedHistory = this.closeCurrentEntry(player.history || [], player, year, month);
-    return this.startNewEntry(closedHistory, target, year, month);
+    let history = player.history || [];
+    if (history.length === 0 && currentClubInfo) {
+      history = [{
+        clubName: currentClubInfo.clubName,
+        clubId: currentClubInfo.clubId,
+        fromYear: year - 1,
+        fromMonth: 7,
+        toYear: null,
+        toMonth: null
+      }];
+    }
+    const closedHistory = this.closeCurrentEntry(history, player, year, month);
+    return this.startNewEntry(closedHistory, target, year, month, transferFee);
   }
 };
