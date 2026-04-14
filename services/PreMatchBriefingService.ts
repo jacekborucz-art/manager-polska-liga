@@ -59,7 +59,7 @@ const REACTION_POOL: Record<ReactionQuality, string[]> = {
     'Szatnia wybucha. To nie jest zwykła mobilizacja — to coś zupełnie innego.',
   ],
   SURPRISE_NEG: [
-    'Zbyt wiele naraz. Widać, że kilku zawodników myśli za dużo i traci fokus.',
+    'Zbyt wiele naraz. Widać, że kilku zawodników myśli za dużo i nie jest skoncentrowanych na meczu.',
     'Cisza jest głucha. Jakbyś powiedział złe słowo w złym miejscu i o złym czasie.',
     'Coś pękło w złą stronę. Kilku liderów ma kamienne, nieprzeniknione miny.',
   ],
