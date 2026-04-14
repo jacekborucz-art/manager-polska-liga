@@ -55,8 +55,8 @@ const REACTION_POOL: Record<ReactionQuality, string[]> = {
   ],
   SURPRISE_POS: [
     'Coś eksploduje w tej szatni. Zawodnicy krzyczą, wstają, rzucają ręcznikami. Nigdy tak nie wyglądali.',
-    'Łzy w oczach napastnika. Kapitan ściska go za ramię. Ta mowa zmieniła wszystko.',
-    'Szatnia wybucha. To nie jest zwykła mobilizacja — to coś zupełnie innego.',
+    'To było mocne przemówienie.',
+    'Atomosfera zmienia się. To nie była zwyykła motywacja. To coś zupełnie innego.',
   ],
   SURPRISE_NEG: [
     'Zbyt wiele naraz. Widać, że kilku zawodników myśli za dużo i nie jest skoncentrowanych na meczu.',
