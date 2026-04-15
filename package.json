@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "npx --yes vite build",
     "lint": "eslint . --ext .ts,.tsx",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -30,4 +31,3 @@
     "vite": "^6.2.0"
   }
 }
-

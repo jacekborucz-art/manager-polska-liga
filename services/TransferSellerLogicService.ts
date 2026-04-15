@@ -34,12 +34,61 @@ const POLISH_TRANSFER_CAP_BY_TIER: Record<number, number> = {
   5: 225_000,
 };
 
+const getPolishAgeTransferCap = (player: Player, tier: number): number => {
+  const tierScale = ({
+    1: 1.00,
+    2: 0.36,
+    3: 0.12,
+    4: 0.04,
+    5: 0.02,
+  } as Record<number, number>)[tier] ?? 0.02;
+
+  let ekstraklasaCap = 0;
+
+  switch (player.position) {
+    case PlayerPosition.GK:
+      if (player.age <= 23) ekstraklasaCap = 10_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 13_000_000;
+      else if (player.age <= 32) ekstraklasaCap = 8_000_000;
+      else if (player.age <= 34) ekstraklasaCap = 4_800_000;
+      else ekstraklasaCap = 2_800_000;
+      break;
+    case PlayerPosition.DEF:
+      if (player.age <= 21) ekstraklasaCap = 12_000_000;
+      else if (player.age <= 24) ekstraklasaCap = 15_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 13_500_000;
+      else if (player.age <= 32) ekstraklasaCap = 8_000_000;
+      else if (player.age <= 34) ekstraklasaCap = 4_800_000;
+      else ekstraklasaCap = 2_800_000;
+      break;
+    default:
+      if (player.age <= 21) ekstraklasaCap = 23_500_000;
+      else if (player.age <= 24) ekstraklasaCap = 20_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 16_000_000;
+      else if (player.age <= 32) ekstraklasaCap = 8_500_000;
+      else if (player.age <= 34) ekstraklasaCap = 4_500_000;
+      else ekstraklasaCap = 2_600_000;
+      break;
+  }
+
+  return ekstraklasaCap * tierScale;
+};
+
 const roundToNearest50k = (value: number) => Math.round(Math.max(100_000, value) / 50_000) * 50_000;
 const isPolishClub = (club: Pick<Club, 'id' | 'leagueId'>): boolean =>
   club.id.startsWith('PL_') || club.leagueId.startsWith('PL_');
-const applyTransferCap = (value: number, club: Pick<Club, 'id' | 'leagueId' | 'tier'>): number => {
+const applyTransferCap = (
+  value: number,
+  club: Pick<Club, 'id' | 'leagueId' | 'tier'>,
+  player?: Player
+): number => {
   if (!isPolishClub(club)) return roundToNearest50k(value);
-  const tierCap = POLISH_TRANSFER_CAP_BY_TIER[club.tier] ?? 225_000;
+  const tierCap = player
+    ? Math.min(
+        POLISH_TRANSFER_CAP_BY_TIER[club.tier] ?? 225_000,
+        getPolishAgeTransferCap(player, club.tier)
+      )
+    : (POLISH_TRANSFER_CAP_BY_TIER[club.tier] ?? 225_000);
   return roundToNearest50k(Math.min(value, tierCap));
 };
 
@@ -88,7 +137,7 @@ export const TransferSellerLogicService = {
       currentDate,
       boardKompetencja
     );
-    const askingPrice = applyTransferCap(baseAskingPrice * getTimingPriceMultiplier(timing), sellerClub);
+    const askingPrice = applyTransferCap(baseAskingPrice * getTimingPriceMultiplier(timing), sellerClub, player);
 
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const playerRank = Math.max(0, sortedSquad.findIndex(item => item.id === player.id));
@@ -146,7 +195,7 @@ export const TransferSellerLogicService = {
     }
 
     if ((protectedRivalSale || protectedTopElevenSale) && timing === TransferTiming.IN_TWELVE_MONTHS) {
-      const delayedAskingPrice = applyTransferCap(askingPrice * 1.20, sellerClub);
+      const delayedAskingPrice = applyTransferCap(askingPrice * 1.20, sellerClub, player);
       return {
         allowTalks: true,
         askingPrice: delayedAskingPrice,
@@ -240,7 +289,7 @@ export const TransferSellerLogicService = {
     if (daysLeft >= 730 && !player.isOnTransferList) minimumMultiplier = Math.max(minimumMultiplier, 1.10);
 
     const rawPrice = Math.max(100_000, baseValue * Math.max(multiplier, minimumMultiplier));
-    return applyTransferCap(rawPrice, sellerClub);
+    return applyTransferCap(rawPrice, sellerClub, player);
   },
 
   evaluateSellerDecision: (

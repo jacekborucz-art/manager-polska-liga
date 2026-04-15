@@ -1,5 +1,4 @@
-import { Club } from '@/types';
-import { Player, PlayerPosition } from '../types';
+import { Club, Player, PlayerPosition } from '../types';
 
 // ============================================================
 // PARAMETRY KOSZTÓW DNIA MECZOWEGO  —  pogrupowane wg. ligi
@@ -188,6 +187,46 @@ const POLISH_MARKET_CAP_BY_TIER: Record<number, number> = {
   5: 175_000,
 };
 
+const getPolishAgeMarketCap = (player: Player, tier: number): number => {
+  const tierScale = ({
+    1: 1.00,
+    2: 0.34,
+    3: 0.11,
+    4: 0.035,
+    5: 0.018,
+  } as Record<number, number>)[tier] ?? 0.018;
+
+  let ekstraklasaCap = 0;
+
+  switch (player.position) {
+    case PlayerPosition.GK:
+      if (player.age <= 23) ekstraklasaCap = 8_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 11_000_000;
+      else if (player.age <= 32) ekstraklasaCap = 6_500_000;
+      else if (player.age <= 34) ekstraklasaCap = 3_800_000;
+      else ekstraklasaCap = 2_200_000;
+      break;
+    case PlayerPosition.DEF:
+      if (player.age <= 21) ekstraklasaCap = 10_000_000;
+      else if (player.age <= 24) ekstraklasaCap = 13_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 11_000_000;
+      else if (player.age <= 32) ekstraklasaCap = 6_500_000;
+      else if (player.age <= 34) ekstraklasaCap = 3_800_000;
+      else ekstraklasaCap = 2_200_000;
+      break;
+    default:
+      if (player.age <= 21) ekstraklasaCap = 16_000_000;
+      else if (player.age <= 24) ekstraklasaCap = 18_000_000;
+      else if (player.age <= 29) ekstraklasaCap = 14_000_000;
+      else if (player.age <= 32) ekstraklasaCap = 5_500_000;
+      else if (player.age <= 34) ekstraklasaCap = 2_800_000;
+      else ekstraklasaCap = 1_700_000;
+      break;
+  }
+
+  return ekstraklasaCap * tierScale;
+};
+
 const getRecentAverageRating = (player: Player, sampleSize: number = 10): number | null => {
   const history = player.stats?.ratingHistory?.slice(-sampleSize) ?? [];
   if (history.length === 0) return null;
@@ -216,21 +255,42 @@ const getPolishBaseMarketValue = (ovr: number): number => {
 const getPolishAgeFactor = (player: Player): number => {
   switch (player.position) {
     case PlayerPosition.DEF:
-    case PlayerPosition.GK:
       if (player.age <= 20) return 0.94;
       if (player.age <= 23) return 1.00;
       if (player.age <= 27) return 1.08;
-      if (player.age <= 31) return 1.05;
-      if (player.age <= 34) return 0.92;
-      return 0.78;
+      if (player.age <= 30) return 1.02;
+      if (player.age === 31) return 0.92;
+      if (player.age === 32) return 0.80;
+      if (player.age === 33) return 0.68;
+      if (player.age === 34) return 0.56;
+      if (player.age === 35) return 0.46;
+      if (player.age === 36) return 0.36;
+      return 0.28;
+    case PlayerPosition.GK:
+      if (player.age <= 21) return 0.96;
+      if (player.age <= 25) return 1.00;
+      if (player.age <= 30) return 1.06;
+      if (player.age <= 32) return 1.02;
+      if (player.age === 33) return 0.94;
+      if (player.age === 34) return 0.84;
+      if (player.age === 35) return 0.74;
+      if (player.age === 36) return 0.62;
+      if (player.age === 37) return 0.50;
+      return 0.40;
     default:
       if (player.age <= 19) return 1.16;
       if (player.age <= 21) return 1.12;
       if (player.age <= 24) return 1.08;
       if (player.age <= 28) return 1.00;
-      if (player.age <= 30) return 0.94;
-      if (player.age <= 33) return 0.82;
-      return 0.68;
+      if (player.age === 29) return 0.94;
+      if (player.age === 30) return 0.86;
+      if (player.age === 31) return 0.74;
+      if (player.age === 32) return 0.60;
+      if (player.age === 33) return 0.48;
+      if (player.age === 34) return 0.36;
+      if (player.age === 35) return 0.27;
+      if (player.age === 36) return 0.20;
+      return 0.15;
   }
 };
 
@@ -243,7 +303,27 @@ const getPolishExperienceFactor = (player: Player): number => {
     case PlayerPosition.GK:
       return 0.92 + clamp(careerMatches / 240, 0, 1) * 0.24;
     default:
-      return 0.96 + clamp(careerMatches / 260, 0, 1) * 0.12;
+      return 0.94 + clamp(careerMatches / 260, 0, 1) * 0.08;
+  }
+};
+
+const getPolishVeteranUsageFactor = (player: Player): number => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+
+  if (player.age <= 32) return 1;
+
+  switch (player.position) {
+    case PlayerPosition.GK:
+    case PlayerPosition.DEF:
+      if (minutesPlayed >= 1800) return 1;
+      if (minutesPlayed >= 900) return 0.90;
+      if (minutesPlayed >= 450) return 0.78;
+      return 0.64;
+    default:
+      if (minutesPlayed >= 1800) return 1;
+      if (minutesPlayed >= 900) return 0.86;
+      if (minutesPlayed >= 450) return 0.72;
+      return 0.55;
   }
 };
 
@@ -307,7 +387,7 @@ const calculatePolishMarketValue = (player: Player, reputation: number, tier: nu
   const baseValue = getPolishBaseMarketValue(player.overallRating);
   const tierMultiplier = ({
     1: 1.00,
-    2: 0.43,
+    2: 0.38,
     3: 0.14,
     4: 0.05,
     5: 0.025,
@@ -316,10 +396,22 @@ const calculatePolishMarketValue = (player: Player, reputation: number, tier: nu
   const ageFactor = getPolishAgeFactor(player);
   const experienceFactor = getPolishExperienceFactor(player);
   const performanceFactor = getPolishPerformanceFactor(player);
+  const veteranUsageFactor = getPolishVeteranUsageFactor(player);
   const randomFactor = 0.985 + (Math.random() * 0.03);
-  const tierCap = POLISH_MARKET_CAP_BY_TIER[tier] ?? 175_000;
+  const tierCap = Math.min(
+    POLISH_MARKET_CAP_BY_TIER[tier] ?? 175_000,
+    getPolishAgeMarketCap(player, tier)
+  );
 
-  const rawValue = baseValue * tierMultiplier * reputationFactor * ageFactor * experienceFactor * performanceFactor * randomFactor;
+  const rawValue =
+    baseValue *
+    tierMultiplier *
+    reputationFactor *
+    ageFactor *
+    experienceFactor *
+    performanceFactor *
+    veteranUsageFactor *
+    randomFactor;
   const cappedValue = Math.min(rawValue, tierCap);
   const step = cappedValue >= 10_000_000 ? 250_000 : cappedValue >= 1_000_000 ? 100_000 : cappedValue >= 100_000 ? 25_000 : 10_000;
   return Math.round(cappedValue / step) * step;
