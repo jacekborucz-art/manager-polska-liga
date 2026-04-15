@@ -3,6 +3,7 @@ import {
   Player, PlayerPosition, PlayerAttributes, Region, HealthStatus, InjurySeverity
 } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
+import { FinanceService } from './FinanceService';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -341,7 +342,9 @@ export const AcademyService = {
   promoteToPlayer(
     youth: YouthPlayer,
     clubId: string,
-    currentDate: Date
+    currentDate: Date,
+    clubReputation: number = 5,
+    clubTier: number = 1
   ): Player {
     const contractEnd = new Date(currentDate);
     contractEnd.setFullYear(contractEnd.getFullYear() + 2);
@@ -353,7 +356,7 @@ export const AcademyService = {
     const overallRating = Math.round(
       overallKeys.reduce((s, k) => s + youth.attributes[k], 0) / overallKeys.length
     );
-    return {
+    const promotedPlayer = {
       id: `PROMOTED_${youth.id}`,
       firstName: youth.firstName,
       lastName: youth.lastName,
@@ -373,7 +376,7 @@ export const AcademyService = {
       contractEndDate: contractEnd.toISOString().split('T')[0],
       annualSalary: 30_000 + Math.round(youth.hiddenTalent * 500),
       isOnTransferList: false,
-      marketValue: Math.round(overallRating * 15_000 * (youth.hiddenTalent / 50)),
+      marketValue: 0,
       history: [
         {
           clubName: 'Akademia',
@@ -393,6 +396,11 @@ export const AcademyService = {
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,
       freeAgentLockoutUntil: null,
+    };
+
+    return {
+      ...promotedPlayer,
+      marketValue: FinanceService.calculateMarketValue(promotedPlayer, clubReputation, clubTier)
     };
   },
 

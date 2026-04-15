@@ -77,14 +77,14 @@ const REACTION_POOL: Record<ReactionQuality, string[]> = {
     'W szatni zapanowała cisza. Tak jakby ktoś powiedział trochę za dużo lub za mało.',
   ],
   SURPRISE_POS: [
-    'Coś eksploduje w tej szatni. Zawodnicy krzyczą, wstają, rzucają ręcznikami. Nigdy tak nie wyglądali.',
+    'Zawodnicy krzyczą, wstają, i są wyraźnie podbudowani.',
     'To było mocne przemówienie.',
-    'Atomosfera zmienia się. To nie była zwyykła motywacja. To coś zupełnie innego.',
+    'Atomosfera poprawia się. To nie była zwyykła motywacja. To coś zupełnie innego.',
   ],
   SURPRISE_NEG: [
     'Zbyt wiele naraz. Widać, że kilku zawodników myśli za dużo i nie jest skoncentrowanych na meczu.',
     'Cisza taka, jakby ktoś powiedział coś w nieodpowiednim momencie.',
-    'Coś pękło w złą stronę. Kilku liderów ma kamienne, nieprzeniknione miny.',
+    'Coś poszło nie tak. Kilku zawodników ma nieprzeniknione miny.',
   ],
 };
 

@@ -1102,14 +1102,27 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
         // ───────────────────────────────────────────────────────────────────────
-        if (prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute) {
+        const activeBriefing =
+          prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute
+            ? prev.preMatchMotivation
+            : null;
+        const briefingFinishingFitMod = activeBriefing
+          ? Math.max(0.96, Math.min(1.05, 1 + activeBriefing.goalMod * 1.25))
+          : 1.0;
+        const briefingFreshnessDelta = activeBriefing
+          ? Math.max(-3, Math.min(3, (1 - activeBriefing.fatigueMult) * 45))
+          : 0;
+
+        if (activeBriefing) {
           if (isUserAttacking) {
-            shotThreshold += prev.preMatchMotivation.actionMod * 0.12;
+            shotThreshold += activeBriefing.actionMod * 0.12;
+            shotThreshold += (1 - activeBriefing.fatigueMult) * 0.04;
+          } else if (activeBriefing.rivalBoost !== 0) {
+            shotThreshold += activeBriefing.rivalBoost * 0.012;
           }
         }
-        if (nextMinute === 1 && prev.preMatchMotivation?.momentumBonus && isUserAttacking) {
-          const dir = userSide === 'HOME' ? 1 : -1;
-          shotThreshold += (prev.preMatchMotivation.momentumBonus / 100) * 0.018 * dir;
+        if (nextMinute === 1 && activeBriefing?.momentumBonus && isUserAttacking) {
+          shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
         }
 
         let pauseForEvent = false;
@@ -1266,9 +1279,27 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const scorerFitMod    = computePosFitMod(scorer.position, scorerSlotRole);
            // Brak bramkarza (pusty slot 0): gkFitMod 0.01 = niemal pewny gol
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
+           const scorerBriefingFatigue = activeSide === userSide
+             ? Math.max(0, Math.min(100, scorerLiveFatigue + briefingFreshnessDelta))
+             : scorerLiveFatigue;
+           const scorerBriefingFitMod = activeSide === userSide
+             ? scorerFitMod * briefingFinishingFitMod
+             : scorerFitMod;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
-           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod, gkFitMod, oppFatigueMap);
+           const isGoal = GoalAttributionService.checkShotSuccess(
+             scorer,
+             gk as Player,
+             defs,
+             false,
+             () => seededRng(currentSeed, nextMinute, 750),
+             false,
+             scorerBriefingFatigue,
+             gkLiveFatigue,
+             scorerBriefingFitMod,
+             gkFitMod,
+             oppFatigueMap
+           );
           
 
            if (isGoal) {
@@ -1363,10 +1394,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 // Brak bramkarza przy rożnym — tak samo niemal pewny gol
                 const hGkFitMod  = cornerGk ? (cornerGk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
                 const cornerOppFatigue = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
+                const headerBriefingFatigue = activeSide === userSide
+                  ? Math.max(0, Math.min(100, hScorerFat + briefingFreshnessDelta))
+                  : hScorerFat;
+                const headerBriefingFitMod = activeSide === userSide
+                  ? briefingFinishingFitMod
+                  : 1.0;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),
-                  false, hScorerFat, hGkFat, 1.0, hGkFitMod, cornerOppFatigue
+                  false, headerBriefingFatigue, hGkFat, headerBriefingFitMod, hGkFitMod, cornerOppFatigue
                 );
                 if (isHeaderGoal) {
                   if (activeSide === 'HOME') {

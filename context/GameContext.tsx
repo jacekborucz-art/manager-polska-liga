@@ -1764,7 +1764,14 @@ setMessages([welcomeMail, fanMail]);
     if (!academy || !userTeamId) return;
     const youth = academy.youthPlayers.find(yp => yp.id === youthId);
     if (!youth) return;
-    const promoted = AcademyService.promoteToPlayer(youth, userTeamId, currentDate);
+    const club = clubs.find(c => c.id === userTeamId);
+    const promoted = AcademyService.promoteToPlayer(
+      youth,
+      userTeamId,
+      currentDate,
+      club?.reputation ?? 5,
+      club?.tier ?? 1
+    );
     const overallKeys: (keyof import('../types').PlayerAttributes)[] = [
       'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
       'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning',

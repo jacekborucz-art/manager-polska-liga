@@ -26,7 +26,23 @@ const MIN_POSITION_DEPTH: Record<PlayerPosition, number> = {
   FWD: 3
 };
 
+const POLISH_TRANSFER_CAP_BY_TIER: Record<number, number> = {
+  1: 23_500_000,
+  2: 7_000_000,
+  3: 2_000_000,
+  4: 450_000,
+  5: 225_000,
+};
+
 const roundToNearest50k = (value: number) => Math.round(Math.max(100_000, value) / 50_000) * 50_000;
+const isPolishClub = (club: Pick<Club, 'id' | 'leagueId'>): boolean =>
+  club.id.startsWith('PL_') || club.leagueId.startsWith('PL_');
+const applyTransferCap = (value: number, club: Pick<Club, 'id' | 'leagueId' | 'tier'>): number => {
+  if (!isPolishClub(club)) return roundToNearest50k(value);
+  const tierCap = POLISH_TRANSFER_CAP_BY_TIER[club.tier] ?? 225_000;
+  return roundToNearest50k(Math.min(value, tierCap));
+};
+
 const getTimingPriceMultiplier = (timing: TransferTiming): number => {
   switch (timing) {
     case TransferTiming.IN_SIX_MONTHS:
@@ -72,7 +88,7 @@ export const TransferSellerLogicService = {
       currentDate,
       boardKompetencja
     );
-    const askingPrice = roundToNearest50k(baseAskingPrice * getTimingPriceMultiplier(timing));
+    const askingPrice = applyTransferCap(baseAskingPrice * getTimingPriceMultiplier(timing), sellerClub);
 
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const playerRank = Math.max(0, sortedSquad.findIndex(item => item.id === player.id));
@@ -130,7 +146,7 @@ export const TransferSellerLogicService = {
     }
 
     if ((protectedRivalSale || protectedTopElevenSale) && timing === TransferTiming.IN_TWELVE_MONTHS) {
-      const delayedAskingPrice = roundToNearest50k(askingPrice * 1.20);
+      const delayedAskingPrice = applyTransferCap(askingPrice * 1.20, sellerClub);
       return {
         allowTalks: true,
         askingPrice: delayedAskingPrice,
@@ -184,17 +200,23 @@ export const TransferSellerLogicService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
 
-    if (player.isOnTransferList && !player.transferListPrice) multiplier -= 0.10 + Math.random() * 0.30;
-    if (daysLeft > 0 && daysLeft < 180) multiplier -= 0.20;
-    else if (daysLeft > 0 && daysLeft < 365) multiplier -= 0.10;
+    if (player.isOnTransferList && !player.transferListPrice) multiplier -= 0.18;
+    if (daysLeft > 0 && daysLeft < 180) multiplier -= 0.22;
+    else if (daysLeft > 0 && daysLeft < 365) multiplier -= 0.12;
+    else if (daysLeft >= 365 && daysLeft < 730) multiplier += 0.04;
+    else if (daysLeft >= 730) multiplier += 0.10;
 
-    if (player.age <= 22) multiplier += 0.16;
-    if (player.age >= 31) multiplier -= 0.12;
+    if (player.age <= 21) multiplier += 0.12;
+    else if (player.age <= 24) multiplier += 0.06;
+    else if (player.age >= 34) multiplier -= 0.18;
+    else if (player.age >= 31) multiplier -= 0.10;
     if (player.isUntouchable) multiplier += 0.30;
 
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const top11Ids = sortedSquad.slice(0, 11).map(p => p.id);
     if (top11Ids.includes(player.id)) multiplier += 0.14;
+    if (sortedSquad.slice(0, 3).some(p => p.id === player.id)) multiplier += 0.08;
+    if (sortedSquad[0]?.id === player.id) multiplier += 0.10;
 
     const samePosition = sellerSquad.filter(p => p.position === player.position && p.id !== player.id);
     const bestReplacement = samePosition.sort((a, b) => b.overallRating - a.overallRating)[0];
@@ -205,7 +227,7 @@ export const TransferSellerLogicService = {
     if (bestReplacement && player.overallRating - bestReplacement.overallRating >= 6) multiplier += 0.10;
 
     const financialPressure = sellerClub.budget < Math.max(baseValue * 0.75, 3_000_000);
-    if (financialPressure) multiplier -= 0.05;
+    if (financialPressure) multiplier -= 0.10;
 
     let minimumMultiplier = player.isOnTransferList ? 0.75 : 1.0;
     if (daysLeft > 365 && !player.isOnTransferList) {
@@ -215,9 +237,10 @@ export const TransferSellerLogicService = {
     if (top11Ids.includes(player.id)) minimumMultiplier = Math.max(minimumMultiplier, 1.08);
     if (sortedSquad.slice(0, 3).some(p => p.id === player.id)) minimumMultiplier = Math.max(minimumMultiplier, 1.15);
     if (player.isUntouchable || sortedSquad[0]?.id === player.id) minimumMultiplier = Math.max(minimumMultiplier, 1.25);
+    if (daysLeft >= 730 && !player.isOnTransferList) minimumMultiplier = Math.max(minimumMultiplier, 1.10);
 
     const rawPrice = Math.max(100_000, baseValue * Math.max(multiplier, minimumMultiplier));
-    return Math.round(rawPrice / 50_000) * 50_000;
+    return applyTransferCap(rawPrice, sellerClub);
   },
 
   evaluateSellerDecision: (

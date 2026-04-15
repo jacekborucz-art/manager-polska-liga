@@ -1,5 +1,5 @@
 import { Club } from '@/types';
-import { Player } from '../types';
+import { Player, PlayerPosition } from '../types';
 
 // ============================================================
 // PARAMETRY KOSZTÓW DNIA MECZOWEGO  —  pogrupowane wg. ligi
@@ -179,6 +179,151 @@ const isEuropeanCommercialClub = (club: Pick<Club, 'leagueId'>): boolean =>
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
+
+const POLISH_MARKET_CAP_BY_TIER: Record<number, number> = {
+  1: 21_000_000,
+  2: 6_500_000,
+  3: 1_800_000,
+  4: 350_000,
+  5: 175_000,
+};
+
+const getRecentAverageRating = (player: Player, sampleSize: number = 10): number | null => {
+  const history = player.stats?.ratingHistory?.slice(-sampleSize) ?? [];
+  if (history.length === 0) return null;
+  return history.reduce((sum, rating) => sum + rating, 0) / history.length;
+};
+
+const getCareerMatches = (player: Player): number => {
+  const currentMatches = player.stats?.matchesPlayed || 0;
+  const historicalMatches = (player.history || []).reduce(
+    (sum, entry) => sum + (entry.statsSnapshot?.matchesPlayed || 0),
+    0
+  );
+  return currentMatches + historicalMatches;
+};
+
+const getPolishBaseMarketValue = (ovr: number): number => {
+  if (ovr >= 82) return 12_500_000 + (ovr - 82) * 1_400_000;
+  if (ovr >= 78) return 8_800_000 + (ovr - 78) * 900_000;
+  if (ovr >= 74) return 5_800_000 + (ovr - 74) * 750_000;
+  if (ovr >= 70) return 3_400_000 + (ovr - 70) * 600_000;
+  if (ovr >= 65) return 1_700_000 + (ovr - 65) * 340_000;
+  if (ovr >= 60) return 650_000 + (ovr - 60) * 210_000;
+  return 100_000 + Math.max(0, ovr - 40) * 27_500;
+};
+
+const getPolishAgeFactor = (player: Player): number => {
+  switch (player.position) {
+    case PlayerPosition.DEF:
+    case PlayerPosition.GK:
+      if (player.age <= 20) return 0.94;
+      if (player.age <= 23) return 1.00;
+      if (player.age <= 27) return 1.08;
+      if (player.age <= 31) return 1.05;
+      if (player.age <= 34) return 0.92;
+      return 0.78;
+    default:
+      if (player.age <= 19) return 1.16;
+      if (player.age <= 21) return 1.12;
+      if (player.age <= 24) return 1.08;
+      if (player.age <= 28) return 1.00;
+      if (player.age <= 30) return 0.94;
+      if (player.age <= 33) return 0.82;
+      return 0.68;
+  }
+};
+
+const getPolishExperienceFactor = (player: Player): number => {
+  const careerMatches = getCareerMatches(player);
+
+  switch (player.position) {
+    case PlayerPosition.DEF:
+      return 0.94 + clamp(careerMatches / 260, 0, 1) * 0.20;
+    case PlayerPosition.GK:
+      return 0.92 + clamp(careerMatches / 240, 0, 1) * 0.24;
+    default:
+      return 0.96 + clamp(careerMatches / 260, 0, 1) * 0.12;
+  }
+};
+
+const getPolishPerformanceFactor = (player: Player): number => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+  const matchesPlayed = Math.max(0, player.stats?.matchesPlayed || 0);
+  const goals = Math.max(0, player.stats?.goals || 0);
+  const assists = Math.max(0, player.stats?.assists || 0);
+  const averageRating = getRecentAverageRating(player);
+  const fullMatches = Math.max(1, minutesPlayed / 90);
+  const sampleFactor = clamp(minutesPlayed / 900, 0, 1);
+  const ratingDelta = averageRating === null ? 0 : averageRating - 6.7;
+
+  switch (player.position) {
+    case PlayerPosition.FWD: {
+      const goalsPer90 = goals / fullMatches;
+      const assistsPer90 = assists / fullMatches;
+      const goalsBoost =
+        clamp(goals / 20, 0, 1) * 0.20 +
+        clamp(goalsPer90 / 0.75, 0, 1) * 0.18;
+      const assistsBoost =
+        clamp(assists / 10, 0, 1) * 0.07 +
+        clamp(assistsPer90 / 0.35, 0, 1) * 0.05;
+      const ratingBoost = clamp(ratingDelta * 0.10, -0.08, 0.10);
+      return 1 + clamp(sampleFactor * (goalsBoost + assistsBoost + ratingBoost), -0.10, 0.52);
+    }
+    case PlayerPosition.MID: {
+      const goalsPer90 = goals / fullMatches;
+      const assistsPer90 = assists / fullMatches;
+      const assistsBoost =
+        clamp(assists / 14, 0, 1) * 0.18 +
+        clamp(assistsPer90 / 0.45, 0, 1) * 0.15;
+      const goalsBoost =
+        clamp(goals / 12, 0, 1) * 0.08 +
+        clamp(goalsPer90 / 0.35, 0, 1) * 0.06;
+      const ratingBoost = clamp(ratingDelta * 0.11, -0.08, 0.12);
+      return 1 + clamp(sampleFactor * (assistsBoost + goalsBoost + ratingBoost), -0.10, 0.46);
+    }
+    case PlayerPosition.DEF: {
+      const matchFactor = clamp(matchesPlayed / 30, 0, 1) * 0.10;
+      const experienceBoost = clamp(getCareerMatches(player) / 260, 0, 1) * 0.12;
+      const ratingBoost = averageRating === null
+        ? 0
+        : clamp((averageRating - 6.6) * 0.18, -0.10, 0.22) * clamp(matchesPlayed / 10, 0, 1);
+      return 1 + clamp(matchFactor + experienceBoost + ratingBoost, -0.10, 0.42);
+    }
+    case PlayerPosition.GK: {
+      const matchFactor = clamp(matchesPlayed / 30, 0, 1) * 0.10;
+      const experienceBoost = clamp(getCareerMatches(player) / 240, 0, 1) * 0.14;
+      const ratingBoost = averageRating === null
+        ? 0
+        : clamp((averageRating - 6.6) * 0.22, -0.10, 0.24) * clamp(matchesPlayed / 8, 0, 1);
+      return 1 + clamp(matchFactor + experienceBoost + ratingBoost, -0.12, 0.46);
+    }
+    default:
+      return 1;
+  }
+};
+
+const calculatePolishMarketValue = (player: Player, reputation: number, tier: number): number => {
+  const baseValue = getPolishBaseMarketValue(player.overallRating);
+  const tierMultiplier = ({
+    1: 1.00,
+    2: 0.43,
+    3: 0.14,
+    4: 0.05,
+    5: 0.025,
+  } as Record<number, number>)[tier] ?? 0.05;
+  const reputationFactor = 0.88 + clamp(reputation, 1, 10) * 0.025;
+  const ageFactor = getPolishAgeFactor(player);
+  const experienceFactor = getPolishExperienceFactor(player);
+  const performanceFactor = getPolishPerformanceFactor(player);
+  const randomFactor = 0.985 + (Math.random() * 0.03);
+  const tierCap = POLISH_MARKET_CAP_BY_TIER[tier] ?? 175_000;
+
+  const rawValue = baseValue * tierMultiplier * reputationFactor * ageFactor * experienceFactor * performanceFactor * randomFactor;
+  const cappedValue = Math.min(rawValue, tierCap);
+  const step = cappedValue >= 10_000_000 ? 250_000 : cappedValue >= 1_000_000 ? 100_000 : cappedValue >= 100_000 ? 25_000 : 10_000;
+  return Math.round(cappedValue / step) * step;
+};
 
 const getEuropeanCommercialIndex = (club: Pick<Club, 'leagueId' | 'country' | 'reputation' | 'stadiumCapacity'>): number => {
   const countryFactorRaw = EUROPEAN_COUNTRY_FINANCE_FACTOR[club.country || ''] ?? 0.10;
@@ -396,6 +541,10 @@ export const FinanceService = {
     if (player.clubId === 'FREE_AGENTS') return 0;
     const ovr = player.overallRating;
     const isPolishClub = player.clubId.startsWith('PL_');
+    if (isPolishClub) {
+      return calculatePolishMarketValue(player, reputation, tier);
+    }
+
     let baseValue = 0;
     if (ovr >= 80) baseValue = 15000000 + (ovr - 80) * 1300000;
     else if (ovr >= 75) baseValue = 8500000 + (ovr - 75) * 840000;
@@ -427,20 +576,13 @@ export const FinanceService = {
     if (reputation > 5) multiplier += (reputation - 5) * 0.03;
     else if (reputation < 4) multiplier -= (4 - reputation) * 0.02;
 
-    const tierCap = isPolishClub
-      ? ({
-          1: 50_000_000,
-          2: 12_000_000,
-          3: 3_000_000,
-          4: 600_000
-        } as Record<number, number | undefined>)[tier]
-      : ({
-          1: 120_000_000,
-          2: 18_000_000,
-          3: 6_000_000,
-          4: 2_000_000,
-          5: 800_000
-        } as Record<number, number | undefined>)[tier];
+    const tierCap = ({
+      1: 120_000_000,
+      2: 18_000_000,
+      3: 6_000_000,
+      4: 2_000_000,
+      5: 800_000
+    } as Record<number, number | undefined>)[tier];
 
     const randomFactor = 0.97 + (Math.random() * 0.06);
     const rawValue = baseValue * multiplier * randomFactor;
