@@ -71,6 +71,7 @@ export const Dashboard: React.FC = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
+  const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers'>('main');
 
   useEffect(() => {
     setIsProcessing(false);
@@ -513,6 +514,37 @@ const boardConfidence = useMemo(() => {
       default: return 'bg-slate-600/20 text-slate-400 border-slate-500/20';
     }
   };
+
+  const isTransferOfferMail = (mail: MailMessage) => {
+    if (mail.metadata?.type === 'INCOMING_TRANSFER_OFFER') {
+      return true;
+    }
+
+    const content = `${mail.subject} ${mail.body} ${mail.sender} ${mail.role}`.toLowerCase();
+    return (
+      content.includes('oferta transferowa') ||
+      content.includes('oficjalna oferta transferowa') ||
+      content.includes('oferta za zawodnika') ||
+      content.includes('oferta za ') ||
+      content.includes('zatwierdz transfer') ||
+      content.includes('zatwierdź transfer')
+    );
+  };
+
+  const transferMessages = useMemo(
+    () => messages.filter(isTransferOfferMail),
+    [messages]
+  );
+
+  const mainMessages = useMemo(
+    () => messages.filter(mail => !isTransferOfferMail(mail)),
+    [messages]
+  );
+
+  const activeMailboxMessages = activeMailboxTab === 'transfers' ? transferMessages : mainMessages;
+  const unreadMainMessagesCount = mainMessages.filter(mail => !mail.isRead).length;
+  const unreadTransferMessagesCount = transferMessages.filter(mail => !mail.isRead).length;
+  const unreadActiveMailboxMessagesCount = activeMailboxMessages.filter(mail => !mail.isRead).length;
 
   type TileButtonProps = {
     label: string;
@@ -975,20 +1007,41 @@ const boardConfidence = useMemo(() => {
               
               <div className="relative z-10 flex flex-col h-full min-h-0">
                  <div className="px-8 py-5 border-b border-white/5 bg-white/5 flex justify-between items-center shrink-0">
-                
-
-
-                <h3 className="text-xs font-black uppercase tracking-[0.4em] text-white">Skrzynka pocztowa</h3>
-                {messages.filter(m => !m.isRead).length > 0 && (
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xs font-black uppercase tracking-[0.4em] text-white">Skrzynka pocztowa</h3>
+                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 p-1">
+                    <button
+                      onClick={() => setActiveMailboxTab('main')}
+                      className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                        activeMailboxTab === 'main'
+                          ? 'bg-white text-slate-900 shadow-lg'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Glowna ({unreadMainMessagesCount})
+                    </button>
+                    <button
+                      onClick={() => setActiveMailboxTab('transfers')}
+                      className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                        activeMailboxTab === 'transfers'
+                          ? 'bg-amber-400 text-slate-950 shadow-lg'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Transfery ({unreadTransferMessagesCount})
+                    </button>
+                  </div>
+                </div>
+                {unreadActiveMailboxMessagesCount > 0 && (
                    <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-inner">
-                     {messages.filter(m => !m.isRead).length} NOWE
+                     {unreadActiveMailboxMessagesCount} NOWE
                    </span>
                 )}
               </div>
               
                <div className="h-[700px] overflow-y-auto custom-scrollbar p-6 space-y-4">
-                 {messages.length > 0 ? (
-                   messages.map(mail => (
+                 {activeMailboxMessages.length > 0 ? (
+                   activeMailboxMessages.map(mail => (
                     <div 
                       key={mail.id}
                       onClick={() => setSelectedMail(mail)}

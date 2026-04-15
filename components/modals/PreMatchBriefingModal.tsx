@@ -104,7 +104,7 @@ export const PreMatchBriefingModal = ({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85">
-      <div className="w-full max-w-2xl mx-4 bg-slate-900/70 border border-white/10 rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
+      <div className="w-full max-w-[1080px] mx-4 bg-slate-900/70 border border-white/10 rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
 
         {/* GRADIENT BAR */}
         <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent ${getScenarioGradient()} to-transparent`} />
@@ -144,19 +144,19 @@ export const PreMatchBriefingModal = ({
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
             <div className="px-8 pt-5 pb-2">
-              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">
-                JAK PRZEMÓWISZ DO DRUŻYNY?
+              <span className="text-[14px] font-black italic uppercase tracking-tighter text-slate-400">
+                PRZEMOWA DO DRUŻYNY
               </span>
             </div>
 
-            <div className="overflow-y-auto custom-scrollbar max-h-[340px] px-8 pb-4 flex flex-col gap-2">
+            <div className="overflow-y-auto custom-scrollbar max-h-[420px] px-8 pb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {availableBriefings.map((speech, index) => (
                 <button
                   key={speech.id}
                   onClick={() => handleSelect(index)}
-                  className="w-full text-left px-5 py-3.5 rounded-2xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/20 transition-all duration-150 group"
+                  className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-5 py-3.5 text-left transition-all duration-150 group hover:bg-yellow-500/15 hover:border-yellow-400/70"
                 >
-                  <p className="text-sm font-black italic uppercase tracking-tighter text-white/80 group-hover:text-white leading-snug">
+                  <p className="text-sm font-normal italic uppercase tracking-tighter text-white group-hover:text-white leading-snug">
                     {speech.text}
                   </p>
                 </button>
@@ -167,10 +167,10 @@ export const PreMatchBriefingModal = ({
             <div className="px-8 pb-7 pt-2 border-t border-white/5 mt-1">
               <button
                 onClick={handleSilence}
-                className="w-full py-3 rounded-2xl border border-white/8 bg-transparent hover:bg-white/[0.04] transition-all duration-150"
+                className="mx-auto block w-full max-w-[420px] py-3 rounded-2xl border border-white/8 bg-transparent hover:bg-white/[0.04] transition-all duration-150"
               >
-                <span className="text-xs font-black italic uppercase tracking-tighter text-slate-500 hover:text-slate-300">
-                  MILCZENIE — NIC NIE MÓWISZ
+                <span className="text-xs font-normal italic uppercase tracking-tighter text-slate-500 hover:text-slate-300">
+                  BEZ KOMENTARZA
                 </span>
               </button>
             </div>
