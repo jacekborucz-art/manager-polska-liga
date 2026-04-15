@@ -40,10 +40,10 @@ import { Club, Player, PlayerPosition } from '../types';
 // ============================================================
 export const MATCHDAY_ADDITIONAL_REVENUE_PARAMS = {
   //                             tier: [  0,    1,    2,    3,    4 ]
-  cateringPerFan:                      [  0,  4.5,  2.0,  1.2,  0.5],
-  merchandisingPerFan:                 [  0,  2.0,  0.8,  0.4, 0.15],
-  programsPerFan:                      [  0,  0.6,  0.3,  0.4, 0.07],
-  parkingPerFan:                       [  0,  0.7,  0.4, 0.25,  0.1],
+  cateringPerFan:                      [  0,  4.5,  2.0,  0.8,  0.5],
+  merchandisingPerFan:                 [  0,  2.0,  0.8, 0.22, 0.15],
+  programsPerFan:                      [  0,  0.6,  0.3, 0.15, 0.07],
+  parkingPerFan:                       [  0,  0.7,  0.4, 0.16,  0.1],
 } as const;
 
 // ============================================================
@@ -758,8 +758,8 @@ export const FinanceService = {
         max = 70000000;
         break;
       case 3: // 2 Liga
-        min = 10000000;
-        max = 45000000;
+        min = 3500000;
+        max = 16000000;
         break;
       case 4: // Tier 4
         min = 800000;
@@ -936,8 +936,21 @@ export const FinanceService = {
   },
 
   calculateSeasonalIncome: (tier: number, reputation: number, rank: number): number => {
+    const cappedReputation = Math.max(1, Math.min(10, reputation));
+    if (tier === 3) {
+      const tvRights = 2000000;
+      const sponsorship = cappedReputation * 500000;
+      const prizeMoney = Math.max(0, (19 - rank) * 150000);
+      return Math.floor(tvRights + sponsorship + prizeMoney);
+    }
+    if (tier === 4) {
+      const tvRights = 750000;
+      const sponsorship = cappedReputation * 150000;
+      const prizeMoney = Math.max(0, (20 - rank) * 40000);
+      return Math.floor(tvRights + sponsorship + prizeMoney);
+    }
     const tvRights = [0, 35000000, 15000000, 6000000, 2000000][tier] || 1000000;
-    const sponsorship = reputation * 4000000;
+    const sponsorship = cappedReputation * 4000000;
     const prizeMoney = Math.max(0, (19 - rank) * 1500000);
     return Math.floor(tvRights + sponsorship + prizeMoney);
   },
@@ -1323,8 +1336,15 @@ export const FinanceService = {
         const refPrice = 20 + (reputation / 10) * 160;
         basePrice = refPrice * (0.15 + (reputation / 10) * 0.25); // 60-85% poniżej
         break;
+      case 4: // Piłka regionalna / półamatorska
+        basePrice = 8 + (reputation / 10) * 16; // 8-24 PLN
+        break;
       default:
-        basePrice = 40;
+        basePrice = 12;
+    }
+
+    if (tier === 3) {
+      basePrice = 8 + (reputation / 10) * 18; // 8-26 PLN
     }
     
     return Math.floor(basePrice);
@@ -1344,8 +1364,10 @@ export const FinanceService = {
   // Przychód z biletów jednorazowych
   calculateMatchTicketRevenue: (attendance: number, tier: number, reputation: number): { revenue: number; avgPrice: number } => {
     const maxPrice = FinanceService.calculateTicketPrice(tier, reputation);
-    const minPrice = 20;
-    const avgPrice = Math.floor(minPrice + Math.random() * (maxPrice - minPrice));
+    const minPrice = maxPrice <= 20 ? Math.max(5, Math.floor(maxPrice * 0.65)) : 20;
+    const avgPrice = maxPrice <= minPrice
+      ? maxPrice
+      : Math.floor(minPrice + Math.random() * (maxPrice - minPrice));
     return { revenue: Math.floor(attendance * avgPrice), avgPrice };
   },
 

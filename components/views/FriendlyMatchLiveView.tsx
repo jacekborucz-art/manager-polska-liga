@@ -1677,9 +1677,11 @@ return {
   const updatedClubs = simResult.updatedClubs.map(c => {
        if (c.id === ctx.homeClub.id || c.id === ctx.awayClub.id) {
           const isHome = c.id === ctx.homeClub.id;
-          const tier = parseInt(c.leagueId.split('_')[2] || '1');
           const matchCost = FinanceService.calculateMatchdayExpenses(c, isHome, isHome ? attendance : undefined);
-          const additionalRevenues = isHome ? FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, c.reputation) : null;
+          const { revenue: ticketRevenue, avgPrice: ticketAvgPrice } = isHome
+            ? FinanceService.calculateMatchTicketRevenueForClub(attendance, c)
+            : { revenue: 0, avgPrice: 0 };
+          const additionalRevenues = isHome ? FinanceService.calculateMatchdayAdditionalRevenuesForClub(attendance, c) : null;
           const additionalTotal = additionalRevenues ? (additionalRevenues.catering + additionalRevenues.merchandising + additionalRevenues.programs + additionalRevenues.parking) : 0;
           const s = isHome ? matchState.homeScore : matchState.awayScore;
           const o = isHome ? matchState.awayScore : matchState.homeScore;
@@ -1690,8 +1692,20 @@ return {
           const financeLogsToAdd: any[] = [];
           let runningBalance = c.budget;
 
-          if (isHome && additionalRevenues) {
-            if (additionalRevenues.catering > 0) {
+          if (isHome) {
+            if (ticketRevenue > 0) {
+              financeLogsToAdd.push({
+                id: Math.random().toString(36).substr(2, 9),
+                date: new Date().toISOString().split('T')[0],
+                amount: ticketRevenue,
+                type: 'INCOME' as const,
+                description: `Bilety (vs ${ctx.awayClub.name}): ${attendance} widzów @ ${ticketAvgPrice} PLN`,
+                previousBalance: runningBalance
+              });
+              runningBalance += ticketRevenue;
+            }
+
+            if (additionalRevenues && additionalRevenues.catering > 0) {
               financeLogsToAdd.push({
                 id: Math.random().toString(36).substr(2, 9),
                 date: new Date().toISOString().split('T')[0],
@@ -1702,7 +1716,7 @@ return {
               });
               runningBalance += additionalRevenues.catering;
             }
-            if (additionalRevenues.merchandising > 0) {
+            if (additionalRevenues && additionalRevenues.merchandising > 0) {
               financeLogsToAdd.push({
                 id: Math.random().toString(36).substr(2, 9),
                 date: new Date().toISOString().split('T')[0],
@@ -1713,7 +1727,7 @@ return {
               });
               runningBalance += additionalRevenues.merchandising;
             }
-            if (additionalRevenues.programs > 0) {
+            if (additionalRevenues && additionalRevenues.programs > 0) {
               financeLogsToAdd.push({
                 id: Math.random().toString(36).substr(2, 9),
                 date: new Date().toISOString().split('T')[0],
@@ -1724,7 +1738,7 @@ return {
               });
               runningBalance += additionalRevenues.programs;
             }
-            if (additionalRevenues.parking > 0) {
+            if (additionalRevenues && additionalRevenues.parking > 0) {
               financeLogsToAdd.push({
                 id: Math.random().toString(36).substr(2, 9),
                 date: new Date().toISOString().split('T')[0],
@@ -1735,11 +1749,33 @@ return {
               });
               runningBalance += additionalRevenues.parking;
             }
+
+            if (matchCost > 0) {
+              financeLogsToAdd.push({
+                id: Math.random().toString(36).substr(2, 9),
+                date: new Date().toISOString().split('T')[0],
+                amount: -matchCost,
+                type: 'EXPENSE' as const,
+                description: `Koszty organizacji meczu`,
+                previousBalance: runningBalance
+              });
+              runningBalance -= matchCost;
+            }
+          } else if (matchCost > 0) {
+            financeLogsToAdd.push({
+              id: Math.random().toString(36).substr(2, 9),
+              date: new Date().toISOString().split('T')[0],
+              amount: -matchCost,
+              type: 'EXPENSE' as const,
+              description: `Koszty wyjazdu`,
+              previousBalance: runningBalance
+            });
+            runningBalance -= matchCost;
           }
 
           return {
             ...c, 
-            budget: c.budget + additionalTotal - matchCost,
+            budget: c.budget + ticketRevenue + additionalTotal - matchCost,
             financeHistory: [...financeLogsToAdd, ...(c.financeHistory || [])].slice(0, 50),
             stats: {
               ...c.stats,
