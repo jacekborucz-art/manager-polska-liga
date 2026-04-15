@@ -1,45 +1,48 @@
-import { Player, PlayerAttributes, TrainingCycle, PlayerPosition, MatchSummary, HealthStatus, TrainingIntensity } from '../types';
+import { Player, PlayerAttributes, MatchSummary, HealthStatus, TrainingIntensity, PlayerPosition } from '../types';
 import { TRAINING_CYCLES } from '../data/training_definitions_pl';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 
 export const TrainingService = {
   /**
-   * Główna logika przetwarzająca zmiany atrybutów po każdej kolejce.
+   * Main training logic applied after each round.
    */
- processTrainingEffects: (
+  processTrainingEffects: (
     playersMap: Record<string, Player[]>,
     userTeamId: string,
     activeTrainingId: string | null,
     lastMatchSummary: MatchSummary | null,
-    clubReputation: number, // DODANO
-    leagueTier: number,      // DODANO
-     intensity: TrainingIntensity // Dodajemy nową informację o intensywności
+    clubReputation: number,
+    leagueTier: number,
+    intensity: TrainingIntensity,
+    clubCountry?: string
   ): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
     if (!updatedMap[userTeamId]) return updatedMap;
 
     const cycle = TRAINING_CYCLES.find(c => c.id === activeTrainingId) || TRAINING_CYCLES[0];
-    
+
     updatedMap[userTeamId] = updatedMap[userTeamId].map(player => {
-      // FIX: Zawodnicy kontuzjowani nie trenują
-      const intensityMultiplier = intensity === TrainingIntensity.HEAVY ? 1.8 : (intensity === TrainingIntensity.LIGHT ? 0.5 : 1.0);
+      const intensityMultiplier =
+        intensity === TrainingIntensity.HEAVY ? 1.8 :
+        intensity === TrainingIntensity.LIGHT ? 0.5 : 1.0;
+
       if (player.health.status === HealthStatus.INJURED) {
         return player;
       }
 
-      let updated = { ...player };
+      const updated = { ...player };
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
-      
-      const performance = lastMatchSummary?.homePlayers.find(p => p.name === player.lastName) 
-        || lastMatchSummary?.awayPlayers.find(p => p.name === player.lastName);
+
+      const performance =
+        lastMatchSummary?.homePlayers.find(p => p.name === player.lastName) ||
+        lastMatchSummary?.awayPlayers.find(p => p.name === player.lastName);
 
       const playedThisRound = !!performance;
       const rating = performance?.rating || 0;
 
-      // 1. SZANSA NA WZROST (Trening + Gra)
       const attrKeys: (keyof PlayerAttributes)[] = [
         'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
         'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
@@ -47,37 +50,32 @@ export const TrainingService = {
       ];
 
       attrKeys.forEach(key => {
-        let pGrowth = 0.02; // Bazowa szansa 2% tygodniowo
+        let pGrowth = 0.02;
 
-        // Wpływ wybranego cyklu
         pGrowth *= intensityMultiplier;
         if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
         if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
         if (player.trainingFocus === key) pGrowth += 0.06;
 
-        // Bonus za wiek (młodzi rosną szybciej)
         if (player.age < 21) pGrowth *= 1.5;
         else if (player.age > 32) pGrowth *= 0.3;
 
-        // Bonus za grę i formę
         if (playedThisRound) {
           pGrowth += 0.02;
           if (rating >= 7.5) pGrowth += 0.05;
           if (rating >= 9.0) pGrowth += 0.10;
         }
 
-        // Bonusy za osiągnięcia w meczu
         if (key === 'finishing' && (performance?.goals || 0) > 0) pGrowth += 0.05;
         if (key === 'goalkeeping' && player.position === PlayerPosition.GK && performance && performance.fatigue > 0 && lastMatchSummary) {
-           const teamGoalsAgainst = (player.clubId === lastMatchSummary.homeClub.id) ? lastMatchSummary.awayScore : lastMatchSummary.homeScore;
-           if (teamGoalsAgainst === 0) pGrowth += 0.05;
+          const teamGoalsAgainst =
+            player.clubId === lastMatchSummary.homeClub.id ? lastMatchSummary.awayScore : lastMatchSummary.homeScore;
+          if (teamGoalsAgainst === 0) pGrowth += 0.05;
         }
 
-        // Modyfikator talentu — wyższy talent przyspiesza rozwój
-        const _talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
-        pGrowth *= _talentMod;
+        const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
+        pGrowth *= talentMod;
 
-        // FINALNY ROLL NA WZROST
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
           if (currentChange < 3 && attributes[key] < 99) {
@@ -86,10 +84,7 @@ export const TrainingService = {
           }
         }
 
-        // 2. SZANSA NA REGRES (Wiek + Brak gry + Typ atrybutu)
-        let pRegress = 0.003; // Baza: minimalna dla każdego
-
-        // KRZYWA WIEKOWA — stopniowa, nie klif
+        let pRegress = 0.003;
         const age = player.age;
         if (age >= 36) pRegress += 0.100;
         else if (age >= 35) pRegress += 0.075;
@@ -99,15 +94,13 @@ export const TrainingService = {
         else if (age >= 31) pRegress += 0.012;
         else if (age >= 30) pRegress += 0.006;
 
-        // REGRES ZA BRAK GRY — wiek decyduje o skali
         if (!playedThisRound) {
           if (age >= 32) pRegress += 0.035;
           else if (age >= 28) pRegress += 0.020;
           else if (age >= 24) pRegress += 0.012;
-          else pRegress += 0.006; // młodzi też tracą bez gry
+          else pRegress += 0.006;
         }
 
-        // MODYFIKATOR TYPU ATRYBUTU
         const physicalAttrs = ['pace', 'stamina', 'strength'];
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
@@ -116,28 +109,28 @@ export const TrainingService = {
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
           if (currentChange > -3 && attributes[key] > 10) {
-             attributes[key] -= 1;
-             seasonalChanges[key] = currentChange - 1;
+            attributes[key] -= 1;
+            seasonalChanges[key] = currentChange - 1;
           }
         }
       });
 
-      // Aktualizacja OVR po zmianach atrybutów
       const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
-// Obliczamy nową wartość rynkową na podstawie nowego OVR
       const updatedMarketValue = FinanceService.calculateMarketValue(
-        { ...updated, overallRating: newOvr }, 
-        clubReputation, // Ten parametr musimy dodać do sygnatury metody
-        leagueTier      // Ten parametr musimy dodać do sygnatury metody
+        { ...updated, overallRating: newOvr },
+        clubReputation,
+        leagueTier,
+        clubCountry
       );
-   return {
+
+      return {
         ...updated,
         attributes,
         overallRating: newOvr,
-        // TUTAJ WSTAW TEN KOD - Naprawa niszczenia statystyk i not przez trening
-        stats: { 
-          ...player.stats, ratingHistory: player.stats.ratingHistory || [],
-          seasonalChanges 
+        stats: {
+          ...player.stats,
+          ratingHistory: player.stats.ratingHistory || [],
+          seasonalChanges
         },
         marketValue: updatedMarketValue
       };
@@ -147,24 +140,23 @@ export const TrainingService = {
   },
 
   /**
-   * Trening rezerw — zarządzany przez trenera rezerw (AI).
-   * Niższy bazowy wzrost niż 1. drużyna, ale wyższy mnożnik dla młodych (<21).
-   * Jakość trenera (coachTrainingAttr 0-99) modyfikuje efekty przez mnożnik 0.70–1.20.
+   * Reserve training managed by the reserve coach.
    */
   processReserveTrainingEffects: (
     reserves: Player[],
     trainingId: string | null,
     coachTrainingAttr: number,
     clubReputation: number,
-    leagueTier: number
+    leagueTier: number,
+    clubCountry?: string
   ): Player[] => {
     const cycle = TRAINING_CYCLES.find(c => c.id === trainingId) || TRAINING_CYCLES[0];
-    const coachMultiplier = 0.70 + (coachTrainingAttr / 100) * 0.50; // 0.70 – 1.20
+    const coachMultiplier = 0.70 + (coachTrainingAttr / 100) * 0.50;
 
     return reserves.map(player => {
       if (player.health.status === HealthStatus.INJURED) return player;
 
-      let updated = { ...player };
+      const updated = { ...player };
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
@@ -176,19 +168,17 @@ export const TrainingService = {
       ];
 
       attrKeys.forEach(key => {
-        // WZROST
-        let pGrowth = 0.015; // 1.5% bazowo (vs 2% dla 1. drużyny)
+        let pGrowth = 0.015;
 
         if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
         if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
         if (player.trainingFocus === key) pGrowth += 0.06;
 
-        // Rezerwy: młodzi (<21) rosną szybciej niż w 1. drużynie (2.0x vs 1.5x)
         if (player.age < 21) pGrowth *= 2.0;
         else if (player.age > 32) pGrowth *= 0.3;
 
-        const _talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
-        pGrowth *= _talentMod;
+        const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
+        pGrowth *= talentMod;
         pGrowth *= coachMultiplier;
 
         if (Math.random() < pGrowth) {
@@ -199,8 +189,6 @@ export const TrainingService = {
           }
         }
 
-        // REGRES — identyczny jak dla 1. drużyny
-        // Rezerwy nie grają meczów systemowych — kara za brak gry zawsze aktywna
         let pRegress = 0.003;
         const age = player.age;
         if (age >= 36) pRegress += 0.100;
@@ -234,8 +222,10 @@ export const TrainingService = {
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },
         clubReputation,
-        leagueTier
+        leagueTier,
+        clubCountry
       );
+
       return {
         ...updated,
         attributes,

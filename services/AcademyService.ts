@@ -344,7 +344,8 @@ export const AcademyService = {
     clubId: string,
     currentDate: Date,
     clubReputation: number = 5,
-    clubTier: number = 1
+    clubTier: number = 1,
+    clubCountry?: string
   ): Player {
     const contractEnd = new Date(currentDate);
     contractEnd.setFullYear(contractEnd.getFullYear() + 2);
@@ -400,7 +401,7 @@ export const AcademyService = {
 
     return {
       ...promotedPlayer,
-      marketValue: FinanceService.calculateMarketValue(promotedPlayer, clubReputation, clubTier)
+      marketValue: FinanceService.calculateMarketValue(promotedPlayer, clubReputation, clubTier, clubCountry)
     };
   },
 

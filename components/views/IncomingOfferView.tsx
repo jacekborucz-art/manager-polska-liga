@@ -52,7 +52,8 @@ export const IncomingOfferView: React.FC = () => {
     const marketValue = FinanceService.calculateMarketValue(
       player,
       sellerClub.reputation,
-      FinanceService.getClubTier(sellerClub)
+      FinanceService.getClubTier(sellerClub),
+      sellerClub.country
     );
 
     return { player, sellerClub, buyerClub, buyerLeague, marketValue };

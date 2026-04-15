@@ -261,7 +261,8 @@ const calculateScenarioPrices = (
   const marketValue = FinanceService.calculateMarketValue(
     player,
     sellerClub.reputation,
-    sellerClub.tier || 1
+    sellerClub.tier || 1,
+    sellerClub.country
   );
   const askingPrice = TransferSellerLogicService.estimateAskingPrice(
     { ...player, marketValue },
@@ -480,6 +481,325 @@ export const runMarketValueBalanceTests = () => {
         marketValueRange: [350_000, 900_000],
         askingPriceRange: [450_000, 1_400_000],
       }),
+      buildScenario({
+        id: 'eng_elite_fwd_90',
+        label: 'Premier League: elite FWD 90 OVR',
+        player: createPlayer({
+          id: 'ENG_ELITE_FWD_90',
+          position: PlayerPosition.FWD,
+          overallRating: 90,
+          age: 24,
+          matchesPlayed: 32,
+          minutesPlayed: 2_760,
+          goals: 27,
+          assists: 8,
+          averageRating: 7.7,
+          annualSalary: 18_000_000,
+          contractEndDate: '2030-06-30',
+          clubId: 'ENG_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'ENG_TEST_CLUB',
+          leagueId: 'ENG_1',
+          tier: 1,
+          reputation: 18,
+          country: 'ENG',
+          budget: 900_000_000,
+          transferBudget: 250_000_000,
+        },
+        marketValueRange: [180_000_000, 220_000_000],
+        askingPriceRange: [190_000_000, 250_000_000],
+      }),
+      buildScenario({
+        id: 'esp_elite_fwd_90',
+        label: 'LaLiga: elite FWD 90 OVR',
+        player: createPlayer({
+          id: 'ESP_ELITE_FWD_90',
+          position: PlayerPosition.FWD,
+          overallRating: 90,
+          age: 21,
+          matchesPlayed: 31,
+          minutesPlayed: 2_600,
+          goals: 19,
+          assists: 12,
+          averageRating: 7.6,
+          annualSalary: 14_000_000,
+          contractEndDate: '2030-06-30',
+          clubId: 'ESP_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'ESP_TEST_CLUB',
+          leagueId: 'ESP_1',
+          tier: 1,
+          reputation: 19,
+          country: 'ESP',
+          budget: 700_000_000,
+          transferBudget: 180_000_000,
+        },
+        marketValueRange: [175_000_000, 200_000_000],
+        askingPriceRange: [185_000_000, 245_000_000],
+      }),
+      buildScenario({
+        id: 'ger_elite_mid_88',
+        label: 'Bundesliga: elite MID 88 OVR',
+        player: createPlayer({
+          id: 'GER_ELITE_MID_88',
+          position: PlayerPosition.MID,
+          overallRating: 88,
+          age: 22,
+          matchesPlayed: 30,
+          minutesPlayed: 2_520,
+          goals: 11,
+          assists: 14,
+          averageRating: 7.5,
+          annualSalary: 11_000_000,
+          contractEndDate: '2030-06-30',
+          clubId: 'GER_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'GER_TEST_CLUB',
+          leagueId: 'GER_1',
+          tier: 1,
+          reputation: 18,
+          country: 'GER',
+          budget: 520_000_000,
+          transferBudget: 150_000_000,
+        },
+        marketValueRange: [120_000_000, 135_000_000],
+        askingPriceRange: [130_000_000, 170_000_000],
+      }),
+      buildScenario({
+        id: 'ita_elite_fwd_87',
+        label: 'Serie A: elite FWD 87 OVR',
+        player: createPlayer({
+          id: 'ITA_ELITE_FWD_87',
+          position: PlayerPosition.FWD,
+          overallRating: 87,
+          age: 28,
+          matchesPlayed: 31,
+          minutesPlayed: 2_550,
+          goals: 23,
+          assists: 5,
+          averageRating: 7.4,
+          annualSalary: 10_500_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'ITA_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'ITA_TEST_CLUB',
+          leagueId: 'ITA_1',
+          tier: 1,
+          reputation: 18,
+          country: 'ITA',
+          budget: 420_000_000,
+          transferBudget: 110_000_000,
+        },
+        marketValueRange: [85_000_000, 100_000_000],
+        askingPriceRange: [100_000_000, 130_000_000],
+      }),
+      buildScenario({
+        id: 'fra_elite_mid_87',
+        label: 'Ligue 1: elite MID 87 OVR',
+        player: createPlayer({
+          id: 'FRA_ELITE_MID_87',
+          position: PlayerPosition.MID,
+          overallRating: 87,
+          age: 25,
+          matchesPlayed: 30,
+          minutesPlayed: 2_510,
+          goals: 8,
+          assists: 13,
+          averageRating: 7.4,
+          annualSalary: 9_000_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'FRA_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'FRA_TEST_CLUB',
+          leagueId: 'FRA_1',
+          tier: 1,
+          reputation: 19,
+          country: 'FRA',
+          budget: 380_000_000,
+          transferBudget: 95_000_000,
+        },
+        marketValueRange: [90_000_000, 105_000_000],
+        askingPriceRange: [100_000_000, 135_000_000],
+      }),
+      buildScenario({
+        id: 'por_top_mid_85',
+        label: 'Liga Portugal: top MID 85 OVR',
+        player: createPlayer({
+          id: 'POR_TOP_MID_85',
+          position: PlayerPosition.MID,
+          overallRating: 85,
+          age: 26,
+          matchesPlayed: 31,
+          minutesPlayed: 2_580,
+          goals: 7,
+          assists: 11,
+          averageRating: 7.3,
+          annualSalary: 4_500_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'POR_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'POR_TEST_CLUB',
+          leagueId: 'POR_1',
+          tier: 1,
+          reputation: 17,
+          country: 'POR',
+          budget: 165_000_000,
+          transferBudget: 45_000_000,
+        },
+        marketValueRange: [50_000_000, 60_000_000],
+        askingPriceRange: [55_000_000, 75_000_000],
+      }),
+      buildScenario({
+        id: 'bra_top_fwd_84',
+        label: 'Brazil Serie A: top FWD 84 OVR',
+        player: createPlayer({
+          id: 'BRA_TOP_FWD_84',
+          position: PlayerPosition.FWD,
+          overallRating: 84,
+          age: 23,
+          matchesPlayed: 31,
+          minutesPlayed: 2_620,
+          goals: 22,
+          assists: 6,
+          averageRating: 7.5,
+          annualSalary: 6_500_000,
+          contractEndDate: '2030-06-30',
+          clubId: 'BRA_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'BRA_TEST_CLUB',
+          leagueId: 'BRA_1',
+          tier: 1,
+          reputation: 16,
+          country: 'BRA',
+          budget: 260_000_000,
+          transferBudget: 80_000_000,
+        },
+        marketValueRange: [40_000_000, 42_000_000],
+        askingPriceRange: [50_000_000, 55_000_000],
+      }),
+      buildScenario({
+        id: 'arg_top_mid_83',
+        label: 'Argentina Primera: top MID 83 OVR',
+        player: createPlayer({
+          id: 'ARG_TOP_MID_83',
+          position: PlayerPosition.MID,
+          overallRating: 83,
+          age: 22,
+          matchesPlayed: 30,
+          minutesPlayed: 2_480,
+          goals: 8,
+          assists: 10,
+          averageRating: 7.3,
+          annualSalary: 4_000_000,
+          contractEndDate: '2030-06-30',
+          clubId: 'ARG_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'ARG_TEST_CLUB',
+          leagueId: 'ARG_1',
+          tier: 1,
+          reputation: 15,
+          country: 'ARG',
+          budget: 180_000_000,
+          transferBudget: 45_000_000,
+        },
+        marketValueRange: [27_000_000, 28_000_000],
+        askingPriceRange: [35_000_000, 38_000_000],
+      }),
+      buildScenario({
+        id: 'ksa_top_fwd_85',
+        label: 'Saudi Pro League: top FWD 85 OVR',
+        player: createPlayer({
+          id: 'KSA_TOP_FWD_85',
+          position: PlayerPosition.FWD,
+          overallRating: 85,
+          age: 27,
+          matchesPlayed: 29,
+          minutesPlayed: 2_310,
+          goals: 19,
+          assists: 7,
+          averageRating: 7.4,
+          annualSalary: 12_000_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'KSA_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'KSA_TEST_CLUB',
+          leagueId: 'KSA_1',
+          tier: 2,
+          reputation: 10,
+          country: 'KSA',
+          budget: 220_000_000,
+          transferBudget: 75_000_000,
+        },
+        marketValueRange: [26_000_000, 30_000_000],
+        askingPriceRange: [33_000_000, 39_000_000],
+      }),
+      buildScenario({
+        id: 'jpn_star_mid_80',
+        label: 'J1 League: star MID 80 OVR',
+        player: createPlayer({
+          id: 'JPN_STAR_MID_80',
+          position: PlayerPosition.MID,
+          overallRating: 80,
+          age: 25,
+          matchesPlayed: 30,
+          minutesPlayed: 2_420,
+          goals: 7,
+          assists: 11,
+          averageRating: 7.2,
+          annualSalary: 2_800_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'JPN_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'JPN_TEST_CLUB',
+          leagueId: 'JPN_1',
+          tier: 2,
+          reputation: 9,
+          country: 'JPN',
+          budget: 70_000_000,
+          transferBudget: 18_000_000,
+        },
+        marketValueRange: [2_500_000, 3_200_000],
+        askingPriceRange: [3_000_000, 4_500_000],
+      }),
+      buildScenario({
+        id: 'egy_star_fwd_79',
+        label: 'Egypt Premier League: star FWD 79 OVR',
+        player: createPlayer({
+          id: 'EGY_STAR_FWD_79',
+          position: PlayerPosition.FWD,
+          overallRating: 79,
+          age: 26,
+          matchesPlayed: 28,
+          minutesPlayed: 2_180,
+          goals: 16,
+          assists: 4,
+          averageRating: 7.2,
+          annualSalary: 2_400_000,
+          contractEndDate: '2029-06-30',
+          clubId: 'EGY_TEST_CLUB',
+        }),
+        clubOverrides: {
+          id: 'EGY_TEST_CLUB',
+          leagueId: 'EGY_1',
+          tier: 2,
+          reputation: 10,
+          country: 'EGY',
+          budget: 60_000_000,
+          transferBudget: 14_000_000,
+        },
+        marketValueRange: [2_000_000, 3_000_000],
+        askingPriceRange: [2_500_000, 4_000_000],
+      }),
     ];
 
     const rows = scenarios.map(scenario => {
@@ -649,6 +969,332 @@ export const runMarketValueBalanceTests = () => {
       comparisonMap['Weteran 35 lat'].askingPrice,
       comparisonMap['Baza'].askingPrice,
       'Veteran asking price should be lower than prime-age equivalent'
+    );
+
+    const internationalComparisonPlayer = createPlayer({
+      id: 'INTERNATIONAL_COMPARISON',
+      position: PlayerPosition.FWD,
+      overallRating: 83,
+      age: 24,
+      matchesPlayed: 29,
+      minutesPlayed: 2_280,
+      goals: 17,
+      assists: 5,
+      averageRating: 7.2,
+      annualSalary: 5_000_000,
+      contractEndDate: '2029-06-30',
+      clubId: 'INTL_BASE',
+    });
+    const internationalComparisonCases = [
+      { label: 'England', country: 'ENG', reputation: 17, clubId: 'INTL_ENG' },
+      { label: 'Spain', country: 'ESP', reputation: 17, clubId: 'INTL_ESP' },
+      { label: 'Germany', country: 'GER', reputation: 17, clubId: 'INTL_GER' },
+      { label: 'Italy', country: 'ITA', reputation: 17, clubId: 'INTL_ITA' },
+      { label: 'France', country: 'FRA', reputation: 17, clubId: 'INTL_FRA' },
+      { label: 'Portugal', country: 'POR', reputation: 17, clubId: 'INTL_POR' },
+    ].map(entry => {
+      const club = createClub({
+        id: entry.clubId,
+        leagueId: `${entry.country}_1`,
+        tier: 1,
+        country: entry.country,
+        reputation: entry.reputation,
+        budget: 250_000_000,
+        transferBudget: 80_000_000,
+      });
+      const player = { ...internationalComparisonPlayer, id: `INT_${entry.country}`, clubId: entry.clubId };
+      const squad = createSupportSquad(player);
+      return {
+        label: entry.label,
+        ...calculateScenarioPrices(player, club, squad, 'przecietna'),
+      };
+    });
+
+    console.table(
+      internationalComparisonCases.map(({ label, marketValue, askingPrice }) => ({
+        scenario: `Rynek ${label}`,
+        marketValue,
+        askingPrice,
+      }))
+    );
+
+    const internationalMap = Object.fromEntries(
+      internationalComparisonCases.map(entry => [entry.label, entry])
+    ) as Record<string, (typeof internationalComparisonCases)[number]>;
+
+    assertGreaterThan(
+      internationalMap['England'].marketValue,
+      internationalMap['Spain'].marketValue,
+      'England should price the same player above Spain'
+    );
+    assertGreaterThan(
+      internationalMap['Spain'].marketValue,
+      internationalMap['Germany'].marketValue,
+      'Spain should price the same player above Germany'
+    );
+    assertGreaterThan(
+      internationalMap['Germany'].marketValue,
+      internationalMap['Italy'].marketValue,
+      'Germany should price the same player above Italy'
+    );
+    assertGreaterThan(
+      internationalMap['Italy'].marketValue,
+      internationalMap['Portugal'].marketValue,
+      'Italy should price the same player above Portugal'
+    );
+    assertGreaterThan(
+      internationalMap['France'].marketValue,
+      internationalMap['Portugal'].marketValue,
+      'France should price the same player above Portugal'
+    );
+
+    const emergingMarketComparisonPlayer = createPlayer({
+      id: 'EMERGING_MARKET_COMPARISON',
+      position: PlayerPosition.FWD,
+      overallRating: 81,
+      age: 24,
+      matchesPlayed: 29,
+      minutesPlayed: 2_260,
+      goals: 18,
+      assists: 5,
+      averageRating: 7.2,
+      annualSalary: 3_500_000,
+      contractEndDate: '2029-06-30',
+      clubId: 'EM_BASE',
+    });
+    const emergingMarketComparisonCases = [
+      { label: 'Brazil', country: 'BRA', tier: 1, reputation: 16, clubId: 'EM_BRA', budget: 180_000_000, transferBudget: 50_000_000 },
+      { label: 'Argentina', country: 'ARG', tier: 1, reputation: 15, clubId: 'EM_ARG', budget: 130_000_000, transferBudget: 30_000_000 },
+      { label: 'Saudi Arabia', country: 'KSA', tier: 2, reputation: 10, clubId: 'EM_KSA', budget: 180_000_000, transferBudget: 60_000_000 },
+      { label: 'Egypt', country: 'EGY', tier: 2, reputation: 10, clubId: 'EM_EGY', budget: 45_000_000, transferBudget: 12_000_000 },
+      { label: 'Japan', country: 'JPN', tier: 2, reputation: 9, clubId: 'EM_JPN', budget: 55_000_000, transferBudget: 14_000_000 },
+      { label: 'Morocco', country: 'MAR', tier: 2, reputation: 9, clubId: 'EM_MAR', budget: 40_000_000, transferBudget: 10_000_000 },
+    ].map(entry => {
+      const club = createClub({
+        id: entry.clubId,
+        leagueId: `${entry.country}_1`,
+        tier: entry.tier,
+        country: entry.country,
+        reputation: entry.reputation,
+        budget: entry.budget,
+        transferBudget: entry.transferBudget,
+      });
+      const player = { ...emergingMarketComparisonPlayer, id: `EM_${entry.country}`, clubId: entry.clubId };
+      const squad = createSupportSquad(player);
+      return {
+        label: entry.label,
+        ...calculateScenarioPrices(player, club, squad, 'przecietna'),
+      };
+    });
+
+    console.table(
+      emergingMarketComparisonCases.map(({ label, marketValue, askingPrice }) => ({
+        scenario: `Rynek ${label}`,
+        marketValue,
+        askingPrice,
+      }))
+    );
+
+    const emergingMap = Object.fromEntries(
+      emergingMarketComparisonCases.map(entry => [entry.label, entry])
+    ) as Record<string, (typeof emergingMarketComparisonCases)[number]>;
+
+    assertGreaterThan(
+      emergingMap['Brazil'].marketValue,
+      emergingMap['Argentina'].marketValue,
+      'Brazil should price the same player above Argentina'
+    );
+    assertGreaterThan(
+      emergingMap['Argentina'].marketValue,
+      emergingMap['Saudi Arabia'].marketValue,
+      'Argentina should price the same player above Saudi Arabia'
+    );
+    assertGreaterThan(
+      emergingMap['Saudi Arabia'].marketValue,
+      emergingMap['Egypt'].marketValue,
+      'Saudi Arabia should price the same player above Egypt'
+    );
+    assertGreaterThan(
+      emergingMap['Egypt'].marketValue,
+      emergingMap['Japan'].marketValue,
+      'Egypt should price the same player above Japan'
+    );
+    assertGreaterThan(
+      emergingMap['Japan'].marketValue,
+      emergingMap['Morocco'].marketValue,
+      'Japan should price the same player above Morocco'
+    );
+
+    const balkanComparisonPlayer = createPlayer({
+      id: 'BALKAN_MARKET_COMPARISON',
+      position: PlayerPosition.FWD,
+      overallRating: 78,
+      age: 24,
+      matchesPlayed: 30,
+      minutesPlayed: 2_400,
+      goals: 16,
+      assists: 5,
+      averageRating: 7.2,
+      annualSalary: 1_800_000,
+      contractEndDate: '2029-06-30',
+      clubId: 'BALKAN_BASE',
+    });
+    const balkanComparisonCases = [
+      { label: 'Greece', country: 'GRE', reputation: 12 },
+      { label: 'Croatia', country: 'CRO', reputation: 10 },
+      { label: 'Serbia', country: 'SRB', reputation: 10 },
+      { label: 'Romania', country: 'ROU', reputation: 10 },
+      { label: 'Bulgaria', country: 'BUL', reputation: 8 },
+      { label: 'Slovenia', country: 'SVN', reputation: 8 },
+      { label: 'Bosnia', country: 'BIH', reputation: 7 },
+      { label: 'Albania', country: 'ALB', reputation: 6 },
+      { label: 'North Macedonia', country: 'MKD', reputation: 6 },
+      { label: 'Montenegro', country: 'MNE', reputation: 6 },
+    ].map(entry => {
+      const club = createClub({
+        id: `BALKAN_${entry.country}`,
+        leagueId: `${entry.country}_1`,
+        tier: 1,
+        country: entry.country,
+        reputation: entry.reputation,
+        budget: 60_000_000,
+        transferBudget: 15_000_000,
+      });
+      const player = { ...balkanComparisonPlayer, id: `BALKAN_${entry.country}`, clubId: club.id };
+      const squad = createSupportSquad(player);
+      return {
+        label: entry.label,
+        ...calculateScenarioPrices(player, club, squad, 'przecietna'),
+      };
+    });
+
+    console.table(
+      balkanComparisonCases.map(({ label, marketValue, askingPrice }) => ({
+        scenario: `Rynek ${label}`,
+        marketValue,
+        askingPrice,
+      }))
+    );
+
+    const balkanMap = Object.fromEntries(
+      balkanComparisonCases.map(entry => [entry.label, entry])
+    ) as Record<string, (typeof balkanComparisonCases)[number]>;
+
+    assertGreaterThan(
+      balkanMap['Greece'].marketValue,
+      balkanMap['Croatia'].marketValue,
+      'Greece should price the same player above Croatia'
+    );
+    assertGreaterThan(
+      balkanMap['Croatia'].marketValue,
+      balkanMap['Serbia'].marketValue,
+      'Croatia should price the same player above Serbia'
+    );
+    assertGreaterThan(
+      balkanMap['Serbia'].marketValue,
+      balkanMap['Romania'].marketValue,
+      'Serbia should price the same player above Romania'
+    );
+    assertGreaterThan(
+      balkanMap['Romania'].marketValue,
+      balkanMap['Bulgaria'].marketValue,
+      'Romania should price the same player above Bulgaria'
+    );
+    assertGreaterThan(
+      balkanMap['Bulgaria'].marketValue,
+      balkanMap['Slovenia'].marketValue,
+      'Bulgaria should price the same player above Slovenia'
+    );
+    assertGreaterThan(
+      balkanMap['Slovenia'].marketValue,
+      balkanMap['Bosnia'].marketValue,
+      'Slovenia should price the same player above Bosnia'
+    );
+    assertGreaterThan(
+      balkanMap['Bosnia'].marketValue,
+      balkanMap['Albania'].marketValue,
+      'Bosnia should price the same player above Albania'
+    );
+    assertGreaterThan(
+      balkanMap['Albania'].marketValue,
+      balkanMap['North Macedonia'].marketValue,
+      'Albania should price the same player above North Macedonia'
+    );
+    assertGreaterThan(
+      balkanMap['North Macedonia'].marketValue,
+      balkanMap['Montenegro'].marketValue,
+      'North Macedonia should price the same player above Montenegro'
+    );
+
+    const nordicComparisonPlayer = createPlayer({
+      id: 'NORDIC_MARKET_COMPARISON',
+      position: PlayerPosition.FWD,
+      overallRating: 78,
+      age: 24,
+      matchesPlayed: 30,
+      minutesPlayed: 2_400,
+      goals: 16,
+      assists: 5,
+      averageRating: 7.2,
+      annualSalary: 1_800_000,
+      contractEndDate: '2029-06-30',
+      clubId: 'NORDIC_BASE',
+    });
+    const nordicComparisonCases = [
+      { label: 'Denmark', country: 'DEN', reputation: 13 },
+      { label: 'Norway', country: 'NOR', reputation: 11 },
+      { label: 'Sweden', country: 'SWE', reputation: 10 },
+      { label: 'Finland', country: 'FIN', reputation: 7 },
+      { label: 'Iceland', country: 'ISL', reputation: 5 },
+    ].map(entry => {
+      const club = createClub({
+        id: `NORDIC_${entry.country}`,
+        leagueId: `${entry.country}_1`,
+        tier: 1,
+        country: entry.country,
+        reputation: entry.reputation,
+        budget: 50_000_000,
+        transferBudget: 12_000_000,
+      });
+      const player = { ...nordicComparisonPlayer, id: `NORDIC_${entry.country}`, clubId: club.id };
+      const squad = createSupportSquad(player);
+      return {
+        label: entry.label,
+        ...calculateScenarioPrices(player, club, squad, 'przecietna'),
+      };
+    });
+
+    console.table(
+      nordicComparisonCases.map(({ label, marketValue, askingPrice }) => ({
+        scenario: `Rynek ${label}`,
+        marketValue,
+        askingPrice,
+      }))
+    );
+
+    const nordicMap = Object.fromEntries(
+      nordicComparisonCases.map(entry => [entry.label, entry])
+    ) as Record<string, (typeof nordicComparisonCases)[number]>;
+
+    assertGreaterThan(
+      nordicMap['Denmark'].marketValue,
+      nordicMap['Norway'].marketValue,
+      'Denmark should price the same player above Norway'
+    );
+    assertGreaterThan(
+      nordicMap['Norway'].marketValue,
+      nordicMap['Sweden'].marketValue,
+      'Norway should price the same player above Sweden'
+    );
+    assertGreaterThan(
+      nordicMap['Sweden'].marketValue,
+      nordicMap['Finland'].marketValue,
+      'Sweden should price the same player above Finland'
+    );
+    assertGreaterThan(
+      nordicMap['Finland'].marketValue,
+      nordicMap['Iceland'].marketValue,
+      'Finland should price the same player above Iceland'
     );
 
     if (failures.length > 0) {

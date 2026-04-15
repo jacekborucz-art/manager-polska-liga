@@ -61,7 +61,7 @@ export const TransferExecutionService = {
       clubId: buyerClub.id,
       annualSalary: offer.salary,
       contractEndDate: newEndDate,
-      marketValue: FinanceService.calculateMarketValue(player, buyerClub.reputation, buyerTier),
+      marketValue: FinanceService.calculateMarketValue(player, buyerClub.reputation, buyerTier, buyerClub.country),
       history: updatedHistory,
       isOnTransferList: false,
       interestedClubs: [],

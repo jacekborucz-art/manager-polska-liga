@@ -77,6 +77,25 @@ const getPolishAgeTransferCap = (player: Player, tier: number): number => {
 const roundToNearest50k = (value: number) => Math.round(Math.max(100_000, value) / 50_000) * 50_000;
 const isPolishClub = (club: Pick<Club, 'id' | 'leagueId'>): boolean =>
   club.id.startsWith('PL_') || club.leagueId.startsWith('PL_');
+
+const applyInternationalAskingGuardrail = (
+  value: number,
+  baseValue: number,
+  player: Player,
+  contractDaysLeft: number,
+  club: Pick<Club, 'id' | 'leagueId'>
+): number => {
+  if (isPolishClub(club)) return value;
+
+  let maxMarkup = player.isUntouchable ? 1.38 : 1.30;
+  if (player.isOnTransferList) maxMarkup = Math.min(maxMarkup, 1.05);
+  else if (contractDaysLeft > 0 && contractDaysLeft < 365) maxMarkup = Math.min(maxMarkup, 1.15);
+  if (player.age >= 32) maxMarkup -= 0.05;
+  else if (player.age >= 29) maxMarkup -= 0.02;
+
+  return Math.min(value, baseValue * Math.max(1.02, maxMarkup));
+};
+
 const applyTransferCap = (
   value: number,
   club: Pick<Club, 'id' | 'leagueId' | 'tier'>,
@@ -233,7 +252,7 @@ export const TransferSellerLogicService = {
     const tier = FinanceService.getClubTier(sellerClub);
     const rawBaseValue = player.transferListPrice
       ? player.transferListPrice
-      : FinanceService.calculateMarketValue(player, sellerClub.reputation, tier);
+      : FinanceService.calculateMarketValue(player, sellerClub.reputation, tier, sellerClub.country);
     const KOMPETENCJA_SELL_MULTIPLIER: Record<BoardAttributeLevel, number> = {
       bardzo_wysoka: 1.15,
       wysoka:        1.07,
@@ -289,7 +308,8 @@ export const TransferSellerLogicService = {
     if (daysLeft >= 730 && !player.isOnTransferList) minimumMultiplier = Math.max(minimumMultiplier, 1.10);
 
     const rawPrice = Math.max(100_000, baseValue * Math.max(multiplier, minimumMultiplier));
-    return applyTransferCap(rawPrice, sellerClub, player);
+    const guardedPrice = applyInternationalAskingGuardrail(rawPrice, baseValue, player, daysLeft, sellerClub);
+    return applyTransferCap(guardedPrice, sellerClub, player);
   },
 
   evaluateSellerDecision: (

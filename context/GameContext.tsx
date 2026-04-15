@@ -1331,7 +1331,8 @@ setMessages([welcomeMail, fanMail]);
         lastMatchSummary,
         userClub?.reputation || 5, 
         tier,
-        activeIntensity                       
+        activeIntensity,
+        userClub?.country
       );
       // KONIEC WSTAWKI
 
@@ -1345,7 +1346,8 @@ setMessages([welcomeMail, fanMail]);
           autoTrainingId,
           coachTrainingAttr,
           userClub?.reputation || 5,
-          tier
+          tier,
+          userClub?.country
         );
         setReserves(updatedReserves);
       }
@@ -1770,7 +1772,8 @@ setMessages([welcomeMail, fanMail]);
       userTeamId,
       currentDate,
       club?.reputation ?? 5,
-      club?.tier ?? 1
+      club?.tier ?? 1,
+      club?.country
     );
     const overallKeys: (keyof import('../types').PlayerAttributes)[] = [
       'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -6217,7 +6220,12 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       annualSalary: salary, 
       contractEndDate: newEndDate,
       transferLockoutUntil: transferLockoutDate.toISOString(),
-      marketValue: FinanceService.calculateMarketValue(playerToSign, 5, 1),
+      marketValue: FinanceService.calculateMarketValue(
+        { ...playerToSign, clubId: userTeamId },
+        userClub?.reputation ?? 5,
+        userClub?.tier ?? 1,
+        userClub?.country
+      ),
       history: updatedHistory // Podpinamy zaktualizowaną historię
     };
 

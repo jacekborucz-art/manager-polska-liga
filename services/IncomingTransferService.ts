@@ -151,7 +151,7 @@ export const IncomingTransferService = {
     seed: number
   ): Pick<IncomingTransferOffer, 'fee' | 'aiMaxFee' | 'aiUrgency' | 'timing'> {
     const sellerTier = IncomingTransferService.getClubTier(sellerClub);
-    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier);
+    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier, sellerClub.country);
 
     const rng1 = IncomingTransferService.seededRandom(seed + 1);
     const rng2 = IncomingTransferService.seededRandom(seed + 2);
@@ -209,7 +209,7 @@ export const IncomingTransferService = {
   ): boolean {
     const sellerTier = IncomingTransferService.getClubTier(sellerClub);
     if (sellerClub.budget < 0) return true;
-    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier);
+    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier, sellerClub.country);
     if (offer.fee > marketValue * 1.8) return true;
     if (
       player.isOnTransferList &&

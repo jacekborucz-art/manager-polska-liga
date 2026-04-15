@@ -449,7 +449,7 @@ contractEndDate: new Date(new Date().getFullYear() + 1 + Math.floor(Math.random(
     const finalSquad = squadBase.map(p => ({
         ...p,
         annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
-marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
+marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInfo?.country)
 
     })) as Player[];
 
@@ -624,7 +624,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
     return squad.map(p => ({
       ...p,
       annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
-      marketValue: FinanceService.calculateMarketValue(p, reputation, tier)
+      marketValue: FinanceService.calculateMarketValue(p, reputation, tier, country)
     })) as Player[];
   },
 
@@ -723,7 +723,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
     return squad.map(p => ({
       ...p,
       annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
-      marketValue: FinanceService.calculateMarketValue(p, reputation, tier)
+      marketValue: FinanceService.calculateMarketValue(p, reputation, tier, country)
     })) as Player[];
   },
 
@@ -813,7 +813,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier)
     return squad.map(p => ({
       ...p,
       annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
-      marketValue: FinanceService.calculateMarketValue(p, reputation, tier)
+      marketValue: FinanceService.calculateMarketValue(p, reputation, tier, country)
     })) as Player[];
   },
 

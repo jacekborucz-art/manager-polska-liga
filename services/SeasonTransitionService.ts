@@ -59,6 +59,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             club.reputation,
             club.budget,
             nextSquad.length,
+            club.country,
             
           );
           nextSquad.push(newgen);
@@ -107,7 +108,8 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
     tier: number, 
     reputation: number,
     clubBudget: number,
-    index: number
+    index: number,
+    clubCountry?: string
   ): Player => {
     const region = Math.random() < 0.85 ? Region.POLAND : NameGeneratorService.getRandomForeignRegion();
     const namePair = NameGeneratorService.getRandomName(region);
@@ -158,7 +160,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       isOnTransferList: false
     };
 
-    newPlayer.marketValue = FinanceService.calculateMarketValue(newPlayer, reputation, tier);
+    newPlayer.marketValue = FinanceService.calculateMarketValue(newPlayer, reputation, tier, clubCountry);
 
     return newPlayer;
   },

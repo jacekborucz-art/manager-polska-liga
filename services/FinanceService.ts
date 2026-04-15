@@ -427,6 +427,319 @@ const getEuropeanCommercialIndex = (club: Pick<Club, 'leagueId' | 'country' | 'r
   return clamp((countryFactor * reputationFactor * stadiumFactor * competitionFactor) / 1.45, 0.45, 2.60);
 };
 
+type InternationalMarketProfile = {
+  marketFactor: number;
+  tierCaps: Record<number, number>;
+};
+
+const INTERNATIONAL_DEFAULT_TIER_CAPS: Record<number, number> = {
+  1: 90_000_000,
+  2: 22_000_000,
+  3: 6_000_000,
+  4: 1_500_000,
+  5: 500_000,
+};
+
+const INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY: Record<string, InternationalMarketProfile> = {
+  ENG: {
+    marketFactor: 1.28,
+    tierCaps: { 1: 220_000_000, 2: 70_000_000, 3: 18_000_000, 4: 4_000_000, 5: 1_200_000 },
+  },
+  ESP: {
+    marketFactor: 1.18,
+    tierCaps: { 1: 200_000_000, 2: 45_000_000, 3: 12_000_000, 4: 3_000_000, 5: 1_000_000 },
+  },
+  GER: {
+    marketFactor: 1.08,
+    tierCaps: { 1: 150_000_000, 2: 40_000_000, 3: 10_000_000, 4: 2_500_000, 5: 800_000 },
+  },
+  ITA: {
+    marketFactor: 1.00,
+    tierCaps: { 1: 110_000_000, 2: 28_000_000, 3: 8_000_000, 4: 2_000_000, 5: 700_000 },
+  },
+  FRA: {
+    marketFactor: 0.97,
+    tierCaps: { 1: 120_000_000, 2: 24_000_000, 3: 7_000_000, 4: 1_800_000, 5: 600_000 },
+  },
+  POR: {
+    marketFactor: 0.78,
+    tierCaps: { 1: 60_000_000, 2: 15_000_000, 3: 4_000_000, 4: 1_000_000, 5: 350_000 },
+  },
+  DEN: {
+    marketFactor: 0.43,
+    tierCaps: { 1: 22_000_000, 2: 10_000_000, 3: 3_500_000, 4: 1_000_000, 5: 325_000 },
+  },
+  NOR: {
+    marketFactor: 0.30,
+    tierCaps: { 1: 11_000_000, 2: 6_000_000, 3: 2_200_000, 4: 650_000, 5: 225_000 },
+  },
+  SWE: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 6_500_000, 2: 3_500_000, 3: 1_300_000, 4: 400_000, 5: 150_000 },
+  },
+  FIN: {
+    marketFactor: 0.07,
+    tierCaps: { 1: 1_200_000, 2: 700_000, 3: 300_000, 4: 100_000, 5: 40_000 },
+  },
+  ISL: {
+    marketFactor: 0.035,
+    tierCaps: { 1: 600_000, 2: 350_000, 3: 150_000, 4: 50_000, 5: 20_000 },
+  },
+  GRE: {
+    marketFactor: 0.52,
+    tierCaps: { 1: 25_000_000, 2: 12_000_000, 3: 4_000_000, 4: 1_100_000, 5: 350_000 },
+  },
+  CRO: {
+    marketFactor: 0.34,
+    tierCaps: { 1: 15_000_000, 2: 8_000_000, 3: 3_000_000, 4: 850_000, 5: 275_000 },
+  },
+  SRB: {
+    marketFactor: 0.32,
+    tierCaps: { 1: 12_000_000, 2: 7_000_000, 3: 2_800_000, 4: 800_000, 5: 250_000 },
+  },
+  ROU: {
+    marketFactor: 0.28,
+    tierCaps: { 1: 10_000_000, 2: 6_000_000, 3: 2_400_000, 4: 700_000, 5: 225_000 },
+  },
+  BUL: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 5_500_000, 2: 3_500_000, 3: 1_500_000, 4: 450_000, 5: 150_000 },
+  },
+  SVN: {
+    marketFactor: 0.14,
+    tierCaps: { 1: 2_800_000, 2: 1_800_000, 3: 800_000, 4: 250_000, 5: 90_000 },
+  },
+  BIH: {
+    marketFactor: 0.11,
+    tierCaps: { 1: 2_200_000, 2: 1_400_000, 3: 650_000, 4: 200_000, 5: 70_000 },
+  },
+  MNE: {
+    marketFactor: 0.06,
+    tierCaps: { 1: 1_000_000, 2: 650_000, 3: 300_000, 4: 100_000, 5: 40_000 },
+  },
+  MKD: {
+    marketFactor: 0.07,
+    tierCaps: { 1: 1_200_000, 2: 750_000, 3: 350_000, 4: 120_000, 5: 45_000 },
+  },
+  ALB: {
+    marketFactor: 0.09,
+    tierCaps: { 1: 1_600_000, 2: 1_000_000, 3: 450_000, 4: 150_000, 5: 55_000 },
+  },
+  BRA: {
+    marketFactor: 0.72,
+    tierCaps: { 1: 42_000_000, 2: 18_000_000, 3: 6_000_000, 4: 1_500_000, 5: 500_000 },
+  },
+  ARG: {
+    marketFactor: 0.58,
+    tierCaps: { 1: 28_000_000, 2: 12_000_000, 3: 4_000_000, 4: 1_100_000, 5: 350_000 },
+  },
+  URU: {
+    marketFactor: 0.24,
+    tierCaps: { 1: 8_000_000, 2: 5_000_000, 3: 1_800_000, 4: 500_000, 5: 175_000 },
+  },
+  COL: {
+    marketFactor: 0.27,
+    tierCaps: { 1: 9_000_000, 2: 5_500_000, 3: 1_800_000, 4: 500_000, 5: 175_000 },
+  },
+  ECU: {
+    marketFactor: 0.30,
+    tierCaps: { 1: 11_000_000, 2: 6_000_000, 3: 2_000_000, 4: 600_000, 5: 200_000 },
+  },
+  PAR: {
+    marketFactor: 0.23,
+    tierCaps: { 1: 7_000_000, 2: 4_000_000, 3: 1_400_000, 4: 400_000, 5: 150_000 },
+  },
+  CHI: {
+    marketFactor: 0.26,
+    tierCaps: { 1: 7_500_000, 2: 4_000_000, 3: 1_400_000, 4: 400_000, 5: 150_000 },
+  },
+  PER: {
+    marketFactor: 0.18,
+    tierCaps: { 1: 4_500_000, 2: 2_500_000, 3: 900_000, 4: 250_000, 5: 100_000 },
+  },
+  BOL: {
+    marketFactor: 0.12,
+    tierCaps: { 1: 2_500_000, 2: 1_500_000, 3: 500_000, 4: 150_000, 5: 60_000 },
+  },
+  KSA: {
+    marketFactor: 1.20,
+    tierCaps: { 1: 90_000_000, 2: 40_000_000, 3: 12_000_000, 4: 3_000_000, 5: 900_000 },
+  },
+  UAE: {
+    marketFactor: 0.48,
+    tierCaps: { 1: 18_000_000, 2: 12_000_000, 3: 4_000_000, 4: 1_100_000, 5: 350_000 },
+  },
+  QAT: {
+    marketFactor: 0.64,
+    tierCaps: { 1: 22_000_000, 2: 16_000_000, 3: 5_000_000, 4: 1_500_000, 5: 500_000 },
+  },
+  JPN: {
+    marketFactor: 0.30,
+    tierCaps: { 1: 10_000_000, 2: 6_000_000, 3: 2_000_000, 4: 600_000, 5: 200_000 },
+  },
+  KOR: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 7_000_000, 2: 4_500_000, 3: 1_500_000, 4: 450_000, 5: 150_000 },
+  },
+  IRN: {
+    marketFactor: 0.26,
+    tierCaps: { 1: 8_000_000, 2: 5_000_000, 3: 1_800_000, 4: 500_000, 5: 175_000 },
+  },
+  CHN: {
+    marketFactor: 0.28,
+    tierCaps: { 1: 9_000_000, 2: 6_000_000, 3: 2_000_000, 4: 600_000, 5: 200_000 },
+  },
+  THA: {
+    marketFactor: 0.17,
+    tierCaps: { 1: 5_000_000, 2: 3_000_000, 3: 1_800_000, 4: 500_000, 5: 150_000 },
+  },
+  MAS: {
+    marketFactor: 0.16,
+    tierCaps: { 1: 4_500_000, 2: 2_800_000, 3: 1_600_000, 4: 450_000, 5: 150_000 },
+  },
+  AUS: {
+    marketFactor: 0.20,
+    tierCaps: { 1: 6_000_000, 2: 3_500_000, 3: 2_000_000, 4: 600_000, 5: 200_000 },
+  },
+  EGY: {
+    marketFactor: 0.30,
+    tierCaps: { 1: 10_000_000, 2: 6_000_000, 3: 2_000_000, 4: 600_000, 5: 200_000 },
+  },
+  RSA: {
+    marketFactor: 0.21,
+    tierCaps: { 1: 7_000_000, 2: 4_000_000, 3: 1_500_000, 4: 450_000, 5: 150_000 },
+  },
+  MAR: {
+    marketFactor: 0.24,
+    tierCaps: { 1: 8_000_000, 2: 5_000_000, 3: 1_800_000, 4: 500_000, 5: 175_000 },
+  },
+  TUN: {
+    marketFactor: 0.15,
+    tierCaps: { 1: 4_500_000, 2: 3_000_000, 3: 1_100_000, 4: 350_000, 5: 120_000 },
+  },
+  ALG: {
+    marketFactor: 0.14,
+    tierCaps: { 1: 4_000_000, 2: 2_800_000, 3: 1_000_000, 4: 300_000, 5: 100_000 },
+  },
+  TZA: {
+    marketFactor: 0.10,
+    tierCaps: { 1: 2_500_000, 2: 1_800_000, 3: 700_000, 4: 220_000, 5: 80_000 },
+  },
+  COD: {
+    marketFactor: 0.09,
+    tierCaps: { 1: 2_200_000, 2: 1_600_000, 3: 600_000, 4: 200_000, 5: 70_000 },
+  },
+};
+
+const normalizeMarketCountry = (country?: string | null): string | null => {
+  if (!country) return null;
+  const normalized = country.trim().toUpperCase();
+  return normalized.length >= 3 ? normalized.slice(0, 3) : normalized;
+};
+
+const getInternationalMarketProfile = (country?: string | null): InternationalMarketProfile => {
+  const normalizedCountry = normalizeMarketCountry(country);
+  if (normalizedCountry && INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY[normalizedCountry]) {
+    return INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY[normalizedCountry];
+  }
+
+  const financeFactor = EUROPEAN_COUNTRY_FINANCE_FACTOR[normalizedCountry || ''] ?? 0.25;
+  const marketFactor = clamp(0.50 + Math.sqrt(financeFactor / 1.45) * 0.55, 0.45, 1.10);
+  const capScale = clamp(marketFactor / 0.90, 0.55, 1.22);
+
+  return {
+    marketFactor,
+    tierCaps: Object.fromEntries(
+      Object.entries(INTERNATIONAL_DEFAULT_TIER_CAPS).map(([tierKey, value]) => [
+        Number(tierKey),
+        Math.round(value * capScale),
+      ])
+    ) as Record<number, number>,
+  };
+};
+
+const getInternationalBaseMarketValue = (ovr: number): number => {
+  if (ovr >= 92) return 155_000_000 + (ovr - 92) * 15_000_000;
+  if (ovr >= 89) return 105_000_000 + (ovr - 89) * 16_000_000;
+  if (ovr >= 86) return 68_000_000 + (ovr - 86) * 12_000_000;
+  if (ovr >= 83) return 40_000_000 + (ovr - 83) * 9_000_000;
+  if (ovr >= 80) return 24_000_000 + (ovr - 80) * 5_000_000;
+  if (ovr >= 76) return 11_000_000 + (ovr - 76) * 3_000_000;
+  if (ovr >= 72) return 5_000_000 + (ovr - 72) * 1_500_000;
+  if (ovr >= 68) return 1_800_000 + (ovr - 68) * 800_000;
+  if (ovr >= 60) return 350_000 + (ovr - 60) * 180_000;
+  return 50_000 + Math.max(0, ovr - 40) * 15_000;
+};
+
+const getInternationalAgeFactor = (player: Player): number => {
+  switch (player.position) {
+    case PlayerPosition.DEF:
+      if (player.age <= 20) return 1.08;
+      if (player.age <= 24) return 1.04;
+      if (player.age <= 29) return 1.00;
+      if (player.age <= 31) return 0.94;
+      if (player.age <= 33) return 0.82;
+      if (player.age <= 35) return 0.68;
+      if (player.age <= 37) return 0.52;
+      return 0.40;
+    case PlayerPosition.GK:
+      if (player.age <= 21) return 1.02;
+      if (player.age <= 25) return 1.00;
+      if (player.age <= 31) return 1.05;
+      if (player.age <= 34) return 0.96;
+      if (player.age <= 36) return 0.82;
+      if (player.age <= 38) return 0.66;
+      return 0.52;
+    default:
+      if (player.age <= 20) return 1.18;
+      if (player.age <= 23) return 1.10;
+      if (player.age <= 27) return 1.00;
+      if (player.age <= 29) return 0.94;
+      if (player.age <= 31) return 0.82;
+      if (player.age <= 33) return 0.68;
+      if (player.age <= 35) return 0.54;
+      if (player.age <= 37) return 0.40;
+      return 0.28;
+  }
+};
+
+const calculateInternationalMarketValue = (
+  player: Player,
+  reputation: number,
+  tier: number,
+  country?: string | null
+): number => {
+  const baseValue = getInternationalBaseMarketValue(player.overallRating);
+  const tierMultiplier = ({
+    1: 1.00,
+    2: 0.36,
+    3: 0.16,
+    4: 0.06,
+    5: 0.03,
+  } as Record<number, number>)[tier] ?? 0.08;
+  const reputationFactor = 0.90 + clamp(reputation, 1, 20) * 0.015;
+  const ageFactor = getInternationalAgeFactor(player);
+  const marketProfile = getInternationalMarketProfile(country);
+  const randomFactor = 0.97 + (Math.random() * 0.06);
+  const tierCap = marketProfile.tierCaps[tier] ?? INTERNATIONAL_DEFAULT_TIER_CAPS[5];
+
+  const rawValue =
+    baseValue *
+    tierMultiplier *
+    marketProfile.marketFactor *
+    reputationFactor *
+    ageFactor *
+    randomFactor;
+  const cappedValue = Math.min(rawValue, tierCap);
+  const step =
+    cappedValue >= 100_000_000 ? 1_000_000 :
+    cappedValue >= 25_000_000 ? 500_000 :
+    cappedValue >= 10_000_000 ? 250_000 :
+    cappedValue >= 1_000_000 ? 100_000 :
+    cappedValue >= 100_000 ? 25_000 : 10_000;
+  return Math.round(cappedValue / step) * step;
+};
+
 export const FinanceService = {
   /**
    * Oblicza budżet początkowy na podstawie poziomu ligi i reputacji (1-10)
@@ -629,58 +942,15 @@ export const FinanceService = {
     return Math.floor(tvRights + sponsorship + prizeMoney);
   },
 
-  calculateMarketValue: (player: Player, reputation: number, tier: number): number => {
+  calculateMarketValue: (player: Player, reputation: number, tier: number, clubCountry?: string | null): number => {
     if (player.clubId === 'FREE_AGENTS') return 0;
     const ovr = player.overallRating;
-    const isPolishClub = player.clubId.startsWith('PL_');
+    const normalizedCountry = normalizeMarketCountry(clubCountry);
+    const isPolishClub = player.clubId.startsWith('PL_') || normalizedCountry === 'POL';
     if (isPolishClub) {
       return calculatePolishMarketValue(player, reputation, tier);
     }
-
-    let baseValue = 0;
-    if (ovr >= 80) baseValue = 15000000 + (ovr - 80) * 1300000;
-    else if (ovr >= 75) baseValue = 8500000 + (ovr - 75) * 840000;
-    else if (ovr >= 70) baseValue = 4200000 + (ovr - 70) * 860000;
-    else baseValue = 50000 + (ovr / 70) * 4150000;
-
-    let multiplier = 1.0;
-    switch (tier) {
-      case 1:
-        multiplier = 1.15;
-        break;
-      case 2:
-        multiplier = 0.72;
-        break;
-      case 3:
-        multiplier = 0.30;
-        break;
-      case 4:
-        multiplier = 0.12;
-        break;
-      case 5:
-        multiplier = 0.08;
-        break;
-      default:
-        multiplier = 0.18;
-        break;
-    }
-
-    if (reputation > 5) multiplier += (reputation - 5) * 0.03;
-    else if (reputation < 4) multiplier -= (4 - reputation) * 0.02;
-
-    const tierCap = ({
-      1: 120_000_000,
-      2: 18_000_000,
-      3: 6_000_000,
-      4: 2_000_000,
-      5: 800_000
-    } as Record<number, number | undefined>)[tier];
-
-    const randomFactor = 0.97 + (Math.random() * 0.06);
-    const rawValue = baseValue * multiplier * randomFactor;
-    const cappedValue = tierCap ? Math.min(rawValue, tierCap) : rawValue;
-    const step = cappedValue >= 10_000_000 ? 500_000 : cappedValue >= 1_000_000 ? 100_000 : cappedValue >= 100_000 ? 50_000 : 10_000;
-    return Math.round(cappedValue / step) * step;
+    return calculateInternationalMarketValue(player, reputation, tier, normalizedCountry);
   },
 
   /**

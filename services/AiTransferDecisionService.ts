@@ -194,7 +194,7 @@ export const AiTransferDecisionService = {
         if (!candidate) continue;
 
         const tier = FinanceService.getClubTier(club);
-        const marketValue = FinanceService.calculateMarketValue(candidate, club.reputation, tier);
+        const marketValue = FinanceService.calculateMarketValue(candidate, club.reputation, tier, club.country);
         const reducedPrice = Math.round(marketValue * 0.72 / 50_000) * 50_000;
 
         const idx = updatedSquad.findIndex(p => p.id === candidate.id);
