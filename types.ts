@@ -1185,7 +1185,12 @@ export interface MatchLiveState {
 isPenalties?: boolean;
   homePenaltyScore?: number;
   awayPenaltyScore?: number;
-  penaltySequence?: { side: 'HOME' | 'AWAY', result: 'SCORED' | 'MISSED' }[];
+  penaltySequence?: {
+    side: 'HOME' | 'AWAY';
+    result: 'SCORED' | 'MISSED';
+    playerId?: string;
+    playerName?: string;
+  }[];
   // -> tutaj wstaw kod
   aiActiveShout: { 
     id: string; 

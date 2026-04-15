@@ -391,6 +391,46 @@ const getPositionalDisorder = (
 
 
 
+const checkShootoutWinner = (
+  seq: NonNullable<MatchLiveState['penaltySequence']>
+): 'HOME' | 'AWAY' | null => {
+  const homeShots = seq.filter((_, i) => i % 2 === 0);
+  const awayShots = seq.filter((_, i) => i % 2 === 1);
+  const homeScored = homeShots.filter(s => s.result === 'SCORED').length;
+  const awayScored = awayShots.filter(s => s.result === 'SCORED').length;
+  const homeTaken = homeShots.length;
+  const awayTaken = awayShots.length;
+  const sharedRounds = Math.min(homeTaken, awayTaken);
+
+  if (sharedRounds < 5) {
+    const homeRemaining = 5 - homeTaken;
+    const awayRemaining = 5 - awayTaken;
+    if (homeScored > awayScored + awayRemaining) return 'HOME';
+    if (awayScored > homeScored + homeRemaining) return 'AWAY';
+    return null;
+  }
+
+  if (homeTaken >= 5 && awayTaken >= 5) {
+    if (homeScored !== awayScored) return homeScored > awayScored ? 'HOME' : 'AWAY';
+
+    const extraRoundsCompleted = Math.floor((seq.length - 10) / 2);
+    for (let round = 0; round <= extraRoundsCompleted; round++) {
+      const homeIndex = 10 + round * 2;
+      const awayIndex = 11 + round * 2;
+      if (homeIndex < seq.length && awayIndex < seq.length) {
+        const homeResult = seq[homeIndex].result;
+        const awayResult = seq[awayIndex].result;
+        if (homeResult === 'SCORED' && awayResult === 'MISSED') return 'HOME';
+        if (awayResult === 'SCORED' && homeResult === 'MISSED') return 'AWAY';
+      }
+    }
+  }
+
+  return null;
+};
+
+const getPenaltyDisplayName = (player: Player) => `${player.firstName} ${player.lastName}`;
+
 export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
@@ -881,31 +921,38 @@ useEffect(() => {
     return { tacticId, startingXI: newXI };
   };
 
-  const getPenaltyOrder = (lineup: Lineup, teamPlayers: Player[], sentOffIds: string[]) => {
-    const getScore = (p: Player) => (p.attributes.finishing * 1000) + (p.overallRating * 10);
-
+  const getPenaltyOrder = (
+    lineup: Lineup,
+    teamPlayers: Player[],
+    sentOffIds: string[],
+    injuries: Record<string, InjurySeverity>
+  ) => {
     const onPitch = lineup.startingXI
-      .filter((id): id is string => id !== null && !sentOffIds.includes(id))
+      .filter((id): id is string => (
+        id !== null &&
+        !sentOffIds.includes(id) &&
+        injuries[id] !== InjurySeverity.SEVERE
+      ))
       .map(id => teamPlayers.find(p => p.id === id))
       .filter((p): p is Player => p !== undefined)
       .sort((a, b) => {
-        const diff = getScore(b) - getScore(a);
-        return diff !== 0 ? diff : a.lastName.localeCompare(b.lastName);
+        const penDiff = (b.attributes.penalties || 50) - (a.attributes.penalties || 50);
+        if (penDiff !== 0) return penDiff;
+        const finDiff = (b.attributes.finishing || 50) - (a.attributes.finishing || 50);
+        if (finDiff !== 0) return finDiff;
+        const mentDiff = (b.attributes.mentality || 50) - (a.attributes.mentality || 50);
+        if (mentDiff !== 0) return mentDiff;
+        return getPenaltyDisplayName(a).localeCompare(getPenaltyDisplayName(b));
       });
 
-    let ids = onPitch.map(p => p.id);
-    if (ids.length < 5) {
-      const onBench = lineup.bench
-        .filter(id => !sentOffIds.includes(id))
-        .map(id => teamPlayers.find(p => p.id === id))
-        .filter((p): p is Player => p !== undefined)
-        .sort((a, b) => {
-          const diff = getScore(b) - getScore(a);
-          return diff !== 0 ? diff : a.lastName.localeCompare(b.lastName);
-        });
-      ids = [...ids, ...onBench.map(p => p.id)];
-    }
-    return ids.length > 0 ? ids : (teamPlayers[0] ? [teamPlayers[0].id] : []);
+    if (onPitch.length > 0) return onPitch;
+
+    const emergencyOrder = lineup.startingXI
+      .filter((id): id is string => id !== null)
+      .map(id => teamPlayers.find(p => p.id === id))
+      .filter((p): p is Player => p !== undefined);
+
+    return emergencyOrder.length > 0 ? emergencyOrder : teamPlayers.slice(0, 1);
   };
 
   // LOGIKA RZUTÓW KARNYCH (STEP-BY-STEP)
@@ -916,27 +963,27 @@ useEffect(() => {
       setMatchState(prev => {
         if (!prev || !ctx) return prev;
         
-        const currentRound = prev.penaltySequence?.length || 0;
-        const side: 'HOME' | 'AWAY' = (currentRound % 2 === 0) ? 'HOME' : 'AWAY';
-        
-        // Warunki zakończenia karnych
-        const hPens = prev.penaltySequence?.filter(s => s.side === 'HOME' && s.result === 'SCORED').length || 0;
-        const aPens = prev.penaltySequence?.filter(s => s.side === 'AWAY' && s.result === 'SCORED').length || 0;
-        const hTaken = prev.penaltySequence?.filter(s => s.side === 'HOME').length || 0;
-        const aTaken = prev.penaltySequence?.filter(s => s.side === 'AWAY').length || 0;
-
-        // Sprawdzenie czy ktoś już wygrał
-        if (hTaken >= 5 && aTaken >= 5 && hTaken === aTaken) {
-           if (hPens !== aPens) return { ...prev, isFinished: true, isPaused: true };
+        const penaltySequence = prev.penaltySequence || [];
+        const winner = checkShootoutWinner(penaltySequence);
+        if (winner) {
+          return { ...prev, isFinished: true, isPaused: true };
         }
 
-        const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-        const lineup = side === 'HOME' ? prev.homeLineup : prev.awayLineup;
+        const currentRound = penaltySequence.length;
+        const side: 'HOME' | 'AWAY' = (currentRound % 2 === 0) ? 'HOME' : 'AWAY';
+        const shootoutTeamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+        const shootoutLineup = side === 'HOME' ? prev.homeLineup : prev.awayLineup;
+        const injuries = side === 'HOME' ? prev.homeInjuries : prev.awayInjuries;
+        const penaltyOrder = getPenaltyOrder(shootoutLineup, shootoutTeamPlayers, prev.sentOffIds, injuries);
+        const attemptsTakenBySide = penaltySequence.filter(s => s.side === side).length;
+        const kicker = penaltyOrder[attemptsTakenBySide % penaltyOrder.length] || shootoutTeamPlayers[0];
+        if (!kicker) return prev;
         
-        const penaltyOrder = getPenaltyOrder(lineup, teamPlayers, prev.sentOffIds);
-        const teamIndex = Math.floor(currentRound / 2);
-        const kickerId = penaltyOrder[teamIndex % penaltyOrder.length];
-        const kicker = teamPlayers.find(p => p.id === kickerId) || teamPlayers[0];
+        // Warunki zakończenia karnych
+
+        // Sprawdzenie czy ktoś już wygrał
+
+        
         
         // Urealistycznienie szansy (82% to średnia światowa) + wpływ atrybutu wykończenia
         const kickerPenaltySkill =
@@ -947,14 +994,22 @@ useEffect(() => {
         const baseProb = 0.80 + (kickerPenaltySkill - 50) / 430;
         const isScored = Math.random() < Math.max(0.65, Math.min(0.95, baseProb));
         
-       const newSequence = [...(prev.penaltySequence || []), { side, result: isScored ? 'SCORED' as const : 'MISSED' as const }];
+       const newSequence = [
+        ...penaltySequence,
+        {
+          side,
+          result: isScored ? 'SCORED' as const : 'MISSED' as const,
+          playerId: kicker.id,
+          playerName: getPenaltyDisplayName(kicker),
+        }
+      ];
         
         // TUTAJ WSTAW TEN KOD (Failsafe z operatorem || 0)
         const newHomePenScore = side === 'HOME' && isScored ? (prev.homePenaltyScore || 0) + 1 : (prev.homePenaltyScore || 0);
         const newAwayPenScore = side === 'AWAY' && isScored ? (prev.awayPenaltyScore || 0) + 1 : (prev.awayPenaltyScore || 0);
         // KONIEC KODU
 
-        const kickerDisplayName = `${kicker.firstName.charAt(0)}. ${kicker.lastName}`;
+        const kickerDisplayName = getPenaltyDisplayName(kicker);
 
         return {
           ...prev,
@@ -3421,7 +3476,7 @@ if (activePlayerTempo === 'SLOW') {
                      </div>
                   </div>
                )}
-               {matchState.isPenalties && (
+               {false && matchState.isPenalties && (
                   <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-12 text-center animate-fade-in">
                      <h3 className="text-5xl font-black italic text-rose-500 uppercase mb-12 tracking-tighter">RZUTY KARNE</h3>
                      <div className="flex items-center gap-20">
@@ -3442,6 +3497,77 @@ if (activePlayerTempo === 'SLOW') {
                               {matchState.penaltySequence?.filter(s => s.side === 'AWAY').map((s, i) => (
                                  <div key={i} className={`w-6 h-6 rounded-full border-2 ${s.result === 'SCORED' ? 'bg-emerald-500 border-emerald-400' : 'bg-red-600 border-red-500'}`} />
                            ))}
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               )}
+               {matchState.isPenalties && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-10 text-center animate-fade-in">
+                     <div className="w-full max-w-5xl rounded-[38px] border border-white/10 bg-slate-950/92 px-10 py-8 shadow-[0_0_120px_rgba(15,23,42,0.8)] backdrop-blur-2xl">
+                        <div className="mb-8 flex items-center justify-center">
+                           <span className="text-[11px] font-black uppercase tracking-[0.5em] text-rose-400">RZUTY KARNE</span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)] items-start gap-8">
+                           <div className="min-w-0">
+                              <div className="mb-5 flex flex-col items-center gap-2">
+                                 <span className="text-3xl font-black italic uppercase tracking-tight text-white">{ctx.homeClub.name}</span>
+                                 <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Gospodarze</span>
+                              </div>
+                              <div className="mx-auto flex max-h-[360px] min-h-[180px] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-3xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left custom-scrollbar">
+                                 {(matchState.penaltySequence?.filter(s => s.side === 'HOME') || []).map((shot, i) => (
+                                    <div
+                                      key={`home_pen_${i}`}
+                                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 ${
+                                        shot.result === 'SCORED'
+                                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                                          : 'border-red-500/20 bg-red-500/10 text-red-100'
+                                      }`}
+                                    >
+                                      <span className={`text-sm font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
+                                        {shot.playerName || 'Nieznany strzelec'}
+                                      </span>
+                                      <span className={`text-2xl ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
+                                        {shot.result === 'SCORED' ? '⚽' : '✖'}
+                                      </span>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+
+                           <div className="flex flex-col items-center justify-center gap-4 rounded-[32px] border border-white/10 bg-white/[0.04] px-6 py-8 shadow-inner shadow-white/5">
+                              <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Wynik serii</span>
+                              <div className="flex items-center gap-5">
+                                 <span className="text-7xl font-black font-mono tracking-tighter text-white">{matchState.homePenaltyScore ?? 0}</span>
+                                 <span className="text-5xl font-black text-slate-600">:</span>
+                                 <span className="text-7xl font-black font-mono tracking-tighter text-white">{matchState.awayPenaltyScore ?? 0}</span>
+                              </div>
+                           </div>
+
+                           <div className="min-w-0">
+                              <div className="mb-5 flex flex-col items-center gap-2">
+                                 <span className="text-3xl font-black italic uppercase tracking-tight text-white">{ctx.awayClub.name}</span>
+                                 <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Goście</span>
+                              </div>
+                              <div className="mx-auto flex max-h-[360px] min-h-[180px] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-3xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left custom-scrollbar">
+                                 {(matchState.penaltySequence?.filter(s => s.side === 'AWAY') || []).map((shot, i) => (
+                                    <div
+                                      key={`away_pen_${i}`}
+                                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 ${
+                                        shot.result === 'SCORED'
+                                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                                          : 'border-red-500/20 bg-red-500/10 text-red-100'
+                                      }`}
+                                    >
+                                      <span className={`text-sm font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
+                                        {shot.playerName || 'Nieznany strzelec'}
+                                      </span>
+                                      <span className={`text-2xl ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
+                                        {shot.result === 'SCORED' ? '⚽' : '✖'}
+                                      </span>
+                                    </div>
+                                 ))}
+                              </div>
                            </div>
                         </div>
                      </div>
