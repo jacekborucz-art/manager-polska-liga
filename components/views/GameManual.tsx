@@ -5,6 +5,193 @@ import { ViewState } from '../../types';
 
 type ManualCategory = 'INTRO' | 'ENGINE' | 'CUP_LOGIC' | 'TACTICS' | 'PLAYERS' | 'REFEREE' | 'LEAGUE' | 'MATCHDAY' | 'FINANCE' | 'CONTRACTS' | 'INJURIES' | 'TRAINING' | 'CALENDAR' | 'TIPS';
 
+const PLAYER_ATTRIBUTE_GROUPS = [
+  {
+    title: 'Fundament Fizyczny',
+    items: [
+      {
+        label: 'Szybkość (Pace)',
+        description: 'Napędza sprint, kontratak i asekurację przy wysokiej linii. Jest ważna nie tylko dla skrzydeł i napastników, ale też dla obrońców ścigających piłkę za plecy.',
+      },
+      {
+        label: 'Kondycja (Stamina)',
+        description: 'Spowalnia spadek energii w meczu i pod pressingiem. Najmocniej czuć ją u pomocników, bo ta pozycja zużywa się najszybciej.',
+      },
+      {
+        label: 'Siła (Strength)',
+        description: 'Pomaga w bark w bark, utrzymaniu pozycji i walce o drugą piłkę. Dla stoperów i napastników to fundament gry kontaktowej.',
+      },
+    ],
+  },
+  {
+    title: 'Obrona, Intensywność i Gra Bez Piłki',
+    items: [
+      {
+        label: 'Obrona (Defending)',
+        description: 'Podnosi jakość odbioru i krycia. W defensywnych ustawieniach ma bezpośredni wpływ na to, czy zespół odzyskuje kontrolę bez fauli i chaosu.',
+      },
+      {
+        label: 'Ustawianie się (Positioning)',
+        description: 'Jeden z najbardziej uniwersalnych atrybutów w grze. Obrońca zamyka linie podań, napastnik lepiej atakuje wolne strefy, a bramkarz skuteczniej skraca kąt.',
+      },
+      {
+        label: 'Gra głową (Heading)',
+        description: 'Ważna przy stałych fragmentach, długich piłkach i obronie własnego pola karnego. W połączeniu z siłą buduje dominację w powietrzu.',
+      },
+      {
+        label: 'Pracowitość (Work Rate)',
+        description: 'Wpływa na pressing, aktywność bez piłki i intensywność gry. Jest bardzo cenna w wysokim pressingu, kontrataku i dla liderów nadających tempo zespołowi.',
+      },
+      {
+        label: 'Agresja (Aggression)',
+        description: 'Podkręca zaciekłość odbioru i pressingu. Daje przewagę w twardych meczach, ale przy surowym arbitrze i dużym zmęczeniu zamienia się w ryzyko kartek.',
+      },
+    ],
+  },
+  {
+    title: 'Technika i Kreacja',
+    items: [
+      {
+        label: 'Podania (Passing)',
+        description: 'Trzon budowania akcji. Silnik używa podań w wyjściu spod pressingu, progresji akcji i jakości rozegrania, więc słabe podanie psuje całą strukturę.',
+      },
+      {
+        label: 'Technika (Technique)',
+        description: 'Zmniejsza ryzyko błędu technicznego i poprawia kontrolę piłki. To też ważna część krótkiego i długiego rozegrania, zwłaszcza przy grze kombinacyjnej.',
+      },
+      {
+        label: 'Wizja (Vision)',
+        description: 'Decyduje, czy zawodnik zobaczy podanie przed resztą boiska. Bardzo mocna dla rozgrywających, nowoczesnych bramkarzy i przy tempie opartym na cierpliwości.',
+      },
+      {
+        label: 'Drybling (Dribbling)',
+        description: 'Podnosi jakość prowadzenia piłki, wyjść 1 na 1 i minięcia pierwszej linii pressingu. U skrzydłowych i ofensywnych pomocników robi realny bałagan w obronie rywala.',
+      },
+      {
+        label: 'Dośrodkowania (Crossing)',
+        description: 'Kluczowe przy grze skrzydłami, długim rozegraniu i stałych fragmentach z bocznych sektorów. Bez jakości na wrzutce nawet wysocy napastnicy nie dostaną piłki na czas.',
+      },
+    ],
+  },
+  {
+    title: 'Atak i Stałe Fragmenty',
+    items: [
+      {
+        label: 'Atak (Attacking)',
+        description: 'To inteligencja ofensywna i zachowanie w polu karnym. Wspiera liczenie siły ataku drużyny, ruch bez piłki i jakość finalnej fazy akcji.',
+      },
+      {
+        label: 'Wykończenie (Finishing)',
+        description: 'Najmocniejszy surowy atrybut snajpera. Bezpośrednio podnosi jakość strzału, jest premiowany po zdobywaniu goli i ma znaczenie przy jedenastkach.',
+      },
+      {
+        label: 'Rzuty wolne (Free Kicks)',
+        description: 'Specjalistyczny parametr od uderzeń z dystansu i stałych fragmentów. W połączeniu z techniką, podaniem i wizją buduje prawdziwego wykonawcę.',
+      },
+      {
+        label: 'Rzuty karne (Penalties)',
+        description: 'Najważniejszy parametr przy jedenastkach. Pomagają mu wykończenie, technika i mentalność, ale to właśnie karne są bazą przy wyborze etatowego strzelca.',
+      },
+      {
+        label: 'Rzuty rożne (Corners)',
+        description: 'Nie pompują mocno OVR, ale potrafią dać kilka bramek w sezonie. Im wyższe rożne i dośrodkowania, tym większa wartość z wysokich stoperów i napastników.',
+      },
+    ],
+  },
+  {
+    title: 'Mental, Liderzy i Specjalizacje',
+    items: [
+      {
+        label: 'Mentalność (Mentality)',
+        description: 'Stabilizuje reakcję pod presją, pomaga w momentum i wspiera specjalistów od karnych, bramkarzy oraz liderów szatni. To atrybut od nerwów i koncentracji.',
+      },
+      {
+        label: 'Przywództwo (Leadership)',
+        description: 'Kluczowe przy wyborze kapitana i odporności drużyny na wahania. Nie zawsze błyszczy w OVR, ale realnie wzmacnia strukturę zespołu.',
+      },
+      {
+        label: 'Bramkarstwo (Goalkeeping)',
+        description: 'Podstawowy atrybut golkipera i najcięższa waga w jego OVR. U zawodników z pola praktycznie nie ma znaczenia, bo silnik generuje im tę statystykę bardzo nisko.',
+      },
+      {
+        label: 'Talent (Talent)',
+        description: 'Nie wchodzi bezpośrednio do OVR, ale mocno steruje rozwojem i wartością rynkową. To najważniejszy długoterminowy wskaźnik przy młodych zawodnikach i akademii.',
+      },
+    ],
+  },
+] as const;
+
+const PLAYER_OVR_PROFILES = [
+  {
+    position: 'GK',
+    label: 'Bramkarz',
+    formula: 'BR 85% • UST 10% • POD 5%',
+    note: 'U bramkarza liczy się przede wszystkim gra na bramce. Pozycjonowanie i podanie są dodatkiem, ale mogą odróżnić zwykłego golkipera od nowoczesnej jedynki.',
+  },
+  {
+    position: 'DEF',
+    label: 'Obrońca',
+    formula: 'OBR 35% • UST 20% • SIŁ 15% • GŁ 10% • SZYB 10% • POD 10%',
+    note: 'Dobry obrońca to nie tylko sam odbiór. Ustawienie, siła i gra głową są dla systemu równie ważne, szczególnie przy bronieniu pola karnego.',
+  },
+  {
+    position: 'MID',
+    label: 'Pomocnik',
+    formula: 'POD 30% • WIZ 20% • TEC 15% • DRY 10% • OBR 10% • KON 10% • ATAK 5%',
+    note: 'Pomocnik jest najbardziej złożony. Podanie i wizja budują fundament, ale bez techniki, biegania i odrobiny defensywy środek pola zacznie pękać.',
+  },
+  {
+    position: 'FWD',
+    label: 'Napastnik',
+    formula: 'WYK 35% • ATAK 25% • SZYB 15% • DRY 10% • GŁ 10% • SIŁ 5%',
+    note: 'Napastnik żyje z wykończenia i ruchu w ataku. Szybkość, drybling i gra głową są wzmacniaczami stylu, nie zamiennikiem instynktu.',
+  },
+] as const;
+
+const PLAYER_DEVELOPMENT_RULES = [
+  {
+    title: 'Bazowa szansa wzrostu',
+    text: 'Każdy trenowalny atrybut ma bazowo 2% szans tygodniowo na wzrost w pierwszej drużynie i 1.5% w rezerwach. To tylko start, bo dalej wchodzą trening, forma, talent i wiek.',
+  },
+  {
+    title: 'Intensywność treningu',
+    text: 'Heavy mnoży rozwój x1.8, Normal zostawia x1.0, a Light tnie go do x0.5. Mocniejszy bodziec przyspiesza wzrost, ale zwiększa też ryzyko przeciążenia i utraty świeżości.',
+  },
+  {
+    title: 'Plan treningowy i focus',
+    text: 'Atrybut główny cyklu dostaje +0.08 do szansy wzrostu, poboczny +0.04, a indywidualny trainingFocus kolejne +0.06. Najszybciej rosną więc gracze z dobrze dopiętym planem.',
+  },
+  {
+    title: 'Minuty i występy',
+    text: 'Samo granie daje +0.02. Ocena 7.5+ dorzuca +0.05, a występ 9.0+ kolejne +0.10. Napastnik po golu dostaje bonus do wykończenia, a bramkarz po czystym koncie bonus do bramkarstwa.',
+  },
+  {
+    title: 'Talent i wiek',
+    text: 'Talent działa jak mnożnik 0.70-1.30 do rozwoju. Zawodnicy poniżej 21 lat rosną szybciej, a po 32. roku życia rozwój mocno hamuje. W rezerwach młodzi dostają jeszcze większy bonus.',
+  },
+  {
+    title: 'Regres i starzenie',
+    text: 'Każdy atrybut może też spadać. Fizyczne statystyki lecą najszybciej, mentalne najwolniej. Po trzydziestce regres rośnie co sezon, a brak minut dodatkowo przyspiesza zużycie starszych zawodników.',
+  },
+  {
+    title: 'Twarde limity sezonowe',
+    text: 'Silnik trzyma limit maksymalnie +3 i -3 na atrybut w sezonie. Dzięki temu nie ma absurdalnych eksplozji ani kompletnego załamania formy po jednym miesiącu.',
+  },
+  {
+    title: 'Czego nie wytrenujesz tak samo',
+    text: 'Talent nie jest zwykłym atrybutem treningowym i nie podnosi OVR bezpośrednio. To parametr strategiczny: mówi, jak wysoki jest sufit gracza i jak bardzo opłaca się inwestować w jego minuty.',
+  },
+] as const;
+
+const PLAYER_TRAINING_CYCLES = [
+  'Periodyzacja Taktyczna: wizja, ustawianie się, podania, technika, mentalność.',
+  'Gegenpressing i Wysoki Pressing: kondycja, szybkość, pracowitość, agresja, obrona.',
+  'Szkoła Techniczna: podania, technika, drybling, wizja, dośrodkowania.',
+  'Blok Defensywny i Dominacja w Powietrzu: obrona, siła, ustawianie, gra głową.',
+  'Instynkt Snajperski i Kontratak: wykończenie, atak, szybkość, pracowitość.',
+  'Nowoczesny Bramkarz i Stałe Fragmenty: bramkarstwo, ustawianie, wolne, rożne, karne.',
+] as const;
+
 export const GameManual: React.FC = () => {
   const { navigateTo, previousViewState } = useGame();
   const [activeTab, setActiveTab] = useState<ManualCategory>('INTRO');
@@ -12,13 +199,13 @@ export const GameManual: React.FC = () => {
   const categories: { id: ManualCategory; label: string; icon: string }[] = [
     { id: 'INTRO', label: 'Wstęp i Świat', icon: '🌍' },
     { id: 'ENGINE', label: 'Silnik Momentum', icon: '⚙️' },
-    { id: 'CUP_LOGIC', label: 'Puchary & Bitwa Taktyczna', icon: '🏆' },
+    { id: 'CUP_LOGIC', label: 'Symulacja Meczu', icon: '🏆' },
     { id: 'TACTICS', label: 'Encyklopedia Taktyki', icon: '📋' },
     { id: 'PLAYERS', label: 'Atrybuty i Rozwój', icon: '👕' },
     { id: 'INJURIES', label: 'Kontuzje i Regeneracja', icon: '🏥' },
     { id: 'TRAINING', label: 'Trening i Rozwój', icon: '🎯' },
-    { id: 'FINANCE', label: 'Finanse Klubu', icon: '💰' },
-    { id: 'CONTRACTS', label: 'Kontrakty i Transfery', icon: '📝' },
+    { id: 'FINANCE', label: 'Finanse Klubu i Transfery', icon: '💰' },
+    { id: 'CONTRACTS', label: 'Negocjacje Kontraktowe', icon: '📝' },
     { id: 'REFEREE', label: 'Kolegium Sędziów', icon: '⚖️' },
     { id: 'LEAGUE', label: 'Zasady i Kariera', icon: '📊' },
     { id: 'CALENDAR', label: 'Kalendarz Sezonu', icon: '📅' },
@@ -75,34 +262,107 @@ export const GameManual: React.FC = () => {
         return (
           <div className="space-y-10 animate-fade-in pb-20">
              <div className="bg-blue-600/10 border border-blue-500/20 p-10 rounded-[45px] shadow-2xl relative">
-                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Momentum Engine v2.5</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Zrozumienie silnika to klucz do wygrywania meczów, w których teoretycznie jesteś skazany na porażkę. Gra symuluje stan psychiczny i fizyczny obu jedenastek w czasie rzeczywistym.
+                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Silnik Momentum</h3>
+                <p className="text-slate-300 leading-relaxed text-[15px]">
+                  Momentum to nie ozdobny pasek, tylko żywy rdzeń symulacji meczu. Pokazuje, która drużyna przejmuje inicjatywę, a sam wynik tego wskaźnika wpływa potem na liczbę akcji, jakość strzałów, presję, posiadanie i tempo zużywania sił.
                 </p>
              </div>
 
-             <div className="grid grid-cols-1 gap-6">
-                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 group hover:border-blue-500/30 transition-all">
-                   <div className="flex items-center gap-6 mb-4">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-600 text-3xl flex items-center justify-center shadow-lg transform group-hover:rotate-6 transition-transform">📉</div>
-                      <h4 className="text-xl font-black text-white uppercase italic">Kinetic Noise (Szum Kinetyczny)</h4>
-                   </div>
-                   <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                     Pasek Momentum na górze ekranu meczowego nigdy nie stoi w miejscu. Silnik generuje mikro-drgania symulujące walkę o piłkę w środku pola. Każde udane podanie, drybling czy interwencja bramkarza przesuwa ten balans na Twoją korzyść.
+             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                   <h4 className="text-blue-300 font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                      <span className="w-6 h-px bg-blue-400/30" /> Naturalny kierunek meczu
+                   </h4>
+                   <p className="text-[15px] text-slate-200 leading-relaxed">
+                     Momentum zawsze próbuje wracać do naturalnego balansu sił. Ten balans nie jest liczony tylko z reputacji. Znaczenie mają też przewaga własnego boiska, jakość techniczna składu, attackBias obu taktyk, forma z ostatnich meczów, morale, oceny obrońców i przywództwo kapitana na boisku.
+                   </p>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     W praktyce oznacza to, że lepsza drużyna częściej odzyskuje kontrolę, ale nie dzieje się to automatycznie. Jeśli źle dobierzesz system albo wejdziesz w mecz z niskim morale i słabą serią, naturalny cel paska może być dużo mniej korzystny, niż sugeruje sama nazwa klubu.
                    </p>
                 </div>
 
-                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 group hover:border-red-500/30 transition-all">
-                   <div className="flex items-center gap-6 mb-4">
-                      <div className="w-14 h-14 rounded-2xl bg-red-600 text-3xl flex items-center justify-center shadow-lg transform group-hover:rotate-6 transition-transform">🔋</div>
-                      <h4 className="text-xl font-black text-white uppercase italic">Anatomia Zmęczenia (Fatigue)</h4>
-                   </div>
-                   <p className="text-slate-400 text-sm leading-relaxed">
-                     Zmęczenie zależy od pozycji: Pomocnicy (MID) tracą energię najszybciej przez konieczność krycia całego placu, podczas gdy Bramkarze (GK) niemal w ogóle nie tracą kondycji w trakcie gry.
+                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                   <h4 className="text-cyan-300 font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                      <span className="w-6 h-px bg-cyan-400/30" /> Impulsy meczowe
+                   </h4>
+                   <p className="text-[15px] text-slate-200 leading-relaxed">
+                     Każde ważne zdarzenie daje natychmiastowy impuls. Gol, strzał w światło bramki, słupek, długi fragment pressingu, karny czy czerwona kartka mogą gwałtownie przestawić środek ciężkości meczu w jedną stronę.
                    </p>
-                   <p className="mt-6 text-xs text-red-400 italic font-bold">UWAGA: Deszcz i upał ({'>'}27°C) zwiększają drenaż energii o dodatkowe 12% na minutę!</p>
+                   <div className="p-4 bg-black/35 rounded-2xl border border-cyan-500/20">
+                      <span className="block text-[13px] text-cyan-300 font-black mb-2 uppercase">Najmocniejsze bodźce:</span>
+                      <ul className="text-[13px] text-slate-200 space-y-2">
+                         <li>• Gol i wykorzystany karny potrafią wywołać pełne przejęcie inicjatywy.</li>
+                         <li>• Słupek, poprzeczka i strzały celne budują napór nawet bez zmiany wyniku.</li>
+                         <li>• Blunder, zły pass, druga żółta i czerwona karta mogą odwrócić mecz jednym ruchem.</li>
+                         <li>• Seria drobnych akcji też działa, bo silnik sumuje presję minuta po minucie.</li>
+                      </ul>
+                   </div>
+                </div>
+             </section>
+
+             <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10 space-y-4">
+                   <h4 className="text-emerald-300 font-black uppercase tracking-widest text-sm">Mikrodrgania i błędy</h4>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Pasek nigdy nie stoi idealnie nieruchomo. Silnik dorzuca lekki szum kinetyczny, żeby mecz oddychał, a do tego losuje sporadyczne „ludzkie błędy” wynikające z gorszej koncentracji. Im słabsza mentalność zespołu, tym łatwiej o nagłe załamanie rytmu.
+                   </p>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10 space-y-4">
+                   <h4 className="text-amber-300 font-black uppercase tracking-widest text-sm">Zmęczenie i świeżość</h4>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Świeższa drużyna dostaje naturalny bonus do momentum. Gdy rywal wchodzi w pomarańczową lub czerwoną strefę kondycji, inicjatywa coraz łatwiej dryfuje na Twoją stronę. Dlatego sensowne zmiany i kontrola energii w drugiej połowie są realną bronią, a nie tylko kosmetyką.
+                   </p>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10 space-y-4">
+                   <h4 className="text-rose-300 font-black uppercase tracking-widest text-sm">Presja zużywa siły</h4>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Mocne momentum nie tylko wygląda groźnie na pasku. Drużyna zamknięta pod presją szybciej traci energię, a wysoki pressing dodatkowo podkręca koszt fizyczny. W efekcie dominacja może sama napędzać kolejną dominację, jeśli przeciwnik nie przerwie spirali zmianą planu albo zmianami personalnymi.
+                   </p>
+                </div>
+             </section>
+
+             <div className="bg-slate-950 p-10 rounded-[50px] border border-white/10 shadow-2xl">
+                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-8">Jak momentum wpływa na symulację akcji</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-blue-300 font-black uppercase tracking-[0.25em]">1. Inicjatywa</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Silniejsze momentum zwiększa szansę, że to Twoja drużyna będzie stroną atakującą w kolejnych fragmentach meczu.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-emerald-300 font-black uppercase tracking-[0.25em]">2. Jakość strzału</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Gdy aktywna drużyna ma impet po swojej stronie, rośnie próg jakości akcji i łatwiej o strzały naprawdę groźne.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-amber-300 font-black uppercase tracking-[0.25em]">3. Posiadanie</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Końcowe posiadanie piłki jest częściowo wyliczane ze średniego momentum z całego meczu, więc dominacja na pasku przekłada się na statystyki.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-rose-300 font-black uppercase tracking-[0.25em]">4. Presja psychiczna</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Długie przebywanie pod naporem zwiększa szansę, że przeciwnik popełni błąd, spóźni się z reakcją albo odda pole na własnej połowie.</p>
+                   </div>
                 </div>
              </div>
+
+             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                   <h4 className="text-violet-300 font-black uppercase tracking-widest text-sm">Co możesz kontrolować</h4>
+                   <p className="text-[15px] text-slate-200 leading-relaxed">
+                     Na momentum wpływasz przez dobór taktyki, pressing, tempo, mindset, świeżość składu, zmiany oraz reakcję na kartki. Jeśli przeciwnik przejął rytm, nie zawsze trzeba od razu zmieniać formację. Często wystarczy poprawić intensywność, skrócić lub wydłużyć podania albo zdjąć dwóch najbardziej zmęczonych zawodników.
+                   </p>
+                </div>
+
+                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                   <h4 className="text-fuchsia-300 font-black uppercase tracking-widest text-sm">Briefing i przerwa</h4>
+                   <p className="text-[15px] text-slate-200 leading-relaxed">
+                     Momentum dostaje też wsparcie spoza samej akcji. Odprawa przed meczem może dać startowy impuls, a rozmowa w przerwie potrafi dodać albo odjąć konkretne punkty impetu oraz zmienić reakcję drużyny na tempo, nastawienie i intensywność po wznowieniu gry.
+                   </p>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Dobra mowa działa najlepiej, gdy pasuje do sytuacji: agresja dla zespołu w dołku, spokój dla drużyny prowadzącej i pochwała, gdy wynik jest gorszy niż sama jakość gry.
+                   </p>
+                </div>
+             </section>
           </div>
         );
 
@@ -110,65 +370,108 @@ export const GameManual: React.FC = () => {
         return (
           <div className="space-y-12 animate-fade-in pb-20">
             <div className="bg-rose-600/10 border border-rose-500/20 p-10 rounded-[45px] shadow-2xl relative">
-                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Magia Pucharów & Tactic Battle</h3>
-                <p className="text-slate-300">W meczach pucharowych (Puchar Polski, Superpuchar) margines błędu wynosi zero. Silnik aktywuje tryb **HIGH-STAKES**, w którym psychologia i starcie stylów taktycznych biorą górę nad czystym ratingiem.</p>
+                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Symulacja Meczu</h3>
+                <p className="text-slate-300">Ten sam rdzeń obsługuje mecze ligowe w symulacji oraz spotkania w LM, LE i LK. O wyniku decydują attackBias, defenseBias, pressingIntensity, momentum, zmęczenie, kartki, pogoda i instrukcje live. Puchar Polski korzysta z tego samego fundamentu, ale ma lekko bardziej pucharowy charakter, żeby rozgrywka dawała więcej napięcia i niespodzianek.</p>
             </div>
 
             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
                   <h4 className="text-rose-400 font-black uppercase tracking-widest text-sm flex items-center gap-3">
-                     <span className="w-6 h-px bg-rose-500/30" /> Tactic Battle (Clash Logic)
+                     <span className="w-6 h-px bg-rose-500/30" /> Rdzeń silnika meczowego
                   </h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Każda formacja ma swój styl (ALL-IN, BUS, TRAP, SOLID). Jeśli grasz **ALL-IN** (np. 3-4-3), a AI zastawi **TRAP** (Pułapkę, np. 5-4-1), rywal otrzyma mnożnik Momentum x1.25. Twoja ofensywa rozbije się o ich kontry.
+                  <p className="text-[15px] text-slate-200 leading-relaxed">
+                    Każda formacja wnosi trzy realne parametry: ile ryzykujesz w ataku, jak mocno bronisz dostępu do strzału i jak agresywnie próbujesz odzyskać piłkę. Dlatego ta sama nazwa systemu może dać zupełnie inny efekt przy innym składzie, kondycji i przebiegu meczu.
                   </p>
                   <div className="p-4 bg-black/40 rounded-2xl border border-rose-500/20">
-                    <span className="block text-[10px] text-rose-500 font-black mb-2 uppercase">Zasada kontrowania:</span>
-                    <ul className="text-[10px] text-slate-500 space-y-1">
-                      <li>• ALL-IN &rarr; Kontrowane przez TRAP</li>
-                      <li>• BUS (Autobus) &rarr; Rozbijane przez ALL-IN</li>
-                      <li>• TRAP &rarr; Neutralizowane przez SOLID</li>
+                    <span className="block text-[13px] text-rose-300 font-black mb-2 uppercase">Najważniejsze zależności:</span>
+                    <ul className="text-[13px] text-slate-200 space-y-2">
+                      <li>• Wysoki defenseBias tłumi liczbę i jakość sytuacji przeciwnika.</li>
+                      <li>• Wysoki pressingIntensity daje więcej akcji, ale zwiększa koszt energetyczny.</li>
+                      <li>• Wysoki attackBias po czerwonej kartce lub dziurach w XI otwiera plecy.</li>
+                      <li>• Ten sam system może być genialny albo fatalny zależnie od składu i stanu meczu.</li>
                     </ul>
                   </div>
                </div>
 
                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
                   <h4 className="text-blue-400 font-black uppercase tracking-widest text-sm flex items-center gap-3">
-                     <span className="w-6 h-px bg-blue-500/30" /> Instrukcje "Stateless"
+                     <span className="w-6 h-px bg-blue-500/30" /> Instrukcje live
                   </h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Twoje polecenia w trakcie meczu działają jak stałe wektory siły. 
+                  <p className="text-[15px] text-slate-200 leading-relaxed">
+                    Instrukcje w trakcie meczu są bardzo ważne, ale działają warunkowo. Silnik sprawdza je względem techniki, podań, pressingu, bloku rywala i aktualnej sytuacji na boisku, więc sam klik nie gwarantuje przewagi.
                   </p>
                   <div className="space-y-3">
                     <div className="flex flex-col gap-1">
-                       <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Tempo: SLOW vs FAST</span>
-                       <span className="text-[9px] text-slate-500 italic">SLOW premiuje technikę (TECH), FAST premiuje czystą siłę ognia (ATT). Jeśli Twoja drużyna jest słabsza technicznie od rywala, granie SLOW odda im Momentum!</span>
+                       <span className="text-[13px] font-bold text-white uppercase tracking-tighter">Tempo, nastawienie i intensywność</span>
+                       <span className="text-[12px] text-slate-200 italic leading-relaxed">FAST podbija liczbę akcji i kontr. SLOW pomaga tylko wtedy, gdy masz przewagę techniki i podań. OFFENSIVE daje mocniejszy impuls w ataku, a DEFENSIVE lepiej broni tylko przy sensownym fundamencie MID/DEF. AGGRESSIVE głównie pompuje faule, urazy i ryzyko karnego.</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                       <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Nastawienie: OFFENSIVE vs DEFENSIVE</span>
-                       <span className="text-[9px] text-slate-500 italic">OFFENSIVE wymaga 15+ pkt przewagi "Mocy Jedenastki". Bez tego ryzykujesz tragiczne błędy w obronie. DEFENSIVE pozwala "ukraść" momentum rywalowi, jeśli Twoja suma obrony jest wysoka.</span>
+                       <span className="text-[13px] font-bold text-white uppercase tracking-tighter">Podania i pressing</span>
+                       <span className="text-[12px] text-slate-200 italic leading-relaxed">SHORT i LONG są liczone względem jakości technicznej Twojego środka i ataku. PRESSING porównuje agresję, pace, strength i stamina zawodników z pola. Jeśli nie masz nóg do biegania, ten przycisk staje się karą, nie bonusem.</span>
                     </div>
                   </div>
                </div>
             </section>
 
             <div className="bg-slate-950 p-10 rounded-[50px] border border-white/10 shadow-2xl">
-               <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-8">Analiza Przedmeczowa - KROK PO KROKU</h4>
+               <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-8">Analiza przedmeczowa - krok po kroku</h4>
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                   <div className="space-y-4">
                      <div className="text-3xl">🕵️‍♂️</div>
-                     <h5 className="text-white font-black uppercase text-xs">1. Poznaj Rywala</h5>
-                     <p className="text-[10px] text-slate-500 leading-relaxed">W Studiu sprawdź atrybuty gwiazd rywala. Jeśli ich napastnik ma Pace 90, nie graj wysoką linią obrony (unikaj 3-4-3). Jeśli mają słabego bramkarza, wybierz Nastawienie Ofensywne.</p>
+                     <h5 className="text-white font-black uppercase text-[15px]">1. Poznaj Rywala</h5>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Sprawdź biasy i pressing rywala, nie tylko nazwę systemu. 6-3-1 i 5-4-1 mocno tłumią strzały, 3-4-3 i 4-2-4 są bardziej ryzykowne, a 5-2-1-2 oraz 5-3-2 lubią przejścia i kontratak.</p>
                   </div>
                   <div className="space-y-4">
                      <div className="text-3xl">🌡️</div>
-                     <h5 className="text-white font-black uppercase text-xs">2. Sprawdź Warunki</h5>
-                     <p className="text-[10px] text-slate-500 leading-relaxed">Deszcz to wróg Twoich techników. Jeśli pada, graj prościej (Tempo FAST, Nastawienie Neutralne). W upale oszczędzaj siły (Intensywność Ostrożnie), by nie zostać z 0% kondycji w dogrywce.</p>
+                     <h5 className="text-white font-black uppercase text-[15px]">2. Sprawdź Warunki</h5>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Deszcz karze technicznie słabszą drużynę. Jeśli przegrywasz techniką, nie zmuszaj zespołu do wolnego kombinowania. W pucharach pilnuj też energii, bo szybkie tempo i pressing mają realny koszt po 90 minucie.</p>
                   </div>
                   <div className="space-y-4">
                      <div className="text-3xl">⚖️</div>
-                     <h5 className="text-white font-black uppercase text-xs">3. Oceń Arbitra</h5>
-                     <p className="text-[10px] text-slate-500 leading-relaxed">Surowy sędzia (High Strictness) wlepi Ci czerwoną kartkę przy pierwszym mocniejszym wślizgu. Przy takim sędzi i niskim atrybucie Defending Twoich graczy, unikaj Intensywności Agresywnej.</p>
+                     <h5 className="text-white font-black uppercase text-[15px]">3. Oceń Arbitra</h5>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Agresywna intensywność przede wszystkim podnosi ryzyko faulu, urazu i karnego. Przy surowym sędzim albo zmęczonym zespole spokojniejsza gra często daje więcej niż sztuczny chaos.</p>
+                  </div>
+               </div>
+            </div>
+
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+               <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                  <h4 className="text-amber-400 font-black uppercase tracking-widest text-sm">Liga, Europa i Puchar Polski</h4>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">Mecze ligowe w symulacji oraz spotkania w Lidze Mistrzów, Lidze Europy i Lidze Konferencji korzystają z tego samego rdzenia. Wszędzie liczą się te same profile taktyczne, jakość piłkarska, stamina, momentum i reakcje live.</p>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">Puchar Polski działa na bardzo podobnych zasadach, ale ma celowo trochę więcej chaosu i presji jednego meczu. Dzięki temu łatwiej o zwroty akcji, czerwone kartki, mecz życia underdoga i bardziej filmowe rozstrzygnięcia niż w długim rytmie ligi.</p>
+               </div>
+
+               <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                  <h4 className="text-emerald-400 font-black uppercase tracking-widest text-sm">Dogrywka i karne</h4>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">W rozgrywkach pucharowych, w tym w Pucharze Polski, remis po 90 minutach może przejść do dogrywki, a potem do serii karnych. W dogrywce AI częściej zwalnia, pilnuje sił i szuka jednego gola zamiast pełnego chaosu.</p>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">Przy karnych najważniejsze są penalties u strzelca i goalkeeping u bramkarza, ale pomagają też finishing, technique, mentality i positioning. Warto więc planować wykonawców jeszcze przed pierwszym gwizdkiem.</p>
+               </div>
+
+               <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
+                  <h4 className="text-blue-400 font-black uppercase tracking-widest text-sm">Jak czytać ryzyko</h4>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">Wysoki attackBias daje odwagę, ale po osłabieniu składu może otworzyć autostradę za plecy. Wysoki defenseBias dusi mecz, ale nie naprawi wolnych stoperów ani pustych sektorów po kartce.</p>
+                  <p className="text-[13px] text-slate-200 leading-relaxed">Najlepsza decyzja pucharowa to zwykle nie "najbardziej heroiczny system", tylko taki profil, który pasuje do Twoich nóg, jakości technicznej i stanu meczu. W Pucharze Polski szczególnie warto szanować chaos i nie przeszarżować od pierwszej minuty.</p>
+               </div>
+            </section>
+
+            <div className="bg-slate-950 p-10 rounded-[50px] border border-white/10 shadow-2xl">
+               <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-8">Szybki model decyzyjny na mecz</h4>
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                  <div className="space-y-3">
+                     <span className="text-[13px] text-rose-300 font-black uppercase tracking-[0.25em]">1. Profil rywala</span>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Patrz na attackBias, defenseBias i pressing, nie na samą nazwę formacji.</p>
+                  </div>
+                  <div className="space-y-3">
+                     <span className="text-[13px] text-blue-300 font-black uppercase tracking-[0.25em]">2. Twoje nogi</span>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Bez stamina, pace, strength i aggression nie klikaj PRESSING tylko dlatego, że to puchar.</p>
+                  </div>
+                  <div className="space-y-3">
+                     <span className="text-[13px] text-emerald-300 font-black uppercase tracking-[0.25em]">3. Warunki</span>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Deszcz, czerwone kartki i w pucharach także dogrywka zmieniają sens nawet najlepszej taktyki.</p>
+                  </div>
+                  <div className="space-y-3">
+                     <span className="text-[13px] text-amber-300 font-black uppercase tracking-[0.25em]">4. Korekta live</span>
+                     <p className="text-[13px] text-slate-200 leading-relaxed">Jeśli mecz nie daje Ci sytuacji, szukaj poprawy przez tempo, passing i mindset, nie tylko przez paniczną zmianę systemu.</p>
                   </div>
                </div>
             </div>
@@ -254,6 +557,113 @@ export const GameManual: React.FC = () => {
                          <span className="block text-white font-bold text-xs uppercase mb-1 group-hover:text-blue-400 transition-colors">Ustawianie się (Positioning)</span>
                          <p className="text-[10px] text-slate-500">Defensor: Przecinanie podań. Atakujący: Znajdowanie wolnych stref. Bramkarz: Skracanie kąta.</p>
                       </div>
+                   </div>
+                </div>
+             </section>
+
+             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-900/60 p-6 rounded-[30px] border border-emerald-500/20">
+                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400">22 parametry</span>
+                   <p className="text-sm text-slate-300 mt-3 leading-relaxed">Tyle atrybutów opisuje zawodnika. Część buduje OVR, a część daje przewagę ukrytą w pressingu, stałych fragmentach, przywództwie i odporności psychicznej.</p>
+                </div>
+                <div className="bg-slate-900/60 p-6 rounded-[30px] border border-blue-500/20">
+                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">21 trenowalnych</span>
+                   <p className="text-sm text-slate-300 mt-3 leading-relaxed">Prawie wszystko może rosnąć lub spadać wraz z treningiem, minutami i wiekiem. Wyjątkiem jest talent, który działa bardziej jak sufit rozwoju niż zwykła statystyka.</p>
+                </div>
+                <div className="bg-slate-900/60 p-6 rounded-[30px] border border-amber-500/20">
+                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400">OVR to nie wszystko</span>
+                   <p className="text-sm text-slate-300 mt-3 leading-relaxed">Rożne, wolne, karne, agresja, przywództwo czy mentalność często nie robią wielkiego numeru na ocenie ogólnej, ale potrafią wygrywać mecze i serie rzutów karnych.</p>
+                </div>
+             </section>
+
+             <section className="space-y-8">
+                <div className="flex items-center justify-between gap-6 flex-wrap">
+                   <h4 className="text-white font-black uppercase tracking-[0.25em] text-sm">Pełna Analiza Atrybutów</h4>
+                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.25em]">Czytaj kartę zawodnika jak raport skautingowy</span>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                  {PLAYER_ATTRIBUTE_GROUPS.map(group => (
+                    <div key={group.title} className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5">
+                      <h5 className="text-white font-black uppercase tracking-widest text-sm mb-6">{group.title}</h5>
+                      <div className="space-y-5">
+                        {group.items.map(item => (
+                          <div key={item.label} className="border-l-2 border-white/10 pl-4">
+                            <span className="block text-white font-bold text-xs uppercase mb-1">{item.label}</span>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">{item.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </section>
+
+             <section className="bg-slate-950 p-10 rounded-[50px] border border-white/10 shadow-2xl space-y-8">
+                <div>
+                   <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-3">Jak Naprawdę Liczony Jest OVR</h4>
+                   <p className="text-sm text-slate-400 leading-relaxed">
+                     Ocena ogólna nie korzysta ze wszystkich statystyk po równo. Silnik liczy ją przez wagi pozycyjne, więc ten sam zawodnik może wyglądać świetnie jako pomocnik i przeciętnie jako napastnik.
+                   </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {PLAYER_OVR_PROFILES.map(profile => (
+                    <div key={profile.position} className="bg-slate-900/60 p-6 rounded-[30px] border border-white/5">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-white font-black italic text-xl">{profile.position}</span>
+                        <span className="text-[10px] px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300 font-black uppercase tracking-widest">{profile.label}</span>
+                      </div>
+                      <p className="text-xs text-emerald-400 font-black uppercase tracking-[0.25em] mb-3">{profile.formula}</p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">{profile.note}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-blue-900/20 border border-blue-500/20 rounded-[30px] p-6">
+                   <p className="text-xs text-slate-300 leading-relaxed">
+                     Ważne: <span className="text-white font-bold">talent, przywództwo, mentalność, agresja, stałe fragmenty i rożne</span> mogą nie pompować mocno OVR, ale realnie wpływają na dobór kapitana, wykonawców, pressing, momentum i rozwój młodych zawodników.
+                   </p>
+                </div>
+             </section>
+
+             <section className="space-y-8">
+                <div className="bg-rose-950/20 p-10 rounded-[45px] border border-rose-500/20">
+                   <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-4">Mechanika Rozwoju Krok po Kroku</h4>
+                   <p className="text-sm text-slate-300 leading-relaxed">
+                     Rozwój nie jest losową mgłą. Kod gry sprawdza trening, intensywność, wiek, minuty, ocenę po meczu, talent i nawet to, czy bramkarz zachował czyste konto.
+                   </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {PLAYER_DEVELOPMENT_RULES.map(rule => (
+                    <div key={rule.title} className="bg-slate-900/55 p-7 rounded-[32px] border border-white/5">
+                      <h5 className="text-white font-black uppercase text-xs tracking-[0.25em] mb-3">{rule.title}</h5>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">{rule.text}</p>
+                    </div>
+                  ))}
+                </div>
+             </section>
+
+             <section className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8">
+                <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5">
+                   <h4 className="text-emerald-400 font-black uppercase tracking-[0.25em] text-sm mb-5">Cykle Treningowe, Które Najmocniej Zmieniają Profil Gracza</h4>
+                   <div className="space-y-3">
+                      {PLAYER_TRAINING_CYCLES.map(cycle => (
+                        <div key={cycle} className="p-4 rounded-2xl bg-black/25 border border-white/5 text-[11px] text-slate-300 leading-relaxed">
+                          {cycle}
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10">
+                   <h4 className="text-amber-400 font-black uppercase tracking-[0.25em] text-sm mb-5">Praktyka Managera</h4>
+                   <div className="space-y-4 text-[11px] text-slate-400 leading-relaxed">
+                      <p><span className="text-white font-bold">Młodzi 17-21:</span> dawaj im minuty, ustaw trainingFocus i pilnuj zgodności cyklu z pozycją. Talent bez gry rozwija się wolniej niż talent z regularną rotacją.</p>
+                      <p><span className="text-white font-bold">Szczyt kariery 24-29:</span> tu budujesz wynik sportowy. Tacy gracze najlepiej zamieniają wysoki OVR na regularną jakość bez gwałtownego regresu.</p>
+                      <p><span className="text-white font-bold">Po 30. roku życia:</span> rotuj rozsądniej i nie ignoruj braku minut. Fizyczność zaczyna spadać pierwsza, więc weteranów trzeba chronić rolą, nie tylko reputacją.</p>
+                      <p><span className="text-white font-bold">Czytaj kartę kontekstowo:</span> napastnik z gorszym OVR, ale lepszym wykończeniem i atakiem, może być skuteczniejszy od bardziej "pełnego" rywala. To samo dotyczy obrońcy z mocnym ustawianiem i grą głową.</p>
                    </div>
                 </div>
              </section>
@@ -407,7 +817,7 @@ export const GameManual: React.FC = () => {
           <div className="space-y-10 animate-fade-in pb-20">
              <div className="bg-emerald-900/20 p-10 rounded-[45px] border border-emerald-500/20">
                 <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Trening i Rozwój Zawodników</h3>
-                <p className="text-slate-300">Mądrze zaplanowany trening to podstawa rozwoju młodych zawodników i utrzymania formy weteranów.</p>
+                <p className="text-slate-300 text-[15px] leading-relaxed">Mądrze zaplanowany trening buduje nie tylko rozwój młodych zawodników, ale też kondycję całej kadry, jakość wejść z ławki i wartość rynkową piłkarzy. To sekcja o balansie między wzrostem atrybutów, regeneracją i doborem programu do realnych potrzeb drużyny.</p>
              </div>
 
              <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -418,42 +828,69 @@ export const GameManual: React.FC = () => {
                    <div className="space-y-3">
                       <div className="bg-slate-800/50 p-4 rounded-2xl border border-emerald-500/20">
                          <span className="text-emerald-400 font-black uppercase text-xs">LIGHT (Lekki)</span>
-                         <p className="text-[10px] text-slate-400 mt-2">
-                           +0.5 do tempa regeneracji kondycji. Idealny po ciężkim meczu lub w okresie świątecznym.
+                         <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">
+                           Daje bonus do regeneracji kondycji i obniża tempo rozwoju do połowy standardu. Idealny po serii meczów, dla weteranów oraz wtedy, gdy Twoim priorytetem jest odzyskanie świeżości przed kolejnym spotkaniem.
                          </p>
                       </div>
                       <div className="bg-slate-800/50 p-4 rounded-2xl border border-blue-500/20">
                          <span className="text-blue-400 font-black uppercase text-xs">NORMAL (Standardowy)</span>
-                         <p className="text-[10px] text-slate-400 mt-2">
-                           Bazowe tempo rozwoju i regeneracji. Zalecany przez większość sezonu.
+                         <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">
+                           Bazowy balans między wzrostem i regeneracją. To domyślny wybór na większość sezonu, zwłaszcza jeśli grasz regularnie co tydzień i nie chcesz przepalać kadry.
                          </p>
                       </div>
                       <div className="bg-slate-800/50 p-4 rounded-2xl border border-red-500/20">
                          <span className="text-red-400 font-black uppercase text-xs">HEAVY (Ciężki)</span>
-                         <p className="text-[10px] text-slate-400 mt-2">
-                           ×1.8 wzrost atrybutów, ale -2.0 do regeneracji kondycji. Ryzykowny, ale skuteczny.
+                         <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">
+                           Mnoży wzrost atrybutów ×1.8, ale mocno uderza w regenerację kondycji. Najlepiej działa przy młodych zawodnikach, dłuższych tygodniach bez meczu albo w okresie, gdy świadomie pompujesz rozwój kosztem krótkoterminowej świeżości.
                          </p>
                       </div>
                    </div>
+                   <p className="text-[12px] text-amber-300 italic leading-relaxed">
+                     Kontuzjowani zawodnicy nie korzystają z regularnych efektów treningu, więc przy urazach ważniejsza od ambicji staje się regeneracja i mądre zarządzanie obciążeniem kadry.
+                   </p>
                 </div>
 
                 <div className="bg-slate-900/50 p-8 rounded-[35px] border border-white/5 space-y-4">
                    <h4 className="text-blue-400 font-black uppercase tracking-widest text-sm flex items-center gap-3">
                       <span className="w-6 h-px bg-blue-500/30" /> Wzrost i Regres Atrybutów
                    </h4>
-                   <p className="text-xs text-slate-400 leading-relaxed">
-                     Każdy cykl treningowy daje szansę na wzrost atrybutów:
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Każdy cykl treningowy co rundę przelicza szansę wzrostu dla atrybutów zawodnika. Na rozwój wpływają jednocześnie program zespołu, fokus indywidualny, wiek, talent i to, czy piłkarz faktycznie gra oraz daje liczby na boisku.
                    </p>
-                   <ul className="text-xs text-slate-400 space-y-2 mt-3">
+                   <ul className="text-[13px] text-slate-200 space-y-2 mt-3">
                       <li>• <span className="text-white font-bold">Baza:</span> 2% szansy/tydzień</li>
                       <li>• <span className="text-white font-bold">Primary Attributes:</span> +8% szansy</li>
                       <li>• <span className="text-white font-bold">Secondary Attributes:</span> +4% szansy</li>
+                      <li>• <span className="text-white font-bold">Indywidualny fokus:</span> +6% do wybranego atrybutu</li>
                       <li>• <span className="text-white font-bold">Wiek &lt;21:</span> ×1.5 wzrostu</li>
                       <li>• <span className="text-white font-bold">Wiek &gt;32:</span> ×0.3 wzrostu</li>
                       <li>• <span className="text-white font-bold">Gra w meczu:</span> +2%, rating 7.5+: +5%, 9.0+: +10%</li>
+                      <li>• <span className="text-white font-bold">Talent:</span> mocno skaluje końcową szansę rozwoju</li>
                    </ul>
-                   <p className="text-[10px] text-amber-400 mt-4 italic">
-                     Uwaga: Istnieje też szansa na regres (0.5% bazowo, +4% dla wieku 33+, +2% przy braku gry).
+                   <p className="text-[12px] text-amber-300 mt-4 italic leading-relaxed">
+                     Regres też istnieje i z wiekiem rośnie coraz szybciej, szczególnie bez minut meczowych. Najmocniej cierpią parametry fizyczne, a łagodniej cofają się mentalne. Limit sezonowy pozostaje ważny: jeden atrybut nie urośnie ani nie spadnie bardziej niż o 3 punkty w sezonie.
+                   </p>
+                </div>
+             </section>
+
+             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10 space-y-4">
+                   <h4 className="text-violet-300 font-black uppercase tracking-widest text-sm">Kto rozwija się najlepiej</h4>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Największy zwrot z treningu dają młodzi gracze z wysokim talentem, regularnie grający i dobrze oceniani po meczach. To właśnie oni powinni dostawać cięższe bloki, indywidualny fokus i miejsce w rotacji.
+                   </p>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Starsi zawodnicy nadal mogą poprawiać elementy techniczne i mentalne, ale ich parametry fizyczne cofają się szybciej. Dla weteranów zwykle ważniejsze jest utrzymanie poziomu i świeżości niż agresywne pompowanie rozwoju.
+                   </p>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[35px] border border-white/10 space-y-4">
+                   <h4 className="text-cyan-300 font-black uppercase tracking-widest text-sm">Asystent i ocena drużyny</h4>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Asystent może realnie pomóc. W centrum treningowym przycisk `Poproś Asystenta` wybiera program zespołowy i ustawia indywidualne focusy dla zawodników na podstawie wieku, pozycji, słabości kadry i aktualnej kondycji zespołu.
+                   </p>
+                   <p className="text-[13px] text-slate-200 leading-relaxed">
+                     Dodatkowo analiza drużyny pomaga ocenić, które techniczne obszary są dziś najsłabsze, które linie wymagają najwięcej pracy oraz kogo warto traktować jako lidera, wykonawcę wolnych czy karnych. To dobry punkt startowy, jeśli nie chcesz ustawiać wszystkiego ręcznie.
                    </p>
                 </div>
              </section>
@@ -464,24 +901,51 @@ export const GameManual: React.FC = () => {
                    {[
                      { id: '🧠', name: 'Periodyzacja Taktyczna', attrs: 'Wizja, Ustawianie się' },
                      { id: '⚡', name: 'Gegenpressing', attrs: 'Kondycja, Szybkość' },
-                     { id: '👟', name: 'Tiki-Taka', attrs: 'Podania, Technika' },
-                     { id: '🛡️', name: 'Catenaccio', attrs: 'Obrona, Siła' },
+                     { id: '👟', name: 'Szkoła Techniczna', attrs: 'Podania, Technika' },
+                     { id: '🛡️', name: 'Blok Defensywny', attrs: 'Obrona, Siła' },
                      { id: '🎯', name: 'Instynkt Snajperski', attrs: 'Wykończenie, Atakowanie' },
                      { id: '🚀', name: 'Szybkość i Zwinność', attrs: 'Szybkość, Drybling' },
                      { id: '🪂', name: 'Dominacja w Powietrzu', attrs: 'Gra głową, Siła' },
                      { id: '🧤', name: 'Nowoczesny Bramkarz', attrs: 'Bramkarstwo, Ustawianie się' },
-                     { id: '🚩', name: 'Stałe Fragmenty Gry', attrs: 'Podania, Gra głową' },
+                     { id: '🚩', name: 'Stałe Fragmenty Gry', attrs: 'Wolne, Rożne, Karne' },
                      { id: '🧘', name: 'Odnowa i Joga', attrs: 'Kondycja, +50% regeneracji' },
+                     { id: '🔥', name: 'Wysoki Pressing', attrs: 'Pracowitość, Agresja' },
+                     { id: '💨', name: 'Kontratak', attrs: 'Szybkość, Atakowanie' },
                    ].map(c => (
                      <div key={c.name} className="bg-slate-900/40 p-5 rounded-2xl border border-white/5">
                         <span className="text-2xl block mb-2">{c.id}</span>
                         <h5 className="text-white font-black uppercase text-xs mb-1">{c.name}</h5>
-                        <p className="text-[9px] text-slate-500">{c.attrs}</p>
+                        <p className="text-[11px] text-slate-400">{c.attrs}</p>
                      </div>
                    ))}
                 </div>
-                <p className="text-xs text-slate-400 mt-6 italic">
-                  Limit zmian: ±3 punkty na atrybut w jednym sezonie.
+                <p className="text-[13px] text-slate-300 mt-6 italic leading-relaxed">
+                  Dobry cykl to taki, który wzmacnia największą słabość drużyny albo wspiera model gry, którym naprawdę chcesz wygrywać mecze. Nie zawsze warto trenować „najlepszy” styl na papierze. Często lepiej wybrać program, który pasuje do obecnej kadry.
+                </p>
+             </div>
+
+             <div className="bg-black/30 p-10 rounded-[45px] border border-white/10">
+                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">Praktyczny model pracy</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-emerald-300 font-black uppercase tracking-[0.25em]">1. Oceń kadrę</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Sprawdź, czy bardziej kuleje technika, fizyczność, obrona czy wykończenie. Tu najlepiej pomagają asystent i analiza drużyny.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-blue-300 font-black uppercase tracking-[0.25em]">2. Dobierz cykl</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Program zespołowy ustawiaj pod problem drużyny albo plan gry, a nie pod jednego zawodnika.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-amber-300 font-black uppercase tracking-[0.25em]">3. Ustaw focus</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Indywidualny fokus dawaj pod pozycję i największy brak zawodnika. To jeden z najmocniejszych dopalaczy rozwoju.</p>
+                   </div>
+                   <div className="space-y-3">
+                      <span className="text-[13px] text-rose-300 font-black uppercase tracking-[0.25em]">4. Patrz na minuty</span>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Trening bez grania rozwija wolniej. Jeśli chcesz pompować młodego, musisz dać mu też realne występy i oceny meczowe.</p>
+                   </div>
+                </div>
+                <p className="text-[12px] text-slate-400 mt-8 italic leading-relaxed">
+                  Rezerwy także rozwijają się osobno, a na ich tempo wpływa jakość szkoleniowa trenera rezerw. To ważne miejsce do prowadzenia projektów długoterminowych, zanim zawodnik wejdzie do pierwszej drużyny.
                 </p>
              </div>
           </div>
@@ -491,115 +955,192 @@ export const GameManual: React.FC = () => {
         return (
           <div className="space-y-10 animate-fade-in pb-20">
              <div className="bg-amber-900/20 p-10 rounded-[45px] border border-amber-500/20">
-                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Finanse Klubu</h3>
-                <p className="text-slate-300">Zarządzanie budżetem to sztuka balansowania między ambicjami sportowymi a realiami ekonomicznymi.</p>
+                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">FINANSE KLUBU I TRANSFERY</h3>
+                <p className="text-slate-200 text-[15px] leading-relaxed">
+                  Ten moduł łączy ekonomię klubu z rynkiem transferowym, bo w grze jedno napędza drugie. Budżety, ceny biletów, przychody meczowe, wyceny piłkarzy i limity ofert nie są losowe: model stara się zbliżać do realnych danych, publicznych benchmarków, kursów walut i prawdziwych proporcji między ligami, reputacją oraz skalą klubu.
+                </p>
              </div>
 
              <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                   <h4 className="text-amber-400 font-black uppercase tracking-widest text-sm flex items-center gap-3">
-                      <span className="w-6 h-px bg-amber-500/30" /> Budżety Startowe
-                   </h4>
-                   <div className="space-y-3">
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5 flex justify-between items-center">
-                         <span className="text-white font-bold text-xs uppercase">Ekstraklasa</span>
-                         <span className="text-emerald-400 font-black text-xs">24 - 217 mln PLN</span>
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-amber-300 font-black uppercase tracking-[0.22em] text-[15px]">Model Finansowy</h4>
+                   <p className="text-[14px] text-slate-200 leading-relaxed">
+                     Startowy potencjał finansowy klubu zależy od ligi, kraju, reputacji i skali rynku. Dla rozgrywek europejskich silnik korzysta z publicznych benchmarków przychodowych i przeliczeń walutowych, a dla Polski pilnuje realnych widełek dla Ekstraklasy, 1. ligi, 2. ligi i poziomu regionalnego.
+                   </p>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <span className="text-[12px] text-white font-black uppercase">Ekstraklasa</span>
+                         <p className="text-[13px] text-emerald-300 mt-2 leading-relaxed">Największe budżety, najwyższe ceny dnia meczowego i najszersze sufity transferowe.</p>
                       </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5 flex justify-between items-center">
-                         <span className="text-white font-bold text-xs uppercase">1. Liga</span>
-                         <span className="text-blue-400 font-black text-xs">9 - 18 mln PLN</span>
-                      </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5 flex justify-between items-center">
-                         <span className="text-white font-bold text-xs uppercase">2. Liga</span>
-                         <span className="text-slate-400 font-black text-xs">1 - 3 mln PLN</span>
-                      </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5 flex justify-between items-center">
-                         <span className="text-white font-bold text-xs uppercase">Regionalna</span>
-                         <span className="text-slate-500 font-black text-xs">80 - 500 tys. PLN</span>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <span className="text-[12px] text-white font-black uppercase">Niższe ligi</span>
+                         <p className="text-[13px] text-sky-300 mt-2 leading-relaxed">Mniejsze pieniądze, niższe koszty i twarde limity na wyceny oraz transfery.</p>
                       </div>
                    </div>
                 </div>
 
-                <div className="space-y-6">
-                   <h4 className="text-emerald-400 font-black uppercase tracking-widest text-sm flex items-center gap-3">
-                      <span className="w-6 h-px bg-emerald-500/30" /> Źródła Przychodów
-                   </h4>
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-emerald-300 font-black uppercase tracking-[0.22em] text-[15px]">Skąd Klub Bierze Pieniądze</h4>
                    <div className="space-y-3">
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5">
-                         <h5 className="text-white font-black uppercase text-xs mb-2">📺 Prawa TV</h5>
-                         <p className="text-[10px] text-slate-400">Ekstraklasa: 35 mln PLN | 1. Liga: 15 mln | 2. Liga: 6 mln</p>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">📺 Liga, premie i pozycja końcowa</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Na sezon wpływają pieniądze ligowe, bonusy za miejsca w tabeli i premie pucharowe. W Ekstraklasie top tabeli potrafi zmienić skalę całego kolejnego okna.</p>
                       </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5">
-                         <h5 className="text-white font-black uppercase text-xs mb-2">🎫 Bilety i Karnety</h5>
-                         <p className="text-[10px] text-slate-400">20-180 PLN/bilet (Ekstraklasa). Karnety: 10-30% pojemności stadionu.</p>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">🎫 Bilety i karnety</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Cena biletu zależy od tieru, reputacji i rynku klubu. Karnety są liczone osobno i opierają się na procentowym wykorzystaniu pojemności stadionu.</p>
                       </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5">
-                         <h5 className="text-white font-black uppercase text-xs mb-2">🍿 Catering i Merchandising</h5>
-                         <p className="text-[10px] text-slate-400">Dodatkowe przychody w dni meczowe (4-6 zł/fan na catering).</p>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">🍿 Dzień meczowy</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Do kasy wpada nie tylko sam bilet. Silnik dolicza catering, merchandising, programy meczowe, LED i parkingi, a wszystko skaluje frekwencją oraz renomą klubu.</p>
                       </div>
-                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/5">
-                         <h5 className="text-white font-black uppercase text-xs mb-2">🏢 VIP Boxes</h5>
-                         <p className="text-[10px] text-slate-400">240-500 tys. PLN/rok (tylko Ekstraklasa, stadiony 15k+ miejsc).</p>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">🏢 VIP i loże</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Duże kluby z odpowiednim stadionem mogą generować roczne wpływy z lóż i stref VIP. To nie jest kosmetyka, tylko realny zastrzyk stabilności dla mocnych organizacji.</p>
                       </div>
                    </div>
                 </div>
              </section>
 
-             <div className="bg-slate-950 p-10 rounded-[50px] border border-white/10">
-                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">Koszty Klubu</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5">
-                      <h5 className="text-red-400 font-black uppercase text-sm mb-4">💸 Koszty Meczu (Gospodarz)</h5>
-                      <ul className="text-xs text-slate-400 space-y-2">
-                         <li>• <span className="text-white font-bold">Legia/Lech:</span> 350-700 tys. PLN</li>
-                         <li>• <span className="text-white font-bold">Średniak Ekstraklasy:</span> 200-250 tys. PLN</li>
-                         <li>• <span className="text-white font-bold">1. Liga:</span> 55-80 tys. PLN</li>
-                         <li>• <span className="text-white font-bold">2. Liga:</span> 14-20 tys. PLN</li>
-                      </ul>
+             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-rose-300 font-black uppercase tracking-[0.22em] text-[15px]">Co Obciąża Budżet</h4>
+                   <div className="space-y-3">
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">🏟️ Koszt meczu u siebie</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Organizacja domowego spotkania rośnie wraz z ligą, reputacją, frekwencją i obciążeniem stadionu. Wielki klub płaci za mecz dużo więcej niż średniak czy zespół z niższego poziomu.</p>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">✈️ Koszt wyjazdu</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Wyjazdy też są liczone osobno. Ich skala zależy od poziomu rozgrywek i renomy klubu, więc napięty kalendarz może naprawdę podjadać budżet.</p>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+                         <h5 className="text-white font-black uppercase text-[12px] mb-2">💸 Transfery i bonusy za podpis</h5>
+                         <p className="text-[13px] text-slate-200 leading-relaxed">Przy zakupie liczy się nie tylko odstępne. Z budżetu transferowego schodzą też bonus za podpis oraz koszt zakontraktowania pensji na cały uzgodniony okres.</p>
+                      </div>
                    </div>
-                   <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5">
-                      <h5 className="text-blue-400 font-black uppercase text-sm mb-4">✈️ Koszty Wyjazdu</h5>
-                      <ul className="text-xs text-slate-400 space-y-2">
-                         <li>• <span className="text-white font-bold">Ekstraklasa:</span> do 140 tys. PLN</li>
-                         <li>• <span className="text-white font-bold">1. Liga:</span> do 55 tys. PLN</li>
-                         <li>• <span className="text-white font-bold">2. Liga:</span> do 20 tys. PLN</li>
-                      </ul>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-blue-300 font-black uppercase tracking-[0.22em] text-[15px]">Jak Budżet Zmienia Się W Sezonie</h4>
+                   <p className="text-[14px] text-slate-200 leading-relaxed">
+                     Po każdym meczu symulacja aktualizuje finanse. Gospodarz dostaje wpływy z biletów i dnia meczowego, ale równocześnie płaci za organizację spotkania. Gość ponosi koszt wyjazdu. Dzięki temu stadion, frekwencja i reputacja mają realny wpływ na to, ile możesz później wydać na kadrę.
+                   </p>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-emerald-500/20">
+                         <span className="text-[12px] text-emerald-300 font-black uppercase">Dom</span>
+                         <p className="text-[13px] text-slate-200 mt-2 leading-relaxed">Bilety + dodatki dnia meczowego - koszt organizacji.</p>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-blue-500/20">
+                         <span className="text-[12px] text-blue-300 font-black uppercase">Wyjazd</span>
+                         <p className="text-[13px] text-slate-200 mt-2 leading-relaxed">Brak wpływów meczowych, ale pojawia się koszt logistyki i wyjazdu.</p>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-amber-500/20">
+                         <span className="text-[12px] text-amber-300 font-black uppercase">Sezon</span>
+                         <p className="text-[13px] text-slate-200 mt-2 leading-relaxed">Karnety, premie ligowe, puchary i VIP robią różnicę w długim horyzoncie.</p>
+                      </div>
+                   </div>
+                </div>
+             </section>
+
+             <div className="bg-slate-950 p-10 rounded-[50px] border border-white/10 space-y-6">
+                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Wartość Rynkowa Zawodnika</h4>
+                <p className="text-[14px] text-slate-200 leading-relaxed">
+                  Wycena piłkarza nie jest jedną liczbą z sufitu. System bierze pod uwagę OVR, wiek pod konkretną pozycję, talent, liczbę meczów w karierze, ostatnie noty, reputację klubu, tier rozgrywek i siłę rynku krajowego. W Polsce dodatkowo działają twarde sufity zależne od ligi i wieku, żeby rynek nie odklejał się od realiów.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                   <div className="bg-slate-900/50 p-5 rounded-3xl border border-white/5">
+                      <h5 className="text-white font-black uppercase text-[12px] mb-2">Jakość</h5>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">OVR i potencjał ustawiają bazę wyceny.</p>
+                   </div>
+                   <div className="bg-slate-900/50 p-5 rounded-3xl border border-white/5">
+                      <h5 className="text-white font-black uppercase text-[12px] mb-2">Profil wieku</h5>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Inny szczyt wartości ma bramkarz, obrońca, a inny ofensywny zawodnik.</p>
+                   </div>
+                   <div className="bg-slate-900/50 p-5 rounded-3xl border border-white/5">
+                      <h5 className="text-white font-black uppercase text-[12px] mb-2">Forma i doświadczenie</h5>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Historia ocen i rozegrane mecze podbijają wiarygodność zawodnika.</p>
+                   </div>
+                   <div className="bg-slate-900/50 p-5 rounded-3xl border border-white/5">
+                      <h5 className="text-white font-black uppercase text-[12px] mb-2">Rynek</h5>
+                      <p className="text-[13px] text-slate-200 leading-relaxed">Reputacja klubu, kraj i liga zmieniają sufit cenowy.</p>
                    </div>
                 </div>
              </div>
 
+             <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-fuchsia-300 font-black uppercase tracking-[0.22em] text-[15px]">Jak Klub Sprzedający Ustala Cenę</h4>
+                   <p className="text-[14px] text-slate-200 leading-relaxed">
+                     Punkt wyjścia to realna wycena rynkowa albo cena z listy transferowej, ale później silnik dokłada kontekst sportowy i politykę klubu.
+                   </p>
+                   <ul className="text-[13px] text-slate-200 space-y-2 leading-relaxed">
+                      <li>• długość kontraktu: im mniej czasu zostało, tym trudniej bronić wysokiej ceny</li>
+                      <li>• status w drużynie: topowi gracze i filary składu są chronieni dużo mocniej</li>
+                      <li>• rywal ligowy: sprzedaż do bezpośredniego konkurenta bywa blokowana albo mocno windowana</li>
+                      <li>• termin transferu: teraz, za 6 miesięcy, za 12 miesięcy albo po końcu kontraktu to cztery różne stany negocjacji</li>
+                      <li>• potrzeba gotówki i decyzje zarządu: klub pod presją finansową szybciej mięknie</li>
+                   </ul>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-cyan-300 font-black uppercase tracking-[0.22em] text-[15px]">Jak Kupujący Jest Sprawdzany</h4>
+                   <ul className="text-[13px] text-slate-200 space-y-3 leading-relaxed">
+                      <li>• oferta nie może przekraczać dostępnego budżetu transferowego</li>
+                      <li>• bonus za podpis musi zmieścić się w osobnej puli bonusowej</li>
+                      <li>• kontrakt musi mieć od 1 do 5 lat</li>
+                      <li>• klub nie przepchnie zakupu, jeśli kadra jest już przeładowana</li>
+                      <li>• istnieje twardy sufit „realizmu”, więc absurdalnie przepłacona oferta zostanie zablokowana</li>
+                   </ul>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     W praktyce oznacza to, że trzeba pilnować całego pakietu, a nie tylko samego odstępnego.
+                   </p>
+                </div>
+
+                <div className="bg-slate-950 p-8 rounded-[40px] border border-white/10 space-y-5">
+                   <h4 className="text-emerald-300 font-black uppercase tracking-[0.22em] text-[15px]">Jak Decyduje Zawodnik</h4>
+                   <ul className="text-[13px] text-slate-200 space-y-3 leading-relaxed">
+                      <li>• liczy się pensja, bonus za podpis, długość umowy i ogólna wartość pakietu</li>
+                      <li>• ważna jest rola w zespole: gwiazda, pierwszy skład, rotacja albo rezerwa</li>
+                      <li>• reputacja nowego klubu może pomóc albo wymusić dużo wyższe wymagania</li>
+                      <li>• ruch zagraniczny i przejście do słabszego klubu mają własne mnożniki ryzyka</li>
+                      <li>• zawodnik z listy transferowej albo z kończącą się umową schodzi z żądań szybciej</li>
+                   </ul>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Młodsi mocniej reagują na rozwój i długość kontraktu, a starsi dużo uważniej patrzą na bonus za podpis i bezpieczeństwo finansowe.
+                   </p>
+                </div>
+             </section>
+
              <div className="bg-red-900/20 p-10 rounded-[50px] border border-red-500/20">
-                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">⚠️ Wskaźnik Oporu Zarządu (WOZ)</h4>
-                <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                  Przy próbie zwolnienia zawodnika zarząd oblicza WOZ (0-100). Im wyższy, tym większy opór.
+                <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">Kontrola Zarządu i Blokady Ruchów</h4>
+                <p className="text-[14px] text-slate-200 leading-relaxed mb-6">
+                  Nie każda decyzja managerska przechodzi automatycznie. Zarząd może ograniczyć sprzedaż kluczowego piłkarza, a polityka finansowa pilnuje, żeby klub nie rozjechał się ekonomicznie.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-emerald-500/20">
                       <div className="text-emerald-400 font-black text-2xl mb-2">0-29</div>
-                      <h5 className="text-white font-black uppercase text-xs">ZATWIERDZONO</h5>
-                      <p className="text-[9px] text-slate-500 mt-2">Zarząd akceptuje decyzję</p>
+                      <h5 className="text-white font-black uppercase text-[12px]">ZATWIERDZONO</h5>
+                      <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">Zarząd uznaje ruch za bezpieczny.</p>
                    </div>
                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-amber-500/20">
                       <div className="text-amber-400 font-black text-2xl mb-2">30-59</div>
-                      <h5 className="text-white font-black uppercase text-xs">OSTRZEŻENIE</h5>
-                      <p className="text-[9px] text-slate-500 mt-2">Wątpliwości, ale zgoda</p>
+                      <h5 className="text-white font-black uppercase text-[12px]">OSTRZEŻENIE</h5>
+                      <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">Decyzja przechodzi, ale zarząd nie jest spokojny.</p>
                    </div>
                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-orange-500/20">
                       <div className="text-orange-400 font-black text-2xl mb-2">60-84</div>
-                      <h5 className="text-white font-black uppercase text-xs">ODRZUCONO</h5>
-                      <p className="text-[9px] text-slate-500 mt-2">Odrzucone, spróbuj za 3 miesiące</p>
+                      <h5 className="text-white font-black uppercase text-[12px]">ODRZUCONO</h5>
+                      <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">Ruch zostaje zablokowany i trzeba wrócić do tematu później.</p>
                    </div>
                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-red-500/20">
                       <div className="text-red-400 font-black text-2xl mb-2">85-100</div>
-                      <h5 className="text-white font-black uppercase text-xs">VETO</h5>
-                      <p className="text-[9px] text-slate-500 mt-2">Absolutne veto zarządu!</p>
+                      <h5 className="text-white font-black uppercase text-[12px]">VETO</h5>
+                      <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">Klub nie pozwoli ruszyć takiego zawodnika lub takiej operacji.</p>
                    </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-6 italic">
-                  ⚠️ <span className="text-white font-bold">Top 11 Elite Lock:</span> 95% szansy na blokadę sprzedaży filaru drużyny (Top 11 OVR).
-                </p>
-                <p className="text-xs text-slate-400 mt-2 italic">
-                  💰 <span className="text-white font-bold">Limit płac:</span> Łączne wynagrodzenia nie mogą przekroczyć 65% budżetu.
+                <p className="text-[13px] text-slate-200 mt-6 italic leading-relaxed">
+                  Topowi gracze z pierwszej jedenastki są szczególnie chronieni, a polityka płacowa pilnuje, żeby wynagrodzenia nie odjechały względem możliwości klubu.
                 </p>
              </div>
           </div>
@@ -609,7 +1150,7 @@ export const GameManual: React.FC = () => {
         return (
           <div className="space-y-10 animate-fade-in pb-20">
              <div className="bg-blue-900/20 p-10 rounded-[45px] border border-blue-500/20">
-                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Kontrakty i Negocjacje</h3>
+                <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Negocjacje Kontraktowe</h3>
                 <p className="text-slate-300">Sztuka negocjacji to balans między oczekiwaniami zawodnika a możliwościami klubu.</p>
              </div>
 
