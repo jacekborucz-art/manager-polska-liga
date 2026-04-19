@@ -33,6 +33,8 @@ import { AZERBAIJANI_MALE_FIRSTNAMES, AZERBAIJANI_MALE_LASTNAMES } from '../reso
 import { KAZAKH_MALE_FIRSTNAMES, KAZAKH_MALE_LASTNAMES } from '../resources/static_db/names/kazakh_data';
 import { SOUTH_AMERICAN_MALE_FIRSTNAMES, SOUTH_AMERICAN_MALE_LASTNAMES } from '../resources/static_db/names/southamerican_data';
 import { MEXICAN_MALE_FIRSTNAMES, MEXICAN_MALE_LASTNAMES } from '../resources/static_db/names/mexican_data';
+import { OCEANIAN_MALE_FIRSTNAMES, OCEANIAN_MALE_LASTNAMES } from '../resources/static_db/names/oceanian_data';
+import { NORTH_AMERICAN_MALE_FIRSTNAMES, NORTH_AMERICAN_MALE_LASTNAMES } from '../resources/static_db/names/northamerican_data';
 interface NamePair {
   firstName: string;
   lastName: string;
@@ -70,10 +72,20 @@ export const NameGeneratorService = {
           firstName: getRandomElement(IBERIA_MALE_FIRSTNAMES),
           lastName: getRandomElement(IBERIA_MALE_LASTNAMES)
         };
+      case Region.NORTH_AMERICA:
+        return {
+          firstName: getRandomElement(NORTH_AMERICAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(NORTH_AMERICAN_MALE_LASTNAMES)
+        };
       case Region.MEXICO:
         return {
           firstName: getRandomElement(MEXICAN_MALE_FIRSTNAMES),
           lastName: getRandomElement(MEXICAN_MALE_LASTNAMES)
+        };
+      case Region.OCEANIA:
+        return {
+          firstName: getRandomElement(OCEANIAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(OCEANIAN_MALE_LASTNAMES)
         };
       case Region.SWEDEN:
         return {

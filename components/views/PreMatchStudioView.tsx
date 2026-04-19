@@ -6,12 +6,12 @@ import { Card } from '../ui/Card';
 import { PreMatchStudioService } from '../../services/PreMatchStudioService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
-import { KitSelectionService } from '../../services/KitSelectionService';
+import { KitSelectionService, KitSelection } from '../../services/KitSelectionService';
 import { LineupService } from '../../services/LineupService';
 import { AttendanceService } from '../../services/AttendanceService';
 
 // Import lokalnych zdjęć piłkarzy
-import { getPlayerCardImage } from '../../resources/PlayerCardAssets';
+import { getPlayerCardImage, getClubKitVariants, KitVariant } from '../../resources/PlayerCardAssets';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
@@ -36,11 +36,52 @@ const getContrastTextColor = (bgHex: string, secondaryHex: string): string => {
   return bgLum > 128 ? '#000000' : '#ffffff';
 };
 
+function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
+  let minDist = KitSelectionService.getColorDistance(kA.hex, kB.hex);
+  if (kA.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.hex));
+  if (kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.secondaryHex));
+  if (kA.secondaryHex && kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.secondaryHex));
+  return minDist;
+}
+
+function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
+  const homeVariants = getClubKitVariants(homeClub.id, homeClub.colorsHex);
+  const awayVariants = getClubKitVariants(awayClub.id, awayClub.colorsHex);
+  const CLASH_THRESHOLD = 280;
+  let bestHomeIdx = 0, bestAwayIdx = 0, maxScore = -1;
+  for (let h = 0; h < homeVariants.length; h++) {
+    for (let a = 0; a < awayVariants.length; a++) {
+      const dist = kitEffectiveDistance(homeVariants[h], awayVariants[a]);
+      const score = dist + (h === 0 ? 100 : 0) + (a === 0 ? 50 : 0);
+      if (score > maxScore) { maxScore = score; bestHomeIdx = h; bestAwayIdx = a; }
+    }
+    if (h === 0 && kitEffectiveDistance(homeVariants[0], awayVariants[bestAwayIdx]) > CLASH_THRESHOLD) break;
+  }
+  const hKit = homeVariants[bestHomeIdx];
+  const aKit = awayVariants[bestAwayIdx];
+  const hNext = homeVariants[(bestHomeIdx + 1) % homeVariants.length];
+  const aNext = awayVariants[(bestAwayIdx + 1) % awayVariants.length];
+  return {
+    home: {
+      primary: hKit.hex,
+      secondary: hNext.hex,
+      text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
+    },
+    away: {
+      primary: aKit.hex,
+      secondary: aNext.hex,
+      text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
+    }
+  };
+}
+
 export const PreMatchStudioView: React.FC = () => {
-  const { navigateTo, userTeamId, clubs, fixtures, players, lineups, currentDate, viewRefereeDetails } = useGame();
+  const { navigateTo, userTeamId, clubs, fixtures, players, lineups, currentDate, viewRefereeDetails, setPendingMatchKits } = useGame();
   const [data, setData] = useState<PreMatchStudioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showExpertCommentary, setShowExpertCommentary] = useState(false);
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [matchKits, setMatchKits] = useState<KitSelection | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,18 +112,13 @@ export const PreMatchStudioView: React.FC = () => {
         fixture, home, away, hLineup, aLineup, hPlayers, aPlayers, clubs
       );
       setData(studioData);
+      setMatchKits(selectKitsFromVariants(home, away));
       setLoading(false);
     };
 
     init();
   }, [userTeamId, clubs, fixtures, players, lineups, currentDate, navigateTo]);
 
-  const matchKits = useMemo(() => {
-    if (!data) return null;
-    return KitSelectionService.selectOptimalKits(data.homeClub, data.awayClub);
-  }, [data]);
-
-  
   const estimatedAttendance = useMemo(() => {
     if (!data) return 0;
     // Znajdujemy wszystkie kluby z tej samej ligi co gospodarz
@@ -106,6 +142,41 @@ export const PreMatchStudioView: React.FC = () => {
   }
 
   const getJerseyUrl = (clubId: string, hex: string) => getPlayerCardImage(clubId, hex);
+
+  const isUserHome = data.homeClub.id === userTeamId;
+  const userClub = isUserHome ? data.homeClub : data.awayClub;
+  const opponentClub = isUserHome ? data.awayClub : data.homeClub;
+
+  const handleKitSelect = (selectedVariant: KitVariant) => {
+    if (!matchKits) return;
+    const userVariants = getClubKitVariants(userClub.id, userClub.colorsHex);
+    const selectedIdx = userVariants.findIndex(v => v.hex === selectedVariant.hex);
+    const nextUserVariant = userVariants[(selectedIdx + 1) % userVariants.length];
+    const opponentVariants = getClubKitVariants(opponentClub.id, opponentClub.colorsHex);
+    let bestOppIdx = 0, maxDist = -1;
+    for (let i = 0; i < opponentVariants.length; i++) {
+      const dist = kitEffectiveDistance(selectedVariant, opponentVariants[i]);
+      if (dist > maxDist) { maxDist = dist; bestOppIdx = i; }
+    }
+    const bestOppVariant = opponentVariants[bestOppIdx];
+    const nextOppVariant = opponentVariants[(bestOppIdx + 1) % opponentVariants.length];
+    const opponentKit = {
+      primary: bestOppVariant.hex,
+      secondary: nextOppVariant.hex,
+      text: KitSelectionService.isColorLight(bestOppVariant.hex) ? '#000000' : '#ffffff'
+    };
+    const playerKit = {
+      primary: selectedVariant.hex,
+      secondary: nextUserVariant.hex,
+      text: KitSelectionService.isColorLight(selectedVariant.hex) ? '#000000' : '#ffffff'
+    };
+    if (isUserHome) {
+      setMatchKits({ home: playerKit, away: opponentKit });
+    } else {
+      setMatchKits({ home: opponentKit, away: playerKit });
+    }
+    setShowKitModal(false);
+  };
 
   const homeXI = data.homeLineup.startingXI.map(id => data.homePlayers.find(p => p.id === id)).filter(Boolean) as Player[];
   const awayXI = data.awayLineup.startingXI.map(id => data.awayPlayers.find(p => p.id === id)).filter(Boolean) as Player[];
@@ -238,29 +309,39 @@ export const PreMatchStudioView: React.FC = () => {
         {/* CENTER COLUMN */}
         <div className="flex-1 flex flex-col gap-6 items-center min-w-0">
            <div className="w-full flex items-center justify-between gap-2 animate-fade-in flex-1 min-h-0">
-                      <div className="relative group shrink-0 self-center -mr-20 z-20">
-                 <div className="absolute -inset-4 bg-blue-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                 <img 
-                    src={getJerseyUrl(data.homeClub.id, matchKits.home.primary)} 
-                    className="
-      w-48 h-72 lg:w-64 lg:h-[450px] 
-      object-cover rounded-[50px] 
-      border-2 border-white/20 
-      shadow-[0_40px_80px_rgba(0,0,0,0.7)] 
+                      <div className="shrink-0 self-center -mr-20 z-20 flex flex-col items-center gap-3">
+                 <div className="relative group">
+                    <div className="absolute -inset-4 bg-blue-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                    <img
+                       src={getJerseyUrl(data.homeClub.id, matchKits.home.primary)}
+                       className="
+      w-48 h-72 lg:w-64 lg:h-[450px]
+      object-cover rounded-[50px]
+      border-2 border-white/20
+      shadow-[0_40px_80px_rgba(0,0,0,0.7)]
       transform perspective-[1000px] rotate-y-[12deg] -rotate-[2deg]
-      group-hover:rotate-y-0 group-hover:rotate-0 
-      transition-transform duration-700 
+      group-hover:rotate-y-0 group-hover:rotate-0
+      transition-transform duration-700
       hover:scale-[1.02] opacity-80
     "
-                    style={{ boxShadow: `0 0 50px ${matchKits.home.primary}44` }}
-                    alt="Star Home" 
-                 />
-                 <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl">
-                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
-                    <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
-                       {[...homeXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
-                    </p>
+                       style={{ boxShadow: `0 0 50px ${matchKits.home.primary}44` }}
+                       alt="Star Home"
+                    />
+                    <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl">
+                       <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
+                       <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
+                          {[...homeXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
+                       </p>
+                    </div>
                  </div>
+                 {isUserHome && (
+                   <button
+                     onClick={() => setShowKitModal(true)}
+                     className="px-5 py-2 rounded-2xl bg-blue-600/30 border border-blue-400/30 text-blue-300 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600/50 transition-all shadow-lg"
+                   >
+                     👕 ZMIEŃ KOSZULKĘ
+                   </button>
+                 )}
               </div>
 
               {/* BOISKO 3D Z KOMPLETNYMI LINIAMI I OŚWIETLENIEM */}
@@ -318,29 +399,39 @@ export const PreMatchStudioView: React.FC = () => {
                 </div>
               </div>
 
-                           <div className="relative group shrink-0 self-center -ml-20 z-20">
-                 <div className="absolute -inset-4 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                 <img 
-                    src={getJerseyUrl(data.awayClub.id, matchKits.away.primary)} 
-                    className="
-      w-48 h-72 lg:w-64 lg:h-[450px] 
-      object-cover rounded-[50px] 
-      border-2 border-white/20 
-      shadow-[0_40px_80px_rgba(0,0,0,0.7)] 
+                           <div className="shrink-0 self-center -ml-20 z-20 flex flex-col items-center gap-3">
+                 <div className="relative group">
+                    <div className="absolute -inset-4 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                    <img
+                       src={getJerseyUrl(data.awayClub.id, matchKits.away.primary)}
+                       className="
+      w-48 h-72 lg:w-64 lg:h-[450px]
+      object-cover rounded-[50px]
+      border-2 border-white/20
+      shadow-[0_40px_80px_rgba(0,0,0,0.7)]
       transform perspective-[1000px] rotate-y-[-12deg] rotate-[2deg]
-      group-hover:rotate-y-0 group-hover:rotate-0 
-      transition-transform duration-700 
+      group-hover:rotate-y-0 group-hover:rotate-0
+      transition-transform duration-700
       hover:scale-[1.02] opacity-80
-    " 
-                    style={{ boxShadow: `0 0 50px ${matchKits.away.primary}44` }}
-                    alt="Star Away" 
-                 />
-                 <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl text-right">
-                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
-                    <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
-                       {[...awayXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
-                    </p>
+    "
+                       style={{ boxShadow: `0 0 50px ${matchKits.away.primary}44` }}
+                       alt="Star Away"
+                    />
+                    <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl text-right">
+                       <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
+                       <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
+                          {[...awayXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
+                       </p>
+                    </div>
                  </div>
+                 {!isUserHome && (
+                   <button
+                     onClick={() => setShowKitModal(true)}
+                     className="px-5 py-2 rounded-2xl bg-emerald-600/30 border border-emerald-400/30 text-emerald-300 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600/50 transition-all shadow-lg"
+                   >
+                     👕 ZMIEŃ KOSZULKĘ
+                   </button>
+                 )}
               </div>
            </div>
 
@@ -353,7 +444,7 @@ export const PreMatchStudioView: React.FC = () => {
                 🎙️ ANALIZA EKSPERTÓW
               </button>
               <button
-                onClick={() => navigateTo(ViewState.MATCH_LIVE)}
+                onClick={() => { setPendingMatchKits(matchKits); navigateTo(ViewState.MATCH_LIVE); }}
                 className="group relative flex-1 px-10 py-8 rounded-[40px] bg-white text-slate-950 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(255,255,255,0.2)] border-b-8 border-slate-300 overflow-hidden animate-shimmer"
               >
                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -407,6 +498,50 @@ export const PreMatchStudioView: React.FC = () => {
             </div>
          </div>
       </div>
+
+      {/* KIT SELECTION MODAL */}
+      {showKitModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-[1px] p-6 animate-fade-in" onClick={() => setShowKitModal(false)}>
+          <div className="max-w-6xl w-full bg-slate-900/30 border border-white/10 rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" onClick={e => e.stopPropagation()}>
+            <div className="p-12 border-b border-white/5 bg-white/5 flex justify-between items-center">
+              <div>
+                <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">Wybierz Koszulkę</h2>
+                <p className="text-[12px] font-black text-blue-500 uppercase tracking-[0.4em] mt-1">{userClub.name}</p>
+              </div>
+              <button onClick={() => setShowKitModal(false)} className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center hover:bg-red-500/20 hover:text-red-500 transition-all text-3xl font-light">&times;</button>
+            </div>
+            <div className="p-12">
+              <div className="grid grid-cols-4 gap-8">
+                {getClubKitVariants(userClub.id, userClub.colorsHex).map((variant, idx) => {
+                  const isSelected = matchKits
+                    ? (isUserHome ? matchKits.home.primary : matchKits.away.primary) === variant.hex
+                    : idx === 0;
+                  return (
+                    <button
+                      key={variant.hex}
+                      onClick={() => handleKitSelect(variant)}
+                      className={`flex flex-col items-center gap-5 p-8 rounded-3xl border-2 transition-all hover:scale-105 active:scale-95 ${
+                        isSelected
+                          ? 'border-white/60 bg-white/10 shadow-[0_0_40px_rgba(255,255,255,0.15)]'
+                          : 'border-white/10 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.07]'
+                      }`}
+                    >
+                      <img src={variant.image} alt={variant.hex} className="w-44 h-64 object-cover rounded-2xl" />
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full border border-white/20" style={{ backgroundColor: variant.hex }} />
+                        {isSelected && <span className="text-[11px] font-black text-white uppercase tracking-widest">✓</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="p-10 bg-black/30 border-t border-white/5 text-center">
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Koszulka przeciwnika zostanie dobrana automatycznie</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EXPERT COMMENTARY MODAL */}
       {showExpertCommentary && (

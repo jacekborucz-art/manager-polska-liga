@@ -123,6 +123,8 @@ export enum Region {
   CZ_SK = 'CZ_SK',
   SSA = 'SSA',
   IBERIA = 'IBERIA',
+  NORTH_AMERICA = 'NORTH_AMERICA',
+  OCEANIA = 'OCEANIA',
   SCANDINAVIA = 'SCANDINAVIA',
   EX_USSR = 'EX_USSR',
   SPAIN = 'SPAIN',

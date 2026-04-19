@@ -1,9 +1,9 @@
 import { Region } from '../../../types';
 
 export const NATIONAL_TEAMS_CONCACAF = [
-  { name: "Stany Zjednoczone", continent: "North America", tier: 3, colors: ['#B22234','#FFFFFF','#3C3B6E'], stadium: "MetLife Stadium", capacity: 82500, reputation: 13, region: Region.ENGLAND },
+  { name: "Stany Zjednoczone", continent: "North America", tier: 3, colors: ['#B22234','#FFFFFF','#3C3B6E'], stadium: "MetLife Stadium", capacity: 82500, reputation: 13, region: Region.NORTH_AMERICA },
   { name: "Meksyk", continent: "North America", tier: 2, colors: ['#006847','#FFFFFF','#CE1126'], stadium: "Estadio Azteca", capacity: 87000, reputation: 14, region: Region.MEXICO },
-  { name: "Kanada", continent: "North America", tier: 3, colors: ['#D52B1E','#FFFFFF','#D52B1E'], stadium: "BMO Field", capacity: 30000, reputation: 12, region: Region.ENGLAND },
+  { name: "Kanada", continent: "North America", tier: 3, colors: ['#D52B1E','#FFFFFF','#D52B1E'], stadium: "BMO Field", capacity: 30000, reputation: 12, region: Region.NORTH_AMERICA },
   { name: "Kostaryka", continent: "North America", tier: 2, colors: ['#002B7F','#FFFFFF','#CE1126'], stadium: "Estadio Nacional", capacity: 35000, reputation: 12, region: Region.IBERIA },
   { name: "Panama", continent: "North America", tier: 2, colors: ['#0052A5','#FFFFFF','#EF3340'], stadium: "Estadio Rommel Fernández", capacity: 32000, reputation: 12, region: Region.IBERIA },
   { name: "Honduras", continent: "North America", tier: 4, colors: ['#0073CF','#FFFFFF','#0073CF'], stadium: "Estadio Olímpico Metropolitano", capacity: 38000, reputation: 10, region: Region.IBERIA },
@@ -11,7 +11,7 @@ export const NATIONAL_TEAMS_CONCACAF = [
   { name: "Gwatemala", continent: "North America", tier: 3, colors: ['#4997D0','#FFFFFF','#4997D0'], stadium: "Estadio Doroteo Guamuch Flores", capacity: 26000, reputation: 8, region: Region.IBERIA },
   { name: "Nikaragua", continent: "North America", tier: 3, colors: ['#0067C6','#FFFFFF','#0067C6'], stadium: "Estadio Nacional de Fútbol", capacity: 15000, reputation: 7, region: Region.IBERIA },
   { name: "Belize", continent: "North America", tier: 5, colors: ['#003F87','#FFFFFF','#CE1126'], stadium: "FFB Stadium", capacity: 5000, reputation: 4, region: Region.ENGLAND },
-  { name: "Jamajka", continent: "North America", tier: 3, colors: ['#009B3A','#FED100','#000000'], stadium: "Independence Park", capacity: 35000, reputation: 10, region: Region.ENGLAND },
+  { name: "Jamajka", continent: "North America", tier: 3, colors: ['#009B3A','#FED100','#000000'], stadium: "Independence Park", capacity: 35000, reputation: 10, region: Region.NORTH_AMERICA },
   { name: "Trynidad i Tobago", continent: "North America", tier: 3, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Hasely Crawford Stadium", capacity: 23000, reputation: 9, region: Region.ENGLAND },
   { name: "Haiti", continent: "North America", tier: 4, colors: ['#00209F','#D21034','#FFFFFF'], stadium: "Stade Sylvio Cator", capacity: 15000, reputation: 9, region: Region.FRANCE },
   { name: "Curaçao", continent: "North America", tier: 5, colors: ['#0033A0','#FFD100','#CE1126'], stadium: "Ergilio Hato Stadium", capacity: 15000, reputation: 9, region: Region.BENELUX },
@@ -30,5 +30,117 @@ export const NATIONAL_TEAMS_CONCACAF = [
   { name: "Saint Kitts i Nevis", continent: "North America", tier: 5, colors: ['#009E60','#FCD116','#CE1126'], stadium: "Warner Park Stadium", capacity: 8000, reputation: 5, region: Region.ENGLAND },
   { name: "Saint Lucia", continent: "North America", tier: 5, colors: ['#6CF','#FFD100','#000000'], stadium: "Daren Sammy Cricket Ground", capacity: 15000, reputation: 5, region: Region.ENGLAND },
   { name: "Saint Vincent i Grenadyny", continent: "North America", tier: 5, colors: ['#0052A5','#FFD100','#009E60'], stadium: "Arnos Vale Stadium", capacity: 18000, reputation: 5, region: Region.ENGLAND },
-  { name: "Turks i Caicos", continent: "North America", tier: 5, colors: ['#00247D','#FFFFFF','#CF142B'], stadium: "TCIFA National Academy", capacity: 3000, reputation: 3, region: Region.ENGLAND }
+  { name: "Turks i Caicos", continent: "North America", tier: 5, colors: ['#00247D','#FFFFFF','#CF142B'], stadium: "TCIFA National Academy", capacity: 3000, reputation: 3, region: Region.ENGLAND },
+
+{ 
+  name: "Anguilla", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#FFFFFF', '#CE1126', '#00247D'], 
+  stadium: "Raymond E. Lee Football Field", 
+  capacity: 2500, 
+  reputation: 3, 
+  region: Region.ENGLAND 
+},
+{ 
+  name: "Brytyjskie Wyspy Dziewicze", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#FFFFFF', '#00247D', '#CE1126'], 
+  stadium: "A.O. Shirley Recreation Ground", 
+  capacity: 5000, 
+  reputation: 3, 
+  region: Region.ENGLAND 
+},
+{ 
+  name: "Francuska Gujana", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#002395', '#FFFFFF', '#ED2939'], 
+  stadium: "Stade de Badminton", 
+  capacity: 7000, 
+  reputation: 6, 
+  region: Region.FRANCE 
+},
+{ 
+  name: "Gujana", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#009E49', '#FFD100', '#CE1126'], 
+  stadium: "Providence Stadium", 
+  capacity: 15000, 
+  reputation: 6, 
+  region: Region.ENGLAND 
+},
+{ 
+  name: "Portoryko", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#002D62', '#FFFFFF', '#CE1126'], 
+  stadium: "Estadio Juan Ramón Loubriel", 
+  capacity: 22000, 
+  reputation: 7, 
+  region: Region.IBERIA 
+},
+{ 
+  name: "Stany Zjednoczone Wyspy Dziewicze", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#FFFFFF', '#0033A0', '#CE1126'], 
+  stadium: "Lionel Roberts Stadium", 
+  capacity: 3500, 
+  reputation: 3, 
+  region: Region.ENGLAND 
+},
+{ 
+  name: "Bonaire", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#FFFFFF', '#E30613', '#002395'], 
+  stadium: "Stadion Kralendijk", 
+  capacity: 3000, 
+  reputation: 4, 
+  region: Region.BENELUX 
+},
+{ 
+  name: "Gwadelupa", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#002395', '#FFFFFF', '#ED2939'], 
+  stadium: "Stade Joséphine-Charlotte", 
+  capacity: 18000, 
+  reputation: 6, 
+  region: Region.FRANCE 
+},
+{ 
+  name: "Martynika", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#002395', '#FFFFFF', '#ED2939'], 
+  stadium: "Stade Pierre-Aliker", 
+  capacity: 18000, 
+  reputation: 7, 
+  region: Region.FRANCE 
+},
+{ 
+  name: "Saint-Martin", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#002395', '#FFFFFF', '#ED2939'], 
+  stadium: "Stade de Marigot", 
+  capacity: 2000, 
+  reputation: 3, 
+  region: Region.FRANCE 
+},
+{ 
+  name: "Sint Maarten", 
+  continent: "North America", 
+  tier: 5, 
+  colors: ['#CE1126', '#FFFFFF', '#00247D'], 
+  stadium: "Raoul Illidge Sports Complex", 
+  capacity: 3000, 
+  reputation: 3, 
+  region: Region.BENELUX 
+}
+
 ]

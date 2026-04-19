@@ -100,5 +100,25 @@ export const KitSelectionService = {
         text: KitSelectionService.isColorLight(aPrimary) ? '#000000' : '#ffffff'
       }
     };
+  },
+
+  /**
+   * Wybiera optymalną koszulkę przeciwnika na podstawie wybranego koloru gracza.
+   * Szuka koloru z największą odległością percepcyjną (brak kolizji).
+   */
+  selectOpponentKit: (playerKitHex: string, opponent: Club): { primary: string; secondary: string; text: string } => {
+    const oppColors = opponent.colorsHex;
+    let bestIdx = 0;
+    let maxDist = -1;
+    for (let i = 0; i < oppColors.length; i++) {
+      const dist = KitSelectionService.getColorDistance(playerKitHex, oppColors[i]);
+      if (dist > maxDist) { maxDist = dist; bestIdx = i; }
+    }
+    const primary = oppColors[bestIdx];
+    return {
+      primary,
+      secondary: oppColors[(bestIdx + 1) % oppColors.length] || primary,
+      text: KitSelectionService.isColorLight(primary) ? '#000000' : '#ffffff'
+    };
   }
 };

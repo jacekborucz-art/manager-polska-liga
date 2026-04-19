@@ -43,12 +43,14 @@ export const REGION_PROFILE: Partial<Record<Region, { baseOffset: number; starCh
   [Region.CZ_SK]:     { baseOffset:  -4, starChance: 0.04 },
   [Region.SSA]:       { baseOffset:  -4, starChance: 0.04 },
   [Region.KOREA]:     { baseOffset:  -4, starChance: 0.04 },
+  [Region.NORTH_AMERICA]: { baseOffset: -5, starChance: 0.03 },
   // Średnio
   [Region.POLAND]:    { baseOffset:  -6, starChance: 0.03 },
   [Region.BALKANS]:   { baseOffset:  -6, starChance: 0.03 },
   [Region.EX_USSR]:   { baseOffset:  -6, starChance: 0.03 },
   [Region.TURKEY]:    { baseOffset:  -6, starChance: 0.03 },
   [Region.JAPAN]:     { baseOffset:  -6, starChance: 0.03 },
+  [Region.OCEANIA]:   { baseOffset:  -8, starChance: 0.02 },
   // Poniżej Średnio
   [Region.GREEK]:     { baseOffset:  -8, starChance: 0.02 },
   [Region.ROMANIA]:   { baseOffset:  -8, starChance: 0.02 },

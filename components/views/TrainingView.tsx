@@ -17,7 +17,8 @@ export const TrainingView: React.FC = () => {
     updatePlayer,
     viewPlayerDetails,
     setPlayers,
-    showGameNotification
+    showGameNotification,
+    trainingProgressHistory
   } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(activeTrainingId);
   const [hoveredAttribute, setHoveredAttribute] = useState<{ label: string; x: number; y: number } | null>(null);
@@ -229,6 +230,78 @@ export const TrainingView: React.FC = () => {
 
         {/* PRAWA STRONA: PROGRAMY + DIAGNOSTYKA */}
         <div className="w-[680px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
+
+           {/* WYKRES PROGRESU TRENINGOWEGO */}
+           {trainingProgressHistory.length >= 2 && (() => {
+             const data = trainingProgressHistory;
+             const W = 620;
+             const H = 80;
+             const PAD = { top: 10, right: 12, bottom: 18, left: 28 };
+             const innerW = W - PAD.left - PAD.right;
+             const innerH = H - PAD.top - PAD.bottom;
+             const minVal = Math.min(...data) - 1;
+             const maxVal = Math.max(...data) + 1;
+             const range = maxVal - minVal || 1;
+             const toX = (i: number) => PAD.left + (i / (data.length - 1)) * innerW;
+             const toY = (v: number) => PAD.top + innerH - ((v - minVal) / range) * innerH;
+             const points = data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+             const areaPoints = `${toX(0)},${PAD.top + innerH} ${points} ${toX(data.length - 1)},${PAD.top + innerH}`;
+             const last = data[data.length - 1];
+             const prev = data[data.length - 2];
+             const diff = last - prev;
+             const trendColor = diff > 0 ? '#10b981' : diff < 0 ? '#f43f5e' : '#94a3b8';
+             const trendArrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
+             const trendLabel = diff > 0 ? `+${diff}` : `${diff}`;
+             return (
+               <div className="bg-slate-900/60 rounded-2xl border border-white/10 p-3 backdrop-blur-sm">
+                 <div className="flex items-center justify-between mb-2 px-1">
+                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Progres Treningowy Drużyny</span>
+                   <div className="flex items-center gap-2">
+                     <span className="text-[9px] font-black uppercase" style={{ color: trendColor }}>{trendArrow} {trendLabel}</span>
+                     <span className="text-[11px] font-black text-white tabular-nums">OVR {last}</span>
+                   </div>
+                 </div>
+                 <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block' }}>
+                   <defs>
+                     <linearGradient id="tpg" x1="0" y1="0" x2="0" y2="1">
+                       <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                       <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                     </linearGradient>
+                   </defs>
+                   {/* Linie siatki poziomej */}
+                   {[0, 0.5, 1].map((t, i) => {
+                     const y = PAD.top + innerH * (1 - t);
+                     const val = Math.round(minVal + range * t);
+                     return (
+                       <g key={i}>
+                         <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                         <text x={PAD.left - 4} y={y + 3.5} fill="rgba(148,163,184,0.6)" fontSize="7" textAnchor="end" fontWeight="bold">{val}</text>
+                       </g>
+                     );
+                   })}
+                   {/* Gradient wypełnienia */}
+                   <polygon points={areaPoints} fill="url(#tpg)" />
+                   {/* Linia wykresu */}
+                   <polyline points={points} fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+                   {/* Punkty */}
+                   {data.map((v, i) => (
+                     <circle key={i} cx={toX(i)} cy={toY(v)} r={i === data.length - 1 ? 3.5 : 2} fill={i === data.length - 1 ? '#10b981' : '#1e293b'} stroke="#10b981" strokeWidth="1.5" />
+                   ))}
+                   {/* Etykieta ostatniego punktu */}
+                   <text x={toX(data.length - 1)} y={toY(last) - 6} fill="#10b981" fontSize="8" textAnchor="middle" fontWeight="bold">{last}</text>
+                   {/* Etykiety osi X */}
+                   {data.length <= 10
+                     ? data.map((_, i) => (
+                         <text key={i} x={toX(i)} y={H - 3} fill="rgba(148,163,184,0.45)" fontSize="6.5" textAnchor="middle">T{i + 1}</text>
+                       ))
+                     : [0, Math.floor((data.length - 1) / 2), data.length - 1].map(i => (
+                         <text key={i} x={toX(i)} y={H - 3} fill="rgba(148,163,184,0.45)" fontSize="6.5" textAnchor="middle">T{i + 1}</text>
+                       ))
+                   }
+                 </svg>
+               </div>
+             );
+           })()}
 
            {/* SIATKA PROGRAMÓW TRENINGOWYCH */}
            <div className="grid grid-cols-2 gap-3">

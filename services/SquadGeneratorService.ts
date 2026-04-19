@@ -119,8 +119,8 @@ const getLocalRegionForInternationalClub = (country: string, continent: 'Asia' |
     LBY: Region.ARABIA,
     MRT: Region.ARABIA,
     SDN: Region.ARABIA,
-    USA: Region.ENGLAND,
-    CAN: Region.ENGLAND,
+    USA: Region.NORTH_AMERICA,
+    CAN: Region.NORTH_AMERICA,
     MEX: Region.MEXICO,
     CRC: Region.IBERIA,
     HON: Region.IBERIA,
@@ -130,8 +130,8 @@ const getLocalRegionForInternationalClub = (country: string, continent: 'Asia' |
     PAN: Region.IBERIA,
     DOM: Region.IBERIA,
     CUB: Region.IBERIA,
-    JAM: Region.ENGLAND,
-    TTO: Region.ENGLAND,
+    JAM: Region.NORTH_AMERICA,
+    TTO: Region.NORTH_AMERICA,
     HAI: Region.FRANCE,
   };
 
@@ -156,7 +156,7 @@ const getForeignRegionForInternationalClub = (
   const pools: Record<'Asia' | 'Africa' | 'North America' | 'South America', Region[]> = {
     Asia: [Region.JAPAN, Region.KOREA, Region.ARABIA, Region.KAZAKH, Region.SSA, Region.IBERIA, Region.BRAZIL],
     Africa: [Region.SSA, Region.ARABIA, Region.IBERIA, Region.FRANCE, Region.ENGLAND, Region.BRAZIL],
-    'North America': [Region.IBERIA, Region.ENGLAND, Region.BRAZIL, Region.ARGENTINA, Region.FRANCE],
+    'North America': [Region.NORTH_AMERICA, Region.MEXICO, Region.IBERIA, Region.BRAZIL, Region.ARGENTINA],
     'South America': [Region.SOUTH_AMERICAN, Region.BRAZIL, Region.ARGENTINA, Region.IBERIA, Region.ENGLAND],
   };
 

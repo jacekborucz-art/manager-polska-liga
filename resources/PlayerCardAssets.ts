@@ -108,8 +108,9 @@ import zaglebieWhite  from '../Graphic/players/zaglebie_lubin_white.png';
 // Typy
 // ─────────────────────────────────────────────────
 
-interface KitVariant {
+export interface KitVariant {
   hex: string;
+  secondaryHex?: string;
   image: string;
 }
 
@@ -135,7 +136,7 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
   {
     clubId: 'PL_CRACOVIA',
     kits: [
-      { hex: '#FF0000', image: cracoviaRedWhite },
+      { hex: '#FF0000', secondaryHex: '#FFFFFF', image: cracoviaRedWhite },
       { hex: '#0000FF', image: cracoviaBlue },
       { hex: '#000000', image: cracoviaBlack },
     ]
@@ -159,24 +160,24 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
   {
     clubId: 'PL_JAGIELLONIA_BIALYSTOK',
     kits: [
-      { hex: '#FFFF00', image: jagielloniaYellowRed },
+      { hex: '#FFFF00', secondaryHex: '#FF0000', image: jagielloniaYellowRed },
       { hex: '#000000', image: jagielloniaBlack },
-      { hex: '#8B008B', image: jagielloniaYellowViolet },
+      { hex: '#8B008B', secondaryHex: '#FFFF00', image: jagielloniaYellowViolet },
     ]
   },
   {
     clubId: 'PL_KORONA_KIELCE',
     kits: [
-      { hex: '#FFFF00', image: koronaYellowRed },
-      { hex: '#000000', image: koronaYellowBlack },
-      { hex: '#8B4513', image: koronaYellowBrown },
+      { hex: '#FFFF00', secondaryHex: '#FF0000', image: koronaYellowRed },
+      { hex: '#000000', secondaryHex: '#FFFF00', image: koronaYellowBlack },
+      { hex: '#8B4513', secondaryHex: '#FFFF00', image: koronaYellowBrown },
     ]
   },
   {
     clubId: 'PL_LECHIA_GDANSK',
     kits: [
       { hex: '#008000', image: lechiaGreen },
-      { hex: '#FFFFFF', image: lechiaWhiteGreen },
+      { hex: '#FFFFFF', secondaryHex: '#008000', image: lechiaWhiteGreen },
       { hex: '#FF0000', image: lechiaRed },
     ]
   },
@@ -209,14 +210,14 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     clubId: 'PL_PIAST_GLIWICE',
     kits: [
       { hex: '#0000FF', image: piastGliwiceBlue },
-      { hex: '#000080', image: piastGliwiceBlueRed },
+      { hex: '#000080', secondaryHex: '#FF0000', image: piastGliwiceBlueRed },
       { hex: '#FF69B4', image: piastGliwicePink },
     ]
   },
   {
     clubId: 'PL_POGON_SZCZECIN',
     kits: [
-      { hex: '#000080', image: pogonBlueRed },
+      { hex: '#000080', secondaryHex: '#FF0000', image: pogonBlueRed },
       { hex: '#FFFFFF', image: pogonWhite },
       { hex: '#00FFFF', image: pogonCyan },
     ]
@@ -284,7 +285,7 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
 // ─────────────────────────────────────────────────
 
 const GENERIC_KITS: KitVariant[] = [
-  { hex: '#FFFFFF', image: genericWhite  },
+  { hex: '#FFFFFF', secondaryHex: '#000000', image: genericWhite  },
   { hex: '#000000', image: genericBlack  },
   { hex: '#FF0000', image: genericRed    },
   { hex: '#0000FF', image: genericBlue   },
@@ -332,4 +333,20 @@ export function getPlayerCardImage(clubId: string, kitHex: string): string {
   const clubAssets = BRANDED_CLUB_CARDS.find(c => c.clubId === clubId);
   const kits = clubAssets ? clubAssets.kits : GENERIC_KITS;
   return closestImage(kits, kitHex);
+}
+
+/**
+ * Zwraca wszystkie warianty koszulek dla danego klubu.
+ * Dla klubów brandowanych — oryginalne warianty.
+ * Dla pozostałych — generyczne koszulki dopasowane do colorsHex klubu.
+ */
+export function getClubKitVariants(clubId: string, colorsHex: string[]): KitVariant[] {
+  const clubAssets = BRANDED_CLUB_CARDS.find(c => c.clubId === clubId);
+  if (clubAssets) {
+    return clubAssets.kits;
+  }
+  return colorsHex.map(hex => ({
+    hex,
+    image: closestImage(GENERIC_KITS, hex)
+  }));
 }

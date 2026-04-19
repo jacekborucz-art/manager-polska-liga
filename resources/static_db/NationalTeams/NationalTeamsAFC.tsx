@@ -7,7 +7,7 @@ export const NATIONAL_TEAMS_AFC = [
   { name: "Arabia Saudyjska", continent: "Asia", tier: 4, colors: ['#006C35','#FFFFFF','#006C35'], stadium: "King Fahd International Stadium", capacity: 68752, reputation: 12, region: Region.ARABIA },
   { name: "Bahrajn", continent: "Asia", tier: 4, colors: ['#CE1126','#FFFFFF','#CE1126'], stadium: "Bahrain National Stadium", capacity: 24000, reputation: 7, region: Region.ARABIA },
   { name: "Irak", continent: "Asia", tier: 3, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Basra International Stadium", capacity: 65000, reputation: 10, region: Region.ARABIA },
-  { name: "Iran", continent: "Asia", tier: 2, colors: ['#239F40','#FFFFFF','#DA0000'], stadium: "Azadi Stadium", capacity: 78116, reputation: 13, region: Region.ARABIA },
+  { name: "Iran", continent: "Asia", tier: 3, colors: ['#239F40','#FFFFFF','#DA0000'], stadium: "Azadi Stadium", capacity: 78116, reputation: 11, region: Region.ARABIA },
   { name: "Jemen", continent: "Asia", tier: 4, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Al-Thawra Stadium", capacity: 30000, reputation: 5, region: Region.ARABIA },
   { name: "Jordania", continent: "Asia", tier: 4, colors: ['#000000','#FFFFFF','#007A3D'], stadium: "Amman International Stadium", capacity: 25000, reputation: 9, region: Region.ARABIA },
   { name: "Katar", continent: "Asia", tier: 4, colors: ['#8A1538','#FFFFFF','#8A1538'], stadium: "Lusail Stadium", capacity: 88966, reputation: 12, region: Region.ARABIA },
@@ -17,7 +17,7 @@ export const NATIONAL_TEAMS_AFC = [
   { name: "Palestyna", continent: "Asia", tier: 4, colors: ['#000000','#FFFFFF','#007A3D'], stadium: "Faisal Al-Husseini Stadium", capacity: 12000, reputation: 7, region: Region.ARABIA },
   { name: "Syria", continent: "Asia", tier: 4, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Abbasiyyin Stadium", capacity: 30000, reputation: 8, region: Region.ARABIA },
   { name: "ZEA", continent: "Asia", tier: 3, colors: ['#00732F','#FFFFFF','#000000'], stadium: "Zayed Sports City Stadium", capacity: 43000, reputation: 10, region: Region.ARABIA },
-  { name: "Australia", continent: "Asia", tier: 2, colors: ['#1F8A43','#FFD100','#1F8A43'], stadium: "Stadium Australia", capacity: 83500, reputation: 13, region: Region.ENGLAND },
+  { name: "Australia", continent: "Asia", tier: 2, colors: ['#1F8A43','#FFD100','#1F8A43'], stadium: "Stadium Australia", capacity: 83500, reputation: 13, region: Region.OCEANIA },
   { name: "Chiny", continent: "Asia", tier: 4, colors: ['#DE2910','#FFDE00','#DE2910'], stadium: "Workers' Stadium", capacity: 68000, reputation: 10, region: Region.JAPAN },
   { name: "Filipiny", continent: "Asia", tier: 4, colors: ['#0038A8','#FFFFFF','#CE1126'], stadium: "Rizal Memorial Stadium", capacity: 12000, reputation: 7, region: Region.JAPAN },
   { name: "Indonezja", continent: "Asia", tier: 4, colors: ['#CE1126','#FFFFFF','#CE1126'], stadium: "Gelora Bung Karno", capacity: 77000, reputation: 9, region: Region.JAPAN },
@@ -55,5 +55,36 @@ export const NATIONAL_TEAMS_AFC = [
   { name: "Sri Lanka", continent: "Asia", tier: 5, colors: ['#8D153A','#F9E547','#1C4FA1'], stadium: "Racecourse Stadium", capacity: 35000, reputation: 5, region: Region.ARABIA },
   { name: "Tadżykistan", continent: "Asia", tier: 5, colors: ['#CE1126','#FFFFFF','#007A3D'], stadium: "Central Republican Stadium", capacity: 23000, reputation: 9, region: Region.EX_USSR },
   { name: "Turkmenistan", continent: "Asia", tier: 5, colors: ['#009E60','#FFFFFF','#CE1126'], stadium: "Ashgabat Stadium", capacity: 20000, reputation: 7, region: Region.KAZAKH },
-  { name: "Uzbekistan", continent: "Asia", tier: 4, colors: ['#0099B5','#FFFFFF','#1EB53A'], stadium: "Milliy Stadium", capacity: 34000, reputation: 12, region: Region.KAZAKH }
+  { name: "Uzbekistan", continent: "Asia", tier: 4, colors: ['#0099B5','#FFFFFF','#1EB53A'], stadium: "Milliy Stadium", capacity: 34000, reputation: 12, region: Region.KAZAKH },
+{ 
+  name: "Brunei", 
+  continent: "Asia", 
+  tier: 5, 
+  colors: ['#000000', '#FFFFFF', '#CF1126'], 
+  stadium: "Hassanal Bolkiah National Stadium", 
+  capacity: 28000, 
+  reputation: 4, 
+  region: Region.JAPAN 
+},
+{ 
+  name: "Chinese Taipei", 
+  continent: "Asia", 
+  tier: 5, 
+  colors: ['#002868', '#FFFFFF', '#CE1126'], 
+  stadium: "Kaohsiung National Stadium", 
+  capacity: 55000, 
+  reputation: 6, 
+  region: Region.JAPAN 
+},
+{ 
+  name: "Guam", 
+  continent: "Asia", 
+  tier: 5, 
+  colors: ['#0033A0', '#FFFFFF', '#CE1126'], 
+  stadium: "Guam National Football Stadium", 
+  capacity: 3500, 
+  reputation: 3, 
+  region: Region.JAPAN 
+}
+
 ]

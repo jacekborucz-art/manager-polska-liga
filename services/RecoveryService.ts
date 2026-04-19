@@ -80,6 +80,9 @@ export const RecoveryService = {
           } else {
             // Aktualizacja licznika wstecznego
             updated.health.injury.daysRemaining = actualRemaining;
+            // Limit energii dynamiczny: im więcej dni pozostało, tym niższy limit
+            // Przy 7 dniach → max 80% (fatigueDebt=20), przy 30+ → ok. 10%
+            updated.fatigueDebt = Math.min(90, Math.round(actualRemaining * 20 / 7));
             // Korekta severity: lekki uraz nie może trwać dłużej niż 14 dni
             if (updated.health.injury.severity === InjurySeverity.LIGHT && actualRemaining > 14) {
               updated.health.injury.severity = InjurySeverity.SEVERE;

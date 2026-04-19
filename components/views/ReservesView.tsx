@@ -229,7 +229,7 @@ function generateCoachReport(players: Player[], seed: number): CoachReport {
 export const ReservesView: React.FC = () => {
   const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, currentDate, seasonNumber,
           players, setPlayers, setReserves, lineups, updateLineup,
-          coaches, viewCoachDetails, reserveCoachId } = useGame();
+          coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; player: Player } | null>(null);
 
@@ -308,6 +308,62 @@ export const ReservesView: React.FC = () => {
               )}
             </div>
           </div>
+          <div className="flex items-center gap-4">
+            {reserveProgressHistory.length >= 2 && (() => {
+              const data = reserveProgressHistory;
+              const W = 220;
+              const H = 56;
+              const PAD = { top: 8, right: 10, bottom: 14, left: 24 };
+              const innerW = W - PAD.left - PAD.right;
+              const innerH = H - PAD.top - PAD.bottom;
+              const minVal = Math.min(...data) - 1;
+              const maxVal = Math.max(...data) + 1;
+              const range = maxVal - minVal || 1;
+              const toX = (i: number) => PAD.left + (i / (data.length - 1)) * innerW;
+              const toY = (v: number) => PAD.top + innerH - ((v - minVal) / range) * innerH;
+              const points = data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+              const areaPoints = `${toX(0)},${PAD.top + innerH} ${points} ${toX(data.length - 1)},${PAD.top + innerH}`;
+              const last = data[data.length - 1];
+              const prev = data[data.length - 2];
+              const diff = last - prev;
+              const trendColor = diff > 0 ? '#10b981' : diff < 0 ? '#f43f5e' : '#94a3b8';
+              const trendArrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
+              return (
+                <div className="bg-slate-900/70 rounded-2xl border border-white/10 px-3 py-2 backdrop-blur-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.35em]">Progres Rezerw</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] font-black" style={{ color: trendColor }}>{trendArrow} {diff > 0 ? `+${diff}` : diff}</span>
+                      <span className="text-[10px] font-black text-white tabular-nums">OVR {last}</span>
+                    </div>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block' }}>
+                    <defs>
+                      <linearGradient id="rpg" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    {[0, 0.5, 1].map((t, i) => {
+                      const y = PAD.top + innerH * (1 - t);
+                      const val = Math.round(minVal + range * t);
+                      return (
+                        <g key={i}>
+                          <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                          <text x={PAD.left - 3} y={y + 3} fill="rgba(148,163,184,0.5)" fontSize="6" textAnchor="end" fontWeight="bold">{val}</text>
+                        </g>
+                      );
+                    })}
+                    <polygon points={areaPoints} fill="url(#rpg)" />
+                    <polyline points={points} fill="none" stroke="#10b981" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+                    {data.map((v, i) => (
+                      <circle key={i} cx={toX(i)} cy={toY(v)} r={i === data.length - 1 ? 3 : 1.8} fill={i === data.length - 1 ? '#10b981' : '#1e293b'} stroke="#10b981" strokeWidth="1.4" />
+                    ))}
+                    <text x={toX(data.length - 1)} y={toY(last) - 5} fill="#10b981" fontSize="7" textAnchor="middle" fontWeight="bold">{last}</text>
+                  </svg>
+                </div>
+              );
+            })()}
           <div className="flex gap-3">
             <button
               onClick={() => setShowReport(true)}
@@ -324,6 +380,7 @@ export const ReservesView: React.FC = () => {
               <span>Powrót</span>
             </button>
           </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-slate-700">
@@ -336,6 +393,7 @@ export const ReservesView: React.FC = () => {
                   <th key={key} title={ATTR_FULL_NAMES[key]} className="px-1 py-2 text-center whitespace-nowrap cursor-help">{ATTR_LABELS[key]}</th>
                 ))}
                 <th className="px-2 py-2 text-center whitespace-nowrap">Wiek</th>
+                <th className="px-2 py-2 text-center whitespace-nowrap text-emerald-400">DEV</th>
               </tr>
             </thead>
             <tbody>
@@ -364,15 +422,31 @@ export const ReservesView: React.FC = () => {
                   </td>
                   {ATTR_KEYS.map(key => {
                     const val = player.attributes[key];
+                    const change = (player.stats.seasonalChanges?.[key as string] ?? 0);
                     const isTop = val >= 65;
                     const isWeak = isWeakForPosition(player.position, key, val);
+                    const ringStyle = change > 0
+                      ? { outline: '1px solid rgba(16,185,129,0.55)', backgroundColor: 'rgba(16,185,129,0.08)' }
+                      : change < 0
+                      ? { outline: '1px solid rgba(244,63,94,0.45)', backgroundColor: 'rgba(244,63,94,0.07)' }
+                      : {};
                     return (
-                      <td key={key} className={`px-1 py-1.5 text-center font-medium italic tracking-tight text-[11px] ${isTop ? 'text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]' : isWeak ? 'text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]' : 'text-slate-100'}`} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)' }}>
+                      <td key={key} className={`px-1 py-1.5 text-center font-medium italic tracking-tight text-[11px] ${isTop ? 'text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]' : isWeak ? 'text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]' : 'text-slate-100'}`} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)', ...ringStyle }}>
                         {val}
                       </td>
                     );
                   })}
                   <td className="px-2 py-1.5 text-center text-slate-300 font-medium">{player.age}</td>
+                  {(() => {
+                    const totalDev = Object.values(player.stats.seasonalChanges ?? {}).reduce((s, v) => s + v, 0);
+                    const devColor = totalDev > 0 ? 'text-emerald-400' : totalDev < 0 ? 'text-red-400' : 'text-slate-500';
+                    const devLabel = totalDev > 0 ? `+${totalDev}` : `${totalDev}`;
+                    return (
+                      <td className={`px-2 py-1.5 text-center font-black italic text-[11px] tabular-nums ${devColor}`}>
+                        {totalDev === 0 ? '—' : devLabel}
+                      </td>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>

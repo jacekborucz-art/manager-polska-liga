@@ -83,7 +83,8 @@ export const MatchLiveView = () => {
     navigateTo, userTeamId, clubs, fixtures, players,
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches,
     roundResults, setClubs,
-    activeMatchState: matchState, setActiveMatchState: setMatchState
+    activeMatchState: matchState, setActiveMatchState: setMatchState,
+    pendingMatchKits
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
@@ -148,9 +149,10 @@ export const MatchLiveView = () => {
   }, [userTeamId, clubs, fixtures, players, currentDate]);
 
   const kitColors = useMemo(() => {
+    if (pendingMatchKits) return pendingMatchKits;
     if (!ctx) return null;
     return KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub);
-  }, [ctx]);
+  }, [ctx, pendingMatchKits]);
 
   const userSide = useMemo(() => {
     if (!ctx || !userTeamId) return 'HOME';

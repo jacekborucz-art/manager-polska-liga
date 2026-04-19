@@ -28,6 +28,7 @@ WCQPlayoffState,
 CoachSeasonStats,
 AiTransferLogEntry,
 } from '../types';
+import { KitSelection } from '../services/KitSelectionService';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
 import { NationalTeamService } from '../services/NationalTeamService';
@@ -180,7 +181,9 @@ interface GameContextType {
 
   activeIntensity: TrainingIntensity;
   setTrainingIntensity: (intensity: TrainingIntensity) => void;
-  
+  trainingProgressHistory: number[];
+  reserveProgressHistory: number[];
+
   startNewGame: () => void;
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
@@ -189,6 +192,8 @@ interface GameContextType {
   jumpToNextEvent: () => void;
   navigateTo: (view: ViewState) => void;
   navigateWithoutHistory: (view: ViewState) => void;
+  pendingMatchKits: KitSelection | null;
+  setPendingMatchKits: React.Dispatch<React.SetStateAction<KitSelection | null>>;
   updateLineup: (clubId: string, lineup: Lineup) => void;
   viewClubDetails: (clubId: string) => void;
   viewPlayerDetails: (playerId: string) => void;
@@ -334,11 +339,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(null);
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
+  const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
   const [activeTrainingId, setActiveTrainingId] = useState<string | null>('T_TACTICAL_PERIOD');
 
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
+const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
+const [reserveProgressHistory, setReserveProgressHistory] = useState<number[]>([]);
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
@@ -1336,6 +1344,15 @@ setMessages([welcomeMail, fanMail]);
       );
       // KONIEC WSTAWKI
 
+      // Zapis tygodniowego progresu treningowego (średni OVR drużyny)
+      const teamAfterTraining = finalPlayers[userTeamId] || [];
+      if (teamAfterTraining.length > 0) {
+        const avgOvr = Math.round(
+          teamAfterTraining.reduce((sum, p) => sum + p.overallRating, 0) / teamAfterTraining.length
+        );
+        setTrainingProgressHistory(prev => [...prev.slice(-19), avgOvr]);
+      }
+
       // Trening rezerw — automatyczny plan trenera rezerw
       if (reserves.length > 0) {
         const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
@@ -1350,6 +1367,12 @@ setMessages([welcomeMail, fanMail]);
           userClub?.country
         );
         setReserves(updatedReserves);
+        if (updatedReserves.length > 0) {
+          const avgOvrRes = Math.round(
+            updatedReserves.reduce((sum, p) => sum + p.overallRating, 0) / updatedReserves.length
+          );
+          setReserveProgressHistory(prev => [...prev.slice(-19), avgOvrRes]);
+        }
       }
     }
 
@@ -6533,9 +6556,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
       lastRecoveryDate,
       managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
-      activeIntensity, setTrainingIntensity: setActiveIntensity,
+      activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
       startNewGame, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
-      setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, 
+      setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
