@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PreMatchStudioData, PlayerPosition, Player, Club, CommentaryCategory } from '../../types';
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
+import { ViewState, PreMatchStudioData, PlayerPosition, Player, Club } from '../../types';
 import { PreMatchStudioService } from '../../services/PreMatchStudioService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
@@ -34,6 +32,81 @@ const getContrastTextColor = (bgHex: string, secondaryHex: string): string => {
   const diff = Math.abs(bgLum - secLum);
   if (diff > 60) return secondaryHex;
   return bgLum > 128 ? '#000000' : '#ffffff';
+};
+
+const GOALKEEPER_KIT_POOL = ['#facc15', '#fb923c', '#f472b6', '#881337', '#dc2626', '#16a34a'];
+
+const hashString = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const getPitchPlayerLabel = (player?: Player | null): string =>
+  player ? `${player.firstName.charAt(0)}. ${player.lastName}` : 'BRAK';
+
+const getPitchSlotTop = (isHome: boolean, slotY: number): string =>
+  `${isHome ? 55 + slotY * 32 : 45 - slotY * 32}%`;
+
+const pickGoalkeeperKitColor = (seed: string, blockedColors: string[]): string => {
+  const threshold = 120;
+  const viableColors = GOALKEEPER_KIT_POOL.filter(color =>
+    blockedColors.every(blocked => KitSelectionService.getColorDistance(color, blocked) > threshold)
+  );
+
+  if (viableColors.length > 0) {
+    return viableColors[hashString(seed) % viableColors.length];
+  }
+
+  const ranked = [...GOALKEEPER_KIT_POOL].sort((a, b) => {
+    const aScore = Math.min(...blockedColors.map(blocked => KitSelectionService.getColorDistance(a, blocked)));
+    const bScore = Math.min(...blockedColors.map(blocked => KitSelectionService.getColorDistance(b, blocked)));
+    return bScore - aScore;
+  });
+
+  return ranked[hashString(seed) % ranked.length];
+};
+
+const PitchPlayerKit: React.FC<{
+  player?: Player;
+  left: string;
+  top: string;
+  primary: string;
+  secondary: string;
+  trim: string;
+}> = ({ player, left, top, primary, secondary, trim }) => {
+  const shirtText = getContrastTextColor(primary, secondary);
+
+  return (
+    <div
+      className="absolute z-20 flex flex-col items-center gap-0 transition-transform duration-300 hover:scale-110"
+      style={{ left, top, transform: 'translate(-50%, -50%)' }}
+    >
+      <div className="relative flex flex-col items-center">
+        <svg viewBox="0 0 24 24" className="w-[34px] h-[34px] drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]">
+          <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={primary} />
+          <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.9" />
+          <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={secondary} fillOpacity="0.35" />
+          <path d="M12 7.2v11.8" stroke={trim} strokeWidth="1.15" strokeOpacity="0.85" />
+          <text x="12" y="15.6" textAnchor="middle" fontSize="3.6" fontWeight="900" fontStyle="italic" fill={shirtText}>
+            {player?.overallRating ?? '??'}
+          </text>
+        </svg>
+        <svg viewBox="0 0 28 18" className="-mt-1 w-[18px] h-[10px] drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]">
+          <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={secondary} stroke={trim} strokeWidth="1.2" strokeLinejoin="round" />
+          <path d="M14 3v12" stroke={trim} strokeWidth="1" strokeOpacity="0.7" />
+        </svg>
+      </div>
+      <div className="min-w-[82px] max-w-[96px] -mt-[4px] rounded-md border border-white/10 bg-black/85 px-2 py-1 text-center shadow-[0_6px_16px_rgba(0,0,0,0.45)]">
+        <span className="block truncate text-[8px] font-black uppercase tracking-[0.14em] text-white">
+          {getPitchPlayerLabel(player)}
+        </span>
+      </div>
+    </div>
+  );
 };
 
 function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
@@ -82,7 +155,6 @@ export const PreMatchStudioView: React.FC = () => {
   const [showExpertCommentary, setShowExpertCommentary] = useState(false);
   const [showKitModal, setShowKitModal] = useState(false);
   const [matchKits, setMatchKits] = useState<KitSelection | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -185,6 +257,20 @@ export const PreMatchStudioView: React.FC = () => {
 
   const homeTactic = TacticRepository.getById(data.homeLineup.tacticId);
   const awayTactic = TacticRepository.getById(data.awayLineup.tacticId);
+  const blockedGoalkeeperColors = [
+    matchKits.home.primary,
+    matchKits.home.secondary,
+    matchKits.away.primary,
+    matchKits.away.secondary
+  ];
+  const homeGoalkeeperColor = pickGoalkeeperKitColor(
+    `${data.homeClub.id}-${data.awayClub.id}-${homeXI.find(player => player.position === PlayerPosition.GK)?.id ?? 'home-gk'}`,
+    blockedGoalkeeperColors
+  );
+  const awayGoalkeeperColor = pickGoalkeeperKitColor(
+    `${data.awayClub.id}-${data.homeClub.id}-${awayXI.find(player => player.position === PlayerPosition.GK)?.id ?? 'away-gk'}`,
+    blockedGoalkeeperColors
+  );
 
   const UnifiedPlayerList = ({ club, xi, bench, side }: { club: Club, xi: Player[], bench: Player[], side: 'left' | 'right' }) => (
     <div className={`w-80 shrink-0 bg-slate-900/30 rounded-[40px] border border-white/10 backdrop-blur-[1px] shadow-2xl flex flex-col overflow-hidden h-full`}>
@@ -302,14 +388,14 @@ export const PreMatchStudioView: React.FC = () => {
       </header>
 
       {/* MAIN LAYOUT */}
-      <main className="relative z-10 flex-1 w-full max-w-[1850px] mx-auto flex gap-6 px-6 py-4 min-h-0">
+      <main className="relative z-10 flex-1 w-full max-w-[1850px] mx-auto flex gap-6 px-6 pt-4 pb-6 min-h-0">
         
         <UnifiedPlayerList club={data.homeClub} xi={homeXI} bench={homeBench} side="left" />
 
         {/* CENTER COLUMN */}
-        <div className="flex-1 flex flex-col gap-6 items-center min-w-0">
-           <div className="w-full flex items-center justify-between gap-2 animate-fade-in flex-1 min-h-0">
-                      <div className="shrink-0 self-center -mr-20 z-20 flex flex-col items-center gap-3">
+        <div className="flex-1 flex flex-col gap-4 items-center min-w-0 justify-end">
+           <div className="w-full flex items-center justify-between gap-4 animate-fade-in flex-1 min-h-0">
+                      <div className="shrink-0 self-center -mr-16 z-20 flex flex-col items-center gap-3">
                  <div className="relative group">
                     <div className="absolute -inset-4 bg-blue-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
                     <img
@@ -344,62 +430,76 @@ export const PreMatchStudioView: React.FC = () => {
                  )}
               </div>
 
-              {/* BOISKO 3D Z KOMPLETNYMI LINIAMI I OŚWIETLENIEM */}
-              <div className="flex-1 max-w-[350px] flex items-center justify-center py-10" style={{ perspective: '1200px' }}>
+              {/* BOISKO W WIDOKU 2D Z KOSZULKAMI SVG */}
+              <div className="flex-1 max-w-[430px] xl:max-w-[470px] flex items-center justify-center py-2">
                 <div 
-                  className="w-full aspect-[2/3] rounded-none relative shadow-[0_80px_100px_rgba(0,0,0,0.7)] overflow-visible group/pitch opacity-80"
-                  style={{ transform: 'rotateX(25deg)', transformOrigin: 'center center' }}
+                  className="w-full aspect-[2/3] rounded-[10px] relative shadow-[0_45px_80px_rgba(0,0,0,0.55)] overflow-visible group/pitch opacity-90"
                 >
                   {/* Grafika boiska */}
-                  <img src={bojo2Pitch} alt="boisko" className="absolute inset-0 w-full h-full object-fill" style={{ transform: 'scale(1.15, 1.035)' }} />
+                  <img src={bojo2Pitch} alt="boisko" className="absolute inset-0 w-full h-full object-fill" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/10 pointer-events-none" />
 
-                  {/* Ikonki Gospodarzy */}
+                  {/* Koszulki Gospodarzy */}
                   {homeTactic.slots.map((slot, i) => {
                     const player = homeXI[i];
+                    const primary = slot.role === PlayerPosition.GK ? homeGoalkeeperColor : matchKits.home.primary;
+                    const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.home.secondary;
+                    const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.home.secondary);
                     return (
-                      <div 
-                        key={`h-${i}`} 
-                        className="absolute w-[29px] h-[29px] rounded-full border border-white/60 shadow-2xl flex flex-col overflow-hidden transform hover:scale-125 transition-transform z-20" 
-                        style={{ 
-                          left: `${slot.x * 100}%`, 
-                          top: `calc(${(slot.y * 0.44 + 0.53) * 100}% - ${slot.role === PlayerPosition.FWD ? 50 : slot.role === PlayerPosition.MID ? 25 : slot.role === PlayerPosition.GK ? -5 : 15}px)`, 
-                          transform: 'translate(-50%, -50%)',
-                          WebkitFontSmoothing: 'antialiased',
-                        }}
-                      >
-                        <div className="h-[80%] w-full flex items-center justify-center" style={{ backgroundColor: matchKits.home.primary }}>
-                          <span className="text-[7px] font-black" style={{ color: getContrastTextColor(matchKits.home.primary, matchKits.home.secondary) }}>{player?.overallRating || '??'}</span>
-                        </div>
-                        <div className="h-[20%] w-full" style={{ backgroundColor: matchKits.home.secondary }} />
-                      </div>
+                      <PitchPlayerKit
+                        key={`h-${i}`}
+                        player={player}
+                        left={`${slot.x * 100}%`}
+                        top={
+                          slot.role === PlayerPosition.GK
+                            ? `calc(${getPitchSlotTop(true, slot.y)} + 60px)`
+                            : slot.role === PlayerPosition.DEF
+                              ? `calc(${getPitchSlotTop(true, slot.y)} + 37px)`
+                              : slot.role === PlayerPosition.MID
+                                ? `calc(${getPitchSlotTop(true, slot.y)} - 7px)`
+                              : slot.role === PlayerPosition.FWD
+                                ? `calc(${getPitchSlotTop(true, slot.y)} - 45px)`
+                              : getPitchSlotTop(true, slot.y)
+                        }
+                        primary={primary}
+                        secondary={secondary}
+                        trim={trim}
+                      />
                     );
                   })}
 
-                  {/* Ikonki Gości */}
+                  {/* Koszulki Gości */}
                   {awayTactic.slots.map((slot, i) => {
                     const player = awayXI[i];
+                    const primary = slot.role === PlayerPosition.GK ? awayGoalkeeperColor : matchKits.away.primary;
+                    const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.away.secondary;
+                    const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.away.secondary);
                     return (
-                      <div 
-                        key={`a-${i}`} 
-                        className="absolute w-6 h-6 rounded-full border border-white/60 shadow-2xl flex flex-col overflow-hidden transform hover:scale-125 transition-transform z-20" 
-                        style={{ 
-                          left: `${slot.x * 100}%`, 
-                          top: `calc(${(0.47 - slot.y * 0.44) * 100}% - 10px)`, 
-                          transform: 'translate(-50%, -50%)',
-                          WebkitFontSmoothing: 'antialiased',
-                        }}
-                      >
-                        <div className="h-[80%] w-full flex items-center justify-center" style={{ backgroundColor: matchKits.away.primary }}>
-                          <span className="text-[7px] font-black" style={{ color: getContrastTextColor(matchKits.away.primary, matchKits.away.secondary) }}>{player?.overallRating || '??'}</span>
-                        </div>
-                        <div className="h-[20%] w-full" style={{ backgroundColor: matchKits.away.secondary }} />
-                      </div>
+                      <PitchPlayerKit
+                        key={`a-${i}`}
+                        player={player}
+                        left={`${slot.x * 100}%`}
+                        top={
+                          slot.role === PlayerPosition.GK
+                            ? `calc(${getPitchSlotTop(false, slot.y)} - 60px)`
+                            : slot.role === PlayerPosition.DEF
+                              ? `calc(${getPitchSlotTop(false, slot.y)} - 35px)`
+                              : slot.role === PlayerPosition.MID
+                                ? `calc(${getPitchSlotTop(false, slot.y)} + 5px)`
+                              : slot.role === PlayerPosition.FWD
+                                ? `calc(${getPitchSlotTop(false, slot.y)} + 48px)`
+                              : getPitchSlotTop(false, slot.y)
+                        }
+                        primary={primary}
+                        secondary={secondary}
+                        trim={trim}
+                      />
                     );
                   })}
                 </div>
               </div>
 
-                           <div className="shrink-0 self-center -ml-20 z-20 flex flex-col items-center gap-3">
+                           <div className="shrink-0 self-center -ml-16 z-20 flex flex-col items-center gap-3">
                  <div className="relative group">
                     <div className="absolute -inset-4 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
                     <img
@@ -436,25 +536,25 @@ export const PreMatchStudioView: React.FC = () => {
            </div>
 
            {/* PANEL PRZYCISKÓW */}
-           <div className="w-full max-w-5xl bg-slate-900/30 rounded-[35px] border border-white/10 p-4 flex items-center justify-center gap-4 backdrop-blur-[1px] shadow-2xl shrink-0">
+           <div className="mt-auto mt-[10px] w-full max-w-[864px] bg-slate-900/30 rounded-[30px] border border-white/10 p-3 flex items-center justify-center gap-3 backdrop-blur-[1px] shadow-2xl shrink-0">
               <button
                 onClick={() => setShowExpertCommentary(true)}
-                className="flex-1 px-10 py-8 rounded-[40px] bg-blue-600/30 border-b-8 border-blue-900 text-blue-400 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-3"
+                className="flex-1 px-8 py-6 rounded-[32px] bg-blue-600/30 border-b-8 border-blue-900 text-blue-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2.5"
               >
                 🎙️ ANALIZA EKSPERTÓW
               </button>
               <button
                 onClick={() => { setPendingMatchKits(matchKits); navigateTo(ViewState.MATCH_LIVE); }}
-                className="group relative flex-1 px-10 py-8 rounded-[40px] bg-white text-slate-950 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(255,255,255,0.2)] border-b-8 border-slate-300 overflow-hidden animate-shimmer"
+                className="group relative flex-1 px-8 py-6 rounded-[32px] bg-white text-slate-950 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(255,255,255,0.2)] border-b-8 border-slate-300 overflow-hidden animate-shimmer"
               >
                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="relative z-10 flex items-center justify-center gap-3">
-                  ROZPOCZNIJ MECZ <span className="text-2xl group-hover:rotate-12 transition-transform">⚽</span>
+                <span className="relative z-10 flex items-center justify-center gap-2.5">
+                  ROZPOCZNIJ MECZ <span className="text-xl group-hover:rotate-12 transition-transform">⚽</span>
                 </span>
               </button>
               <button
                 onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
-                className="flex-1 px-10 py-8 rounded-[40px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-3"
+                className="flex-1 px-8 py-6 rounded-[32px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2.5"
               >
                 ✏️ ZMIEŃ SKŁAD
               </button>
@@ -483,7 +583,7 @@ export const PreMatchStudioView: React.FC = () => {
       </main>
 
       {/* DEDICATED BOTTOM CONTAINER */}
-      <div className="w-full h-32 bg-black/30 shrink-0 border-t border-white/5 relative z-10">
+      <div className="hidden w-full h-32 bg-black/30 shrink-0 border-t border-white/5 relative z-10">
          <div className="h-full w-full max-w-[1850px] mx-auto flex items-center px-12 justify-between">
             <div className="flex gap-16">
                <div className="flex flex-col">

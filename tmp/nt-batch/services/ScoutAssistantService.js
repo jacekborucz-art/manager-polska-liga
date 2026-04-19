@@ -910,9 +910,9 @@ export const ScoutAssistantService = {
         const mailId = `SCOUT_REPORT_${opponentClub.id}_${matchDate.toISOString().slice(0, 10)}`;
         return {
             id: mailId,
-            sender: 'Dział Skautingu',
-            role: 'Główny Analityk',
-            subject: `Raport przedmeczowy: ${opponentClub.name}`,
+            sender: 'Raport Przedmeczowy',
+            role: 'Zespół Analityków',
+            subject: `Analiza przeciwnika: ${opponentClub.name}`,
             body,
             date: matchDate,
             isRead: false,

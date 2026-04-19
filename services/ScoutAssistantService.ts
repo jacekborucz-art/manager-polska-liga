@@ -1051,9 +1051,9 @@ export const ScoutAssistantService = {
 
     return {
       id: mailId,
-      sender: 'Dział Skautingu',
-      role: 'Główny Analityk',
-      subject: `Raport przedmeczowy: ${opponentClub.name}`,
+      sender: 'Raport Przedmeczowy',
+      role: 'Zespół analityków',
+      subject: `Analiza przeciwnika: ${opponentClub.name}`,
       body,
       date: matchDate,
       isRead: false,

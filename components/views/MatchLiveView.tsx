@@ -2746,8 +2746,8 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
   className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
   style={{
     left: `${slot.x * 100}%`,
-    top: `${(slot.y * 0.42 + 0.54) * 100}%`,
-    transform: 'translate(-50%, -50%) scale(1.15)'
+    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.FWD ? -26 : slot.role === PlayerPosition.MID ? -29 : slot.role === PlayerPosition.DEF ? -10 : 0}px)`,
+    transform: 'translate(-50%, -50%) scale(1.265)'
   }}
         >
           {hasScored && (
@@ -2769,7 +2769,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '19px', right: 'calc(50% - 18px)' }}>✚</div>}
           <div 
             className={`text-[7px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`}
-            style={{ marginTop: '-2px' }}
+            style={{ marginTop: '-2px', textShadow: '0 2px 8px rgba(0, 0, 0, 0.65)' }}
           >
             {p.firstName.charAt(0)}. {p.lastName}
           </div>
@@ -2791,8 +2791,8 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       onClick={() => handleOpenPlayerCard(p.id)}
       className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
       style={{
-        left: `${slot.x * 100}%`,
-        top: `${(0.48 - slot.y * 0.42) * 100}%`,
+        left: `calc(${slot.x * 100}% + ${slot.role === PlayerPosition.MID ? (slot.x < 0.5 ? -4 : slot.x > 0.5 ? 4 : 0) : 0}px)`,
+        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 28 : slot.role === PlayerPosition.MID ? 32 : slot.role === PlayerPosition.DEF ? 10 : slot.role === PlayerPosition.GK ? -9 : 0}px)`,
         transform: 'translate(-50%, -50%) scale(1.4)'
       }}
     >
@@ -2813,7 +2813,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg" />}
       </div>
       {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '-2px', left: 'calc(50% - 18px)' }}>✚</div>}
-      <div className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`} style={{ marginTop: '-2px' }}>
+      <div className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`} style={{ marginTop: '-2px', textShadow: '0 2px 8px rgba(0, 0, 0, 0.65)' }}>
         {p.firstName.charAt(0)}. {p.lastName}
       </div>
     </div>
