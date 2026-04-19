@@ -201,6 +201,7 @@ const attributeGoalsToPlayers = (
 
     goals.push({
       playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?',
+      playerId: scorer?.id,
       minute,
       teamId,
       isPenalty,
@@ -872,6 +873,11 @@ export const BackgroundMatchProcessorCL = {
           ? MatchEventType.RED_CARD
           : MatchEventType.YELLOW_CARD;
         updatedPlayersMap = PlayerStatsService.applyCard(updatedPlayersMap, card.playerId, eventType);
+      });
+
+      // ── Gole i asysty → statystyki ──────────────────────────────────
+      result.goals.filter(g => !g.varDisallowed && g.playerId).forEach(g => {
+        updatedPlayersMap = PlayerStatsService.applyGoal(updatedPlayersMap, g.playerId!, g.assistId);
       });
 
       // ── Statystyki sędziego ──────────────────────────────────────────
