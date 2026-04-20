@@ -3382,11 +3382,6 @@ if (activePlayerTempo === 'SLOW') {
                   {matchState.homeScore} <span className="text-slate-700 opacity-50">&nbsp;&nbsp;&nbsp;&nbsp; </span> {matchState.awayScore}
                </div>
             )}
-            {matchState.isPenalties && (
-               <div className="text-2xl font-black text-rose-500 animate-pulse">
-                  KARNE: {matchState.homePenaltyScore} - {matchState.awayPenaltyScore}
-               </div>
-            )}
            <div className="absolute flex flex-col items-center gap-1" style={{ bottom: 'calc(100% - 120px)' }}>
                <div className="px-3 py-0.5 bg-black-600/20 border border-yellow-500/30 rounded-xs">
                   <span className="text-3xl font-black text-yellow-500 font-bold tracking-widest">{matchState.minute}</span>
@@ -3504,30 +3499,30 @@ if (activePlayerTempo === 'SLOW') {
                )}
                {matchState.isPenalties && (
                   <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-10 text-center animate-fade-in">
-                     <div className="w-full max-w-5xl rounded-[38px] border border-white/10 bg-slate-950/92 px-10 py-8 shadow-[0_0_120px_rgba(15,23,42,0.8)] backdrop-blur-2xl">
+                     <div className="w-full max-w-5xl rounded-[38px] border border-white/10 bg-slate-950/92 px-10 py-8 shadow-[0_0_120px_rgba(15,23,42,0.8)] backdrop-blur-2xl" style={{ transform: 'translateY(-150px)' }}>
                         <div className="mb-8 flex items-center justify-center">
-                           <span className="text-[11px] font-black uppercase tracking-[0.5em] text-rose-400">RZUTY KARNE</span>
+                           <span className="text-[11px] font-black uppercase tracking-[0.5em] text-rose-400 animate-pulse" style={{ animationDuration: '3s' }}>RZUTY KARNE</span>
                         </div>
                         <div className="grid grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)] items-start gap-8">
                            <div className="min-w-0">
                               <div className="mb-5 flex flex-col items-center gap-2">
-                                 <span className="text-3xl font-black italic uppercase tracking-tight text-white">{ctx.homeClub.name}</span>
+                                 <span className="text-xl font-black italic uppercase tracking-tight text-white">{ctx.homeClub.name}</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Gospodarze</span>
                               </div>
-                              <div className="mx-auto flex max-h-[360px] min-h-[180px] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-3xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left custom-scrollbar">
+                              <div className="mx-auto flex max-h-[260px] min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
                                  {(matchState.penaltySequence?.filter(s => s.side === 'HOME') || []).map((shot, i) => (
                                     <div
                                       key={`home_pen_${i}`}
-                                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 ${
+                                      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 ${
                                         shot.result === 'SCORED'
                                           ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
                                           : 'border-red-500/20 bg-red-500/10 text-red-100'
                                       }`}
                                     >
-                                      <span className={`text-sm font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
+                                      <span className={`text-xs font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
                                         {shot.playerName || 'Nieznany strzelec'}
                                       </span>
-                                      <span className={`text-2xl ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
+                                      <span className={`text-base ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
                                         {shot.result === 'SCORED' ? '⚽' : '✖'}
                                       </span>
                                     </div>
@@ -3535,34 +3530,34 @@ if (activePlayerTempo === 'SLOW') {
                               </div>
                            </div>
 
-                           <div className="flex flex-col items-center justify-center gap-4 rounded-[32px] border border-white/10 bg-white/[0.04] px-6 py-8 shadow-inner shadow-white/5">
-                              <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Wynik serii</span>
-                              <div className="flex items-center gap-5">
-                                 <span className="text-7xl font-black font-mono tracking-tighter text-white">{matchState.homePenaltyScore ?? 0}</span>
-                                 <span className="text-5xl font-black text-slate-600">:</span>
-                                 <span className="text-7xl font-black font-mono tracking-tighter text-white">{matchState.awayPenaltyScore ?? 0}</span>
+                           <div className="mb-5 flex flex-col items-center gap-2 animate-pulse" style={{ marginTop: '-7px', animationDuration: '3s' }}>
+                              <div className="flex items-center gap-3">
+                                 <span className="text-4xl font-bold font-mono tracking-tight text-slate-300">{matchState.homePenaltyScore ?? 0}</span>
+                                 <span className="text-2xl font-light text-slate-500">:</span>
+                                 <span className="text-4xl font-bold font-mono tracking-tight text-slate-300">{matchState.awayPenaltyScore ?? 0}</span>
                               </div>
+                              <span className="text-[10px] opacity-0 select-none">·</span>
                            </div>
 
                            <div className="min-w-0">
                               <div className="mb-5 flex flex-col items-center gap-2">
-                                 <span className="text-3xl font-black italic uppercase tracking-tight text-white">{ctx.awayClub.name}</span>
+                                 <span className="text-xl font-black italic uppercase tracking-tight text-white">{ctx.awayClub.name}</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Goście</span>
                               </div>
-                              <div className="mx-auto flex max-h-[360px] min-h-[180px] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-3xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left custom-scrollbar">
+                              <div className="mx-auto flex max-h-[260px] min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
                                  {(matchState.penaltySequence?.filter(s => s.side === 'AWAY') || []).map((shot, i) => (
                                     <div
                                       key={`away_pen_${i}`}
-                                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 ${
+                                      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 ${
                                         shot.result === 'SCORED'
                                           ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
                                           : 'border-red-500/20 bg-red-500/10 text-red-100'
                                       }`}
                                     >
-                                      <span className={`text-sm font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
+                                      <span className={`text-xs font-bold ${shot.result === 'MISSED' ? 'text-red-200/90' : 'text-white'}`}>
                                         {shot.playerName || 'Nieznany strzelec'}
                                       </span>
-                                      <span className={`text-2xl ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
+                                      <span className={`text-base ${shot.result === 'SCORED' ? '' : 'text-red-500'}`}>
                                         {shot.result === 'SCORED' ? '⚽' : '✖'}
                                       </span>
                                     </div>

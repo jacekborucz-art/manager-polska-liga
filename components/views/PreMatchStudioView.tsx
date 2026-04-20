@@ -120,7 +120,7 @@ function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
 function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   const homeVariants = getClubKitVariants(homeClub.id, homeClub.colorsHex);
   const awayVariants = getClubKitVariants(awayClub.id, awayClub.colorsHex);
-  const CLASH_THRESHOLD = 280;
+  const CLASH_THRESHOLD = 350;
   let bestHomeIdx = 0, bestAwayIdx = 0, maxScore = -1;
   for (let h = 0; h < homeVariants.length; h++) {
     for (let a = 0; a < awayVariants.length; a++) {
@@ -137,12 +137,12 @@ function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   return {
     home: {
       primary: hKit.hex,
-      secondary: hNext.hex,
+      secondary: hKit.secondaryHex ?? hNext.hex,
       text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
     },
     away: {
       primary: aKit.hex,
-      secondary: aNext.hex,
+      secondary: aKit.secondaryHex ?? aNext.hex,
       text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
     }
   };
@@ -234,12 +234,12 @@ export const PreMatchStudioView: React.FC = () => {
     const nextOppVariant = opponentVariants[(bestOppIdx + 1) % opponentVariants.length];
     const opponentKit = {
       primary: bestOppVariant.hex,
-      secondary: nextOppVariant.hex,
+      secondary: bestOppVariant.secondaryHex ?? nextOppVariant.hex,
       text: KitSelectionService.isColorLight(bestOppVariant.hex) ? '#000000' : '#ffffff'
     };
     const playerKit = {
       primary: selectedVariant.hex,
-      secondary: nextUserVariant.hex,
+      secondary: selectedVariant.secondaryHex ?? nextUserVariant.hex,
       text: KitSelectionService.isColorLight(selectedVariant.hex) ? '#000000' : '#ffffff'
     };
     if (isUserHome) {

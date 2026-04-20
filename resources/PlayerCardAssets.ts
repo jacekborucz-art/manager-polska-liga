@@ -438,8 +438,8 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
     clubId: 'PL_LKS_LODZ',
     kits: [
       { hex: '#000000', image: lksLodzBlack },
-      { hex: '#FF0000', image: lksLodzCzerwone },
-      { hex: '#FFFFFF', image: lksLodzWhite },
+      { hex: '#FF0000', secondaryHex: '#FFFFFF', image: lksLodzCzerwone },
+      { hex: '#FFFFFF', secondaryHex: '#FF0000', image: lksLodzWhite },
     ]
   },
   {
