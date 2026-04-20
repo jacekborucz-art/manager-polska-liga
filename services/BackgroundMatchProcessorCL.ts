@@ -58,6 +58,8 @@ interface CLMatchResult {
   substitutions: { playerOutName: string; playerInName: string; minute: number; teamId: string }[];
   updatedHomePlayers: Player[];
   updatedAwayPlayers: Player[];
+  participatingHomePlayerIds: string[];
+  participatingAwayPlayerIds: string[];
   fatigueMap: Record<string, number>;
   fatigueDebtMap: Record<string, number>;
   injuryPenaltyMap: Record<string, number>;
@@ -643,6 +645,8 @@ const simulateCLMatchFull = (
     substitutions: [...homeSubs, ...awaySubs],
     updatedHomePlayers: homeCardData.updatedPlayers,
     updatedAwayPlayers: awayCardData.updatedPlayers,
+    participatingHomePlayerIds: homeSubData.allPlayedIds,
+    participatingAwayPlayerIds: awaySubData.allPlayedIds,
     fatigueMap,
     fatigueDebtMap,
     injuryPenaltyMap,
@@ -868,6 +872,17 @@ export const BackgroundMatchProcessorCL = {
       };
 
       // ── Kartki → statystyki i zawieszenia (jak w BackgroundMatchProcessor) ─
+      updatedPlayersMap = PlayerStatsService.processMatchDayEndForClub(
+        updatedPlayersMap,
+        home.id,
+        result.participatingHomePlayerIds
+      );
+      updatedPlayersMap = PlayerStatsService.processMatchDayEndForClub(
+        updatedPlayersMap,
+        away.id,
+        result.participatingAwayPlayerIds
+      );
+
       result.cards.forEach(card => {
         const eventType = card.type === 'RED' || card.type === 'SECOND_YELLOW'
           ? MatchEventType.RED_CARD

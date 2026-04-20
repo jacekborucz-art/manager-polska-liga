@@ -102,6 +102,8 @@ export const STATIC_LEAGUES: League[] = [
   { id: 'L_PL_3', name: 'Polish League 3', level: LeagueLevel.TIER_3, teamIds: [] },
   { id: 'L_PL_4', name: 'Regional League', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
   { id: 'L_CL', name: 'UEFA Champions League', level: LeagueLevel.EUROPEAN, teamIds: [] },
+  { id: 'L_EL', name: 'UEFA Europa League', level: LeagueLevel.EUROPEAN, teamIds: [] },
+  { id: 'L_CONF', name: 'UEFA Conference League', level: LeagueLevel.EUROPEAN, teamIds: [] },
 ];
 
 // 2. Club Loading Logic (Stage 4)
@@ -369,7 +371,7 @@ export const UNEMPLOYED_MANAGER_CLUB: Club = {
 
 // Populate league teamIds (Only include active teams in the league structure)
 STATIC_LEAGUES.forEach(l => {
-  l.teamIds = STATIC_CLUBS
+  l.teamIds = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS]
     .filter(c => c.leagueId === l.id && c.isDefaultActive)
     .map(c => c.id);
 });

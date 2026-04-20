@@ -1,10 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { LeagueLevel, ViewState } from '../../types';
+import { ViewState } from '../../types';
 import { LeagueStatsService } from '../../services/LeagueStatsService';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 
 type StatTab = 'SCORERS' | 'ASSISTS' | 'YELLOW_CARDS' | 'RED_CARDS' | 'INJURIES';
+type LeagueTab = {
+  id: string;
+  label: string;
+  title: string;
+  accent: string;
+};
 
 const STAT_TABS: Array<{ id: StatTab; label: string; icon: string }> = [
   { id: 'SCORERS', label: 'STRZELCY', icon: '\u26bd' },
@@ -14,10 +20,19 @@ const STAT_TABS: Array<{ id: StatTab; label: string; icon: string }> = [
   { id: 'INJURIES', label: 'SZPITAL', icon: '+' },
 ];
 
-export const LeagueStatsView: React.FC = () => {
-  const { leagues, clubs, players, navigateTo, viewPlayerDetails } = useGame();
+const LEAGUE_TABS: LeagueTab[] = [
+  { id: 'L_PL_1', label: 'EKST', title: 'Ekstraklasa', accent: '#fbbf24' },
+  { id: 'L_PL_2', label: '1 L', title: '1 Liga', accent: '#3b82f6' },
+  { id: 'L_PL_3', label: '2 L', title: '2 Liga', accent: '#10b981' },
+  { id: 'L_CL', label: 'CHAMPIONS LEAGUE', title: 'Champions League', accent: '#f59e0b' },
+  { id: 'L_EL', label: 'EUROPE LEAGUE', title: 'Europe League', accent: '#f97316' },
+  { id: 'L_CONF', label: 'CONF LEAGUE', title: 'Conf League', accent: '#22c55e' },
+];
 
-  const displayLeagues = leagues.filter((league) => league.level !== LeagueLevel.TIER_4_HIDDEN);
+export const LeagueStatsView: React.FC = () => {
+  const { clubs, players, navigateTo, viewPlayerDetails } = useGame();
+
+  const displayLeagues = useMemo(() => LEAGUE_TABS, []);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(displayLeagues[0]?.id || 'L_PL_1');
   const [activeTab, setActiveTab] = useState<StatTab>('SCORERS');
 
@@ -27,10 +42,8 @@ export const LeagueStatsView: React.FC = () => {
   );
 
   const leagueColor = useMemo(() => {
-    if (selectedLeagueId === 'L_PL_1') return '#fbbf24';
-    if (selectedLeagueId === 'L_PL_2') return '#3b82f6';
-    return '#10b981';
-  }, [selectedLeagueId]);
+    return selectedLeague?.accent || '#fbbf24';
+  }, [selectedLeague]);
 
   const statsData = useMemo(() => {
     const rawData = LeagueStatsService.getPlayersForLeague(selectedLeagueId, clubs, players);
@@ -83,7 +96,7 @@ export const LeagueStatsView: React.FC = () => {
             </h1>
             <div className="mt-1.5 flex items-center gap-3">
               <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: leagueColor }}>
-                {selectedLeague?.name.toUpperCase()}
+                {selectedLeague?.title}
               </span>
               <span className="h-1 w-1 rounded-full bg-white/20" />
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
@@ -105,7 +118,7 @@ export const LeagueStatsView: React.FC = () => {
                     : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
                 }`}
               >
-                {league.name.replace('Polish League ', '')}
+                {league.label}
               </button>
             ))}
           </div>

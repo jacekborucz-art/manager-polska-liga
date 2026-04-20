@@ -29,6 +29,47 @@ export const SquadView: React.FC = () => {
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE'>('SQUAD');
 
+  const getAverageRatingBadgeClass = (rating: number | null): string => {
+    if (rating === null) return 'bg-slate-700 border-slate-500 text-slate-200';
+    if (rating < 6.0) return 'bg-red-600 border-red-400 text-white';
+    if (rating <= 6.9) return 'bg-orange-500 border-orange-300 text-white';
+    return 'bg-emerald-600 border-emerald-400 text-white';
+  };
+
+  const getPositionBadgeClass = (position: string): string => {
+    if (position === 'GK') return 'bg-yellow-500 border-yellow-300 text-slate-950 shadow-[0_0_16px_rgba(250,204,21,0.28)]';
+    if (['DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB'].includes(position) || position.startsWith('DEF')) {
+      return 'bg-blue-600 border-blue-300 text-white shadow-[0_0_16px_rgba(59,130,246,0.28)]';
+    }
+    if (['MID', 'CM', 'CDM', 'CAM', 'LM', 'RM'].includes(position) || position.startsWith('MID')) {
+      return 'bg-emerald-600 border-emerald-300 text-white shadow-[0_0_16px_rgba(16,185,129,0.28)]';
+    }
+    return 'bg-red-600 border-red-300 text-white shadow-[0_0_16px_rgba(239,68,68,0.28)]';
+  };
+
+  const getPositionRowTintClass = (position: string): string => {
+    if (position === 'GK') return 'bg-yellow-500/[0.08] hover:bg-yellow-500/[0.12]';
+    if (['DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB'].includes(position) || position.startsWith('DEF')) {
+      return 'bg-blue-500/[0.08] hover:bg-blue-500/[0.12]';
+    }
+    if (['MID', 'CM', 'CDM', 'CAM', 'LM', 'RM'].includes(position) || position.startsWith('MID')) {
+      return 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]';
+    }
+    return 'bg-red-500/[0.08] hover:bg-red-500/[0.12]';
+  };
+
+  const getPositionLabelClass = (label: string): string => {
+    if (label === 'SUB' || label === 'RES') return 'bg-slate-700/70 border-slate-500/50 text-slate-200';
+    if (label === 'GK') return 'bg-yellow-500/25 border-yellow-300/40 text-yellow-200';
+    if (['DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB'].includes(label) || label.startsWith('DEF')) {
+      return 'bg-blue-500/25 border-blue-300/40 text-blue-200';
+    }
+    if (['MID', 'CM', 'CDM', 'CAM', 'LM', 'RM'].includes(label) || label.startsWith('MID')) {
+      return 'bg-emerald-500/25 border-emerald-300/40 text-emerald-200';
+    }
+    return 'bg-red-500/25 border-red-300/40 text-red-200';
+  };
+
   const getMoraleInfo = (morale: number): { label: string; color: string; barColor: string; bg: string; border: string; description: string } => {
     if (morale <= 20) return { label: 'BARDZO NISKIE', color: 'text-red-500', barColor: 'bg-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', description: 'Szatnia podzielona. Brak wiary w sukces. Każda porażka boli podwójnie — drużyna wchodzi na boisko bez przekonania.' };
     if (morale <= 35) return { label: 'NISKIE', color: 'text-orange-400', barColor: 'bg-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30', description: 'Nastroje wyraźnie przygnębione. Drużyna potrzebuje pozytywnego impulsu — wystarczy jedna wygrana, by odwrócić trend.' };
@@ -241,7 +282,10 @@ export const SquadView: React.FC = () => {
             ${isSelected ? 'bg-red-500/30 ring-2 ring-inset ring-red-500' : 'bg-red-500/5 hover:bg-red-500/10'}`}
         >
           <td className="pl-6 w-12 text-[10px] font-black text-red-500/50 uppercase tracking-tighter">{label}</td>
-          <td colSpan={4} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
+          <td className="w-6 text-center text-slate-700">
+            <span className="inline-flex items-center justify-center text-[10px] font-black">→</span>
+          </td>
+          <td colSpan={7} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
             &gt; SYSTEM_READY_FOR_DEPLOYMENT
           </td>
         </tr>
@@ -260,6 +304,9 @@ export const SquadView: React.FC = () => {
     const isSevereInjured = player.health.status === HealthStatus.INJURED && player.health.injury?.severity === InjurySeverity.SEVERE;
     const isOverfatigued = player.condition < 60;
     const isOutOfPosition = loc === 'START' && getPositionGroup(player.position) !== getPositionGroup(label);
+    const averageRating = player.stats?.ratingHistory?.length
+      ? player.stats.ratingHistory.reduce((a, b) => a + b, 0) / player.stats.ratingHistory.length
+      : null;
 
     return (
       <tr
@@ -268,14 +315,25 @@ export const SquadView: React.FC = () => {
         onDoubleClick={() => handlePlayerDoubleClick(player.id)}
         onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, playerId: player.id, loc }); }}
         className={`group relative h-14 border-b border-white/5 transition-all cursor-pointer
-          ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : isHighlighted ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/60 shadow-[0_0_16px_rgba(52,211,153,0.15)]' : isOutOfPosition ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-500/40' : 'hover:bg-white/[0.03]'}
+          ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : isHighlighted ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/60 shadow-[0_0_16px_rgba(52,211,153,0.15)]' : isOutOfPosition ? 'bg-red-950/30 ring-2 ring-inset ring-red-500 shadow-[0_0_18px_rgba(239,68,68,0.2)]' : getPositionRowTintClass(player.position)}
           ${(isSuspended || isSevereInjured || isOverfatigued) ? 'opacity-30 grayscale' : ''}`}
       >
         <td className="pl-6 w-12 relative z-10">
-           <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{label}</span>
+           <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[8px] font-black uppercase tracking-tight ${getPositionLabelClass(label)}`}>
+             {label}
+           </span>
         </td>
-        <td className={`w-14 font-mono font-black text-[11px] relative z-10 ${PlayerPresentationService.getPositionColorClass(player.position)}`}>
-          {player.position}
+        <td className="w-6 relative z-10 text-center">
+          <span className="inline-flex items-center justify-center text-slate-500/80">
+            <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" aria-hidden="true">
+              <path d="M3 8h8m0 0-3-3m3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        </td>
+        <td className="w-14 relative z-10">
+          <span className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-full border px-1.5 font-mono text-[9px] font-black leading-none tracking-tight ${getPositionBadgeClass(player.position)}`}>
+            {player.position}
+          </span>
         </td>
         <td className="relative z-10 w-52">
            <div className="flex items-center gap-3">
@@ -367,11 +425,8 @@ export const SquadView: React.FC = () => {
 
 {/* TUTAJ WSTAW TEN KOD - Kolumna średniej oceny w wierszu */}
      <td className="w-16 text-center relative z-10">
-           <span className="text-sm font-black text-blue-400 font-mono italic">
-            
-              {player.stats?.ratingHistory?.length > 0 
-                ? (player.stats.ratingHistory.reduce((a, b) => a + b, 0) / player.stats.ratingHistory.length).toFixed(1)
-                : '-'}
+           <span className={`inline-flex min-w-[44px] items-center justify-center rounded-md border px-2 py-1 text-sm font-black font-mono italic ${getAverageRatingBadgeClass(averageRating)}`}>
+              {averageRating !== null ? averageRating.toFixed(1) : '-'}
            </span>
         </td>
 
@@ -687,6 +742,7 @@ export const SquadView: React.FC = () => {
                     <thead>
                       <tr className="border-b border-white/5 bg-white/[0.02]">
                         <th className="pl-6 w-12 py-2" />
+                        <th className="w-6 py-2" />
                         <th className="w-14 py-2" />
                         <th className="w-52 py-2">
                           <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">Zawodnik</span>
@@ -736,6 +792,7 @@ export const SquadView: React.FC = () => {
                     <thead>
                       <tr>
                         <th className="pl-6 w-12" />
+                        <th className="w-6" />
                         <th className="w-14" />
                         <th className="w-52" />
                         <th className="px-2 w-36" />
@@ -754,7 +811,7 @@ export const SquadView: React.FC = () => {
                     <tbody className="divide-y divide-white/[0.03]">
                       {benchPlayers.map(pid => renderPlayerRow(pid, 'SUB', 'BENCH'))}
                       {benchPlayers.length === 0 && (
-                        <tr><td className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
+                        <tr><td colSpan={9} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
                       )}
                     </tbody>
                  </table>
@@ -772,6 +829,7 @@ export const SquadView: React.FC = () => {
                     <thead>
                       <tr>
                         <th className="pl-6 w-12" />
+                        <th className="w-6" />
                         <th className="w-14" />
                         <th className="w-52" />
                         <th className="px-2 w-36" />
@@ -790,7 +848,7 @@ export const SquadView: React.FC = () => {
                     <tbody className="divide-y divide-white/[0.03]">
                       {reservePlayersSorted.map(pid => renderPlayerRow(pid, 'RES', 'RES'))}
                       {reservePlayersSorted.length === 0 && (
-                        <tr><td className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
+                        <tr><td colSpan={9} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
                       )}
                     </tbody>
                  </table>
