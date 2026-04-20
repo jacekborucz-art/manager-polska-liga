@@ -104,6 +104,91 @@ import zaglebieBlack  from '../Graphic/players/zaglebie_lubin_black.png';
 import zaglebieOrange from '../Graphic/players/zaglebie_lubin_orange.png';
 import zaglebieWhite  from '../Graphic/players/zaglebie_lubin_white.png';
 
+// Import kart brandowanych — Wisła Kraków
+import wislaKrakowBlack from '../Graphic/players/wisla_krakow_black.png';
+import wislaKrakowRed   from '../Graphic/players/wisla_krakow_red.png';
+import wislaKrakowWhite from '../Graphic/players/wisla_krakow_white.png';
+
+// Import kart brandowanych — Pogoń Grodzisk Mazowiecki
+import pogonGrodziskRed       from '../Graphic/players/pogon_grodzisk_red.png';
+import pogonGrodziskWhiteRed  from '../Graphic/players/pogon_grodzisk_white_red.png';
+import pogonGrodziskGreyBlack from '../Graphic/players/pogon_grodzisk_grey_black.png';
+
+// Import kart brandowanych — Polonia Bytom
+import poloniaBytomBlack   from '../Graphic/players/polonia_bytom_black.png';
+import poloniaBytomRedBlue from '../Graphic/players/polonia_bytom_red_blue.png';
+import poloniaBytomWhite   from '../Graphic/players/polonia_bytom_white.png';
+
+// Import kart brandowanych — Chrobry Głogów
+import chrobryGlogowBlack  from '../Graphic/players/chrobry_glogow_black.png';
+import chrobryGlogowNavy   from '../Graphic/players/chrobry_glogow_navy.png';
+import chrobryGlogowOrange from '../Graphic/players/chrobry_glogow_orange.png';
+
+// Import kart brandowanych — Stal Rzeszów
+import stalRzeszowBlack     from '../Graphic/players/stal_rzeszow_black.png';
+import stalRzeszowBlackNavy from '../Graphic/players/stal_rzeszow_black_navy.png';
+import stalRzeszowBlueWhite from '../Graphic/players/stal_rzeszow_blue_white.png';
+import stalRzeszowWhite     from '../Graphic/players/stal_rzeszow_white.png';
+
+// Import kart brandowanych — Śląsk Wrocław
+import slaskWroclawAqua  from '../Graphic/players/slask_wroclaw_aqua.png';
+import slaskWroclawGreen from '../Graphic/players/slask_wroclaw_green.png';
+import slaskWroclawWhite from '../Graphic/players/slask_wroclaw_white.png';
+
+// Import kart brandowanych — Wieczysta Kraków
+import wieczystaKrakowBlack  from '../Graphic/players/wieczysta_krakow_black.png';
+import wieczystaKrakowYellow from '../Graphic/players/wieczysta_krakow_yellow.png';
+
+// Import kart brandowanych — Ruch Chorzów
+import ruchChorzowBlack from '../Graphic/players/ruch_chorzow_black.png';
+import ruchChorzowBlue  from '../Graphic/players/ruch_chorzow_blue.png';
+import ruchChorzowWhite from '../Graphic/players/ruch_chorzow_white.png';
+
+// Import kart brandowanych — Miedź Legnica
+import miedzLegnicaBlue from '../Graphic/players/miedz_legnica_blue.png';
+import miedzLegnicaRed  from '../Graphic/players/miedz_legnica_red.png';
+
+// Import kart brandowanych — ŁKS Łódź
+import lksLodzBlack    from '../Graphic/players/lks_lodz_black.png';
+import lksLodzCzerwone from '../Graphic/players/lks_lodz_czerwone.png';
+import lksLodzWhite    from '../Graphic/players/lks_lodz_white.png';
+
+// Import kart brandowanych — Pogoń Siedlce
+import pogonSiedlceBlue  from '../Graphic/players/pogon_siedlce_blue.png';
+import pogonSiedlceRed   from '../Graphic/players/pogon_siedlce_red.png';
+import pogonSiedlceWhite from '../Graphic/players/pogon_siedlce_white.png';
+
+// Import kart brandowanych — Odra Opole
+import odraOpoleRed     from '../Graphic/players/odra_opole_red.png';
+import odraOpoleRedNavy from '../Graphic/players/odra_opole_red_navy.png';
+import odraOpoleWhite   from '../Graphic/players/odra_opole_white.png';
+
+// Import kart brandowanych — Puszcza Niepołomice
+import puszczaNiepolomiceGreen from '../Graphic/players/puszcza_niepolomice_green.png';
+import puszczaNiepolomiceRed   from '../Graphic/players/puszcza_niepolomice_red.png';
+import puszczaNiepolomiceWhite from '../Graphic/players/puszcza_niepolomice_white.png';
+
+// Import kart brandowanych — Znicz Pruszków
+import zniczPruszkowNavy   from '../Graphic/players/znicz_pruszkow_navy.png';
+import zniczPruszkowWhite  from '../Graphic/players/znicz_pruszkow_white.png';
+import zniczPruszkowYellow from '../Graphic/players/znicz_pruszkow_yellow.png';
+
+// Import kart brandowanych — Stal Mielec
+import stalMielecBlue        from '../Graphic/players/stal_mielec_blue.png';
+import stalMielecWhite       from '../Graphic/players/stal_mielec_white.png';
+import stalMielecYellowBlack from '../Graphic/players/stal_mielec_yellow_black.png';
+
+// Import kart brandowanych — GKS Tychy
+import gksTychyGreenBlack from '../Graphic/players/gks_tychy_green_black.png';
+import gksTychyGrey       from '../Graphic/players/gks_tychy_grey.png';
+import gksTychyRed        from '../Graphic/players/gks_tychy_red.png';
+
+// Import kart brandowanych — Górnik Łęczna
+import gornikLecznaBlack      from '../Graphic/players/gornik_leczna_black.png';
+import gornikLecznaGreen      from '../Graphic/players/gornik_leczna_green.png';
+import gornikLecznaGreenBlack from '../Graphic/players/gornik_leczna_green_black.png';
+import gornikLecznaWhite      from '../Graphic/players/gornik_leczna_white.png';
+
 // ─────────────────────────────────────────────────
 // Typy
 // ─────────────────────────────────────────────────
@@ -276,6 +361,142 @@ const BRANDED_CLUB_CARDS: ClubCardAssets[] = [
       { hex: '#FF5F1F', image: zaglebieOrange },
       { hex: '#FFFFFF', image: zaglebieWhite },
       { hex: '#000000', image: zaglebieBlack },
+    ]
+  },
+  {
+    clubId: 'PL_WISLA_KRAKOW',
+    kits: [
+      { hex: '#FF0000', image: wislaKrakowRed },
+      { hex: '#FFFFFF', image: wislaKrakowWhite },
+      { hex: '#000000', image: wislaKrakowBlack },
+    ]
+  },
+  {
+    clubId: 'PL_POGON_GRODZISK_MAZOWIECKI',
+    kits: [
+      { hex: '#FF0000', image: pogonGrodziskRed },
+      { hex: '#FFFFFF', secondaryHex: '#FF0000', image: pogonGrodziskWhiteRed },
+      { hex: '#808080', secondaryHex: '#000000', image: pogonGrodziskGreyBlack },
+    ]
+  },
+  {
+    clubId: 'PL_POLONIA_BYTOM',
+    kits: [
+      { hex: '#000000', image: poloniaBytomBlack },
+      { hex: '#FF0000', secondaryHex: '#0000FF', image: poloniaBytomRedBlue },
+      { hex: '#FFFFFF', image: poloniaBytomWhite },
+    ]
+  },
+  {
+    clubId: 'PL_CHROBRY_GLOGOW',
+    kits: [
+      { hex: '#000000', image: chrobryGlogowBlack },
+      { hex: '#000080', image: chrobryGlogowNavy },
+      { hex: '#FF5F1F', image: chrobryGlogowOrange },
+    ]
+  },
+  {
+    clubId: 'PL_STAL_RZESZOW',
+    kits: [
+      { hex: '#000000', image: stalRzeszowBlack },
+      { hex: '#000080', secondaryHex: '#000000', image: stalRzeszowBlackNavy },
+      { hex: '#0000FF', secondaryHex: '#FFFFFF', image: stalRzeszowBlueWhite },
+      { hex: '#FFFFFF', image: stalRzeszowWhite },
+    ]
+  },
+  {
+    clubId: 'PL_SLASK_WROCLAW',
+    kits: [
+      { hex: '#00FFFF', image: slaskWroclawAqua },
+      { hex: '#008000', image: slaskWroclawGreen },
+      { hex: '#FFFFFF', image: slaskWroclawWhite },
+    ]
+  },
+  {
+    clubId: 'PL_WIECZYSTA_KRAKOW',
+    kits: [
+      { hex: '#000000', image: wieczystaKrakowBlack },
+      { hex: '#FFFF00', image: wieczystaKrakowYellow },
+    ]
+  },
+  {
+    clubId: 'PL_RUCH_CHORZOW',
+    kits: [
+      { hex: '#000000', image: ruchChorzowBlack },
+      { hex: '#0000FF', image: ruchChorzowBlue },
+      { hex: '#FFFFFF', image: ruchChorzowWhite },
+    ]
+  },
+  {
+    clubId: 'PL_MIEDZ_LEGNICA',
+    kits: [
+      { hex: '#0000FF', image: miedzLegnicaBlue },
+      { hex: '#FF0000', image: miedzLegnicaRed },
+    ]
+  },
+  {
+    clubId: 'PL_LKS_LODZ',
+    kits: [
+      { hex: '#000000', image: lksLodzBlack },
+      { hex: '#FF0000', image: lksLodzCzerwone },
+      { hex: '#FFFFFF', image: lksLodzWhite },
+    ]
+  },
+  {
+    clubId: 'PL_POGON_SIEDLCE',
+    kits: [
+      { hex: '#0000FF', image: pogonSiedlceBlue },
+      { hex: '#FF0000', image: pogonSiedlceRed },
+      { hex: '#FFFFFF', image: pogonSiedlceWhite },
+    ]
+  },
+  {
+    clubId: 'PL_ODRA_OPOLE',
+    kits: [
+      { hex: '#FF0000', image: odraOpoleRed },
+      { hex: '#8B0000', secondaryHex: '#000080', image: odraOpoleRedNavy },
+      { hex: '#FFFFFF', image: odraOpoleWhite },
+    ]
+  },
+  {
+    clubId: 'PL_PUSZCZA_NIEPOLOMICE',
+    kits: [
+      { hex: '#008000', image: puszczaNiepolomiceGreen },
+      { hex: '#FF0000', image: puszczaNiepolomiceRed },
+      { hex: '#FFFFFF', image: puszczaNiepolomiceWhite },
+    ]
+  },
+  {
+    clubId: 'PL_ZNICZ_PRUSZKOW',
+    kits: [
+      { hex: '#000080', image: zniczPruszkowNavy },
+      { hex: '#FFFFFF', image: zniczPruszkowWhite },
+      { hex: '#FFFF00', image: zniczPruszkowYellow },
+    ]
+  },
+  {
+    clubId: 'PL_STAL_MIELEC',
+    kits: [
+      { hex: '#0000FF', image: stalMielecBlue },
+      { hex: '#FFFFFF', image: stalMielecWhite },
+      { hex: '#FFFF00', secondaryHex: '#000000', image: stalMielecYellowBlack },
+    ]
+  },
+  {
+    clubId: 'PL_GKS_TYCHY',
+    kits: [
+      { hex: '#008000', secondaryHex: '#000000', image: gksTychyGreenBlack },
+      { hex: '#808080', image: gksTychyGrey },
+      { hex: '#FF0000', image: gksTychyRed },
+    ]
+  },
+  {
+    clubId: 'PL_GORNIK_LECZNA',
+    kits: [
+      { hex: '#000000', image: gornikLecznaBlack },
+      { hex: '#008000', image: gornikLecznaGreen },
+      { hex: '#008000', secondaryHex: '#000000', image: gornikLecznaGreenBlack },
+      { hex: '#FFFFFF', image: gornikLecznaWhite },
     ]
   },
 ];
