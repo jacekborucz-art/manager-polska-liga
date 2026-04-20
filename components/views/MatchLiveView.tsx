@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
 import { 
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
@@ -64,16 +65,16 @@ import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect } from '../../services/PreMatchBriefingService';
 
-const BigJerseyIcon = ({ primary, secondary, size = "w-16 h-16" }: { primary: string, secondary: string, size?: string }) => (
+const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
     <div className="absolute inset-[-10px] rounded-full blur-2xl opacity-40 transition-opacity group-hover:opacity-60" style={{ backgroundColor: primary }} />
-    <div className={`relative ${size} flex items-center justify-center p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
-      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/10 to-transparent z-20 pointer-events-none" />
-      <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" fill={primary} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+    <div className={`relative ${size} flex items-center justify-center p-2`}>
+      <svg viewBox="0 0 24 30" className="w-full h-full drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" fill={primary} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
         <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" />
         <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.6" />
+        <path d="M5 20h6v9H5z" fill={secondary} />
+        <path d="M13 20h6v9h-6z" fill={secondary} />
       </svg>
-      <div className="absolute -inset-full bg-gradient-to-tr from-transparent via-white/5 to-transparent rotate-45 animate-shine pointer-events-none" />
     </div>
   </div>
 );
@@ -2478,7 +2479,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-[10rem] font-black italic text-white/[0.04] select-none pointer-events-none uppercase tracking-tighter">
       {ctx.homeClub.shortName}
    </div>
-            <div className="relative z-10 flex items-center gap-10">
+            <div className="relative z-10 flex items-center gap-4">
                <BigJerseyIcon primary={kitColors.home.primary} secondary={kitColors.home.secondary} />
                <h1 className="text-6xl font-black italic uppercase tracking-tighter truncate leading-tight drop-shadow-2xl">{ctx.homeClub.name}</h1>
             </div>
@@ -2487,24 +2488,26 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
         <div className="w-72 flex flex-col items-center justify-center border-x border-white/5 relative overflow-hidden"
               style={{ background: `linear-gradient(180deg, ${kitColors.home.primary}33 0%, #0a0a0f 35%, #0a0a0f 65%, ${kitColors.away.primary}33 100%)` }}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+            {getClubLogo(ctx.homeClub.id) && <img src={getClubLogo(ctx.homeClub.id)} alt={ctx.homeClub.name} className="absolute left-2 w-[50px] h-[50px] object-contain pointer-events-none" style={{ top: 'calc(50% + 40px)', transform: 'translateY(-50%)' }} />}
+            {getClubLogo(ctx.awayClub.id) && <img src={getClubLogo(ctx.awayClub.id)} alt={ctx.awayClub.name} className="absolute right-2 w-[50px] h-[50px] object-contain pointer-events-none" style={{ top: 'calc(50% + 40px)', transform: 'translateY(-50%)' }} />}
             {isCelebratingGoal ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-yellow-500/20 animate-pulse-gold">
                   <span className="text-8xl font-black italic text-yellow-400 tracking-tighter drop-shadow-[0_0_30px_rgba(250,204,21,1)]">GOL!</span>
                </div>
             ) : (
                <><div className="text-8xl font-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.4)] tracking-tighter leading-none mb-1">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
-                  <div className="flex items-center gap-3"><div className="text-xl font-mono font-bold text-emerald-400 animate-pulse bg-emerald-500/10 px-3 py-0.5 rounded-lg border border-emerald-500/20">{matchState.isFinished ? 'WYNIK KOŃCOWY' : `${matchState.minute}'`}</div>
+                  <div className="flex items-center gap-3">{!matchState.isFinished && <div className="text-xl font-mono font-bold text-emerald-400 animate-pulse bg-emerald-500/10 size-10 flex items-center justify-center rounded-full border border-emerald-500/20">{matchState.minute}</div>}
                   {matchState.addedTime > 0 && !matchState.isFinished && <div className="text-[11px] font-black text-red-500 font-mono">+{matchState.addedTime}</div>}</div></>
             )}
          </div>
-         <div className="flex-1 flex flex-col justify-center px-12 text-right relative overflow-hidden group">
+         <div className="flex-1 flex flex-col justify-center pl-12 pr-4 text-right relative overflow-hidden group">
             <div className="absolute inset-0 opacity-10" style={{ backgroundColor: kitColors.away.primary }} />
 <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[10rem] font-black italic text-white/[0.04] select-none pointer-events-none uppercase tracking-tighter">
       {ctx.awayClub.shortName}
    </div>
 
             <div className="relative z-10 flex items-center gap-10 justify-end">
-               <h1 className="text-6xl font-black italic uppercase tracking-tighter truncate leading-tight drop-shadow-2xl">{ctx.awayClub.name}</h1>
+               <h1 className="text-6xl font-black italic uppercase tracking-tighter truncate leading-tight drop-shadow-2xl pr-2">{ctx.awayClub.name}</h1>
                <BigJerseyIcon primary={kitColors.away.primary} secondary={kitColors.away.secondary} />
 
             </div>
