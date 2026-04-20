@@ -71,11 +71,11 @@ export const SquadView: React.FC = () => {
   };
 
   const getMoraleInfo = (morale: number): { label: string; color: string; barColor: string; bg: string; border: string; description: string } => {
-    if (morale <= 20) return { label: 'BARDZO NISKIE', color: 'text-red-500', barColor: 'bg-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', description: 'Szatnia podzielona. Brak wiary w sukces. Każda porażka boli podwójnie — drużyna wchodzi na boisko bez przekonania.' };
-    if (morale <= 35) return { label: 'NISKIE', color: 'text-orange-400', barColor: 'bg-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30', description: 'Nastroje wyraźnie przygnębione. Drużyna potrzebuje pozytywnego impulsu — wystarczy jedna wygrana, by odwrócić trend.' };
-    if (morale <= 64) return { label: 'NEUTRALNE', color: 'text-white', barColor: 'bg-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30', description: 'Stabilna atmosfera w szatni. Zespół gotowy — ani przesadny optymizm, ani defetyzm. Solidna baza do pracy.' };
-    if (morale <= 79) return { label: 'WYSOKIE', color: 'text-green-400', barColor: 'bg-green-500', bg: 'bg-green-500/10', border: 'border-green-500/30', description: 'Pozytywna atmosfera w szatni. Drużyna wierzy w swoje możliwości i wchodzi na boisko z głową wysoko.' };
-    return { label: 'BARDZO WYSOKIE', color: 'text-yellow-400', barColor: 'bg-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', description: 'Znakomite morale! Seria sukcesów podbija pewność siebie całego zespołu. Drużyna jest w stanie szczytowej gotowości.' };
+    if (morale <= 20) return { label: 'BARDZO NISKIE', color: 'text-red-500', barColor: 'bg-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', description: 'Szatnia podzielona. Brak wiary w sukces.' };
+    if (morale <= 35) return { label: 'NISKIE', color: 'text-orange-400', barColor: 'bg-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30', description: 'Nastroje wyraźnie przygnębione. Drużyna potrzebuje pozytywnego impulsu, aby odwrócić trend.' };
+    if (morale <= 64) return { label: 'NEUTRALNE', color: 'text-white', barColor: 'bg-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30', description: 'Stabilna atmosfera w szatni.' };
+    if (morale <= 79) return { label: 'WYSOKIE', color: 'text-green-400', barColor: 'bg-green-500', bg: 'bg-green-500/10', border: 'border-green-500/30', description: 'Pozytywna atmosfera w szatni.' };
+    return { label: 'BARDZO WYSOKIE', color: 'text-yellow-400', barColor: 'bg-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', description: 'Znakomite morale! Drużyna jest w stanie szczytowej gotowości.' };
   };
 
   const leagueClubs = useMemo(() => myClub ? clubs.filter(c => c.leagueId === myClub.leagueId) : [], [clubs, myClub]);
@@ -318,8 +318,8 @@ export const SquadView: React.FC = () => {
           ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : isHighlighted ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/60 shadow-[0_0_16px_rgba(52,211,153,0.15)]' : isOutOfPosition ? 'bg-red-950/30 ring-2 ring-inset ring-red-500 shadow-[0_0_18px_rgba(239,68,68,0.2)]' : getPositionRowTintClass(player.position)}
           ${(isSuspended || isSevereInjured || isOverfatigued) ? 'opacity-30 grayscale' : ''}`}
       >
-        <td className="pl-6 w-12 relative z-10">
-           <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[8px] font-black uppercase tracking-tight ${getPositionLabelClass(label)}`}>
+        <td className="w-12 relative z-10 overflow-hidden">
+           <span className={`absolute inset-y-0 left-0 inline-flex w-10 items-center justify-center rounded-r-md border text-[8px] font-black uppercase tracking-tight ${getPositionLabelClass(label)}`}>
              {label}
            </span>
         </td>
