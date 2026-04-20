@@ -117,6 +117,16 @@ function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
   return minDist;
 }
 
+function resolveShorts(candidates: string[], opponentPrimary: string, opponentShorts: string, THRESHOLD = 110): string {
+  for (const c of candidates) {
+    if (KitSelectionService.getColorDistance(c, opponentPrimary) >= THRESHOLD &&
+        KitSelectionService.getColorDistance(c, opponentShorts) >= THRESHOLD) {
+      return c;
+    }
+  }
+  return candidates[0];
+}
+
 function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   const homeVariants = getClubKitVariants(homeClub.id, homeClub.colorsHex);
   const awayVariants = getClubKitVariants(awayClub.id, awayClub.colorsHex);
@@ -134,15 +144,32 @@ function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   const aKit = awayVariants[bestAwayIdx];
   const hNext = homeVariants[(bestHomeIdx + 1) % homeVariants.length];
   const aNext = awayVariants[(bestAwayIdx + 1) % awayVariants.length];
+
+  const awayShortsCandidates = [
+    aKit.secondaryHex ?? aNext.hex,
+    aKit.hex,
+    '#FFFFFF',
+    '#000000',
+  ];
+  const awaySecondary = resolveShorts(awayShortsCandidates, hKit.hex, hKit.secondaryHex ?? hNext.hex);
+
+  const homeShortsCandidates = [
+    hKit.secondaryHex ?? hNext.hex,
+    hKit.hex,
+    '#FFFFFF',
+    '#000000',
+  ];
+  const homeSecondary = resolveShorts(homeShortsCandidates, aKit.hex, awaySecondary);
+
   return {
     home: {
       primary: hKit.hex,
-      secondary: hKit.secondaryHex ?? hNext.hex,
+      secondary: homeSecondary,
       text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
     },
     away: {
       primary: aKit.hex,
-      secondary: aKit.secondaryHex ?? aNext.hex,
+      secondary: awaySecondary,
       text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
     }
   };

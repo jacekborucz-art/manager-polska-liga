@@ -2,11 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus, FriendlyMatchConditions, PreMatchStudioData, PlayerPosition, Player, Club } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
-import { getPlayerCardImage } from '../../resources/PlayerCardAssets';
+import { getPlayerCardImage, getClubKitVariants, KitVariant } from '../../resources/PlayerCardAssets';
 import { PreMatchStudioService } from '../../services/PreMatchStudioService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
-import { KitSelectionService } from '../../services/KitSelectionService';
+import { KitSelectionService, KitSelection } from '../../services/KitSelectionService';
 import { LineupService } from '../../services/LineupService';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 import startMecz from '../../Graphic/themes/start-mecz.png';
@@ -75,6 +75,143 @@ const getContrastTextColor = (bgHex: string, secondaryHex: string): string => {
   return lum(parse(bgHex)) > 128 ? '#000000' : '#ffffff';
 };
 
+const GOALKEEPER_KIT_POOL = ['#facc15', '#fb923c', '#f472b6', '#881337', '#dc2626', '#16a34a'];
+
+const hashString = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const getPitchSlotTop = (isHome: boolean, slotY: number): string =>
+  `${isHome ? 55 + slotY * 32 : 45 - slotY * 32}%`;
+
+const pickGoalkeeperKitColor = (seed: string, blockedColors: string[]): string => {
+  const threshold = 120;
+  const viableColors = GOALKEEPER_KIT_POOL.filter(color =>
+    blockedColors.every(blocked => KitSelectionService.getColorDistance(color, blocked) > threshold)
+  );
+  if (viableColors.length > 0) {
+    return viableColors[hashString(seed) % viableColors.length];
+  }
+  const ranked = [...GOALKEEPER_KIT_POOL].sort((a, b) => {
+    const aScore = Math.min(...blockedColors.map(blocked => KitSelectionService.getColorDistance(a, blocked)));
+    const bScore = Math.min(...blockedColors.map(blocked => KitSelectionService.getColorDistance(b, blocked)));
+    return bScore - aScore;
+  });
+  return ranked[hashString(seed) % ranked.length];
+};
+
+const getPitchPlayerLabel = (player?: Player | null): string =>
+  player ? `${player.firstName.charAt(0)}. ${player.lastName}` : 'BRAK';
+
+const PitchPlayerKit: React.FC<{
+  player?: Player;
+  left: string;
+  top: string;
+  primary: string;
+  secondary: string;
+  trim: string;
+}> = ({ player, left, top, primary, secondary, trim }) => {
+  const shirtText = getContrastTextColor(primary, secondary);
+  return (
+    <div
+      className="absolute z-20 flex flex-col items-center gap-0 transition-transform duration-300 hover:scale-110"
+      style={{ left, top, transform: 'translate(-50%, -50%)' }}
+    >
+      <div className="relative flex flex-col items-center">
+        <svg viewBox="0 0 24 24" className="w-[34px] h-[34px] drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]">
+          <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={primary} />
+          <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.9" />
+          <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={secondary} fillOpacity="0.35" />
+          <path d="M12 7.2v11.8" stroke={trim} strokeWidth="1.15" strokeOpacity="0.85" />
+          <text x="12" y="15.6" textAnchor="middle" fontSize="3.6" fontWeight="900" fontStyle="italic" fill={shirtText}>
+            {player?.overallRating ?? '??'}
+          </text>
+        </svg>
+        <svg viewBox="0 0 28 18" className="-mt-1 w-[18px] h-[10px] drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]">
+          <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={secondary} stroke={trim} strokeWidth="1.2" strokeLinejoin="round" />
+          <path d="M14 3v12" stroke={trim} strokeWidth="1" strokeOpacity="0.7" />
+        </svg>
+      </div>
+      <div className="min-w-[82px] max-w-[96px] -mt-[4px] rounded-md border border-white/10 bg-black/85 px-2 py-1 text-center shadow-[0_6px_16px_rgba(0,0,0,0.45)]">
+        <span className="block truncate text-[8px] font-black uppercase tracking-[0.14em] text-white">
+          {getPitchPlayerLabel(player)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
+  let minDist = KitSelectionService.getColorDistance(kA.hex, kB.hex);
+  if (kA.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.hex));
+  if (kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.secondaryHex));
+  if (kA.secondaryHex && kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.secondaryHex));
+  return minDist;
+}
+
+function resolveShorts(candidates: string[], opponentPrimary: string, opponentShorts: string, THRESHOLD = 110): string {
+  for (const c of candidates) {
+    if (KitSelectionService.getColorDistance(c, opponentPrimary) >= THRESHOLD &&
+        KitSelectionService.getColorDistance(c, opponentShorts) >= THRESHOLD) {
+      return c;
+    }
+  }
+  return candidates[0];
+}
+
+function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
+  const homeVariants = getClubKitVariants(homeClub.id, homeClub.colorsHex);
+  const awayVariants = getClubKitVariants(awayClub.id, awayClub.colorsHex);
+  const CLASH_THRESHOLD = 350;
+  let bestHomeIdx = 0, bestAwayIdx = 0, maxScore = -1;
+  for (let h = 0; h < homeVariants.length; h++) {
+    for (let a = 0; a < awayVariants.length; a++) {
+      const dist = kitEffectiveDistance(homeVariants[h], awayVariants[a]);
+      const score = dist + (h === 0 ? 100 : 0) + (a === 0 ? 50 : 0);
+      if (score > maxScore) { maxScore = score; bestHomeIdx = h; bestAwayIdx = a; }
+    }
+    if (h === 0 && kitEffectiveDistance(homeVariants[0], awayVariants[bestAwayIdx]) > CLASH_THRESHOLD) break;
+  }
+  const hKit = homeVariants[bestHomeIdx];
+  const aKit = awayVariants[bestAwayIdx];
+  const hNext = homeVariants[(bestHomeIdx + 1) % homeVariants.length];
+  const aNext = awayVariants[(bestAwayIdx + 1) % awayVariants.length];
+
+  const awayShortsCandidates = [
+    aKit.secondaryHex ?? aNext.hex,
+    aKit.hex,
+    '#FFFFFF',
+    '#000000',
+  ];
+  const awaySecondary = resolveShorts(awayShortsCandidates, hKit.hex, hKit.secondaryHex ?? hNext.hex);
+
+  const homeShortsCandidates = [
+    hKit.secondaryHex ?? hNext.hex,
+    hKit.hex,
+    '#FFFFFF',
+    '#000000',
+  ];
+  const homeSecondary = resolveShorts(homeShortsCandidates, aKit.hex, awaySecondary);
+
+  return {
+    home: {
+      primary: hKit.hex,
+      secondary: homeSecondary,
+      text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
+    },
+    away: {
+      primary: aKit.hex,
+      secondary: awaySecondary,
+      text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
+    }
+  };
+}
+
 export const PreMatchFriendlyStudioView: React.FC = () => {
   const {
     fixtures, clubs, players, lineups, currentDate, navigateTo, userTeamId,
@@ -116,7 +253,7 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
 
   const matchKits = useMemo(() => {
     if (!data) return null;
-    return KitSelectionService.selectOptimalKits(data.homeClub, data.awayClub);
+    return selectKitsFromVariants(data.homeClub, data.awayClub);
   }, [data]);
 
   // Bardzo niska frekwencja dla sparingów
@@ -166,6 +303,21 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
 
   const homeTactic = TacticRepository.getById(data.homeLineup.tacticId);
   const awayTactic = TacticRepository.getById(data.awayLineup.tacticId);
+
+  const blockedGoalkeeperColors = [
+    matchKits.home.primary,
+    matchKits.home.secondary,
+    matchKits.away.primary,
+    matchKits.away.secondary
+  ];
+  const homeGoalkeeperColor = pickGoalkeeperKitColor(
+    `${data.homeClub.id}-${data.awayClub.id}-${homeXI.find(p => p.position === PlayerPosition.GK)?.id ?? 'home-gk'}`,
+    blockedGoalkeeperColors
+  );
+  const awayGoalkeeperColor = pickGoalkeeperKitColor(
+    `${data.awayClub.id}-${data.homeClub.id}-${awayXI.find(p => p.position === PlayerPosition.GK)?.id ?? 'away-gk'}`,
+    blockedGoalkeeperColors
+  );
 
   const stadiumName = venueInfo
     ? `${venueInfo.name}, ${venueInfo.city}`
@@ -309,37 +461,67 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
               </div>
             </div>
 
-            {/* 3D PITCH */}
-            <div className="flex-1 max-w-[320px] flex items-center justify-center py-6" style={{ perspective: '1200px' }}>
+            {/* BOISKO W WIDOKU 2D Z KOSZULKAMI SVG */}
+            <div className="flex-1 max-w-[430px] xl:max-w-[470px] flex items-center justify-center py-2">
               <div
-                className="w-full aspect-[2/3] rounded-none relative shadow-[0_80px_100px_rgba(0,0,0,0.7)] overflow-visible group/pitch opacity-80"
-                style={{ transform: 'rotateX(25deg)', transformOrigin: 'center center' }}
+                className="w-full aspect-[2/3] rounded-[10px] relative shadow-[0_45px_80px_rgba(0,0,0,0.55)] overflow-visible group/pitch opacity-90"
               >
-                <img src={bojo2Pitch} alt="boisko" className="absolute inset-0 w-full h-full object-fill" style={{ transform: 'scale(1.15, 1.035)' }} />
+                <img src={bojo2Pitch} alt="boisko" className="absolute inset-0 w-full h-full object-fill" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/10 pointer-events-none" />
 
                 {homeTactic.slots.map((slot, i) => {
                   const player = homeXI[i];
+                  const primary = slot.role === PlayerPosition.GK ? homeGoalkeeperColor : matchKits.home.primary;
+                  const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.home.secondary;
+                  const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.home.secondary);
                   return (
-                    <div key={`h-${i}`} className="absolute w-[29px] h-[29px] rounded-full border border-white/60 shadow-2xl flex flex-col overflow-hidden z-20"
-                      style={{ left: `${slot.x * 100}%`, top: `calc(${(slot.y * 0.44 + 0.53) * 100}% - ${slot.role === PlayerPosition.FWD ? 50 : slot.role === PlayerPosition.MID ? 25 : slot.role === PlayerPosition.GK ? -5 : 15}px)`, transform: 'translate(-50%, -50%)' }}>
-                      <div className="h-[80%] w-full flex items-center justify-center" style={{ backgroundColor: matchKits.home.primary }}>
-                        <span className="text-[7px] font-black" style={{ color: getContrastTextColor(matchKits.home.primary, matchKits.home.secondary) }}>{player?.overallRating || '??'}</span>
-                      </div>
-                      <div className="h-[20%] w-full" style={{ backgroundColor: matchKits.home.secondary }} />
-                    </div>
+                    <PitchPlayerKit
+                      key={`h-${i}`}
+                      player={player}
+                      left={`${slot.x * 100}%`}
+                      top={
+                        slot.role === PlayerPosition.GK
+                          ? `calc(${getPitchSlotTop(true, slot.y)} + 60px)`
+                          : slot.role === PlayerPosition.DEF
+                            ? `calc(${getPitchSlotTop(true, slot.y)} + 37px)`
+                            : slot.role === PlayerPosition.MID
+                              ? `calc(${getPitchSlotTop(true, slot.y)} - 7px)`
+                              : slot.role === PlayerPosition.FWD
+                                ? `calc(${getPitchSlotTop(true, slot.y)} - 45px)`
+                                : getPitchSlotTop(true, slot.y)
+                      }
+                      primary={primary}
+                      secondary={secondary}
+                      trim={trim}
+                    />
                   );
                 })}
 
                 {awayTactic.slots.map((slot, i) => {
                   const player = awayXI[i];
+                  const primary = slot.role === PlayerPosition.GK ? awayGoalkeeperColor : matchKits.away.primary;
+                  const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.away.secondary;
+                  const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.away.secondary);
                   return (
-                    <div key={`a-${i}`} className="absolute w-6 h-6 rounded-full border border-white/60 shadow-2xl flex flex-col overflow-hidden z-20"
-                      style={{ left: `${slot.x * 100}%`, top: `calc(${(0.47 - slot.y * 0.44) * 100}% - 10px)`, transform: 'translate(-50%, -50%)' }}>
-                      <div className="h-[80%] w-full flex items-center justify-center" style={{ backgroundColor: matchKits.away.primary }}>
-                        <span className="text-[7px] font-black" style={{ color: getContrastTextColor(matchKits.away.primary, matchKits.away.secondary) }}>{player?.overallRating || '??'}</span>
-                      </div>
-                      <div className="h-[20%] w-full" style={{ backgroundColor: matchKits.away.secondary }} />
-                    </div>
+                    <PitchPlayerKit
+                      key={`a-${i}`}
+                      player={player}
+                      left={`${slot.x * 100}%`}
+                      top={
+                        slot.role === PlayerPosition.GK
+                          ? `calc(${getPitchSlotTop(false, slot.y)} - 60px)`
+                          : slot.role === PlayerPosition.DEF
+                            ? `calc(${getPitchSlotTop(false, slot.y)} - 35px)`
+                            : slot.role === PlayerPosition.MID
+                              ? `calc(${getPitchSlotTop(false, slot.y)} + 5px)`
+                              : slot.role === PlayerPosition.FWD
+                                ? `calc(${getPitchSlotTop(false, slot.y)} + 48px)`
+                                : getPitchSlotTop(false, slot.y)
+                      }
+                      primary={primary}
+                      secondary={secondary}
+                      trim={trim}
+                    />
                   );
                 })}
               </div>

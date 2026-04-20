@@ -40,7 +40,7 @@ exports.RAW_PL_CLUBS = [
     { name: "Chrobry Głogów", tier: 2, colors: ['#FF5F1F', '#000000', '#FFFFFF'], stadium: "Stadion Miejski w Głogowie", capacity: 3000, reputation: 5 },
     { name: "Stal Rzeszów", tier: 2, colors: ['#FFFFFF', '#0000FF', '#FF0000'], stadium: "Stadion Miejski w Rzeszowie", capacity: 11500, reputation: 6 },
     { name: "Śląsk Wrocław", tier: 2, colors: ['#008000', '#FFFFFF', '#FF0000'], stadium: "Tarczyński Arena", capacity: 42771, reputation: 10 },
-    { name: "Polonia Warszawa", tier: 2, colors: ['#000000', '#FFFFFF', '#dac511d0'], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8 },
+    { name: "Polonia Warszawa", tier: 2, colors: ['#000000', '#FFFFFF', '#ff0000ec'], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8 },
     { name: "Wieczysta Kraków", tier: 2, colors: ['#FFFF00', '#FF0000', '#000000'], stadium: "Stadion Prądniczanki", capacity: 2000, reputation: 5 },
     { name: "Ruch Chorzów", tier: 2, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Chorzowie", capacity: 9300, reputation: 9 },
     { name: "Miedź Legnica", tier: 2, colors: ['#008000', '#FF0000', '#0000FF'], stadium: "Stadion Orła Białego", capacity: 6194, reputation: 8 },
