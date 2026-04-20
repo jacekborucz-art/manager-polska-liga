@@ -175,7 +175,7 @@ if (todayFixtures.length === 0) {
       // --- PRZYGOTOWANIE DANYCH DLA V2 ---
       const hCoach = coaches[home.coachId || ''] || { attributes: { experience: 50, decisionMaking: 50, motivation: 50 } };
       const aCoach = coaches[away.coachId || ''] || { attributes: { experience: 50, decisionMaking: 50, motivation: 50 } };
-      const assignedRef = RefereeService.assignReferee(fixture.id, 3);
+      const assignedRef = RefereeService.assignPolishReferee(fixture.id, 3);
 
       // --- WYBÓR SILNIKA (ODKOMENTUJ WŁAŚCIWY) ---
       

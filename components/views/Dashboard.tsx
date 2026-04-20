@@ -812,10 +812,16 @@ const boardConfidence = useMemo(() => {
                    <div className="flex items-center gap-3">
                      {/* home team */}
                      <div className="flex flex-col items-center gap-1.5 flex-1">
-                       <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-inner flex flex-col shrink-0">
-                         <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[0] ?? '#334155' }} />
-                         <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[1] ?? '#1e293b' }} />
-                       </div>
+                       {getClubLogo(myClub?.id || '') ? (
+                         <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+                           <img src={getClubLogo(myClub?.id || '')} alt={myClub?.name} className="w-full h-full object-contain drop-shadow-lg" />
+                         </div>
+                       ) : (
+                         <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-inner flex flex-col shrink-0">
+                           <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[0] ?? '#334155' }} />
+                           <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[1] ?? '#1e293b' }} />
+                         </div>
+                       )}
                        <span className="text-[10px] font-black italic uppercase text-white text-center leading-tight line-clamp-2">{myClub?.name}</span>
                        {isHome !== undefined && (
                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/70">{isHome ? 'DOM' : 'WYJAZD'}</span>
@@ -831,10 +837,16 @@ const boardConfidence = useMemo(() => {
 
                      {/* away team */}
                      <div className="flex flex-col items-center gap-1.5 flex-1">
-                       <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-inner flex flex-col shrink-0">
-                         <div className="flex-1" style={{ backgroundColor: opponent?.colorsHex[0] ?? '#334155' }} />
-                         <div className="flex-1" style={{ backgroundColor: opponent?.colorsHex[1] ?? '#1e293b' }} />
-                       </div>
+                       {getClubLogo(opponent?.id || '') ? (
+                         <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+                           <img src={getClubLogo(opponent?.id || '')} alt={opponent?.name} className="w-full h-full object-contain drop-shadow-lg" />
+                         </div>
+                       ) : (
+                         <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-inner flex flex-col shrink-0">
+                           <div className="flex-1" style={{ backgroundColor: opponent?.colorsHex[0] ?? '#334155' }} />
+                           <div className="flex-1" style={{ backgroundColor: opponent?.colorsHex[1] ?? '#1e293b' }} />
+                         </div>
+                       )}
                        <span className="text-[10px] font-black italic uppercase text-white text-center leading-tight line-clamp-2">{opponent?.name}</span>
                        {isHome !== undefined && (
                          <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">{isHome ? 'WYJAZD' : 'DOM'}</span>

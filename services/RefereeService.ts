@@ -272,6 +272,31 @@ export const RefereeService = {
   },
 
   /**
+   * Assigns a Polish referee for domestic league and cup matches.
+   */
+  assignPolishReferee: (seedStr: string, importance: number): Referee => {
+    RefereeService.initializePool();
+
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+      hash |= 0;
+    }
+
+    const polishRefs = RefereeService.pool.filter(r => r.nationality === Region.POLAND);
+
+    const eligibleRefs = polishRefs.filter(r => {
+      if (importance >= 4) return r.consistency > 70;
+      if (importance >= 3) return r.consistency > 50;
+      return true;
+    });
+
+    const finalPool = eligibleRefs.length > 0 ? eligibleRefs : polishRefs;
+    const index = Math.abs(hash) % finalPool.length;
+    return finalPool[index];
+  },
+
+  /**
    * Deterministically assigns a referee based on match criteria.
    */
   assignReferee: (seedStr: string, importance: number): Referee => {

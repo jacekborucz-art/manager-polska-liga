@@ -53,7 +53,7 @@ export const PreMatchStudioService = {
 
     // 1. Weather & Referee
     const weather = PolandWeatherService.getWeather(fixture.date, seed);
-    const referee = RefereeService.assignReferee(seed, importance);
+    const referee = RefereeService.assignPolishReferee(seed, importance);
 
     // 2. Odds
     let odds = await OddsService.getOdds(home.name, away.name, fixture.date, fixture.leagueId === 'CUP' ? CompetitionType.POLISH_CUP : CompetitionType.LEAGUE);

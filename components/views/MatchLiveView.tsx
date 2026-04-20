@@ -189,7 +189,7 @@ const isPausedForSevereInjury = useMemo(() => {
   const env = useMemo(() => {
     if (!ctx) return null;
     const seedStr = `${ctx.fixture.id}_ENV`;
-    const ref = RefereeService.assignReferee(seedStr, 3);
+    const ref = RefereeService.assignPolishReferee(seedStr, 3);
     const weather = PolandWeatherService.getWeather(ctx.fixture.date, seedStr);
     return { ref, weather };
   }, [ctx]);

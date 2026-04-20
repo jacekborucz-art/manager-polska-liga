@@ -39,7 +39,7 @@ const simulatePlayoffMatchEngine = (
   };
 
   // Sekcja sędziego — ważność jak dla meczu pucharowego o awans
-  const referee: Referee = RefereeService.assignReferee(`${home.id}_${away.id}_${seed}`, 3);
+  const referee: Referee = RefereeService.assignPolishReferee(`${home.id}_${away.id}_${seed}`, 3);
 
   // Sekcja aktywnych składów — mutowalne przez czerwone kartki
   let homeXI: (string | null)[] = [...hLineup.startingXI];

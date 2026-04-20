@@ -45,7 +45,7 @@ const simulateCupMatch = (
   };
 
   // Losowanie sędziego na mecz
-  const referee: Referee = RefereeService.assignReferee(`${home.id}_${away.id}_${seed}`, 3); // 3 = ważność meczu
+  const referee: Referee = RefereeService.assignPolishReferee(`${home.id}_${away.id}_${seed}`, 3); // 3 = ważność meczu
 
   // ── POMOCNICZE STRUKTURY ────────────────────────────────────
   const scorers: CupMatchResult['scorers'] = [];

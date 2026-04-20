@@ -575,7 +575,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, mi
   const env = useMemo(() => {
     if (!ctx) return null;
     const seed = `${ctx.fixture.id}_CUP`;
-    return { ref: RefereeService.assignReferee(seed, 5), weather: PolandWeatherService.getWeather(ctx.fixture.date, seed) };
+    return { ref: RefereeService.assignPolishReferee(seed, 5), weather: PolandWeatherService.getWeather(ctx.fixture.date, seed) };
   }, [ctx]);
 
   const isPausedForSevereInjury = useMemo(() => {
