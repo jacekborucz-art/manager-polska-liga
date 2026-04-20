@@ -32,6 +32,7 @@ import { AiMatchPreparationService } from '@/services/AiMatchPreparationService'
 import { AiScoutingService } from '../services/AiScoutingService';
 import { TacticalBrainService } from '@/services/TacticalBrainService';
 import { MatchHistoryService } from '@/services/MatchHistoryService';
+import { getClubLogo } from '../resources/ClubLogoAssets';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -3206,61 +3207,31 @@ if (activePlayerTempo === 'SLOW') {
   };
 
   const renderSquad = (side: 'HOME' | 'AWAY') => {
-    const club = side === 'HOME' ? ctx?.homeClub : ctx?.awayClub;
     const lineup = side === 'HOME' ? matchState?.homeLineup : matchState?.awayLineup;
     const teamPlayers = side === 'HOME' ? ctx?.homePlayers : ctx?.awayPlayers;
     if (!lineup || !teamPlayers) return null;
 
     return (
-      <div className={`w-60 rounded-[35px] border border-white/5 p-2 flex flex-col gap-1 overflow-hidden shadow-2xl backdrop-blur-xl relative z-0`}>
-         <div className="flex items-center gap-2 mb-1 px-1">
-            <div className="w-8 h-8 rounded-lg flex flex-col overflow-hidden border border-white/10 shrink-0">
-               <div className="flex-1" style={{ backgroundColor: club?.colorsHex[0] }} />
-               <div className="flex-1" style={{ backgroundColor: club?.colorsHex[1] || club?.colorsHex[0] }} />
-            </div>
-            <span className="text-[10px] font-black text-white uppercase italic truncate">{club?.name}</span>
-         </div>
+      <div className={`w-72 rounded-[35px] border border-white/5 p-2 flex flex-col gap-1 overflow-hidden shadow-2xl backdrop-blur-xl relative z-0`}>
          <div className="overflow-y-auto custom-scrollbar space-y-1">
 
 {/* *** TUTAJ WSTAW TEN KOD (TACTICAL STATUS DISPLAY) *** */}
          {side !== userSide && matchState.aiActiveShout && (
            <div className="bg-black/40 p-3 rounded-2xl border border-white/5 mb-2 flex flex-col gap-2 shadow-inner">
               <div className="flex justify-between items-center">
-                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">USTAWIENIE I TAKTYKA </span>
-                 <span className="text-[8px] font-black text-white italic">{TacticRepository.getById(matchState[side === 'HOME' ? 'homeLineup' : 'awayLineup'].tacticId).name}</span>
+                 <span className="text-[14px] font-black text-slate-500 uppercase tracking-widest">TAKTYKA</span>
+                 <span className="text-[14px] font-black text-white italic">{TacticRepository.getById(matchState[side === 'HOME' ? 'homeLineup' : 'awayLineup'].tacticId).name}</span>
               </div>
-              <div className={`flex gap-1.5 transition-opacity duration-500 ${(matchState.aiActiveShout as any).isExpired ? 'opacity-40' : 'opacity-100'}`}>
-                 <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    {matchState.aiActiveShout.tempo} {(matchState.aiActiveShout as any).isExpired && '...'}
-                 </span>
-                 <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    {matchState.aiActiveShout.mindset} {(matchState.aiActiveShout as any).isExpired && '...'}
-                 </span>
-                 <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                    {matchState.aiActiveShout.intensity} {(matchState.aiActiveShout as any).isExpired && '...'}
-                 </span>
-              </div>
-              {(matchState.aiActiveShout as any).isExpired && (
-                <span className="text-[6px] font-black text-slate-500 uppercase animate-pulse">Analiza taktyczna w toku...</span>
-              )}
            </div>
          )}
 
          {side === userSide && (
            <div className="bg-black/40 px-3 py-2 rounded-xl border border-white/5 mb-2 flex flex-col gap-1.5 shadow-inner">
              <div className="flex justify-between items-center">
-               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">USTAWIENIE I TAKTYKA</span>
-               <span className="text-[8px] font-black text-emerald-400 italic">
+               <span className="text-[13px] font-black text-slate-500 uppercase tracking-widest">TAKTYKA</span>
+               <span className="text-[14px] font-black text-emerald-400 italic">
                  {TacticRepository.getById(lineup.tacticId)?.name ?? lineup.tacticId}
                </span>
-             </div>
-             <div className="flex flex-wrap gap-1">
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{matchState.userInstructions.tempo}</span>
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{matchState.userInstructions.mindset}</span>
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">{matchState.userInstructions.intensity}</span>
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">{matchState.userInstructions.passing}</span>
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">{matchState.userInstructions.pressing}</span>
-               <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{matchState.userInstructions.counterAttack}</span>
              </div>
            </div>
          )}
@@ -3307,19 +3278,25 @@ if (activePlayerTempo === 'SLOW') {
                );
             })}
          </div>
-         <div className="mt-4 pt-3 border-t border-white/5 space-y-1">
-            <h5 className="text-[14px] font-black italic text-slate-500 uppercase tracking-widest px-2">ZMIANY</h5>
+         <div className="mt-3">
+            <div className="flex items-center gap-2 mb-2">
+               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+               <span className="text-[11px] font-black text-amber-400 uppercase tracking-widest px-1">ZMIANY</span>
+               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            </div>
+            <div className="space-y-1 px-1">
             {(side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory).map((sub, sIdx) => {
                const pIn = teamPlayers.find(p => p.id === sub.playerInId);
                const pOut = teamPlayers.find(p => p.id === sub.playerOutId);
                return (
-                 <div key={sIdx} className="flex items-center gap-2 px-3 py-1 bg-white/[0.01] rounded border border-white/[0.03]">
-                    <span className="text-[8px] text-emerald-400 font-bold">{sub.minute}'</span>
-                    <span className="text-[9px] text-slate-300 font-bold truncate">↑ {pIn?.lastName}</span>
-                    <span className={`text-[9px] ${pOut ? 'text-slate-600' : 'text-slate-700 italic'} truncate`}>↓ {pOut?.lastName || 'zniesiony'}</span>
+                 <div key={sIdx} className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+                    <span className="text-[11px] text-emerald-400 font-black shrink-0">{sub.minute}'</span>
+                    <span className="text-[10px] text-slate-300 font-bold uppercase italic truncate flex-1">↑ {pIn ? `${pIn.firstName.charAt(0)}. ${pIn.lastName}` : ''}</span>
+                    <span className={`text-[10px] font-bold uppercase italic truncate ${pOut ? 'text-red-500' : 'text-slate-700'}`}>↓ {pOut ? `${pOut.firstName.charAt(0)}. ${pOut.lastName}` : 'zniesiony'}</span>
                  </div>
                );
             })}
+            </div>
          </div>
       </div>
     );
@@ -3342,10 +3319,12 @@ if (activePlayerTempo === 'SLOW') {
         <div className="absolute inset-0 backdrop-blur-[2px] bg-slate-950/20" />
       </div>
 
-      <header className="flex items-center justify-between h-32 bg-slate-900/60 backdrop-blur-3xl rounded-[40px] border border-white/10 px-12 shadow-2xl shrink-0">
+      <header className="flex items-center justify-between h-32 backdrop-blur-3xl rounded-[40px] border border-white/10 px-12 shadow-2xl shrink-0" style={{ background: `linear-gradient(to right, ${kitColors.home.primary}99 0%, #0f172a 40%, #0f172a 60%, ${kitColors.away.primary}99 100%)` }}>
          <div className="flex-1 flex flex-col justify-center">
             <div className="flex items-center gap-3">
-              <BigJerseyIcon primary={kitColors.home.primary} secondary={kitColors.home.secondary} size="w-20 h-20" />
+              {getClubLogo(ctx.homeClub.id)
+                ? <img src={getClubLogo(ctx.homeClub.id)} className="w-20 h-20 object-contain drop-shadow-2xl" style={{ transform: 'rotate(-7deg)' }} alt={ctx.homeClub.name} />
+                : <BigJerseyIcon primary={kitColors.home.primary} secondary={kitColors.home.secondary} size="w-20 h-20" />}
               <h2 className="text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl">{ctx.homeClub.name}</h2>
             </div>
             <div className="flex flex-wrap gap-2 mt-1">
@@ -3353,7 +3332,7 @@ if (activePlayerTempo === 'SLOW') {
                  const fp = ctx.homePlayers.find(px => px.lastName === g.playerName);
                  const gName = fp ? `${fp.firstName.charAt(0)}. ${fp.lastName}` : g.playerName;
                  return (
-                   <span key={i} className={`text-[9px] font-bold uppercase italic ${g.isMiss ? 'text-rose-500/80' : 'text-white/60'}`}>
+                   <span key={i} className={`text-[11px] font-bold uppercase italic ${g.isMiss ? 'text-rose-500/80' : 'text-white'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
                       {g.isMiss ? '❌' : '⚽'} {gName} {g.minute}'{g.isPenalty ? ' k.' : ''}
                    </span>
                  );
@@ -3393,14 +3372,16 @@ if (activePlayerTempo === 'SLOW') {
          <div className="flex-1 flex flex-col justify-center items-end">
             <div className="flex items-center gap-3 text-right">
               <h2 className="text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl">{ctx.awayClub.name}</h2>
-              <BigJerseyIcon primary={kitColors.away.primary} secondary={kitColors.away.secondary} size="w-20 h-20" />
+              {getClubLogo(ctx.awayClub.id)
+                ? <img src={getClubLogo(ctx.awayClub.id)} className="w-20 h-20 object-contain drop-shadow-2xl" style={{ transform: 'rotate(7deg)' }} alt={ctx.awayClub.name} />
+                : <BigJerseyIcon primary={kitColors.away.primary} secondary={kitColors.away.secondary} size="w-20 h-20" />}
             </div>
             <div className="flex flex-wrap gap-2 mt-1 justify-end">
               {matchState.awayGoals.map((g, i) => {
                  const fp = ctx.awayPlayers.find(px => px.lastName === g.playerName);
                  const gName = fp ? `${fp.firstName.charAt(0)}. ${fp.lastName}` : g.playerName;
                  return (
-                   <span key={i} className={`text-[9px] font-bold uppercase italic ${g.isMiss ? 'text-rose-500/80' : 'text-white/60'}`}>
+                   <span key={i} className={`text-[11px] font-bold uppercase italic ${g.isMiss ? 'text-rose-500/80' : 'text-white'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
                       {gName} {g.minute}'{g.isPenalty ? ' k.' : ''} {g.isMiss ? '❌' : '⚽'}
                    </span>
                  );
@@ -3797,7 +3778,7 @@ if (activePlayerTempo === 'SLOW') {
     if (!pId) return null;
     const p = ctx.homePlayers.find(px => px.id === pId);
     if (!p) return null;
-    
+    const yOffset = p.position === PlayerPosition.FWD ? -55 : p.position === PlayerPosition.MID ? -25 : p.position === PlayerPosition.DEF ? 10 : p.position === PlayerPosition.GK ? 48 : 30;
     return (
       <div
         key={`h-${p.id}`}
@@ -3805,7 +3786,7 @@ if (activePlayerTempo === 'SLOW') {
         style={{
           left: `${slot.x * 100}%`,
           top: `${(slot.y * 0.42 + 0.54) * 100}%`,
-          transform: 'translate(-50%, calc(-50% + 30px)) scale(1.15)',
+          transform: `translate(-50%, calc(-50% + ${yOffset}px)) scale(1.4)`,
           willChange: 'transform'
         }}
       >
@@ -3838,16 +3819,17 @@ if (activePlayerTempo === 'SLOW') {
           )}
           {/* -> tutaj wstaw kod (STAGE 1 PRO FIX: Poprawna lista bramek i format dla Gospodarzy) */}
           {matchState.homeGoals.some(g => g.playerName === `${p.firstName.charAt(0)}. ${p.lastName}` && !g.isMiss) && (
-            <div className="absolute -top-2 -left-2 w-4 h-4 bg-white rounded-full flex items-center justify-center text-[8px] shadow-lg border border-black z-30">
+            <div className="absolute w-[36px] h-[36px] rounded-full flex items-center justify-center text-[16px] z-30" style={{ top: '-18px', left: '-3px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))' }}>
               ⚽
             </div>
           )}
         </div>
-        <div className="bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[7px] font-black mt-0 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter text-white"
-          style={{ 
+        <div className="px-1.5 py-0.5 rounded-full text-[11px] font-black mt-0 whitespace-nowrap shadow-2xl italic tracking-tighter text-white"
+          style={{
             transform: 'scale(1.15)',
             backfaceVisibility: 'hidden',
-            WebkitFontSmoothing: 'antialiased'
+            WebkitFontSmoothing: 'antialiased',
+            textShadow: '0 1px 3px rgba(0,0,0,0.9)'
           }}
         >
           {p.firstName.charAt(0)}. {p.lastName} {/* -> tutaj wstaw kod */}
@@ -3896,16 +3878,17 @@ if (activePlayerTempo === 'SLOW') {
           )}
           {/* -> tutaj wstaw kod (STAGE 1 PRO FIX: Ujednolicony format nazwiska dla Gości) */}
           {matchState.awayGoals.some(g => g.playerName === `${p.firstName.charAt(0)}. ${p.lastName}` && !g.isMiss) && (
-            <div className="absolute -top-2 -right-2 w-4 h-4 bg-white rounded-full flex items-center justify-center text-[8px] shadow-lg border border-black z-30">
+            <div className="absolute w-[36px] h-[36px] rounded-full flex items-center justify-center text-[16px] z-30" style={{ top: '-18px', right: '-13px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))' }}>
               ⚽
             </div>
           )}
         </div>
-          <div className="bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[7px] font-black mt-0 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter text-white"
-          style={{ 
+          <div className="px-1.5 py-0.5 rounded-full text-[11px] font-black mt-0 whitespace-nowrap shadow-2xl italic tracking-tighter text-white"
+          style={{
             transform: 'scale(1.15)',
             backfaceVisibility: 'hidden',
-            WebkitFontSmoothing: 'antialiased'
+            WebkitFontSmoothing: 'antialiased',
+            textShadow: '0 1px 3px rgba(0,0,0,0.9)'
           }}
         >
           {p.lastName}
