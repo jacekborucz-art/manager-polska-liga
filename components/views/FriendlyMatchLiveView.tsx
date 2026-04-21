@@ -2530,7 +2530,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
   className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
   style={{
     left: `${slot.x * 100}%`,
-    top: `${(slot.y * 0.42 + 0.54) * 100}%`,
+    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.GK ? '7px' : slot.role === PlayerPosition.FWD ? '-30px' : slot.role === PlayerPosition.DEF ? '-3px' : slot.role === PlayerPosition.MID ? '-20px' : '0px'})`,
 
     transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.15)'
   }}
@@ -2554,11 +2554,11 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
 
             {injury && <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
           </div>
-         <div 
-  className={`bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[7px] font-black mt-0 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
-  style={{ transform: 'rotateX(-24deg) scale(1.15)' }}
+         <div
+  className={`text-[9px] font-black mt-0 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
+  style={{ transform: 'rotateX(-24deg) scale(1.15)', textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 2px 2px 0 #000' }}
 >
-  {p.lastName}
+  {p.firstName.charAt(0)}. {p.lastName}
           </div>
         </div>
       );
@@ -2579,7 +2579,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
       style={{
         left: `${slot.x * 100}%`,
-        top: `${(0.48 - slot.y * 0.42) * 100}%`,
+        top: `calc(${(0.48 - slot.y * 0.42) * 100}% - ${slot.role === PlayerPosition.GK ? '20px' : slot.role === PlayerPosition.FWD ? '-30px' : slot.role === PlayerPosition.MID ? '-15px' : '0px'})`,
         transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.4)'
       }}
     >
@@ -2602,8 +2602,8 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
 
         {injury && <div className={`absolute -bottom-1.5 -left-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
       </div>
-      <div className={`bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[8px] font-black mt-1 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}>
-        {p.lastName}
+      <div className={`text-[8px] font-black mt-1 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`} style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 2px 2px 0 #000', position: 'relative', top: '-5px' }}>
+        {p.firstName.charAt(0)}. {p.lastName}
       </div>
     </div>
   );
