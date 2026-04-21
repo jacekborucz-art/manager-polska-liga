@@ -49,7 +49,7 @@ export const NATIONAL_TEAMS_AFRICA = [
   { name: "Wyspy Świętego Tomasza i Książęca", continent: "Africa", tier: 5, colors: ['#009E49','#FCD116','#CE1126'], stadium: "Estádio Nacional 12 de Julho", capacity: 6500, reputation: 3, region: Region.SSA },
   { name: "Tanzania", continent: "Africa", tier: 3, colors: ['#1EB53A','#FCD116','#00A3DD'], stadium: "Benjamin Mkapa Stadium", capacity: 60000, reputation: 7, region: Region.SSA },
   { name: "Togo", continent: "Africa", tier: 4, colors: ['#006A4E','#FCD116','#D21034'], stadium: "Stade de Kégué", capacity: 30000, reputation: 6, region: Region.SSA },
-  { name: "Tunezja", continent: "Africa", tier: 3, colors: ['#E70013','#FFFFFF','#E70013'], stadium: "Stade Olympique de Radès", capacity: 60000, reputation: 11, region: Region.ARABIA },
+  { name: "Tunezja", continent: "Africa", tier: 2, colors: ['#E70013','#FFFFFF','#E70013'], stadium: "Stade Olympique de Radès", capacity: 60000, reputation: 11, region: Region.ARABIA },
   { name: "Uganda", continent: "Africa", tier: 4, colors: ['#000000','#FCD116','#CE1126'], stadium: "Mandela National Stadium", capacity: 45000, reputation: 8, region: Region.SSA },
   { name: "Wybrzeże Kości Słoniowej", continent: "Africa", tier: 2, colors: ['#F77F00','#FFFFFF','#009E60'], stadium: "Stade Olympique d'Ebimpé", capacity: 60000, reputation: 14, region: Region.SSA },
   { name: "Wyspy Zielonego Przylądka", continent: "Africa", tier: 4, colors: ['#003893','#FFFFFF','#CF2027'], stadium: "Estádio Nacional de Cabo Verde", capacity: 15000, reputation: 8, region: Region.SSA },

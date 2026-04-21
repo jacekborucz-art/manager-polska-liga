@@ -34,8 +34,10 @@ export const TeamSelection: React.FC = () => {
   const { clubs, selectUserTeam, navigateTo } = useGame();
   
   const [selectedLeagueTier, setSelectedLeagueTier] = useState<number | 'FOREIGN'>(1);
-  const [selectedCountry, setSelectedCountry] = useState<'ENG' | 'ITA' | 'ESP'>('ENG');
+  const [selectedCountry, setSelectedCountry] = useState<'ENG' | 'ITA' | 'ESP' | 'GER' | 'FRA' | 'OTHER'>('ENG');
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+  const [secretUnlocked, setSecretUnlocked] = useState<boolean>(false);
+  const [showSecretFlash, setShowSecretFlash] = useState<boolean>(false);
 
   // Filter clubs: Active only, and belongs to selected tier.
   const filteredClubs = useMemo(() => {
@@ -47,7 +49,9 @@ export const TeamSelection: React.FC = () => {
        (selectedLeagueTier === 4 && c.leagueId === 'L_PL_4') ||
        (selectedLeagueTier === 'FOREIGN' &&
          (c.leagueId === 'L_CL' || c.leagueId === 'L_EL' || c.leagueId === 'L_CONF') &&
-         c.country === selectedCountry))
+         (selectedCountry === 'OTHER'
+           ? !['ENG', 'ITA', 'ESP', 'GER', 'FRA'].includes(c.country)
+           : c.country === selectedCountry)))
     );
   }, [clubs, selectedLeagueTier, selectedCountry]);
 
@@ -58,7 +62,20 @@ export const TeamSelection: React.FC = () => {
     }
   }, [selectedLeagueTier, filteredClubs, selectedClubId]);
 
-  const selectedClub = useMemo(() => 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        setSecretUnlocked(true);
+        setShowSecretFlash(true);
+        setTimeout(() => setShowSecretFlash(false), 2000);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const selectedClub = useMemo(() =>
     clubs.find(c => c.id === selectedClubId), 
     [clubs, selectedClubId]
   );
@@ -93,9 +110,19 @@ export const TeamSelection: React.FC = () => {
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/10 blur-[150px] animate-pulse" />
       </div>
 
+      {showSecretFlash && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="animate-secret-flash px-10 py-5 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 backdrop-blur-md">
+            <span className="text-emerald-400 font-black italic text-2xl tracking-[0.4em] uppercase">
+              🔓 SECRET UNLOCKED
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header - Fixed Height */}
 
- 
+
       <div className="bg-slate-900/20 border-b border-white/5 p-6 backdrop-blur-xl shrink-0 z-20">
         <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
@@ -108,7 +135,7 @@ export const TeamSelection: React.FC = () => {
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
-              {[1, 2, 3, 4].map(tier => (
+              {[1, 2, 3, ...(secretUnlocked ? [4] : [])].map(tier => (
                   <button
                     key={tier}
                     onClick={() => setSelectedLeagueTier(tier)}
@@ -122,21 +149,23 @@ export const TeamSelection: React.FC = () => {
                     {tier}. LIGA
                   </button>
                 ))}
-              <button
-                onClick={() => setSelectedLeagueTier('FOREIGN')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border
-                  ${selectedLeagueTier === 'FOREIGN'
-                    ? 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]'
-                    : 'bg-slate-900/50 border-white/5 text-slate-500 hover:text-slate-300'
-                  }
-                `}
-              >
-                INNE DRUŻYNY
-              </button>
+              {secretUnlocked && (
+                <button
+                  onClick={() => setSelectedLeagueTier('FOREIGN')}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border
+                    ${selectedLeagueTier === 'FOREIGN'
+                      ? 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                      : 'bg-slate-900/50 border-white/5 text-slate-500 hover:text-slate-300'
+                    }
+                  `}
+                >
+                  INNE DRUŻYNY
+                </button>
+              )}
             </div>
             {selectedLeagueTier === 'FOREIGN' && (
               <div className="flex gap-2 justify-end">
-                {(['ENG', 'ITA', 'ESP'] as const).map(country => (
+                {(['ENG', 'ITA', 'ESP', 'GER', 'FRA', 'OTHER'] as const).map(country => (
                   <button
                     key={country}
                     onClick={() => setSelectedCountry(country)}
@@ -147,7 +176,7 @@ export const TeamSelection: React.FC = () => {
                       }
                     `}
                   >
-                    {country === 'ENG' ? 'ANGLIA' : country === 'ITA' ? 'WŁOCHY' : 'HISZPANIA'}
+                    {country === 'ENG' ? 'ANGLIA' : country === 'ITA' ? 'WŁOCHY' : country === 'ESP' ? 'HISZPANIA' : country === 'GER' ? 'NIEMCY' : country === 'FRA' ? 'FRANCJA' : 'INNE'}
                   </button>
                 ))}
               </div>
@@ -286,7 +315,7 @@ export const TeamSelection: React.FC = () => {
                    <div className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/60 text-[9px] font-black tracking-[0.3em] uppercase mb-6 backdrop-blur-md">
                       <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                       {selectedLeagueTier === 'FOREIGN'
-                        ? (selectedCountry === 'ENG' ? 'Anglia' : selectedCountry === 'ITA' ? 'Włochy' : 'Hiszpania')
+                        ? (selectedCountry === 'ENG' ? 'Anglia' : selectedCountry === 'ITA' ? 'Włochy' : selectedCountry === 'ESP' ? 'Hiszpania' : selectedCountry === 'GER' ? 'Niemcy' : selectedCountry === 'FRA' ? 'Francja' : 'Inne drużyny')
                         : `${selectedLeagueTier}. Liga Polska`
                       }
                    </div>
@@ -342,6 +371,13 @@ export const TeamSelection: React.FC = () => {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+        @keyframes secret-flash {
+          0% { opacity: 0; transform: scale(0.85); }
+          15% { opacity: 1; transform: scale(1.05); }
+          80% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.95); }
+        }
+        .animate-secret-flash { animation: secret-flash 2s ease-in-out forwards; }
       `}</style>
     </div>
   );
