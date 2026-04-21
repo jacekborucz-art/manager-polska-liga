@@ -2139,11 +2139,12 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
   const injuryStatus = injs[pid];
   const isSevereInjured = injuryStatus === 'SEVERE';
+  const isLightInjured = injuryStatus === 'LIGHT';
           const conditionColor = injuryStatus === 'LIGHT' ? 'bg-orange-500' : PlayerPresentationService.getConditionColorClass(f);
 
 
           return (
-            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all cursor-pointer ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : 'bg-white/[0.05] border-white/[0.01] hover:border-white/20 hover:bg-white/[0.01]'}`}>
+            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all cursor-pointer ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30' : 'bg-white/[0.05] border-white/[0.01] hover:border-white/20 hover:bg-white/[0.01]'}`}>
               {side === 'HOME' ? (
                 <>
                   <div className="min-w-0 flex items-center gap-3">
@@ -2353,7 +2354,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                <><div className="text-8xl font-black text-white tracking-tighter leading-none mb-1">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
                   {matchState.isPenalties && <div className="text-base font-black text-blue-400 font-mono mb-1">k. {matchState.homePenaltyScore ?? 0} – {matchState.awayPenaltyScore ?? 0}</div>}
                   {firstLegInfo && (matchState.period as number) >= 2 && (() => { const flH = firstLegInfo.homeTeamId === ctx.homeClub.id ? (firstLegInfo.homeScore ?? 0) : (firstLegInfo.awayScore ?? 0); const flA = firstLegInfo.awayTeamId === ctx.awayClub.id ? (firstLegInfo.awayScore ?? 0) : (firstLegInfo.homeScore ?? 0); return <div className="text-[10px] font-black text-amber-400 tracking-widest">WYNIK DWUMECZU: {flH + matchState.homeScore} – {flA + matchState.awayScore}</div>; })()}
-                  <div className="flex items-center gap-3"><div className="text-xl font-mono font-bold text-emerald-400 animate-pulse bg-emerald-500/10 px-3 py-0.5 rounded-lg border border-emerald-500/20">{matchState.isFinished ? 'WYNIK KOŃCOWY' : matchState.isPenalties ? 'RZUTY KARNE' : (matchState.period as number) >= 3 ? `DOG. ${matchState.minute}'` : `${matchState.minute}'`}</div>
+                  <div className="flex items-center gap-3"><div className="text-[22px] font-mono font-bold text-emerald-400 animate-pulse">{matchState.isFinished ? 'WYNIK KOŃCOWY' : matchState.isPenalties ? 'RZUTY KARNE' : (matchState.period as number) >= 3 ? `DOG. ${matchState.minute}` : `${matchState.minute}`}</div>
                   {matchState.addedTime > 0 && !matchState.isFinished && !matchState.isPenalties && <div className="text-[11px] font-black text-red-500 font-mono">+{matchState.addedTime}</div>}</div></>
             )}
          </div>
@@ -2598,6 +2599,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       const p = ctx.homePlayers.find(px => px.id === pId);
       if (!p || matchState.sentOffIds.includes(p.id)) return null;
       const injury = matchState.homeInjuries[pId];
+      const playerOffsetY = slot.role === PlayerPosition.GK ? 12 : slot.role === PlayerPosition.MID ? -15 : slot.role === PlayerPosition.FWD ? -15 : 0;
 const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && !g.isMiss && !g.varDisallowed);
       return (
         <div
@@ -2608,7 +2610,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     left: `${slot.x * 100}%`,
     top: `${(slot.y * 0.42 + 0.54) * 100}%`,
 
-    transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.15)'
+    transform: `translate(-50%, calc(-50% + ${playerOffsetY}px)) rotateX(-24deg) scale(1.15)`
   }}
         >
           <div className="relative group/player">
@@ -2628,13 +2630,16 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
               </div>
             )}
 
-            {injury && <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
+            {injury && <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-lg bg-orange-500 ${injury === InjurySeverity.SEVERE ? 'animate-bounce' : 'animate-pulse'}`}>✚</div>}
           </div>
          <div 
-  className={`bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[7px] font-black mt-0 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
-  style={{ transform: 'rotateX(-24deg) scale(1.15)' }}
+  className={`px-1.5 py-0.5 text-[7px] font-black mt-0 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
+  style={{
+    transform: 'rotateX(-24deg) scale(1.15)',
+    textShadow: '0 2px 0 rgba(0,0,0,0.95), 0 -1px 0 rgba(0,0,0,0.95), 1px 0 0 rgba(0,0,0,0.95), -1px 0 0 rgba(0,0,0,0.95)'
+  }}
 >
-  {p.lastName}
+  {`${p.firstName.charAt(0)}. ${p.lastName}`}
           </div>
         </div>
       );
@@ -2647,6 +2652,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
   const p = ctx.awayPlayers.find(px => px.id === pId);
   if (!p || matchState.sentOffIds.includes(p.id)) return null;
   const injury = matchState.awayInjuries[pId];
+  const playerOffsetY = slot.role === PlayerPosition.GK ? -15 : slot.role === PlayerPosition.DEF ? 10 : slot.role === PlayerPosition.MID ? 30 : slot.role === PlayerPosition.FWD ? 25 : 0;
  const hasScored = matchState.awayGoals.some(g => g.playerName === p.lastName && !g.isMiss && !g.varDisallowed);
   return (
     <div
@@ -2656,7 +2662,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       style={{
         left: `${slot.x * 100}%`,
         top: `${(0.48 - slot.y * 0.42) * 100}%`,
-        transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.4)'
+        transform: `translate(-50%, calc(-50% + ${playerOffsetY}px)) rotateX(-24deg) scale(1.4)`
       }}
     >
       <div className="relative group/player">
@@ -2676,10 +2682,16 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           </div>
         )}
 
-        {injury && <div className={`absolute -bottom-1.5 -left-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
+        {injury && <div className={`absolute -bottom-1.5 -left-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-lg bg-orange-500 ${injury === InjurySeverity.SEVERE ? 'animate-bounce' : 'animate-pulse'}`}>✚</div>}
       </div>
-      <div className={`bg-slate-950/50 backdrop-blur-md px-1.5 py-0.5 rounded-full text-[8px] font-black mt-1 border border-white/10 whitespace-nowrap shadow-2xl italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}>
-        {p.lastName}
+      <div
+        className={`px-1.5 py-0.5 text-[8px] font-black mt-1 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
+        style={{
+          transform: 'translateY(-6px)',
+          textShadow: '0 2px 0 rgba(0,0,0,0.95), 0 -1px 0 rgba(0,0,0,0.95), 1px 0 0 rgba(0,0,0,0.95), -1px 0 0 rgba(0,0,0,0.95)'
+        }}
+      >
+        {`${p.firstName.charAt(0)}. ${p.lastName}`}
       </div>
     </div>
   );
