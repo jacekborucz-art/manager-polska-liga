@@ -2354,7 +2354,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                <><div className="text-8xl font-black text-white tracking-tighter leading-none mb-1">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
                   {matchState.isPenalties && <div className="text-base font-black text-blue-400 font-mono mb-1">k. {matchState.homePenaltyScore ?? 0} – {matchState.awayPenaltyScore ?? 0}</div>}
                   {firstLegInfo && (matchState.period as number) >= 2 && (() => { const flH = firstLegInfo.homeTeamId === ctx.homeClub.id ? (firstLegInfo.homeScore ?? 0) : (firstLegInfo.awayScore ?? 0); const flA = firstLegInfo.awayTeamId === ctx.awayClub.id ? (firstLegInfo.awayScore ?? 0) : (firstLegInfo.homeScore ?? 0); return <div className="text-[10px] font-black text-amber-400 tracking-widest">WYNIK DWUMECZU: {flH + matchState.homeScore} – {flA + matchState.awayScore}</div>; })()}
-                  <div className="flex items-center gap-3"><div className="text-[22px] font-mono font-bold text-emerald-400 animate-pulse">{matchState.isFinished ? 'WYNIK KOŃCOWY' : matchState.isPenalties ? 'RZUTY KARNE' : (matchState.period as number) >= 3 ? `DOG. ${matchState.minute}` : `${matchState.minute}`}</div>
+                  <div className="flex items-center gap-3"><div className="text-[22px] font-mono font-bold text-emerald-400 animate-pulse">{matchState.isFinished ? '' : matchState.isPenalties ? 'RZUTY KARNE' : (matchState.period as number) >= 3 ? `DOG. ${matchState.minute}` : `${matchState.minute}`}</div>
                   {matchState.addedTime > 0 && !matchState.isFinished && !matchState.isPenalties && <div className="text-[11px] font-black text-red-500 font-mono">+{matchState.addedTime}</div>}</div></>
             )}
          </div>
@@ -2622,7 +2622,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 shadow-lg" />}
 
  {hasScored && (
               <div className="absolute -top-2 -left-2 text-[10px] z-30">
@@ -2633,7 +2633,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             {injury && <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-lg bg-orange-500 ${injury === InjurySeverity.SEVERE ? 'animate-bounce' : 'animate-pulse'}`}>✚</div>}
           </div>
          <div 
-  className={`px-1.5 py-0.5 text-[7px] font-black mt-0 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
+  className={`px-1.5 py-0.5 text-[9px] font-black mt-0 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
   style={{
     transform: 'rotateX(-24deg) scale(1.15)',
     textShadow: '0 2px 0 rgba(0,0,0,0.95), 0 -1px 0 rgba(0,0,0,0.95), 1px 0 0 rgba(0,0,0,0.95), -1px 0 0 rgba(0,0,0,0.95)'
@@ -2674,7 +2674,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 shadow-lg" />}
 
  {hasScored && (
           <div className="absolute -top-2 -right-2 text-[10px] z-30">
