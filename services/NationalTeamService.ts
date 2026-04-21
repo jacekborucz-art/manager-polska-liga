@@ -44,6 +44,16 @@ const CLUB_COUNTRY_BY_ID = new Map<string, string>(
   KNOWN_CLUBS.map(club => [club.id, club.country])
 );
 
+const CLUB_REPUTATION_BY_ID = new Map<string, number>(
+  KNOWN_CLUBS.map(club => [club.id, club.reputation])
+);
+
+const calcPolishNTScore = (player: Player): number => {
+  const clubRep = CLUB_REPUTATION_BY_ID.get(player.clubId) ?? 1;
+  const jitter = Math.floor(Math.random() * 7) - 3;
+  return player.overallRating * 2 + clubRep + jitter;
+};
+
 type TeamSelectionRule = {
   maxOverall?: number;
   starThreshold?: number;
@@ -118,11 +128,6 @@ const isEligibleForTeam = (
   }
 
   if (player.nationality !== team.region) return false;
-
-  if (team.region === Region.POLAND) {
-    const clubCountry = CLUB_COUNTRY_BY_ID.get(player.clubId);
-    if (clubCountry && clubCountry !== 'POL') return false;
-  }
 
   return true;
 };
@@ -361,7 +366,9 @@ export const NationalTeamService = {
           if (p.position !== pos) return false;
           return isEligibleForTeam(team, p, [], assignedPlayerIds);
         })
-        .sort((a, b) => b.overallRating - a.overallRating);
+        .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.player);
 
     const poolGK  = byPos(PlayerPosition.GK);
     const poolDEF = byPos(PlayerPosition.DEF);
@@ -517,7 +524,9 @@ export const NationalTeamService = {
         // Priorytet 1: najlepszy kandydat klubowy
         const clubCandidate = clubPlayersList
           .filter(isEligible)
-          .sort((a, b) => b.overallRating - a.overallRating)[0] ?? null;
+          .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+          .sort((a, b) => b.score - a.score)
+          .map(x => x.player)[0] ?? null;
 
         // Priorytet 2 (ostateczność): wolny agent — tylko gdy brak kandydatów klubowych
         const candidate = clubCandidate ?? (

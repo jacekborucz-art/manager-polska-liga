@@ -103,10 +103,38 @@ const PROFILES: Record<PlayerPosition, Partial<Record<keyof PlayerAttributes, nu
 
 // Weights for calculating Overall Rating
 const OVR_WEIGHTS: Record<PlayerPosition, Partial<Record<keyof PlayerAttributes, number>>> = {
-  [PlayerPosition.GK]: { goalkeeping: 0.85, positioning: 0.10, passing: 0.05 },
-  [PlayerPosition.DEF]: { defending: 0.35, positioning: 0.20, strength: 0.15, heading: 0.10, pace: 0.10, passing: 0.10 },
-  [PlayerPosition.MID]: { passing: 0.30, vision: 0.20, technique: 0.15, dribbling: 0.10, defending: 0.10, stamina: 0.10, attacking: 0.05 },
-  [PlayerPosition.FWD]: { finishing: 0.35, attacking: 0.25, pace: 0.15, dribbling: 0.10, heading: 0.10, strength: 0.05 }
+  [PlayerPosition.GK]: {
+    goalkeeping: 0.28, positioning: 0.09, mentality: 0.08, strength: 0.07,
+    passing: 0.06, workRate: 0.06, leadership: 0.05, aggression: 0.05,
+    pace: 0.04, stamina: 0.04, talent: 0.04, penalties: 0.03,
+    technique: 0.02, vision: 0.02,
+    freeKicks: 0.01, crossing: 0.01, corners: 0.01, defending: 0.01,
+    heading: 0.01, dribbling: 0.01, finishing: 0.01, attacking: 0.01
+  },
+  [PlayerPosition.DEF]: {
+    defending: 0.18, positioning: 0.12, strength: 0.10, heading: 0.08,
+    stamina: 0.08, workRate: 0.07, mentality: 0.07, aggression: 0.06,
+    pace: 0.06, passing: 0.05, leadership: 0.04, technique: 0.03,
+    crossing: 0.02, vision: 0.02, freeKicks: 0.02, talent: 0.02,
+    corners: 0.01, penalties: 0.01, dribbling: 0.01, finishing: 0.01,
+    attacking: 0.01, goalkeeping: 0.01
+  },
+  [PlayerPosition.MID]: {
+    passing: 0.14, vision: 0.11, technique: 0.10, stamina: 0.09,
+    dribbling: 0.08, mentality: 0.07, workRate: 0.07, attacking: 0.06,
+    positioning: 0.05, crossing: 0.05, pace: 0.04, freeKicks: 0.03,
+    corners: 0.03, leadership: 0.03, defending: 0.02, finishing: 0.02,
+    talent: 0.02, strength: 0.01, heading: 0.01, aggression: 0.01,
+    penalties: 0.01, goalkeeping: 0.01
+  },
+  [PlayerPosition.FWD]: {
+    finishing: 0.20, attacking: 0.14, pace: 0.12, positioning: 0.08,
+    mentality: 0.07, dribbling: 0.07, heading: 0.06, technique: 0.05,
+    strength: 0.05, stamina: 0.04, workRate: 0.04, talent: 0.03,
+    penalties: 0.03, freeKicks: 0.02, passing: 0.01, crossing: 0.01,
+    aggression: 0.01, leadership: 0.01, corners: 0.01, defending: 0.01,
+    vision: 0.01, goalkeeping: 0.01
+  }
 };
 
 export const PlayerAttributesGenerator = {
