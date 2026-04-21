@@ -4,6 +4,7 @@ import {
 } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { FinanceService } from './FinanceService';
+import { pickNationalityForRegion } from './NationalityService';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -285,6 +286,7 @@ export const AcademyService = {
         age,
         position: pos,
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         attributes: attrs,
         hiddenTalent,
         revealedTalentRating: undefined,
@@ -364,6 +366,7 @@ export const AcademyService = {
       age: youth.age,
       clubId,
       nationality: youth.nationality,
+      nationalityCountry: youth.nationalityCountry,
       position: youth.position,
       overallRating,
       attributes: { ...youth.attributes },
@@ -659,6 +662,7 @@ export const AcademyService = {
         age,
         position: pos,
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         attributes: attrs,
         hiddenTalent,
         revealedTalentRating: undefined,

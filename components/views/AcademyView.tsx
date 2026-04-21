@@ -445,7 +445,7 @@ export const AcademyView: React.FC = () => {
                     </span>
                     <div>
                       <p className="text-white font-black text-sm">{selectedYouth.firstName} {selectedYouth.lastName}</p>
-                      <p className="text-slate-500 text-[9px] uppercase tracking-widest">{selectedYouth.age} lat • {REGION_LABELS[selectedYouth.nationality] ?? selectedYouth.nationality}</p>
+                      <p className="text-slate-500 text-[9px] uppercase tracking-widest">{selectedYouth.age} lat • {selectedYouth.nationalityCountry || REGION_LABELS[selectedYouth.nationality] || selectedYouth.nationality}</p>
                     </div>
                   </div>
 

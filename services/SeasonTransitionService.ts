@@ -3,6 +3,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
+import { pickNationalityForRegion } from './NationalityService';
 
 export const SeasonTransitionService = {
   /**
@@ -127,6 +128,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       clubId: clubId,
       position: position,
       nationality: region,
+      nationalityCountry: pickNationalityForRegion(region),
       age: age,
       fatigueDebt: 0,
       overallRating: genData.overall,
@@ -185,6 +187,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       clubId,
       position: PlayerPosition.GK,
       nationality: Region.POLAND,
+      nationalityCountry: 'Polska',
       overallRating: forcedOvr,
       attributes: genData.attributes,
       condition: 100,

@@ -196,7 +196,7 @@ export const PlayerCard: React.FC = () => {
                     {player.position}
                  </div>
                  <div className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px]">
-                    {player.age} lat • {REGION_NATIONALITY_LABEL[player.nationality] ?? player.nationality}
+                    {player.age} lat • {player.nationalityCountry || REGION_NATIONALITY_LABEL[player.nationality] || player.nationality}
                  </div>
               </div>
            </div>

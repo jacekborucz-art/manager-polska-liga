@@ -745,6 +745,7 @@ export interface Player {
   age: number;
   clubId: string;
   nationality: Region;
+  nationalityCountry?: string;
   position: PlayerPosition;
   overallRating: number;
   attributes: PlayerAttributes;
@@ -872,6 +873,7 @@ export interface YouthPlayer {
   age: number;
   position: PlayerPosition;
   nationality: Region;
+  nationalityCountry?: string;
   attributes: PlayerAttributes;
   hiddenTalent: number;
   revealedTalentRating?: 'EXCEPTIONAL' | 'HIGH' | 'AVERAGE' | 'LOW';

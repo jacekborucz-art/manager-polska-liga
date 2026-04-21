@@ -3,6 +3,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { STATIC_CLUBS, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS } from '../constants';
 import { FinanceService } from './FinanceService';
+import { pickNationalityForRegion } from './NationalityService';
 
 // STAGE 2 CONSTANTS
 export const MIN_SQUAD_SIZE = 29;
@@ -382,6 +383,7 @@ export const SquadGeneratorService = {
             clubId: clubId,
             position: slot.pos,
             nationality: region,
+            nationalityCountry: pickNationalityForRegion(region),
             age: age,
             fatigueDebt: 0,
             overallRating: genData.overall,
@@ -563,6 +565,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         clubId,
         position: slot.pos,
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
         overallRating: region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall,
@@ -679,6 +682,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         clubId,
         position: slot.pos,
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
         overallRating: genData.overall,
@@ -769,6 +773,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         clubId,
         position: slot.pos,
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
         overallRating: genData.overall,
@@ -870,6 +875,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         clubId: clubId,
         position: pos,
         nationality: Region.POLAND,
+        nationalityCountry: 'Polska',
         age,
         fatigueDebt: 0,
         overallRating: genData.overall,

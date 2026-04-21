@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Region, PlayerAttributes } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
+import { pickNationalityForRegion } from '../../services/NationalityService';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -70,6 +71,7 @@ export const EditorView: React.FC = () => {
   const [lastName,  setLastName]            = useState('');
   const [age,       setAge]                 = useState<number>(20);
   const [nationality, setNationality]       = useState<Region>(Region.POLAND);
+  const [nationalityCountry, setNationalityCountry] = useState<string>('Polska');
   const [position,  setPosition]            = useState<PlayerPosition>(PlayerPosition.MID);
   const [attrs,     setAttrs]               = useState<PlayerAttributes>({ ...DEFAULT_ATTRS });
   const [annualSalary,  setAnnualSalary]    = useState<number>(0);
@@ -111,6 +113,7 @@ export const EditorView: React.FC = () => {
         setLastName(p.lastName);
         setAge(p.age);
         setNationality(p.nationality);
+        setNationalityCountry(p.nationalityCountry ?? pickNationalityForRegion(p.nationality));
         setPosition(p.position);
         setAttrs({ ...p.attributes });
         setAnnualSalary(p.annualSalary);
@@ -119,7 +122,7 @@ export const EditorView: React.FC = () => {
       }
     } else {
       setFirstName(''); setLastName(''); setAge(20);
-      setNationality(Region.POLAND); setPosition(PlayerPosition.MID);
+      setNationality(Region.POLAND); setNationalityCountry('Polska'); setPosition(PlayerPosition.MID);
       setAttrs({ ...DEFAULT_ATTRS }); setAnnualSalary(0); setMarketValue(0); setContractEndDate('');
     }
   }, [selectedPlayerId, clubPlayers, selectedClubId]);
@@ -146,7 +149,7 @@ export const EditorView: React.FC = () => {
     if (!selectedClubId || !selectedPlayerId) return;
     const newOvr = PlayerAttributesGenerator.calculateOverall(attrs, position);
     updatePlayer(selectedClubId, selectedPlayerId, {
-      firstName, lastName, age, nationality, position,
+      firstName, lastName, age, nationality, nationalityCountry, position,
       attributes: { ...attrs }, overallRating: newOvr,
       annualSalary, marketValue, contractEndDate
     });
@@ -272,7 +275,7 @@ export const EditorView: React.FC = () => {
               </div>
               <div>
                 <div className={`${labelCls} mb-1`}>Narodowość</div>
-                <select value={nationality} onChange={(e) => setNationality(e.target.value as Region)}
+                <select value={nationality} onChange={(e) => { const r = e.target.value as Region; setNationality(r); setNationalityCountry(pickNationalityForRegion(r)); }}
                   className={`${selectCls} px-2 py-1.5 w-36`}>
                   {Object.values(Region).map(r => (
                     <option key={r} value={r}>{REGION_LABELS[r]}</option>

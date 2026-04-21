@@ -1,6 +1,7 @@
 import { Player, PlayerPosition, Region, HealthStatus } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
+import { pickNationalityForRegion } from './NationalityService';
 
 export const FreeAgentService = {
   /**
@@ -45,6 +46,7 @@ export const FreeAgentService = {
         fatigueDebt: 0,
         clubId: 'FREE_AGENTS', // Kluczowe: ten identyfikator oznacza brak klubu
         nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
         position: position,
         overallRating: targetOverall,
         attributes: scaledAttributes,

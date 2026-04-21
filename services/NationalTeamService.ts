@@ -1,4 +1,5 @@
 import { NationalTeam, Coach, Player, Region, PlayerPosition, HealthStatus } from '../types';
+import { pickNationalityForRegion } from './NationalityService';
 import { NATIONAL_TEAMS_EUROPE } from '../resources/static_db/NationalTeams/NationalTeamsEurope';
 import { NATIONAL_TEAMS_AFRICA } from '../resources/static_db/NationalTeams/NationalTeamsAfrica';
 import { NATIONAL_TEAMS_CONMEBOL } from '../resources/static_db/NationalTeams/NationalTeamsCONMEBOL';
@@ -122,12 +123,16 @@ const isEligibleForTeam = (
     const clubCountry = CLUB_COUNTRY_BY_ID.get(player.clubId);
     const isLiechtensteinClubPlayer = clubCountry === 'LIE';
     const isGermanFallback =
-      player.nationality === Region.GERMANY &&
+      (player.nationalityCountry === 'Niemcy' || (!player.nationalityCountry && player.nationality === Region.GERMANY)) &&
       player.overallRating <= (getTeamRule(team)?.fallbackMaxOverall ?? 60);
     return isLiechtensteinClubPlayer || isGermanFallback;
   }
 
-  if (player.nationality !== team.region) return false;
+  if (player.nationalityCountry) {
+    if (player.nationalityCountry !== team.name) return false;
+  } else {
+    if (player.nationality !== team.region) return false;
+  }
 
   return true;
 };
@@ -257,6 +262,7 @@ export const NationalTeamService = {
   generatePlayerForNT: (
     teamId: string,
     region: Region,
+    teamName: string,
     position: PlayerPosition,
     teamReputation: number,
     index: number,
@@ -312,6 +318,7 @@ export const NationalTeamService = {
       clubId: 'FREE_AGENTS',
       position,
       nationality: region,
+      nationalityCountry: teamName,
       age,
       fatigueDebt: 0,
       overallRating: genData.overall,
@@ -410,7 +417,7 @@ export const NationalTeamService = {
           ? Math.min(ovrCap, (getTeamRule(team)?.starThreshold ?? ovrCap) - 1)
           : ovrCap;
         const np = NationalTeamService.generatePlayerForNT(
-          team.id, team.region, pos, team.reputation, genIndex++, usedNames, syntheticCap
+          team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, syntheticCap
         );
         np.assignedNationalTeamId = team.id;
         if (isTeamStarPlayer(team, np)) selectedStarCount++;
@@ -618,7 +625,7 @@ export const NationalTeamService = {
             ? Math.min(getTeamOvrCap(team), (getTeamRule(team)?.starThreshold ?? getTeamOvrCap(team)) - 1)
             : getTeamOvrCap(team);
           const np = NationalTeamService.generatePlayerForNT(
-            team.id, team.region, player.position, team.reputation, genIndex++, usedNames, syntheticCap
+            team.id, team.region, team.name, player.position, team.reputation, genIndex++, usedNames, syntheticCap
           );
           np.assignedNationalTeamId = team.id;
           allNewPlayers.push(np);
