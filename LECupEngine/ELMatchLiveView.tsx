@@ -328,7 +328,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           playedPlayerIds: [],
         aiActiveShout: null,
         lastGoalBoostMinute: -1,
-        activeTacticalBoost: null,
+        activeTacticalBoost: 0,
         tacticalBoostExpiry: -1
         
         
@@ -2584,7 +2584,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 border-2 border-slate-900 rounded-md shadow-lg" />}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
 
  {hasScored && (
               <div className="absolute -top-2 -left-2 text-[10px] z-30">
@@ -2632,7 +2632,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 border-2 border-slate-900 rounded-md shadow-lg" />}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
 
  {hasScored && (
           <div className="absolute -top-2 -right-2 text-[10px] z-30">

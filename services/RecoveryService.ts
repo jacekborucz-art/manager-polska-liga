@@ -54,7 +54,7 @@ export const RecoveryService = {
           const condAtInjury = updated.health.injury.conditionAtInjury ?? updated.condition;
           const injStart = new Date(updated.health.injury.injuryDate).setHours(0,0,0,0);
           const simDay   = new Date(currentDate).setHours(0,0,0,0);
-          const daysPassed = Math.floor((simDay - injStart) / (1000 * 60 * 60 * 24));
+          const daysPassed = Math.max(0, Math.floor((simDay - injStart) / (1000 * 60 * 60 * 24)));
           const targetCond = condAtInjury + (99 - condAtInjury) * (daysPassed / ((updated.health.injury.totalDays || 1) - 1));
           updated.condition = Math.min(99, Math.max(condAtInjury, targetCond));
         } else {
@@ -69,7 +69,7 @@ export const RecoveryService = {
           
           // Obliczamy ile realnie dni minęło od daty wypadku
           const diffMs = currentSimDate - injuryStart;
-          const totalDaysPassed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          const totalDaysPassed = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
           
           // Pozostałe dni to pierwotna długość (totalDays) minus upływ czasu
           const actualRemaining = (updated.health.injury.totalDays || updated.health.injury.daysRemaining) - totalDaysPassed;

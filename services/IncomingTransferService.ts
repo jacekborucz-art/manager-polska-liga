@@ -34,6 +34,86 @@ export const IncomingTransferService = {
     return FinanceService.getClubTier(club);
   },
 
+  getBuyerIdealOverall(club: Club): number {
+    return Math.min(95, 30 + club.reputation * 4.5);
+  },
+
+  getBuyerMinimumTargetOverall(player: Player, buyerClub: Club): number {
+    const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
+    let tolerance = 24;
+
+    if (buyerClub.reputation >= 18) tolerance = 15;
+    else if (buyerClub.reputation >= 15) tolerance = 17;
+    else if (buyerClub.reputation >= 12) tolerance = 19;
+    else if (buyerClub.reputation >= 8) tolerance = 22;
+
+    if (player.isOnTransferList) tolerance += 2;
+    if (player.age <= 21) tolerance += 2;
+
+    return idealOvr - tolerance;
+  },
+
+  getSquadAverageOverall(squad: Player[]): number {
+    if (squad.length === 0) return 0;
+    return squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length;
+  },
+
+  getBuyerSquadFit(player: Player, buyerSquad?: Player[]): { fits: boolean; multiplier: number } {
+    if (!buyerSquad || buyerSquad.length === 0) return { fits: true, multiplier: 1.0 };
+
+    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    if (player.overallRating < squadAverage) {
+      return { fits: false, multiplier: 0 };
+    }
+
+    const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
+    const positionAverage = samePosition.length > 0
+      ? IncomingTransferService.getSquadAverageOverall(samePosition)
+      : squadAverage;
+    const positionGap = player.overallRating - positionAverage;
+    const squadGap = player.overallRating - squadAverage;
+
+    if (positionGap >= 4 || squadGap >= 5) return { fits: true, multiplier: 1.20 };
+    if (positionGap >= 1 || squadGap >= 2) return { fits: true, multiplier: 1.05 };
+    return { fits: true, multiplier: 0.85 };
+  },
+
+  isPlausibleBuyerForPlayer(player: Player, buyerClub: Club, buyerSquad?: Player[]): boolean {
+    const squadFit = IncomingTransferService.getBuyerSquadFit(player, buyerSquad);
+    if (!squadFit.fits) return false;
+
+    const minOvr = IncomingTransferService.getBuyerMinimumTargetOverall(player, buyerClub);
+    if (player.overallRating >= minOvr) return true;
+
+    const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
+    const talent = player.attributes?.talent ?? player.overallRating;
+    const highUpsideYoungster =
+      player.age <= 21 &&
+      talent >= idealOvr - 2 &&
+      player.overallRating >= minOvr - 8;
+    if (highUpsideYoungster) return true;
+
+    const strongRecentForm =
+      player.age <= 28 &&
+      IncomingTransferService.getAvgRating(player) >= 8.0 &&
+      player.overallRating >= minOvr - 4;
+    return strongRecentForm;
+  },
+
+  getBuyerFitProbabilityMultiplier(player: Player, buyerClub: Club, buyerSquad?: Player[]): number {
+    const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
+    const ovrDelta = player.overallRating - idealOvr;
+    const squadFit = IncomingTransferService.getBuyerSquadFit(player, buyerSquad);
+
+    let multiplier = 0.30;
+    if (ovrDelta >= -2) multiplier = 1.15;
+    else if (ovrDelta >= -6) multiplier = 1.0;
+    else if (ovrDelta >= -10) multiplier = 0.75;
+    else if (ovrDelta >= -16) multiplier = 0.50;
+
+    return multiplier * squadFit.multiplier;
+  },
+
   shouldGenerateOffer(
     player: Player,
     buyerClub: Club,
@@ -41,7 +121,8 @@ export const IncomingTransferService = {
     activeIncomingOffers: IncomingTransferOffer[],
     seed: number,
     currentDate: Date | string,
-    sellerPlayers?: Player[]
+    sellerPlayers?: Player[],
+    buyerPlayers?: Player[]
   ): { shouldGenerate: boolean; source: 'SHORTLIST' | 'SPONTANEOUS' | null } {
     const hasActiveOffer = activeIncomingOffers.some(
       o =>
@@ -75,6 +156,9 @@ export const IncomingTransferService = {
 
     if (buyerClub.rosterIds.length >= 30) return { shouldGenerate: false, source: null };
     if (buyerClub.id === sellerClub.id) return { shouldGenerate: false, source: null };
+    if (!IncomingTransferService.isPlausibleBuyerForPlayer(player, buyerClub, buyerPlayers)) {
+      return { shouldGenerate: false, source: null };
+    }
 
     if (player.isUntouchable) {
       const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
@@ -106,6 +190,8 @@ export const IncomingTransferService = {
 
     let prob = priority !== false ? PRIORITY_PROB[priority] : 0;
     let source: 'SHORTLIST' | 'SPONTANEOUS' | null = null;
+
+    prob *= IncomingTransferService.getBuyerFitProbabilityMultiplier(player, buyerClub, buyerPlayers);
 
     if (player.isOnTransferList) prob *= 4.0;
 

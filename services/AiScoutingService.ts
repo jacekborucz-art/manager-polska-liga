@@ -194,6 +194,7 @@ export const AiScoutingService = {
           need.position,
           need.urgency,
           club,
+          squad,
           allPlayers,
           clubs,
           coachSeed,
@@ -205,19 +206,19 @@ export const AiScoutingService = {
       // E) Jeśli klub nie ma pilnych potrzeb ale ma budżet → "okazjonalne scouting"
       //    Symuluje sytuację gdy skaut natknął się na ciekawego zawodnika przypadkowo
       if (needs.length === 0 && club.budget > 300_000) {
-        const opportunistic = AiScoutingService._opportunisticScouting(club, allPlayers, coachSeed, clubs);
+        const opportunistic = AiScoutingService._opportunisticScouting(club, squad, allPlayers, coachSeed, clubs);
         candidates.push(...opportunistic);
       }
 
       // F) Scouting młodych talentów — zawsze aktywny, niezależnie od pilności potrzeb.
       //    Klub może wziąć na oko perspektywicznego gracza z gorszego klubu,
       //    nawet jeśli aktualna kadra jest kompletna.
-      const youngTalents = AiScoutingService._youngTalentScouting(club, allPlayers, clubs, coachSeed, currentDate);
+      const youngTalents = AiScoutingService._youngTalentScouting(club, squad, allPlayers, clubs, coachSeed, currentDate);
       candidates.push(...youngTalents);
 
       // G) Scouting gemów z tier 4 — zawodnik zbyt dobry na swoją ligę.
       //    Losowość: nie każdy klub odkryje go w danym miesiącu.
-      const tier4Gems = AiScoutingService._tier4GemScouting(club, allPlayers, tier4ClubIds, clubs, coachSeed, currentDate);
+      const tier4Gems = AiScoutingService._tier4GemScouting(club, squad, allPlayers, tier4ClubIds, clubs, coachSeed, currentDate);
       candidates.push(...tier4Gems);
 
       // H) Sortuj kandydatów po score (malejąco), usuń duplikaty, ogranicz do maxInterests
@@ -243,6 +244,7 @@ export const AiScoutingService = {
 
         // ZABEZPIECZENIE 1: klub nie może figurować jako zainteresowany własnym zawodnikiem
         if (player.clubId === club.id) continue;
+        if (!AiScoutingService._meetsSquadQualityFloor(player, squad, true)) continue;
         // ZABEZPIECZENIE 2: jeden zawodnik może być obserwowany maksymalnie przez 10 klubów.
         //    Zapobiega sytuacji, że zawodnik ma "całą ligę" na karcie zainteresowanych.
         const existing = list[idx].interestedClubs || [];
@@ -268,6 +270,34 @@ export const AiScoutingService = {
    *   - Kontrakt gwiazdy wygasa w ciągu 6 miesięcy (ryzyko utraty)
    *   - Seria przegranych → trener szuka ratunku (forma drużyny)
    */
+  _getSquadAverageOverall: (squad: Player[]): number => {
+    if (squad.length === 0) return 0;
+    return squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+  },
+
+  _meetsSquadQualityFloor: (
+    player: Player,
+    buyerSquad: Player[],
+    _allowDevelopment = false
+  ): boolean => {
+    if (buyerSquad.length === 0) return true;
+
+    const squadAverage = AiScoutingService._getSquadAverageOverall(buyerSquad);
+    return player.overallRating >= squadAverage;
+  },
+
+  _getSquadQualityScoreBonus: (player: Player, buyerSquad: Player[]): number => {
+    if (buyerSquad.length === 0) return 0;
+
+    const squadAverage = AiScoutingService._getSquadAverageOverall(buyerSquad);
+    const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
+    const positionAverage = samePosition.length > 0
+      ? AiScoutingService._getSquadAverageOverall(samePosition)
+      : squadAverage;
+
+    return Math.max(0, Math.min(18, (player.overallRating - squadAverage) * 2 + (player.overallRating - positionAverage)));
+  },
+
   _diagnoseSquadNeeds: (
     squad: Player[],
     club: Club,
@@ -349,6 +379,7 @@ export const AiScoutingService = {
     position: PlayerPosition,
     urgency: number,
     club: Club,
+    buyerSquad: Player[],
     allPlayers: Player[],
     allClubs: Club[],
     coachSeed: number,
@@ -372,6 +403,7 @@ export const AiScoutingService = {
       if (p.position !== position) return false;
       // Nie ze swojej własnej drużyny
       if (p.clubId === club.id) return false;
+      if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       // W zasięgu OVR
       if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;
       // W zasięgu finansowym (wartość rynkowa lub wynagrodzenie * 3 jako proxy)
@@ -404,6 +436,7 @@ export const AiScoutingService = {
       // 1. Dopasowanie OVR (max 40 pkt)
       const ovrDiff = Math.abs(player.overallRating - idealOvr);
       score += Math.max(0, 40 - ovrDiff * 2);
+      score += AiScoutingService._getSquadQualityScoreBonus(player, buyerSquad);
 
       // 2. Wiek (max 20 pkt) — premiujemy zawodników 19–27 lat (perspektywa i forma szczytowa)
       //    28+ stopniowy spadek, 18– bardzo młody = spory potencjał ale ryzyko
@@ -465,6 +498,7 @@ export const AiScoutingService = {
    */
   _opportunisticScouting: (
     club: Club,
+    buyerSquad: Player[],
     allPlayers: Player[],
     coachSeed: number,
     allClubs: Club[]
@@ -477,6 +511,7 @@ export const AiScoutingService = {
 
     const pool = allPlayers.filter(p => {
       if (p.clubId === club.id) return false;
+      if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;
       if (p.health.status === HealthStatus.INJURED) return false;
       // Filtr reputacyjny: nie "przypadkowo odkrywamy" zawodników z klubów o znacznie wyższej reputacji.
@@ -500,7 +535,11 @@ export const AiScoutingService = {
       const player = pool[idx];
       if (player && !results.some(r => r.player.id === player.id)) {
         // Okazjonalne zainteresowania mają niższy bazowy score
-        results.push({ player, score: 20 + AiScoutingService._seededRandom(coachSeed + i) * 15 });
+        results.push({
+          player,
+          score: 20 + AiScoutingService._seededRandom(coachSeed + i) * 15 +
+            AiScoutingService._getSquadQualityScoreBonus(player, buyerSquad),
+        });
       }
     }
     return results;
@@ -564,6 +603,7 @@ export const AiScoutingService = {
    */
   _youngTalentScouting: (
     club: Club,
+    buyerSquad: Player[],
     allPlayers: Player[],
     allClubs: Club[],
     coachSeed: number,
@@ -572,6 +612,7 @@ export const AiScoutingService = {
     const idealOvr = 30 + club.reputation * 4.5;
 
     const talents = allPlayers.filter(p => {
+      if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad, true)) return false;
       // Wyklucz własnych zawodników
       if (p.clubId === club.id) return false;
       // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
@@ -603,6 +644,7 @@ export const AiScoutingService = {
       // Bonus za OVR powyżej progu — zawodnik "za dobry" na swoją ligę
       const ovrBonus = Math.max(0, player.overallRating - (idealOvr - 10));
       score += Math.min(15, ovrBonus * 1.5);
+      score += AiScoutingService._getSquadQualityScoreBonus(player, buyerSquad);
 
       // Nie każdy trener zwraca uwagę na tych samych talentów — losowość per scenariusz
       score += AiScoutingService._seededRandom(
@@ -636,6 +678,7 @@ export const AiScoutingService = {
    */
   _tier4GemScouting: (
     observingClub: Club,
+    buyerSquad: Player[],
     allPlayers: Player[],
     tier4ClubIds: Set<string>,
     allClubs: Club[],
@@ -648,6 +691,7 @@ export const AiScoutingService = {
 
     const gems = allPlayers.filter(p => {
       if (!tier4ClubIds.has(p.clubId || '')) return false;
+      if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
       if (p.transferOfferBanUntil && currentDate < new Date(p.transferOfferBanUntil)) return false;
       const playerClub = allClubs.find(c => c.id === p.clubId);
@@ -677,6 +721,7 @@ export const AiScoutingService = {
 
       const ovrGap = player.overallRating - clubIdealOvr;
       score += Math.min(20, ovrGap * 1.2);
+      score += AiScoutingService._getSquadQualityScoreBonus(player, buyerSquad);
 
       const ratings = player.stats.ratingHistory;
       if (ratings && ratings.length >= 5) {

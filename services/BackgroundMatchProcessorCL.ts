@@ -222,7 +222,8 @@ const simulateCardsAndInjuries = (
   offset: number,
   rng: (o: number) => number,
   referee: Referee,
-  isHomeTeam: boolean
+  isHomeTeam: boolean,
+  matchDate: Date
 ): {
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   redCount: number;
@@ -286,7 +287,7 @@ const simulateCardsAndInjuries = (
             type: isSev ? 'Poważny uraz więzadeł' : 'Stłuczenie mięśnia',
             daysRemaining: days,
             severity: isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
-            injuryDate: new Date().toISOString(),
+            injuryDate: matchDate.toISOString(),
             totalDays: days,
           }
         }
@@ -490,8 +491,8 @@ const simulateCLMatchFull = (
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
   // ── Kartki i kontuzje z sędzią (Stage 2) ────────────────────────────
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false);
+  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
+  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false, date);
 
   // ── Zmęczenie ────────────────────────────────────────────────────────
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };

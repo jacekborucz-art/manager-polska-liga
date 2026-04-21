@@ -3993,6 +3993,7 @@ const finalResult: SimulationOutput = {
         // 2. Generuj nowe oferty AI
         const aiClubs = clubs.filter(c => c.id !== userTeamId);
         aiClubs.forEach(aiClub => {
+          const buyerSquad = players[aiClub.id] || [];
           userSquad.forEach(p => {
             const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, p.id);
             const offerDecision = IncomingTransferService.shouldGenerateOffer(
@@ -4002,7 +4003,8 @@ const finalResult: SimulationOutput = {
               processed,
               seed,
               nextDay,
-              userSquad
+              userSquad,
+              buyerSquad
             );
             if (!offerDecision.shouldGenerate) return;
             const { fee, aiMaxFee, aiUrgency, timing } = IncomingTransferService.calculateOffer(
@@ -4074,104 +4076,110 @@ const finalResult: SimulationOutput = {
 
     // ── AKADEMIA: tygodniowy tick (każdy poniedziałek) ───────────────────────
     if (academy && userTeamId && nextDay.getDay() === 1) {
-      setAcademy(prev => {
-        if (!prev) return prev;
+      // 1. Tygodniowy rozwój wychowanków
+      const developed = AcademyService.processWeeklyDevelopment(
+        academy.youthPlayers,
+        academy.level,
+        academy.operationalBudgetWeekly
+      );
 
-        // 1. Tygodniowy rozwój wychowanków
-        const developed = AcademyService.processWeeklyDevelopment(
-          prev.youthPlayers,
-          prev.level,
-          prev.operationalBudgetWeekly
-        );
+      // 2. Sprawdź zakończone misje skautingowe
+      const { updatedMissions, completedMissions, updatedYouthPlayers } =
+        AcademyService.processCompletedMissions({ ...academy, youthPlayers: developed }, nextDay);
 
-        // 2. Sprawdź zakończone misje skautingowe
-        const { updatedMissions, completedMissions, updatedYouthPlayers } =
-          AcademyService.processCompletedMissions({ ...prev, youthPlayers: developed }, nextDay);
+      // 3. Zwolnij skautów po zakończeniu misji
+      const scoutIdsToFree = completedMissions.filter(m => m.scoutId).map(m => m.scoutId!);
+      if (scoutIdsToFree.length > 0) {
+        setScoutPool(prev => prev.map(s => scoutIdsToFree.includes(s.id) ? { ...s, isOnMission: false } : s));
+      }
 
-        // 3. Zwolnij skautów po zakończeniu misji
-        const scoutIdsToFree = completedMissions.filter(m => m.scoutId).map(m => m.scoutId!);
-        if (scoutIdsToFree.length > 0) {
-          setScoutPool(prev => prev.map(s => scoutIdsToFree.includes(s.id) ? { ...s, isOnMission: false } : s));
-        }
+      // 3b. Wyniki misji regionalnych — skaut może wrócić z pustymi rękami
+      let finalYouthPlayers = [...updatedYouthPlayers];
+      const regionalMissionResults = new Map<string, YouthPlayer[]>();
+      completedMissions.forEach(m => {
+        if (!m.isRegionScouting) return;
+        const scout = scoutPool.find(s => s.id === m.scoutId);
+        const networkDepth = scout?.networkDepth ?? 10;
+        const slotsLeft = ACADEMY_MAX_SLOTS[academy.level] - finalYouthPlayers.length;
+        const found = AcademyService.resolveRegionalScoutingResult(m, academy.level, slotsLeft, networkDepth, new Date(nextDay));
+        regionalMissionResults.set(m.id, found);
+        finalYouthPlayers = [...finalYouthPlayers, ...found];
+      });
 
-        // 3b. Wyniki misji regionalnych — skaut może wrócić z pustymi rękami
-        let finalYouthPlayers = [...updatedYouthPlayers];
-        const regionalMissionResults = new Map<string, YouthPlayer[]>();
-        completedMissions.forEach(m => {
-          if (!m.isRegionScouting) return;
-          const scout = scoutPool.find(s => s.id === m.scoutId);
-          const networkDepth = scout?.networkDepth ?? 10;
-          const slotsLeft = ACADEMY_MAX_SLOTS[prev.level] - finalYouthPlayers.length;
-          const found = AcademyService.resolveRegionalScoutingResult(m, prev.level, slotsLeft, networkDepth, new Date(nextDay));
-          regionalMissionResults.set(m.id, found);
-          finalYouthPlayers = [...finalYouthPlayers, ...found];
-        });
-
-        // Maile o zakończonych misjach
-        if (completedMissions.length > 0) {
-          const mails: MailMessage[] = completedMissions.map(m => {
-            if (m.isRegionScouting) {
-              const foundYouths = regionalMissionResults.get(m.id) ?? [];
-              const body = foundYouths.length > 0
-                ? `Skaut wrócił z misji skautingowej. Udało się pozyskać ${foundYouths.length} wychowanka${foundYouths.length > 1 ? 'ów' : ''}: ${foundYouths.map(y => `${y.firstName} ${y.lastName} (${y.age} l.)`).join(', ')}. Sprawdź zakładkę Wychowankowie.`
-                : `Skaut wrócił z misji z pustymi rękami. Tym razem nie udało się znaleźć odpowiednich kandydatów do akademii.`;
-              return {
-                id: `SCOUT_DONE_${m.id}`,
-                sender: 'Szef Skautingu Akademii',
-                role: 'Akademia Piłkarska',
-                subject: foundYouths.length > 0 ? `Skaut wrócił — znaleziono ${foundYouths.length} talent${foundYouths.length > 1 ? 'ów' : ''}` : 'Skaut wrócił bez kandydatów',
-                body,
-                date: new Date(nextDay),
-                isRead: false,
-                type: MailType.STAFF,
-                priority: foundYouths.length > 0 ? 65 : 40,
-              };
-            }
-            const targetYouth = finalYouthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
-            const body = targetYouth
-              ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}. Zalecamy dalszą obserwację.`
-              : `Zakończono obserwację. Raport dostępny w Akademii.`;
+      // Maile o zakończonych misjach (poza updaterem — unikamy podwójnego wywołania w StrictMode)
+      if (completedMissions.length > 0) {
+        const mails: MailMessage[] = completedMissions.map(m => {
+          if (m.isRegionScouting) {
+            const foundYouths = regionalMissionResults.get(m.id) ?? [];
+            const body = foundYouths.length > 0
+              ? `Skaut wrócił z misji skautingowej. Udało się pozyskać ${foundYouths.length} wychowanka${foundYouths.length > 1 ? 'ów' : ''}: ${foundYouths.map(y => `${y.firstName} ${y.lastName} (${y.age} l.)`).join(', ')}. Sprawdź zakładkę Wychowankowie.`
+              : `Skaut wrócił z misji z pustymi rękami. Tym razem nie udało się znaleźć odpowiednich kandydatów do akademii.`;
             return {
               id: `SCOUT_DONE_${m.id}`,
               sender: 'Szef Skautingu Akademii',
               role: 'Akademia Piłkarska',
-              subject: m.targetYouthPlayerId ? `Raport skautingowy: ${targetYouth?.lastName ?? '—'}` : 'Raport skautingowy',
+              subject: foundYouths.length > 0 ? `Skaut wrócił — znaleziono ${foundYouths.length} talent${foundYouths.length > 1 ? 'ów' : ''}` : 'Skaut wrócił bez kandydatów',
               body,
               date: new Date(nextDay),
               isRead: false,
               type: MailType.STAFF,
-              priority: 50,
+              priority: foundYouths.length > 0 ? 65 : 40,
             };
-          });
-          setMessages(msgs => [...mails, ...msgs]);
-        }
-
-        // 4. Sprawdź zakończenie upgrade'u akademii
-        const upgradeCheck = AcademyService.checkUpgradeCompletion(prev, nextDay);
-        const baseResult: ClubAcademy = {
-          ...prev,
-          youthPlayers: finalYouthPlayers,
-          activeMissions: updatedMissions,
-        };
-        if (upgradeCheck.completed && upgradeCheck.newLevel) {
-          const upgradeMail: MailMessage = {
-            id: `ACAD_UPGRADE_${Date.now()}`,
-            sender: 'Dyrektor Akademii',
+          }
+          const targetYouth = finalYouthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
+          const body = targetYouth
+            ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}. Zalecamy dalszą obserwację.`
+            : `Zakończono obserwację. Raport dostępny w Akademii.`;
+          return {
+            id: `SCOUT_DONE_${m.id}`,
+            sender: 'Szef Skautingu Akademii',
             role: 'Akademia Piłkarska',
-            subject: `Modernizacja Akademii ukończona – Poziom ${upgradeCheck.newLevel}!`,
-            body: `Prace budowlane dobiegły końca. Akademia Piłkarska osiągnęła Poziom ${upgradeCheck.newLevel}. Zwiększono liczbę miejsc i jakość szkolenia.`,
+            subject: m.targetYouthPlayerId ? `Raport skautingowy: ${targetYouth?.lastName ?? '—'}` : 'Raport skautingowy',
+            body,
             date: new Date(nextDay),
             isRead: false,
-            type: MailType.BOARD,
-            priority: 85,
+            type: MailType.STAFF,
+            priority: 50,
           };
-          setMessages(msgs => [upgradeMail, ...msgs]);
+        });
+        setMessages(msgs => [...mails, ...msgs]);
+      }
+
+      // 4. Sprawdź zakończenie upgrade'u akademii
+      const upgradeCheck = AcademyService.checkUpgradeCompletion(academy, nextDay);
+      if (upgradeCheck.completed && upgradeCheck.newLevel) {
+        const upgradeMail: MailMessage = {
+          id: `ACAD_UPGRADE_${Date.now()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: `Modernizacja Akademii ukończona – Poziom ${upgradeCheck.newLevel}!`,
+          body: `Prace budowlane dobiegły końca. Akademia Piłkarska osiągnęła Poziom ${upgradeCheck.newLevel}. Zwiększono liczbę miejsc i jakość szkolenia.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 85,
+        };
+        setMessages(msgs => [upgradeMail, ...msgs]);
+      }
+
+      // Czysty updater — bez efektów ubocznych (setMessages/setScoutPool wywołane wyżej)
+      const capturedFinalYouthPlayers = finalYouthPlayers;
+      const capturedUpdatedMissions = updatedMissions;
+      const capturedUpgradeCheck = upgradeCheck;
+      setAcademy(prev => {
+        if (!prev) return prev;
+        const baseResult: ClubAcademy = {
+          ...prev,
+          youthPlayers: capturedFinalYouthPlayers,
+          activeMissions: capturedUpdatedMissions,
+        };
+        if (capturedUpgradeCheck.completed && capturedUpgradeCheck.newLevel) {
           return {
             ...baseResult,
-            level: upgradeCheck.newLevel,
+            level: capturedUpgradeCheck.newLevel,
             upgradeInProgress: false,
             upgradeCompletionDate: undefined,
-            operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(upgradeCheck.newLevel),
+            operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(capturedUpgradeCheck.newLevel),
           };
         }
         return baseResult;
@@ -4211,16 +4219,15 @@ const finalResult: SimulationOutput = {
     }
 
     // ── AKADEMIA: nabór wychowanków (1 Sierpnia każdego roku) ─────────────────
-    if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1) {
-      setAcademy(prev => {
-        if (!prev || prev.lastIntakeYear >= nextDay.getFullYear()) return prev;
-        const newYouths = AcademyService.generateYouthIntake(
-          prev.level,
-          prev.regionFocus,
-          nextDay.getFullYear(),
-          prev.youthPlayers.length
-        );
-        if (newYouths.length === 0) return prev;
+    if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1
+        && academy.lastIntakeYear < nextDay.getFullYear()) {
+      const newYouths = AcademyService.generateYouthIntake(
+        academy.level,
+        academy.regionFocus,
+        nextDay.getFullYear(),
+        academy.youthPlayers.length
+      );
+      if (newYouths.length > 0) {
         const intakeMail: MailMessage = {
           id: `ACAD_INTAKE_${nextDay.getFullYear()}`,
           sender: 'Dyrektor Akademii',
@@ -4233,12 +4240,16 @@ const finalResult: SimulationOutput = {
           priority: 75,
         };
         setMessages(msgs => [intakeMail, ...msgs]);
-        return {
-          ...prev,
-          youthPlayers: [...prev.youthPlayers, ...newYouths],
-          lastIntakeYear: nextDay.getFullYear(),
-        };
-      });
+        const capturedNewYouths = newYouths;
+        setAcademy(prev => {
+          if (!prev || prev.lastIntakeYear >= nextDay.getFullYear()) return prev;
+          return {
+            ...prev,
+            youthPlayers: [...prev.youthPlayers, ...capturedNewYouths],
+            lastIntakeYear: nextDay.getFullYear(),
+          };
+        });
+      }
     }
 
     // ── AKADEMIA: decyzja właściciela o rozbudowie (sprawdzana codziennie) ────

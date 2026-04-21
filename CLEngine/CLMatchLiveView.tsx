@@ -129,16 +129,16 @@ const checkShootoutWinner = (seq: { side: 'HOME' | 'AWAY', result: 'SCORED' | 'M
   return null;
 };
 
-const BigJerseyIcon = ({ primary, secondary, size = "w-16 h-16" }: { primary: string, secondary: string, size?: string }) => (
+const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
     <div className="absolute inset-[-10px] rounded-full blur-2xl opacity-40 transition-opacity group-hover:opacity-60" style={{ backgroundColor: primary }} />
-    <div className={`relative ${size} flex items-center justify-center p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
-      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/10 to-transparent z-20 pointer-events-none" />
-      <svg viewBox="0 0 24 24" className="w-full h-full drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" fill={primary} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+    <div className={`relative ${size} flex items-center justify-center p-2`}>
+      <svg viewBox="0 0 24 30" className="w-full h-full drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" fill={primary} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
         <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" />
         <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.6" />
+        <path d="M5 20h6v9H5z" fill={secondary} />
+        <path d="M13 20h6v9h-6z" fill={secondary} />
       </svg>
-      <div className="absolute -inset-full bg-gradient-to-tr from-transparent via-white/5 to-transparent rotate-45 animate-shine pointer-events-none" />
     </div>
   </div>
 );
@@ -328,7 +328,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           playedPlayerIds: [],
         aiActiveShout: null,
         lastGoalBoostMinute: -1,
-        activeTacticalBoost: null,
+        activeTacticalBoost: 0,
         tacticalBoostExpiry: -1
         
         
@@ -2072,7 +2072,7 @@ const summary: MatchSummary = {
             ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}`
             : g.playerName;
           return (
-            <span key={`g-${i}`} className={`text-[9px] font-bold flex items-center gap-1 ${g.isMiss ? 'text-rose-500' : g.varDisallowed ? 'text-slate-500' : 'text-white'}`}>
+            <span key={`g-${i}`} className={`text-[11px] font-bold flex items-center gap-1 ${g.isMiss ? 'text-rose-500' : g.varDisallowed ? 'text-slate-500' : 'text-white'}`}>
               {g.isMiss ? '❌' : '⚽'}{' '}
               {g.varDisallowed
                 ? <><s>{nameToDisplay} ({g.minute}'{g.isPenalty ? ' k.' : ''})</s> (VAR)</>
@@ -2086,7 +2086,7 @@ const summary: MatchSummary = {
           const foundPlayer = playersList.find(px => px.lastName === c.playerName);
           const cardName = foundPlayer ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}` : c.playerName;
           return (
-            <span key={`c-${i}`} className="text-[9px] font-bold text-white flex items-center gap-1">
+            <span key={`c-${i}`} className="text-[11px] font-bold text-white flex items-center gap-1">
               {c.type === MatchEventType.RED_CARD ? '🟥' : '🟨'} {cardName} ({c.minute}')
             </span>
           );
@@ -2096,7 +2096,7 @@ const summary: MatchSummary = {
           const foundPlayer = playersList.find(px => px.lastName === j.playerName);
           const injName = foundPlayer ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}` : j.playerName;
           return (
-            <span key={`j-${i}`} className="text-[9px] font-bold text-white flex items-center gap-1">
+            <span key={`j-${i}`} className="text-[11px] font-bold text-white flex items-center gap-1">
               <span className={j.type === MatchEventType.INJURY_SEVERE ? 'text-red-500' : 'text-white'}>✚</span> {injName} ({j.minute}')
             </span>
           );
@@ -2620,7 +2620,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 border-2 border-slate-900 rounded-md shadow-lg" />}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
 
  {hasScored && (
               <div className="absolute -top-2 -left-2 text-[10px] z-30">
@@ -2668,7 +2668,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 border-2 border-slate-900 rounded-md shadow-lg" />}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
 
  {hasScored && (
           <div className="absolute -top-2 -right-2 text-[10px] z-30">

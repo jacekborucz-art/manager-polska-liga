@@ -274,7 +274,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
         aiNextInstructionMinute: aiInitNextMin,
         lastGoalBoostMinute: -1,
-        activeTacticalBoost: null,
+        activeTacticalBoost: 0,
         tacticalBoostExpiry: -1
         
         

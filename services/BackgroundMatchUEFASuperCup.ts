@@ -181,7 +181,8 @@ const simulateCardsAndInjuries = (
   offset: number,
   rng: (o: number) => number,
   referee: Referee,
-  isHomeTeam: boolean
+  isHomeTeam: boolean,
+  matchDate: Date
 ): {
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   redCount: number;
@@ -245,7 +246,7 @@ const simulateCardsAndInjuries = (
             type: isSev ? 'PowaÅ¼ny uraz wiÄ™zadeÅ‚' : 'StÅ‚uczenie miÄ™Å›nia',
             daysRemaining: days,
             severity: isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
-            injuryDate: new Date().toISOString(),
+            injuryDate: matchDate.toISOString(),
             totalDays: days,
           }
         }
@@ -444,8 +445,8 @@ const simulateCLMatchFull = (
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
   // â”€â”€ Kartki i kontuzje z sÄ™dziÄ… (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false);
+  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
+  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false, date);
 
   // â”€â”€ ZmÄ™czenie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
