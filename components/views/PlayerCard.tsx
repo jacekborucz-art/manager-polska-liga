@@ -151,7 +151,7 @@ export const PlayerCard: React.FC = () => {
 
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 animate-fade-in overflow-y-auto custom-scrollbar" style={{ backgroundImage: "url('graphic/themes/playercard.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: '#020617' }}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 animate-fade-in overflow-y-auto custom-scrollbar" style={{ backgroundImage: "url('../Graphic/themes/playercard.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: '#020617' }}>
       <div className="fixed inset-0 bg-black/70 pointer-events-none" />
 
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
