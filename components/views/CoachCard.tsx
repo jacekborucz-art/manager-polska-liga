@@ -73,7 +73,7 @@ export const CoachCard: React.FC = () => {
     : null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in font-black italic uppercase tracking-tighter" style={{ backgroundImage: "url('/Graphic/themes/trener.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in font-black italic uppercase tracking-tighter" style={{ backgroundImage: "url('../Graphic/themes/trener.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <div className="absolute inset-0 bg-black/80" />
       <div className="max-w-4xl w-full bg-slate-900/20 backdrop-blur-sm rounded-[45px] border border-white/10 shadow-2xl flex overflow-hidden h-[700px] relative z-10">
 
