@@ -570,6 +570,13 @@ export interface PlayerStats {
   ratingHistory: number[]; 
 }
 
+export interface ReserveProgressEntry {
+  date: string;
+  overall: number;
+}
+
+export type ReserveProgressPoint = number | ReserveProgressEntry;
+
 export interface PlayerCareerStatsSnapshot {
   matchesPlayed: number;
   goals: number;

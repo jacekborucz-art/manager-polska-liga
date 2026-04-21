@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { PlayerPosition, PlayerAttributes, ViewState, Player } from '../../types';
+import { PlayerPosition, PlayerAttributes, ViewState, Player, ReserveProgressPoint } from '../../types';
 import { Button } from '../ui/Button';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
@@ -25,6 +25,8 @@ const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'goalkeeping', 'freeKicks', 'talent', 'penalties', 'corners', 'aggression',
   'crossing', 'leadership', 'mentality', 'workRate',
 ];
+
+const RESERVE_PROGRESS_ATTR_KEYS = ATTR_KEYS.filter(key => !['talent', 'leadership'].includes(key));
 
 const ATTR_LABELS: Record<string, string> = {
   strength: 'SIŁ',
@@ -179,6 +181,119 @@ interface CoachReport {
   concerns: ReportEntry[];
 }
 
+interface NormalizedReserveProgressPoint {
+  date: string;
+  label: string;
+  overall: number;
+}
+
+interface HoveredProgressPoint {
+  x: number;
+  y: number;
+  index: number;
+  point: NormalizedReserveProgressPoint;
+  diff: number;
+}
+
+type ProgressRange = 'DAY' | 'WEEK' | 'MONTH';
+
+const PROGRESS_RANGE_LABELS: Record<ProgressRange, string> = {
+  DAY: '1D',
+  WEEK: '1T',
+  MONTH: '1M',
+};
+
+const PROGRESS_WINDOW_SIZE: Record<ProgressRange, number> = {
+  DAY: 14,
+  WEEK: 10,
+  MONTH: 12,
+};
+
+const formatProgressDate = (date: string): string => {
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+
+  return parsed.toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+const formatProgressShortDate = (date: string): string => {
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+
+  return parsed.toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  });
+};
+
+const normalizeReserveProgressHistory = (
+  history: ReserveProgressPoint[],
+  currentDate: Date
+): NormalizedReserveProgressPoint[] => (
+  history.map((entry, index) => {
+    if (typeof entry === 'number') {
+      const inferredDate = new Date(currentDate);
+      inferredDate.setDate(currentDate.getDate() - (history.length - 1 - index) * 7);
+      const isoDate = inferredDate.toISOString();
+      return {
+        date: isoDate,
+        label: formatProgressDate(isoDate),
+        overall: entry,
+      };
+    }
+
+    return {
+      date: entry.date,
+      label: formatProgressDate(entry.date),
+      overall: entry.overall,
+    };
+  }).filter(point => Number.isFinite(point.overall))
+);
+
+const getWeekKey = (date: Date): string => {
+  const weekStart = new Date(date);
+  const day = weekStart.getDay() || 7;
+  weekStart.setDate(weekStart.getDate() - day + 1);
+  weekStart.setHours(0, 0, 0, 0);
+  return weekStart.toISOString().split('T')[0];
+};
+
+const aggregateReserveProgressPoints = (
+  points: NormalizedReserveProgressPoint[],
+  range: ProgressRange
+): NormalizedReserveProgressPoint[] => {
+  if (range === 'DAY') return points;
+
+  const groups = new Map<string, NormalizedReserveProgressPoint[]>();
+  points.forEach(point => {
+    const parsed = new Date(point.date);
+    const key = range === 'WEEK'
+      ? getWeekKey(parsed)
+      : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+    groups.set(key, [...(groups.get(key) || []), point]);
+  });
+
+  return Array.from(groups.entries()).map(([key, group]) => {
+    const lastPoint = group[group.length - 1];
+    const overall = Math.round(group.reduce((sum, point) => sum + point.overall, 0) / group.length);
+    const date = range === 'WEEK' ? key : `${key}-01`;
+    const label = range === 'WEEK'
+      ? formatProgressDate(date)
+      : new Date(date).toLocaleDateString('pl-PL', { month: '2-digit', year: 'numeric' });
+
+    return {
+      date: lastPoint.date,
+      label,
+      overall,
+    };
+  });
+};
+
 function seededRand(seed: number) {
   let s = seed;
   return () => {
@@ -231,6 +346,10 @@ export const ReservesView: React.FC = () => {
           players, setPlayers, setReserves, lineups, updateLineup,
           coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory } = useGame();
   const [showReport, setShowReport] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [hoveredProgressPoint, setHoveredProgressPoint] = useState<HoveredProgressPoint | null>(null);
+  const [progressRange, setProgressRange] = useState<ProgressRange>('DAY');
+  const [progressWindowOffset, setProgressWindowOffset] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; player: Player } | null>(null);
 
   const moveToFirstTeam = (player: Player) => {
@@ -264,6 +383,52 @@ export const ReservesView: React.FC = () => {
       return b.overallRating - a.overallRating;
     });
   }, [reserves]);
+
+  const reserveProgressPoints = useMemo(
+    () => normalizeReserveProgressHistory(reserveProgressHistory, currentDate),
+    [reserveProgressHistory, currentDate]
+  );
+
+  const rangedReserveProgressPoints = useMemo(
+    () => aggregateReserveProgressPoints(reserveProgressPoints, progressRange),
+    [reserveProgressPoints, progressRange]
+  );
+
+  const visibleReserveProgressPoints = useMemo(() => {
+    const visibleCount = PROGRESS_WINDOW_SIZE[progressRange];
+    const maxOffset = Math.max(0, rangedReserveProgressPoints.length - visibleCount);
+    const safeOffset = Math.min(progressWindowOffset, maxOffset);
+    const start = Math.max(0, rangedReserveProgressPoints.length - visibleCount - safeOffset);
+    return rangedReserveProgressPoints.slice(start, start + visibleCount);
+  }, [progressRange, progressWindowOffset, rangedReserveProgressPoints]);
+
+  const canShiftProgressLeft = progressWindowOffset < Math.max(0, rangedReserveProgressPoints.length - PROGRESS_WINDOW_SIZE[progressRange]);
+  const canShiftProgressRight = progressWindowOffset > 0;
+
+  const reserveAttributeChanges = useMemo(() => (
+    RESERVE_PROGRESS_ATTR_KEYS.map(key => {
+      const total = reserves.reduce((sum, player) => (
+        sum + (player.stats.seasonalChanges?.[key as string] ?? 0)
+      ), 0);
+      return {
+        key,
+        label: ATTR_LABELS[key],
+        name: ATTR_FULL_NAMES[key],
+        total,
+        average: reserves.length > 0 ? total / reserves.length : 0,
+      };
+    }).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label))
+  ), [reserves]);
+
+  const maxAttributeChange = useMemo(() => (
+    Math.max(1, ...reserveAttributeChanges.map(stat => Math.abs(stat.total)))
+  ), [reserveAttributeChanges]);
+
+  const latestReserveProgress = reserveProgressPoints[reserveProgressPoints.length - 1] ?? null;
+  const previousReserveProgress = reserveProgressPoints[reserveProgressPoints.length - 2] ?? null;
+  const reserveProgressDiff = latestReserveProgress && previousReserveProgress
+    ? latestReserveProgress.overall - previousReserveProgress.overall
+    : 0;
 
   return (
     <>
@@ -309,75 +474,39 @@ export const ReservesView: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {reserveProgressHistory.length >= 2 && (() => {
-              const data = reserveProgressHistory;
-              const W = 220;
-              const H = 56;
-              const PAD = { top: 8, right: 10, bottom: 14, left: 24 };
-              const innerW = W - PAD.left - PAD.right;
-              const innerH = H - PAD.top - PAD.bottom;
-              const minVal = Math.min(...data) - 1;
-              const maxVal = Math.max(...data) + 1;
-              const range = maxVal - minVal || 1;
-              const toX = (i: number) => PAD.left + (i / (data.length - 1)) * innerW;
-              const toY = (v: number) => PAD.top + innerH - ((v - minVal) / range) * innerH;
-              const points = data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
-              const areaPoints = `${toX(0)},${PAD.top + innerH} ${points} ${toX(data.length - 1)},${PAD.top + innerH}`;
-              const last = data[data.length - 1];
-              const prev = data[data.length - 2];
-              const diff = last - prev;
-              const trendColor = diff > 0 ? '#10b981' : diff < 0 ? '#f43f5e' : '#94a3b8';
-              const trendArrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
-              return (
-                <div className="bg-slate-900/70 rounded-2xl border border-white/10 px-3 py-2 backdrop-blur-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.35em]">Progres Rezerw</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[8px] font-black" style={{ color: trendColor }}>{trendArrow} {diff > 0 ? `+${diff}` : diff}</span>
-                      <span className="text-[10px] font-black text-white tabular-nums">OVR {last}</span>
-                    </div>
-                  </div>
-                  <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block' }}>
-                    <defs>
-                      <linearGradient id="rpg" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-                    {[0, 0.5, 1].map((t, i) => {
-                      const y = PAD.top + innerH * (1 - t);
-                      const val = Math.round(minVal + range * t);
-                      return (
-                        <g key={i}>
-                          <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                          <text x={PAD.left - 3} y={y + 3} fill="rgba(148,163,184,0.5)" fontSize="6" textAnchor="end" fontWeight="bold">{val}</text>
-                        </g>
-                      );
-                    })}
-                    <polygon points={areaPoints} fill="url(#rpg)" />
-                    <polyline points={points} fill="none" stroke="#10b981" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
-                    {data.map((v, i) => (
-                      <circle key={i} cx={toX(i)} cy={toY(v)} r={i === data.length - 1 ? 3 : 1.8} fill={i === data.length - 1 ? '#10b981' : '#1e293b'} stroke="#10b981" strokeWidth="1.4" />
-                    ))}
-                    <text x={toX(data.length - 1)} y={toY(last) - 5} fill="#10b981" fontSize="7" textAnchor="middle" fontWeight="bold">{last}</text>
+            {reserveProgressPoints.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => setShowProgressModal(true)}
+                className="group flex items-center gap-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-300 hover:bg-emerald-500/20 active:scale-95"
+                aria-label="Otworz szczegolowy progres rezerw"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-300/50 bg-black/45 text-emerald-300 transition-colors group-hover:bg-emerald-400 group-hover:text-black">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 19V5" />
+                    <path d="M4 19h16" />
+                    <path d="m7 15 3.2-4 3.1 2.7L18 8" />
+                    <path d="M18 8h-3.5" />
+                    <path d="M18 8v3.5" />
                   </svg>
-                </div>
-              );
-            })()}
+                </span>
+                <span className="block text-[13px] italic text-white">Statystyki progresu</span>
+              </button>
+            )}
           <div className="flex gap-3">
             <button
               onClick={() => setShowReport(true)}
-              className="group flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-600/15 border border-amber-500/40 text-amber-400 font-black italic uppercase tracking-widest text-xs hover:bg-amber-600/25 hover:border-amber-400/60 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+              className="group flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-amber-400/60 hover:bg-amber-600/25 active:scale-95"
             >
-              <span>📋</span>
-              <span>Analiza trenera</span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/50 bg-black/45 text-amber-400 transition-colors group-hover:bg-amber-400 group-hover:text-black">📋</span>
+              <span className="block text-[13px] italic text-white">Analiza trenera</span>
             </button>
             <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="group flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95"
+              className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-white/25 hover:bg-white/10 active:scale-95"
             >
-              <span className="group-hover:-translate-x-1 transition-transform">←</span>
-              <span>Powrót</span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-black/45 text-white transition-colors group-hover:bg-white group-hover:text-black">←</span>
+              <span className="block text-[13px] italic text-white">Powrót</span>
             </button>
           </div>
           </div>
@@ -405,8 +534,8 @@ export const ReservesView: React.FC = () => {
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }}
                 >
                   <td className={`px-1 py-1.5 sticky left-0 z-10 ${POSITION_ROW_BG[player.position]}`}>
-                    <div className="relative group/pos w-9">
-                      <div className={`w-9 h-7 rounded-full flex items-center justify-center text-[9px] font-black italic tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
+                    <div className="relative group/pos w-8">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-center text-[8px] font-black italic leading-none tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
                         {POSITION_LABEL[player.position]}
                       </div>
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 opacity-0 group-hover/pos:opacity-100 transition-opacity duration-150">
@@ -477,6 +606,261 @@ export const ReservesView: React.FC = () => {
       </div>
     )}
 
+    {showProgressModal && latestReserveProgress && (
+      <div
+        className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 px-4 py-4"
+        onClick={() => {
+          setShowProgressModal(false);
+          setHoveredProgressPoint(null);
+        }}
+      >
+        {hoveredProgressPoint && (
+          <div
+            className="pointer-events-none fixed z-[120] rounded-xl border border-emerald-300 bg-black px-4 py-3 shadow-[0_18px_45px_rgba(0,0,0,0.75)]"
+            style={{ left: hoveredProgressPoint.x + 16, top: hoveredProgressPoint.y + 16 }}
+          >
+            <p className="text-[13px] italic uppercase tracking-tighter text-emerald-300">Punkt {hoveredProgressPoint.index + 1}</p>
+            <p className="text-[15px] italic uppercase tracking-tighter text-white">Data: {hoveredProgressPoint.point.label}</p>
+            <p className="text-[15px] italic uppercase tracking-tighter text-white">Ogólne: {hoveredProgressPoint.point.overall}</p>
+            <p
+              className="text-[15px] italic uppercase tracking-tighter"
+              style={{ color: hoveredProgressPoint.diff > 0 ? '#34d399' : hoveredProgressPoint.diff < 0 ? '#fb7185' : '#ffffff' }}
+            >
+              Wzrost/Spadek: {hoveredProgressPoint.diff > 0 ? `+${hoveredProgressPoint.diff}` : hoveredProgressPoint.diff}
+            </p>
+          </div>
+        )}
+
+        <div
+          className="relative flex max-h-[78vh] w-[96vw] max-w-[1550px] flex-col overflow-hidden rounded-[20px] border border-emerald-400/35 bg-[#020617] shadow-[0_28px_90px_rgba(0,0,0,0.85)]"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex shrink-0 items-start justify-between gap-5 border-b border-white/15 bg-black/45 px-6 py-4">
+            <div>
+              <p className="text-[13px] italic uppercase tracking-tighter text-emerald-300">Analiza rozwoju</p>
+              <h2 className="text-3xl italic uppercase tracking-tighter text-white leading-none">Progres Rezerw</h2>
+              <p className="mt-2 text-[13px] italic uppercase tracking-tighter text-white">
+                {myClub?.name || 'Klub'} II / {reserves.length} zawodnikow / RAPORT: {latestReserveProgress.label}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-emerald-300/60 bg-emerald-500 px-4 py-2 text-black">
+                <p className="text-[13px] italic uppercase tracking-tighter">Ogólne</p>
+                <p className="text-2xl italic uppercase tracking-tighter leading-none">{latestReserveProgress.overall}</p>
+              </div>
+              <div
+                className="rounded-xl border px-4 py-2 text-center"
+                style={{
+                  borderColor: reserveProgressDiff >= 0 ? '#34d399' : '#fb7185',
+                  backgroundColor: reserveProgressDiff >= 0 ? 'rgba(16,185,129,0.18)' : 'rgba(244,63,94,0.18)',
+                }}
+              >
+                <p className="text-[13px] italic uppercase tracking-tighter text-white">Wzrost/Spadek</p>
+                <p
+                  className="text-center text-2xl italic uppercase tracking-tighter leading-none"
+                  style={{ color: reserveProgressDiff >= 0 ? '#34d399' : '#fb7185' }}
+                >
+                  {reserveProgressDiff > 0 ? `+${reserveProgressDiff}` : reserveProgressDiff}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProgressModal(false);
+                  setHoveredProgressPoint(null);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white text-lg text-black transition-all hover:scale-105 active:scale-95"
+                aria-label="Zamknij modal progresu rezerw"
+              >
+                X
+              </button>
+            </div>
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-5 lg:grid-cols-[460px_1fr]">
+            <section className="flex min-h-0 flex-col rounded-2xl border border-white/15 bg-black/35 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-xl italic uppercase tracking-tighter text-white">Ogólne</h3>
+                  <p className="text-[13px] italic uppercase tracking-tighter text-emerald-300">
+                    {visibleReserveProgressPoints[0]?.label || latestReserveProgress.label} - {visibleReserveProgressPoints[visibleReserveProgressPoints.length - 1]?.label || latestReserveProgress.label}
+                  </p>
+                </div>
+                <div className="flex rounded-xl border border-white/15 bg-black p-1">
+                  {(['DAY', 'WEEK', 'MONTH'] as ProgressRange[]).map(range => (
+                    <button
+                      key={range}
+                      onClick={() => {
+                        setProgressRange(range);
+                        setProgressWindowOffset(0);
+                        setHoveredProgressPoint(null);
+                      }}
+                      className={`min-w-10 rounded-lg px-3 py-2 text-[13px] italic uppercase tracking-tighter transition-all ${
+                        progressRange === range ? 'bg-emerald-400 text-black' : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {PROGRESS_RANGE_LABELS[range]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {(() => {
+                const data = visibleReserveProgressPoints.length > 0 ? visibleReserveProgressPoints : reserveProgressPoints;
+                const W = 420;
+                const H = 250;
+                const PAD = { top: 26, right: 18, bottom: 48, left: 50 };
+                const innerW = W - PAD.left - PAD.right;
+                const innerH = H - PAD.top - PAD.bottom;
+                const minVal = Math.min(...data.map(point => point.overall)) - 1;
+                const maxVal = Math.max(...data.map(point => point.overall)) + 1;
+                const valueRange = maxVal - minVal || 1;
+                const toX = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * innerW;
+                const toY = (v: number) => PAD.top + innerH - ((v - minVal) / valueRange) * innerH;
+                const points = data.map((point, i) => `${toX(i)},${toY(point.overall)}`).join(' ');
+                const areaPoints = `${toX(0)},${PAD.top + innerH} ${points} ${toX(data.length - 1)},${PAD.top + innerH}`;
+                const labelIndexes = data.length <= 6
+                  ? data.map((_, i) => i)
+                  : [0, Math.floor((data.length - 1) / 2), data.length - 1];
+
+                return (
+                  <div className="rounded-2xl border border-white/15 bg-black/55 p-3">
+                    <svg
+                      viewBox={`0 0 ${W} ${H}`}
+                      width="100%"
+                      height={H}
+                      role="img"
+                      aria-label="Wykres liniowy ogólne rezerw"
+                      onMouseLeave={() => setHoveredProgressPoint(null)}
+                      style={{ display: 'block' }}
+                    >
+                      <defs>
+                        <linearGradient id="reserveProgressModalFillCompact" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+
+                      {[0, 0.5, 1].map((t, i) => {
+                        const y = PAD.top + innerH * (1 - t);
+                        const val = Math.round(minVal + valueRange * t);
+                        return (
+                          <g key={i}>
+                            <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                            <text x={PAD.left - 10} y={y + 5} fill="#ffffff" fontSize="13" textAnchor="end" fontStyle="italic">{val}</text>
+                          </g>
+                        );
+                      })}
+
+                      <polygon points={areaPoints} fill="url(#reserveProgressModalFillCompact)" />
+                      <polyline points={points} fill="none" stroke="#34d399" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+
+                      {labelIndexes.map(index => (
+                        <text key={index} x={toX(index)} y={H - 14} fill="#ffffff" fontSize="13" textAnchor="middle" fontStyle="italic">
+                          {progressRange === 'DAY' ? formatProgressShortDate(data[index].date) : data[index].label}
+                        </text>
+                      ))}
+
+                      {data.map((point, index) => {
+                        const diff = index === 0 ? 0 : point.overall - data[index - 1].overall;
+                        const fill = index === data.length - 1 ? '#34d399' : '#020617';
+                        return (
+                          <g key={`${point.date}-${index}`}>
+                            <circle
+                              cx={toX(index)}
+                              cy={toY(point.overall)}
+                              r={6.5}
+                              fill={fill}
+                              stroke="#34d399"
+                              strokeWidth="3"
+                              cursor="pointer"
+                              onMouseEnter={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
+                              onMouseMove={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
+                            />
+                            <text x={toX(index)} y={toY(point.overall) - 12} fill="#ffffff" fontSize="13" textAnchor="middle" fontStyle="italic">
+                              {point.overall}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setProgressWindowOffset(prev => prev + 1)}
+                  disabled={!canShiftProgressLeft}
+                  className="rounded-xl border border-white/20 bg-white px-4 py-2 text-[13px] italic uppercase tracking-tighter text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  ←
+                </button>
+                <p className="text-center text-[13px] italic uppercase tracking-tighter text-white">
+                  {visibleReserveProgressPoints.length} / {rangedReserveProgressPoints.length}
+                </p>
+                <button
+                  onClick={() => setProgressWindowOffset(prev => Math.max(0, prev - 1))}
+                  disabled={!canShiftProgressRight}
+                  className="rounded-xl border border-white/20 bg-white px-4 py-2 text-[13px] italic uppercase tracking-tighter text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  →
+                </button>
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col rounded-2xl border border-white/15 bg-black/35">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <h3 className="text-xl italic uppercase tracking-tighter text-white">Atrybuty</h3>
+                <div className="flex gap-3 text-[13px] italic uppercase tracking-tighter">
+                  <span className="text-emerald-300">+{reserveAttributeChanges.filter(stat => stat.total > 0).length}</span>
+                  <span className="text-rose-300">-{reserveAttributeChanges.filter(stat => stat.total < 0).length}</span>
+                  <span className="text-white">0:{reserveAttributeChanges.filter(stat => stat.total === 0).length}</span>
+                </div>
+              </div>
+
+              <div className="custom-scrollbar grid flex-1 grid-cols-1 gap-1.5 overflow-y-auto p-2 xl:grid-cols-2">
+                {reserveAttributeChanges.map(stat => {
+                  const isPositive = stat.total > 0;
+                  const isNegative = stat.total < 0;
+                  const barWidth = `${Math.max(stat.total === 0 ? 2 : 6, (Math.abs(stat.total) / maxAttributeChange) * 50)}%`;
+                  const valueColor = isPositive ? '#34d399' : isNegative ? '#fb7185' : '#ffffff';
+                  return (
+                    <div key={stat.key} className="grid grid-cols-[118px_1fr_86px] items-center gap-2 rounded-lg border border-white/15 bg-black/55 px-2.5 py-1">
+                      <div>
+                        <p className="truncate text-[11px] italic uppercase tracking-tighter text-white" title={stat.name}>{stat.name}</p>
+                      </div>
+                      <div className="relative h-5 overflow-hidden rounded-md border border-white/20 bg-black">
+                        <div className="absolute bottom-0 left-1/2 top-0 w-px bg-white" />
+                        {isPositive && (
+                          <div className="absolute bottom-0 left-1/2 top-0 bg-emerald-400" style={{ width: barWidth }} />
+                        )}
+                        {isNegative && (
+                          <div className="absolute bottom-0 right-1/2 top-0 bg-rose-400" style={{ width: barWidth }} />
+                        )}
+                        {!isPositive && !isNegative && (
+                          <div className="absolute bottom-0 left-1/2 top-0 -translate-x-1/2 bg-white" style={{ width: barWidth }} />
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] italic uppercase tracking-tighter leading-none text-white">Suma</p>
+                        <p className="text-[15px] italic uppercase tracking-tighter leading-none tabular-nums" style={{ color: valueColor }}>
+                          {stat.total > 0 ? `+${stat.total}` : stat.total}
+                        </p>
+                        <p className="mt-0.5 text-[10px] italic uppercase tracking-tighter leading-none text-white">
+                          Sr/zaw {stat.average > 0 ? `+${stat.average.toFixed(1)}` : stat.average.toFixed(1)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    )}
+
     {showReport && weeklyReport && (
       <div
         className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80"
@@ -522,7 +906,7 @@ export const ReservesView: React.FC = () => {
                       onClick={() => { viewPlayerDetails(e.player.id); setShowReport(false); }}
                     >
                       <div className="flex items-center gap-2 mb-1.5">
-                        <div className={`w-9 h-6 rounded-full flex items-center justify-center text-[8px] font-black italic shrink-0 ${POSITION_BADGE_STYLE[e.player.position]}`}>
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-center text-[7px] font-black italic leading-none ${POSITION_BADGE_STYLE[e.player.position]}`}>
                           {POSITION_LABEL[e.player.position]}
                         </div>
                         <span className={`text-sm font-black italic uppercase tracking-tight ${e.tier === 'gem' ? 'text-amber-300' : 'text-white'}`}>
@@ -554,7 +938,7 @@ export const ReservesView: React.FC = () => {
                       onClick={() => { viewPlayerDetails(e.player.id); setShowReport(false); }}
                     >
                       <div className="flex items-center gap-2 mb-1.5">
-                        <div className={`w-9 h-6 rounded-full flex items-center justify-center text-[8px] font-black italic shrink-0 ${POSITION_BADGE_STYLE[e.player.position]}`}>
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-center text-[7px] font-black italic leading-none ${POSITION_BADGE_STYLE[e.player.position]}`}>
                           {POSITION_LABEL[e.player.position]}
                         </div>
                         <span className="text-sm font-black italic uppercase tracking-tight text-red-300">

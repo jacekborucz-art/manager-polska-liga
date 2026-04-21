@@ -6,7 +6,7 @@ import {
 Coach, TrainingIntensity,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
 HealthStatus,
-PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult,
+PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
 IncomingTransferOffer, IncomingOfferStatus,
 ActivePlayoffDraw,
@@ -182,7 +182,7 @@ interface GameContextType {
   activeIntensity: TrainingIntensity;
   setTrainingIntensity: (intensity: TrainingIntensity) => void;
   trainingProgressHistory: number[];
-  reserveProgressHistory: number[];
+  reserveProgressHistory: ReserveProgressPoint[];
 
   startNewGame: () => void;
   saveManagerProfile: (profile: ManagerProfile) => void;
@@ -346,7 +346,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
-const [reserveProgressHistory, setReserveProgressHistory] = useState<number[]>([]);
+const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
@@ -1371,7 +1371,10 @@ setMessages([welcomeMail, fanMail]);
           const avgOvrRes = Math.round(
             updatedReserves.reduce((sum, p) => sum + p.overallRating, 0) / updatedReserves.length
           );
-          setReserveProgressHistory(prev => [...prev.slice(-19), avgOvrRes]);
+          setReserveProgressHistory(prev => [
+            ...prev.slice(-19),
+            { date: currentDate.toISOString(), overall: avgOvrRes },
+          ]);
         }
       }
     }
