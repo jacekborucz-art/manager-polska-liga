@@ -146,6 +146,11 @@ export const SquadView: React.FC = () => {
 
   const getPlayerById = (id: string | null) => id ? myPlayers.find(p => p.id === id) : null;
 
+  const formatPitchPlayerName = (player: Player) => {
+    const firstInitial = player.firstName.trim().charAt(0);
+    return firstInitial ? `${firstInitial}. ${player.lastName}` : player.lastName;
+  };
+
   const handlePlayerClick = (pId: string | null, loc: 'START' | 'BENCH' | 'RES', index?: number) => {
     if (!myLineup || !userTeamId) return;
 
@@ -341,7 +346,7 @@ export const SquadView: React.FC = () => {
                 <span className={`text-sm font-black uppercase italic tracking-tight transition-colors ${(isSuspended || isSevereInjured || isOverfatigued) ? 'text-slate-500' : 'text-white group-hover:text-blue-400'}`}>
                   {player.lastName}
                 </span>
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{player.firstName}</span>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${(isSuspended || isSevereInjured || isOverfatigued) ? 'text-slate-400' : 'text-white'}`}>{player.firstName}</span>
               </div>
               {myClub?.captainId === player.id && (
                 <span className="w-5 h-5 rounded-full bg-blue-900 border border-blue-400 flex items-center justify-center text-[9px] font-black text-white shrink-0" title="Kapitan">C</span>
@@ -651,7 +656,7 @@ export const SquadView: React.FC = () => {
                     {/* Name Label */}
                     <div className="-mt-[7px]">
                        <span className={`text-[10px] font-black uppercase italic tracking-widest whitespace-nowrap drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${!player ? 'text-rose-400' : (isOutOfPosition ? 'text-amber-200' : 'text-white')}`}>
-                          {player ? player.lastName : 'DEPLOY UNIT'}
+                          {player ? formatPitchPlayerName(player) : 'DEPLOY UNIT'}
                        </span>
                     </div>
                   </div>

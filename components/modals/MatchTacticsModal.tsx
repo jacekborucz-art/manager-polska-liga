@@ -34,6 +34,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
   const [localPenaltyTakerId, setLocalPenaltyTakerId] = useState<string | null>(club?.penaltyTakerId ?? null);
   const [localFreeKickTakerId, setLocalFreeKickTakerId] = useState<string | null>(club?.freeKickTakerId ?? null);
   const [roleMenu, setRoleMenu] = useState<{ x: number; y: number; playerId: string } | null>(null);
+  const [showSubLimitModal, setShowSubLimitModal] = useState(false);
+  const substitutionLimit = maxSubs ?? 5;
 
   const handleRoleAssign = (role: 'captain' | 'penalty' | 'freekick') => {
     if (!roleMenu) return;
@@ -72,8 +74,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
       const isSub = (selectedSlot.loc !== loc);
       
       if (isSub) {
-        if (currentSubsCount >= (maxSubs ?? 5) && !injuryEmergencyMode) {
-          alert(`LIMIT ${maxSubs ?? 5} ZMIAN WYCZERPANY!`);
+        if (currentSubsCount >= substitutionLimit && !injuryEmergencyMode) {
+          setShowSubLimitModal(true);
           setSelectedSlot(null);
           return;
         }
@@ -386,6 +388,30 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
            </div>
         </footer>
       </div>
+
+      {showSubLimitModal && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 backdrop-blur-[2px] px-4" onClick={() => setShowSubLimitModal(false)}>
+          <div
+            className="relative w-full max-w-sm overflow-hidden rounded-[30px] border border-blue-400/30 bg-slate-950/95 p-7 text-center shadow-[0_30px_90px_rgba(0,0,0,0.75),0_0_40px_rgba(59,130,246,0.16)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute inset-x-0 top-0 h-1 bg-blue-500" />
+            <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full bg-blue-500/10 blur-3xl" />
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-400/30 bg-blue-500/15 text-2xl shadow-[0_0_28px_rgba(59,130,246,0.25)]">
+              ↯
+            </div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-blue-400">Protokół zmian</p>
+            <h3 className="mb-6 text-2xl font-black italic uppercase tracking-tight text-white">Wykorzystano wszystkie zmiany</h3>
+            <button
+              type="button"
+              onClick={() => setShowSubLimitModal(false)}
+              className="w-full rounded-2xl border border-blue-300/30 bg-blue-500/20 px-6 py-3 text-[11px] font-black uppercase tracking-[0.25em] text-blue-100 shadow-[0_12px_30px_rgba(37,99,235,0.18)] transition-all hover:scale-[1.02] hover:bg-blue-500/30 active:scale-95"
+            >
+              Zamknij
+            </button>
+          </div>
+        </div>
+      )}
 
       {roleMenu && (
         <>

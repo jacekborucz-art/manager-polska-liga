@@ -2584,10 +2584,10 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 shadow-lg" />}
 
  {hasScored && (
-              <div className="absolute -top-2 -left-2 text-[10px] z-30">
+              <div className="absolute -top-2 -left-2 text-[10px] z-30 drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
                 ⚽
               </div>
             )}
@@ -2632,10 +2632,10 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 shadow-lg" />}
 
  {hasScored && (
-          <div className="absolute -top-2 -right-2 text-[10px] z-30">
+          <div className="absolute -top-2 -right-2 text-[10px] z-30 drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
             ⚽
           </div>
         )}

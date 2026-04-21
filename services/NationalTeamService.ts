@@ -49,6 +49,11 @@ const CLUB_REPUTATION_BY_ID = new Map<string, number>(
   KNOWN_CLUBS.map(club => [club.id, club.reputation])
 );
 
+const FREE_AGENT_CLUB_ID = 'FREE_AGENTS';
+
+const isFreeAgentPlayer = (player?: Pick<Player, 'clubId'> | null): boolean =>
+  player?.clubId === FREE_AGENT_CLUB_ID;
+
 const calcPolishNTScore = (player: Player): number => {
   const clubRep = CLUB_REPUTATION_BY_ID.get(player.clubId) ?? 1;
   const jitter = Math.floor(Math.random() * 7) - 3;
@@ -362,7 +367,7 @@ export const NationalTeamService = {
   ): { squadPlayerIds: string[]; newPlayers: Player[]; selectedPlayerIds: string[] } => {
     // Wyklucz wolnych agentów — trener szuka tylko wśród zawodników z klubów
     const allPlayersList = Object.entries(allPlayers)
-      .filter(([key]) => key !== 'FREE_AGENTS')
+      .filter(([key]) => key !== FREE_AGENT_CLUB_ID)
       .flatMap(([, arr]) => arr);
 
     const ovrCap = getTeamOvrCap(team);
@@ -477,14 +482,11 @@ export const NationalTeamService = {
   ): { updatedTeams: NationalTeam[]; playerUpdates: { id: string; assignedNationalTeamId: string | null }[]; calledUpFromClub: { playerId: string; teamName: string }[] } => {
     // Priorytet 1: zawodnicy klubowi (nie wolni agenci, nie generowani przez NT)
     const clubPlayersList = Object.entries(allPlayers)
-      .filter(([key]) => key !== 'FREE_AGENTS')
+      .filter(([key]) => key !== FREE_AGENT_CLUB_ID)
       .flatMap(([, arr]) => arr)
       .filter(p => !p.id.startsWith('NT_'));
 
-    // Priorytet 2 (ostateczność): wolni agenci niebędący generowanymi zawodnikami NT
-    const freeAgentsList = (allPlayers['FREE_AGENTS'] || [])
-      .filter(p => !p.id.startsWith('NT_'));
-
+    // Miesieczny przeglad nie powoluje prawdziwych wolnych agentow.
     const playerMap: Record<string, Player> = {};
     Object.values(allPlayers).flat().forEach(p => { playerMap[p.id] = p; });
 
@@ -520,7 +522,11 @@ export const NationalTeamService = {
           (a.player?.overallRating ?? 0) - (b.player?.overallRating ?? 0)
         )[0];
 
-        const weakestOvr = weakest.player?.overallRating ?? 0;
+        const freeAgentInSquad = squadAtPos
+          .filter(entry => isFreeAgentPlayer(entry.player))
+          .sort((a, b) => (a.player?.overallRating ?? 0) - (b.player?.overallRating ?? 0))[0] ?? null;
+        const replacementTarget = freeAgentInSquad ?? weakest;
+        const replacementTargetOvr = replacementTarget.player?.overallRating ?? 0;
 
         const isEligible = (p: Player): boolean => {
           if (p.position !== pos) return false;
@@ -529,28 +535,24 @@ export const NationalTeamService = {
         };
 
         // Priorytet 1: najlepszy kandydat klubowy
-        const clubCandidate = clubPlayersList
+        const candidate = clubPlayersList
           .filter(isEligible)
           .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
           .sort((a, b) => b.score - a.score)
           .map(x => x.player)[0] ?? null;
 
-        // Priorytet 2 (ostateczność): wolny agent — tylko gdy brak kandydatów klubowych
-        const candidate = clubCandidate ?? (
-          freeAgentsList.find(isEligible) ?? null
-        );
-
+        // Jesli w kadrze zostal wolny agent, klubowy kandydat wypycha go bez progu OVR.
         if (!candidate) continue;
-        if (candidate.overallRating - weakestOvr < threshold) continue;
+        if (!freeAgentInSquad && candidate.overallRating - replacementTargetOvr < threshold) continue;
         const starsWithoutWeakest = squadIds
-          .filter(id => id !== weakest.id)
+          .filter(id => id !== replacementTarget.id)
           .map(id => playerMap[id])
           .filter((player): player is Player => !!player)
           .filter(player => isTeamStarPlayer(team, player)).length;
         if (isTeamStarPlayer(team, candidate) && starsWithoutWeakest >= getMaxStarsForTeam(team)) continue;
 
-        squadIds[weakest.idx] = candidate.id;
-        allPlayerUpdates.push({ id: weakest.id, assignedNationalTeamId: null });
+        squadIds[replacementTarget.idx] = candidate.id;
+        allPlayerUpdates.push({ id: replacementTarget.id, assignedNationalTeamId: null });
         allPlayerUpdates.push({ id: candidate.id, assignedNationalTeamId: team.id });
         calledUpFromClub.push({ playerId: candidate.id, teamName: team.name });
         changed = true;
@@ -576,7 +578,7 @@ export const NationalTeamService = {
   ): { updatedTeams: NationalTeam[]; newPlayers: Player[]; playerUpdates: { id: string; assignedNationalTeamId: string }[] } => {
     // Wyklucz wolnych agentów — zastępca musi być zawodnikiem klubowym
     const allPlayersList = Object.entries(allPlayers)
-      .filter(([key]) => key !== 'FREE_AGENTS')
+      .filter(([key]) => key !== FREE_AGENT_CLUB_ID)
       .flatMap(([, arr]) => arr);
     const playerMap: Record<string, Player> = {};
     allPlayersList.forEach(p => { playerMap[p.id] = p; });

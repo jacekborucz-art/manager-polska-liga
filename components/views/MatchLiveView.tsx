@@ -2282,11 +2282,12 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
   const injuryStatus = injs[pid];
   const isSevereInjured = injuryStatus === 'SEVERE';
+  const isLightInjured = injuryStatus === 'LIGHT';
           const conditionColor = injuryStatus === 'LIGHT' ? 'bg-orange-500' : PlayerPresentationService.getConditionColorClass(f);
 
 
           return (
-            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all cursor-pointer ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : 'bg-white/[0.05] border-white/[0.01] hover:border-white/20 hover:bg-white/[0.01]'}`}>
+            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all cursor-pointer ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-400/40 hover:bg-orange-500/30' : 'bg-white/[0.05] border-white/[0.01] hover:border-white/20 hover:bg-white/[0.01]'}`}>
               {side === 'HOME' ? (
                 <>
                   <div className="min-w-0 flex items-center gap-3">
@@ -2795,7 +2796,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
       style={{
         left: `calc(${slot.x * 100}% + ${slot.role === PlayerPosition.MID ? (slot.x < 0.5 ? -4 : slot.x > 0.5 ? 4 : 0) : 0}px)`,
-        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 28 : slot.role === PlayerPosition.MID ? 32 : slot.role === PlayerPosition.DEF ? 10 : slot.role === PlayerPosition.GK ? -9 : 0}px)`,
+        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 18 : slot.role === PlayerPosition.MID ? 17 : slot.role === PlayerPosition.DEF ? 10 : slot.role === PlayerPosition.GK ? -9 : 0}px)`,
         transform: 'translate(-50%, -50%) scale(1.4)'
       }}
     >
