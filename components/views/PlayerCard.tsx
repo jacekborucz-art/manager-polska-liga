@@ -7,7 +7,7 @@ import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiation
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -350,11 +350,11 @@ export const PlayerCard: React.FC = () => {
 
           </div>
           {/* PRAWY PANEL: historia + kontrakt i wynagrodzenie */}
-          <div className="w-[300px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+          <div className="w-[400px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
             <div className="rounded-[18px] border border-white/20 px-3 py-2" style={{ backgroundColor: 'rgba(30,41,59,0.92)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <span className="h-px w-5 bg-sky-400" />
-                <h3 className="text-[9px] font-black uppercase tracking-[0.28em] text-sky-300 drop-shadow">
+                <h3 className="text-[9px] font-semibold uppercase tracking-[0.28em] text-sky-300 drop-shadow">
                   Przebieg Kariery
                 </h3>
               </div>
@@ -363,35 +363,35 @@ export const PlayerCard: React.FC = () => {
                   <table className="w-full text-left" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
                       <tr style={{ backgroundColor: 'rgba(180,140,60,0.22)' }}>
-                        <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Okres</th>
-                        <th className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Klub</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Opłata</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>M</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\u26BD' }</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDC5F' }</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE8' }</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE5' }</th>
-                        <th className="px-1.5 py-1 text-center font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#fff', borderBottom: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDCCA' }</th>
+                        <th className="px-2 py-1 font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Okres</th>
+                        <th className="px-2 py-1 font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Klub</th>
+                        <th className="px-1.5 py-1 text-center font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>CENA</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>M</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\u26BD' }</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDC5F' }</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE8' }</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDFE5' }</th>
+                        <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)' }}>{ '\uD83D\uDCCA' }</th>
                       </tr>
                     </thead>
                     <tbody>
                       {careerRows.slice(0, 6).map(({ key, entry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
                         <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? 'rgba(96,165,250,0.15)' : 'transparent' }}>
-                          <td className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
+                          <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             {periodLabel}
                           </td>
-                          <td className="px-2 py-1 font-black italic uppercase tracking-tighter text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
+                          <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             <span className="block max-w-[92px] truncate">
                               {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : entry.clubName}
                             </span>
                           </td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.yellowCards : '—'}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.redCards : '—'}</td>
-                          <td className="px-1.5 py-1 text-center font-black italic tracking-tighter text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)' }}>
+                          <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.yellowCards : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.redCards : '—'}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)' }}>
                             {statsSnapshot?.averageRating !== null && statsSnapshot?.averageRating !== undefined
                               ? statsSnapshot.averageRating.toFixed(1)
                               : '—'}
@@ -402,7 +402,7 @@ export const PlayerCard: React.FC = () => {
                   </table>
                 </div>
               ) : (
-                <div className="rounded-[10px] border border-dashed border-white/30 px-2 py-4 text-center font-black italic uppercase tracking-tighter text-[7px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <div className="rounded-[10px] border border-dashed border-white/30 px-2 py-4 text-center font-normal text-[7px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
                   Brak historii
                 </div>
               )}
@@ -487,6 +487,38 @@ export const PlayerCard: React.FC = () => {
             )}
 
             {player.clubId === userTeamId && !isMatchContext && (
+              <div className="bg-slate-800 border-2 border-yellow-400 rounded-[16px] p-3 mt-1 drop-shadow-lg">
+                <p className="text-[10px] font-black italic uppercase tracking-widest text-yellow-400 mb-2">Rola w zespole</p>
+                <div className="flex gap-2">
+                  {([
+                    { value: null, label: 'Brak' },
+                    { value: 'STARTER', label: 'Podstawowa 11' },
+                    { value: 'KEY_PLAYER', label: 'Kluczowy' },
+                  ] as const).map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      onClick={() => setSquadRole(player.id, opt.value)}
+                      className={`flex-1 py-2.5 rounded-[12px] font-black italic uppercase tracking-tighter text-[9px] border-2 transition-all active:scale-95 drop-shadow
+                        ${(player.squadRole ?? null) === opt.value
+                          ? opt.value === 'KEY_PLAYER'
+                            ? 'bg-rose-600 border-rose-300 text-white'
+                            : opt.value === 'STARTER'
+                            ? 'bg-blue-600 border-blue-300 text-white'
+                            : 'bg-slate-500 border-slate-200 text-white'
+                          : opt.value === 'KEY_PLAYER'
+                          ? 'bg-slate-800 border-rose-500 text-rose-400'
+                          : opt.value === 'STARTER'
+                          ? 'bg-slate-800 border-blue-500 text-blue-400'
+                          : 'bg-slate-800 border-slate-400 text-slate-200'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {player.clubId === userTeamId && !isMatchContext && (
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <button
                   onClick={() => {
@@ -518,10 +550,10 @@ export const PlayerCard: React.FC = () => {
                   </span>
                   <div className="text-left">
                     <span className="block text-[8px] font-black uppercase tracking-widest drop-shadow">
-                      {hasPendingTransfer ? 'TRANSFER' : isContractLocked ? 'BLOKADA CZASOWA' : 'NOWE WARUNKI'}
+                      {hasPendingTransfer ? 'TRANSFER' : isContractLocked ? 'BLOKADA CZASOWA' : 'NOWY KONTRAKT'}
                     </span>
                     <span className="text-[6px] font-black text-white italic uppercase drop-shadow">
-                      {hasPendingTransfer ? 'DO INNEGO KLUBU' : isContractLocked ? 'UMOWA NIEDAWNO PODPISANA' : 'PRZEDŁUŻ UMOWĘ'}
+                      {hasPendingTransfer ? 'DO INNEGO KLUBU' : isContractLocked ? 'UMOWA NIEDAWNO PODPISANA' : ''}
                     </span>
                   </div>
                 </button>
@@ -577,7 +609,7 @@ export const PlayerCard: React.FC = () => {
                   </div>
                 )}
                 <button
-                  disabled={hasPendingTransfer}
+                  disabled={hasPendingTransfer || player.squadRole === 'KEY_PLAYER'}
                   onClick={() => {
                     if (player.isOnTransferList) {
                       toggleTransferList(player.id);
@@ -587,8 +619,10 @@ export const PlayerCard: React.FC = () => {
                     }
                   }}
                   className={`w-full py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-2 active:scale-95 drop-shadow
-                    ${hasPendingTransfer
-                      ? "relative bg-slate-800 border-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
+                    ${hasPendingTransfer || player.squadRole === 'KEY_PLAYER'
+                      ? hasPendingTransfer
+                        ? "relative bg-slate-800 border-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
+                        : 'bg-slate-800 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
                       : player.isOnTransferList
                       ? 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'
                       : 'bg-amber-600/20 border-amber-500/40 text-amber-500 hover:bg-amber-600/30'}`}

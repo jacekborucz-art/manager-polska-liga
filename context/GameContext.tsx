@@ -240,6 +240,7 @@ interface GameContextType {
     processCLMatchDay: () => void;
   updatePlayer: (clubId: string, playerId: string, newData: Partial<Player>) => void;
   toggleTransferList: (playerId: string, price?: number) => void;
+  setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
   pendingFriendlyRequests: PendingFriendlyRequest[];
@@ -3504,6 +3505,8 @@ setMessages([welcomeMail, fanMail]);
       const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, coaches, dateToProcess, userTeamId);
       postReviewClubs = seasonDecision.updatedClubs;
       postReviewPlayers = seasonDecision.updatedPlayers;
+      const updatedCoachesJuly = AiTransferDecisionService.updateCoachFavorites(postReviewClubs, postReviewPlayers, coaches, dateToProcess, sessionSeed, userTeamId);
+      setCoaches(updatedCoachesJuly);
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       
       // Wyplata pensji zawodników na start sezonu
@@ -3768,6 +3771,7 @@ const finalResult: SimulationOutput = {
           
           coach.blacklist[club.id] = nextDay.getFullYear() + 5;
           coach.currentClubId = null;
+          coach.favoritePlayerIds = undefined;
           coach.history[coach.history.length-1].toYear = nextDay.getFullYear();
           coach.history[coach.history.length-1].toMonth = nextDay.getMonth()+1;
           // Szukanie następcy
@@ -3778,6 +3782,7 @@ const finalResult: SimulationOutput = {
           
           if (replacement) {
             replacement.currentClubId = club.id;
+            replacement.favoritePlayerIds = undefined;
             replacement.history.push({
               clubId: club.id, clubName: club.name,
               fromYear: nextDay.getFullYear(), fromMonth: nextDay.getMonth()+1,
@@ -4299,6 +4304,12 @@ const finalResult: SimulationOutput = {
           } : prev);
         }
       }
+    }
+
+    // ── ULUBIEŃCY TRENERÓW AI: aktualizacja (1. dzień miesiąca) ─────────────
+    if (nextDay.getDate() === 1) {
+      const updatedCoachesMonthly = AiTransferDecisionService.updateCoachFavorites(clubs, players, coaches, nextDay, sessionSeed, userTeamId);
+      setCoaches(updatedCoachesMonthly);
     }
 
     // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────
@@ -5417,6 +5428,19 @@ const finalResult: SimulationOutput = {
     }
   };
 
+  const setSquadRole = (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (!player) return;
+    const updates: Partial<Player> = { squadRole: role };
+    if (role === 'KEY_PLAYER') {
+      updates.isOnTransferList = false;
+      updates.transferListPrice = undefined;
+    }
+    updatePlayer(userTeamId, playerId, updates);
+  };
+
   const navigateToIncomingOffer = (offerId: string): void => {
     setViewedIncomingOfferId(offerId);
     navigateWithoutHistory(ViewState.INCOMING_OFFER);
@@ -5652,6 +5676,7 @@ const finalResult: SimulationOutput = {
 
     const buyerSquad = players[userTeamId] || [];
     const sellerSquad = players[sellerClubId] || [];
+    const sellerCoachFavoriteIds = sellerClub.coachId ? coaches[sellerClub.coachId]?.favoritePlayerIds : undefined;
     const sellerOpeningStance = TransferSellerLogicService.getNegotiationStance(
       targetPlayer,
       sellerClub,
@@ -5659,7 +5684,8 @@ const finalResult: SimulationOutput = {
       sellerSquad,
       currentDate,
       offerInput.timing,
-      sellerClub.board?.kompetencja
+      sellerClub.board?.kompetencja,
+      sellerCoachFavoriteIds
     );
     const latestClubOffer = transferOffers.find(
       offer =>
@@ -5802,7 +5828,8 @@ const finalResult: SimulationOutput = {
           : sellerOpeningStance.askingPrice,
         attemptNumber: createdOffer.attemptNumber,
         maxAttempts: createdOffer.maxAttempts
-      }
+      },
+      sellerCoachFavoriteIds
     );
 
     if (sellerDecision.verdict === 'REJECT') {
@@ -6577,7 +6604,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,

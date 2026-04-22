@@ -63,6 +63,7 @@ export const TransferExecutionService = {
       contractEndDate: newEndDate,
       marketValue: FinanceService.calculateMarketValue(player, buyerClub.reputation, buyerTier, buyerClub.country),
       history: updatedHistory,
+      purchaseFee: offer.fee > 0 ? offer.fee : undefined,
       isOnTransferList: false,
       interestedClubs: [],
       transferLockoutUntil: transferLockoutDate.toISOString(),

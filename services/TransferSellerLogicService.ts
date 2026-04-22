@@ -147,7 +147,8 @@ export const TransferSellerLogicService = {
     sellerSquad: Player[],
     currentDate: Date,
     timing: TransferTiming = TransferTiming.IMMEDIATE,
-    boardKompetencja?: BoardAttributeLevel
+    boardKompetencja?: BoardAttributeLevel,
+    coachFavoriteIds?: string[]
   ): SellerOpeningStance => {
     const baseAskingPrice = TransferSellerLogicService.estimateAskingPrice(
       player,
@@ -157,6 +158,14 @@ export const TransferSellerLogicService = {
       boardKompetencja
     );
     const askingPrice = applyTransferCap(baseAskingPrice * getTimingPriceMultiplier(timing), sellerClub, player);
+
+    if (coachFavoriteIds && coachFavoriteIds.includes(player.id) && Math.random() >= 0.01) {
+      return {
+        allowTalks: false,
+        askingPrice,
+        reason: `Zarząd odrzucił zapytanie. Trener uznaje tego zawodnika za kluczową postać składu i nie zgadza się na jego odejście.`
+      };
+    }
 
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const playerRank = Math.max(0, sortedSquad.findIndex(item => item.id === player.id));
@@ -279,6 +288,8 @@ export const TransferSellerLogicService = {
     else if (player.age >= 34) multiplier -= 0.18;
     else if (player.age >= 31) multiplier -= 0.10;
     if (player.isUntouchable) multiplier += 0.30;
+    if (player.squadRole === 'KEY_PLAYER') multiplier += 0.18;
+    else if (player.squadRole === 'STARTER') multiplier += 0.08;
 
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const top11Ids = sortedSquad.slice(0, 11).map(p => p.id);
@@ -305,6 +316,8 @@ export const TransferSellerLogicService = {
     if (top11Ids.includes(player.id)) minimumMultiplier = Math.max(minimumMultiplier, 1.08);
     if (sortedSquad.slice(0, 3).some(p => p.id === player.id)) minimumMultiplier = Math.max(minimumMultiplier, 1.15);
     if (player.isUntouchable || sortedSquad[0]?.id === player.id) minimumMultiplier = Math.max(minimumMultiplier, 1.25);
+    if (player.squadRole === 'KEY_PLAYER') minimumMultiplier = Math.max(minimumMultiplier, 1.20);
+    else if (player.squadRole === 'STARTER') minimumMultiplier = Math.max(minimumMultiplier, 1.10);
     if (daysLeft >= 730 && !player.isOnTransferList) minimumMultiplier = Math.max(minimumMultiplier, 1.10);
 
     const rawPrice = Math.max(100_000, baseValue * Math.max(multiplier, minimumMultiplier));
@@ -319,7 +332,8 @@ export const TransferSellerLogicService = {
     buyerClub: Club,
     sellerSquad: Player[],
     currentDate: Date,
-    negotiationContext?: SellerNegotiationContext
+    negotiationContext?: SellerNegotiationContext,
+    coachFavoriteIds?: string[]
   ): SellerDecisionResult => {
     const openingStance = TransferSellerLogicService.getNegotiationStance(
       player,
@@ -327,7 +341,9 @@ export const TransferSellerLogicService = {
       buyerClub,
       sellerSquad,
       currentDate,
-      offer.timing
+      offer.timing,
+      undefined,
+      coachFavoriteIds
     );
     if (!openingStance.allowTalks) {
       return {

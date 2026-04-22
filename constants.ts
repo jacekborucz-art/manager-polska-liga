@@ -409,6 +409,7 @@ export const generatePlaceholderPlayersForClub = (clubId: string): Player[] => {
     annualSalary: 120000,
     boardLockoutUntil: null,
     isUntouchable: false,
+    squadRole: null,
     // TUTAJ WSTAW TEN KOD - STARTOWE WARTOŚCI NEGOCJACJI
     negotiationStep: 0,
     negotiationLockoutUntil: null,

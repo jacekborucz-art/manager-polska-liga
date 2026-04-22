@@ -305,7 +305,7 @@ export const AiScoutingService = {
   ): { position: PlayerPosition; urgency: number }[] => {
 
     const needs: { position: PlayerPosition; urgency: number }[] = [];
-    const positions: PlayerPosition[] = ['GK', 'DEF', 'MID', 'FWD'];
+    const positions: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
 
     // Optymalne minimalne liczby zawodników na pozycję
     const minCounts: Record<PlayerPosition, number> = { GK: 2, DEF: 5, MID: 4, FWD: 3 };

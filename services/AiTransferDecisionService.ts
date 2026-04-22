@@ -117,10 +117,11 @@ const _selectWeakPositions = (
  */
 const _pickPlayerForSale = (
   position: PlayerPosition,
-  squad: Player[]
+  squad: Player[],
+  favoriteIds: Set<string>
 ): Player | null => {
   const MIN_DEPTH: Record<PlayerPosition, number> = { GK: 2, DEF: 4, MID: 3, FWD: 2 };
-  const posGroup = squad.filter(p => p.position === position && !p.isOnTransferList);
+  const posGroup = squad.filter(p => p.position === position && !p.isOnTransferList && !favoriteIds.has(p.id));
   if (posGroup.length <= MIN_DEPTH[position]) return null;
 
   const sorted = [...posGroup].sort((a, b) => {
@@ -130,6 +131,60 @@ const _pickPlayerForSale = (
   });
 
   return sorted[0] || null;
+};
+
+/**
+ * Buduje listę "ulubieńców trenera" z wieloskładnikową oceną zawodnika.
+ *
+ * Składowe score:
+ *   perceivedOvr  — OVR z szumem exp (błąd percepcji talentu, tylko tu wpływa exp)
+ *   formBonus     — średnia z ostatnich 5 ocen meczowych (±4 pkt względem neutralnego 7.0)
+ *   goalBonus     — gole sezonu: max 20 goli → +6 pkt (FWD/MID)
+ *   assistBonus   — asysty sezonu: max 15 → +3 pkt (FWD/MID)
+ *   cleanSheetBonus — mecze bez straty: max 15 CS → +3 pkt (GK/DEF)
+ *
+ * Forma i statystyki są obiektywnie widoczne nawet dla słabego trenera —
+ * szum dotyczy wyłącznie OVR (błąd w ocenie talentu/potencjału).
+ */
+const _computeCoachFavorites = (
+  squad: Player[],
+  exp: number,
+  listSize: number,
+  clubSeed: number
+): string[] => {
+  if (squad.length === 0) return [];
+  const errorRange = _perceptionError(exp);
+
+  const scored = squad.map((p, i) => {
+    // 1. Perceived OVR — szum zależny od doświadczenia trenera
+    const noise = (_seededRandom(clubSeed + i * 17) * 2 - 1) * errorRange;
+    const perceivedOvr = Math.max(1, p.overallRating * (1 + noise));
+
+    // 2. Forma — średnia ostatnich 5 ocen meczowych (neutral: 7.0)
+    const recentRatings = (p.stats.ratingHistory || []).slice(-5);
+    const avgRating = recentRatings.length > 0
+      ? recentRatings.reduce((s, r) => s + r, 0) / recentRatings.length
+      : 7.0;
+    const formBonus = (avgRating - 7.0) * 1.5;
+
+    // 3. Statystyki ofensywne — bramki i asysty (FWD/MID)
+    const goals = p.stats.goals || 0;
+    const assists = p.stats.assists || 0;
+    const isAttacking = p.position === PlayerPosition.FWD || p.position === PlayerPosition.MID;
+    const goalBonus = isAttacking ? Math.min(goals, 20) * 0.30 : Math.min(goals, 20) * 0.10;
+    const assistBonus = isAttacking ? Math.min(assists, 15) * 0.20 : Math.min(assists, 15) * 0.08;
+
+    // 4. Mecze bez straty (GK/DEF)
+    const cleanSheets = p.stats.cleanSheets || 0;
+    const isDefensive = p.position === PlayerPosition.GK || p.position === PlayerPosition.DEF;
+    const cleanSheetBonus = isDefensive ? Math.min(cleanSheets, 15) * 0.20 : 0;
+
+    const compositeScore = perceivedOvr + formBonus + goalBonus + assistBonus + cleanSheetBonus;
+    return { id: p.id, compositeScore };
+  });
+
+  const sorted = [...scored].sort((a, b) => b.compositeScore - a.compositeScore);
+  return sorted.slice(0, Math.min(listSize, squad.length)).map(p => p.id);
 };
 
 // ─── Serwis publiczny ─────────────────────────────────────────────────────────
@@ -186,16 +241,23 @@ export const AiTransferDecisionService = {
       // 4. Najsłabsze linie
       const weakPositions = _selectWeakPositions(perceivedStrengths, exp);
 
-      // 5. Oznacz zawodników do sprzedaży — 1 per słaba pozycja
+      // 5. Ulubieńcy trenera — chronieni przed wystawieniem na sprzedaż
+      const favoriteIds = new Set<string>(coach?.favoritePlayerIds ?? []);
+
+      // 6. Oznacz zawodników do sprzedaży — 1 per słaba pozycja
       const updatedSquad = squad.map(p => ({ ...p }));
 
       for (const weak of weakPositions) {
-        const candidate = _pickPlayerForSale(weak.position as PlayerPosition, updatedSquad);
+        const candidate = _pickPlayerForSale(weak.position as PlayerPosition, updatedSquad, favoriteIds);
         if (!candidate) continue;
 
         const tier = FinanceService.getClubTier(club);
         const marketValue = FinanceService.calculateMarketValue(candidate, club.reputation, tier, club.country);
-        const reducedPrice = Math.round(marketValue * 0.72 / 50_000) * 50_000;
+        const purchaseBase = candidate.purchaseFee && candidate.purchaseFee > marketValue
+          ? candidate.purchaseFee
+          : marketValue;
+        const priceMultiplier = 1.15 + _seededRandom(clubSeed + candidate.id.charCodeAt(0)) * 0.35;
+        const reducedPrice = Math.round(purchaseBase * priceMultiplier / 50_000) * 50_000;
 
         const idx = updatedSquad.findIndex(p => p.id === candidate.id);
         if (idx !== -1) {
@@ -211,6 +273,44 @@ export const AiTransferDecisionService = {
     }
 
     return { updatedClubs: clubs, updatedPlayers };
+  },
+
+  /**
+   * Aktualizuje listę "ulubieńców trenera" dla każdego AI-klubu.
+   * Wywoływana co miesiąc (1. dzień) i na starcie sezonu (2 lipca).
+   * Trener bez klubu (currentClubId === null) nie jest dotykany.
+   * Rozmiar listy: losowo 5–16 zawodników (per klub, per miesiąc).
+   */
+  updateCoachFavorites: (
+    clubs: Club[],
+    playersMap: Record<string, Player[]>,
+    coachesMap: Record<string, Coach>,
+    currentDate: Date,
+    sessionSeed: number,
+    userTeamId: string | null
+  ): Record<string, Coach> => {
+    const updated = { ...coachesMap };
+
+    for (const club of clubs) {
+      if (club.id === userTeamId || !club.coachId) continue;
+      const squad = playersMap[club.id];
+      if (!squad || squad.length === 0) continue;
+
+      const coach = updated[club.coachId];
+      if (!coach || !coach.currentClubId) continue;
+
+      const exp = coach.attributes.experience ?? 50;
+      const clubSeed = sessionSeed +
+        currentDate.getFullYear() * 100 + (currentDate.getMonth() + 1) +
+        Math.abs(club.id.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) % 1000);
+
+      const listSize = 5 + Math.floor(_seededRandom(clubSeed + 7) * 12); // losowo 5–16
+      const favoritePlayerIds = _computeCoachFavorites(squad, exp, listSize, clubSeed);
+
+      updated[club.coachId] = { ...coach, favoritePlayerIds };
+    }
+
+    return updated;
   },
 
 };

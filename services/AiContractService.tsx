@@ -1,4 +1,4 @@
-import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput, AiTransferLogEntry } from '../types';
+import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput, AiTransferLogEntry, Coach } from '../types';
 import { FinanceService as FinanceLogic } from './FinanceService';
 import { TransferSellerLogicService } from './TransferSellerLogicService';
 import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
@@ -141,7 +141,7 @@ const _assessClubNeeds = (
     return x - Math.floor(x);
   };
 
-  const positions: PlayerPosition[] = ['GK', 'DEF', 'MID', 'FWD'];
+  const positions: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
   const minCounts: Record<PlayerPosition, number> = { GK: 2, DEF: 5, MID: 4, FWD: 3 };
   const idealOvr = 30 + club.reputation * 4.5;
 
@@ -182,7 +182,7 @@ const _assessClubNeeds = (
 
     // TRIGGER 3: INJURY (HIGH)
     // Lider kontuzjowany >30 dni — rotacyjny zastępca wystarczy
-    if (keyPlayer?.health.status === 'INJURED' && (keyPlayer.health.injury?.daysRemaining || 0) > 30) {
+    if (keyPlayer?.health.status === 'INJURED' && (keyPlayer.health.injury?.daysRemaining || 0) > 100) {
       results.push({ position: pos, urgency: 'HIGH', reason: 'INJURY', starterRequired: false });
       continue;
     }
@@ -581,7 +581,8 @@ processAiRecruitment: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
     currentDate: Date,
-    userTeamId: string | null
+    userTeamId: string | null,
+    coachesMap: Record<string, Coach> = {}
   ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
@@ -729,15 +730,17 @@ processAiRecruitment: (
       // Poza oknem negocjujemy z timingiem IN_SIX_MONTHS — daje realistyczną premię cenową
       // i poprawnie klasyfikuje ochronę przed sprzedażą do rywala (blocksShortDelaySale).
       const transferTiming = windowOpen ? TransferTiming.IMMEDIATE : TransferTiming.IN_SIX_MONTHS;
+      const sellerCoachTL = sellerClub.coachId ? coachesMap[sellerClub.coachId] : null;
+      const sellerFavoritesTL = sellerCoachTL?.favoritePlayerIds;
       const stance = TransferSellerLogicService.getNegotiationStance(
-        best, sellerClub, club, sellerSquad, currentDate, transferTiming
+        best, sellerClub, club, sellerSquad, currentDate, transferTiming, undefined, sellerFavoritesTL
       );
       if (!stance.allowTalks) continue;
 
       // AI płaci pełną cenę wywoławczą
       const bidInput: TransferClubBidInput = { fee: stance.askingPrice, timing: transferTiming };
       const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
-        bidInput, best, sellerClub, club, sellerSquad, currentDate
+        bidInput, best, sellerClub, club, sellerSquad, currentDate, undefined, sellerFavoritesTL
       );
       if (sellerDecision.verdict !== 'ACCEPT') continue;
 
@@ -828,7 +831,8 @@ processAiRecruitment: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
     currentDate: Date,
-    userTeamId: string | null
+    userTeamId: string | null,
+    coachesMap: Record<string, Coach> = {}
   ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
@@ -902,14 +906,16 @@ processAiRecruitment: (
 
       // Poza oknem: timing IN_SIX_MONTHS — poprawna premia cenowa i klasyfikacja ochrony rywala.
       const transferTimingInt = windowOpen ? TransferTiming.IMMEDIATE : TransferTiming.IN_SIX_MONTHS;
+      const sellerCoachIT = sellerClub.coachId ? coachesMap[sellerClub.coachId] : null;
+      const sellerFavoritesIT = sellerCoachIT?.favoritePlayerIds;
       const stance = TransferSellerLogicService.getNegotiationStance(
-        target, sellerClub, club, sellerSquad, currentDate, transferTimingInt
+        target, sellerClub, club, sellerSquad, currentDate, transferTimingInt, undefined, sellerFavoritesIT
       );
       if (!stance.allowTalks) continue;
 
       const bidInput: TransferClubBidInput = { fee: stance.askingPrice, timing: transferTimingInt };
       const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
-        bidInput, target, sellerClub, club, sellerSquad, currentDate
+        bidInput, target, sellerClub, club, sellerSquad, currentDate, undefined, sellerFavoritesIT
       );
       if (sellerDecision.verdict !== 'ACCEPT') continue;
 

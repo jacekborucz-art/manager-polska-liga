@@ -79,8 +79,8 @@ if (todayFixtures.length === 0) {
       const recruitmentUpdate = AiContractService.processAiRecruitment(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
       const resolvedUpdate = AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate, userTeamId);
       const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId);
-      const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId);
-      const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId);
+      const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId, coaches);
+      const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId, coaches);
       const transferResolvedUpdate = AiContractService.resolveAiTransferPending(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
 
       const aiTransferLogEntries: AiTransferLogEntry[] = [
@@ -486,8 +486,8 @@ if (todayFixtures.length === 0) {
     const finalUpdate = AiContractService.processAiRecruitment(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
     const resolvedFinal = AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate, userTeamId);
     const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId);
-    const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId);
-    const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId);
+    const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId, coaches);
+    const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId, coaches);
     const transferResolvedFinal = AiContractService.resolveAiTransferPending(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
 
     const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [

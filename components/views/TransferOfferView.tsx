@@ -17,6 +17,7 @@ export const TransferOfferView: React.FC = () => {
     viewedPlayerId,
     players,
     clubs,
+    coaches,
     userTeamId,
     currentDate,
     transferOffers,
@@ -52,15 +53,18 @@ export const TransferOfferView: React.FC = () => {
   const sellerOpeningStance = useMemo(() => {
     if (!player || !buyerClub || !sellerClub) return null;
 
+    const sellerFavoriteIds = sellerClub.coachId ? coaches[sellerClub.coachId]?.favoritePlayerIds : undefined;
     return TransferSellerLogicService.getNegotiationStance(
       player,
       sellerClub,
       buyerClub,
       players[sellerClub.id] || [],
       currentDate,
-      timing
+      timing,
+      undefined,
+      sellerFavoriteIds
     );
-  }, [player, buyerClub, sellerClub, players, currentDate, timing]);
+  }, [player, buyerClub, sellerClub, players, coaches, currentDate, timing]);
 
   const latestOffer = useMemo(() => {
     if (!player || !userTeamId) return null;

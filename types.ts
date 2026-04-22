@@ -313,6 +313,7 @@ export interface Coach {
     defensive: string;
   };
   seasonStats: CoachSeasonStats[];
+  favoritePlayerIds?: string[];  // Lista ID "ulubieńców trenera" — aktualizowana co miesiąc
 }
 
 export interface MailMessage {
@@ -775,6 +776,7 @@ export interface Player {
   isOnTransferList?: boolean;
   transferListPrice?: number;
   marketValue?: number;
+  purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
    history: PlayerHistoryEntry[];
     boardLockoutUntil: string | null; // Data ISO, do której nie można ponowić próby zwolnienia
   isUntouchable: boolean;           
@@ -801,6 +803,7 @@ export interface Player {
   /** Data ISO kiedy zawodnik "melduje się" w nowym klubie (currentDate + 3 dni) */
   transferReportDate?: string;
   trainingFocus?: keyof PlayerAttributes | null;
+  squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
 }
 
 export interface TeamStats {

@@ -4,6 +4,7 @@ import {
   IncomingTransferOffer,
   IncomingOfferStatus,
   TransferTiming,
+  PlayerPosition,
 } from '../types';
 import { FinanceService } from './FinanceService';
 
@@ -171,6 +172,12 @@ export const IncomingTransferService = {
       }
     }
 
+    if (player.squadRole === 'KEY_PLAYER') {
+      const avgRating = IncomingTransferService.getAvgRating(player);
+      const isExceptional = player.overallRating >= 75 && avgRating > 7.6;
+      if (!isExceptional) return { shouldGenerate: false, source: null };
+    }
+
     const isShortlisted = !!player.interestedClubs?.includes(buyerClub.id);
     const priority = IncomingTransferService.isExceptionalSpontaneousTarget(
       player,
@@ -220,6 +227,8 @@ export const IncomingTransferService = {
 
       source = 'SPONTANEOUS';
     }
+
+    if (player.squadRole === 'KEY_PLAYER') prob = Math.min(prob, 0.05);
 
     const rng = IncomingTransferService.seededRandom(seed);
     const shouldGenerate = rng < prob;
@@ -473,8 +482,8 @@ export const IncomingTransferService = {
     const goals = player.stats.goals;
     const assists = player.stats.assists;
     const talent = player.attributes.talent;
-    const isFwd = player.position === 'FWD' || player.position === 'CF' || player.position === 'ST' || player.position === 'LW' || player.position === 'RW';
-    const isMid = player.position === 'MID' || player.position === 'CAM' || player.position === 'CDM' || player.position === 'CM' || player.position === 'LM' || player.position === 'RM';
+    const isFwd = player.position === PlayerPosition.FWD;
+    const isMid = player.position === PlayerPosition.MID;
 
     // Priorytet 1: talent/elite + młody
     if (ovr >= 80 && talent >= 80 && age >= 16 && age <= 24) return 1;
