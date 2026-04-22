@@ -46,6 +46,7 @@ type LiveTeam = {
   yellows: Record<string, number>;
   sentOff: Set<string>;
   subs: number;
+  redCardPenalty: number;
   penaltyTakerId: string | null;
 };
 
@@ -64,6 +65,14 @@ const hash = (v: string) => {
 };
 const nameOf = (p?: Player | null) => p ? `${p.firstName} ${p.lastName}` : 'Unknown';
 const fatMul = (f: number) => 0.52 + 0.48 * Math.pow(clamp(f, 0, 100) / 100, 1.25);
+
+const playerOverall = (p: Player): number => {
+  if (p.position === PlayerPosition.GK) {
+    return clamp((p.attributes.goalkeeping * 6 + p.attributes.positioning * 2 + p.attributes.mentality + p.attributes.passing) / 10, 0, 100);
+  }
+  const a = p.attributes;
+  return clamp((a.attacking + a.finishing + a.defending + a.passing + a.positioning + a.mentality + a.technique + a.pace + a.vision + a.stamina) / 10, 0, 100);
+};
 
 const clonePlayer = (p: Player): Player => ({
   ...p,
@@ -152,6 +161,10 @@ const metrics = (lt: LiveTeam): Metrics => {
     press *= Math.max(0.36, 1 - missingPlayers * 0.15);
     ment *= Math.max(0.7, 1 - missingPlayers * 0.06);
   }
+  if (lt.redCardPenalty < 1) {
+    att *= lt.redCardPenalty; build *= lt.redCardPenalty; create *= lt.redCardPenalty;
+    def *= lt.redCardPenalty; press *= lt.redCardPenalty; ment *= lt.redCardPenalty;
+  }
   return { att, build, create, def, press, gk: gk || 24, ment, aggr, avgFat: fat / act.length, active: act.length };
 };
 
@@ -188,6 +201,12 @@ const pickPenalty = (lt: LiveTeam, rng: Rng) => {
 };
 
 const removeFromPitch = (lt: LiveTeam, playerId: string) => { lt.activeXI = lt.activeXI.map(id => id === playerId ? null : id); };
+
+const applyRedCardPenalty = (lt: LiveTeam, expelled: Player): void => {
+  const overall = playerOverall(expelled);
+  const penalty = 0.08 + (overall / 100) * 0.06;
+  lt.redCardPenalty = Math.max(0.65, lt.redCardPenalty * (1 - penalty));
+};
 
 const benchReplacement = (lt: LiveTeam, requiredRole: PlayerPosition, minute: number, losing: boolean) => {
   const bench = lt.bench.map(id => lt.squad.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
@@ -328,12 +347,14 @@ const maybeCardOrPenalty = (att: LiveTeam, def: LiveTeam, minute: number, weathe
     eventPush(timeline, minute, def.side, MatchEventType.RED_CARD, `${nameOf(defender)} sent off for ${def.team.name}`, defender.id);
     def.sentOff.add(defender.id);
     removeFromPitch(def, defender.id);
+    applyRedCardPenalty(def, defender);
   } else if (rng.next() < cardChance) {
     if (alreadyBooked) {
       cards.push({ playerId: defender.id, playerName: nameOf(defender), minute, teamId: def.team.id, type: 'SECOND_YELLOW' });
       eventPush(timeline, minute, def.side, MatchEventType.RED_CARD, `${nameOf(defender)} sent off for ${def.team.name}`, defender.id);
       def.sentOff.add(defender.id);
       removeFromPitch(def, defender.id);
+      applyRedCardPenalty(def, defender);
     } else {
       def.yellows[defender.id] = (def.yellows[defender.id] ?? 0) + 1;
       cards.push({ playerId: defender.id, playerName: nameOf(defender), minute, teamId: def.team.id, type: 'YELLOW' });
@@ -370,13 +391,13 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   const prog = creator.attributes.passing * 0.78 + creator.attributes.vision * 0.74 + creator.attributes.technique * 0.64 + creator.attributes.dribbling * 0.58 + attM.build * 0.018 + attM.create * 0.016 + (att.coach?.attributes.decisionMaking ?? 50) * 0.18;
   const disrupt = defender.attributes.defending * 0.72 + defender.attributes.positioning * 0.68 + defender.attributes.pace * 0.42 + defM.def * 0.02 + defM.press * 0.01 + (def.coach?.attributes.decisionMaking ?? 50) * 0.16;
   const numbersAdvantage = def.sentOff.size - att.sentOff.size;
-  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) + Math.max(0, numbersAdvantage) * 0.03 - weatherInt * 0.025, 0.07, 0.28);
+  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) + Math.max(0, numbersAdvantage) * 0.03 - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty;
   if (rng.next() >= phaseChance) return;
   const shot = shooter.attributes.finishing * 0.92 + shooter.attributes.attacking * 0.75 + shooter.attributes.positioning * 0.65 + shooter.attributes.technique * 0.56 + shooter.attributes.heading * 0.26 + creator.attributes.vision * 0.18 + creator.attributes.passing * 0.18 + attM.att * 0.022 + attM.create * 0.015 + (att.coach?.attributes.motivation ?? 50) * 0.18;
   const prev = keeper.attributes.goalkeeping * 0.94 + keeper.attributes.positioning * 0.58 + defM.def * 0.022 + defender.attributes.defending * 0.32 + defender.attributes.positioning * 0.22 + weatherInt * 4;
   const onTarget = clamp(0.2 + (shot - prev) / 920 + Math.max(0, 100 - (att.fatigue[shooter.id] ?? 100)) * -0.001 - weatherInt * 0.035, 0.1, 0.42);
   if (rng.next() >= onTarget) return;
-  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) + Math.max(0, numbersAdvantage) * 0.04 - weatherInt * 0.02, 0.05, 0.24);
+  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) + Math.max(0, numbersAdvantage) * 0.04 - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty;
   if (rng.next() < goalChance) {
     const assistant = creator.id !== shooter.id ? creator : null;
     goals.push(goalEntry(shooter, att.team.id, minute, false, assistant));
@@ -436,8 +457,8 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
   usedRefereeIds.add(referee.id);
   const rng = new Rng(hash(`${envSeed}|${attendance}|${weather.description}`));
   const matchId = ['NT', date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0'), homeTeam.id, awayTeam.id].join('_');
-  const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, penaltyTakerId: hs.penaltyTakerId };
-  const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, penaltyTakerId: as.penaltyTakerId };
+  const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: hs.penaltyTakerId };
+  const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: as.penaltyTakerId };
   const goals: MatchGoalEntry[] = []; const cards: MatchCardEntry[] = []; const injuries: MatchInjuryEntry[] = []; const substitutions: MatchSubstitutionEntry[] = []; const timeline: MatchEvent[] = [];
   const homeScore = { value: 0 }; const awayScore = { value: 0 };
   let addedTime = 2; let stop = 0.5;
@@ -446,7 +467,7 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
     const hm = metrics(home); const am = metrics(away);
     const phases = 1 + (rng.next() < clamp(0.06 + (hm.press + am.press) / 5200 + ((homeCoach.attributes.motivation + awayCoach.attributes.motivation) / 1200), 0.08, 0.34) ? 1 : 0);
     for (let i = 0; i < phases; i++) {
-      const homeInit = clamp(0.48 + (hm.build - am.press) / 2400 + (hm.create - am.def) / 2600 + (hm.ment - am.ment) / 3000 + (homeCoach.attributes.decisionMaking - awayCoach.attributes.decisionMaking) / 900 + Math.max(0, away.sentOff.size - home.sentOff.size) * 0.055 + 0.045, 0.22, 0.78);
+      const homeInit = clamp(0.48 + (hm.build - am.press) / 2400 + (hm.create - am.def) / 2600 + (hm.ment - am.ment) / 3000 + (homeCoach.attributes.decisionMaking - awayCoach.attributes.decisionMaking) / 900 + (home.redCardPenalty - away.redCardPenalty) * 0.4 + 0.045, 0.22, 0.78);
       const att = rng.next() < homeInit ? home : away;
       const def = att.side === 'HOME' ? away : home;
       const attM = att.side === 'HOME' ? hm : am;
@@ -563,8 +584,8 @@ export function simulateSinglePlayoffMatch(
 
   const rng = new Rng(hash(`${envSeed}|PLAYOFF`));
 
-  const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, penaltyTakerId: hs.penaltyTakerId };
-  const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, penaltyTakerId: as.penaltyTakerId };
+  const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: hs.penaltyTakerId };
+  const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: as.penaltyTakerId };
 
   const goals: MatchGoalEntry[] = [];
   const cards: MatchCardEntry[] = [];
@@ -585,7 +606,7 @@ export function simulateSinglePlayoffMatch(
       const hm = metrics(home); const am = metrics(away);
       const phases = 1 + (rng.next() < clamp(0.06 + (hm.press + am.press) / 5200 + ((homeCoach.attributes.motivation + awayCoach.attributes.motivation) / 1200), 0.08, 0.34) ? 1 : 0);
       for (let i = 0; i < phases; i++) {
-        const homeInit = clamp(0.48 + (hm.build - am.press) / 2400 + (hm.create - am.def) / 2600 + (hm.ment - am.ment) / 3000 + (homeCoach.attributes.decisionMaking - awayCoach.attributes.decisionMaking) / 900 + Math.max(0, away.sentOff.size - home.sentOff.size) * 0.055 + 0.045, 0.22, 0.78);
+        const homeInit = clamp(0.48 + (hm.build - am.press) / 2400 + (hm.create - am.def) / 2600 + (hm.ment - am.ment) / 3000 + (homeCoach.attributes.decisionMaking - awayCoach.attributes.decisionMaking) / 900 + (home.redCardPenalty - away.redCardPenalty) * 0.4 + 0.045, 0.22, 0.78);
         const att = rng.next() < homeInit ? home : away;
         const def = att.side === 'HOME' ? away : home;
         const attM = att.side === 'HOME' ? hm : am;

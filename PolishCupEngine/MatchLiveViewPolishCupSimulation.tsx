@@ -760,7 +760,7 @@ useEffect(() => {
       const isScored = Math.random() < Math.max(0.68, Math.min(0.94, 0.79 + ((penaltySkill - 50) / 420)));
       if (!isScored) {
         setShowMissedPenalty(true);
-        setTimeout(() => setShowMissedPenalty(false), 2000);
+        setTimeout(() => setShowMissedPenalty(false), 4000);
       }
       setMatchState(latest => {
         if (!latest) return latest;
@@ -790,7 +790,7 @@ useEffect(() => {
           awayScore: finalAScore,
           homeGoals: finalHGoals,
           awayGoals: finalAGoals,
-          isPaused: isScored ? true : false,  // po golu — pauza 2 sek; po pudле — wznów
+          isPaused: true,
           isPausedForEvent: false,
           logs: [{
             id: `PEN_RES_${minute}`,
@@ -809,6 +809,14 @@ useEffect(() => {
             return { ...s, isPaused: false };
           });
         }, 5000);
+      }
+      if (!isScored) {
+        setTimeout(() => {
+          setMatchState(s => {
+            if (!s || s.isFinished || s.isPenalties) return s;
+            return { ...s, isPaused: false };
+          });
+        }, 4000);
       }
     }, 3000);
     return () => clearTimeout(timer);
