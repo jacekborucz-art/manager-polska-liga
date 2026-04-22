@@ -8,7 +8,7 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
-  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing
+  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack
 } from '../../types';
 
 const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
@@ -266,6 +266,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           intensity: 'NORMAL',
           passing: 'MIXED',
           pressing: 'NORMAL',
+          counterAttack: 'NORMAL',
           expiryMinute: -1,
           tempoExpiry: -1,
           mindsetExpiry: -1,
@@ -275,11 +276,13 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           intensityCooldown: -1,
           passingCooldown: -1,
           pressingCooldown: -1,
+          counterAttackCooldown: -1,
           tempoResponseFactor: 1.0,
           mindsetResponseFactor: 1.0,
           intensityResponseFactor: 1.0,
           passingResponseFactor: 1.0,
           pressingResponseFactor: 1.0,
+          counterAttackResponseFactor: 1.0,
          lastChangeMinute: -5,},
           playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
@@ -754,7 +757,40 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod));
-        const activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
+        const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
+        const opponentCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
+        const opponentPressure = userSide === 'HOME' ? Math.max(0, -prev.momentum) : Math.max(0, prev.momentum);
+        const userScoreDiff = userSide === 'HOME' ? prev.homeScore - prev.awayScore : prev.awayScore - prev.homeScore;
+        const counterShape =
+          prev.userInstructions.mindset === 'DEFENSIVE' ||
+          userCounterTactic.defenseBias >= 62 ||
+          userCounterTactic.attackBias <= 45;
+        const opponentPushes =
+          opponentPressure >= 35 ||
+          opponentCounterTactic.attackBias >= 62 ||
+          userScoreDiff > 0;
+        let counterAttackTriggered = false;
+        let counterAttackShotBonus = 0;
+
+        if (activeSide !== userSide && counterAttackEnabled && counterShape && opponentPushes) {
+          const pressureFactor = Math.max(0, Math.min(1, (opponentPressure - 25) / 75));
+          const shapeFactor = Math.max(0, Math.min(1, (userCounterTactic.defenseBias - 50) / 40));
+          const opponentRiskFactor = Math.max(0, Math.min(1, (opponentCounterTactic.attackBias - 50) / 45));
+          const scoreFactor = userScoreDiff > 0 ? 0.03 : 0;
+          const rf = prev.userInstructions.counterAttackResponseFactor ?? 1.0;
+          const counterChance = Math.max(
+            0,
+            Math.min(0.16, (0.025 + pressureFactor * 0.060 + shapeFactor * 0.025 + opponentRiskFactor * 0.025 + scoreFactor) * rf)
+          );
+
+          if (seededRng(currentSeed, nextMinute, 631) < counterChance) {
+            activeSide = userSide;
+            counterAttackTriggered = true;
+            counterAttackShotBonus = Math.min(0.026, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006);
+          }
+        }
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.1125; // Bazowa szansa (zmniejszona o 10%)
@@ -1026,6 +1062,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // ───────────────────────────────────────────────────────────────────────
 
         // ─── INSTRUKCJE TAKTYCZNE TRENERA AI → MODYFIKATORY SILNIKA ────────────
+        if (counterAttackTriggered && isUserAttacking) {
+          shotThreshold += counterAttackShotBonus;
+        }
+
         let nextAiActiveShout = prev.aiActiveShout;
         let nextAiNextInstructionMinute = prev.aiNextInstructionMinute ?? 10;
 
@@ -1264,6 +1304,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const scorerBriefingFitMod = activeSide === userSide
              ? scorerFitMod * briefingFinishingFitMod
              : scorerFitMod;
+           const scorerCounterFitMod = counterAttackTriggered && activeSide === userSide
+             ? scorerBriefingFitMod * 1.06
+             : scorerBriefingFitMod;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
            const isGoal = GoalAttributionService.checkShotSuccess(
@@ -1275,7 +1318,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
              false,
              scorerBriefingFatigue,
              gkLiveFatigue,
-             scorerBriefingFitMod,
+              scorerCounterFitMod,
              gkFitMod,
              oppFatigueMap
            );
@@ -1303,7 +1346,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 nextLiveStats.away.shots++;
                 nextLiveStats.away.shotsOnTarget++;
               }
-              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
+              const counterPrefix = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
 
               // ── CONTACT GOAL BOOST: detekcja i przyznanie boosta ───────────────
@@ -1354,7 +1398,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               immediateEventType = failType;
-              newLog = { id: `MISS_${nextMinute}`, minute: nextMinute, text: getCommentary(failType, scorer.lastName), type: failType, teamSide: activeSide };
+              const counterPrefix = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              newLog = { id: `MISS_${nextMinute}`, minute: nextMinute, text: `${counterPrefix}${getCommentary(failType, scorer.lastName)}`, type: failType, teamSide: activeSide };
            }
            pauseForEvent = isGoal;
 
@@ -2776,7 +2821,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
   className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
   style={{
     left: `${slot.x * 100}%`,
-    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.FWD ? -26 : slot.role === PlayerPosition.MID ? -29 : slot.role === PlayerPosition.DEF ? -10 : 0}px)`,
+    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.FWD ? -31 : slot.role === PlayerPosition.MID ? -29 : slot.role === PlayerPosition.DEF ? -10 : slot.role === PlayerPosition.GK ? 6 : 0}px)`,
     transform: 'translate(-50%, -50%) scale(1.265)'
   }}
         >
@@ -2798,8 +2843,8 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           </div>
           {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '19px', right: 'calc(50% - 18px)' }}>✚</div>}
           <div 
-            className={`text-[7px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`}
-            style={{ marginTop: '-2px', textShadow: '0 2px 8px rgba(0, 0, 0, 0.65)' }}
+            className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`}
+            style={{ marginTop: '-2px', textShadow: '0 3px 10px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.8)' }}
           >
             {p.firstName.charAt(0)}. {p.lastName}
           </div>
@@ -2822,7 +2867,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
       style={{
         left: `calc(${slot.x * 100}% + ${slot.role === PlayerPosition.MID ? (slot.x < 0.5 ? -4 : slot.x > 0.5 ? 4 : 0) : 0}px)`,
-        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 18 : slot.role === PlayerPosition.MID ? 17 : slot.role === PlayerPosition.DEF ? 10 : slot.role === PlayerPosition.GK ? -9 : 0}px)`,
+        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 18 : slot.role === PlayerPosition.MID ? 27 : slot.role === PlayerPosition.DEF ? 6 : slot.role === PlayerPosition.GK ? -16 : 0}px)`,
         transform: 'translate(-50%, -50%) scale(1.4)'
       }}
     >
@@ -3059,6 +3104,43 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
                 { val: 'NORMAL'   as InstructionPressing, label: 'Normalnie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
                 { val: 'PRESSING' as InstructionPressing, label: 'Pressing',  activeClass: 'bg-purple-600/50 text-purple-200 border-purple-500/50' },
               ] as { val: InstructionPressing; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
+                <button
+                  key={val}
+                  onClick={() => pick(val)}
+                  disabled={locked}
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
+                  }`}
+                >{label}</button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      {(() => {
+        const cd = matchState.userInstructions.counterAttackCooldown ?? -1;
+        const locked = cd > 0 && matchState.minute < cd;
+        const remaining = locked ? cd - matchState.minute : 0;
+        const cur = matchState.userInstructions.counterAttack ?? 'NORMAL';
+        const pick = (val: InstructionCounterAttack) => setMatchState(s => {
+          if (!s) return s;
+          const c = s.userInstructions.counterAttackCooldown ?? -1;
+          if (c > 0 && s.minute < c) return s;
+          if ((s.userInstructions.counterAttack ?? 'NORMAL') === val) return s;
+          const rf = val === 'NORMAL' ? 1.0 : parseFloat((0.6 + Math.random() * 0.8).toFixed(2));
+          const cooldown = s.minute + 5 + Math.floor(Math.random() * 6);
+          return { ...s, userInstructions: { ...s.userInstructions, counterAttack: val, counterAttackCooldown: cooldown, counterAttackResponseFactor: rf } };
+        });
+        return (
+          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+            <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
+              {locked ? `Kontra - blokada ${remaining}'` : 'Kontra'}
+            </span>
+            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+              {([
+                { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
+                { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak', activeClass: 'bg-cyan-600/50 text-cyan-200 border-cyan-500/50' },
+              ] as { val: InstructionCounterAttack; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
                 <button
                   key={val}
                   onClick={() => pick(val)}
@@ -3327,7 +3409,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
     )}
 
     {/* Etykieta Końca Meczu */}
-    {matchState.isFinished && (
+    {matchState.isFinished && !showPostMatchDebrief && (
       <div className="absolute inset-0 z-[999] flex items-center justify-center pointer-events-none" style={{ transform: 'rotateX(-24deg)' }}>
         <div className="bg-slate-950/90 backdrop-blur-2xl border-y-4 border-emerald-500 px-20 py-12 rounded-[50px] shadow-[0_0_120px_rgba(34,197,94,0.6)] animate-pulse">
           <div className="flex flex-col items-center gap-4">
