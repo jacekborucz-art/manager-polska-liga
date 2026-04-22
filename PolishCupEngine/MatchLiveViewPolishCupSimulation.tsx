@@ -26,6 +26,8 @@ import { MailService } from '../services/MailService';
 import { MatchCupTacticsModal } from '../components/modals/MatchCupTacticsModal';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
 import { BriefingEffect } from '../services/PreMatchBriefingService';
+import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, getDebriefContext } from '../services/PostMatchDebriefService';
 // -> tutaj wstaw kod (ZMIANA SERWISU NA CUP)
 import { AiMatchDecisionCupService } from '../services/AiMatchDecisionCupService';
 import { AiMatchPreparationService } from '@/services/AiMatchPreparationService';
@@ -454,7 +456,17 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const [redCardNotice, setRedCardNotice] = useState<string | null>(null);
   const [isCommentaryOpen, setIsCommentaryOpen] = useState(false);
   const [instructionCooldowns, setInstructionCooldowns] = useState<Record<string, number>>({});
-   const [showMissedPenalty, setShowMissedPenalty] = useState(false);
+    const [showMissedPenalty, setShowMissedPenalty] = useState(false);
+  const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [pendingCupPayload, setPendingCupPayload] = useState<{
+    applyArgs: any;
+    matchHistoryArgs: any;
+    debriefContext: DebriefContext;
+    debriefPenaltyScores?: { user: number; opp: number };
+    sessionSeed: number;
+    navigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO';
+    userTeamId: string;
+  } | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const debugLogRef = useRef<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
@@ -2998,15 +3010,22 @@ if (activePlayerTempo === 'SLOW') {
     if (!matchState || !ctx) return;
     setIsFinishing(true);
 
-    const isHomeWinner = matchState.isPenalties
+    const penaltyWinner: 'HOME' | 'AWAY' | null = matchState.isPenalties
       ? (matchState.homePenaltyScore || 0) > (matchState.awayPenaltyScore || 0)
-      : matchState.homeScore > matchState.awayScore;
+        ? 'HOME'
+        : (matchState.awayPenaltyScore || 0) > (matchState.homePenaltyScore || 0)
+          ? 'AWAY'
+          : null
+      : null;
+    const isHomeWinner = matchState.isPenalties ? penaltyWinner === 'HOME' : matchState.homeScore > matchState.awayScore;
+    const isAwayWinner = matchState.isPenalties ? penaltyWinner === 'AWAY' : matchState.awayScore > matchState.homeScore;
+    const didUserWin = matchState.isPenalties ? penaltyWinner === userSide : (isHomeWinner && userSide === 'HOME') || (isAwayWinner && userSide === 'AWAY');
 
     const updatedClubs = isPlayoffMode
       ? clubs  // w trybie barażowym nie zmieniamy flagi isInPolishCup
       : clubs.map(c => {
           if (c.id === ctx.homeClub.id) return { ...c, isInPolishCup: isHomeWinner };
-          if (c.id === ctx.awayClub.id) return { ...c, isInPolishCup: !isHomeWinner };
+          if (c.id === ctx.awayClub.id) return { ...c, isInPolishCup: isAwayWinner };
           return c;
         });
 
@@ -3049,9 +3068,7 @@ if (activePlayerTempo === 'SLOW') {
     };
 
    if (ctx.fixture.id.includes('SUPER_CUP')) {
-      const isUserWinner = (isHomeWinner && userSide === 'HOME') || (!isHomeWinner && userSide === 'AWAY');
-      
-      if (isUserWinner) {
+      if (didUserWin) {
          const winMail = MailService.generateSuperCupMail(ctx.homeClub.name, ctx.awayClub.name, `${matchState.homeScore}:${matchState.awayScore}`);
          setMessages(prev => [winMail, ...prev]);
       } else {
@@ -3102,15 +3119,12 @@ if (activePlayerTempo === 'SLOW') {
         })()
     });
 
-    setLastMatchSummary(summary);
-    setMatchState(null);
-
-   const finalPlayers = { ...players };
+    // Pre-compute finalPlayers synchronously (matchState closure jest ważny przez całą funkcję)
+    const finalPlayers = { ...players };
     [ctx.homeClub.id, ctx.awayClub.id].forEach(clubId => {
        finalPlayers[clubId] = finalPlayers[clubId].map(p => {
           const sideFatigue = clubId === ctx.homeClub.id ? matchState.homeFatigue : matchState.awayFatigue;
           const endCondition = sideFatigue[p.id] !== undefined ? sideFatigue[p.id] : p.condition;
-
           let updatedPlayer = { ...p, condition: Math.min(100, endCondition + 5) };
           // Jeśli zawodnik grał, naliczamy dług
           const onPitchIds = clubId === ctx.homeClub.id ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
@@ -3118,15 +3132,12 @@ if (activePlayerTempo === 'SLOW') {
              const matchDebt = 10 + ((100 - (p.attributes.stamina || 50)) * 0.2);
              updatedPlayer.fatigueDebt = Math.min(100, (updatedPlayer.fatigueDebt || 0) + matchDebt);
           }
-
-      
           return updatedPlayer;
           // KONIEC KODU (Zastąp pętlę mapującą tym blokiem)
-
        });
     });
 
-   applySimulationResult({
+    const cupApplyArgs = {
       updatedFixtures: isPlayoffMode
         ? fixtures  // w trybie barażowym fixtures nie są modyfikowane
         : fixtures.map(f => f.id === ctx.fixture.id ? {
@@ -3143,9 +3154,45 @@ if (activePlayerTempo === 'SLOW') {
       newOffers: [], // TUTAJ DODAJEMY TEN KOD
       roundResults: null,
       seasonNumber: seasonNumber
-    });
+    };
 
-    // ── ZAPIS WYNIKU BARAŻOWEGO ──────────────────────────────────────────
+    const cupMatchHistoryArgs = {
+      matchId: ctx.fixture.id,
+      date: currentDate.toDateString(),
+      season: seasonNumber,
+      competition: ctx.fixture.leagueId,
+      homeTeamId: ctx.homeClub.id,
+      awayTeamId: ctx.awayClub.id,
+      homeScore: matchState.homeScore,
+      awayScore: matchState.awayScore,
+      homePenaltyScore: matchState.homePenaltyScore,
+      awayPenaltyScore: matchState.awayPenaltyScore,
+      goals: matchState.homeGoals.map(g => ({ ...g, teamId: ctx.homeClub.id }))
+        .concat(matchState.awayGoals.map(g => ({ ...g, teamId: ctx.awayClub.id }))),
+      cards: (() => {
+          const playerYellowCount: Record<string, number> = {};
+          return [...matchState.logs]
+            .filter(l => l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD)
+            .sort((a, b) => a.minute - b.minute)
+            .map(l => {
+               const pId = l.playerName || '?';
+               let finalType: 'YELLOW' | 'RED' | 'SECOND_YELLOW' = l.type === MatchEventType.RED_CARD ? 'RED' : 'YELLOW';
+               if (finalType === 'YELLOW') {
+                  playerYellowCount[pId] = (playerYellowCount[pId] || 0) + 1;
+                  if (playerYellowCount[pId] === 2) finalType = 'SECOND_YELLOW';
+               }
+               return {
+                  playerName: l.playerName || '?',
+                  minute: l.minute,
+                  teamId: l.teamSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id,
+                  type: finalType as any
+               };
+            });
+        })()
+    };
+
+    // ── ZAPIS WYNIKU BARAŻOWEGO (state updates muszą być przed modalem) ─────────────────────────
+    let cupNavigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO' = 'POST_MATCH_CUP_STUDIO';
     if (isPlayoffMode && activePlayoffMatch) {
       const legResult = { homeId: ctx.homeClub.id, awayId: ctx.awayClub.id, homeGoals: matchState.homeScore, awayGoals: matchState.awayScore };
       const decidedBy: PromotionPlayoffSingleMatchResult['decidedBy'] = matchState.isPenalties ? 'PENALTIES' : (matchState.isExtraTime ? 'EXTRA_TIME' : 'REGULAR');
@@ -3199,11 +3246,54 @@ if (activePlayerTempo === 'SLOW') {
         );
       }
       // Nie czyścimy activePlayoffMatch tutaj — PostMatchPlayoffStudioView potrzebuje go do wyświetlenia agregatu
-      navigateTo(ViewState.POST_MATCH_PLAYOFF_STUDIO);
-      return;
+      cupNavigateTarget = 'POST_MATCH_PLAYOFF_STUDIO';
     }
 
-    navigateTo(ViewState.POST_MATCH_CUP_STUDIO);
+    const debriefUserScore = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+    const debriefOppScore  = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+    const debriefUserRep   = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+    const debriefOppRep    = userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+    const debriefUserGoals = (userSide === 'HOME' ? matchState.homeGoals : matchState.awayGoals).filter(g => !g.varDisallowed);
+    const debriefOppGoals  = (userSide === 'HOME' ? matchState.awayGoals : matchState.homeGoals).filter(g => !g.varDisallowed);
+    const debriefUserPIds  = userSide === 'HOME' ? ctx.homePlayers.map((p: Player) => p.id) : ctx.awayPlayers.map((p: Player) => p.id);
+    const debriefUserHasRC = matchState.sentOffIds.some(id => debriefUserPIds.includes(id));
+    const debriefCtx: DebriefContext = matchState.isPenalties
+      ? (didUserWin ? 'PENALTY_WIN' : 'PENALTY_LOSS')
+      : getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRC);
+
+    setLastMatchSummary(summary);
+    setPendingCupPayload({
+      applyArgs: cupApplyArgs,
+      matchHistoryArgs: cupMatchHistoryArgs,
+      debriefContext: debriefCtx,
+      debriefPenaltyScores: matchState.isPenalties
+        ? {
+            user: userSide === 'HOME' ? (matchState.homePenaltyScore || 0) : (matchState.awayPenaltyScore || 0),
+            opp: userSide === 'HOME' ? (matchState.awayPenaltyScore || 0) : (matchState.homePenaltyScore || 0),
+          }
+        : undefined,
+      sessionSeed: matchState.sessionSeed,
+      navigateTarget: cupNavigateTarget,
+      userTeamId: userTeamId!,
+    });
+    setShowPostMatchDebrief(true);
+  };
+
+  const handleCupDebriefClose = (effect: DebriefEffect) => {
+    if (!pendingCupPayload) return;
+    const finalUpdatedClubs = pendingCupPayload.applyArgs.updatedClubs.map((c: any) => {
+      if (c.id !== pendingCupPayload.userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      return { ...c, morale: newMorale };
+    });
+    applySimulationResult({ ...pendingCupPayload.applyArgs, updatedClubs: finalUpdatedClubs });
+    MatchHistoryService.logMatch(pendingCupPayload.matchHistoryArgs);
+    setMatchState(null);
+    setShowPostMatchDebrief(false);
+    setPendingCupPayload(null);
+    navigateTo(pendingCupPayload.navigateTarget === 'POST_MATCH_PLAYOFF_STUDIO'
+      ? ViewState.POST_MATCH_PLAYOFF_STUDIO
+      : ViewState.POST_MATCH_CUP_STUDIO);
   };
 
   const renderSquad = (side: 'HOME' | 'AWAY') => {
@@ -4356,6 +4446,22 @@ if (activePlayerTempo === 'SLOW') {
           minute={matchState.minute} 
           sentOffIds={matchState.sentOffIds}
           injuries={userSide === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries}
+        />
+      )}
+
+      {showPostMatchDebrief && pendingCupPayload && (
+        <PostMatchDebriefModal
+          isOpen={true}
+          onClose={handleCupDebriefClose}
+          context={pendingCupPayload.debriefContext}
+          userScore={pendingCupPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingCupPayload.matchHistoryArgs.homeScore : pendingCupPayload.matchHistoryArgs.awayScore}
+          oppScore={pendingCupPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingCupPayload.matchHistoryArgs.awayScore : pendingCupPayload.matchHistoryArgs.homeScore}
+          userSide={userSide}
+          homeClubName={ctx.homeClub.name}
+          awayClubName={ctx.awayClub.name}
+          sessionSeed={pendingCupPayload.sessionSeed}
+          userPenaltyScore={pendingCupPayload.debriefPenaltyScores?.user}
+          oppPenaltyScore={pendingCupPayload.debriefPenaltyScores?.opp}
         />
       )}
 

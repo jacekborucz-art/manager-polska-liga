@@ -60,6 +60,10 @@ import { InjuryUpgradeService } from '../services/InjuryUpgradeService';
 import { AttendanceService } from '../services/AttendanceService';
 import { LineupService } from '../services/LineupService';
 import { FinanceService } from '@/services/FinanceService';
+import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
+import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../services/HalftimeTalkService';
+import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, getDebriefContext } from '../services/PostMatchDebriefService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
@@ -149,6 +153,16 @@ export const CLMatchLiveView = () => {
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
+  const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
+  const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [pendingFinishPayload, setPendingFinishPayload] = useState<{
+    simResultMerged: any;
+    matchHistoryArgs: any;
+    summary: MatchSummary;
+    userTeamId: string;
+    debriefContext: DebriefContext;
+    sessionSeed: number;
+  } | null>(null);
   const [activePenalty, setActivePenalty] = useState<{
     side: 'HOME' | 'AWAY',
     kicker: Player,
@@ -319,6 +333,12 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [matchState?.logs]);
+
+  useEffect(() => {
+    if (matchState?.isHalfTime && !matchState.halftimeTalkApplied && !isHalftimeTalkOpen) {
+      setIsHalftimeTalkOpen(true);
+    }
+  }, [matchState?.isHalfTime, matchState?.halftimeTalkApplied]);
 
   const handleOpenPlayerCard = (pId: string) => {
     setMatchState(prev => prev ? { ...prev, isPaused: true } : prev);
@@ -1787,19 +1807,7 @@ const summary: MatchSummary = {
     });
     // KONIEC WSTAWKI
 
-    applySimulationResult({ 
-      ...simResult, 
-      updatedClubs, 
-      updatedFixtures: clBgResult.updatedFixtures, 
-      updatedPlayers, 
-      roundResults: finalRoundResults, 
-      seasonNumber, 
-      ratings: finalRatingsMap 
-    });
-
-
-
-    MatchHistoryService.logMatch({
+    const matchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
       season: seasonNumber,
@@ -1809,8 +1817,6 @@ const summary: MatchSummary = {
       homeScore: matchState.homeScore,
       awayScore: matchState.awayScore,
       attendance: attendance,
-
-
       goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
         .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
      cards: (() => {
@@ -1820,9 +1826,9 @@ const summary: MatchSummary = {
             .filter(l => l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD)
             .sort((a, b) => a.minute - b.minute)
             .map(l => {
-               const pId = l.playerName || '?'; 
+               const pId = l.playerName || '?';
                let finalType: 'YELLOW' | 'RED' | 'SECOND_YELLOW' = l.type === MatchEventType.RED_CARD ? 'RED' : 'YELLOW';
-               
+
                if (finalType === 'YELLOW') {
                   playerYellowCount[pId] = (playerYellowCount[pId] || 0) + 1;
                   if (playerYellowCount[pId] === 2) finalType = 'SECOND_YELLOW';
@@ -1836,10 +1842,85 @@ const summary: MatchSummary = {
                };
             });
         })()
-    });
+    };
 
-    setLastMatchSummary(summary); 
+    const debriefUserScore    = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+    const debriefOppScore     = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+    const debriefUserRep      = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+    const debriefOppRep       = userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+    const debriefUserGoals    = userSide === 'HOME' ? matchState.homeGoals.filter(g => !g.varDisallowed) : matchState.awayGoals.filter(g => !g.varDisallowed);
+    const debriefOppGoals     = userSide === 'HOME' ? matchState.awayGoals.filter(g => !g.varDisallowed) : matchState.homeGoals.filter(g => !g.varDisallowed);
+    const debriefUserHasRed   = matchState.sentOffIds.some(id => (userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id));
+    const debriefCtx          = getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRed);
+
+    setLastMatchSummary(summary);
+    setPendingFinishPayload({
+      simResultMerged: { ...simResult, updatedClubs, updatedFixtures: clBgResult.updatedFixtures, updatedPlayers, roundResults: finalRoundResults, seasonNumber, ratings: finalRatingsMap },
+      matchHistoryArgs,
+      summary,
+      userTeamId: userTeamId!,
+      debriefContext: debriefCtx,
+      sessionSeed,
+    });
+    setShowPostMatchDebrief(true);
+  };
+
+  const handleHalftimeTalk = (effect: TalkEffect) => {
+    setMatchState(prev => {
+      if (!prev) return prev;
+      const isHome = userSide === 'HOME';
+      const userFatigueMap = isHome ? prev.homeFatigue : prev.awayFatigue;
+      const userXI = isHome ? prev.homeLineup.startingXI : prev.awayLineup.startingXI;
+      const nextFatigue = { ...userFatigueMap };
+      if (effect.fatigueRegenBonus !== 0) {
+        userXI.forEach(pId => {
+          if (pId) nextFatigue[pId] = Math.min(100, (nextFatigue[pId] || 100) + effect.fatigueRegenBonus);
+        });
+      }
+      const oppClub = isHome ? ctx?.awayClub : ctx?.homeClub;
+      const oppCoach = oppClub?.coachId ? coaches[oppClub.coachId] : null;
+      const oppScore = isHome ? prev.awayScore : prev.homeScore;
+      const userScore = isHome ? prev.homeScore : prev.awayScore;
+      const oppContext = getScoreContext(oppScore, userScore);
+      const oppCoachDelta = oppCoach
+        ? calculateOpponentCoachTalkEffect(
+            oppCoach.attributes.decisionMaking,
+            oppCoach.attributes.experience,
+            oppContext,
+            prev.sessionSeed
+          )
+        : 0;
+      const oppMomentumDelta = isHome ? -oppCoachDelta : oppCoachDelta;
+      return {
+        ...prev,
+        homeFatigue: isHome ? nextFatigue : prev.homeFatigue,
+        awayFatigue: !isHome ? nextFatigue : prev.awayFatigue,
+        halftimeTalkApplied: true,
+        halftimeMomentumBonus: effect.momentumDelta,
+        oppHalftimeMomentumBonus: oppMomentumDelta,
+        userInstructions: {
+          ...prev.userInstructions,
+          tempoResponseFactor:     effect.tempoResponseFactor,
+          mindsetResponseFactor:   effect.mindsetResponseFactor,
+          intensityResponseFactor: effect.intensityResponseFactor,
+        },
+      };
+    });
+    setIsHalftimeTalkOpen(false);
+  };
+
+  const handleLEDebriefClose = (effect: DebriefEffect) => {
+    if (!pendingFinishPayload) return;
+    const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
+      if (c.id !== pendingFinishPayload.userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      return { ...c, morale: newMorale };
+    });
+    applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
+    MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
     setMatchState(null);
+    setShowPostMatchDebrief(false);
+    setPendingFinishPayload(null);
     navigateTo(ViewState.POST_MATCH_CL_STUDIO);
   };
 
@@ -2620,7 +2701,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
         <button
           disabled={hasMandatorySub}
-          onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, addedTime: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
+          onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))), halftimeMomentumBonus: 0, oppHalftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
           className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95 shadow-2xl border
             ${hasMandatorySub
               ? 'bg-red-600/20 border-red-500/40 text-red-500 hover:bg-red-600/30 shadow-red-500/10'
@@ -2738,6 +2819,80 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         ))}
       </div>
     )}
+
+      {(() => {
+        const isHome = userSide === 'HOME';
+        const uXI  = isHome ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
+        const oXI  = isHome ? matchState.awayLineup.startingXI : matchState.homeLineup.startingXI;
+        const uFat = isHome ? matchState.homeFatigue : matchState.awayFatigue;
+        const validIds = uXI.filter((id): id is string => id !== null);
+        const avgUserFatigue = validIds.length > 0 ? validIds.reduce((acc, id) => acc + (uFat[id] ?? 100), 0) / validIds.length : 100;
+        const uStats = isHome ? matchState.liveStats.home : matchState.liveStats.away;
+        const oStats = isHome ? matchState.liveStats.away : matchState.liveStats.home;
+        const uYellows = uXI.filter((id): id is string => id !== null).filter(id => (matchState.playerYellowCards[id] || 0) >= 1).length;
+        const oYellows = oXI.filter((id): id is string => id !== null).filter(id => (matchState.playerYellowCards[id] || 0) >= 1).length;
+        const avgMomentum = matchState.momentumTicks > 0 ? matchState.momentumSum / matchState.momentumTicks : 0;
+        const userPossession = Math.round(Math.max(20, Math.min(80, 50 + avgMomentum * 0.3)));
+        const uScore = isHome ? matchState.homeScore : matchState.awayScore;
+        const oScore = isHome ? matchState.awayScore : matchState.homeScore;
+        const htSeed = matchState.sessionSeed;
+        const htRng = (off: number) => seededRng(htSeed, 45, off);
+        const htShots = (base: number, goals: number, off: number) =>
+          base + goals * (2 + Math.floor(htRng(off) * 3)) + Math.floor(htRng(off + 1) * 3) + 1;
+        const htShotsOT = (shots: number, goals: number, off: number) =>
+          Math.max(goals, Math.floor(shots * (0.40 + htRng(off) * 0.30)));
+        const htCorners = (base: number, off: number) =>
+          base < 3 ? base + Math.floor(htRng(off) * 4) + 1 : base;
+        const htFouls = (base: number, cards: number, off: number) =>
+          Math.max(3, base + cards * (2 + Math.floor(htRng(off) * 3)));
+        const calibUShots   = htShots(uStats.shots, uScore, 200);
+        const calibOShots   = htShots(oStats.shots, oScore, 300);
+        const calibUSOT     = htShotsOT(calibUShots, uScore, 410);
+        const calibOSOT     = htShotsOT(calibOShots, oScore, 510);
+        const calibUCorners = htCorners(uStats.corners, 600);
+        const calibOCorners = htCorners(oStats.corners, 700);
+        const calibUFouls   = htFouls(uStats.fouls, uYellows, 800);
+        const calibOFouls   = htFouls(oStats.fouls, oYellows, 900);
+        return (
+          <HalftimeTalkModal
+            isOpen={isHalftimeTalkOpen}
+            onClose={handleHalftimeTalk}
+            userScore={isHome ? matchState.homeScore : matchState.awayScore}
+            oppScore={isHome ? matchState.awayScore : matchState.homeScore}
+            userSide={userSide}
+            homeClubName={ctx.homeClub.name}
+            awayClubName={ctx.awayClub.name}
+            userShots={calibUShots}
+            userShotsOnTarget={calibUSOT}
+            userCorners={calibUCorners}
+            userFouls={calibUFouls}
+            userYellowCards={uYellows}
+            oppShots={calibOShots}
+            oppShotsOnTarget={calibOSOT}
+            oppCorners={calibOCorners}
+            oppFouls={calibOFouls}
+            oppYellowCards={oYellows}
+            userPossession={userPossession}
+            momentumEndOf1st={matchState.momentum}
+            avgFatigue={avgUserFatigue}
+            sessionSeed={matchState.sessionSeed}
+          />
+        );
+      })()}
+
+      {showPostMatchDebrief && pendingFinishPayload && (
+        <PostMatchDebriefModal
+          isOpen={true}
+          onClose={handleLEDebriefClose}
+          context={pendingFinishPayload.debriefContext}
+          userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
+          oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
+          userSide={userSide}
+          homeClubName={pendingFinishPayload.summary.homeClub.name}
+          awayClubName={pendingFinishPayload.summary.awayClub.name}
+          sessionSeed={pendingFinishPayload.sessionSeed}
+        />
+      )}
 
 ///Etykieta przerwa w meczu ///
      {matchState.isHalfTime && !isTacticsOpen && (

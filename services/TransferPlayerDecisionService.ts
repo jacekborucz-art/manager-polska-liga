@@ -23,6 +23,21 @@ const roundMoney = (value: number) => Math.max(50_000, Math.round(value / 5_000)
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const getReputationDrop = (currentClub: Club, targetClub: Club): number =>
+  Math.max(0, currentClub.reputation - targetClub.reputation);
+
+const getBaseMoveAcceptanceChance = (currentClub: Club, targetClub: Club): number => {
+  const reputationDrop = getReputationDrop(currentClub, targetClub);
+  if (reputationDrop === 0) return 0.999;
+  if (reputationDrop === 1) return 0.96;
+  if (reputationDrop === 2) return 0.93;
+  if (reputationDrop === 3) return 0.88;
+  if (reputationDrop === 4) return 0.70;
+  if (reputationDrop === 5) return 0.60;
+
+  return clamp(0.60 * Math.pow(0.82, reputationDrop - 5), 0.02, 0.60);
+};
+
 const roleScore = (role: SquadRole): number => {
   switch (role) {
     case 'STAR':
@@ -83,57 +98,17 @@ export const TransferPlayerDecisionService = {
     const currentRoleLevel = roleLevel(currentRole);
     const targetRoleLevel = roleLevel(targetRole);
     const reputationDelta = targetClub.reputation - currentClub.reputation;
+    const reputationDrop = getReputationDrop(currentClub, targetClub);
     const isForeignMove =
       !!currentClub.country &&
       !!targetClub.country &&
       currentClub.country !== targetClub.country;
     const isNotFirstTeamPlayer = currentRole === 'ROTATION' || currentRole === 'BACKUP';
     const isVeteran = player.age >= 31;
-    const canAcceptSidewaysOrLowerMove = !!player.isOnTransferList || isNotFirstTeamPlayer || isVeteran;
+    const hasMoveSoftener = !!player.isOnTransferList || isNotFirstTeamPlayer || isVeteran;
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
-
-    // Rezerwowi/rotacyjni powyżej 24 lat mogą zejść o więcej niż 2 szczeble reputacji (chcą grać)
-    // Młodzi (≤24) i podstawowi trzymają twardą granicę -2
-    // Zawodnik na liście transferowej ma losową tolerancję 0-3 punkty niżej (niezależną per oferta)
-    let hardReputationLimit = (isNotFirstTeamPlayer && player.age > 24) ? -4 : -2;
-    if (player.isOnTransferList) {
-      const repTolerance = Math.floor(Math.random() * 4);
-      hardReputationLimit = Math.min(hardReputationLimit, -repTolerance);
-    }
-    if (reputationDelta < hardReputationLimit) {
-      return {
-        willingToTalk: false,
-        reason: 'Zawodnik nie chce schodzic sportowo tak nisko. Reputacja nowego klubu jest zbyt wyraznie slabsza od obecnego.',
-        targetRole,
-        desiredSalary: roundMoney(currentSalaryBase),
-        desiredBonus: roundMoney(currentSalaryBase * 0.5),
-        desiredYears: 3
-      };
-    }
-
-    if (reputationDelta < 0 && !canAcceptSidewaysOrLowerMove) {
-      return {
-        willingToTalk: false,
-        reason: 'Zawodnik nie jest gotowy odejsc do slabszego reputacyjnie klubu, dopoki regularnie liczy sie w obecnym zespole.',
-        targetRole,
-        desiredSalary: roundMoney(currentSalaryBase),
-        desiredBonus: roundMoney(currentSalaryBase * 0.6),
-        desiredYears: 3
-      };
-    }
-
-    if (reputationDelta === 0 && !isForeignMove && !canAcceptSidewaysOrLowerMove) {
-      return {
-        willingToTalk: false,
-        reason: 'Nie jestem zainteresowany przejsciem do Waszego klubu. Do widzenia.',
-        targetRole,
-        desiredSalary: roundMoney(currentSalaryBase * 1.2),
-        desiredBonus: roundMoney(currentSalaryBase * 0.7),
-        desiredYears: 3
-      };
-    }
 
     let desiredYears = 3;
     if (player.age <= 22) desiredYears = 5;
@@ -148,10 +123,11 @@ export const TransferPlayerDecisionService = {
 
     let salaryMultiplier = 1.10;
     if (player.age <= 24 && reputationDelta >= 2) salaryMultiplier -= 0.08;
-    if (player.age <= 24 && reputationDelta < 0) salaryMultiplier += 0.15;
+    if (player.age <= 24 && reputationDrop > 0) salaryMultiplier += Math.min(0.18, reputationDrop * 0.03);
     if (reputationDelta > 0) salaryMultiplier += 0.08;
-    if (reputationDelta === 0 && isForeignMove) salaryMultiplier += 0.18;
-    if (reputationDelta < 0) salaryMultiplier += 0.30;
+    if (reputationDelta === 0 && isForeignMove) salaryMultiplier += 0.12;
+    if (reputationDrop > 0) salaryMultiplier += Math.min(0.42, reputationDrop * 0.06);
+    if (reputationDrop >= 4 && !hasMoveSoftener) salaryMultiplier += 0.10;
     if (player.isOnTransferList) salaryMultiplier -= 0.08;
     if (isNotFirstTeamPlayer) salaryMultiplier -= 0.06;
     if (targetRoleLevel > currentRoleLevel) salaryMultiplier -= 0.06;
@@ -162,17 +138,19 @@ export const TransferPlayerDecisionService = {
     else if (player.age >= 30 && player.age <= 33) bonusMultiplier = 0.90;
     else if (player.age >= 34) bonusMultiplier = 1.20;
 
-    if (reputationDelta < 0) bonusMultiplier += 0.35;
-    else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.18;
+    if (reputationDrop > 0) bonusMultiplier += Math.min(0.45, reputationDrop * 0.07);
+    else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.14;
     else if (reputationDelta === 0) bonusMultiplier += 0.08;
 
     const desiredSalary = roundMoney(currentSalaryBase * salaryMultiplier);
     const desiredBonus = roundMoney(currentSalaryBase * bonusMultiplier);
     let negotiationReason = `Moj klient jest gotow rozmawiac. Oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'}.`;
-    if (reputationDelta < 0) {
-      negotiationReason = 'Moj klient rozwaza ten ruch tylko dlatego, ze jego pozycja w obecnym klubie nie jest mocna lub zostal wystawiony na liste transferowa. W takim przypadku oczekuje wyraznie lepszych warunkow finansowych.';
+    if (reputationDrop > 0) {
+      negotiationReason = 'Moj klient jest gotow rozmawiac, ale nizsza reputacja nowego klubu podnosi jego oczekiwania finansowe. Im wiekszy spadek reputacji, tym mocniejszy kontrakt bedzie potrzebny.';
     } else if (reputationDelta === 0 && isForeignMove) {
-      negotiationReason = 'Moj klient jest zainteresowany tym kierunkiem, ale przy klubie o podobnej reputacji oczekuje wyraznie lepszego kontraktu.';
+      negotiationReason = 'Moj klient jest zainteresowany tym kierunkiem. Przy klubie o podobnej reputacji oczekuje solidnych, ale realistycznych warunkow.';
+    } else if (reputationDelta === 0) {
+      negotiationReason = `Moj klient traktuje ten ruch jako sportowo porownywalny i oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'}.`;
     } else if (reputationDelta > 0) {
       negotiationReason = `Mój klient jest zainteresowany przejściem do Waszego klubu i oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'} i warunkow adekwatnych do tego kroku.`;
     }
@@ -218,6 +196,7 @@ export const TransferPlayerDecisionService = {
     const currentRole = TransferPlayerDecisionService.estimateRole(player, currentSquad);
     const currentSalaryBase = Math.max(player.annualSalary, 1);
     const reputationDelta = targetClub.reputation - currentClub.reputation;
+    const reputationDrop = getReputationDrop(currentClub, targetClub);
     const isForeignMove =
       !!currentClub.country &&
       !!targetClub.country &&
@@ -279,7 +258,7 @@ export const TransferPlayerDecisionService = {
     );
     const contractPressure = daysLeft > 0 && daysLeft < 365 ? 7 : 0;
     const transferListPressure = player.isOnTransferList ? 10 : 0;
-    const reputationScore = Math.max(-20, Math.min(22, reputationDelta * 7));
+    const reputationScore = reputationDelta > 0 ? Math.min(22, reputationDelta * 7) : 0;
     const foreignBonus = reputationDelta === 0 && isForeignMove ? 6 : 0;
 
     const estimatedMarketSalary = 50_000 + player.overallRating * 8_000;
@@ -311,19 +290,20 @@ export const TransferPlayerDecisionService = {
 
     const margin = offerScore - stayScore;
     const requiredFinancialFit = player.age >= 30 ? 0.98 : 0.92;
-    const lowerClubMoveWithoutPremium = reputationDelta < 0 && financialFit < 1.02 && !transferListSalaryDiscountApplied;
+    const lowerClubMoveWithoutPremium = reputationDrop >= 4 && financialFit < 0.98 && !transferListSalaryDiscountApplied;
     const flatForeignMoveWithoutUpgrade = reputationDelta === 0 && isForeignMove && financialFit < 0.96;
+    const allowedNegativeMargin = reputationDrop === 0 ? -8 : reputationDrop <= 5 ? -35 : -24;
 
     if (
       financialFit < requiredFinancialFit ||
       lowerClubMoveWithoutPremium ||
       flatForeignMoveWithoutUpgrade ||
-      margin < 0
+      margin < allowedNegativeMargin
     ) {
       let reason = 'Zawodnik uznal, ze warunki kontraktu i projekt sportowy nie sa dla niego wystarczajaco korzystne.';
 
       if (lowerClubMoveWithoutPremium) {
-        reason = 'Zawodnik moglby zejsc do slabszego reputacyjnie klubu tylko za wyraznie lepsza pensje, mocny bonus za podpis i odpowiednia dlugosc kontraktu.';
+        reason = 'Przy tak duzym spadku reputacji zawodnik oczekuje mocniejszej rekompensaty finansowej i stabilnego kontraktu.';
       } else if (player.age >= 30 && yearsFit < 1) {
         reason = 'Na tym etapie kariery zawodnik oczekuje mocniejszego zabezpieczenia gwarantowanego okresu kontraktu.';
       } else if (bonusFit < 0.9 && player.age >= 29) {
@@ -331,6 +311,35 @@ export const TransferPlayerDecisionService = {
       } else if (salaryFit < 0.95) {
         reason = 'Roczna pensja jest zbyt daleka od finansowych oczekiwan zawodnika.';
       }
+
+      return {
+        accepted: false,
+        reason,
+        stayScore,
+        offerScore,
+        targetRole: negotiationPlan.targetRole
+      };
+    }
+
+    const roleChanceAdjustment = clamp((roleLevel(negotiationPlan.targetRole) - roleLevel(currentRole)) * 0.05, -0.12, 0.12);
+    const financialChanceAdjustment = clamp((financialFit - 1) * 0.25, -0.22, 0.16);
+    const situationChanceAdjustment =
+      (player.isOnTransferList ? 0.08 : 0) +
+      (contractPressure > 0 ? 0.04 : 0) +
+      (reputationDrop > 0 && player.age >= 31 ? 0.03 : 0);
+    const finalAcceptanceChance = clamp(
+      getBaseMoveAcceptanceChance(currentClub, targetClub) +
+        roleChanceAdjustment +
+        financialChanceAdjustment +
+        situationChanceAdjustment,
+      0.01,
+      0.999
+    );
+
+    if (Math.random() > finalAcceptanceChance) {
+      const reason = reputationDrop > 0
+        ? 'Zawodnik byl gotow rozmawiac, ale po analizie uznal, ze spadek reputacji klubu jest dla niego zbyt duzym ryzykiem sportowym przy tej ofercie.'
+        : 'Zawodnik byl blisko akceptacji, ale po namysle uznal, ze pozostanie w obecnym klubie jest dla niego minimalnie lepszym wyborem.';
 
       return {
         accepted: false,

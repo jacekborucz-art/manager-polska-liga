@@ -64,6 +64,8 @@ import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '.
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect } from '../../services/PreMatchBriefingService';
+import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -109,6 +111,15 @@ export const MatchLiveView = () => {
   } | null>(null);
   const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
+  const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [pendingFinishPayload, setPendingFinishPayload] = useState<{
+    simResultMerged: any;
+    matchHistoryArgs: any;
+    summary: MatchSummary;
+    userTeamId: string;
+    debriefContext: DebriefContext;
+    sessionSeed: number;
+  } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -499,8 +510,23 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     setIsHalftimeTalkOpen(false);
   };
 
+  const handleDebriefClose = (effect: DebriefEffect) => {
+    if (!pendingFinishPayload) return;
+    const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
+      if (c.id !== pendingFinishPayload.userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      return { ...c, morale: newMorale };
+    });
+    applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
+    MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
+    setMatchState(null);
+    setShowPostMatchDebrief(false);
+    setPendingFinishPayload(null);
+    navigateTo(ViewState.MATCH_POST);
+  };
+
   useEffect(() => {
-    if (!matchState || matchState.isPaused || matchState.isPausedForEvent || 
+    if (!matchState || matchState.isPaused || matchState.isPausedForEvent ||
         matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activeVAR) return;
 
     const tickInterval = matchState.speed === 5 ? 120 
@@ -2139,19 +2165,7 @@ const summary: MatchSummary = {
     });
     // KONIEC WSTAWKI
 
-    applySimulationResult({ 
-      ...simResult, 
-      updatedClubs, 
-      updatedFixtures, 
-      updatedPlayers, 
-      roundResults: finalRoundResults, 
-      seasonNumber, 
-      ratings: finalRatingsMap 
-    });
-
-
-
-    MatchHistoryService.logMatch({
+    const matchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
       season: seasonNumber,
@@ -2161,25 +2175,20 @@ const summary: MatchSummary = {
       homeScore: matchState.homeScore,
       awayScore: matchState.awayScore,
       attendance: attendance,
-
-
       goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
         .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
-     cards: (() => {
+      cards: (() => {
           const playerYellowCount: Record<string, number> = {};
-          // Sortujemy logi chronologicznie, aby poprawnie wykryć, która żółta jest drugą
           return [...matchState.logs]
             .filter(l => l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD)
             .sort((a, b) => a.minute - b.minute)
             .map(l => {
-               const pId = l.playerName || '?'; 
+               const pId = l.playerName || '?';
                let finalType: 'YELLOW' | 'RED' | 'SECOND_YELLOW' = l.type === MatchEventType.RED_CARD ? 'RED' : 'YELLOW';
-               
                if (finalType === 'YELLOW') {
                   playerYellowCount[pId] = (playerYellowCount[pId] || 0) + 1;
                   if (playerYellowCount[pId] === 2) finalType = 'SECOND_YELLOW';
                }
-
                return {
                   playerName: l.playerName || '?',
                   minute: l.minute,
@@ -2188,11 +2197,28 @@ const summary: MatchSummary = {
                };
             });
         })()
-    });
+    };
 
-    setLastMatchSummary(summary); 
-    setMatchState(null);
-    navigateTo(ViewState.MATCH_POST);
+    const debriefUserScore = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+    const debriefOppScore  = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+    const debriefUserRep   = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+    const debriefOppRep    = userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+    const debriefUserGoals = (userSide === 'HOME' ? matchState.homeGoals : matchState.awayGoals).filter(g => !g.varDisallowed);
+    const debriefOppGoals  = (userSide === 'HOME' ? matchState.awayGoals : matchState.homeGoals).filter(g => !g.varDisallowed);
+    const debriefUserPIds  = userSide === 'HOME' ? ctx.homePlayers.map(p => p.id) : ctx.awayPlayers.map(p => p.id);
+    const debriefUserHasRC = matchState.sentOffIds.some(id => debriefUserPIds.includes(id));
+    const debriefCtx = getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRC);
+
+    setLastMatchSummary(summary);
+    setPendingFinishPayload({
+      simResultMerged: { ...simResult, updatedClubs, updatedFixtures, updatedPlayers, roundResults: finalRoundResults, seasonNumber, ratings: finalRatingsMap },
+      matchHistoryArgs,
+      summary,
+      userTeamId: userTeamId!,
+      debriefContext: debriefCtx,
+      sessionSeed: matchState.sessionSeed,
+    });
+    setShowPostMatchDebrief(true);
   };
 
   if (!matchState || !ctx || !env || !kitColors) return null;
@@ -3255,6 +3281,20 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           />
         );
       })()}
+
+    {showPostMatchDebrief && pendingFinishPayload && (
+      <PostMatchDebriefModal
+        isOpen={true}
+        onClose={handleDebriefClose}
+        context={pendingFinishPayload.debriefContext}
+        userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
+        oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
+        userSide={userSide}
+        homeClubName={pendingFinishPayload.summary.homeClub.name}
+        awayClubName={pendingFinishPayload.summary.awayClub.name}
+        sessionSeed={pendingFinishPayload.sessionSeed}
+      />
+    )}
 
 ///Etykieta przerwa w meczu ///
      {matchState.isHalfTime && !isTacticsOpen && (
