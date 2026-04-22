@@ -24,11 +24,31 @@ const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) 
   r -= cards * 0.5;
   if (isRed) r -= 3.0;
 
+  // Bonus/kara za różnicę bramek (dla wszystkich)
+  const teamScore = side === 'HOME' ? state.homeScore : state.awayScore;
+  const oppScore  = side === 'HOME' ? state.awayScore : state.homeScore;
+  const scoreDiff = teamScore - oppScore;
+  if (scoreDiff === 1) r += 0.5;
+  else if (scoreDiff === 2) r += 0.9;
+  else if (scoreDiff >= 3) r += 1.2;
+  else if (scoreDiff === -1) r -= 0.5;
+  else if (scoreDiff === -2) r -= 1.0;
+  else if (scoreDiff === -3) r -= 1.3;
+  else if (scoreDiff <= -4) r -= 1.5;
+
+  // Bonus dla MID za bramki drużyny
+  if (player.position === 'MID') {
+    const teamGoals = (side === 'HOME' ? state.homeGoals : state.awayGoals).length;
+    const playerSeed = player.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const midFactor = 0.65 + (playerSeed % 36) / 100;
+    r += teamGoals * midFactor;
+  }
+
   // Kara za gole stracone (tylko GK i DEF)
   if (player.position === 'GK' || player.position === 'DEF') {
     const conceded = side === 'HOME' ? state.awayScore : state.homeScore;
     r -= conceded * 0.2;
-    if (conceded === 0 && player.position === 'GK') {
+    if (conceded === 0 && player.position === 'GK' && state.minute >= 30) {
       const oppSoT = side === 'HOME' ? state.liveStats.away.shotsOnTarget : state.liveStats.home.shotsOnTarget;
       r += Math.min(1.5, 1.0 + (oppSoT / 20));
     }
