@@ -850,7 +850,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // ─────────────────────────────────────────────────────────────────────
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
-        let shotThreshold = 0.1125; // Bazowa szansa (zmniejszona o 10%)
+        let shotThreshold = 0.1294; // Bazowa szansa (+15%)
         const goalDiff = Math.abs(prev.homeScore - prev.awayScore);
         const leads = (activeSide === 'HOME' && prev.homeScore > prev.awayScore) || (activeSide === 'AWAY' && prev.awayScore > prev.homeScore);
 
