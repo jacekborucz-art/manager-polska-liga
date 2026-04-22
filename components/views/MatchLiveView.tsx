@@ -2227,8 +2227,8 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
 
       // 5. Logika Bramkarza (Czyste konto + strzały - zachowana)
       const gk = perfs.find(p => p.position === PlayerPosition.GK);
-      if (gk && conceded === 0 && shotsAgainst >= 5) {
-        gk.rating! += Math.min(2.5, (shotsAgainst - 4) * 0.4);
+      if (gk && conceded === 0) {
+        gk.rating! += Math.min(1.5, 1.0 + (shotsAgainst / 20));
       }
 
       // Bonus za obroniony karny (+1.0 do +2.5 za każdy)
