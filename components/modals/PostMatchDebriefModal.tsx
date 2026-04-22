@@ -3,6 +3,7 @@ import { DebriefComment } from '../../data/postmatch_debrief_pl';
 import {
   DebriefEffect,
   DebriefContext,
+  DebriefMatchStage,
   getCommentsForContext,
   calculateDebriefEffect,
   getDebriefContextLabel,
@@ -19,6 +20,7 @@ interface PostMatchDebriefModalProps {
   homeClubName: string;
   awayClubName: string;
   sessionSeed: number;
+  matchStage?: DebriefMatchStage;
   userPenaltyScore?: number;
   oppPenaltyScore?: number;
 }
@@ -35,6 +37,7 @@ export const PostMatchDebriefModal = ({
   homeClubName,
   awayClubName,
   sessionSeed,
+  matchStage = 'LEAGUE',
   userPenaltyScore,
   oppPenaltyScore,
 }: PostMatchDebriefModalProps) => {
@@ -44,9 +47,9 @@ export const PostMatchDebriefModal = ({
 
   if (!isOpen) return null;
 
-  const comments: DebriefComment[] = getCommentsForContext(context);
+  const comments: DebriefComment[] = getCommentsForContext(context, matchStage);
   const accent = getDebriefAccentColor(context);
-  const contextLabel = getDebriefContextLabel(context);
+  const contextLabel = getDebriefContextLabel(context, matchStage);
 
   const leftClubName  = userSide === 'HOME' ? homeClubName : awayClubName;
   const rightClubName = userSide === 'HOME' ? awayClubName : homeClubName;

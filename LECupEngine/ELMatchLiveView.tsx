@@ -64,7 +64,7 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { TalkEffect } from '../services/HalftimeTalkService';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
-import { BriefingEffect } from '../services/PreMatchBriefingService';
+import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.EL_R1Q, CompetitionType.EL_R1Q_RETURN,
@@ -90,6 +90,13 @@ const FIRST_LEG_MAP: Partial<Record<CompetitionType, CompetitionType>> = {
   [CompetitionType.EL_R16_RETURN]: CompetitionType.EL_R16,
   [CompetitionType.EL_QF_RETURN]: CompetitionType.EL_QF,
   [CompetitionType.EL_SF_RETURN]: CompetitionType.EL_SF,
+};
+
+const getEuropeanBriefingMatchStage = (competition: CompetitionType): BriefingMatchStage => {
+  if (competition === CompetitionType.EL_FINAL) return 'CUP_FINAL';
+  if (competition === CompetitionType.EL_SF || competition === CompetitionType.EL_SF_RETURN) return 'CUP_SEMIFINAL';
+  if (competition === CompetitionType.EL_GROUP_STAGE) return 'LEAGUE';
+  return 'CUP';
 };
 
 const checkShootoutWinner = (seq: { side: 'HOME' | 'AWAY', result: 'SCORED' | 'MISSED' }[]): 'HOME' | 'AWAY' | null => {
@@ -2953,6 +2960,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
           userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
           oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          matchStage={getEuropeanBriefingMatchStage(ctx.fixture.leagueId as CompetitionType)}
           sessionSeed={matchState.sessionSeed} />
       )}
 

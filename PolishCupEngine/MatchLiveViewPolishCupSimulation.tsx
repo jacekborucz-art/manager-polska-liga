@@ -25,9 +25,9 @@ import { PostMatchCommentSelector } from './PostMatchCommentSelector';
 import { MailService } from '../services/MailService';
 import { MatchCupTacticsModal } from '../components/modals/MatchCupTacticsModal';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
-import { BriefingEffect } from '../services/PreMatchBriefingService';
+import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
-import { DebriefEffect, DebriefContext, getDebriefContext } from '../services/PostMatchDebriefService';
+import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 // -> tutaj wstaw kod (ZMIANA SERWISU NA CUP)
 import { AiMatchDecisionCupService } from '../services/AiMatchDecisionCupService';
 import { AiMatchPreparationService } from '@/services/AiMatchPreparationService';
@@ -44,6 +44,24 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: st
     </svg>
   </div>
 );
+
+const getCupDebriefMatchStage = (fixtureId: string, playoffMatchType?: string): DebriefMatchStage => {
+  const normalizedId = fixtureId.toUpperCase();
+  if (playoffMatchType?.includes('FINAL')) return 'CUP_FINAL';
+  if (playoffMatchType?.includes('SEMI')) return 'CUP_SEMIFINAL';
+  if (normalizedId.includes('SUPER_CUP') || normalizedId.includes('FINA')) return 'CUP_FINAL';
+  if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'CUP_SEMIFINAL';
+  return 'CUP';
+};
+
+const getCupBriefingMatchStage = (fixtureId: string, playoffMatchType?: string): BriefingMatchStage => {
+  const normalizedId = fixtureId.toUpperCase();
+  if (playoffMatchType?.includes('FINAL')) return 'CUP_FINAL';
+  if (playoffMatchType?.includes('SEMI')) return 'CUP_SEMIFINAL';
+  if (normalizedId.includes('SUPER_CUP') || normalizedId.includes('FINA')) return 'CUP_FINAL';
+  if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'CUP_SEMIFINAL';
+  return 'CUP';
+};
 
 type CupInstructionAssessment = {
   score: number;
@@ -462,6 +480,7 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
     applyArgs: any;
     matchHistoryArgs: any;
     debriefContext: DebriefContext;
+    debriefMatchStage: DebriefMatchStage;
     debriefPenaltyScores?: { user: number; opp: number };
     sessionSeed: number;
     navigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO';
@@ -3274,6 +3293,7 @@ if (activePlayerTempo === 'SLOW') {
       applyArgs: cupApplyArgs,
       matchHistoryArgs: cupMatchHistoryArgs,
       debriefContext: debriefCtx,
+      debriefMatchStage: getCupDebriefMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType),
       debriefPenaltyScores: matchState.isPenalties
         ? {
             user: userSide === 'HOME' ? (matchState.homePenaltyScore || 0) : (matchState.awayPenaltyScore || 0),
@@ -4437,6 +4457,7 @@ if (activePlayerTempo === 'SLOW') {
           oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
           userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
           oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          matchStage={getCupBriefingMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType)}
           sessionSeed={matchState.sessionSeed}
         />
       )}
@@ -4462,6 +4483,7 @@ if (activePlayerTempo === 'SLOW') {
           isOpen={true}
           onClose={handleCupDebriefClose}
           context={pendingCupPayload.debriefContext}
+          matchStage={pendingCupPayload.debriefMatchStage}
           userScore={pendingCupPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingCupPayload.matchHistoryArgs.homeScore : pendingCupPayload.matchHistoryArgs.awayScore}
           oppScore={pendingCupPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingCupPayload.matchHistoryArgs.awayScore : pendingCupPayload.matchHistoryArgs.homeScore}
           userSide={userSide}

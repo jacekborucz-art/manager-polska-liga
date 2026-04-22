@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   BriefingScenario,
   BriefingEffect,
+  BriefingMatchStage,
   detectScenario,
   calculateBriefingEffect,
   getBriefingsForScenario,
@@ -16,6 +17,7 @@ interface PreMatchBriefingModalProps {
   userRep: number;
   oppRep: number;
   sessionSeed: number;
+  matchStage?: BriefingMatchStage;
 }
 
 type Phase = 'SELECTING' | 'REACTING';
@@ -28,6 +30,7 @@ export const PreMatchBriefingModal = ({
   userRep,
   oppRep,
   sessionSeed,
+  matchStage = 'LEAGUE',
 }: PreMatchBriefingModalProps) => {
   const [phase, setPhase] = useState<Phase>('SELECTING');
   const [reactionText, setReactionText] = useState('');
@@ -36,7 +39,7 @@ export const PreMatchBriefingModal = ({
   if (!isOpen) return null;
 
   const scenario: BriefingScenario = detectScenario(userRep, oppRep);
-  const availableBriefings = getBriefingsForScenario(scenario);
+  const availableBriefings = getBriefingsForScenario(scenario, matchStage);
 
   const handleSelect = (index: number) => {
     const speech = availableBriefings[index];
@@ -94,6 +97,13 @@ export const PreMatchBriefingModal = ({
     return 'RÓWNORZĘDNA WALKA';
   };
 
+  const getMatchStageLabel = (): string => {
+    if (matchStage === 'CUP_FINAL') return 'FINAŁ PUCHARU';
+    if (matchStage === 'CUP_SEMIFINAL') return 'PÓŁFINAŁ PUCHARU';
+    if (matchStage === 'CUP') return 'MECZ PUCHAROWY';
+    return 'MECZ O PUNKTY';
+  };
+
   const getRepLabel = (rep: number): string => {
     if (rep >= 9)  return 'EKSTRAKLASA';
     if (rep >= 7)  return 'I LIGA';
@@ -115,7 +125,7 @@ export const PreMatchBriefingModal = ({
         {/* HEADER */}
         <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">PUCHAR POLSKI</span>
+            <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{getMatchStageLabel()}</span>
             <span className={`text-[8px] font-black italic uppercase tracking-tighter border px-3 py-1 rounded-full ${getScenarioBadge()}`}>
               {getScenarioLabel()}
             </span>

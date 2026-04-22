@@ -64,9 +64,9 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { TalkEffect } from '../services/HalftimeTalkService';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
-import { BriefingEffect } from '../services/PreMatchBriefingService';
+import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
-import { DebriefEffect, DebriefContext, getDebriefContext } from '../services/PostMatchDebriefService';
+import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
@@ -92,6 +92,20 @@ const FIRST_LEG_MAP: Partial<Record<CompetitionType, CompetitionType>> = {
   [CompetitionType.CL_R16_RETURN]: CompetitionType.CL_R16,
   [CompetitionType.CL_QF_RETURN]: CompetitionType.CL_QF,
   [CompetitionType.CL_SF_RETURN]: CompetitionType.CL_SF,
+};
+
+const getEuropeanDebriefMatchStage = (competition: CompetitionType): DebriefMatchStage => {
+  if (competition === CompetitionType.CL_FINAL) return 'CUP_FINAL';
+  if (competition === CompetitionType.CL_SF || competition === CompetitionType.CL_SF_RETURN) return 'CUP_SEMIFINAL';
+  if (competition === CompetitionType.CL_GROUP_STAGE) return 'LEAGUE';
+  return 'CUP';
+};
+
+const getEuropeanBriefingMatchStage = (competition: CompetitionType): BriefingMatchStage => {
+  if (competition === CompetitionType.CL_FINAL) return 'CUP_FINAL';
+  if (competition === CompetitionType.CL_SF || competition === CompetitionType.CL_SF_RETURN) return 'CUP_SEMIFINAL';
+  if (competition === CompetitionType.CL_GROUP_STAGE) return 'LEAGUE';
+  return 'CUP';
 };
 
 const checkShootoutWinner = (seq: { side: 'HOME' | 'AWAY', result: 'SCORED' | 'MISSED' }[]): 'HOME' | 'AWAY' | null => {
@@ -166,6 +180,7 @@ export const CLMatchLiveView = () => {
     summary: MatchSummary;
     userTeamId: string;
     debriefContext: DebriefContext;
+    debriefMatchStage: DebriefMatchStage;
     sessionSeed: number;
   } | null>(null);
   const [activePenalty, setActivePenalty] = useState<{
@@ -2061,6 +2076,7 @@ const summary: MatchSummary = {
       summary,
       userTeamId: userTeamId!,
       debriefContext: debriefCtx,
+      debriefMatchStage: getEuropeanDebriefMatchStage(ctx.fixture.leagueId as CompetitionType),
       sessionSeed,
     });
     setShowPostMatchDebrief(true);
@@ -3029,6 +3045,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
           userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
           oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          matchStage={getEuropeanBriefingMatchStage(ctx.fixture.leagueId as CompetitionType)}
           sessionSeed={matchState.sessionSeed} />
       )}
 
@@ -3119,6 +3136,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           isOpen={true}
           onClose={handleCLDebriefClose}
           context={pendingFinishPayload.debriefContext}
+          matchStage={pendingFinishPayload.debriefMatchStage}
           userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
           oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
           userSide={userSide}

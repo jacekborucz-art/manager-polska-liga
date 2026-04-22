@@ -4,6 +4,7 @@ export { PREMATCH_BRIEFINGS };
 export type { BriefingSpeechType };
 
 export type BriefingScenario = 'UNDERDOG' | 'EQUAL' | 'FAVORITE';
+export type BriefingMatchStage = 'LEAGUE' | 'CUP' | 'CUP_SEMIFINAL' | 'CUP_FINAL';
 
 export interface ScenarioBriefingOption extends BriefingSpeech {
   originalIndex: number;
@@ -42,8 +43,52 @@ const BRIEFING_SCENARIO_RULES: Record<BriefingSpeechType, BriefingScenario[]> = 
   DOMINANCE: ['EQUAL', 'FAVORITE'],
 };
 
-export const getBriefingsForScenario = (scenario: BriefingScenario): ScenarioBriefingOption[] =>
-  PREMATCH_BRIEFINGS
+type CupBriefingStage = Exclude<BriefingMatchStage, 'LEAGUE'>;
+
+const CUP_PREMATCH_BRIEFINGS: Record<CupBriefingStage, BriefingSpeech[]> = {
+  CUP: [
+    { id: 'CUP_PB_1', text: 'To jest puchar. Tu nie ma tabeli, nie ma kalkulacji. Jeden mecz może zmienić wszystko.', hiddenType: 'UPRISING' },
+    { id: 'CUP_PB_2', text: 'Gramy mądrze i cierpliwie. Puchar wygrywa ten, kto najlepiej znosi presję.', hiddenType: 'FORTRESS' },
+    { id: 'CUP_PB_3', text: 'Nie patrzymy na nazwę rywala. Dzisiaj liczy się tylko awans i nasza odpowiedź na boisku.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'CUP_PB_4', text: 'Od pierwszego gwizdka chcę widzieć walkę o każdą piłkę. W pucharze nie ma drugiej szansy.', hiddenType: 'KAMIKAZE' },
+    { id: 'CUP_PB_5', text: 'Plan jest jasny. Nie dajemy się ponieść emocjom i cierpliwie szukamy momentu.', hiddenType: 'TACTICIAN' },
+    { id: 'CUP_PB_6', text: 'Zaczynamy agresywnie. Niech od razu poczują, że ten mecz będzie dla nich ciężki.', hiddenType: 'BLITZ' },
+    { id: 'CUP_PB_7', text: 'Puchar potrafi być nerwowy. Zachowujemy spokój, gramy dokładnie i czekamy na swoje szanse.', hiddenType: 'PATIENCE' },
+    { id: 'CUP_PB_8', text: 'Pełna koncentracja przez całe spotkanie. Bez prostych strat, bez prezentów, bez paniki.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'CUP_PB_9', text: 'Jesteśmy mocniejsi, ale puchar karze pychę. Kontrola, spokój i szacunek do rywala.', hiddenType: 'LOOSE' },
+    { id: 'CUP_PB_10', text: 'Narzućmy im nasze tempo. Niech od pierwszej minuty wiedzą, kto chce grać dalej.', hiddenType: 'DOMINANCE' },
+  ],
+  CUP_SEMIFINAL: [
+    { id: 'SF_PB_1', text: 'Jesteśmy o krok od finału. Nikt nie odda nam tego miejsca, musimy je sobie zabrać.', hiddenType: 'UPRISING' },
+    { id: 'SF_PB_2', text: 'Półfinał wygrywa się głową. Bronimy razem, atakujemy razem i nie tracimy struktury.', hiddenType: 'FORTRESS' },
+    { id: 'SF_PB_3', text: 'Przez cały sezon pracowaliśmy, żeby być w takim meczu. Teraz pokażmy, że tu należymy.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'SF_PB_4', text: 'To półfinał. Każdy sprint, każdy wślizg i każda decyzja ma prowadzić nas do finału.', hiddenType: 'KAMIKAZE' },
+    { id: 'SF_PB_5', text: 'Wiemy, gdzie są ich słabości. Trzymamy się planu i nie pozwalamy emocjom przejąć meczu.', hiddenType: 'TACTICIAN' },
+    { id: 'SF_PB_6', text: 'Uderzamy od startu. W półfinale trzeba pokazać odwagę zanim rywal złapie rytm.', hiddenType: 'BLITZ' },
+    { id: 'SF_PB_7', text: 'Finał nie musi przyjść w pierwszych minutach. Gramy spokojnie, cierpliwie i konsekwentnie.', hiddenType: 'PATIENCE' },
+    { id: 'SF_PB_8', text: 'Półfinał wymaga dojrzałości. Zero głupich fauli, zero rozkojarzenia, pełna odpowiedzialność.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'SF_PB_9', text: 'Mamy jakość, żeby wejść do finału. Nie podpalamy się, robimy swoje.', hiddenType: 'LOOSE' },
+    { id: 'SF_PB_10', text: 'To jest nasza szansa na finał. Narzucamy tempo, wygrywamy pojedynki i idziemy po swoje.', hiddenType: 'DOMINANCE' },
+  ],
+  CUP_FINAL: [
+    { id: 'FINAL_PB_1', text: 'To jest finał. Dzisiaj możecie zrobić coś, co zostanie z tym klubem na lata.', hiddenType: 'UPRISING' },
+    { id: 'FINAL_PB_2', text: 'Finały wygrywa się dyscypliną. Każdy metr boiska bronimy razem i bez paniki.', hiddenType: 'FORTRESS' },
+    { id: 'FINAL_PB_3', text: 'Nieważne, co było przed tym meczem. Dzisiaj macie szansę udowodnić wszystko jednym występem.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'FINAL_PB_4', text: 'Dzisiaj zostawiamy na boisku wszystko. Finał nie wybacza półśrodków.', hiddenType: 'KAMIKAZE' },
+    { id: 'FINAL_PB_5', text: 'Trofeum wygrywa drużyna, która ufa planowi. Chłodna głowa, czyste decyzje, pełna koncentracja.', hiddenType: 'TACTICIAN' },
+    { id: 'FINAL_PB_6', text: 'Pierwsze minuty mają należeć do nas. Niech od razu poczują, że przyszliśmy po puchar.', hiddenType: 'BLITZ' },
+    { id: 'FINAL_PB_7', text: 'Finał może trwać długo. Nie szarpiemy, nie panikujemy, cierpliwie budujemy przewagę.', hiddenType: 'PATIENCE' },
+    { id: 'FINAL_PB_8', text: 'To mecz o trofeum. Każda decyzja ma być odpowiedzialna, każda strata naprawiona natychmiast.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'FINAL_PB_9', text: 'Jesteśmy gotowi na ten finał. Spokojnie, z klasą, bez lekceważenia rywala.', hiddenType: 'LOOSE' },
+    { id: 'FINAL_PB_10', text: 'Dzisiaj nie tylko gramy finał. Dzisiaj mamy go wygrać. Odważnie, wysoko, bez cofania się.', hiddenType: 'DOMINANCE' },
+  ],
+};
+
+const getBriefingPool = (matchStage: BriefingMatchStage): BriefingSpeech[] =>
+  matchStage === 'LEAGUE' ? PREMATCH_BRIEFINGS : CUP_PREMATCH_BRIEFINGS[matchStage];
+
+export const getBriefingsForScenario = (scenario: BriefingScenario, matchStage: BriefingMatchStage = 'LEAGUE'): ScenarioBriefingOption[] =>
+  getBriefingPool(matchStage)
     .map((speech, originalIndex) => ({ ...speech, originalIndex }))
     .filter((speech) => BRIEFING_SCENARIO_RULES[speech.hiddenType].includes(scenario));
 
