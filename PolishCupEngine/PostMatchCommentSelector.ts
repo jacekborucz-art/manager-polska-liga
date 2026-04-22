@@ -32,10 +32,28 @@ export const PostMatchCommentSelector = {
    * Calculates the Man of the Match based on points.
    */
   calculateMOTM: (summary: MatchSummary): PlayerPerformance | null => {
-    const allPlayers = [...summary.homePlayers, ...summary.awayPlayers];
-    if (allPlayers.length === 0) return null;
+    if (summary.homePlayers.length === 0 && summary.awayPlayers.length === 0) return null;
 
-    return [...allPlayers].sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+    const cleanSheetHome = summary.awayScore === 0;
+    const cleanSheetAway = summary.homeScore === 0;
+
+    const motmScore = (p: PlayerPerformance, side: 'HOME' | 'AWAY'): number => {
+      let score = (p.rating || 6.0);
+      score += p.goals * 3.0;
+      score += p.assists * 1.5;
+      if (p.position === PlayerPosition.GK) {
+        if (side === 'HOME' && cleanSheetHome) score += 2.0;
+        if (side === 'AWAY' && cleanSheetAway) score += 2.0;
+      }
+      return score;
+    };
+
+    const all = [
+      ...summary.homePlayers.map(p => ({ p, score: motmScore(p, 'HOME') })),
+      ...summary.awayPlayers.map(p => ({ p, score: motmScore(p, 'AWAY') })),
+    ];
+
+    return all.sort((a, b) => b.score - a.score)[0].p;
   },
 
   /**

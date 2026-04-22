@@ -251,9 +251,9 @@ export const LeagueTables: React.FC = () => {
 
 
 {(selectedLeagueId === 'L_PL_2' || selectedLeagueId === 'L_PL_3') && 
-                                              index < 3 && 
-                                              sortedClubs[3] &&
-                                              club.stats.points > (sortedClubs[3].stats.points + (34 - sortedClubs[3].stats.played) * 3) && (
+                                              index < 2 &&
+                                              sortedClubs[2] &&
+                                              club.stats.points > (sortedClubs[2].stats.points + (34 - sortedClubs[2].stats.played) * 3) && (
                                               <div className="flex items-center gap-1.5 shrink-0">
                                                 <span className="bg-emerald-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter leading-none shadow-lg animate-pulse">AWANS</span>
                                               </div>

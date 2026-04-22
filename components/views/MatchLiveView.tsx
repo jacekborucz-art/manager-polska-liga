@@ -2090,9 +2090,13 @@ return {
     for(let i=0; i<awayCardsCount; i++) calibAwayFouls += Math.floor(Math.random() * 4) + 2;
     if (calibAwayFouls < 8) calibAwayFouls += Math.floor(Math.random() * 13) + 2;
 
-    // b) Strzały ogólne (Gole jako katalizator)
-    let calibHomeShots = matchState.liveStats.home.shots + (matchState.homeScore * (Math.floor(Math.random() * 3) + 2));
-    let calibAwayShots = matchState.liveStats.away.shots + (matchState.awayScore * (Math.floor(Math.random() * 3) + 2));
+    // b) Strzały ogólne (oparte na realnych shotsOnTarget z silnika)
+    // Wskaźnik celności w piłce nożnej: 32-42% strzałów trafia w bramkę/jest celnych
+    // calibShots = shotsOnTarget / celność, min. tyle ile silnik realnie zliczył
+    const homeShotAccuracy = 0.32 + Math.random() * 0.10;
+    const awayShotAccuracy = 0.32 + Math.random() * 0.10;
+    let calibHomeShots = Math.max(matchState.liveStats.home.shots, Math.round(matchState.liveStats.home.shotsOnTarget / homeShotAccuracy));
+    let calibAwayShots = Math.max(matchState.liveStats.away.shots, Math.round(matchState.liveStats.away.shotsOnTarget / awayShotAccuracy));
     // Failsafe: drużyna zawsze oddaje min. 4 strzały
     if (calibHomeShots < 4) calibHomeShots += Math.floor(Math.random() * 8) + 4;
     if (calibAwayShots < 4) calibAwayShots += Math.floor(Math.random() * 8) + 4;
@@ -2164,6 +2168,13 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
       const gk = perfs.find(p => p.position === PlayerPosition.GK);
       if (gk && conceded === 0 && shotsAgainst >= 5) {
         gk.rating! += Math.min(2.5, (shotsAgainst - 4) * 0.4);
+      }
+
+      // Bonus za obroniony karny (+1.0 do +2.5 za każdy)
+      const oppSide = side === 'HOME' ? 'AWAY' : 'HOME';
+      const savedPenaltiesCount = matchState.logs.filter(l => l.type === MatchEventType.PENALTY_MISSED && l.teamSide === oppSide).length;
+      if (gk && savedPenaltiesCount > 0) {
+        gk.rating! += savedPenaltiesCount * (1.0 + Math.random() * 1.5);
       }
 
       // 6. Logika Obrońców (Zachowana)

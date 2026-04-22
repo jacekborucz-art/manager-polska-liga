@@ -22,10 +22,15 @@ export const GoalAttributionService = {
     const gkMod  = progressiveMod(gkLiveFatigue)    * gkFitMod;
 
     if (isPenalty) {
-      const baseProb = 0.94;
-      // Minimalny wpływ statystyk (zachowanie 10:1 przewagi strzelca)
-      const statInfluence = ((attacker.attributes.penalties * attMod) - (goalkeeper.attributes.goalkeeping * gkMod)) / 400;
-      return rng() < Math.max(0.88, Math.min(0.97, baseProb + statInfluence));
+      // 5% szansa na dramatyczne pudło niezależnie od statystyk (słupek, nad bramką)
+      if (rng() < 0.05) return false;
+      // Strzelec: rzuty karne 45% + wykończenie 35% + mentalność 20%
+      const attackerScore = (attacker.attributes.penalties * 0.45 + attacker.attributes.finishing * 0.35 + attacker.attributes.mentality * 0.20) * attMod;
+      // Bramkarz: bramkarstwo 50% + obrona 20% + mentalność 30%
+      const keeperScore = (goalkeeper.attributes.goalkeeping * 0.50 + goalkeeper.attributes.defending * 0.20 + goalkeeper.attributes.mentality * 0.30) * gkMod;
+      // Baza ~76% (real-world skuteczność karnych), zakres 50%–95%
+      const statInfluence = (attackerScore - keeperScore) / 200;
+      return rng() < Math.max(0.50, Math.min(0.95, 0.76 + statInfluence));
     }
 
     // 2. Standardowa siła ataku

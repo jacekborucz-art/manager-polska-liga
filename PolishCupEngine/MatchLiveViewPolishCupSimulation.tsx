@@ -530,7 +530,7 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
     side: 'HOME' | 'AWAY' | null;
   } | null>(null);
 
-const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, minute: number }>(null);
+const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, keeper: any, minute: number }>(null);
 
   const ctx = useMemo(() => {
     if (isPlayoffMode && activePlayoffMatch) {
@@ -768,15 +768,13 @@ counterAttackResponseFactor: 1.0,
 
 useEffect(() => {
     if (!matchState?.isPausedForEvent || !penaltyPendingRef.current) return;
-    const { side, scorer, minute } = penaltyPendingRef.current;
+    const { side, scorer, keeper, minute } = penaltyPendingRef.current;
     const timer = setTimeout(() => {
       penaltyPendingRef.current = null;
-      const penaltySkill =
-        ((scorer.attributes.penalties || 50) * 0.58) +
-        ((scorer.attributes.finishing || 50) * 0.22) +
-        ((scorer.attributes.technique || 50) * 0.12) +
-        ((scorer.attributes.mentality || 50) * 0.08);
-      const isScored = Math.random() < Math.max(0.68, Math.min(0.94, 0.79 + ((penaltySkill - 50) / 420)));
+      const dramaticMiss = Math.random() < 0.05;
+      const attackerScore = (scorer.attributes.penalties || 50) * 0.45 + (scorer.attributes.finishing || 50) * 0.35 + (scorer.attributes.mentality || 50) * 0.20;
+      const keeperScore = keeper ? ((keeper.attributes.goalkeeping || 50) * 0.50 + (keeper.attributes.defending || 50) * 0.20 + (keeper.attributes.mentality || 50) * 0.30) : 50;
+      const isScored = !dramaticMiss && Math.random() < Math.max(0.50, Math.min(0.95, 0.76 + (attackerScore - keeperScore) / 200));
       if (!isScored) {
         setShowMissedPenalty(true);
         setTimeout(() => setShowMissedPenalty(false), 4000);
@@ -1717,11 +1715,14 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
   const kickerXI = side === 'HOME' ? prev.homeLineup.startingXI : prev.awayLineup.startingXI;
   const scorer = GoalAttributionService.pickScorer(kickerTeam, kickerXI as string[], false, () => seededRng(currentSeed, nextMinute, 7777));
   if (!scorer) return { ...prev, minute: nextMinute + 1 };
+  const defTeamPK = side === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
+  const defXIPK = side === 'HOME' ? prev.awayLineup.startingXI : prev.homeLineup.startingXI;
+  const keeperPK = defTeamPK.find((p: any) => p.id === defXIPK[0]) || defTeamPK.find((p: any) => p.position === PlayerPosition.GK);
 
   setPenaltyNotice(teamName);
   setTimeout(() => setPenaltyNotice(null), 3000);
 
-  penaltyPendingRef.current = { side, scorer, minute: nextMinute };
+  penaltyPendingRef.current = { side, scorer, keeper: keeperPK, minute: nextMinute };
 
   return { ...prev, minute: nextMinute + 1, isPaused: true, isPausedForEvent: true };
 }

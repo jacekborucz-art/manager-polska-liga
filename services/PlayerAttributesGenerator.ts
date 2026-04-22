@@ -184,10 +184,15 @@ export const PlayerAttributesGenerator = {
       }
 
       if (position === PlayerPosition.GK && ['dribbling', 'heading', 'attacking', 'finishing'].includes(key)) {
-         generated[key] = Math.floor(Math.random() * 32) + 1; 
+         generated[key] = Math.floor(Math.random() * 32) + 1;
          return;
       }
-      
+
+      if (position === PlayerPosition.GK && key === 'penalties') {
+         generated[key] = Math.floor(Math.random() * 35) + 1; // 1–35
+         return;
+      }
+
       if (key === 'goalkeeping' && position !== PlayerPosition.GK) {
          generated[key] = Math.floor(Math.random() * 15) + 1; 
          return;

@@ -103,6 +103,40 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     body: 'Zarząd uważnie śledzi poczynania {CLUB} na boisku i w tabeli. Zdajemy sobie sprawę, że sezon jest jeszcze w toku, dlatego cierpliwie czekamy na przełom. Liczymy jednak, że w nadchodzących kolejkach drużyna potwierdzi swój potencjał i zacznie wspinać się w klasyfikacji.'
   },
 
+  // --- WINTER BREAK FORM EMAILS (STYCZEŃ) ---
+  {
+    id: 'board_winter_form_excellent',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Imponująca seria przed przerwą zimową!',
+    body: 'Panie Trenerze,\n\nkorzystamy z przerwy zimowej, aby przekazać Panu słowa najwyższego uznania. Forma, jaką {CLUB} zaprezentował w ostatnich kolejkach przed pauzą, jest absolutnie imponująca. Seria wygranych meczów buduje znakomitą atmosferę w klubie i napawa nas optymizmem przed drugą rundą sezonu.\n\nZarząd jest przekonany, że kontynuacja tej drogi zaowocuje znakomitym wynikiem końcowym. Proszę utrzymać tę koncentrację i motywację podczas obozu zimowego.\n\nZ wyrazami uznania,\nZarząd Klubu'
+  },
+  {
+    id: 'board_winter_form_good',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Dobra forma {CLUB} przed przerwą zimową',
+    body: 'Panie Trenerze,\n\nprzed przerwą zimową chcielibyśmy podsumować ostatnie tygodnie. Wyniki {CLUB} są zadowalające — drużyna prezentuje dobrą formę, a punkty zdobywane są regularnie. To solidna podstawa do pracy w drugiej części sezonu.\n\nLiczymy, że obóz zimowy zostanie dobrze wykorzystany, a drużyna wróci na boisko jeszcze mocniejsza.\n\nPozdrawienia,\nZarząd Klubu'
+  },
+  {
+    id: 'board_winter_form_mixed',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Dyrektor Sportowy',
+    subject: 'Analiza formy przed przerwą zimową',
+    body: 'Panie Trenerze,\n\nprzerwa zimowa to dobry moment na szczerą ocenę sytuacji. Ostatnie wyniki {CLUB} są nierówne — kilka zwycięstw przeplatanych stratami punktów, na które nie możemy sobie pozwolić. Widać potencjał, ale brakuje regularności.\n\nProsimy o przeanalizowanie taktyki i ustawieniu drużyny podczas obozu zimowego. Oczekujemy zdecydowanie lepszej konsekwencji po powrocie z przerwy.\n\nZ poważaniem,\nDyrektor Sportowy'
+  },
+  {
+    id: 'board_winter_form_poor',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Właściciel Klubu',
+    subject: 'Pilna rozmowa po wynikach przed przerwą',
+    body: 'Panie Trenerze,\n\nprzerwa zimowa powinna zostać przez Pana potraktowana jako ostatnie ostrzeżenie. Wyniki {CLUB} w ostatnich kolejkach są głęboko niezadowalające i budzą poważne obawy o dalszy przebieg sezonu.\n\nOczekuję gruntownej analizy przyczyn tak słabej dyspozycji i konkretnych zmian, które przyniosą efekty już w pierwszych meczach rundy wiosennej. Zarząd bacznie obserwuje sytuację.\n\nZ całą powagą,\nWłaściciel Klubu'
+  },
+
   // --- BOARD WEEKLY PRESSURE MAILS ---
   {
     id: 'board_pressure_concern',

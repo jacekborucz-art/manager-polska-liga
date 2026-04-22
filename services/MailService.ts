@@ -562,6 +562,23 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        }
     }
 
+    // --- STYCZEŃ: jednorazowy email zarządu o formie przed przerwą zimową ---
+    if (month === 1 && played >= 5) {
+      const alreadySentWinterForm = existingMails.some(m => m.id.includes('WINTER_FORM'));
+      if (!alreadySentWinterForm) {
+        const recentForm = userClub.stats.form.slice(-5);
+        const wins = recentForm.filter(r => r === 'W').length;
+        let winterTemplateId: string;
+        if (wins >= 4)       winterTemplateId = 'board_winter_form_excellent';
+        else if (wins === 3) winterTemplateId = 'board_winter_form_good';
+        else if (wins === 2) winterTemplateId = 'board_winter_form_mixed';
+        else                 winterTemplateId = 'board_winter_form_poor';
+        const winterMail = createMail(winterTemplateId, { 'CLUB': userClub.name });
+        winterMail.id = `WINTER_FORM_${currentDate.getFullYear()}`;
+        newMails.push(winterMail);
+      }
+    }
+
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
     // Obliczenie gap wg tej samej logiki co CoachService.evaluatePerformance
     if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0) {
