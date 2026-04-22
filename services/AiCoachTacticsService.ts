@@ -1,7 +1,7 @@
-import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity } from '../types';
+import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 
-type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity };
+type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack };
 
 const seededRng = (seed: number, minute: number, offset: number = 0): number => {
   let s = seed + minute + offset;
@@ -108,7 +108,10 @@ export const AiCoachTacticsService = {
     decisionMaking: number,
     experience: number,
     lastGoalBoostMinute: number,
-    seed: number
+    seed: number,
+    userMindset: InstructionMindset,
+    userTacticAttackBias: number,
+    aiTacticDefenseBias: number
   ): AiInstructions | null => {
     const rng1 = seededRng(seed, minute, 401);
     const rng2 = seededRng(seed, minute, 402);
@@ -173,6 +176,39 @@ export const AiCoachTacticsService = {
       }
     }
 
-    return enforceConsistency(mindset, tempo, intensity);
+    // ─── PRESSING I KONTRATAK ───────────────────────────────────────────────
+    let pressing: InstructionPressing = 'NORMAL';
+    let counterAttack: InstructionCounterAttack = 'NORMAL';
+
+    // KONTRATAK: AI gra defensywnie + gracz gra ofensywnie + mindset AI nie jest OFFENSIVE
+    const aiIsDefensive = aiTacticDefenseBias >= 55 || aiScoreDiff > 0;
+    const userIsOffensive = userTacticAttackBias >= 60 || userMindset === 'OFFENSIVE';
+    if (aiIsDefensive && userIsOffensive && mindset !== 'OFFENSIVE') {
+      let counterChance: number;
+      if (experience >= 70 && decisionMaking >= 60) counterChance = 0.45;
+      else if (experience >= 55) counterChance = 0.25;
+      else if (experience >= 40) counterChance = 0.10;
+      else counterChance = 0.04;
+      if (seededRng(seed, minute, 501) < counterChance) counterAttack = 'COUNTER';
+      else if (experience < 40 && seededRng(seed, minute, 502) < 0.05) counterAttack = 'COUNTER';
+    }
+
+    // PRESSING: ofensywne nastawienie lub przewaga momentum + wyklucza się z kontrą
+    if (counterAttack !== 'COUNTER') {
+      const pressingCondition = mindset === 'OFFENSIVE' || aiMomentum > 30;
+      if (pressingCondition) {
+        let pressingChance: number;
+        if (experience >= 70) pressingChance = 0.35;
+        else if (experience >= 55) pressingChance = 0.20;
+        else if (experience >= 40) pressingChance = 0.08;
+        else pressingChance = 0.03;
+        if (seededRng(seed, minute, 503) < pressingChance) pressing = 'PRESSING';
+      } else if (experience < 40 && seededRng(seed, minute, 504) < 0.04) {
+        pressing = 'PRESSING';
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack };
   },
 };

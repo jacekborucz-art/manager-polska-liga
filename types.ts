@@ -1206,12 +1206,14 @@ isPenalties?: boolean;
     playerName?: string;
   }[];
   // -> tutaj wstaw kod
-  aiActiveShout: { 
-    id: string; 
-    expiryMinute: number; 
-    mindset: InstructionMindset; 
-    tempo: InstructionTempo; 
+  aiActiveShout: {
+    id: string;
+    expiryMinute: number;
+    mindset: InstructionMindset;
+    tempo: InstructionTempo;
     intensity: InstructionIntensity;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
     isExpired?: boolean;
   } | null;
   lastGoalBoostMinute: number;

@@ -28,6 +28,10 @@ const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) 
   if (player.position === 'GK' || player.position === 'DEF') {
     const conceded = side === 'HOME' ? state.awayScore : state.homeScore;
     r -= conceded * 0.2;
+    if (conceded === 0 && player.position === 'GK') {
+      const oppSoT = side === 'HOME' ? state.liveStats.away.shotsOnTarget : state.liveStats.home.shotsOnTarget;
+      r += Math.min(1.5, 1.0 + (oppSoT / 20));
+    }
   }
 
   // Bonus za kondycję (świeżość podnosi ocenę)
@@ -793,6 +797,38 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
 
+        // ─── AI KONTRATAK ─────────────────────────────────────────────────────
+        let aiCounterAttackTriggered = false;
+        let aiCounterAttackShotBonus = 0;
+        const aiCounterAttackEnabled = prev.aiActiveShout?.counterAttack === 'COUNTER';
+        const aiSideForCounter: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
+        const aiCounterTacticObj = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
+        const aiScoreDiffForCounter = userSide === 'HOME' ? prev.awayScore - prev.homeScore : prev.homeScore - prev.awayScore;
+        const aiCounterShape =
+          aiCounterTacticObj.defenseBias >= 55 ||
+          prev.aiActiveShout?.mindset === 'DEFENSIVE' ||
+          aiScoreDiffForCounter > 0;
+        const userPushes =
+          prev.userInstructions.mindset === 'OFFENSIVE' ||
+          opponentCounterTactic.attackBias >= 60 ||
+          userScoreDiff < 0;
+
+        if (!counterAttackTriggered && activeSide === userSide && aiCounterAttackEnabled && aiCounterShape && userPushes) {
+          const userPressFactor = Math.max(0, Math.min(1, (opponentPressure - 20) / 60));
+          const aiShapeFactor = Math.max(0, Math.min(1, (aiCounterTacticObj.defenseBias - 50) / 40));
+          const userRiskFactor = Math.max(0, Math.min(1, (opponentCounterTactic.attackBias - 50) / 45));
+          const aiCounterChance = Math.max(
+            0,
+            Math.min(0.10, 0.015 + userPressFactor * 0.040 + aiShapeFactor * 0.020 + userRiskFactor * 0.015)
+          );
+          if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
+            activeSide = aiSideForCounter;
+            aiCounterAttackTriggered = true;
+            aiCounterAttackShotBonus = Math.min(0.018, 0.008 + userPressFactor * 0.007 + userRiskFactor * 0.004);
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.1125; // Bazowa szansa (zmniejszona o 10%)
         const goalDiff = Math.abs(prev.homeScore - prev.awayScore);
@@ -1066,6 +1102,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (counterAttackTriggered && isUserAttacking) {
           shotThreshold += counterAttackShotBonus;
         }
+        if (aiCounterAttackTriggered && !isUserAttacking) {
+          shotThreshold += aiCounterAttackShotBonus;
+        }
 
         let nextAiActiveShout = prev.aiActiveShout;
         let nextAiNextInstructionMinute = prev.aiNextInstructionMinute ?? 10;
@@ -1080,7 +1119,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             aiCoach?.attributes.decisionMaking ?? 50,
             aiCoach?.attributes.experience ?? 50,
             prev.lastGoalBoostMinute ?? -1,
-            currentSeed
+            currentSeed,
+            prev.userInstructions.mindset,
+            TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId).attackBias,
+            TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId).defenseBias
           );
           nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;
           nextAiNextInstructionMinute = nextMinute + 10 + Math.floor(seededRng(currentSeed, nextMinute, 77) * 11);
@@ -1097,6 +1139,25 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             shotThreshold += 0.015;
           } else if (nextAiActiveShout.mindset === 'DEFENSIVE' && !isAiAttacking) {
             shotThreshold -= 0.012;
+          }
+        }
+        // AI PRESSING
+        if (nextAiActiveShout?.pressing === 'PRESSING') {
+          const aiPressIds = oXIList.filter((id): id is string => id !== null);
+          const aiPressPlayers = oPlayersList.filter(p => aiPressIds.includes(p.id) && p.position !== 'GK');
+          const uPressIds2 = uXIList.filter((id): id is string => id !== null);
+          const uPressPlayers2 = uPlayersList.filter(p => uPressIds2.includes(p.id) && p.position !== 'GK');
+          const aiPressSum = aiPressPlayers.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
+          const uPressSum2 = uPressPlayers2.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
+          const aiPressDiff = aiPressSum - uPressSum2;
+          if (aiPressDiff > 110) {
+            const aiPressBonus = Math.min(0.013, (aiPressDiff - 110) * 0.000088);
+            if (isAiAttacking) shotThreshold += aiPressBonus;
+            else shotThreshold -= aiPressBonus;
+          } else {
+            const aiPressPenalty = Math.min(0.011, (110 - aiPressDiff) * 0.00007);
+            if (isAiAttacking) shotThreshold -= aiPressPenalty;
+            else shotThreshold += aiPressPenalty;
           }
         }
 
@@ -1347,7 +1408,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 nextLiveStats.away.shots++;
                 nextLiveStats.away.shotsOnTarget++;
               }
-              const counterPrefix = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              const counterPrefix = (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide) ? 'Kontra! ' : '';
               newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
 
@@ -1399,7 +1460,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               immediateEventType = failType;
-              const counterPrefix = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              const counterPrefix = (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide) ? 'Kontra! ' : '';
               newLog = { id: `MISS_${nextMinute}`, minute: nextMinute, text: `${counterPrefix}${getCommentary(failType, scorer.lastName)}`, type: failType, teamSide: activeSide };
            }
            pauseForEvent = isGoal;
@@ -1695,7 +1756,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             uFatTarget[id] = Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra);
           });
         }
-        const aiFatExtra = (nextAiActiveShout?.tempo === 'FAST' ? 0.025 : 0) + (nextAiActiveShout?.intensity === 'AGGRESSIVE' ? 0.018 : nextAiActiveShout?.intensity === 'CAUTIOUS' ? 0.012 : 0);
+        const aiFatExtra = (nextAiActiveShout?.tempo === 'FAST' ? 0.025 : 0) + (nextAiActiveShout?.intensity === 'AGGRESSIVE' ? 0.018 : nextAiActiveShout?.intensity === 'CAUTIOUS' ? 0.012 : 0) + (nextAiActiveShout?.pressing === 'PRESSING' ? 0.015 : 0);
         if (aiFatExtra > 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
