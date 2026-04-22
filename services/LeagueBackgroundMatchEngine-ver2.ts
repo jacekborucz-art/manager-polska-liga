@@ -2,6 +2,7 @@
 import { TacticRepository } from '@/resources/tactics_db';
 import { Fixture, Club, Player, Lineup, MatchEventType, InjurySeverity, Referee, WeatherSnapshot, Coach, PlayerAttributes, PlayerPosition } from '../types';
 import { GoalAttributionService } from './GoalAttributionService';
+import { rollInjuryBySeverity } from './InjuryCatalog';
 
 export interface BackgroundMatchResultV2 {
   homeScore: number;
@@ -320,27 +321,12 @@ const allPlayedIds = new Set<string>([
 
         if (pId) {
           const durRoll = seededRng(minute + 803);
-          let days = 0;
-          let severity: InjurySeverity = InjurySeverity.LIGHT;
-          let type = "Uraz";
-
-          if (durRoll < 0.84) {
-            days = Math.floor(seededRng(minute + 804) * 7) + 1; // 1-7 dni
-            severity = InjurySeverity.LIGHT;
-            type = "Lekkie stłuczenie";
-          } else if (durRoll < 0.96) {
-            days = Math.floor(seededRng(minute + 805) * 23) + 7; // 7-30 dni
-            severity = InjurySeverity.SEVERE;
-            type = "Naciągnięcie mięśnia";
-          } else if (durRoll < 0.99) {
-            days = Math.floor(seededRng(minute + 806) * 30) + 30; // 30-60 dni
-            severity = InjurySeverity.SEVERE;
-            type = "Zerwanie tkanki miękkiej";
-          } else {
-            days = Math.floor(seededRng(minute + 807) * 260) + 60; // 60-320 dni
-            severity = InjurySeverity.SEVERE;
-            type = "Krytyczne uszkodzenie więzadeł";
-          }
+          const severity = durRoll < 0.84 ? InjurySeverity.LIGHT : InjurySeverity.SEVERE;
+          let injuryRollOffset = 808;
+          const { days, type } = rollInjuryBySeverity(
+            severity,
+            () => seededRng(minute + injuryRollOffset++)
+          );
 
           injuries.push({ playerId: pId, severity, minute, days, type });
           

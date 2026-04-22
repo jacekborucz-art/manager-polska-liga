@@ -22,6 +22,7 @@ import { NationalTeamEnvironmentService } from './NationalTeamEnvironmentService
 import { NationalTeamLineupService } from './NationalTeamLineupService';
 import { RefereeService } from './RefereeService';
 import { TacticRepository } from '../resources/tactics_db';
+import { rollInjuryBySeverity } from './InjuryCatalog';
 
 export interface NationalTeamMatchDaySimulation {
   results: NTMatchResult[];
@@ -283,8 +284,7 @@ const maybeInjury = (lt: LiveTeam, minute: number, weatherInt: number, homeScore
   if (!injured) return;
   const f = lt.fatigue[injured.id] ?? 100;
   const severe = rng.next() < (0.2 + Math.max(0, 52 - f) * 0.008 + weatherInt * 0.1);
-  const days = severe ? rng.int(18, 75) : rng.int(3, 16);
-  const type = severe ? 'Muscle tear' : 'Muscle knock';
+  const { days, type } = rollInjuryBySeverity(severe ? InjurySeverity.SEVERE : InjurySeverity.LIGHT, () => rng.next());
   injuries.push({ playerId: injured.id, playerName: nameOf(injured), minute, teamId: lt.team.id, severity: severe ? InjurySeverity.SEVERE : InjurySeverity.LIGHT, days, type });
   eventPush(timeline, minute, lt.side, severe ? MatchEventType.INJURY_SEVERE : MatchEventType.INJURY_LIGHT, `${nameOf(injured)} injured for ${lt.team.name}`, injured.id);
   if (!severe && f > 46 && minute < 82) return;

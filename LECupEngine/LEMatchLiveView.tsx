@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { 
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
@@ -9,6 +9,7 @@ import {
   MatchEvent,
   InstructionTempo, InstructionMindset, InstructionIntensity
 } from '../types';
+import { rollInjuryBySeverity } from '../services/InjuryCatalog';
 
 const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   let r = 6.0;
@@ -1555,8 +1556,7 @@ return {
         if (sideInjuries[p.id]) {
           const sev = sideInjuries[p.id];
           const isSev = sev === InjurySeverity.SEVERE;
-          const days = isSev ? (14 + Math.floor(Math.random() * 30)) : (2 + Math.floor(Math.random() * 6));
-          const type = isSev ? "Poważny uraz więzadeł" : "Stłuczenie mięśnia";
+          const { days, type } = rollInjuryBySeverity(sev, Math.random);
           
        const penalty = isSev ? (Math.floor(Math.random() * 31) + 60) : (Math.floor(Math.random() * 26) + 10);
           const condAfterPenalty = Math.max(0, p.condition - penalty);

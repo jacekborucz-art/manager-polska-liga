@@ -8,6 +8,7 @@ import { GoalAttributionService } from './GoalAttributionService';
 import { TacticRepository } from '../resources/tactics_db';
 import { RefereeService } from './RefereeService';
 import { Referee } from '../types';
+import { rollInjuryBySeverity } from './InjuryCatalog';
 // ============================================================
 //  WBUDOWANY SILNIK PUCHAROWY — symulacja minuta po minucie
 //  Zastępuje wywołanie LeagueBackgroundMatchEngine.simulate()
@@ -277,11 +278,13 @@ const simulateCupMatch = (
 
         const victimId = healthyIds[Math.floor(rng() * healthyIds.length)];
         const isSevere = rng() < 0.15;
+        const severity = isSevere ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
+        const { days, type } = rollInjuryBySeverity(severity, rng);
         injuries.push({
           playerId: victimId,
-          severity: isSevere ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
-          days: isSevere ? (14 + Math.floor(rng() * 30)) : (2 + Math.floor(rng() * 6)),
-          type: isSevere ? 'Poważny uraz więzadeł' : 'Stłuczenie mięśnia'
+          severity,
+          days,
+          type
         });
       }
     }

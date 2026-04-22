@@ -5,6 +5,7 @@ import { LineupService } from './LineupService';
 import { EuropeanWeatherService } from './EuropeanWeatherService';
 import { PlayerStatsService } from './PlayerStatsService';
 import { RefereeService } from './RefereeService';
+import { rollInjuryBySeverity } from './InjuryCatalog';
 
 // ============================================================
 //  NEUTRALNE STADIONY FINAŁÓW
@@ -276,15 +277,17 @@ const simulateCardsAndInjuries = (
     const isInjured = rng(offset + idx + 2000) < 0.0064;
     if (isInjured) {
       const isSev = rng(idx + 3000) < 0.15;
-      const days = isSev
-        ? (14 + Math.floor(rng(idx + 3100) * 30))
-        : (2 + Math.floor(rng(idx + 3200) * 6));
+      let injuryRollOffset = offset + idx + 3100;
+      const { days, type } = rollInjuryBySeverity(
+        isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
+        () => rng(injuryRollOffset++)
+      );
       updatedPlayers = updatedPlayers.map(pl => pl.id === pId ? {
         ...pl,
         health: {
           status: 'INJURED' as any,
           injury: {
-            type: isSev ? 'Poważny uraz więzadeł' : 'Stłuczenie mięśnia',
+            type,
             daysRemaining: days,
             severity: isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
             injuryDate: matchDate.toISOString(),
