@@ -1,4 +1,4 @@
-import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup } from '../types';
+import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { FinanceService } from './FinanceService';
 
@@ -13,6 +13,41 @@ export interface SeasonSummaryData {
     topAssistant: { name: string, assists: number };
   }[];
 }
+
+type WCQPlayoffMailStage = 'SF' | 'FINAL';
+
+const getWCQPlayoffWinner = (result: WCQPlayoffMatchResult): string => {
+  if (result.penaltyWinner) return result.penaltyWinner;
+  return result.homeGoals > result.awayGoals ? result.homeTeam : result.awayTeam;
+};
+
+const formatWCQPlayoffScore = (result: WCQPlayoffMatchResult): string => {
+  const baseScore = `${result.homeGoals}:${result.awayGoals}`;
+  if (result.penaltyWinner && result.homePenaltyGoals !== undefined && result.awayPenaltyGoals !== undefined) {
+    return `${baseScore} (${result.homePenaltyGoals}:${result.awayPenaltyGoals} k.)`;
+  }
+  if (result.wentToExtraTime) return `${baseScore} po dogr.`;
+  return baseScore;
+};
+
+const formatWCQPlayoffScoreForTeam = (result: WCQPlayoffMatchResult, teamName: string): string => {
+  if (result.homeTeam !== teamName && result.awayTeam !== teamName) {
+    return formatWCQPlayoffScore(result);
+  }
+
+  const teamIsHome = result.homeTeam === teamName;
+  const teamGoals = teamIsHome ? result.homeGoals : result.awayGoals;
+  const opponentGoals = teamIsHome ? result.awayGoals : result.homeGoals;
+  const baseScore = `${teamGoals}:${opponentGoals}`;
+
+  if (result.penaltyWinner && result.homePenaltyGoals !== undefined && result.awayPenaltyGoals !== undefined) {
+    const teamPens = teamIsHome ? result.homePenaltyGoals : result.awayPenaltyGoals;
+    const opponentPens = teamIsHome ? result.awayPenaltyGoals : result.homePenaltyGoals;
+    return `${baseScore} (${teamPens}:${opponentPens} k.)`;
+  }
+  if (result.wentToExtraTime) return `${baseScore} po dogr.`;
+  return baseScore;
+};
 
 export const MailService = {
   
@@ -328,6 +363,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       colorSecondary: '#FFFFFF',
       rosterIds: [],
       budget: 0,
+      transferBudget: 0,
       boardStrictness: 5,
       signingBonusPool: 0,
       stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
@@ -350,10 +386,13 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
   generateRetirementReportMail: (retirements: RetirementInfo[], clubName: string): MailMessage => {
     const title = `Raport Kadry ${clubName}`;
-    let body = `Szanowny Panie,\r\n Następujący zawodnicy postanowili zakończyć kariery oraz listę młodych talentów z naszej Akademii, którzy zostali włączeni do kadry w ich miejsce:\n\n`;
+    const hasRetirements = retirements.length > 0;
+    let body = hasRetirements
+      ? `Szanowny Panie,\r\nPo zakończeniu sezonu następujący zawodnicy postanowili zakończyć kariery, a w ich miejsce do kadry włączeni zostali młodzi zawodnicy z naszej Akademii:\n\n`
+      : `Szanowny Panie,\r\nPo zakończeniu sezonu przygotowaliśmy krótką aktualizację kadrową.\n\n`;
 
-    if (retirements.length === 0) {
-      body += "Po ostatnim sezonie, żaden z piłkarzy naszej kadry nie zakończył kariery.";
+    if (!hasRetirements) {
+      body += "Po ostatnim sezonie żaden z piłkarzy naszej kadry nie zdecydował się zakończyć kariery.";
     } else {
       retirements.forEach(r => {
         body += `🎖️ ${r.oldPlayerName} (${r.oldPlayerAge} lat) - Zakończył karierę.\n`;
@@ -361,7 +400,9 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       });
     }
 
-    body += `\nŻyczymy powodzenia w pracy z nowymi zawodnikami!\n\nDyrektor Sportowy`;
+    body += hasRetirements
+      ? `\nŻyczymy powodzenia w pracy z nowymi zawodnikami!\n\nDyrektor Sportowy`
+      : `\n\nDyrektor Sportowy`;
 
     return {
       id: `RETIREMENT_${Date.now()}`,
@@ -452,6 +493,103 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       isRead: false,
       type: MailType.MEDIA,
       priority: polandInvolved ? 140 : 110,
+    };
+  },
+
+  generateWCQPlayoffPolandMail: (
+    playoffState: WCQPlayoffState,
+    stage: WCQPlayoffMailStage,
+    date: Date
+  ): MailMessage | null => {
+    const polandPath = playoffState.paths.find(path => {
+      if (stage === 'SF') {
+        return [path.sf1Result, path.sf2Result].some(
+          result => !!result && (result.homeTeam === 'Polska' || result.awayTeam === 'Polska')
+        );
+      }
+      return !!path.finalResult && (path.finalResult.homeTeam === 'Polska' || path.finalResult.awayTeam === 'Polska');
+    });
+
+    if (!polandPath) return null;
+
+    const result = stage === 'SF'
+      ? [polandPath.sf1Result, polandPath.sf2Result].find(
+          match => !!match && (match.homeTeam === 'Polska' || match.awayTeam === 'Polska')
+        )
+      : polandPath.finalResult;
+
+    if (!result) return null;
+
+    const opponent = result.homeTeam === 'Polska' ? result.awayTeam : result.homeTeam;
+    const polandWon = getWCQPlayoffWinner(result) === 'Polska';
+    const scoreForPoland = formatWCQPlayoffScoreForTeam(result, 'Polska');
+    const sep = '─────────────────────────────────────────────────';
+    const stageLabel = stage === 'SF' ? 'PÓŁFINAŁ BARAŻY' : 'FINAŁ BARAŻY';
+
+    let subject: string;
+    let lead: string;
+
+    if (stage === 'SF') {
+      subject = polandWon
+        ? 'Polska w finale baraży o MŚ 2026! Sport Express po półfinale'
+        : 'Polska odpada w półfinale baraży o MŚ 2026';
+      lead = polandWon
+        ? `Polska pokonała ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i zameldowała się w finale baraży o Mistrzostwa Świata 2026. Biało-Czerwonym został już tylko jeden krok do mundialu.`
+        : `Polska przegrała z ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i odpadła z baraży o Mistrzostwa Świata 2026. Marzenie o wyjeździe na mundial zakończyło się już na pierwszej przeszkodzie.`;
+    } else {
+      subject = polandWon
+        ? 'POLSKA JEDZIE NA MUNDIAL! Wygrany finał baraży o MŚ 2026'
+        : 'Polska przegrywa finał baraży. Mundial 2026 bez Biało-Czerwonych';
+      lead = polandWon
+        ? `Polska wygrała finał ścieżki ${polandPath.pathLabel}, pokonując ${opponent} ${scoreForPoland}, i wywalczyła awans na Mistrzostwa Świata 2026. Biało-Czerwoni wracają na największą scenę futbolu.`
+        : `Polska przegrała finał ścieżki ${polandPath.pathLabel} z ${opponent} ${scoreForPoland} i nie zagra na Mistrzostwach Świata 2026. Barażowa droga zakończyła się tuż przed metą.`;
+    }
+
+    const finalOpponent = polandWon && stage === 'SF'
+      ? [polandPath.finalHome, polandPath.finalAway].find(team => team && team !== 'Polska')
+      : null;
+
+    let body = `════════════════════════════════════════════════\n`;
+    body += `  SPORT EXPRESS  —  WYDANIE SPECJALNE\n`;
+    body += `  BARAŻE MŚ 2026  —  ${stageLabel}\n`;
+    body += `════════════════════════════════════════════════\n\n`;
+    body += `${lead}\n\n`;
+    body += `${sep}\n`;
+    body += `  WYNIK MECZU\n`;
+    body += `${sep}\n\n`;
+    body += `  Polska — ${opponent}\n`;
+    body += `  ${scoreForPoland}\n\n`;
+
+    if (stage === 'SF' && polandWon && finalOpponent) {
+      body += `${sep}\n`;
+      body += `  CO DALEJ?\n`;
+      body += `${sep}\n\n`;
+      body += `  W finale ścieżki ${polandPath.pathLabel} Polska zagra z reprezentacją ${finalOpponent}.\n`;
+      body += `  Stawką tego spotkania będzie bezpośredni awans na mundial.\n\n`;
+    }
+
+    if (stage === 'FINAL') {
+      body += `${sep}\n`;
+      body += `  STAWKA ROZSTRZYGNIĘTA\n`;
+      body += `${sep}\n\n`;
+      body += polandWon
+        ? `  Biało-Czerwoni wygrali barażową ścieżkę ${polandPath.pathLabel} i dołączyli do grona uczestników MŚ 2026.\n\n`
+        : `  Zwycięzca ścieżki ${polandPath.pathLabel} pojedzie na MŚ 2026, a Polska kończy eliminacje na etapie finału baraży.\n\n`;
+    }
+
+    body += `${sep}\n`;
+    body += `  © Sport Express / Redakcja Sport Express`;
+
+    return {
+      id: `WCQ_PLAYOFF_POLAND_${stage}_${playoffState.seasonYear}_${polandPath.pathLabel}`,
+      sender: 'Sport Express',
+      role: 'Redakcja Sportowa',
+      subject,
+      body,
+      date: new Date(date),
+      isRead: false,
+      type: MailType.MEDIA,
+      priority: stage === 'FINAL' ? 155 : 145,
     };
   },
 

@@ -3368,6 +3368,14 @@ setMessages([welcomeMail, fanMail]);
           if (wcqPlayoffState) {
             const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
             setWcqPlayoffState(updatedState);
+            const playoffSfMailKey = `WCQ_PLAYOFF_POLAND_SF_${seasonNumber}`;
+            if (!sentMailIdsRef.current.has(playoffSfMailKey)) {
+              const playoffSfMail = MailService.generateWCQPlayoffPolandMail(updatedState, 'SF', dateToProcess);
+              if (playoffSfMail) {
+                sentMailIdsRef.current.add(playoffSfMailKey);
+                setMessages(prev => [playoffSfMail, ...prev]);
+              }
+            }
           }
           setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
           setTargetJumpTime(null);
@@ -3381,6 +3389,14 @@ setMessages([welcomeMail, fanMail]);
           if (wcqPlayoffState) {
             const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
             setWcqPlayoffState(updatedState);
+            const playoffFinalMailKey = `WCQ_PLAYOFF_POLAND_FINAL_${seasonNumber}`;
+            if (!sentMailIdsRef.current.has(playoffFinalMailKey)) {
+              const playoffFinalMail = MailService.generateWCQPlayoffPolandMail(updatedState, 'FINAL', dateToProcess);
+              if (playoffFinalMail) {
+                sentMailIdsRef.current.add(playoffFinalMailKey);
+                setMessages(prev => [playoffFinalMail, ...prev]);
+              }
+            }
           }
           setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
           setTargetJumpTime(null);
