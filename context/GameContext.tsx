@@ -85,6 +85,7 @@ import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
+import { SaveState } from '../services/SaveGameService';
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -185,6 +186,8 @@ interface GameContextType {
   reserveProgressHistory: ReserveProgressPoint[];
 
   startNewGame: () => void;
+  getSaveState: () => SaveState;
+  loadGameFromFile: (data: SaveState) => void;
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   advanceDay: () => void;
@@ -1227,6 +1230,133 @@ if (userTeamId) {
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
   }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults]);
+
+  const getSaveState = (): SaveState => ({
+    version: '1.5',
+    savedAt: new Date().toISOString(),
+    currentDate,
+    sessionSeed,
+    clubs,
+    leagues,
+    players,
+    reserves,
+    reserveCoachId,
+    academy,
+    scoutPool,
+    scoutMarket,
+    scoutMarketRefreshDate,
+    lineups,
+    userTeamId,
+    seasonTemplate,
+    leagueSchedules,
+    lastRecoveryDate,
+    coaches,
+    roundResults,
+    managerProfile,
+    seasonNumber,
+    messages,
+    activeTrainingId,
+    activeIntensity,
+    trainingProgressHistory,
+    reserveProgressHistory,
+    pendingNegotiations,
+    pendingFriendlyRequests,
+    activeFriendlyFixtureId,
+    activeFriendlyConditions,
+    transferOffers,
+    incomingOffers,
+    aiTransferLog,
+    europeanStatus,
+    nationalTeams,
+    wcqPlayoffState,
+    cupParticipants,
+    activeCupDraw,
+    activeGroupDraw,
+    activePlayoffDraw,
+    relegationPlayoffFirstLegResults,
+    relegationPlayoffFinalResult,
+    promotionPlayoffSemiResults,
+    promotionPlayoffFinalResults,
+    activePlayoffMatch,
+    clGroups,
+    activeELGroupDraw,
+    elGroups,
+    activeConfGroupDraw,
+    confGroups,
+    processedDrawIds,
+    globalFixtures,
+    isResigned,
+    currentPolishChampionId,
+    currentPolishCupWinnerId,
+    currentCLWinnerId,
+    currentELWinnerId,
+    lastUEFASuperCupResult,
+    confR2QPolishTeamIds,
+    supercupWinners,
+  });
+
+  const loadGameFromFile = (data: SaveState): void => {
+    setCurrentDate(data.currentDate);
+    setSessionSeed(data.sessionSeed);
+    setClubs(data.clubs);
+    setLeagues(data.leagues);
+    setPlayers(data.players);
+    setReserves(data.reserves);
+    setReserveCoachId(data.reserveCoachId);
+    setAcademy(data.academy);
+    setScoutPool(data.scoutPool);
+    setScoutMarket(data.scoutMarket);
+    setScoutMarketRefreshDate(data.scoutMarketRefreshDate);
+    setLineups(data.lineups);
+    setUserTeamId(data.userTeamId);
+    setSeasonTemplate(data.seasonTemplate);
+    setLeagueSchedules(data.leagueSchedules);
+    setLastRecoveryDate(data.lastRecoveryDate);
+    setCoaches(data.coaches);
+    setRoundResults(data.roundResults);
+    setManagerProfile(data.managerProfile);
+    setSeasonNumber(data.seasonNumber);
+    setMessages(data.messages);
+    setActiveTrainingId(data.activeTrainingId);
+    setActiveIntensity(data.activeIntensity);
+    setTrainingProgressHistory(data.trainingProgressHistory);
+    setReserveProgressHistory(data.reserveProgressHistory);
+    setPendingNegotiations(data.pendingNegotiations);
+    setPendingFriendlyRequests(data.pendingFriendlyRequests);
+    setActiveFriendlyFixtureId(data.activeFriendlyFixtureId);
+    setActiveFriendlyConditions(data.activeFriendlyConditions);
+    setTransferOffers(data.transferOffers);
+    setIncomingOffers(data.incomingOffers);
+    setAiTransferLog(data.aiTransferLog);
+    setEuropeanStatus(data.europeanStatus);
+    setNationalTeams(data.nationalTeams);
+    setWcqPlayoffState(data.wcqPlayoffState);
+    setCupParticipants(data.cupParticipants);
+    setActiveCupDraw(data.activeCupDraw);
+    setActiveGroupDraw(data.activeGroupDraw);
+    setActivePlayoffDraw(data.activePlayoffDraw);
+    setRelegationPlayoffFirstLegResults(data.relegationPlayoffFirstLegResults);
+    setRelegationPlayoffFinalResult(data.relegationPlayoffFinalResult);
+    setPromotionPlayoffSemiResults(data.promotionPlayoffSemiResults);
+    setPromotionPlayoffFinalResults(data.promotionPlayoffFinalResults);
+    setActivePlayoffMatch(data.activePlayoffMatch);
+    setClGroups(data.clGroups);
+    setActiveELGroupDraw(data.activeELGroupDraw);
+    setElGroups(data.elGroups);
+    setActiveConfGroupDraw(data.activeConfGroupDraw);
+    setConfGroups(data.confGroups);
+    setProcessedDrawIds(data.processedDrawIds);
+    setGlobalFixtures(data.globalFixtures);
+    setIsResigned(data.isResigned);
+    setCurrentPolishChampionId(data.currentPolishChampionId);
+    setCurrentPolishCupWinnerId(data.currentPolishCupWinnerId);
+    setCurrentCLWinnerId(data.currentCLWinnerId);
+    setCurrentELWinnerId(data.currentELWinnerId);
+    setLastUEFASuperCupResult(data.lastUEFASuperCupResult);
+    setConfR2QPolishTeamIds(data.confR2QPolishTeamIds);
+    setSupercupWinners(data.supercupWinners);
+    setViewState(ViewState.DASHBOARD);
+  };
 
   const saveManagerProfile = (profile: ManagerProfile) => {
     setManagerProfile(profile);
@@ -6621,7 +6751,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       lastRecoveryDate,
       managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
-      startNewGame, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
+      startNewGame, getSaveState, loadGameFromFile, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,

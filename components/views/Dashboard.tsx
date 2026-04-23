@@ -25,6 +25,7 @@ import rezerwyButton from '../../Graphic/buttons/rezerwy.png';
 import akademiaButton from '../../Graphic/buttons/akademia.png';
 import szpitalButton from '../../Graphic/buttons/szpital.png';
 import saveButton from '../../Graphic/buttons/save.png';
+import { exportSaveToFile } from '../../services/SaveGameService';
 import edytorButton from '../../Graphic/buttons/edytor.png';
 import rezygnacjaButton from '../../Graphic/buttons/rezygnacja.png';
 import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
@@ -60,6 +61,7 @@ export const Dashboard: React.FC = () => {
     incomingOffers,
     isResigned,
     resignFromClub,
+    getSaveState,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,6 +74,7 @@ export const Dashboard: React.FC = () => {
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers'>('main');
+  const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
 
   useEffect(() => {
     setIsProcessing(false);
@@ -1106,9 +1109,9 @@ const boardConfidence = useMemo(() => {
             className="relative group w-full overflow-hidden rounded-[24px] transition-all">
             <img src={edytorButton} alt="EDYTOR" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
-          <button disabled
-            className="relative w-full overflow-hidden rounded-[24px] opacity-30 cursor-not-allowed">
-            <img src={saveButton} alt="ZAPIS GRY" className="w-full object-contain pointer-events-none" />
+          <button onClick={handleSaveGame}
+            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
+            <img src={saveButton} alt="ZAPIS GRY" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
           <button onClick={() => navigateTo(ViewState.GAME_MANUAL)}
             className="relative group w-full overflow-hidden rounded-[24px] transition-all">

@@ -1,11 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import bgImg from '../../Graphic/themes/main_theme.png';
+import { importSaveFromFile } from '../../services/SaveGameService';
 export const StartMenu: React.FC = () => {
-  const { startNewGame, navigateTo } = useGame();
+  const { startNewGame, navigateTo, loadGameFromFile } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await importSaveFromFile(file);
+      loadGameFromFile(data);
+    } catch {
+      alert('Nieprawidłowy plik zapisu.');
+    }
+    e.target.value = '';
+  };
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-end bg-slate-950 overflow-hidden relative">
@@ -94,15 +107,17 @@ export const StartMenu: React.FC = () => {
              </div>
           </button>
 
-          <button 
-            disabled
-            className="group relative h-48 bg-slate-900/60 border border-white/5 rounded-[32px] p-6 transition-all duration-500 hover:border-white/20 opacity-50 cursor-not-allowed overflow-hidden"
+          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileLoad} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="group relative h-48 bg-slate-600/10 border border-slate-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-slate-600 hover:border-slate-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(100,116,139,0.5)] overflow-hidden"
           >
+             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
              <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl grayscale opacity-50">💾</span>
+                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">💾</span>
                 <div className="text-center">
-                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">KONTYNUUJ</span>
-                  <span className="text-2xl font-black text-slate-400 italic uppercase tracking-tighter">WCZYTAJ</span>
+                  <span className="block text-[10px] font-black text-slate-400 group-hover:text-slate-100 uppercase tracking-widest mb-1">KONTYNUUJ</span>
+                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">WCZYTAJ</span>
                 </div>
              </div>
           </button>
