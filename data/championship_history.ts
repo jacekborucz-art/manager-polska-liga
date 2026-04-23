@@ -155,6 +155,14 @@ export class ChampionshipHistoryService {
     });
   }
 
+  static restore(entries: ChampionshipEntry[]): void {
+    try {
+      localStorage?.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) {
+      console.error('Failed to restore championship history:', e);
+    }
+  }
+
   static clear(): void {
     try {
       localStorage?.removeItem(STORAGE_KEY);

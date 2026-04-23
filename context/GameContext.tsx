@@ -570,6 +570,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
   const startNewGame = () => {
     const startYear = 2025;
     setIsResigned(false);
+    MatchHistoryService.clear();
+    ChampionshipHistoryService.clear();
     setSessionSeed(generateRuntimeSeed());
     const template = SeasonTemplateGenerator.generate(startYear);
     // -> tutaj wstaw kod
@@ -1293,6 +1295,8 @@ if (userTeamId) {
     lastUEFASuperCupResult,
     confR2QPolishTeamIds,
     supercupWinners,
+    matchHistory: MatchHistoryService.getAll(),
+    championshipHistory: ChampionshipHistoryService.getAll(),
   });
 
   const loadGameFromFile = (data: SaveState): void => {
@@ -1355,6 +1359,10 @@ if (userTeamId) {
     setLastUEFASuperCupResult(data.lastUEFASuperCupResult);
     setConfR2QPolishTeamIds(data.confR2QPolishTeamIds);
     setSupercupWinners(data.supercupWinners);
+    MatchHistoryService.clear();
+    (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
+    ChampionshipHistoryService.clear();
+    ChampionshipHistoryService.restore(data.championshipHistory || []);
     setViewState(ViewState.DASHBOARD);
   };
 

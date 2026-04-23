@@ -63,6 +63,8 @@ export interface SaveState {
   lastUEFASuperCupResult: any;
   confR2QPolishTeamIds: string[];
   supercupWinners: { season: string; winner: string; year: number; }[];
+  matchHistory: any[];
+  championshipHistory: any[];
 }
 
 function reviveDate(_key: string, value: unknown): unknown {
