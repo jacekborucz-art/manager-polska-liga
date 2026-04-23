@@ -3,6 +3,7 @@ import { TacticRepository } from '@/resources/tactics_db';
 import { Fixture, Club, Player, Lineup, MatchEventType, InjurySeverity, Referee, WeatherSnapshot, Coach, PlayerAttributes, PlayerPosition } from '../types';
 import { GoalAttributionService } from './GoalAttributionService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { NEUTRAL_PRESSURE_PROFILE, type MatchPressureContext } from './MatchPressureService';
 
 export interface BackgroundMatchResultV2 {
   homeScore: number;
@@ -30,7 +31,8 @@ export const LeagueBackgroundMatchEngineV2 = {
     awayCoach: Coach,
     referee: Referee,
     weather: WeatherSnapshot,
-    seed: number
+    seed: number,
+    pressureContext?: MatchPressureContext
   ): BackgroundMatchResultV2 => {
     
     // Generator liczb pseudolosowych na podstawie ziarna
@@ -67,6 +69,9 @@ export const LeagueBackgroundMatchEngineV2 = {
    const globalChaos = ((seededRng(1) * 0.30) - 0.15) * experienceFactor;
    
     const homeFieldBonus = 1.0015 + ((seededRng as any)(2) * 0.0085);
+    const hPressure = pressureContext?.home ?? NEUTRAL_PRESSURE_PROFILE;
+    const aPressure = pressureContext?.away ?? NEUTRAL_PRESSURE_PROFILE;
+    const rivalryMultiplier = pressureContext?.rivalryMultiplier ?? 1;
     const weatherFinMod = weather.description.toLowerCase().includes('deszcz') ? 0.99 : 1.1;
     const weatherHeatDrain = weather.tempC > 30 ? 1.2 : 1.0;
 
@@ -188,6 +193,21 @@ const allPlayedIds = new Set<string>([
 
       let crowdPressureMod = 1.0;
       const isHomeLosing = homeScore < awayScore;
+      const lateGamePressure = minute > 60 ? Math.min(1, (minute - 60) / 35) : 0;
+      const homeGoalDiff = homeScore - awayScore;
+      const awayGoalDiff = awayScore - homeScore;
+      const homeIsChasing = homeGoalDiff < 0;
+      const awayIsChasing = awayGoalDiff < 0;
+      const homeLowMoraleCollapse = homeIsChasing && homeGoalDiff <= -2 ? hPressure.resignationMultiplier : 1;
+      const awayLowMoraleCollapse = awayIsChasing && awayGoalDiff <= -2 ? aPressure.resignationMultiplier : 1;
+      const hLateChaseMod = homeIsChasing
+        ? 1 + lateGamePressure * hPressure.lateChaseMultiplier * Math.min(1.25, Math.abs(homeGoalDiff) * 0.55)
+        : 1;
+      const aLateChaseMod = awayIsChasing
+        ? 1 + lateGamePressure * aPressure.lateChaseMultiplier * Math.min(1.25, Math.abs(awayGoalDiff) * 0.55)
+        : 1;
+      const hPressureAttackMod = hPressure.intensityMultiplier * hPressure.composureMultiplier * hLateChaseMod * homeLowMoraleCollapse;
+      const aPressureAttackMod = aPressure.intensityMultiplier * aPressure.composureMultiplier * aLateChaseMod * awayLowMoraleCollapse;
 
 // Presja narasta liniowo: od 0% w 45 minucie do ~12% w 95 minucie
 
@@ -227,8 +247,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * awayRedImpact * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * crowdPressureMod;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * homeRedImpact * aSatiety * aTacticMod * aGkPanic * awayFormBoost;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * awayRedImpact * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * homeRedImpact * aSatiety * aTacticMod * aGkPanic * awayFormBoost * aPressureAttackMod * rivalryMultiplier;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {
@@ -274,17 +294,21 @@ const allPlayedIds = new Set<string>([
       const yellowBaseProb = (0.001 + (referee.strictness / 7500)) * yellowExperienceFactor;
       const hCardRoll = seededRng(minute + 300);
       const aCardRoll = seededRng(minute + 300);
+      const hDesperationCardMod = homeIsChasing ? 1 + lateGamePressure * hPressure.lateChaseMultiplier * 0.75 : 1;
+      const aDesperationCardMod = awayIsChasing ? 1 + lateGamePressure * aPressure.lateChaseMultiplier * 0.75 : 1;
+      const hCardPressureMod = hPressure.cardMultiplier * hDesperationCardMod * rivalryMultiplier;
+      const aCardPressureMod = aPressure.cardMultiplier * aDesperationCardMod * rivalryMultiplier;
 
       // Gospodarz ma przywilej korzyści (bias)
       const hBias = (referee.advantageTendency / 5000);
 
-    const processCardLogic = (side: 'H' | 'A', activeXI: string[], roll: number, bias: number) => {
-        if (roll < yellowBaseProb + bias && activeXI.length > 0) {
+    const processCardLogic = (side: 'H' | 'A', activeXI: string[], roll: number, bias: number, sideCardMultiplier: number) => {
+        if (roll < (yellowBaseProb * sideCardMultiplier) + bias && activeXI.length > 0) {
           const pId = activeXI[Math.floor(seededRng(minute + 333) * activeXI.length)];
           if (!pId || expelledIds.has(pId)) return;
 
           const currentYellows = (playerYellowCounts.get(pId) || 0) + 1;
-          const isDirectRed = seededRng(minute + 334) < (referee.strictness / 35000);
+          const isDirectRed = seededRng(minute + 334) < ((referee.strictness / 35000) * sideCardMultiplier);
 
           if (isDirectRed || currentYellows >= 2) {
             // WYKLUCZENIE
@@ -305,8 +329,8 @@ const allPlayedIds = new Set<string>([
         }
       };
 
-      processCardLogic('H', hActiveXI, hCardRoll, -hBias);
-      processCardLogic('A', aActiveXI, aCardRoll, (hBias / 2));
+      processCardLogic('H', hActiveXI, hCardRoll, -hBias, hCardPressureMod);
+      processCardLogic('A', aActiveXI, aCardRoll, (hBias / 2), aCardPressureMod);
 
 
 // 2c. SYMULACJA KONTUZJI (0.4% szansy na minutę na mecz)
@@ -342,10 +366,12 @@ const allPlayedIds = new Set<string>([
 
       // DRENAŻ KONDYCJI (Co minutę)
       const baseDrain = 0.22 * weatherHeatDrain;
+      const hPressureDrain = hPressure.fatigueMultiplier * (homeIsChasing ? 1 + lateGamePressure * hPressure.lateChaseMultiplier * 0.50 : 1);
+      const aPressureDrain = aPressure.fatigueMultiplier * (awayIsChasing ? 1 + lateGamePressure * aPressure.lateChaseMultiplier * 0.50 : 1);
 homeLineup.startingXI.forEach((id, idx) => {
   if (id) {
     const p = homePlayers.find(px => px.id === id);
-    let currentDrain = baseDrain;
+    let currentDrain = baseDrain * hPressureDrain;
       if (p?.position === 'GK') {
       // Redukcja drenażu o losową wartość 10-30% (mnożnik 0.7 - 0.9)
       const gkReduction = 0.4 + (seededRng(minute + idx + 500) * 0.2);
@@ -358,7 +384,9 @@ homeLineup.startingXI.forEach((id, idx) => {
     awayLineup.startingXI.forEach((id, idx) => {
         if (id) {
           const p = awayPlayers.find(px => px.id === id);
+          const awaySidePressureDrain = aPressureDrain;
           let currentDrain = baseDrain; // Korzystamy z zadeklarowanego wcześniej baseDrain
+          currentDrain *= awaySidePressureDrain;
           if (p?.position === 'GK') {
             const gkReduction = 0.7 + (seededRng(minute + idx + 600) * 0.2); // Zmieniony offset dla Gości
             currentDrain *= gkReduction;

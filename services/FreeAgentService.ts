@@ -37,6 +37,10 @@ export const FreeAgentService = {
       (Object.keys(scaledAttributes) as (keyof typeof scaledAttributes)[]).forEach(key => {
         scaledAttributes[key] = Math.max(1, Math.min(99, Math.round(scaledAttributes[key] * scaleFactor)));
       });
+      const finalAttributes = PlayerAttributesGenerator.capInitialGoalkeeperAttributes(scaledAttributes, position);
+      const finalOverall = position === PlayerPosition.GK
+        ? PlayerAttributesGenerator.calculateOverall(finalAttributes, position)
+        : targetOverall;
 
       pool.push({
         id: `FREE_AGENT_${Date.now()}_${i}`,
@@ -48,8 +52,8 @@ export const FreeAgentService = {
         nationality: region,
         nationalityCountry: pickNationalityForRegion(region),
         position: position,
-        overallRating: targetOverall,
-        attributes: scaledAttributes,
+        overallRating: finalOverall,
+        attributes: finalAttributes,
         stats: { 
           goals: 0, 
           assists: 0, 

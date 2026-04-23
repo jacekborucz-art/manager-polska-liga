@@ -91,6 +91,15 @@ import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
+import {
+  adjustBriefingEffectForPressure,
+  adjustDebriefEffectForPressure,
+  adjustTalkEffectForPressure,
+  buildMatchPressureContext,
+  getAiHalftimePressureMultiplier,
+  getLivePressureModifiers,
+  getPressureProfileForSide,
+} from '../../services/MatchPressureService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -196,20 +205,42 @@ export const MatchLiveView = () => {
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
 
+  const livePressureContext = useMemo(() => {
+    if (!ctx) return null;
+    const leagueClubs = clubs.filter(c => c.leagueId === ctx.homeClub.leagueId);
+    const sortedStandings = [...leagueClubs].sort((a, b) =>
+      b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor
+    );
+    const homeCoach = ctx.homeClub.coachId ? coaches[ctx.homeClub.coachId] : null;
+    const awayCoach = ctx.awayClub.coachId ? coaches[ctx.awayClub.coachId] : null;
+    return buildMatchPressureContext(ctx.fixture, ctx.homeClub, ctx.awayClub, sortedStandings, homeCoach, awayCoach);
+  }, [ctx, clubs, coaches]);
+
+  const userPressureProfile = useMemo(
+    () => getPressureProfileForSide(livePressureContext, userSide),
+    [livePressureContext, userSide]
+  );
+
+  const aiPressureProfile = useMemo(
+    () => getPressureProfileForSide(livePressureContext, userSide === 'HOME' ? 'AWAY' : 'HOME'),
+    [livePressureContext, userSide]
+  );
+
   const handleBriefingClose = (effect: BriefingEffect) => {
+    const pressureEffect = adjustBriefingEffectForPressure(effect, userPressureProfile);
     setShowBriefing(false);
     setMatchState(prev => {
       if (!prev) return prev;
       return {
         ...prev,
         preMatchMotivation: {
-          actionMod:     effect.actionMod,
-          goalMod:       effect.goalMod,
-          momentumBonus: effect.momentumBonus,
-          expiryMinute:  effect.expiryMinute,
-          fatigueMult:   effect.fatigueMult,
-          rivalBoost:    effect.rivalBoost,
-          label:         effect.label,
+          actionMod:     pressureEffect.actionMod,
+          goalMod:       pressureEffect.goalMod,
+          momentumBonus: pressureEffect.momentumBonus,
+          expiryMinute:  pressureEffect.expiryMinute,
+          fatigueMult:   pressureEffect.fatigueMult,
+          rivalBoost:    pressureEffect.rivalBoost,
+          label:         pressureEffect.label,
         },
       };
     });
@@ -498,20 +529,21 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     setMatchState(prev => {
       if (!prev) return prev;
       const isHome = userSide === 'HOME';
+      const userScore = isHome ? prev.homeScore : prev.awayScore;
+      const oppScore = isHome ? prev.awayScore : prev.homeScore;
+      const pressureEffect = adjustTalkEffectForPressure(effect, userPressureProfile, userScore - oppScore);
       const userFatigueMap = isHome ? prev.homeFatigue : prev.awayFatigue;
       const userXI = isHome ? prev.homeLineup.startingXI : prev.awayLineup.startingXI;
       const nextFatigue = { ...userFatigueMap };
-      if (effect.fatigueRegenBonus !== 0) {
+      if (pressureEffect.fatigueRegenBonus !== 0) {
         userXI.forEach(pId => {
-          if (pId) nextFatigue[pId] = Math.min(100, (nextFatigue[pId] || 100) + effect.fatigueRegenBonus);
+          if (pId) nextFatigue[pId] = Math.min(100, (nextFatigue[pId] || 100) + pressureEffect.fatigueRegenBonus);
         });
       }
       const oppClub = isHome ? ctx?.awayClub : ctx?.homeClub;
       const oppCoach = oppClub?.coachId ? coaches[oppClub.coachId] : null;
-      const oppScore = isHome ? prev.awayScore : prev.homeScore;
-      const userScore = isHome ? prev.homeScore : prev.awayScore;
       const oppContext = getScoreContext(oppScore, userScore);
-      const oppCoachDelta = oppCoach
+      const baseOppCoachDelta = oppCoach
         ? calculateOpponentCoachTalkEffect(
             oppCoach.attributes.decisionMaking,
             oppCoach.attributes.experience,
@@ -519,19 +551,20 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             prev.sessionSeed
           )
         : 0;
+      const oppCoachDelta = Math.round(baseOppCoachDelta * getAiHalftimePressureMultiplier(aiPressureProfile, oppCoach) * 10) / 10;
       const oppMomentumDelta = isHome ? -oppCoachDelta : oppCoachDelta;
       return {
         ...prev,
         homeFatigue: isHome ? nextFatigue : prev.homeFatigue,
         awayFatigue: !isHome ? nextFatigue : prev.awayFatigue,
         halftimeTalkApplied: true,
-        halftimeMomentumBonus: effect.momentumDelta,
+        halftimeMomentumBonus: pressureEffect.momentumDelta,
         oppHalftimeMomentumBonus: oppMomentumDelta,
         userInstructions: {
           ...prev.userInstructions,
-          tempoResponseFactor:     effect.tempoResponseFactor,
-          mindsetResponseFactor:   effect.mindsetResponseFactor,
-          intensityResponseFactor: effect.intensityResponseFactor,
+          tempoResponseFactor:     pressureEffect.tempoResponseFactor,
+          mindsetResponseFactor:   pressureEffect.mindsetResponseFactor,
+          intensityResponseFactor: pressureEffect.intensityResponseFactor,
         },
       };
     });
@@ -540,9 +573,13 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
 
   const handleDebriefClose = (effect: DebriefEffect) => {
     if (!pendingFinishPayload) return;
+    const args = pendingFinishPayload.matchHistoryArgs;
+    const userScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.homeScore : args.awayScore;
+    const oppScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.awayScore : args.homeScore;
+    const pressureEffect = adjustDebriefEffectForPressure(effect, userPressureProfile, userScore - oppScore);
     const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
       if (c.id !== pendingFinishPayload.userTeamId) return c;
-      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + pressureEffect.moraleDelta)));
       return { ...c, morale: newMorale };
     });
     applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
@@ -778,16 +815,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
         const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
 
+        const homeScoreDiff = prev.homeScore - prev.awayScore;
+        const awayScoreDiff = prev.awayScore - prev.homeScore;
+        const userScoreDiff = userSide === 'HOME' ? homeScoreDiff : awayScoreDiff;
+        const hLivePressure = getLivePressureModifiers(
+          getPressureProfileForSide(livePressureContext, 'HOME'),
+          homeScoreDiff,
+          nextMinute,
+          userSide === 'HOME'
+        );
+        const aLivePressure = getLivePressureModifiers(
+          getPressureProfileForSide(livePressureContext, 'AWAY'),
+          awayScoreDiff,
+          nextMinute,
+          userSide === 'AWAY'
+        );
+
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
-        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod));
+        const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
+        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod + pressureInitiativeMod));
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        let activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
         const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
         const opponentCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
         const opponentPressure = userSide === 'HOME' ? Math.max(0, -prev.momentum) : Math.max(0, prev.momentum);
-        const userScoreDiff = userSide === 'HOME' ? prev.homeScore - prev.awayScore : prev.awayScore - prev.homeScore;
         const counterShape =
           prev.userInstructions.mindset === 'DEFENSIVE' ||
           userCounterTactic.defenseBias >= 62 ||
@@ -848,6 +902,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
         // ─────────────────────────────────────────────────────────────────────
+        activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.1294; // Bazowa szansa (+15%)
@@ -1220,6 +1275,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (nextMinute === 1 && activeBriefing?.momentumBonus && isUserAttacking) {
           shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
         }
+        shotThreshold = Math.max(
+          0.035,
+          Math.min(0.245, shotThreshold * activePressureMods.shotMultiplier * (livePressureContext?.rivalryMultiplier ?? 1))
+        );
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;
@@ -1271,14 +1330,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const _activeXI = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
         const _avgAggression = _activeXI.length > 0 ? _activeTeam.filter(p => _activeXI.includes(p.id)).reduce((acc, p) => acc + p.attributes.aggression, 0) / _activeXI.length : 50;
         const _aggrFoulMod = 0.70 + (_avgAggression / 100) * 0.60;
-        const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : aiFoulMod) * _aggrFoulMod;
+        const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : aiFoulMod) * _aggrFoulMod * activePressureMods.cardMultiplier;
         if (rngEvent < uFoulThreshold) { 
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
            const player = (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId)!;
            if (!player) return prev; // Jeśli zawodnik zniknął (np. czerwona kartka), przerwij akcję
-           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * (isUserAttacking ? uPenaltyMod : aiPenaltyMod));
+           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * (isUserAttacking ? uPenaltyMod : aiPenaltyMod) * activePressureMods.penaltyMultiplier);
 
            if (isPenalty) {
               const attackingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
@@ -1613,7 +1672,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
 
         const accidentalInjuryRoll = seededRng(currentSeed, nextMinute, 4500);
-        const uInjuryThreshold = 0.0064 * ((uInjuryMod + 1.0) / 2);
+        const matchPressureInjuryMod = Math.max(hLivePressure.injuryMultiplier, aLivePressure.injuryMultiplier);
+        const uInjuryThreshold = 0.0064 * ((uInjuryMod + 1.0) / 2) * matchPressureInjuryMod;
         if (accidentalInjuryRoll < uInjuryThreshold) {
            const side: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 4600) < 0.5 ? 'HOME' : 'AWAY';
            const pool = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
@@ -1784,6 +1844,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             aiFatTarget[id] = Math.max(0, (aiFatTarget[id] ?? 100) - aiFatExtra);
           });
         }
+        if (hLivePressure.fatigueDrainExtra > 0) {
+          nextHomeLineup.startingXI.filter((id): id is string => id !== null).forEach(id => {
+            fatigue.home[id] = Math.max(0, (fatigue.home[id] ?? 100) - hLivePressure.fatigueDrainExtra);
+          });
+        }
+        if (aLivePressure.fatigueDrainExtra > 0) {
+          nextAwayLineup.startingXI.filter((id): id is string => id !== null).forEach(id => {
+            fatigue.away[id] = Math.max(0, (fatigue.away[id] ?? 100) - aLivePressure.fatigueDrainExtra);
+          });
+        }
         Object.keys(nextHomeInjuries).forEach(id => { if (nextHomeInjuries[id] === InjurySeverity.SEVERE) fatigue.home[id] = 0; });
         Object.keys(nextAwayInjuries).forEach(id => { if (nextAwayInjuries[id] === InjurySeverity.SEVERE) fatigue.away[id] = 0; });
 
@@ -1877,7 +1947,7 @@ return {
       });
     }, tickInterval);
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, isTacticsOpen, activePenalty, activeVAR, hasMandatorySub, setMatchState]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activeVAR, hasMandatorySub, setMatchState]);
 
  const handleFinishMatch = () => {
     if (!matchState || !ctx) return;

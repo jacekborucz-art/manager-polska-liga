@@ -13,6 +13,7 @@ import { PolandWeatherService } from './PolandWeatherService';
 import { FinanceService } from './FinanceService';
 import { PendingNegotiation } from '@/types';
 import { AiScoutingService } from './AiScoutingService';
+import { buildMatchPressureContext } from './MatchPressureService';
 
 export const BackgroundMatchProcessor = {
   processLeagueEvent: (
@@ -176,6 +177,8 @@ if (todayFixtures.length === 0) {
       const hCoach = coaches[home.coachId || ''] || { attributes: { experience: 50, decisionMaking: 50, motivation: 50 } };
       const aCoach = coaches[away.coachId || ''] || { attributes: { experience: 50, decisionMaking: 50, motivation: 50 } };
       const assignedRef = RefereeService.assignPolishReferee(fixture.id, 3);
+      const leagueStandings = standingsMap[fixture.leagueId as string] || [];
+      const pressureContext = buildMatchPressureContext(fixture, home, away, leagueStandings, hCoach as Coach, aCoach as Coach);
 
       // --- WYBÓR SILNIKA (ODKOMENTUJ WŁAŚCIWY) ---
       
@@ -185,7 +188,7 @@ if (todayFixtures.length === 0) {
       // NOWY SILNIK V2.0:
       const result = LeagueBackgroundMatchEngineV2.simulate(
         fixture, home, away, hPlayers, aPlayers, hLineup, aLineup, 
-        hCoach as any, aCoach as any, assignedRef, weather, seed
+        hCoach as any, aCoach as any, assignedRef, weather, seed, pressureContext
       );
 
       const yellowsInMatch = result.cards.filter(c => c.type === MatchEventType.YELLOW_CARD).length;
@@ -194,7 +197,6 @@ if (todayFixtures.length === 0) {
       RefereeService.recordMatchStats(assignedRef.id, refereeRating, yellowsInMatch, redsInMatch);
 
       // Obliczamy miejsce gospodarza w tabeli
-      const leagueStandings = standingsMap[fixture.leagueId as string] || [];
       const homeRank = leagueStandings.findIndex(c => c.id === home.id) + 1 || 10; 
       const attendance = AttendanceService.calculate(home, homeRank, weather);
 

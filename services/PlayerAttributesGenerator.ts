@@ -22,6 +22,22 @@ export const EUROPEAN_TIER_CONFIG: Record<number, { minBase: number; maxBase: nu
   5: { minBase: 28, maxBase: 44, hardCap: 57 },
 };
 
+export const INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP = 60;
+
+export const capInitialGoalkeeperAttributes = (
+  attributes: PlayerAttributes,
+  position: PlayerPosition,
+  isEuropean: boolean = false
+): PlayerAttributes => {
+  if (position !== PlayerPosition.GK || isEuropean) return attributes;
+  const capped = { ...attributes };
+  (Object.keys(capped) as (keyof PlayerAttributes)[]).forEach(key => {
+    if (key === 'strength' || key === 'stamina') return;
+    capped[key] = Math.max(1, Math.min(INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP, capped[key]));
+  });
+  return capped;
+};
+
 // Profil regionu: baseOffset obniża bazę generowania, starChance to szansa na “iskrę talentu” per atrybut.
 // Dotyczy wyłącznie syntetycznych zawodników kadry narodowej (generatePlayerForNT).
 export const REGION_PROFILE: Partial<Record<Region, { baseOffset: number; starChance: number }>> = {
@@ -134,6 +150,7 @@ const OVR_WEIGHTS: Record<PlayerPosition, Partial<Record<keyof PlayerAttributes,
 };
 
 export const PlayerAttributesGenerator = {
+  capInitialGoalkeeperAttributes,
   
    generateAttributes: (position: PlayerPosition, leagueTier: number, clubReputation: number, age: number, isEuropean: boolean = false, talentConfig?: { minBase: number; maxBase: number; hardCap: number }, regionProfile?: { baseOffset: number; starChance: number }): { attributes: PlayerAttributes, overall: number } => {
 
@@ -179,7 +196,8 @@ export const PlayerAttributesGenerator = {
          else if (age > 33) val = Math.min(val, 87);
          else if (age > 30) val = Math.min(val, 91);
 
-         generated[key] = Math.max(45, Math.min(99, val));
+         const physicalCap = position === PlayerPosition.GK && key === 'pace' && !isEuropean ? INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP : 99;
+         generated[key] = Math.max(45, Math.min(physicalCap, val));
          return;
       }
 
@@ -223,21 +241,24 @@ export const PlayerAttributesGenerator = {
          value = (tierBase * multiplier) + ((Math.random() * 10) - 5);
       }
       
-      const attrCap =
+      const baseAttrCap =
         position === PlayerPosition.DEF && (key === 'freeKicks' || key === 'penalties')
           ? 85
           : config.hardCap;
+      const attrCap = position === PlayerPosition.GK && !isEuropean
+        ? Math.min(baseAttrCap, INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP)
+        : baseAttrCap;
 
       value = Math.max(1, Math.min(Math.floor(value), attrCap));
       
       if (Math.random() < (regionProfile?.starChance ?? 0.04)) {
-          value = Math.min(99, value + Math.floor(Math.random() * 12) + 3);
+          value = Math.min(attrCap, value + Math.floor(Math.random() * 12) + 3);
       }
 
       generated[key] = value;
     });
 
-    const finalAttributes = generated as PlayerAttributes;
+    const finalAttributes = capInitialGoalkeeperAttributes(generated as PlayerAttributes, position, isEuropean);
     const overall = PlayerAttributesGenerator.calculateOverall(finalAttributes, position);
 
     return { attributes: finalAttributes, overall };
