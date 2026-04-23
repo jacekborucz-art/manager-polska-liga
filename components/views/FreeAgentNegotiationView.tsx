@@ -27,11 +27,20 @@ export const FreeAgentNegotiationView: React.FC = () => {
     () => clubs.find(c => c.id === userTeamId),
     [clubs, userTeamId]
   );
+  const mySquad = useMemo(
+    () => (userTeamId ? players[userTeamId] || [] : []),
+    [players, userTeamId]
+  );
 
   const maxSalaryAllowed = useMemo(() => {
-    if (!myClub) return 500000;
-    return myClub.transferBudget;
-  }, [myClub]);
+    if (!myClub || !player) return 500000;
+
+    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+    const budgetCap = Math.max(150000, Math.floor(myClub.transferBudget * 0.25));
+    const marketCap = fairSalary * (player.overallRating >= 80 ? 4.5 : player.overallRating >= 72 ? 3.5 : 3);
+
+    return Math.floor(Math.min(budgetCap, marketCap, myClub.transferBudget));
+  }, [myClub, player]);
 
   const maxBonusAllowed = useMemo(() => {
     if (!myClub || !player) return 0;
@@ -54,8 +63,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
-    return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub);
-  }, [player, myClub]);
+    return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub, mySquad);
+  }, [player, myClub, mySquad]);
 
   const isAlreadyNegotiating = useMemo(() => {
     if (!player) return false;
@@ -70,14 +79,14 @@ export const FreeAgentNegotiationView: React.FC = () => {
   if (!player || !myClub) return null;
 
   const isInterested = agentInterest.interested;
-  const effectiveBudget = maxSalaryAllowed + extraBudget;
+  const availableBudget = myClub.transferBudget + extraBudget;
   const totalCostPreview = salary * years + bonus;
-  const mySquad = players[userTeamId!] || [];
+  const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;
-  const canRequestBoard = totalCostPreview > effectiveBudget && boardRequestsUsed < 2 && extraBudget === 0;
+  const canRequestBoard = totalCostPreview > availableBudget && boardRequestsUsed < 2 && extraBudget === 0;
 
   const handleBoardRequest = () => {
-    const shortfall = totalCostPreview - effectiveBudget;
+    const shortfall = totalCostPreview - availableBudget;
     const result = BoardBudgetRequestService.evaluateBoardRequest(player, myClub, mySquad, shortfall);
     setBoardRequestResult(result);
     setClubs(prev => prev.map(c => c.id === myClub.id
@@ -103,7 +112,6 @@ export const FreeAgentNegotiationView: React.FC = () => {
       return;
     }
 
-    const mySquad = players[userTeamId!] || [];
     if (mySquad.length >= 30) {
       setBoardVeto({
         msg: 'ZARZAD NIE ZEZWALA NA ZATRUDNIENIE. NAJPIERW ZWOLNIJ MIEJSCE W KADRZE.',
@@ -116,8 +124,14 @@ export const FreeAgentNegotiationView: React.FC = () => {
       : 120000;
 
     const totalCost = salary * years + bonus;
-    if (totalCost > effectiveBudget) {
-      setBoardVeto({ msg: `Łączny koszt kontraktu (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${effectiveBudget.toLocaleString('pl-PL')} PLN).` });
+    const boardCheck = FinanceService.evaluateFASigningBoardDecision(player, salary, bonus, mySquad, myClub);
+    if (!boardCheck.approved) {
+      setBoardVeto({ msg: boardCheck.reason });
+      return;
+    }
+
+    if (totalCost > availableBudget) {
+      setBoardVeto({ msg: `Łączny koszt kontraktu (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
       return;
     }
 
@@ -165,7 +179,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
           bonus,
           years,
           currentDate,
-          players[userTeamId!] || []
+          mySquad
         );
         setPendingNegotiations(prev => [...prev, newNegotiation]);
       }
@@ -219,7 +233,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                         value={salary}
                         onChange={e => {
                           const value = parseInt(e.target.value, 10) || 0;
-                          setSalary(Math.min(value, maxSalaryAllowed));
+                          setSalary(Math.min(value, currentSalaryCap));
                         }}
                         className="bg-transparent border-none outline-none text-xl font-black text-emerald-400 font-mono italic w-32 text-right"
                       />
@@ -229,15 +243,15 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   <input
                     type="range"
                     min="0"
-                    max={effectiveBudget}
+                    max={Math.max(currentSalaryCap, 0)}
                     step="5000"
                     value={salary}
-                    onChange={e => setSalary(parseInt(e.target.value, 10))}
+                    onChange={e => setSalary(Math.min(parseInt(e.target.value, 10), currentSalaryCap))}
                     className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                   />
                   <div className="flex justify-between px-1">
                     <span className="text-[8px] font-bold text-slate-600 uppercase">Min: 0</span>
-                    <span className="text-[8px] font-bold text-slate-600 uppercase">Max: {effectiveBudget.toLocaleString()}</span>
+                    <span className="text-[8px] font-bold text-slate-600 uppercase">Limit placowy: {currentSalaryCap.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -311,7 +325,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
           >
             PROŚBA DO ZARZĄDU O DODATKOWY BUDŻET
             <span className="block text-xs font-bold normal-case tracking-normal mt-1 text-amber-200">
-              Brakuje: {(totalCostPreview - effectiveBudget).toLocaleString('pl-PL')} PLN | Pozostałe wnioski: {2 - boardRequestsUsed}
+              Brakuje: {(totalCostPreview - availableBudget).toLocaleString('pl-PL')} PLN | Pozostałe wnioski: {2 - boardRequestsUsed}
             </span>
           </button>
         )}

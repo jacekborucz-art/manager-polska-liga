@@ -6404,11 +6404,74 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     // KONIEC KODU
     const freeAgents = players['FREE_AGENTS'] || [];
     const playerToSign = freeAgents.find(p => p.id === playerId);
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const userSquad = players[userTeamId] || [];
 
-    if (!playerToSign) return;
+    if (!playerToSign || !userClub) return;
+
+    const failForNoFunds = () => {
+      const lockoutDate = new Date(currentDate);
+      lockoutDate.setFullYear(lockoutDate.getFullYear() + 1);
+
+      setPlayers(prevPlayers => ({
+        ...prevPlayers,
+        ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+          player.id === playerToSign.id
+            ? {
+                ...player,
+                freeAgentLockoutUntil: null,
+                isNegotiationPermanentBlocked: false,
+                freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                  player.freeAgentClubLockouts,
+                  userTeamId,
+                  lockoutDate.toISOString()
+                )
+              }
+            : player
+        )
+      }));
+
+      const offendedMail: MailMessage = {
+        id: `MAIL_FA_NO_FUNDS_${mail.id}`,
+        sender: `Agent gracza ${playerToSign.lastName}`,
+        role: 'Agencja Menadzerska',
+        subject: `Rozmowy zerwane: ${playerToSign.firstName} ${playerToSign.lastName}`,
+        body: `Po ponownej weryfikacji okazalo sie, ze klub ${userClub.name} nie ma srodkow na realizacje uzgodnionych warunkow. Moj klient potraktowal to jako brak powagi. Wracamy do rozmow najwczesniej po ${lockoutDate.toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 96
+      };
+
+      setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
+
+      return showGameNotification({
+        title: 'Transfer anulowany',
+        message: `${playerToSign.firstName} ${playerToSign.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodkow. Kolejna proba bedzie mozliwa dopiero za rok.`,
+        tone: 'error'
+      });
+    };
 
     // 1. Zabierz bonus i wartość kontraktu (pensja × lata) z budżetu transferowego
     const contractCost = bonus + salary * years;
+    if (contractCost > userClub.transferBudget) {
+      return failForNoFunds();
+    }
+
+    const boardDecision = FinanceService.evaluateFASigningBoardDecision(
+      playerToSign,
+      salary,
+      bonus,
+      userSquad,
+      userClub
+    );
+    if (!boardDecision.approved) {
+      return showGameNotification({
+        title: 'Veto zarzadu',
+        message: boardDecision.reason,
+        tone: 'error'
+      });
+    }
     setClubs(prev => prev.map(c => c.id === userTeamId ? {
       ...c,
       transferBudget: c.transferBudget - contractCost,
@@ -6431,7 +6494,6 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
    // AKTUALIZACJA HISTORII - TUTAJ WSTAW TEN KOD
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
-    const userClub = clubs.find(c => c.id === userTeamId);
     const updatedHistory = PlayerCareerService.movePlayer(
       playerToSign,
       { clubName: userClub?.name || 'Nieznany Klub', clubId: userTeamId },

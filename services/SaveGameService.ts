@@ -1,5 +1,5 @@
 
-const SAVE_VERSION = '1.5';
+const SAVE_VERSION = '1.6';
 
 export interface SaveState {
   version: string;
@@ -75,6 +75,34 @@ function reviveDate(_key: string, value: unknown): unknown {
   return value;
 }
 
+function normalizeSaveState(data: SaveState): SaveState {
+  const normalizedPlayers = Object.fromEntries(
+    Object.entries(data.players || {}).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player: any) => ({
+        ...player,
+        freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
+      })),
+    ])
+  );
+
+  return {
+    ...data,
+    version: data.version || SAVE_VERSION,
+    players: normalizedPlayers,
+    messages: data.messages || [],
+    pendingNegotiations: data.pendingNegotiations || [],
+    pendingFriendlyRequests: data.pendingFriendlyRequests || [],
+    transferOffers: data.transferOffers || [],
+    incomingOffers: data.incomingOffers || [],
+    aiTransferLog: data.aiTransferLog || [],
+    globalFixtures: data.globalFixtures || [],
+    supercupWinners: data.supercupWinners || [],
+    matchHistory: data.matchHistory || [],
+    championshipHistory: data.championshipHistory || [],
+  };
+}
+
 export function exportSaveToFile(state: SaveState): void {
   const json = JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: new Date().toISOString() });
   const blob = new Blob([json], { type: 'application/json' });
@@ -88,7 +116,8 @@ export function exportSaveToFile(state: SaveState): void {
 
 export async function importSaveFromFile(file: File): Promise<SaveState> {
   const text = await file.text();
-  const data = JSON.parse(text, reviveDate) as SaveState;
+  const rawData = JSON.parse(text, reviveDate) as SaveState;
+  const data = normalizeSaveState(rawData);
   if (
     !data ||
     typeof data !== 'object' ||

@@ -864,12 +864,46 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           userSide === 'AWAY'
         );
 
+        const getMidfieldControl = (
+          playersList: Player[],
+          xi: (string | null)[]
+        ): number => {
+          const ids = xi.filter((id): id is string => id !== null);
+          const midfielders = playersList.filter(
+            p => ids.includes(p.id) && p.position === PlayerPosition.MID
+          );
+          if (midfielders.length === 0) return 60;
+          return midfielders.reduce(
+            (acc, p) => acc + ((p.attributes.technique + p.attributes.passing) / 2),
+            0
+          ) / midfielders.length;
+        };
+
+        const homeMidfieldControl = getMidfieldControl(ctx.homePlayers, nextHomeLineup.startingXI);
+        const awayMidfieldControl = getMidfieldControl(ctx.awayPlayers, nextAwayLineup.startingXI);
+        const midfieldControlDiff = homeMidfieldControl - awayMidfieldControl;
+        const midfieldInitiativeMod =
+          Math.abs(midfieldControlDiff) <= 2
+            ? 0
+            : Math.max(-0.026, Math.min(0.026, midfieldControlDiff * 0.0014));
+
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
         const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
-        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod + pressureInitiativeMod + formInitiativeMod));
+        const homeAttackChance = Math.min(
+          0.92,
+          Math.max(
+            0.08,
+            0.5 +
+              prev.momentum / 160 +
+              fatInitiativeMod +
+              pressureInitiativeMod +
+              formInitiativeMod +
+              midfieldInitiativeMod
+          )
+        );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         let activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
@@ -1057,6 +1091,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - freshDefBonus
         );
 
+        const activeMidfieldControlDiff = activeSide === 'HOME'
+          ? midfieldControlDiff
+          : -midfieldControlDiff;
+        if (activeMidfieldControlDiff > 2) {
+          shotThreshold += Math.min(0.006, activeMidfieldControlDiff * 0.00045);
+        } else if (activeMidfieldControlDiff < -4) {
+          shotThreshold -= Math.min(0.004, Math.abs(activeMidfieldControlDiff) * 0.0003);
+        }
+
         // Momentum bonus do shotThreshold - tylko gdy aktywna drużyna ma impet po swojej stronie
         // max +0.015 przy momentum 100, przy momentum 50 → +0.0075
         const hasMomentumAdvantage = (activeSide === 'HOME' && prev.momentum > 0) || (activeSide === 'AWAY' && prev.momentum < 0);
@@ -1115,14 +1158,24 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
         const uAvgPass = _getXIAvgAttr(uPlayersList, uXIList, 'passing');
+        const oAvgPass = _getXIAvgAttr(oPlayersList, oXIList, 'passing');
         const uAvgMidDef = (() => {
           const ids = uXIList.filter((id): id is string => id !== null);
           const md = uPlayersList.filter(p => ids.includes(p.id) && (p.position === 'MID' || p.position === 'DEF'));
           if (md.length === 0) return 55;
           return md.reduce((acc, p) => acc + (p.attributes.defending + p.attributes.technique) / 2, 0) / md.length;
         })();
+        const oAvgMidDef = (() => {
+          const ids = oXIList.filter((id): id is string => id !== null);
+          const md = oPlayersList.filter(p => ids.includes(p.id) && (p.position === 'MID' || p.position === 'DEF'));
+          if (md.length === 0) return 55;
+          return md.reduce((acc, p) => acc + (p.attributes.defending + p.attributes.technique) / 2, 0) / md.length;
+        })();
         const oppTacticDefBias = TacticRepository.getById(
           userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
+        ).defenseBias;
+        const aiOppTacticDefBias = TacticRepository.getById(
+          userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId
         ).defenseBias;
         // TEMPO
         if (uInstr.tempo === 'FAST') {
@@ -1258,14 +1311,27 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
           if (nextAiActiveShout.tempo === 'FAST') {
-            shotThreshold += isAiAttacking ? 0.012 : 0.004;
+            if (isAiAttacking) {
+              shotThreshold += 0.012;
+            } else {
+              const counterBonus = aiOppTacticDefBias > 60 ? 0.010 : 0.004;
+              const techSafetyMod = oAvgTech > 62 ? 0.5 : 1.0;
+              shotThreshold += counterBonus * techSafetyMod;
+            }
           } else if (nextAiActiveShout.tempo === 'SLOW' && isAiAttacking) {
-            shotThreshold -= 0.004;
+            const techGap = oAvgTech - uAvgTech;
+            if (techGap > 3) {
+              shotThreshold += Math.min(0.012, techGap * 0.0015);
+              if (oAvgPass > 62) shotThreshold += 0.005;
+            } else {
+              shotThreshold -= 0.005;
+            }
           }
           if (nextAiActiveShout.mindset === 'OFFENSIVE' && isAiAttacking) {
             shotThreshold += 0.015;
           } else if (nextAiActiveShout.mindset === 'DEFENSIVE' && !isAiAttacking) {
-            shotThreshold -= 0.012;
+            const midDefBonus = Math.max(0, (oAvgMidDef - 55) / 40);
+            shotThreshold -= Math.min(0.014, 0.004 + midDefBonus * 0.010);
           }
         }
         // AI PRESSING
