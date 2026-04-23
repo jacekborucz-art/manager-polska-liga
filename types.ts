@@ -1503,6 +1503,8 @@ export interface PreMatchContext {
   underdogFlag: boolean;
   injuryCountHome: number;
   injuryCountAway: number;
+  rivalryTier?: 'NONE' | 'RIVAL' | 'DERBY' | 'CLASSIC';
+  rivalryLabel?: string | null;
 }
 
 export interface StudioLine {

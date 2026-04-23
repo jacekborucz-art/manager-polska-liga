@@ -2,6 +2,7 @@ import type { Club, Coach, Fixture } from '../types';
 import type { BriefingEffect } from './PreMatchBriefingService';
 import type { TalkEffect } from './HalftimeTalkService';
 import type { DebriefEffect } from './PostMatchDebriefService';
+import { RivalryService } from './RivalryService';
 
 export type MatchStakes = 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
 
@@ -140,18 +141,33 @@ export const buildMatchPressureContext = (
   const isLateSeason = roundNumber > 25 || Math.min(home.stats.played, away.stats.played) >= 25;
   const homeRank = standings.findIndex(c => c.id === home.id) + 1 || 10;
   const awayRank = standings.findIndex(c => c.id === away.id) + 1 || 10;
-  const homeProfile = buildPressureProfile(home, homeRank, awayRank, roundNumber, isLateSeason, homeCoach, true);
-  const awayProfile = buildPressureProfile(away, awayRank, homeRank, roundNumber, isLateSeason, awayCoach, false);
+  const explicitRivalry = RivalryService.getMatchContext(home, away);
+  const homeProfileBase = buildPressureProfile(home, homeRank, awayRank, roundNumber, isLateSeason, homeCoach, true);
+  const awayProfileBase = buildPressureProfile(away, awayRank, homeRank, roundNumber, isLateSeason, awayCoach, false);
   const topClash = homeRank <= 5 && awayRank <= 5;
   const relegationClash = homeRank >= 13 && awayRank >= 13;
   const directTableRival = Math.abs(homeRank - awayRank) <= 2;
   const phase = isLateSeason ? clamp((roundNumber - 25) / 9, 0, 1) : 0;
-  const rivalryMultiplier = 1 + phase * (topClash || relegationClash ? 0.030 : directTableRival ? 0.015 : 0);
+  const tableRivalryBoost = phase * (topClash || relegationClash ? 0.030 : directTableRival ? 0.015 : 0);
+  const applyExplicitRivalryBoost = (profile: TeamPressureProfile): TeamPressureProfile => {
+    if (!explicitRivalry.isRivalry) return profile;
+
+    return {
+      ...profile,
+      intensityMultiplier: clamp(profile.intensityMultiplier * (1 + explicitRivalry.pressureBoost * 0.45), 0.96, 1.12),
+      cardMultiplier: clamp(profile.cardMultiplier * (1 + explicitRivalry.pressureBoost * 1.10), 0.95, 1.24),
+      fatigueMultiplier: clamp(profile.fatigueMultiplier * (1 + explicitRivalry.pressureBoost * 0.25), 0.98, 1.10),
+      lateChaseMultiplier: clamp(profile.lateChaseMultiplier + explicitRivalry.pressureBoost * 0.40, 0, 0.16),
+    };
+  };
+  const homeProfile = applyExplicitRivalryBoost(homeProfileBase);
+  const awayProfile = applyExplicitRivalryBoost(awayProfileBase);
+  const rivalryMultiplier = 1 + tableRivalryBoost + explicitRivalry.pressureBoost;
 
   return {
     roundNumber,
     isLateSeason,
-    rivalryMultiplier: clamp(rivalryMultiplier, 1, 1.035),
+    rivalryMultiplier: clamp(rivalryMultiplier, 1, 1.09),
     home: homeProfile,
     away: awayProfile,
   };

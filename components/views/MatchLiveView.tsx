@@ -83,6 +83,7 @@ import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { AttendanceService } from '../../services/AttendanceService';
+import { RivalryService } from '../../services/RivalryService';
 import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
 import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
@@ -229,6 +230,11 @@ export const MatchLiveView = () => {
     [livePressureContext, userSide]
   );
 
+  const rivalryContext = useMemo(
+    () => ctx ? RivalryService.getMatchContext(ctx.homeClub, ctx.awayClub) : null,
+    [ctx]
+  );
+
   const teamFormImpact = useMemo(() => {
     if (!ctx) {
       return {
@@ -244,7 +250,8 @@ export const MatchLiveView = () => {
   }, [ctx]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
-    const pressureEffect = adjustBriefingEffectForPressure(effect, userPressureProfile);
+    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(effect, rivalryContext) : effect;
+    const pressureEffect = adjustBriefingEffectForPressure(rivalryEffect, userPressureProfile);
     setShowBriefing(false);
     setMatchState(prev => {
       if (!prev) return prev;
@@ -1375,7 +1382,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const _activeXI = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
         const _avgAggression = _activeXI.length > 0 ? _activeTeam.filter(p => _activeXI.includes(p.id)).reduce((acc, p) => acc + p.attributes.aggression, 0) / _activeXI.length : 50;
         const _aggrFoulMod = 0.70 + (_avgAggression / 100) * 0.60;
-        const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : aiFoulMod) * _aggrFoulMod * activePressureMods.cardMultiplier;
+        const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : aiFoulMod) * _aggrFoulMod * activePressureMods.cardMultiplier * (livePressureContext?.rivalryMultiplier ?? 1);
         if (rngEvent < uFoulThreshold) { 
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
@@ -2018,7 +2025,7 @@ return {
     const homeRank = sortedStandings.findIndex(c => c.id === ctx.homeClub.id) + 1;
     
     // Obliczamy frekwencję (korzystając z pogody zdefiniowanej w env.weather)
-    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather);
+    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather, ctx.awayClub);
 
     // NAPRAWKA DUPLIKACJI WYNIKÓW:
     // Priorytet: wyniki z advanceDay (jeśli już uruchomił się dla daty meczu)

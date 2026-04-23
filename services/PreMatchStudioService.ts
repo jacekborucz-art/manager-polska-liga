@@ -4,6 +4,7 @@ import { PolandWeatherService } from './PolandWeatherService';
 import { RefereeService } from './RefereeService';
 import { OddsService } from './OddsService';
 import { CommentarySelectionEngine } from './CommentarySelectionEngine';
+import { RivalryService } from './RivalryService';
 
 function calcFormScore(form: ('W' | 'R' | 'P')[]): number {
   const last5 = form.slice(-5);
@@ -69,6 +70,7 @@ export const PreMatchStudioService = {
     }
 
     // 3. Build Context for Commentary
+    const rivalryContext = RivalryService.getMatchContext(home, away);
     const context: PreMatchContext = {
       competitionType: fixture.leagueId === 'CUP' ? CompetitionType.POLISH_CUP : CompetitionType.LEAGUE,
       importanceTier: importance,
@@ -78,7 +80,9 @@ export const PreMatchStudioService = {
       awayForm: "LLDDW",
       underdogFlag: home.reputation < away.reputation - 2,
       injuryCountHome: homePlayers.filter(p => p.health.status === 'INJURED').length,
-      injuryCountAway: awayPlayers.filter(p => p.health.status === 'INJURED').length
+      injuryCountAway: awayPlayers.filter(p => p.health.status === 'INJURED').length,
+      rivalryTier: rivalryContext.tier,
+      rivalryLabel: rivalryContext.label,
     };
 
     // 4. Generate Studio Transcript

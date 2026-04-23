@@ -35,6 +35,7 @@ import { AiScoutingService } from '../services/AiScoutingService';
 import { TacticalBrainService } from '@/services/TacticalBrainService';
 import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
+import { RivalryService } from '../services/RivalryService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -568,21 +569,26 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
   }, [ctx, userTeamId]);
 
   const kitColors = useMemo(() => ctx ? KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub) : null, [ctx]);
+  const rivalryContext = useMemo(
+    () => ctx ? RivalryService.getMatchContext(ctx.homeClub, ctx.awayClub) : null,
+    [ctx]
+  );
 
   const handleBriefingClose = (effect: BriefingEffect) => {
+    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(effect, rivalryContext) : effect;
     setShowBriefing(false);
     setMatchState(prev => {
       if (!prev) return prev;
       return {
         ...prev,
         preMatchMotivation: {
-          actionMod:     effect.actionMod,
-          goalMod:       effect.goalMod,
-          momentumBonus: effect.momentumBonus,
-          expiryMinute:  effect.expiryMinute,
-          fatigueMult:   effect.fatigueMult,
-          rivalBoost:    effect.rivalBoost,
-          label:         effect.label,
+          actionMod:     rivalryEffect.actionMod,
+          goalMod:       rivalryEffect.goalMod,
+          momentumBonus: rivalryEffect.momentumBonus,
+          expiryMinute:  rivalryEffect.expiryMinute,
+          fatigueMult:   rivalryEffect.fatigueMult,
+          rivalBoost:    rivalryEffect.rivalBoost,
+          label:         rivalryEffect.label,
         },
       };
     });

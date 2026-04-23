@@ -7,6 +7,7 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { KitSelectionService, KitSelection } from '../../services/KitSelectionService';
 import { LineupService } from '../../services/LineupService';
 import { AttendanceService } from '../../services/AttendanceService';
+import { RivalryService } from '../../services/RivalryService';
 
 // Import lokalnych zdjęć piłkarzy
 import { getPlayerCardImage, getClubKitVariants, KitVariant } from '../../resources/PlayerCardAssets';
@@ -226,8 +227,13 @@ export const PreMatchStudioView: React.FC = () => {
     const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     const homeRank = sorted.findIndex(c => c.id === data.homeClub.id) + 1;
     // Wywołujemy kalkulator frekwencji
-    return AttendanceService.calculate(data.homeClub, homeRank, data.weather);
+    return AttendanceService.calculate(data.homeClub, homeRank, data.weather, data.awayClub);
   }, [data, clubs]);
+
+  const rivalryContext = useMemo(
+    () => data ? RivalryService.getMatchContext(data.homeClub, data.awayClub) : null,
+    [data]
+  );
 
   if (loading || !data || !matchKits) {
     return (
@@ -377,6 +383,11 @@ export const PreMatchStudioView: React.FC = () => {
                     <span className="text-[13px] font-black text-white font-mono tracking-[0.4em] uppercase">STUDIO PRZEDMECZOWE</span>
                  </div>
                  <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">{currentDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                 {rivalryContext?.label && (
+                   <span className="mt-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.3em] text-rose-300">
+                     {rivalryContext.label}
+                   </span>
+                 )}
               </div>
 
               <div className="flex items-center flex-1 justify-end text-right">

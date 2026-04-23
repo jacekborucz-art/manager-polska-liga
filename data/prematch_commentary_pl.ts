@@ -1,4 +1,3 @@
-
 import { CommentaryCategory, CompetitionType } from '../types';
 
 export interface CommentaryTemplate {
@@ -7,94 +6,113 @@ export interface CommentaryTemplate {
   category: CommentaryCategory;
   conditions: {
     competitionType?: CompetitionType;
-    importanceTier?: number; // 1-5
+    importanceTier?: number;
     tableGap?: 'CLOSE' | 'WIDE' | 'NONE';
     seasonPhase?: 'START' | 'MID' | 'END';
     underdog?: boolean;
     weather?: 'RAINY' | 'COLD' | 'WARM';
+    rivalryTier?: 'RIVALRY' | 'RIVAL' | 'DERBY' | 'CLASSIC';
   };
   text: string;
 }
 
-/**
- * Massive Database of Polish Football Commentary
- * Designed to provide depth, tactical analysis, and 6-sentence long responses.
- */
 export const PREMATCH_COMMENTARY_DB: CommentaryTemplate[] = [
-  // --- INTROS (HOSTS: Borek, Smokowski, Twarowski) ---
   {
     id: 'intro_001',
     speaker: 'Mateusz Borek',
     category: CommentaryCategory.INTRO,
     conditions: {},
-    text: 'Kłaniam się nisko ze studia przedmeczowego, gdzie emocje sięgają już zenitu, a zapach świeżo przystrzyżonej trawy niemal czuć przez ekrany. Dzisiejsze starcie {HOME} kontra {AWAY} to nie jest zwykły mecz, to jest manifestacja siły i ambicji obu tych wielkich ośrodków piłkarskich w naszym kraju. Widzimy na trybunach komplet publiczności, która od godzin porannych przygotowywała się na to widowisko, tworząc atmosferę godną europejskich pucharów. Gospodarze muszą dziś udowodnić, że ich ostatnia zwyżka formy to nie był przypadek, a systematyczna praca całego sztabu szkoleniowego. Z kolei goście przyjeżdżają tutaj z bardzo konkretnym planem, który ma zneutralizować najmocniejsze ogniwa ekipy {HOME}. Zapraszam państwa na podróż przez świat taktyki, pasji i nieustępliwej walki o każdą piłkę.'
+    text: 'Witamy panstwa bardzo serdecznie ze studia przedmeczowego. Dzisiejsze spotkanie {HOME} kontra {AWAY} zapowiada sie jako widowisko pelne energii, presji i taktycznych szachow. Na trybunach atmosfera rosnie z minuty na minute, a my za chwile przeanalizujemy najwazniejsze watki tego starcia. Obie druzyny maja swoje argumenty, ale tylko jedna narzuci wieczorem swoje warunki. To bedzie mecz, w ktorym liczyc sie beda detale, koncentracja i gotowosc do walki od pierwszego gwizdka. Zapraszamy na nasze studio i na wielkie pilkarskie emocje.'
   },
   {
     id: 'intro_002',
     speaker: 'Tomasz Smokowski',
     category: CommentaryCategory.INTRO,
     conditions: {},
-    text: 'Dobry wieczór państwu, zaczynamy odliczanie do jednego z najbardziej wyczekiwanych spotkań tej rundy, w którym {HOME} podejmuje {AWAY}. Każdy ekspert, z którym rozmawiałem przed wejściem na antenę, podkreśla jedno: to będzie mecz detali i strategicznych szachów na murawie. Patrząc na składy, które właśnie spłynęły do naszej redakcji, widać wyraźnie, że trenerzy nie zamierzają dziś kalkulować i rzucają na szalę wszystko co mają najlepsze. Stadion tętni życiem, a presja na zawodnikach gospodarzy jest wręcz namacalna, bo oczekiwania kibiców po prostu nie znają granic. Goście z kolei czują się w roli "twardego orzecha do zgryzienia" znakomicie, co udowadniali już niejednokrotnie w tym sezonie na trudnych terenach. Czy zobaczymy grad bramek, czy może defensywną batalię o każdy metr kwadratowy boiska? Przekonamy się o tym już za kilkanaście minut, kiedy sędzia zagwiżdże po raz pierwszy.'
+    text: 'Dobry wieczor panstwu. Przed nami mecz, ktory bardzo mocno elektryzuje kibicow obu zespolow, bo {HOME} podejmuje dzisiaj {AWAY}. Sklady sa juz gotowe, trenerzy podjeli decyzje i za chwile zobaczymy, kto lepiej wejdzie w to spotkanie. Przy takich wieczorach zawsze wraca pytanie o to, kto lepiej wytrzyma presje i kto szybciej zlapie swoj rytm. Wlasne boisko moze byc przewaga, ale goscie tez przyjechali tutaj po konkret. Za moment przechodzimy do analizy i sprawdzimy, gdzie ten mecz moze zostac rozstrzygniety.'
   },
-  // --- TACTICAL GUESTS (Hajto, Engel, Strejlau, Brzęczek, Wichniarek, Juskowiak, Żelasko) ---
+  {
+    id: 'intro_003',
+    speaker: 'Mateusz Borek',
+    category: CommentaryCategory.INTRO,
+    conditions: { rivalryTier: 'RIVALRY' },
+    text: 'Dzisiaj nie mowimy o zwyklym meczu ligowym, bo starcie {HOME} z {AWAY} to spotkanie, w ktorym historia, duma i emocje niosa sie po trybunach jeszcze na dlugo przed pierwszym gwizdkiem. To sa mecze, w ktorych kibice nie wybaczaja braku charakteru, a pilkarze od pierwszej minuty musza wejsc na najwyzszy poziom agresji sportowej i koncentracji. Od rana wokol stadionu slychac bylo jedno: ten wieczor ma dac odpowiedz, kto dzisiaj rzadzi w tej rywalizacji. Takie spotkania bardzo czesto wymykaja sie tabeli i aktualnej formie, bo tutaj liczy sie tez odpornosc psychiczna i gotowosc do walki o kazdy metr. Jezeli ktoras z druzyn nie udzwignie ciezaru chwili, zostanie dzisiaj brutalnie zweryfikowana. Zapinamy pasy, bo zapowiada sie widowisko, ktore kibice beda wspominac jeszcze dlugo po ostatnim gwizdku.'
+  },
   {
     id: 'tact_001',
     speaker: 'Tomasz Hajto',
     category: CommentaryCategory.TACTICS,
     conditions: {},
-    text: 'Słuchajcie, tu nie ma co czarować rzeczywistości, bo w piłce na tym poziomie liczy się przede wszystkim to, co masz w "wątrobie" i jak potrafisz zareagować w fazie przejściowej. {HOME} musi dziś zagrać bardzo agresywnie w środkowej strefie, bo jeśli dadzą rywalowi z {AWAY} złapać oddech, to zostaną po prostu rozklepani przez ich szybkie skrzydła. Widzę tu spore braki w asekuracji bocznych obrońców gospodarzy, co przy tak dysponowanych wahadłowych gości może skończyć się tragicznie dla ich defensywy. Trzeba skrócić pole gry, zacieśnić formacje i przede wszystkim nie bać się twardego, męskiego kontaktu, bo sędzia dziś na pewno pozwoli na więcej. Jeśli jeden z drugim nie zrozumie, że tu trzeba biegać po 12 kilometrów na mecz, to nie mają co marzyć o trzech punktach. Kluczowe będzie wyłączenie z gry ich playmakera, który ma niesamowite kopyto i potrafi jednym podaniem otworzyć drogę do bramki z każdej pozycji.'
+    text: 'Tutaj nie ma co komplikowac. {HOME} musi bardzo dobrze zamknac srodek pola i nie pozwolic druzynie {AWAY} rozpedzic sie po odbiorze. Jezeli gospodarze odpuszcza pierwszy doskok, to goscie zaczna budowac przewage i przejma tempo meczu. Z drugiej strony przy takich ustawieniach bardzo wazna bedzie asekuracja bocznych sektorow, bo tam moze pojawic sie najwiecej wolnej przestrzeni. To bedzie spotkanie, w ktorym dobra organizacja bez pilki moze okazac sie wazniejsza niz sam procent posiadania. Jedna zla reakcja po stracie moze otworzyc ten mecz bardziej, niz trenerzy by chcieli.'
   },
   {
     id: 'tact_002',
     speaker: 'Andrzej Strejlau',
     category: CommentaryCategory.TACTICS,
     conditions: {},
-    text: 'Współczesna myśl szkoleniowa opiera się na strukturze, a struktura to przede wszystkim odpowiednie odległości między formacjami, czego w ostatnich meczach {HOME} nam brakowało. Musimy zwrócić uwagę na to, jak {AWAY} buduje swoje ataki pozycyjne, wykorzystując rotację w trójkącie środkowym, co kompletnie dezorientuje defensywę rywala. Jeśli gospodarze nie zastosują dziś pressingu selektywnego i nie odetną linii podania do bocznych sektorów, to będą mieli ogromny problem z płynnością gry. Widzimy, że trener postawił na system 4-4-2, ale w fazie ofensywnej to się musi płynnie zmieniać w 3-5-2, aby zapewnić przewagę w strefie ataku. Ważne jest, aby zawodnicy nie dublowali swoich pozycji i potrafili czytać grę bez piłki, co jest absolutnym fundamentem na tym poziomie ligowym. Liczę na to, że zobaczymy dziś sporo inteligentnych przesunięć, które pozwolą nam cieszyć się z wysokiej jakości widowiska taktycznego.'
+    text: 'Najciekawsze bedzie to, jak oba zespoly ustawia sie po przejsciu z ataku do obrony. {HOME} lubi budowac akcje szeroko, ale to oznacza, ze po stracie trzeba bardzo szybko skrocic pole gry. {AWAY} ma natomiast potencjal, by wykorzystac kazda chwile zawahania i od razu wejsc w atak na wolna przestrzen. W takich meczach ogromne znaczenie ma synchronizacja miedzy liniami oraz umiejetnosc czytania gry bez pilki. Jezeli jedna z druzyn zacznie sie rozrywac na odcinki, rywal natychmiast to wykorzysta. Tu moze wygrac nie ten, kto dluzej utrzyma sie przy pilce, tylko ten, kto bedzie madrzejszy w kluczowych momentach.'
   },
   {
     id: 'tact_003',
     speaker: 'Jerzy Engel',
     category: CommentaryCategory.TACTICS,
     conditions: { importanceTier: 4 },
-    text: 'Mecze o takim ciężarze gatunkowym wygrywa się w głowach, ale plan taktyczny musi być egzekwowany z chirurgiczną precyzją od pierwszej minuty. Drużyna {HOME} ma tę niesamowitą zdolność do wypracowywania przewagi w bocznych sektorach boiska, gdzie ich dynamiczni skrzydłowi potrafią zdziałać cuda. Z kolei {AWAY} to monolit w defensywie, ekipa, która potrafi cierpieć na własnej połowie i czekać na ten jeden, jedyny błąd przeciwnika, by zadać zabójczy cios. Kluczowym pojedynkiem będzie starcie napastników gospodarzy z parą stoperów gości, którzy są niezwykle silni w powietrzu, ale mają pewne problemy przy niskim pressingu. Musimy pamiętać, że w takich spotkaniach stałe fragmenty gry mogą okazać się kluczem do sukcesu, a obie ekipy mają w swoich szeregach specjalistów od rzutów wolnych. Spodziewam się, że początek będzie bardzo ostrożny, nikt nie zechce się odkryć zbyt wcześnie, by nie narazić się na szybką kontrę. To będzie prawdziwy test dojrzałości dla obu tych zespołów, które aspirują do gry o najwyższe laury w tym sezonie.'
+    text: 'Mecze o takim ciezarze gatunkowym wygrywa sie w glowach, ale plan taktyczny musi byc egzekwowany z chirurgiczna precyzja od pierwszej minuty. {HOME} ma argumenty, by przejac inicjatywe na bokach boiska, natomiast {AWAY} wyglada na zespol gotowy cierpiec w niskiej obronie i szukac jednej decydujacej sytuacji. Kluczowe bedzie to, jak napastnicy i srodkowi pomocnicy beda reagowac po zmianie faz gry. W spotkaniach tej rangi stale fragmenty potrafia zadecydowac o wszystkim, zwlaszcza kiedy margines bledu jest tak maly. Spodziewam sie ostroznego poczatku i bardzo wysokiej koncentracji po obu stronach. To bedzie test dojrzalosci dla obu tych druzyn.'
+  },
+  {
+    id: 'tact_004',
+    speaker: 'Tomasz Hajto',
+    category: CommentaryCategory.TACTICS,
+    conditions: { rivalryTier: 'RIVALRY' },
+    text: 'W takich meczach trzeba odlozyc ladne gadanie na bok, bo tutaj wszystko zaczyna sie od mentalu i odwagi w pojedynkach. {HOME} i {AWAY} wiedza, ze przy tej temperaturze trybun jedno miekkie wejscie albo jeden spozniony doskok zostanie natychmiast odczytany jako slabosc. Dlatego spodziewam sie bardzo ostrej walki w srodku pola, wysokiego pressingu i prob narzucenia tonu meczu juz w pierwszych minutach. Kto pierwszy wygra serie stykowych pojedynkow, ten moze zyskac nie tylko przewage taktyczna, ale tez psychologiczna nad rywalem. Tu nie wystarczy miec plan na pilke, trzeba jeszcze pokazac, ze umiesz grac pod presja wrzasku z trybun i calej historii tego starcia. Wlasnie dlatego mecze najwiekszych wrogow tak czesto maja swoja osobna dynamike i wlasne prawa.'
   },
   {
     id: 'form_001',
     speaker: 'Artur Wichniarek',
     category: CommentaryCategory.FORM,
     conditions: {},
-    text: 'Analizując ostatnie pięć spotkań {HOME}, widać wyraźny trend wznoszący, szczególnie jeśli chodzi o skuteczność pod bramką rywala. Ich napastnik jest w gazie, strzela niemal w każdym meczu i widać, że koledzy z drużyny szukają go w każdej możliwej sytuacji w polu karnym. Z drugiej strony mamy {AWAY}, zespół który ostatnio przechodził mały kryzys, ale zwycięstwo w poprzedniej kolejce mogło podziałać na nich bardzo oczyszczająco. Tabela nie kłamie, różnica punktowa jest minimalna, co tylko podgrzewa atmosferę przed tym derbowym wręcz starciem o dominację w regionie. Goście muszą poprawić grę w defensywie, bo tracenie bramek po prostych błędach indywidualnych stało się ich zmorą w tym miesiącu. Jeśli gospodarze narzucą swoje tempo od początku, to ekipa przyjezdna może mieć bardzo długi i bolesny wieczór. Widzę tu jednak szansę dla {AWAY} w kontrataku, bo obrona gospodarzy często zostawia zbyt dużo wolnej przestrzeni za plecami przy ataku pozycyjnym.'
+    text: 'Patrzac na ostatnie tygodnie, mozna znalezc argumenty po obu stronach. {HOME} ma swoje atuty w regularnosci i intensywnosci, natomiast {AWAY} pokazywal juz w tym sezonie, ze potrafi odpowiedziec po slabszym okresie. Forma jest wazna, ale liczy sie tez to, jak zespol reaguje pod presja i czy w odpowiednim momencie potrafi podkrecic tempo. Takie mecze bardzo czesto wygrywa ta druzyna, ktora lepiej wykorzysta swoj dobry fragment. Jesli ktoras ekipa dobrze wejdzie w pierwsze dwadziescia minut, moze ustawic sobie cale spotkanie. Dzisiaj nawet drobny impuls mentalny moze miec ogromne znaczenie.'
+  },
+  {
+    id: 'form_002',
+    speaker: 'Artur Wichniarek',
+    category: CommentaryCategory.FORM,
+    conditions: { rivalryTier: 'DERBY' },
+    text: 'Przy derbach forma z ostatnich tygodni oczywiscie ma znaczenie, ale bardzo czesto schodzi na drugi plan, kiedy rusza mecz o dume miasta albo regionu. Tu nawet zawodnik po slabszym okresie potrafi wejsc na poziom, ktorego w normalnej kolejce by nie pokazal, bo adrenalina niesie go przez cale spotkanie. Z drugiej strony pilkarze w najlepszej dyspozycji tez potrafia sie zagotowac, jesli od pierwszego starcia nie wytrzymaja temperatury tego widowiska. Dlatego trenerzy {HOME} i {AWAY} beda patrzec nie tylko na forme sportowa, ale tez na to, kto mentalnie uniesie takie obciazenie. W derbach liczy sie cierpliwosc, wyrachowanie i umiejetnosc grania pod ogromnym cisnieniem. Jedna prowokacja albo jedna karta moze kompletnie przewrocic mecz.'
   },
   {
     id: 'inj_001',
-    speaker: 'Jerzy Brzęczek',
+    speaker: 'Jerzy Brzeczek',
     category: CommentaryCategory.INJURIES,
     conditions: { underdog: true },
-    text: 'Sytuacja kadrowa gospodarzy jest daleka od idealnej, brak dwóch kluczowych ogniw w środku pola może kompletnie rozsypać ich dotychczasową strategię. To jest szansa dla zawodników z szerokiego składu, aby udowodnić, że zasługują na regularną grę w pierwszej jedenastce, choć presja jest ogromna. {AWAY} z kolei przyjeżdża w najsilniejszym zestawieniu, co stawia ich w roli naturalnego faworyta, mimo że grają na wyjeździe. Często jednak bywa tak, że drużyna osłabiona kontuzjami potrafi się niesamowicie zmobilizować i wykrzesać z siebie dodatkowe pokłady energii. Kluczowe będzie, jak zmiennicy wejdą w mecz, bo tempo na pewno będzie bardzo wysokie od samego początku spotkania. Muszą uważać na urazy przeciążeniowe, bo przy takim obciążeniu meczowym widać, że niektórym zawodnikom brakuje już tej świeżości. Liczę na mądre zarządzanie zmianami przez trenera {HOME}, bo to może być decydujące w ostatnim kwadransie.'
+    text: 'Sytuacja kadrowa gospodarzy nie jest idealna, a przy takim spotkaniu kazde oslabienie moze byc odczuwalne jeszcze mocniej. Brak kilku ogniw nie tylko zmienia uklad personalny, ale tez odbiera trenerowi czesc rozwiazan w trakcie meczu. Z drugiej strony takie wieczory tworza szanse dla pilkarzy z dalszego planu, ktorzy moga pokazac charakter i wejsc w role bohaterow. {AWAY} przyjezdza w mocnym zestawieniu, co tylko podnosi stopien trudnosci. Kluczowe bedzie zarzadzanie zmianami i rozlozenie sil na koncowke. Przy duzym tempie i presji kazdy detal medyczny moze miec znaczenie.'
   },
   {
     id: 'ref_001',
-    speaker: 'Witt Żelasko',
+    speaker: 'Witt Zelasko',
     category: CommentaryCategory.REFEREE,
     conditions: {},
-    text: 'Dzisiejszy sędzia, pan {REF_NAME}, to arbiter z ogromnym doświadczeniem, który nie boi się podejmować trudnych decyzji pod presją trybun. Ma on jednak swoją specyfikę – pozwala na bardzo agresywną grę w kontakcie, co może być wodą na młyn dla fizycznie grającej ekipy {HOME}. Zawodnicy {AWAY} muszą uważać na niepotrzebne dyskusje, bo pan arbiter bywa bardzo surowy, jeśli chodzi o dyscyplinę na boisku i szybko sięga po żółte kartki. Statystyki pokazują, że w meczach prowadzonych przez tego sędziego rzadko dochodzi do pomyłek w polu karnym, co daje nam nadzieję na sprawiedliwe rozstrzygnięcie. Ważne, aby kapitanowie obu drużyn od początku nawiązali z nim dobry dialog, aby tonować nastroje w gorących momentach. Spodziewam się twardej walki, ale mam nadzieję, że pan sędzia zapanuje nad widowiskiem i nie będzie musiał kraść show głównym aktorom. Trzeba też zwrócić uwagę na współpracę z asystentami, bo przy tak szybkich skrzydłowych milimetry mogą decydować o spalonych.'
+    text: 'Dzisiejszy sedzia, pan {REF_NAME}, to arbiter z duzym doswiadczeniem i mocnym charakterem. W meczach o wysokiej temperaturze bardzo wazne bedzie to, czy od poczatku nada jasny ton i nie pozwoli zawodnikom przesunac granicy za daleko. Obie druzyny musza uwazac na niepotrzebne dyskusje i emocjonalne reakcje, bo kartki moga szybko ustawic pewne pojedynki. W takich spotkaniach arbitrowi nie jest latwo, bo kazda decyzja jest natychmiast oceniana przez trybuny. Kluczem bedzie konsekwencja i spokoj. Jezeli sedzia utrzyma kontrole, widowisko tylko na tym skorzysta.'
   },
   {
     id: 'pred_001',
     speaker: 'Andrzej Juskowiak',
     category: CommentaryCategory.PREDICTION,
     conditions: {},
-    text: 'Moim zdaniem zobaczymy dzisiaj mecz dwóch różnych połówek, gdzie w pierwszej części obie ekipy będą się bardzo uważnie badać. {HOME} ma atut własnego boiska i to oni będą chcieli dyktować warunki, ale {AWAY} to mistrzowie cierpliwości i wyczekiwania na błąd. Stawiam na minimalne zwycięstwo gospodarzy, może 1:0, po jakimś stałym fragmencie gry lub błysku indywidualnym ich gwiazdy. Goście na pewno tanio skóry nie sprzedadzą, będą walczyć o każdy metr, ale brak im ostatnio tej "kropki nad i" w wykończeniu akcji. Kluczowe będzie pierwsze 15 minut drugiej połowy – jeśli wtedy nie padnie bramka, to mecz może otworzyć się dopiero w samej końcówce. Nie wykluczam też scenariusza z remisem, co obie ekipy mogłyby przyjąć z pewnym niedosytem, ale szacunkiem do rywala. To będzie wielki wieczór polskiej piłki i niech wygra po prostu lepszy zespół, który pokaże więcej charakteru na murawie.'
+    text: 'Spodziewam sie meczu, w ktorym obie druzyny beda chcialy przejac inicjatywe, ale dlugo beda tez badac swoje reakcje. {HOME} ma atut wlasnego boiska i to zawsze robi roznice w takich spotkaniach, jednak {AWAY} niejednokrotnie pokazywal juz, ze potrafi funkcjonowac pod presja. Wiele bedzie zalezec od tego, kto pierwszy wykorzysta swoj moment i jak zespoly wejda w druga polowe. Nie zdziwi mnie mecz rozstrzygniety jednym golem albo jednym staly fragmentem. To jest typ spotkania, w ktorym cierpliwosc moze okazac sie najwieksza bronia. Jedno jest pewne: emocji nie zabraknie.'
   },
   {
     id: 'pred_002',
     speaker: 'Mateusz Borek',
     category: CommentaryCategory.PREDICTION,
     conditions: { importanceTier: 5 },
-    text: 'Kończąc nasze rozważania przed pierwszym gwizdkiem, muszę powiedzieć, że czuję w powietrzu coś wielkiego, co zapamiętamy na lata. To jest starcie tytanów, gdzie każda sekunda dekoncentracji może kosztować utratę marzeń o trofeum, o którym obie ekipy tak głośno marzą. Moje serce podpowiada otwartą wymianę ciosów, bo przy takiej jakości w ofensywie po prostu nie da się grać na 0:0 przez cały mecz. Liczę na to, że {HOME} pociągnie ten wózek siłą swoich kibiców, ale {AWAY} ma w sobie ten gen zwycięzcy, który ujawnia się w najtrudniejszych momentach. Typuję wynik 2:1, z dużą ilością dramaturgii, może nawet jakąś kontrowersją, która będzie tematem rozmów przez najbliższy tydzień. Cieszmy się tym momentem, bo polska liga potrafi pisać scenariusze, których nie powstydziłby się sam Alfred Hitchcock. Za chwilę oddajemy głos komentatorom na stanowiskach, bądźcie z nami, bo to będzie prawdziwy rollercoaster emocji!'
+    text: 'Czuc w powietrzu cos wielkiego i to sa dokladnie te wieczory, dla ktorych kibice kochaja futbol. Kazda sekunda dekoncentracji moze dzisiaj kosztowac bardzo duzo, bo obie druzyny wiedza, jak wysoka jest stawka tego widowiska. Moje serce podpowiada otwarty mecz i duzo dramaturgii, ale glowa mowi, ze poczatek bedzie pelen ostroznosci i wzajemnego szacunku dla potencjalu rywala. Jesli spotkanie otworzy sie po pierwszej bramce, mozemy dostac prawdziwy rollercoaster emocji. Tu jest miejsce na bohaterow, ale tez na momenty, ktore beda analizowane jeszcze przez wiele dni. Zapowiada sie wielki wieczor pilki.'
+  },
+  {
+    id: 'pred_003',
+    speaker: 'Andrzej Juskowiak',
+    category: CommentaryCategory.PREDICTION,
+    conditions: { rivalryTier: 'RIVALRY' },
+    text: 'Przed takimi spotkaniami bardzo trudno bawic sie w klasyczne typowanie, bo mecze najwiekszych rywali regularnie wymykaja sie logice i tabeli. Jedno jest pewne: kibice beda oczekiwac od {HOME} i {AWAY} pelnego poswiecenia, agresji sportowej i walki od pierwszej do ostatniej minuty. Kto lepiej opanuje emocje, ten zrobi dzisiaj wielki krok do zwyciestwa, bo przy takiej temperaturze trybun latwo stracic glowe po jednym ostrzejszym starciu. Spodziewam sie meczu, w ktorym bedzie malo miejsca i czasu, za to bardzo duzo pojedynkow, stykowych sytuacji i napiecia przy kazdej decyzji sedziego. Jesli padnie szybka bramka, stadion moze eksplodowac. A jesli wynik dlugo bedzie remisowy, koncowka zapowiada sie na prawdziwa wojne nerwow.'
   }
 ];
-
-// Dynamically generate placeholders for more templates to reach 100+
-// In a real environment, we'd have all 100+ fully written out, 
-// here we provide a structure that is easily expandable.

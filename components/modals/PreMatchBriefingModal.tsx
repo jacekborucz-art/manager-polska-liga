@@ -8,6 +8,7 @@ import {
   getBriefingsForScenario,
   getSilenceEffect,
 } from '../../services/PreMatchBriefingService';
+import { RivalryService } from '../../services/RivalryService';
 
 interface PreMatchBriefingModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export const PreMatchBriefingModal = ({
 
   const scenario: BriefingScenario = detectScenario(userRep, oppRep);
   const availableBriefings = getBriefingsForScenario(scenario, matchStage);
+  const rivalryContext = RivalryService.getMatchContextByNames(userClubName, oppClubName);
 
   const handleSelect = (index: number) => {
     const speech = availableBriefings[index];
@@ -135,6 +137,14 @@ export const PreMatchBriefingModal = ({
             ODPRAWA<br />
             <span className={getScenarioAccentColor()}>PRZEDMECZOWA</span>
           </h1>
+
+          {rivalryContext.label && (
+            <div className="inline-flex w-fit items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1">
+              <span className="text-[8px] font-black italic uppercase tracking-[0.25em] text-rose-300">
+                {rivalryContext.label}
+              </span>
+            </div>
+          )}
 
           {/* MECZ */}
           <div className="flex items-center gap-3 mt-1">

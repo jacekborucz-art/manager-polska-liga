@@ -6,6 +6,8 @@ import { TacticRepository } from '../resources/tactics_db';
 import { PlayerPresentationService } from '../services/PlayerPresentationService';
 import { KitSelectionService } from '../services/KitSelectionService';
 import { PolandWeatherService } from '../services/PolandWeatherService';
+import { AttendanceService } from '../services/AttendanceService';
+import { RivalryService } from '../services/RivalryService';
 
 // Import lokalnych zdjęć piłkarzy
 import { getPlayerCardImage } from '../resources/PlayerCardAssets';
@@ -173,11 +175,16 @@ export const PreMatchCupStudioView: React.FC = () => {
 
   const estimatedAttendance = useMemo(() => {
     if (!data) return 0;
-    const base = data.homeClub.stadiumCapacity * (0.65 + (data.homeClub.reputation / 28));
-    const weatherPenalty = data.weather.description.toLowerCase().includes('deszcz') ? 0.85 : 1.0;
-    const variation = 0.95 + (Math.random() * 0.1);
-    return Math.floor(Math.min(data.homeClub.stadiumCapacity, base * weatherPenalty * variation));
-  }, [data]);
+    const leagueClubs = clubs.filter(c => c.leagueId === data.homeClub.leagueId);
+    const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+    const homeRank = sorted.findIndex(c => c.id === data.homeClub.id) + 1 || 10;
+    return AttendanceService.calculate(data.homeClub, homeRank, data.weather, data.awayClub);
+  }, [data, clubs]);
+
+  const rivalryContext = useMemo(
+    () => data ? RivalryService.getMatchContext(data.homeClub, data.awayClub) : null,
+    [data]
+  );
 
   if (loading || !data || !matchKits || !squadDetails || !bettingData) {
     return (
@@ -303,6 +310,11 @@ export const PreMatchCupStudioView: React.FC = () => {
            <div className="text-center space-y-2">
               <span className="text-rose-500 font-black uppercase tracking-[0.5em] text-[10px] block">STUDIO PRZEDMECZOWE</span>
               <h3 className="text-5xl font-black italic text-white uppercase tracking-tighter leading-none">{roundTitle}</h3>
+              {rivalryContext?.label && (
+                <div className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2">
+                  <span className="text-[9px] font-black uppercase tracking-[0.35em] text-rose-200">{rivalryContext.label}</span>
+                </div>
+              )}
            </div>
 
            <div className="flex items-stretch justify-center gap-4">

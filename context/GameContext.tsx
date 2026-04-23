@@ -3723,9 +3723,16 @@ const finalResult: SimulationOutput = {
       }
       
       const recentFixture = allFixtures.find(f => f.date.toDateString() === dateToProcess.toDateString() && (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId));
+      const nextFixture = allFixtures
+        .filter(f =>
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          f.status === MatchStatus.SCHEDULED &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= new Date(dateToProcess).setHours(0, 0, 0, 0)
+        )
+        .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, recoveredPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, messages, lineups[userTeamId]);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, recoveredPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, lineups[userTeamId]);
       if (newMails.length > 0) setMessages(prev => [...newMails, ...prev]);
     }
 

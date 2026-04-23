@@ -198,7 +198,7 @@ if (todayFixtures.length === 0) {
 
       // Obliczamy miejsce gospodarza w tabeli
       const homeRank = leagueStandings.findIndex(c => c.id === home.id) + 1 || 10; 
-      const attendance = AttendanceService.calculate(home, homeRank, weather);
+      const attendance = AttendanceService.calculate(home, homeRank, weather, away);
 
       MatchHistoryService.logMatch({
         season: seasonNumber,

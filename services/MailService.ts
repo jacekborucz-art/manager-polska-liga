@@ -1,6 +1,7 @@
 import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { FinanceService } from './FinanceService';
+import { RivalryService } from './RivalryService';
 
 export interface SeasonSummaryData {
   year: number;
@@ -47,6 +48,72 @@ const formatWCQPlayoffScoreForTeam = (result: WCQPlayoffMatchResult, teamName: s
   }
   if (result.wentToExtraTime) return `${baseScore} po dogr.`;
   return baseScore;
+};
+
+const startOfDay = (date: Date): number => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized.getTime();
+};
+
+const getDayDifference = (from: Date, to: Date): number =>
+  Math.round((startOfDay(to) - startOfDay(from)) / 86400000);
+
+const buildRivalryWarningMail = (
+  currentDate: Date,
+  userClub: Club,
+  allClubs: Club[],
+  nextFixture?: Fixture
+): MailMessage | null => {
+  if (!nextFixture || nextFixture.status !== MatchStatus.SCHEDULED) return null;
+
+  const daysUntilKickoff = getDayDifference(currentDate, nextFixture.date);
+  if (daysUntilKickoff < 0 || daysUntilKickoff > 1) return null;
+
+  const opponentId = nextFixture.homeTeamId === userClub.id ? nextFixture.awayTeamId : nextFixture.homeTeamId;
+  const opponentClub = allClubs.find(club => club.id === opponentId);
+  if (!opponentClub) return null;
+
+  const rivalryContext = RivalryService.getMatchContext(userClub, opponentClub);
+  if (!rivalryContext.isRivalry) return null;
+
+  const intro =
+    rivalryContext.tier === 'CLASSIC' || rivalryContext.tier === 'DERBY'
+      ? 'Dla kibicow ten mecz to swieta wojna.'
+      : 'Dla kibicow ten mecz jest sprawa honoru.';
+
+  const pressureLine =
+    rivalryContext.tier === 'CLASSIC'
+      ? 'Tu nie wystarczy poprawny wystep. Oczekujemy druzyny gotowej oddac wszystko, bo takie mecze buduja pozycje klubu na lata.'
+      : rivalryContext.tier === 'DERBY'
+        ? 'W derbach nie ma miejsca na alibi. Oczekujemy walki o kazda pilke, ostrosci w pojedynkach i pelnego zaangazowania od pierwszej do ostatniej minuty.'
+        : 'To nie jest zwykla kolejka. Oczekujemy pelnego zaangazowania, charakteru i gotowosci do gry na granicy sportowej intensywnosci.';
+
+  return {
+    id: `FANS_RIVALRY_WARNING_${nextFixture.id}`,
+    sender: `Stowarzyszenie Kibicow ${userClub.name}`,
+    role: 'Glos Trybun',
+    subject: `${rivalryContext.label ?? 'Wielki mecz'}: kibice oczekuja pelnego zaangazowania`,
+    body: [
+      'Trenerze,',
+      '',
+      `Przed meczem z ${opponentClub.name} chcemy powiedziec to jasno: ${intro}`,
+      '',
+      pressureLine,
+      '',
+      'Nie prosimy o ladny futbol za wszelka cene. Chcemy zobaczyc zespol, ktory rozumie wage tego spotkania, nie cofa nogi i walczy dla herbu oraz dla ludzi na trybunach.',
+      '',
+      'Kibice poniosa druzyne, ale teraz pilkarze musza pokazac, ze czuja temperature tego starcia i sa gotowi odpowiedziec na nia na boisku.',
+      '',
+      `Jutro liczy sie tylko jedno: zostawic serce na murawie przeciwko ${opponentClub.name}.`,
+      '',
+      `Stowarzyszenie Kibicow ${userClub.name}`,
+    ].join('\n'),
+    date: new Date(currentDate),
+    isRead: false,
+    type: MailType.FANS,
+    priority: rivalryContext.tier === 'CLASSIC' ? 99 : rivalryContext.tier === 'DERBY' ? 97 : 94,
+  };
 };
 
 export const MailService = {
@@ -618,6 +685,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     rank: number,
     boardConfidence: number,
     recentFixture?: Fixture,
+    nextFixture?: Fixture,
     existingMails: MailMessage[] = [],
     userLineup?: Lineup
   ): MailMessage[] => {
@@ -665,6 +733,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
              newMails.push(createMail('fans_furious_loss', { 'CLUB': userClub.name }));
           }
        }
+    }
+
+    const rivalryWarningMail = buildRivalryWarningMail(currentDate, userClub, allClubs, nextFixture);
+    if (rivalryWarningMail && !existingMails.some(mail => mail.id === rivalryWarningMail.id)) {
+      newMails.push(rivalryWarningMail);
     }
 
     const rng = Math.random();
