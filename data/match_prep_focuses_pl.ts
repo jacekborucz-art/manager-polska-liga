@@ -1,0 +1,133 @@
+export interface MatchPrepFocus {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  finishingMultiplierBase: number;
+  shotModifierBase: number;
+  initiativeModifierBase: number;
+  shotResistanceModifierBase: number;
+  goalkeepingMultiplierBase: number;
+  isRecovery: boolean;
+  recoveryPenaltyMax: number;
+}
+
+export const MATCH_PREP_FOCUSES: MatchPrepFocus[] = [
+  {
+    id: 'FOCUS_FINISHING',
+    name: 'Wykończenie',
+    icon: '⚽',
+    description: 'Intensywna praca nad skutecznością przed bramką. Drużyna wchodzi na murawę z wyostrzonymi instynktami strzeleckimi.',
+    finishingMultiplierBase: 0.030,
+    shotModifierBase: 0.010,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_SET_PIECES',
+    name: 'Stałe fragmenty',
+    icon: '🎯',
+    description: 'Wielogodzinne ćwiczenia rzutów wolnych i rożnych. Każda stała piłka to potencjalnie gol.',
+    finishingMultiplierBase: 0.020,
+    shotModifierBase: 0.012,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_PRESSING',
+    name: 'Pressing',
+    icon: '🔥',
+    description: 'Agresywne odbiory i wysoki pressing. Przeciwnik nie będzie miał czasu na myślenie.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0,
+    initiativeModifierBase: 0.015,
+    shotResistanceModifierBase: 0.018,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_COUNTER',
+    name: 'Gra z kontry',
+    icon: '⚡',
+    description: 'Szybkie przejścia i błyskawiczne ataki po odbiorze. Jeden moment wystarczy.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0.020,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_TIKITAKA',
+    name: 'Tiki-taka',
+    icon: '🔄',
+    description: 'Kombinacyjna gra krótką piłką i dominacja posiadania. Kontroluj tempo meczu.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0,
+    initiativeModifierBase: 0.025,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_MARKING',
+    name: 'Krycie',
+    icon: '🛡️',
+    description: 'Szczegółowa analiza przeciwnika i ćwiczenia krycia indywidualnego. Neutralizacja zagrożeń.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0.022,
+    goalkeepingMultiplierBase: 0.020,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_PASSING',
+    name: 'Podania',
+    icon: '🎯',
+    description: 'Precyzja podań i ruch bez piłki. Drużyna kontroluje grę przez jakość rozegrania.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0,
+    initiativeModifierBase: 0.018,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_AERIAL',
+    name: 'Gra głową',
+    icon: '✈️',
+    description: 'Dominacja w powietrzu przy stałych fragmentach i dośrodkowaniach. Siła fizyczna robi różnicę.',
+    finishingMultiplierBase: 0.015,
+    shotModifierBase: 0.010,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0.010,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: false,
+    recoveryPenaltyMax: 0,
+  },
+  {
+    id: 'FOCUS_RECOVERY',
+    name: 'Regeneracja',
+    icon: '💤',
+    description: 'Tydzień skupiony na odnowie biologicznej. Zawodnicy wchodzą wypoczęci, ale mentalnie mniej nastawieni na atak.',
+    finishingMultiplierBase: 0,
+    shotModifierBase: 0,
+    initiativeModifierBase: 0,
+    shotResistanceModifierBase: 0,
+    goalkeepingMultiplierBase: 0,
+    isRecovery: true,
+    recoveryPenaltyMax: 0.022,
+  },
+];

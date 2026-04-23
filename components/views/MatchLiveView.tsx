@@ -85,6 +85,7 @@ import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
+import { applyFocusToFormImpact } from '../../services/MatchPrepFocusService';
 import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
@@ -243,9 +244,11 @@ export const MatchLiveView = () => {
       };
     }
 
+    const matchDateStr = ctx.fixture.date instanceof Date ? ctx.fixture.date.toISOString().split('T')[0] : String(ctx.fixture.date);
+    const matchSeed = new Date(matchDateStr).getTime() / 100000;
     return {
-      home: analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach),
-      away: analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach),
+      home: applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed),
+      away: applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1),
     };
   }, [ctx]);
 

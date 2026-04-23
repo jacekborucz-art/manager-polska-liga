@@ -874,6 +874,10 @@ export interface Club {
   boardConfidence?: number;
   morale?: number;
   lastMotivationDate?: string;
+  motivationMonitoringStartDate?: string;
+  motivationNeglectLevel?: number;
+  matchPrepFocusId?: string;
+  matchPrepFocusStartDate?: string;
 }
 
 export interface YouthPlayer {

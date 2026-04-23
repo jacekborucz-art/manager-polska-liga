@@ -5,7 +5,7 @@ export const RecoveryService = {
    * Wykonuje dobową regenerację dla wszystkich zawodników.
    * daysCount: pozwala na precyzyjne odliczanie czasu.
    */
-  applyDailyRecovery: (playersMap: Record<string, Player[]>, currentDate: Date, intensity: TrainingIntensity, daysCount: number = 1): Record<string, Player[]> => {
+  applyDailyRecovery: (playersMap: Record<string, Player[]>, currentDate: Date, intensity: TrainingIntensity, daysCount: number = 1, recoveryMult: number = 1.0): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
 
     for (const clubId in updatedMap) {
@@ -35,7 +35,7 @@ export const RecoveryService = {
         const strengthFactor = player.attributes.strength / 100;
         const staminaFactor = player.attributes.stamina / 100;
         
-        let dailyRate = 2.45 + (strengthFactor * 1.5) + (staminaFactor * 1.5);
+        let dailyRate = (2.45 + (strengthFactor * 1.5) + (staminaFactor * 1.5)) * recoveryMult;
 
         // WPŁYW WYBRANEJ INTENSYWNOŚCI (STAGE 1 PRO)
         if (intensity === TrainingIntensity.LIGHT) {

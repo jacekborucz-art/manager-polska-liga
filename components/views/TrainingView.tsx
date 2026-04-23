@@ -3,6 +3,8 @@ import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import { TRAINING_CYCLES } from '../../data/training_definitions_pl';
 import { TrainingAssistantService } from '../../services/TrainingAssistantService';
+import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
+import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusService';
 
 export const TrainingView: React.FC = () => {
   const {
@@ -18,10 +20,14 @@ export const TrainingView: React.FC = () => {
     viewPlayerDetails,
     setPlayers,
     showGameNotification,
-    trainingProgressHistory
+    trainingProgressHistory,
+    currentDate,
+    setClubs,
   } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(activeTrainingId);
   const [hoveredAttribute, setHoveredAttribute] = useState<{ label: string; x: number; y: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<'training' | 'focus'>('training');
+  const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
 
   const myClub = clubs.find(c => c.id === userTeamId);
@@ -80,6 +86,27 @@ export const TrainingView: React.FC = () => {
       message: `Wybral program ${selectedCycle?.name || 'treningowy'} i przydzielil indywidualny fokus dla ${teamPlayers.length} zawodnikow.`,
       tone: 'info'
     });
+  };
+
+  const handleSaveFocus = () => {
+    if (!selectedFocusId || !userTeamId) return;
+    const todayStr = currentDate.toISOString().split('T')[0];
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      const isChanging = c.matchPrepFocusId !== selectedFocusId;
+      return {
+        ...c,
+        matchPrepFocusId: selectedFocusId,
+        matchPrepFocusStartDate: isChanging ? todayStr : (c.matchPrepFocusStartDate ?? todayStr),
+      };
+    }));
+    const focusName = MATCH_PREP_FOCUSES.find(f => f.id === selectedFocusId)?.name ?? '';
+    showGameNotification({
+      title: 'Fokus tygodniowy ustawiony',
+      message: `Program "${focusName}" aktywowany. Efekt zadziala po 5 dniach bez przerwy.`,
+      tone: 'info',
+    });
+    setSelectedFocusId(null);
   };
 
   const tooltipStyle = hoveredAttribute
@@ -156,9 +183,31 @@ export const TrainingView: React.FC = () => {
          </div>
       </header>
 
+      {/* ZAKŁADKI */}
+      <div className="relative z-20 flex items-center gap-2 px-12 pt-4 border-b border-white/5 shrink-0">
+        <button
+          onClick={() => setActiveTab('training')}
+          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'training' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+        >
+          Program Treningowy
+        </button>
+        <button
+          onClick={() => setActiveTab('focus')}
+          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'focus' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+        >
+          Fokus Tygodniowy
+          {myClub?.matchPrepFocusId && (
+            <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[7px] font-black ${isFocusReady(myClub, currentDate.toISOString().split('T')[0]) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+              {isFocusReady(myClub, currentDate.toISOString().split('T')[0]) ? 'AKTYWNY' : `${getFocusDaysCount(myClub, currentDate.toISOString().split('T')[0])}/5`}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* GŁÓWNA PRZESTRZEŃ ROBOCZA */}
+      {activeTab === 'training' && (
       <div className="relative z-10 flex-1 flex gap-8 p-12 min-h-0 overflow-hidden">
-        
+
         {/* LEWA STRONA: LISTA ZAWODNIKÓW */}
         <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
 
@@ -436,6 +485,186 @@ export const TrainingView: React.FC = () => {
            </div>
         </div>
       </div>
+      )}
+
+      {/* FOKUS TYGODNIOWY TAB */}
+      {activeTab === 'focus' && (() => {
+        const todayStr = currentDate.toISOString().split('T')[0];
+        const activeFocusId = myClub?.matchPrepFocusId ?? null;
+        const activeFocus = MATCH_PREP_FOCUSES.find(f => f.id === activeFocusId) ?? null;
+        const daysCount = activeFocusId && myClub ? getFocusDaysCount(myClub, todayStr) : 0;
+        const isReady = activeFocusId && myClub ? isFocusReady(myClub, todayStr) : false;
+        const previewFocus = MATCH_PREP_FOCUSES.find(f => f.id === selectedFocusId) ?? null;
+        const isChanging = selectedFocusId && selectedFocusId !== activeFocusId;
+        return (
+          <div className="relative z-10 flex-1 flex gap-8 p-12 min-h-0 overflow-hidden">
+            {/* LEWA: SIATKA FOKUSÓW */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 pb-20">
+              <span className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-6 px-1">Wybierz Fokus Przedmeczowy</span>
+              <div className="grid grid-cols-3 gap-3">
+                {MATCH_PREP_FOCUSES.map(focus => {
+                  const isCurrent = activeFocusId === focus.id;
+                  const isSelected = selectedFocusId === focus.id;
+                  return (
+                    <button
+                      key={focus.id}
+                      onClick={() => setSelectedFocusId(prev => prev === focus.id ? null : focus.id)}
+                      className={`group relative p-4 rounded-2xl border transition-all duration-300 text-left overflow-hidden
+                        ${isSelected ? 'bg-emerald-600/15 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                        : isCurrent ? 'bg-blue-600/10 border-blue-500/30'
+                        : 'bg-slate-900/40 border-white/5 hover:border-white/20 hover:bg-slate-900/60'}`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-2xl shrink-0 transition-transform group-hover:scale-110
+                          ${isSelected ? 'bg-emerald-500 border border-emerald-300'
+                          : isCurrent ? 'bg-blue-500/30 border border-blue-500/40'
+                          : 'bg-slate-800 border border-white/10'}`}>
+                          {focus.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-black text-white uppercase italic tracking-tighter truncate">{focus.name}</h4>
+                          {isCurrent && isReady && (
+                            <span className="text-[7px] font-black uppercase tracking-widest text-emerald-400">● AKTYWNY</span>
+                          )}
+                          {isCurrent && !isReady && (
+                            <span className="text-[7px] font-black uppercase tracking-widest text-amber-400">Dzień {daysCount}/5</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-relaxed">{focus.description}</p>
+                      {isSelected && (
+                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* PRAWA: PANEL STATUSU */}
+            <div className="w-[360px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
+
+              {/* AKTUALNY STATUS */}
+              <div className="bg-slate-900/60 rounded-[28px] border border-white/10 backdrop-blur-3xl p-5 flex flex-col gap-3">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Aktualny Fokus</span>
+                {activeFocus ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-3xl">{activeFocus.icon}</div>
+                      <div>
+                        <p className="text-base font-black text-white uppercase italic tracking-tighter">{activeFocus.name}</p>
+                        {isReady ? (
+                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">● Aktywny — działa na mecze</span>
+                        ) : (
+                          <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Aktywny za {5 - daysCount} {5 - daysCount === 1 ? 'dzień' : 'dni'}</span>
+                        )}
+                      </div>
+                    </div>
+                    {!isReady && (
+                      <div className="bg-black/30 rounded-xl p-3 border border-white/5">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Postęp</span>
+                          <span className="text-[9px] font-black text-white tabular-nums">{daysCount} / 5 dni</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/10">
+                          <div className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-500" style={{ width: `${(daysCount / 5) * 100}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    {isReady && (
+                      <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20 text-[9px] font-black text-emerald-300 uppercase tracking-widest">
+                        Efekt aktywny — gotowy na następny mecz
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center opacity-30 py-4">
+                    <div className="text-4xl mb-2">🎯</div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Brak aktywnego fokusa</p>
+                  </div>
+                )}
+              </div>
+
+              {/* PODGLĄD WYBRANEGO */}
+              {previewFocus && (
+                <div className="bg-slate-900/60 rounded-[28px] border border-white/10 backdrop-blur-3xl p-5 flex flex-col gap-3 animate-fade-in">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Wybrany Fokus</span>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-2xl">{previewFocus.icon}</div>
+                    <h4 className="text-base font-black text-white uppercase italic tracking-tighter">{previewFocus.name}</h4>
+                  </div>
+
+                  {previewFocus.isRecovery ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl p-2.5">
+                        <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Regeneracja</span>
+                        <span className="text-[10px] font-black text-white">+15%</span>
+                      </div>
+                      <div className="flex items-center justify-between bg-rose-500/10 border border-rose-500/20 rounded-xl p-2.5">
+                        <span className="text-[9px] font-black text-rose-300 uppercase tracking-widest">Finalizacja (kara losowa)</span>
+                        <span className="text-[9px] font-black text-rose-400">do -2.2%</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {previewFocus.finishingMultiplierBase > 0 && (
+                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5">
+                          <span className="text-[9px] font-black text-emerald-300 uppercase tracking-widest">Finalizacja</span>
+                          <span className="text-[9px] font-black text-white">+{(previewFocus.finishingMultiplierBase * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {previewFocus.shotModifierBase > 0 && (
+                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5">
+                          <span className="text-[9px] font-black text-emerald-300 uppercase tracking-widest">Celność strzałów</span>
+                          <span className="text-[9px] font-black text-white">+{(previewFocus.shotModifierBase * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {previewFocus.initiativeModifierBase > 0 && (
+                        <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl p-2.5">
+                          <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Inicjatywa</span>
+                          <span className="text-[9px] font-black text-white">+{(previewFocus.initiativeModifierBase * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {previewFocus.shotResistanceModifierBase > 0 && (
+                        <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5">
+                          <span className="text-[9px] font-black text-amber-300 uppercase tracking-widest">Defensywa</span>
+                          <span className="text-[9px] font-black text-white">+{(previewFocus.shotResistanceModifierBase * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {previewFocus.goalkeepingMultiplierBase > 0 && (
+                        <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5">
+                          <span className="text-[9px] font-black text-amber-300 uppercase tracking-widest">Bramkarstwo</span>
+                          <span className="text-[9px] font-black text-white">+{(previewFocus.goalkeepingMultiplierBase * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {isChanging && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5">
+                      <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest">Zmiana fokusa zresetuje licznik 5 dni</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveFocus}
+                    className="mt-1 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black italic uppercase tracking-tighter text-sm transition-all hover:scale-105 active:scale-95 shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-b-4 border-emerald-900"
+                  >
+                    ZATWIERDŹ FOKUS 🎯
+                  </button>
+                </div>
+              )}
+
+              {!previewFocus && !activeFocus && (
+                <div className="flex flex-col items-center justify-center text-center opacity-20 py-8">
+                  <div className="text-5xl mb-4">🎯</div>
+                  <p className="text-xs font-black uppercase tracking-[0.3em] italic text-slate-500">Wybierz fokus</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* FOOTER TICKER */}
       <footer className="h-12 bg-black/60 border-t border-white/5 flex items-center px-12 overflow-hidden shrink-0 relative z-20">

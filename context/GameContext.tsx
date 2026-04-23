@@ -53,9 +53,11 @@ import { BackgroundPlayOffMatchPolishCup } from '../services/BackgroundPlayOffMa
 import { DebugLoggerService } from '../services/DebugLoggerService';
 import { BackgroundMatchProcessorPolishCup } from '../services/BackgroundMatchProcessorPolishCup';
 import { RecoveryService } from '../services/RecoveryService';
+import { isRecoveryFocusReady } from '../services/MatchPrepFocusService';
 import { MailService, SeasonSummaryData } from '../services/MailService';
 import { TrainingService } from '../services/TrainingService';
 import { TrainingAssistantService } from '../services/TrainingAssistantService';
+import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
@@ -2083,7 +2085,14 @@ setMessages([welcomeMail, fanMail]);
     setClubs(prev => prev.map(c => {
       if (c.id !== userTeamId) return c;
       const newMorale = Math.max(5, Math.min(95, (c.morale ?? 50) + moraleDelta));
-      return { ...c, morale: newMorale, lastMotivationDate: currentDate.toISOString().split('T')[0] };
+      const todayIso = currentDate.toISOString().split('T')[0];
+      return {
+        ...c,
+        morale: newMorale,
+        lastMotivationDate: todayIso,
+        motivationMonitoringStartDate: todayIso,
+        motivationNeglectLevel: 0,
+      };
     }));
   }, [userTeamId, currentDate]);
 
@@ -3583,7 +3592,9 @@ setMessages([welcomeMail, fanMail]);
     const diffTime = Math.abs(dateToProcess.getTime() - lastRecoveryDate.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const recoveryDelta = diffDays > 0 ? diffDays : 1;
-    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta);
+    const userClubForRecovery = userTeamId ? simulation.updatedClubs.find(c => c.id === userTeamId) : null;
+    const recoveryBoost = userClubForRecovery && isRecoveryFocusReady(userClubForRecovery, dateToProcess.toISOString().split('T')[0]) ? 1.15 : 1.0;
+    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta, recoveryBoost);
 
     // 3. Budowanie finalnego wyniku
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu
@@ -3876,6 +3887,55 @@ const finalResult: SimulationOutput = {
 
     const nextDay = new Date(currentDate);
     nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayIso = nextDay.toISOString().split('T')[0];
+
+    if (userTeamId) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub) {
+        const neglectStatus = WeeklyMotivationService.getNeglectStatus(userClub, nextDay);
+
+        if (!userClub.lastMotivationDate && !userClub.motivationMonitoringStartDate) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? {
+            ...c,
+            motivationMonitoringStartDate: nextDayIso,
+            motivationNeglectLevel: c.motivationNeglectLevel ?? 0,
+          } : c));
+        } else if (neglectStatus.isOverdue) {
+          const squad = players[userTeamId] || [];
+          const captain = squad.find(p => p.id === userClub.captainId) || squad[0];
+          const captainName = captain ? `${captain.firstName} ${captain.lastName}` : 'Kapitan druzyny';
+          const reminderLevel = userClub.motivationNeglectLevel ?? 0;
+          const captainMailBody =
+            reminderLevel <= 0
+              ? 'Trenerze,\n\nw szatni zaczyna brakowac wspolnego impulsu. Chlopaki czekaja na rozmowe, bo atmosfera powoli sie rozluznia i nie wszyscy sa juz na tej samej fali.\n\nMysle, ze kilka slow od sztabu dobrze by nam teraz zrobilo.\n\n' + captainName
+              : reminderLevel === 1
+                ? 'Trenerze,\n\nmowie otwarcie: w szatni widac, ze za dlugo nie bylo zadnej rozmowy. Atmosfera nie jest jeszcze zla, ale pojawia sie frustracja i coraz czesciej kazdy idzie w swoja strone.\n\nDruzyna potrzebuje jasnego sygnalu i zebrania nas razem.\n\n' + captainName
+                : 'Trenerze,\n\nmusze to powiedziec wprost. Atmosfera w szatni wyraznie sie psuje i zawodnicy od dawna czekaja na reakcje. Bez rozmowy bedzie nam coraz trudniej utrzymac jednoczesnosc i koncentracje.\n\nTo jest moment, w ktorym zespol potrzebuje Ciebie najbardziej.\n\n' + captainName;
+
+          setClubs(prev => prev.map(c => {
+            if (c.id !== userTeamId) return c;
+            return {
+              ...c,
+              morale: Math.max(5, Math.min(95, (c.morale ?? 50) - neglectStatus.nextPenalty)),
+              motivationMonitoringStartDate: c.motivationMonitoringStartDate ?? c.lastMotivationDate ?? nextDayIso,
+              motivationNeglectLevel: (c.motivationNeglectLevel ?? 0) + 1,
+            };
+          }));
+
+          setMessages(prev => [{
+            id: `CAPTAIN_MOTIVATION_${Date.now()}`,
+            sender: captainName,
+            role: 'Kapitan druzyny',
+            subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Druzyna czeka na rozmowe',
+            body: captainMailBody,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 58,
+          }, ...prev]);
+        }
+      }
+    }
     // Nowy sezon jest teraz uruchamiany przez confirmSeasonEnd (przycisk "NOWY SEZON" na Dashboardzie)
     // Fallback: jeśli data jakoś przeskoczyła bez zatrzymania na OFF_SEASON (np. save z przyszłości)
     // if (nextDay.getMonth() === 6 && nextDay.getDate() === 1) startNextSeason(nextDay.getFullYear());
@@ -4503,7 +4563,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players]);
 
 
    const confirmCLGroupDraw = () => {

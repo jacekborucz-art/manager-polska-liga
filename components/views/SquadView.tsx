@@ -94,6 +94,9 @@ export const SquadView: React.FC = () => {
   }, [nationalTeams]);
 
   const canMotivate = useMemo(() => myClub ? WeeklyMotivationService.canMotivate(myClub, currentDate) : false, [myClub, currentDate]);
+  const motivationPanelText = canMotivate
+    ? 'Druzyna jest gotowa na kolejna rozmowe motywacyjna.'
+    : 'Regularny kontakt z szatnia ma znaczenie. Jesli atmosfera zacznie sie psuc, kapitan da Ci o tym znac w wiadomosci.';
 
   const handleMotivationConfirm = (talk: MotivationTalkOption, result: MotivationTalkResult) => {
     applyWeeklyMotivation(result.moraleDelta);
@@ -728,6 +731,21 @@ export const SquadView: React.FC = () => {
                       >{r === 'W' ? 'W' : r === 'R' ? 'R' : 'P'}</div>
                     ))}
                   </div>
+                </div>
+
+                <div className="rounded-[32px] border border-white/10 bg-white/[0.02] backdrop-blur-xl p-6 flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600">Rozmowy motywacyjne</div>
+                    <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${canMotivate ? 'text-violet-300' : 'text-slate-500'}`}>
+                      {canMotivate ? 'Dostępna rozmowa' : 'Rozmowa w cooldownie'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-slate-500">
+                    Status: <span className="text-slate-300">Szatnia obserwuje reakcje sztabu</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    {motivationPanelText}
+                  </p>
                 </div>
 
 

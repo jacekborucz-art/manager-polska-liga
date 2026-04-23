@@ -2,6 +2,7 @@
 import { TacticRepository } from '@/resources/tactics_db';
 import { Fixture, Club, Player, Lineup, MatchEventType, InjurySeverity, Referee, WeatherSnapshot, Coach, PlayerAttributes, PlayerPosition } from '../types';
 import { GoalAttributionService } from './GoalAttributionService';
+import { getAIFocusLambdaBoost } from './MatchPrepFocusService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { NEUTRAL_PRESSURE_PROFILE, type MatchPressureContext } from './MatchPressureService';
 
@@ -92,6 +93,8 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
     const homeFormBoost = calculateFormBoost(_homeClub.stats.form || []);
     const awayFormBoost = calculateFormBoost(_awayClub.stats.form || []);
+    const homePrepBoost = getAIFocusLambdaBoost(homeCoach, seed + 999);
+    const awayPrepBoost = getAIFocusLambdaBoost(awayCoach, seed + 1001);
 
 const allPlayedIds = new Set<string>([
       ...homeLineup.startingXI.filter(id => id !== null),
@@ -247,8 +250,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * awayRedImpact * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * homeRedImpact * aSatiety * aTacticMod * aGkPanic * awayFormBoost * aPressureAttackMod * rivalryMultiplier;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * awayRedImpact * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * homeRedImpact * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {

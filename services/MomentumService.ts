@@ -1,6 +1,7 @@
 import { MatchContext, MatchLiveState, Player, MatchEventType } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { analyzeClubFormImpact } from './MatchFormService';
+import { applyFocusToFormImpact } from './MatchPrepFocusService';
 
 export const MomentumService = {
   /**
@@ -61,8 +62,10 @@ export const MomentumService = {
     if (awayTactic.attackBias > 65 && techGap > 8) target += techGap > 15 ? 12 : 6;
     if (awayTactic.defenseBias > 65 && techGap > 8) target += techGap > 15 ? -8 : -4;
 
-    const homeFormImpact = analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach);
-    const awayFormImpact = analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach);
+    const matchDateStr = ctx.fixture.date instanceof Date ? ctx.fixture.date.toISOString().split('T')[0] : String(ctx.fixture.date);
+    const matchSeed = new Date(matchDateStr).getTime() / 100000;
+    const homeFormImpact = applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed);
+    const awayFormImpact = applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1);
     target += homeFormImpact.momentumBonus - awayFormImpact.momentumBonus;
 
     const homeMoraleBonus = ((ctx.homeClub.morale ?? 50) - 50) / 50 * 6;

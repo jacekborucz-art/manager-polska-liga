@@ -15,6 +15,31 @@ export interface MotivationTalkResult {
   isPositive: boolean;
 }
 
+export interface MotivationNeglectStatus {
+  daysWithoutTalk: number;
+  daysUntilNextPenalty: number;
+  isOverdue: boolean;
+  nextPenalty: number;
+  neglectLevel: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const REGULAR_TALK_GRACE_DAYS = 10;
+const NEGLECT_PENALTY_INTERVAL_DAYS = 7;
+
+const startOfDay = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const getDayDiff = (from: Date, to: Date): number =>
+  Math.max(0, Math.floor((startOfDay(to).getTime() - startOfDay(from).getTime()) / DAY_MS));
+
+const getTrackingAnchorDate = (club: Club): Date | null => {
+  const rawDate = club.lastMotivationDate ?? club.motivationMonitoringStartDate;
+  if (!rawDate) return null;
+
+  const parsed = new Date(rawDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 // ─── SEEDED RNG ────────────────────────────────────────────────────────────────
 const seededRng = (seed: number, offset: number): number => {
   const s = seed + offset * 9301 + 49297;
@@ -212,8 +237,35 @@ export const WeeklyMotivationService = {
   canMotivate: (club: Club, currentDate: Date): boolean => {
     if (!club.lastMotivationDate) return true;
     const last = new Date(club.lastMotivationDate);
-    const diffMs = currentDate.getTime() - last.getTime();
-    return diffMs >= 7 * 24 * 60 * 60 * 1000;
+    if (Number.isNaN(last.getTime())) return true;
+    return getDayDiff(last, currentDate) >= 7;
+  },
+
+  getNeglectStatus: (club: Club, currentDate: Date): MotivationNeglectStatus => {
+    const anchorDate = getTrackingAnchorDate(club);
+    const neglectLevel = Math.max(0, club.motivationNeglectLevel ?? 0);
+    const nextPenalty = neglectLevel >= 2 ? 3 : 2;
+
+    if (!anchorDate) {
+      return {
+        daysWithoutTalk: 0,
+        daysUntilNextPenalty: REGULAR_TALK_GRACE_DAYS,
+        isOverdue: false,
+        nextPenalty,
+        neglectLevel,
+      };
+    }
+
+    const daysWithoutTalk = getDayDiff(anchorDate, currentDate);
+    const nextThreshold = REGULAR_TALK_GRACE_DAYS + neglectLevel * NEGLECT_PENALTY_INTERVAL_DAYS;
+
+    return {
+      daysWithoutTalk,
+      daysUntilNextPenalty: Math.max(0, nextThreshold - daysWithoutTalk),
+      isOverdue: daysWithoutTalk >= nextThreshold,
+      nextPenalty,
+      neglectLevel,
+    };
   },
 
   buildContext: (club: Club, leaguePosition: number, teamCount: number): MotivationContext => {
