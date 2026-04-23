@@ -1531,6 +1531,8 @@ export interface MatchContext {
   awayClub: Club;
   homePlayers: Player[];
   awayPlayers: Player[];
+  homeCoach?: Coach | null;
+  awayCoach?: Coach | null;
   homeAdvantage: boolean;
   competition: CompetitionType;
 }

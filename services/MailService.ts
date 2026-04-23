@@ -531,18 +531,18 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     if (stage === 'SF') {
       subject = polandWon
-        ? 'Polska w finale baraży o MŚ 2026! Sport Express po półfinale'
-        : 'Polska odpada w półfinale baraży o MŚ 2026';
+        ? 'Polska w finale baraży do MŚ ! Sport Express po półfinale'
+        : 'Polska odpada w półfinale baraży do MŚ';
       lead = polandWon
-        ? `Polska pokonała ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i zameldowała się w finale baraży o Mistrzostwa Świata 2026. Biało-Czerwonym został już tylko jeden krok do mundialu.`
-        : `Polska przegrała z ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i odpadła z baraży o Mistrzostwa Świata 2026. Marzenie o wyjeździe na mundial zakończyło się już na pierwszej przeszkodzie.`;
+        ? `Reprezentacja Polski pokonała ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i zagra w finale baraży o Mistrzostwa Świata. Biało-Czerwonym został już tylko jeden krok do mundialu.`
+        : `Reprezentacja Polski przegrała z ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i odpadła z baraży o Mistrzostwa Świata. Mundial bez Biało-Czerwonych.`;
     } else {
       subject = polandWon
-        ? 'POLSKA JEDZIE NA MUNDIAL! Wygrany finał baraży o MŚ 2026'
-        : 'Polska przegrywa finał baraży. Mundial 2026 bez Biało-Czerwonych';
+        ? 'POLSKA JEDZIE NA MUNDIAL! Zwycięstwo w finale baraży!!!'
+        : 'Polska przegrywa finał baraży. Mundial bez Biało-Czerwonych';
       lead = polandWon
-        ? `Polska wygrała finał ścieżki ${polandPath.pathLabel}, pokonując ${opponent} ${scoreForPoland}, i wywalczyła awans na Mistrzostwa Świata 2026. Biało-Czerwoni wracają na największą scenę futbolu.`
-        : `Polska przegrała finał ścieżki ${polandPath.pathLabel} z ${opponent} ${scoreForPoland} i nie zagra na Mistrzostwach Świata 2026. Barażowa droga zakończyła się tuż przed metą.`;
+        ? `Reprezentacja Polski wygrywa finał ścieżki ${polandPath.pathLabel}, pokonując ${opponent} ${scoreForPoland}, i wywalczyła awans na Mistrzostwa Świata. Biało-Czerwoni wracają na największą scenę futbolu.`
+        : `Reprezentacja Polski przegrała finał ścieżki ${polandPath.pathLabel} z ${opponent} ${scoreForPoland} i nie zagra na Mistrzostwach Świata.`;
     }
 
     const finalOpponent = polandWon && stage === 'SF'
@@ -551,7 +551,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     let body = `════════════════════════════════════════════════\n`;
     body += `  SPORT EXPRESS  —  WYDANIE SPECJALNE\n`;
-    body += `  BARAŻE MŚ 2026  —  ${stageLabel}\n`;
+    body += `  BARAŻE MŚ  —  ${stageLabel}\n`;
     body += `════════════════════════════════════════════════\n\n`;
     body += `${lead}\n\n`;
     body += `${sep}\n`;
@@ -573,8 +573,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       body += `  STAWKA ROZSTRZYGNIĘTA\n`;
       body += `${sep}\n\n`;
       body += polandWon
-        ? `  Biało-Czerwoni wygrali barażową ścieżkę ${polandPath.pathLabel} i dołączyli do grona uczestników MŚ 2026.\n\n`
-        : `  Zwycięzca ścieżki ${polandPath.pathLabel} pojedzie na MŚ 2026, a Polska kończy eliminacje na etapie finału baraży.\n\n`;
+        ? `  Biało-Czerwoni wygrali barażową ścieżkę ${polandPath.pathLabel} i dołączyli do grona uczestników MŚ .\n\n`
+        : `  Zwycięzca ścieżki ${polandPath.pathLabel} pojedzie na MŚ, a Polska kończy eliminacje na etapie finału baraży.\n\n`;
     }
 
     body += `${sep}\n`;

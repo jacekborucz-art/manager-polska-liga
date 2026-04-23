@@ -1,6 +1,6 @@
-
 import { MatchContext, MatchLiveState, Player, MatchEventType } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
+import { analyzeClubFormImpact } from './MatchFormService';
 
 export const MomentumService = {
   /**
@@ -31,17 +31,19 @@ export const MomentumService = {
 
   /**
    * Computes the "Natural Target" for momentum based on stats and tactics.
-   * v2.7: Reputacja minimalna (×0.5), taktyczne ryzyko vs silniejszego rywala, forma drużyny.
+   * v2.8: forma klubu liczona na pełnym oknie ostatnich 5 spotkań.
    */
   calculateNaturalTarget: (ctx: MatchContext, state: MatchLiveState): number => {
-    // Reputacja ma minimalny wpływ — tylko tiebreaker
     let target = (ctx.homeClub.reputation - ctx.awayClub.reputation) * 0.5;
     if (ctx.homeAdvantage) target += 5;
 
     const getTeamTechPower = (players: Player[], lineupIds: string[]) => {
       const active = players.filter(p => lineupIds.includes(p.id));
       if (active.length === 0) return 50;
-      const sum = active.reduce((acc, p) => acc + ((p.attributes.technique * 0.4) + (p.attributes.passing * 0.4) + (p.attributes.pace * 0.2)), 0);
+      const sum = active.reduce(
+        (acc, p) => acc + ((p.attributes.technique * 0.4) + (p.attributes.passing * 0.4) + (p.attributes.pace * 0.2)),
+        0
+      );
       return sum / active.length;
     };
 
@@ -53,103 +55,55 @@ export const MomentumService = {
     const awayTactic = TacticRepository.getById(state.awayLineup.tacticId);
     target += (homeTactic.attackBias - awayTactic.attackBias) * 0.4;
 
-    // --- TAKTYCZNE RYZYKO VS SILNIEJSZY RYWAL ---
     const techGap = homePower - awayPower;
     if (homeTactic.attackBias > 65 && techGap < -8) target += techGap < -15 ? -12 : -6;
     if (homeTactic.defenseBias > 65 && techGap < -8) target += techGap < -15 ? 8 : 4;
-    if (awayTactic.attackBias > 65 && techGap > 8)   target += techGap > 15 ? 12 : 6;
-    if (awayTactic.defenseBias > 65 && techGap > 8)  target += techGap > 15 ? -8 : -4;
+    if (awayTactic.attackBias > 65 && techGap > 8) target += techGap > 15 ? 12 : 6;
+    if (awayTactic.defenseBias > 65 && techGap > 8) target += techGap > 15 ? -8 : -4;
 
-    // --- FORMA DRUŻYNY ---
-    // Liczymy serię wygranych/przegranych od ostatniego meczu (koniec tablicy = najnowszy)
-    const getFormBonus = (form: ('W' | 'R' | 'P')[]): number => {
-      if (!form || form.length === 0) return 0;
-      const recent = [...form].reverse(); // najnowszy na początku
-      let winStreak = 0;
-      let lossStreak = 0;
-      for (const result of recent) {
-        if (result === 'W') {
-          if (lossStreak > 0) break;
-          winStreak++;
-        } else if (result === 'P') {
-          if (winStreak > 0) break;
-          lossStreak++;
-        } else {
-          break; // remis przerywa serię
-        }
-      }
-      if (winStreak > 0) {
-        // +1.5 za każdy wygrany, ekstra +2.5 przy 5+ pod rząd, cap +8
-        const base = Math.min(winStreak, 4) * 1.5;
-        const extra = winStreak >= 5 ? 2.5 : 0;
-        return Math.min(base + extra, 8);
-      }
-      if (lossStreak > 0) {
-        // -1.5 za każdą przegraną, przy 5+ -4 extra (trudniej się podnieść), cap -10
-        const base = Math.min(lossStreak, 4) * 1.5;
-        const extra = lossStreak >= 5 ? 4 : 0;
-        return -Math.min(base + extra, 10);
-      }
-      return 0;
-    };
+    const homeFormImpact = analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach);
+    const awayFormImpact = analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach);
+    target += homeFormImpact.momentumBonus - awayFormImpact.momentumBonus;
 
-    const homeFormBonus = getFormBonus(ctx.homeClub.stats.form);
-    const awayFormBonus = getFormBonus(ctx.awayClub.stats.form);
-    // forma HOME przesuwa cel w górę (+), forma AWAY przesuwa w dół (-)
-    target += homeFormBonus - awayFormBonus;
-
-    // --- MORALE DRUŻYNY ---
-    // morale 0-100, środek = 50 → bonus/kara max ±6
     const homeMoraleBonus = ((ctx.homeClub.morale ?? 50) - 50) / 50 * 6;
     const awayMoraleBonus = ((ctx.awayClub.morale ?? 50) - 50) / 50 * 6;
     target += homeMoraleBonus - awayMoraleBonus;
 
-    // Przy serii 5+ przegranych — dolna granica naturalTarget spada do -92
-    // (drużyna w dołku nie może wrócić do równowagi tylko przez chwilowy impuls)
-    const homeDeepSlump = ctx.homeClub.stats.form.slice(-5).every(r => r === 'P');
-    const awayDeepSlump = ctx.awayClub.stats.form.slice(-5).every(r => r === 'P');
-    const lowerBound = (homeDeepSlump && !awayDeepSlump) ? -92 : (awayDeepSlump && !homeDeepSlump) ? -78 : -85;
-    const upperBound = (awayDeepSlump && !homeDeepSlump) ? 92 : (homeDeepSlump && !awayDeepSlump) ? 78 : 85;
-    
-      // --- FORMA DEFENSYWY ---
-      // Wyciągamy obrońców z XI, liczymy średnią ocen z ostatnich 5 meczów
-      const getDefAvgRating = (players: Player[], xi: (string | null)[]): number => {
-        const defList = players.filter(p => xi.includes(p.id) && p.position === 'DEF');
-        if (defList.length === 0) return 6.5;
-        const avgRatings = defList.map(p => {
-          const recent = p.stats?.ratingHistory?.slice(-5) ?? [];
-          return recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 6.5;
-        });
-        return avgRatings.reduce((a, b) => a + b, 0) / avgRatings.length;
-      };
+    const homeDeepSlump = homeFormImpact.isDeepSlump;
+    const awayDeepSlump = awayFormImpact.isDeepSlump;
+    const lowerBound = homeDeepSlump && !awayDeepSlump ? -92 : awayDeepSlump && !homeDeepSlump ? -78 : -85;
+    const upperBound = awayDeepSlump && !homeDeepSlump ? 92 : homeDeepSlump && !awayDeepSlump ? 78 : 85;
 
-      const homeDefAvg = getDefAvgRating(ctx.homePlayers, state.homeLineup.startingXI);
-      const awayDefAvg = getDefAvgRating(ctx.awayPlayers, state.awayLineup.startingXI);
+    const getDefAvgRating = (players: Player[], xi: (string | null)[]): number => {
+      const defList = players.filter(p => xi.includes(p.id) && p.position === 'DEF');
+      if (defList.length === 0) return 6.5;
+      const avgRatings = defList.map(p => {
+        const recent = p.stats?.ratingHistory?.slice(-5) ?? [];
+        return recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 6.5;
+      });
+      return avgRatings.reduce((a, b) => a + b, 0) / avgRatings.length;
+    };
 
-      // Bonus/karę progresywną, małą (max ±4)
-      let homeDefBonus = 0;
-      if (homeDefAvg >= 7.0) {
-        homeDefBonus = Math.min(4, (homeDefAvg - 7.0) * 2);
-      } else if (homeDefAvg < 6.4) {
-        homeDefBonus = Math.max(-4, (homeDefAvg - 6.4) * 2);
-      }
-      let awayDefBonus = 0;
-      if (awayDefAvg >= 7.0) {
-        awayDefBonus = Math.min(4, (awayDefAvg - 7.0) * 2);
-      } else if (awayDefAvg < 6.4) {
-        awayDefBonus = Math.max(-4, (awayDefAvg - 6.4) * 2);
-      }
-      // Bonus HOME przesuwa cel w górę (+), bonus AWAY przesuwa w dół (-)
-      target += homeDefBonus - awayDefBonus;
+    const homeDefAvg = getDefAvgRating(ctx.homePlayers, state.homeLineup.startingXI);
+    const awayDefAvg = getDefAvgRating(ctx.awayPlayers, state.awayLineup.startingXI);
 
-    const _homeCaptain = ctx.homeClub.captainId ? ctx.homePlayers.find(p => p.id === ctx.homeClub.captainId) : null;
-    const _awayCaptain = ctx.awayClub.captainId ? ctx.awayPlayers.find(p => p.id === ctx.awayClub.captainId) : null;
-    const _homeCaptainOnPitch = _homeCaptain ? state.homeLineup.startingXI.includes(_homeCaptain.id) : false;
-    const _awayCaptainOnPitch = _awayCaptain ? state.awayLineup.startingXI.includes(_awayCaptain.id) : false;
-    const _homeCaptainLeadership = _homeCaptainOnPitch ? _homeCaptain!.attributes.leadership : 50;
-    const _awayCaptainLeadership = _awayCaptainOnPitch ? _awayCaptain!.attributes.leadership : 50;
-    const _leadershipBonus = ((_homeCaptainLeadership - _awayCaptainLeadership) / 100) * 6;
-    target += _leadershipBonus;
+    let homeDefBonus = 0;
+    if (homeDefAvg >= 7.0) homeDefBonus = Math.min(4, (homeDefAvg - 7.0) * 2);
+    else if (homeDefAvg < 6.4) homeDefBonus = Math.max(-4, (homeDefAvg - 6.4) * 2);
+
+    let awayDefBonus = 0;
+    if (awayDefAvg >= 7.0) awayDefBonus = Math.min(4, (awayDefAvg - 7.0) * 2);
+    else if (awayDefAvg < 6.4) awayDefBonus = Math.max(-4, (awayDefAvg - 6.4) * 2);
+
+    target += homeDefBonus - awayDefBonus;
+
+    const homeCaptain = ctx.homeClub.captainId ? ctx.homePlayers.find(p => p.id === ctx.homeClub.captainId) : null;
+    const awayCaptain = ctx.awayClub.captainId ? ctx.awayPlayers.find(p => p.id === ctx.awayClub.captainId) : null;
+    const homeCaptainOnPitch = homeCaptain ? state.homeLineup.startingXI.includes(homeCaptain.id) : false;
+    const awayCaptainOnPitch = awayCaptain ? state.awayLineup.startingXI.includes(awayCaptain.id) : false;
+    const homeCaptainLeadership = homeCaptainOnPitch ? homeCaptain!.attributes.leadership : 50;
+    const awayCaptainLeadership = awayCaptainOnPitch ? awayCaptain!.attributes.leadership : 50;
+    target += ((homeCaptainLeadership - awayCaptainLeadership) / 100) * 6;
 
     return Math.max(lowerBound, Math.min(upperBound, target));
   },
@@ -157,45 +111,55 @@ export const MomentumService = {
   /**
    * Dynamiczny silnik Momentum v2.6 - Zmęczenie drużyny wpływa na pasek momentum.
    */
-  computeMomentum: (ctx: MatchContext, state: MatchLiveState, lastEventType?: MatchEventType, lastEventSide?: 'HOME' | 'AWAY', homeFatigueMap?: Record<string, number>, awayFatigueMap?: Record<string, number>): number => {
+  computeMomentum: (
+    ctx: MatchContext,
+    state: MatchLiveState,
+    lastEventType?: MatchEventType,
+    lastEventSide?: 'HOME' | 'AWAY',
+    homeFatigueMap?: Record<string, number>,
+    awayFatigueMap?: Record<string, number>
+  ): number => {
     const naturalTarget = MomentumService.calculateNaturalTarget(ctx, state);
-    
-    // 1. Natychmiastowy impuls ze zdarzenia
+
     let impulse = 0;
     if (lastEventType && lastEventSide) {
       impulse = MomentumService.getEventImpulse(lastEventType, lastEventSide);
     }
 
-    // 2. Szum kinetyczny (mikro-drgania paska dla poczucia życia)
     const jitter = (Math.random() - 0.5) * 3;
 
-    // 2b. Losowy "ludzki błąd" / gorszy dzień (~1.5% szans per minutę ≈ 1-2x mecz)
-    // Symuluje nagły błąd bramkarza, słaby pass obrońcy, utratę koncentracji
-    const _homeAvgMentality = state.homeLineup.startingXI.filter((id): id is string => id !== null).reduce((acc, id) => { const p = ctx.homePlayers.find(x => x.id === id); return acc + (p?.attributes.mentality ?? 50); }, 0) / Math.max(1, state.homeLineup.startingXI.filter(id => id !== null).length);
-    const _awayAvgMentality = state.awayLineup.startingXI.filter((id): id is string => id !== null).reduce((acc, id) => { const p = ctx.awayPlayers.find(x => x.id === id); return acc + (p?.attributes.mentality ?? 50); }, 0) / Math.max(1, state.awayLineup.startingXI.filter(id => id !== null).length);
-    const _activeMentality = lastEventSide === 'HOME' ? _homeAvgMentality : _awayAvgMentality;
-    const _mentalityErrorMod = 1.0 - ((_activeMentality - 50) / 100) * 0.40;
-    const humanError = Math.random() < (0.015 * _mentalityErrorMod) ? (Math.random() - 0.5) * 16 * _mentalityErrorMod : 0;
+    const homeIds = state.homeLineup.startingXI.filter((id): id is string => id !== null);
+    const awayIds = state.awayLineup.startingXI.filter((id): id is string => id !== null);
+    const homeAvgMentality = homeIds.reduce((acc, id) => {
+      const player = ctx.homePlayers.find(x => x.id === id);
+      return acc + (player?.attributes.mentality ?? 50);
+    }, 0) / Math.max(1, homeIds.length);
+    const awayAvgMentality = awayIds.reduce((acc, id) => {
+      const player = ctx.awayPlayers.find(x => x.id === id);
+      return acc + (player?.attributes.mentality ?? 50);
+    }, 0) / Math.max(1, awayIds.length);
+    const activeMentality = lastEventSide === 'HOME' ? homeAvgMentality : awayAvgMentality;
+    const mentalityErrorMod = 1.0 - ((activeMentality - 50) / 100) * 0.40;
+    const humanError = Math.random() < (0.015 * mentalityErrorMod)
+      ? (Math.random() - 0.5) * 16 * mentalityErrorMod
+      : 0;
 
-    // 3. Bonus momentum za zmęczenie rywala
-    // Zmęczona drużyna traci inicjatywę → pasek dryfuje w stronę świeższego rywala
     const getAvgFatigue = (lineup: (string | null)[], fatigueMap: Record<string, number>): number => {
       const ids = lineup.filter((id): id is string => id !== null);
       if (ids.length === 0) return 100;
       return ids.reduce((acc, id) => acc + (fatigueMap[id] ?? 100), 0) / ids.length;
     };
+
     const homeAvg = homeFatigueMap ? getAvgFatigue(state.homeLineup.startingXI, homeFatigueMap) : 100;
     const awayAvg = awayFatigueMap ? getAvgFatigue(state.awayLineup.startingXI, awayFatigueMap) : 100;
     const fatiguePenalty = (avg: number): number => {
-      if (avg < 35) return 8;   // czerwony pasek → duży bonus dla rywala
-      if (avg < 50) return 5;   // pomarańczowy dolny → wyraźny bonus
-      if (avg < 70) return 2;   // pomarańczowy górny → lekki bonus
+      if (avg < 35) return 8;
+      if (avg < 50) return 5;
+      if (avg < 70) return 2;
       return 0;
     };
-    // dodatni = HOME dostaje bonus (bo AWAY jest zmęczony), ujemny = AWAY dostaje bonus
     const fatigueBalance = fatiguePenalty(awayAvg) - fatiguePenalty(homeAvg);
 
-    // 4. Adaptacja (powrót do naturalnego balansu sił, ale wolniejszy niż impulsy)
     const current = state.momentum + impulse;
     const lerpFactor = 0.08;
     const nextVal = current + (naturalTarget - current) * lerpFactor + jitter + humanError + fatigueBalance;

@@ -83,6 +83,7 @@ import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { AttendanceService } from '../../services/AttendanceService';
+import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
 import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
@@ -189,10 +190,12 @@ export const MatchLiveView = () => {
     const away = clubs.find(c => c.id === fixture.awayTeamId)!;
     const hPlayers = players[home.id] || [];
     const aPlayers = players[away.id] || [];
+    const homeCoach = home.coachId ? coaches[home.coachId] ?? null : null;
+    const awayCoach = away.coachId ? coaches[away.coachId] ?? null : null;
     return {
-      fixture, homeClub: home, awayClub: away, homePlayers: hPlayers, awayPlayers: aPlayers, homeAdvantage: true, competition: CompetitionType.LEAGUE
+      fixture, homeClub: home, awayClub: away, homePlayers: hPlayers, awayPlayers: aPlayers, homeCoach, awayCoach, homeAdvantage: true, competition: CompetitionType.LEAGUE
     } as MatchContext;
-  }, [userTeamId, clubs, fixtures, players, currentDate]);
+  }, [userTeamId, clubs, fixtures, players, currentDate, coaches]);
 
   const kitColors = useMemo(() => {
     if (pendingMatchKits) return pendingMatchKits;
@@ -225,6 +228,20 @@ export const MatchLiveView = () => {
     () => getPressureProfileForSide(livePressureContext, userSide === 'HOME' ? 'AWAY' : 'HOME'),
     [livePressureContext, userSide]
   );
+
+  const teamFormImpact = useMemo(() => {
+    if (!ctx) {
+      return {
+        home: NEUTRAL_CLUB_FORM_IMPACT,
+        away: NEUTRAL_CLUB_FORM_IMPACT,
+      };
+    }
+
+    return {
+      home: analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach),
+      away: analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach),
+    };
+  }, [ctx]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
     const pressureEffect = adjustBriefingEffectForPressure(effect, userPressureProfile);
@@ -814,6 +831,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         };
         const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
         const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
+        const homeFormImpact = teamFormImpact.home;
+        const awayFormImpact = teamFormImpact.away;
+        const getFormStackingMultiplier = (side: 'HOME' | 'AWAY'): number => {
+          const sideMomentum = side === 'HOME' ? prev.momentum : -prev.momentum;
+          if (sideMomentum <= 10) return 1;
+          return 1 - Math.min(0.45, ((sideMomentum - 10) / 90) * 0.45);
+        };
+        const homeFormStacking = getFormStackingMultiplier('HOME');
+        const awayFormStacking = getFormStackingMultiplier('AWAY');
 
         const homeScoreDiff = prev.homeScore - prev.awayScore;
         const awayScoreDiff = prev.awayScore - prev.homeScore;
@@ -835,7 +861,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
-        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod + pressureInitiativeMod));
+        const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
+        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod + pressureInitiativeMod + formInitiativeMod));
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         let activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
@@ -939,6 +966,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const strikerBonus = topStriker
           ? Math.max(0, (topStriker.attributes.finishing - 55) / (77 - 55)) * 0.012
           : 0;
+        const activeFormImpact = activeSide === 'HOME' ? homeFormImpact : awayFormImpact;
+        const defendingFormImpact = activeSide === 'HOME' ? awayFormImpact : homeFormImpact;
+        const activeFormStacking = activeSide === 'HOME' ? homeFormStacking : awayFormStacking;
+        const defendingFormStacking = activeSide === 'HOME' ? awayFormStacking : homeFormStacking;
 
         // Kara zmęczenia atakującej drużyny na shotThreshold
         const activeFatPenalty = activeSide === 'HOME' ? homeFatPenalty : awayFatPenalty;
@@ -1003,7 +1034,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const criticalFatPenalty = criticalAttackers * 0.012;
         const freshDefBonus = criticalAttackers >= 1 ? freshDefenders * 0.007 : 0;
 
-        shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus + redCardDefensiveBoost - criticalFatPenalty - freshDefBonus);
+        shotThreshold = Math.max(
+          0.04,
+          shotThreshold
+            - defBiasPenalty
+            + strikerBonus
+            + activeFatPenalty
+            + activeFormImpact.shotModifier * activeFormStacking
+            - defendingFormImpact.shotResistanceModifier * defendingFormStacking
+            + openBacksBonus
+            - ownShortHandedPenalty
+            + noGkBonus
+            + redCardDefensiveBoost
+            - criticalFatPenalty
+            - freshDefBonus
+        );
 
         // Momentum bonus do shotThreshold - tylko gdy aktywna drużyna ma impet po swojej stronie
         // max +0.015 przy momentum 100, przy momentum 50 → +0.0075
@@ -1442,27 +1487,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const scorerBriefingFatigue = activeSide === userSide
              ? Math.max(0, Math.min(100, scorerLiveFatigue + briefingFreshnessDelta))
              : scorerLiveFatigue;
-           const scorerBriefingFitMod = activeSide === userSide
-             ? scorerFitMod * briefingFinishingFitMod
-             : scorerFitMod;
-           const scorerCounterFitMod = counterAttackTriggered && activeSide === userSide
-             ? scorerBriefingFitMod * 1.06
-             : scorerBriefingFitMod;
+            const scorerBriefingFitMod = activeSide === userSide
+              ? scorerFitMod * briefingFinishingFitMod
+              : scorerFitMod;
+            const scorerCounterFitMod = counterAttackTriggered && activeSide === userSide
+              ? scorerBriefingFitMod * 1.06
+              : scorerBriefingFitMod;
+            const scorerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
+            const gkFormBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
+            const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost;
+            const gkTeamFormFitMod = gkFitMod * gkFormBoost;
 
-           // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
-           const isGoal = GoalAttributionService.checkShotSuccess(
+            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
+            const isGoal = GoalAttributionService.checkShotSuccess(
              scorer,
              gk as Player,
              defs,
              false,
              () => seededRng(currentSeed, nextMinute, 750),
-             false,
-             scorerBriefingFatigue,
-             gkLiveFatigue,
-              scorerCounterFitMod,
-             gkFitMod,
-             oppFatigueMap
-           );
+              false,
+              scorerBriefingFatigue,
+              gkLiveFatigue,
+              scorerTeamFormFitMod,
+              gkTeamFormFitMod,
+              oppFatigueMap
+            );
           
 
            if (isGoal) {
@@ -1597,10 +1646,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const headerBriefingFitMod = activeSide === userSide
                   ? briefingFinishingFitMod
                   : 1.0;
+                const headerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
+                const headerGkBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
+                const headerTeamFormFitMod = headerBriefingFitMod * headerFormBoost;
+                const headerGkFormFitMod = hGkFitMod * headerGkBoost;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),
-                  false, headerBriefingFatigue, hGkFat, headerBriefingFitMod, hGkFitMod, cornerOppFatigue
+                  false, headerBriefingFatigue, hGkFat, headerTeamFormFitMod, headerGkFormFitMod, cornerOppFatigue
                 );
                 if (isHeaderGoal) {
                   if (activeSide === 'HOME') {
@@ -1635,7 +1688,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (fkTaker) {
               const fkGk = fkOppTeam.find(p => p.id === fkOppXI[0]);
               const fkGkAttr = fkGk?.attributes.goalkeeping ?? 50;
-              const fkGoalProb = Math.max(0.05, Math.min(0.30, 0.50 + ((fkTaker.attributes.freeKicks * 1.05) - (fkGkAttr * 1.20)) / 300));
+              const fkFormAttMod = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
+              const fkFormDefMod = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
+              const fkGoalProb = Math.max(
+                0.05,
+                Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod) * 1.05) - ((fkGkAttr * fkFormDefMod) * 1.20)) / 300)
+              );
               if (seededRng(currentSeed, nextMinute, 5200) < fkGoalProb) {
                 if (activeSide === 'HOME') {
                   nextHomeScore++;
