@@ -1112,6 +1112,34 @@ export const CalendarEngine = {
         };
       }
 
+      // ── OBÓZ ZIMOWY ───────────────────────────────────────────────────────
+      case CompetitionType.WINTER_CAMP_INVITE: {
+        return {
+          slot,
+          kind: EventKind.NONE,
+          participation: 'info',
+          targetView: ViewState.DASHBOARD,
+        };
+      }
+
+      case CompetitionType.WINTER_CAMP_PROGRAM: {
+        return {
+          slot,
+          kind: EventKind.NONE,
+          participation: 'info',
+          targetView: ViewState.DASHBOARD,
+        };
+      }
+
+      case CompetitionType.WINTER_CAMP_END: {
+        return {
+          slot,
+          kind: EventKind.NONE,
+          participation: 'info',
+          targetView: ViewState.DASHBOARD,
+        };
+      }
+
       // ── SUPERPUCHAR EUROPY (23 Sierpnia) — mecz NPC, gracz obserwator ────
       case CompetitionType.UEFA_SUPER_CUP: {
         const fixtureUEFASC = allFixtures.find(

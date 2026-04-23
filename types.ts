@@ -508,6 +508,10 @@ export enum CompetitionType {
   WCQ_PLAYOFF_DRAW = 'WCQ_PLAYOFF_DRAW',   // 29 listopada — losowanie par
   WCQ_PLAYOFF_SF = 'WCQ_PLAYOFF_SF',       // 17 marca — półfinały
   WCQ_PLAYOFF_FINAL = 'WCQ_PLAYOFF_FINAL', // 20 marca — finały
+  // ── OBÓZ ZIMOWY ──────────────────────────────────────────────────────────
+  WINTER_CAMP_INVITE = 'WINTER_CAMP_INVITE',   // 11 grudnia — email zarządu z propozycją
+  WINTER_CAMP_PROGRAM = 'WINTER_CAMP_PROGRAM', // 22 grudnia — asystent pyta o program
+  WINTER_CAMP_END = 'WINTER_CAMP_END',         // 15 stycznia — zakończenie, efekty
 }
 
 export enum SlotType {
@@ -878,6 +882,30 @@ export interface Club {
   motivationNeglectLevel?: number;
   matchPrepFocusId?: string;
   matchPrepFocusStartDate?: string;
+  winterCamp?: WinterCampState;
+}
+
+export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
+export type WinterCampProgram = 'fitness' | 'tactical' | 'technical' | 'strength' | 'recovery';
+export type WinterCampIntensity = 'light' | 'moderate' | 'intense';
+
+export interface WinterCampState {
+  location: WinterCampLocation | null;
+  cost: number;
+  program: WinterCampProgram | null;
+  intensity: WinterCampIntensity | null;
+  spaOption: boolean;
+  isDeclined: boolean;
+  locationPrices: {
+    turkey: number;
+    cyprus: number;
+    greece: number;
+    poland: number;
+  };
+  spaCost: number;
+  inviteSent: boolean;
+  programChosen: boolean;
+  effectsApplied: boolean;
 }
 
 export interface YouthPlayer {

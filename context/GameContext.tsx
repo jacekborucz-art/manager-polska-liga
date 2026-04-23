@@ -27,6 +27,10 @@ MatchHistoryEntry,
 WCQPlayoffState,
 CoachSeasonStats,
 AiTransferLogEntry,
+WinterCampLocation,
+WinterCampProgram,
+WinterCampIntensity,
+WinterCampState,
 } from '../types';
 import { KitSelection } from '../services/KitSelectionService';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
@@ -88,6 +92,7 @@ import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { SaveState } from '../services/SaveGameService';
+import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -311,6 +316,12 @@ finalizeFreeAgentContract: (mailId: string) => void;
   refreshScoutMarket: () => void;
   scoutMarketRefreshDate: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
+  winterCampInvitePending: boolean;
+  winterCampProgramPending: boolean;
+  clearWinterCampInvitePending: () => void;
+  clearWinterCampProgramPending: () => void;
+  saveWinterCampLocation: (location: import('../types').WinterCampLocation | null, cost: number, spaOption: boolean) => void;
+  saveWinterCampProgram: (program: import('../types').WinterCampProgram, intensity: import('../types').WinterCampIntensity) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -393,6 +404,8 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [elHistoryInitialRound, setElHistoryInitialRound] = useState<string | null>(null);
   const [confHistoryInitialRound, setConfHistoryInitialRound] = useState<string | null>(null);
   const [isResigned, setIsResigned] = useState(false);
+  const [winterCampInvitePending, setWinterCampInvitePending] = useState(false);
+  const [winterCampProgramPending, setWinterCampProgramPending] = useState(false);
  const [currentPolishChampionId, setCurrentPolishChampionId] = useState<string>('PL_LECH_POZNAN');
  const [currentPolishCupWinnerId, setCurrentPolishCupWinnerId] = useState<string>('PL_LEGIA_WARSZAWA');
  const [currentCLWinnerId, setCurrentCLWinnerId] = useState<string>('EU_CL_PARIS_SAINT_GERMAIN');
@@ -2096,6 +2109,27 @@ setMessages([welcomeMail, fanMail]);
     }));
   }, [userTeamId, currentDate]);
 
+  const clearWinterCampInvitePending = useCallback(() => setWinterCampInvitePending(false), []);
+  const clearWinterCampProgramPending = useCallback(() => setWinterCampProgramPending(false), []);
+
+  const saveWinterCampLocation = useCallback((location: WinterCampLocation | null, cost: number, spaOption: boolean) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.winterCamp) return c;
+      return { ...c, winterCamp: { ...c.winterCamp, location, cost, spaOption, isDeclined: location === null } };
+    }));
+    setWinterCampInvitePending(false);
+  }, [userTeamId]);
+
+  const saveWinterCampProgram = useCallback((program: WinterCampProgram, intensity: WinterCampIntensity) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.winterCamp) return c;
+      return { ...c, winterCamp: { ...c.winterCamp, program, intensity, programChosen: true } };
+    }));
+    setWinterCampProgramPending(false);
+  }, [userTeamId]);
+
   const advanceDay = useCallback(() => {
     if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW) return;
 
@@ -3481,6 +3515,123 @@ setMessages([welcomeMail, fanMail]);
     }
     DebugLoggerService.log('GUARD', `advanceDay PRZECHODZI dla: ${dateKey}`);
     lastProcessedLeagueDateRef.current = dateKey;
+
+    // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
+    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_INVITE && userTeamId && !isResigned) {
+      const campInviteKey = `WINTER_CAMP_INVITE_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campInviteKey)) {
+        sentMailIdsRef.current.add(campInviteKey);
+        const priceSeed = sessionSeed + dateToProcess.getTime() % 100000;
+        const prices = generateLocationPrices(priceSeed);
+        const spaCost = generateSpaCost(priceSeed);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? {
+          ...c,
+          winterCamp: {
+            location: null,
+            cost: 0,
+            program: null,
+            intensity: null,
+            spaOption: false,
+            isDeclined: false,
+            locationPrices: prices,
+            spaCost,
+            inviteSent: true,
+            programChosen: false,
+            effectsApplied: false,
+          },
+        } : c));
+        const inviteMail = MailService.createFromTemplate('winter_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
+        if (inviteMail) setMessages(prev => [inviteMail, ...prev]);
+        setWinterCampInvitePending(true);
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: PROGRAM (22 grudnia) ───────────────────────────────────
+    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_PROGRAM && userTeamId && !isResigned) {
+      const campProgramKey = `WINTER_CAMP_PROGRAM_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campProgramKey)) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.winterCamp && !userClub.winterCamp.isDeclined && userClub.winterCamp.location !== null) {
+          sentMailIdsRef.current.add(campProgramKey);
+          const squad = players[userTeamId] || [];
+          const suggestion = getAssistantSuggestion(squad, userClub);
+          const templateId = suggestion.program === 'tactical' ? 'winter_camp_assistant_tactical' : 'winter_camp_assistant_fitness';
+          const assistantMail = MailService.createFromTemplate(templateId, { CLUB: userClub.name });
+          if (assistantMail) setMessages(prev => [assistantMail, ...prev]);
+          setWinterCampProgramPending(true);
+        }
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: ZAKOŃCZENIE (15 stycznia) ───────────────────────────────
+    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_END && userTeamId && !isResigned) {
+      const campEndKey = `WINTER_CAMP_END_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campEndKey)) {
+        sentMailIdsRef.current.add(campEndKey);
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.winterCamp && !userClub.winterCamp.effectsApplied) {
+          const squad = players[userTeamId] || [];
+          const effectSeed = sessionSeed + dateToProcess.getTime() % 100000 + 777;
+          const { effects, moraleDelta } = applyWinterCampEffects(squad, userClub.winterCamp, effectSeed);
+          const injuredCount = effects.filter(e => e.injured).length;
+          const improvedCount = effects.filter(e => Object.keys(e.attrChanges).some(k => (e.attrChanges as any)[k] > (squad.find(p => p.id === e.playerId)?.attributes as any)[k])).length;
+          const locationLabel = userClub.winterCamp.location
+            ? ({ turkey: 'Turcja', cyprus: 'Cypr', greece: 'Grecja', poland: 'Polska' } as Record<string,string>)[userClub.winterCamp.location]
+            : 'Polska';
+          const programLabel = userClub.winterCamp.program
+            ? ({ fitness: 'Kondycyjny', tactical: 'Taktyczny', technical: 'Techniczny', strength: 'Siłowy', recovery: 'Regeneracyjny' } as Record<string,string>)[userClub.winterCamp.program]
+            : 'Brak';
+          const intensityLabel = userClub.winterCamp.intensity
+            ? ({ light: 'Lekka', moderate: 'Umiarkowana', intense: 'Intensywna' } as Record<string,string>)[userClub.winterCamp.intensity]
+            : 'Brak';
+          const moraleSign = moraleDelta >= 0 ? `+${moraleDelta}` : `${moraleDelta}`;
+          const reportTemplateId = userClub.winterCamp.isDeclined ? 'winter_camp_report_declined' : 'winter_camp_report_success';
+          const reportMail = MailService.createFromTemplate(reportTemplateId, {
+            CLUB: userClub.name,
+            CAMP_LOCATION: locationLabel,
+            CAMP_PROGRAM: programLabel,
+            CAMP_INTENSITY: intensityLabel,
+            IMPROVED_COUNT: String(improvedCount),
+            INJURY_COUNT: String(injuredCount),
+            MORALE_CHANGE: moraleSign,
+          });
+          if (reportMail) setMessages(prev => [reportMail, ...prev]);
+          setPlayers(prev => {
+            const updatedSquad = (prev[userTeamId] || []).map(player => {
+              const effect = effects.find(e => e.playerId === player.id);
+              if (!effect) return player;
+              const newAttrs = { ...player.attributes, ...effect.attrChanges };
+              const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
+              if (effect.injured) {
+                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+              }
+              return { ...player, attributes: newAttrs, fatigueDebt: newDebt };
+            });
+            return { ...prev, [userTeamId]: updatedSquad };
+          });
+          setClubs(prev => prev.map(c => {
+            if (c.id !== userTeamId) return c;
+            const campCost = c.winterCamp?.cost ?? 0;
+            const newBudget = Math.max(0, c.budget - campCost);
+            const financeEntry = campCost > 0 ? {
+              id: Math.random().toString(36).substr(2, 9),
+              date: dateToProcess.toISOString().split('T')[0],
+              amount: -campCost,
+              type: 'EXPENSE' as const,
+              description: `Obóz zimowy (${locationLabel})`,
+              previousBalance: c.budget,
+            } : null;
+            return {
+              ...c,
+              budget: newBudget,
+              morale: Math.min(100, Math.max(0, (c.morale ?? 70) + moraleDelta)),
+              financeHistory: financeEntry ? [financeEntry, ...(c.financeHistory || [])].slice(0, 50) : c.financeHistory,
+              winterCamp: c.winterCamp ? { ...c.winterCamp, effectsApplied: true } : c.winterCamp,
+            };
+          }));
+        }
+      }
+    }
 
     // ── Symulacja meczów reprezentacji ──────────────────────────────────────
     // Gdy primaryEvent to NATIONAL_TEAM_MATCH: pobierz mecze z NT_SCHEDULE_BY_YEAR,
@@ -6905,6 +7056,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
     applyWeeklyMotivation,
+    winterCampInvitePending, winterCampProgramPending,
+    clearWinterCampInvitePending, clearWinterCampProgramPending,
+    saveWinterCampLocation, saveWinterCampProgram,
     }}>
       {children}
     </GameContext.Provider>

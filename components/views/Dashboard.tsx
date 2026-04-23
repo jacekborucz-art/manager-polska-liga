@@ -8,6 +8,9 @@ import { LineupService } from '../../services/LineupService';
 import { MailDetailsModal } from '../modals/MailDetailsModal';
 import { FinanceHistoryModal } from '../modals/FinanceHistoryModal';
 import { BoardModal } from '../modals/BoardModal';
+import { WinterCampLocationModal, WinterCampProgramModal } from '../modals/WinterCampModal';
+import { getAssistantSuggestion } from '../../services/WinterCampService';
+import { WinterCampLocation, WinterCampProgram, WinterCampIntensity } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import treningButton from '../../Graphic/buttons/trening.png';
@@ -62,6 +65,12 @@ export const Dashboard: React.FC = () => {
     isResigned,
     resignFromClub,
     getSaveState,
+    winterCampInvitePending,
+    winterCampProgramPending,
+    clearWinterCampInvitePending,
+    clearWinterCampProgramPending,
+    saveWinterCampLocation,
+    saveWinterCampProgram,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,11 +83,21 @@ export const Dashboard: React.FC = () => {
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers'>('main');
+  const [isWinterCampLocationOpen, setIsWinterCampLocationOpen] = useState(false);
+  const [isWinterCampProgramOpen, setIsWinterCampProgramOpen] = useState(false);
   const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
 
   useEffect(() => {
     setIsProcessing(false);
   }, [currentDate]);
+
+  useEffect(() => {
+    if (winterCampInvitePending) setIsWinterCampLocationOpen(true);
+  }, [winterCampInvitePending]);
+
+  useEffect(() => {
+    if (winterCampProgramPending) setIsWinterCampProgramOpen(true);
+  }, [winterCampProgramPending]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -660,6 +679,31 @@ const boardConfidence = useMemo(() => {
           rank={userRank}
           fixtures={fixtures}
           onClose={() => setIsBoardModalOpen(false)}
+        />
+      )}
+
+      {isWinterCampLocationOpen && myClub?.winterCamp && (
+        <WinterCampLocationModal
+          prices={myClub.winterCamp.locationPrices}
+          spaCost={myClub.winterCamp.spaCost}
+          clubBudget={myClub.budget}
+          onConfirm={(location, cost, spaOption) => {
+            saveWinterCampLocation(location, cost, spaOption);
+            clearWinterCampInvitePending();
+            setIsWinterCampLocationOpen(false);
+          }}
+        />
+      )}
+
+      {isWinterCampProgramOpen && myClub?.winterCamp && (
+        <WinterCampProgramModal
+          campLocation={myClub.winterCamp.location!}
+          assistantSuggestion={getAssistantSuggestion(players[userTeamId ?? ''] ?? [], myClub)}
+          onConfirm={(program, intensity) => {
+            saveWinterCampProgram(program, intensity);
+            clearWinterCampProgramPending();
+            setIsWinterCampProgramOpen(false);
+          }}
         />
       )}
 

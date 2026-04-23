@@ -543,5 +543,47 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     role: 'Kierownik ds. Transferów',
     subject: '{PLAYER} odrzucił ofertę {BUYER_CLUB}',
     body: 'Panie Managerze,\n\nInformujemy, że zawodnik {PLAYER} odmówił podjęcia rozmów z klubem {BUYER_CLUB}. Negocjacje zostały zakończone.\n\nZawodnik pozostaje w {CLUB}.\n\nPozdrawiam,\nDział Transferowy {CLUB}'
+  },
+
+  // ─── OBÓZ ZIMOWY ─────────────────────────────────────────────────────────────
+  {
+    id: 'winter_camp_invite',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Propozycja obozu zimowego dla {CLUB}',
+    body: 'Panie Trenerze,\n\nZarząd {CLUB} rekomenduje zorganizowanie zimowego obozu przygotowawczego w ramach przerwy zimowej. Obóz potrwa od 2 do 15 stycznia.\n\nPrzygotowaliśmy propozycje destynacji wraz z szacunkowymi kosztami (wynajem boisk, zakwaterowanie, personel medyczny i logistyka). Prosimy o wybór lokalizacji do końca tygodnia.\n\nJeśli obóz nie zostanie zorganizowany, drużyna samodzielnie przygotuje się do drugiej części sezonu — jednak zarząd zaleca skorzystanie z tej możliwości.\n\nZ poważaniem,\nZarząd {CLUB}'
+  },
+  {
+    id: 'winter_camp_assistant_fitness',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Sugestia programu obozu — kondycja priorytetem',
+    body: 'Panie Trenerze,\n\nprzeanalizowałem parametry drużyny pod kątem programu obozu zimowego.\n\nNasza kondycja fizyczna — stamina i siła — wymaga zdecydowanej poprawy przed wiosną. Proponuję skoncentrowanie treningu na aspekcie kondycyjnym. Intensywność powinna być umiarkowana lub wysoka, jednak proszę pamiętać o zwiększonym ryzyku kontuzji przy zbyt intensywnym obciążeniu.\n\nOstateczna decyzja należy do Pana.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'winter_camp_assistant_tactical',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Sugestia programu obozu — praca taktyczna',
+    body: 'Panie Trenerze,\n\nprzeanalizowałem wyniki i parametry drużyny.\n\nZważywszy na nasze rezultaty w rundzie jesiennej, uważam, że największe rezerwy tkwią w organizacji taktycznej — mentality i ustawieniu zawodników. Obóz zimowy to idealna okazja na intensywną pracę nad tymi elementami bez presji wynikowej.\n\nProponuję program taktyczny z umiarkowaną intensywnością. Ostateczna decyzja należy do Pana.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'winter_camp_report_success',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Raport z obozu zimowego — {CAMP_LOCATION}',
+    body: 'Panie Trenerze,\n\nobóz zimowy {CLUB} w {CAMP_LOCATION} dobiegł końca.\n\nPodsumowanie:\n• Program: {CAMP_PROGRAM}\n• Intensywność: {CAMP_INTENSITY}\n• Zawodnicy z poprawą atrybutów: {IMPROVED_COUNT}\n• Kontuzje podczas obozu: {INJURY_COUNT}\n• Zmiana morale drużyny: {MORALE_CHANGE}\n\nDrużyna wróciła zmotywowana i lepiej przygotowana fizycznie. Widzę wyraźną poprawę w tych obszarach, na których się skupiliśmy.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'winter_camp_report_declined',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Brak obozu zimowego — informacja o konsekwencjach',
+    body: 'Panie Trenerze,\n\nzgodnie z Pana decyzją drużyna {CLUB} nie wzięła udziału w obozie zimowym.\n\nMuszę uczciwie poinformować, że zawodnicy odczuwają ten brak. Morale drużyny obniżyło się — piłkarze widzieli, jak inne zespoły wyjeżdżają na przygotowania, a my pozostaliśmy bez zorganizowanego programu treningowego.\n\nNiektórzy zawodnicy samodzielnie ograniczyli treningi w przerwie, co może mieć przełożenie na ich gotowość w drugiej części sezonu.\n\nZ poważaniem,\nAsystent Trenera'
   }
 ]; // <--- ZAMKNIĘCIE TABLICY

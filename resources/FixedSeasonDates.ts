@@ -294,7 +294,9 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
 
 { day: 10, month: 11, type: SlotType.WEEKEND, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 18", priority: 10 },
 
-  
+  { day: 11, month: 11, type: SlotType.MIDWEEK, comp: CompetitionType.WINTER_CAMP_INVITE, label: "Propozycja obozu zimowego od Zarządu", priority: 75 },
+
+
 // --- PUCHARY EUROPEJSKIE --- 14 grudnia LIGA MISTRZÓW----faza grupowa 6 kolejka
 { day: 14, month: 11, type: SlotType.MIDWEEK, comp: CompetitionType.CL_GROUP_STAGE, label: "LM: Faza Grupowa - Kolejka 6", priority: 85 },
 
@@ -320,8 +322,10 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
 { day: 20, month: 11, type: SlotType.MIDWEEK, comp: CompetitionType.EL_R16_DRAW, label: "LOSOWANIE LE: 1/8 FINAŁU", priority: 88 },
 
 
-// 21 grudzen LIGA KONFERENCJI ----losowanie 1/8 finału 
+// 21 grudzen LIGA KONFERENCJI ----losowanie 1/8 finału
 { day: 21, month: 11, type: SlotType.MIDWEEK, comp: CompetitionType.CONF_R16_DRAW, label: "LOSOWANIE LK: 1/8 FINAŁU", priority: 87 },
+
+  { day: 22, month: 11, type: SlotType.MIDWEEK, comp: CompetitionType.WINTER_CAMP_PROGRAM, label: "Rozmowa z asystentem: plan obozu zimowego", priority: 75 },
 
   // --- STYCZEŃ ---------------------------------------------------------------------------------------------------------------------------------------
   
@@ -347,6 +351,7 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
 { day: 13 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
     { day: 14 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
 { day: 15 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
+{ day: 15 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.WINTER_CAMP_END, label: "Zakończenie obozu zimowego", priority: 76 },
 { day: 16 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
 { day: 17 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
 { day: 18 , month: 0, type: SlotType.WEEKEND, comp: CompetitionType.FRIENDLY, label: "SPARING", priority: 20 },
