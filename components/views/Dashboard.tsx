@@ -9,8 +9,10 @@ import { MailDetailsModal } from '../modals/MailDetailsModal';
 import { FinanceHistoryModal } from '../modals/FinanceHistoryModal';
 import { BoardModal } from '../modals/BoardModal';
 import { WinterCampLocationModal, WinterCampProgramModal } from '../modals/WinterCampModal';
+import { SummerCampLocationModal, SummerCampProgramModal } from '../modals/SummerCampModal';
 import { getAssistantSuggestion } from '../../services/WinterCampService';
-import { WinterCampLocation, WinterCampProgram, WinterCampIntensity } from '../../types';
+import { getSummerAssistantSuggestion } from '../../services/SummerCampService';
+import { WinterCampLocation, WinterCampProgram, WinterCampIntensity, SummerCampLocation, SummerCampProgram, SummerCampIntensity } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import treningButton from '../../Graphic/buttons/trening.png';
@@ -71,6 +73,12 @@ export const Dashboard: React.FC = () => {
     clearWinterCampProgramPending,
     saveWinterCampLocation,
     saveWinterCampProgram,
+    summerCampInvitePending,
+    summerCampProgramPending,
+    clearSummerCampInvitePending,
+    clearSummerCampProgramPending,
+    saveSummerCampLocation,
+    saveSummerCampProgram,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -85,6 +93,8 @@ export const Dashboard: React.FC = () => {
   const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers'>('main');
   const [isWinterCampLocationOpen, setIsWinterCampLocationOpen] = useState(false);
   const [isWinterCampProgramOpen, setIsWinterCampProgramOpen] = useState(false);
+  const [isSummerCampLocationOpen, setIsSummerCampLocationOpen] = useState(false);
+  const [isSummerCampProgramOpen, setIsSummerCampProgramOpen] = useState(false);
   const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
 
   useEffect(() => {
@@ -98,6 +108,14 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (winterCampProgramPending) setIsWinterCampProgramOpen(true);
   }, [winterCampProgramPending]);
+
+  useEffect(() => {
+    if (summerCampInvitePending) setIsSummerCampLocationOpen(true);
+  }, [summerCampInvitePending]);
+
+  useEffect(() => {
+    if (summerCampProgramPending) setIsSummerCampProgramOpen(true);
+  }, [summerCampProgramPending]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -703,6 +721,31 @@ const boardConfidence = useMemo(() => {
             saveWinterCampProgram(program, intensity);
             clearWinterCampProgramPending();
             setIsWinterCampProgramOpen(false);
+          }}
+        />
+      )}
+
+      {isSummerCampLocationOpen && myClub?.summerCamp && (
+        <SummerCampLocationModal
+          prices={myClub.summerCamp.locationPrices}
+          spaCost={myClub.summerCamp.spaCost}
+          clubBudget={myClub.budget}
+          onConfirm={(location, cost, spaOption) => {
+            saveSummerCampLocation(location, cost, spaOption);
+            clearSummerCampInvitePending();
+            setIsSummerCampLocationOpen(false);
+          }}
+        />
+      )}
+
+      {isSummerCampProgramOpen && myClub?.summerCamp && (
+        <SummerCampProgramModal
+          campLocation={myClub.summerCamp.location!}
+          assistantSuggestion={getSummerAssistantSuggestion(players[userTeamId ?? ''] ?? [], myClub)}
+          onConfirm={(program, intensity) => {
+            saveSummerCampProgram(program, intensity);
+            clearSummerCampProgramPending();
+            setIsSummerCampProgramOpen(false);
           }}
         />
       )}

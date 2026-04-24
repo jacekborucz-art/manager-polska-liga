@@ -512,6 +512,10 @@ export enum CompetitionType {
   WINTER_CAMP_INVITE = 'WINTER_CAMP_INVITE',   // 11 grudnia — email zarządu z propozycją
   WINTER_CAMP_PROGRAM = 'WINTER_CAMP_PROGRAM', // 22 grudnia — asystent pyta o program
   WINTER_CAMP_END = 'WINTER_CAMP_END',         // 15 stycznia — zakończenie, efekty
+  // ── OBÓZ LETNI ───────────────────────────────────────────────────────────
+  SUMMER_CAMP_INVITE = 'SUMMER_CAMP_INVITE',   // 19 maja — wybór lokalizacji
+  SUMMER_CAMP_PROGRAM = 'SUMMER_CAMP_PROGRAM', // 5 czerwca — asystent pyta o program
+  SUMMER_CAMP_END = 'SUMMER_CAMP_END',         // 28 czerwca — zakończenie, efekty
 }
 
 export enum SlotType {
@@ -883,6 +887,7 @@ export interface Club {
   matchPrepFocusId?: string;
   matchPrepFocusStartDate?: string;
   winterCamp?: WinterCampState;
+  summerCamp?: SummerCampState;
 }
 
 export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
@@ -901,6 +906,30 @@ export interface WinterCampState {
     cyprus: number;
     greece: number;
     poland: number;
+  };
+  spaCost: number;
+  inviteSent: boolean;
+  programChosen: boolean;
+  effectsApplied: boolean;
+}
+
+export type SummerCampLocation = 'poland' | 'czech_republic' | 'slovakia' | 'austria' | 'switzerland';
+export type SummerCampProgram = WinterCampProgram;
+export type SummerCampIntensity = WinterCampIntensity;
+
+export interface SummerCampState {
+  location: SummerCampLocation | null;
+  cost: number;
+  program: SummerCampProgram | null;
+  intensity: SummerCampIntensity | null;
+  spaOption: boolean;
+  isDeclined: boolean;
+  locationPrices: {
+    poland: number;
+    czech_republic: number;
+    slovakia: number;
+    austria: number;
+    switzerland: number;
   };
   spaCost: number;
   inviteSent: boolean;

@@ -585,5 +585,46 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     role: 'Pierwszy Asystent',
     subject: 'Brak obozu zimowego — informacja o konsekwencjach',
     body: 'Panie Trenerze,\n\nzgodnie z Pana decyzją drużyna {CLUB} nie wzięła udziału w obozie zimowym.\n\nMuszę uczciwie poinformować, że zawodnicy odczuwają ten brak. Morale drużyny obniżyło się — piłkarze widzieli, jak inne zespoły wyjeżdżają na przygotowania, a my pozostaliśmy bez zorganizowanego programu treningowego.\n\nNiektórzy zawodnicy samodzielnie ograniczyli treningi w przerwie, co może mieć przełożenie na ich gotowość w drugiej części sezonu.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  // ─── OBÓZ LETNI ──────────────────────────────────────────────────────────────
+  {
+    id: 'summer_camp_invite',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Propozycja letniego obozu przygotowawczego — {CLUB}',
+    body: 'Panie Trenerze,\n\nZarząd {CLUB} rekomenduje zorganizowanie letniego obozu przygotowawczego przed startem nowego sezonu. Obóz planowany jest na 14–28 czerwca.\n\nBiorąc pod uwagę wysokie temperatury w tym okresie, przygotowaliśmy propozycje destynacji w krajach o umiarkowanym klimacie: Polska, Czechy, Słowacja, Austria oraz Szwajcaria. Każda lokalizacja oferuje odpowiednią infrastrukturę treningową przy komfortowych warunkach pogodowych.\n\nProsimy o wybór lokalizacji do 19 maja.\n\nJeśli obóz nie zostanie zorganizowany, drużyna samodzielnie przygotuje się do nowego sezonu — zarząd jednak zaleca skorzystanie z tej możliwości.\n\nZ poważaniem,\nZarząd {CLUB}'
+  },
+  {
+    id: 'summer_camp_assistant_fitness',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Sugestia programu obozu letniego — kondycja priorytetem',
+    body: 'Panie Trenerze,\n\nprzeanalizowałem parametry drużyny pod kątem programu letniego obozu przygotowawczego.\n\nPrzed startem nowego sezonu kluczowe jest zbudowanie solidnej bazy kondycyjnej. Stamina i siła zawodników wymagają pracy, aby podołać wymagającemu harmonogramowi. Proponuję skoncentrowanie obozu na aspekcie kondycyjnym z umiarkowaną intensywnością.\n\nProszę pamiętać, że zbyt wysoka intensywność na początku przygotowań zwiększa ryzyko kontuzji. Ostateczna decyzja należy do Pana.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'summer_camp_assistant_tactical',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Sugestia programu obozu letniego — praca taktyczna',
+    body: 'Panie Trenerze,\n\nprzeanalizowałem wyniki minionego sezonu i aktualne parametry drużyny.\n\nUważam, że letni obóz przygotowawczy to idealna okazja do intensywnej pracy taktycznej bez presji wynikowej. Wyniki drużyny wskazują na rezerwy w organizacji gry i mentality zawodników — właśnie te elementy decydują o skuteczności w nowym sezonie.\n\nProponuję program taktyczny z umiarkowaną intensywnością. Ostateczna decyzja należy do Pana.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'summer_camp_report_success',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Raport z obozu letniego — {CAMP_LOCATION}',
+    body: 'Panie Trenerze,\n\nletni obóz przygotowawczy {CLUB} w {CAMP_LOCATION} dobiegł końca.\n\nPodsumowanie:\n• Program: {CAMP_PROGRAM}\n• Intensywność: {CAMP_INTENSITY}\n• Zawodnicy z poprawą atrybutów: {IMPROVED_COUNT}\n• Kontuzje podczas obozu: {INJURY_COUNT}\n• Zmiana morale drużyny: {MORALE_CHANGE}\n\nDrużyna wróciła gotowa na nowy sezon — widać wyraźną poprawę w obszarach, na których skupiło się nasze szkolenie. Zawodnicy są zmotywowani i dobrze przygotowani fizycznie do startu rozgrywek.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'summer_camp_report_declined',
+    type: MailType.STAFF,
+    sender: 'Asystent Trenera',
+    role: 'Pierwszy Asystent',
+    subject: 'Brak obozu letniego — informacja o konsekwencjach',
+    body: 'Panie Trenerze,\n\nzgodnie z Pana decyzją drużyna {CLUB} nie wzięła udziału w letnim obozie przygotowawczym.\n\nMuszę uczciwie poinformować, że zawodnicy odczuwają ten brak. Wiele drużyn z naszej ligi wyjechało na zorganizowane przygotowania, co może dać im przewagę na starcie sezonu. Morale drużyny obniżyło się, a indywidualne przygotowanie poszczególnych zawodników w przerwie letniej jest bardzo zróżnicowane.\n\nZ poważaniem,\nAsystent Trenera'
   }
 ]; // <--- ZAMKNIĘCIE TABLICY

@@ -561,6 +561,7 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
   { day: 11 , month: 4, type: SlotType.WEEKEND, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 32", priority: 10 },
   { day: 15, month: 4, type: SlotType.MIDWEEK, comp: CompetitionType.LEAGUE, label: "Liga: Kolejka 33", priority: 15 },
 
+  { day: 19, month: 4, type: SlotType.MIDWEEK, comp: CompetitionType.SUMMER_CAMP_INVITE, label: "Propozycja obozu letniego od Zarządu", priority: 75 },
 
 
 // --- FINAL PUCHARY EUROPEJSKIE --- 20 Maj LIGA EUROPY ----
@@ -608,7 +609,9 @@ export const FIXED_SEASON_EVENTS: FixedSeasonEvent[] = [
   { day: 7,  month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.BREAK, label: "REPREZENTACJA", priority: 30 },
   { day: 11, month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.BREAK, label: "REPREZENTACJA", priority: 30 },
 
+  { day: 5,  month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.SUMMER_CAMP_PROGRAM, label: "Rozmowa z asystentem: plan obozu letniego", priority: 75 },
 
+  { day: 28, month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.SUMMER_CAMP_END, label: "Zakończenie obozu letniego", priority: 76 },
 
   { day: 29, month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.TRANSFER_WINDOW, label: "PODSUMOWANIE SEZONU", priority: 60 },
   { day: 30, month: 5, type: SlotType.MIDWEEK, comp: CompetitionType.OFF_SEASON, label: "ZAKOŃCZENIE SEZONU", priority: 100 }
