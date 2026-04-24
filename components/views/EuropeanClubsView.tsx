@@ -868,7 +868,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               </span>
               {/* Klub */}
               <span
-                className={`text-[8px] min-w-0 self-stretch flex items-center gap-2 px-2.5 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18),inset_5px_0_0_rgba(255,255,255,0.24),0_0_18px_rgba(0,0,0,0.18)] ${T}`}
+                className={`text-[8px] min-w-0 self-stretch flex items-center gap-2 px-2.5 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),inset_1px_0_0_rgba(255,255,255,0.10),0_0_18px_rgba(0,0,0,0.18)] ${T}`}
                 style={{
                   background: `linear-gradient(90deg, ${clubPrimary} 0%, ${clubSecondary} 58%, ${clubAccent} 100%)`,
                   textShadow: '0 1px 3px rgba(0,0,0,0.72)'
@@ -1262,10 +1262,10 @@ export const EuropeanClubsView: React.FC = () => {
       <div className={`relative z-10 w-full transition-all duration-300 ${activeTab === 'clubs' && selectedCountry === 'POL' ? 'max-w-[1600px]' : activeTab === 'clubs' && selectedCountry === 'WORLD' ? 'max-w-5xl' : activeTab === 'clubs' && selectedCountry && selectedCountry !== 'POL' ? 'max-w-4xl' : activeTab === 'clubs' ? 'max-w-[1500px]' : selectedNT ? 'max-w-[92vw]' : 'max-w-[1280px]'}`}>
 
         {/* Header */}
-        <div className="flex items-center gap-4 mb-5">
+        <div className="flex items-center justify-between gap-4 mb-5">
           <button
             onClick={handleBack}
-            className={`px-3 py-1.5 rounded-lg bg-slate-800/80 border border-white/10 text-xs text-slate-400 hover:text-white hover:bg-slate-700/80 transition-colors ${MANAGER_BUTTON_FONT}`}
+            className={`order-2 ml-auto shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_30px_rgba(15,23,42,0.35)] hover:bg-white/15 hover:border-white/30 hover:shadow-[0_18px_40px_rgba(15,23,42,0.42)] transition-all ${MANAGER_BUTTON_FONT}`}
           >
             ← Wróć
           </button>
@@ -1295,7 +1295,7 @@ export const EuropeanClubsView: React.FC = () => {
             {activeTab === 'nt' && !selectedNT && (
               <h1 className={`text-base text-white ${MANAGER_HEADING_FONT}`}>Reprezentacje Narodowe</h1>
             )}
-            {activeTab === 'nt' && selectedNT && (
+            {false && activeTab === 'nt' && selectedNT && (
               <h1 className={`text-base text-white ${MANAGER_HEADING_FONT}`}>{selectedNT.name} — Skład</h1>
             )}
           </div>
