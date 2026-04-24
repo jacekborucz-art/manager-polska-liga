@@ -333,6 +333,9 @@ export interface MailMessage {
     salary: number;
     years: number;
     bonus: number;
+    goalBonus?: number;
+    assistBonus?: number;
+    cleanSheetBonus?: number;
     responseDate: string;
     acceptanceExpiryDate?: string;
   status: NegotiationStatus;
@@ -619,6 +622,9 @@ export interface PendingNegotiation {
   salary: number;
   bonus: number;
   years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
   responseDate: string; // Data ISO, kiedy agent odpowie
   status: NegotiationStatus;
 }
@@ -668,6 +674,9 @@ export interface TransferOffer {
   salary?: number;
   bonus?: number;
   years?: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
   createdAt: string;
   status: TransferOfferStatus;
   effectiveDate?: string;
@@ -745,6 +754,9 @@ export interface TransferContractInput {
   salary: number;
   bonus: number;
   years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
 }
 
 export interface TransferOfferSubmissionResult {
@@ -781,6 +793,9 @@ export interface Player {
   suspensionMatches: number;
   contractEndDate: string; // Data w formacie ISO
   annualSalary: number;    // Kwota roczna w PLN
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
   isOnTransferList?: boolean;
   transferListPrice?: number;
   marketValue?: number;

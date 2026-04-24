@@ -94,6 +94,19 @@ export const PlayerStatsService = {
     return newPlayers;
   },
 
+  applyCleanSheet: (players: Record<string, Player[]>, clubId: string, gkIds: string[]): Record<string, Player[]> => {
+    const newPlayers = { ...players };
+    if (newPlayers[clubId]) {
+      newPlayers[clubId] = newPlayers[clubId].map(p => {
+        if (gkIds.includes(p.id)) {
+          return { ...p, stats: { ...p.stats, cleanSheets: (p.stats.cleanSheets || 0) + 1 } };
+        }
+        return p;
+      });
+    }
+    return newPlayers;
+  },
+
   incrementMatchesPlayed: (players: Record<string, Player[]>, playerIds: string[]): Record<string, Player[]> => {
     const newPlayers = { ...players };
     const idSet = new Set(playerIds);

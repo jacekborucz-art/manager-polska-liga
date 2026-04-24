@@ -143,7 +143,7 @@ export const FreeAgentNegotiationService = {
     return { interested: true, message: '' };
   },
 
-  createNegotiationEntry: (player: Player, club: Club, salary: number, bonus: number, years: number, currentDate: Date, squad: Player[]): PendingNegotiation => {
+  createNegotiationEntry: (player: Player, club: Club, salary: number, bonus: number, years: number, currentDate: Date, squad: Player[], goalBonus?: number, assistBonus?: number, cleanSheetBonus?: number): PendingNegotiation => {
     const avgSalary = squad.length > 0 ? squad.reduce((sum, currentPlayer) => sum + currentPlayer.annualSalary, 0) / squad.length : 120000;
     const expected = player.overallRating * 2000;
     const rating = salary / expected;
@@ -163,6 +163,9 @@ export const FreeAgentNegotiationService = {
       salary,
       bonus,
       years,
+      goalBonus,
+      assistBonus,
+      cleanSheetBonus,
       responseDate: responseDate.toISOString(),
       status: NegotiationStatus.PENDING
     };

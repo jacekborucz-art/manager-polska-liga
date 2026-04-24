@@ -299,7 +299,24 @@ if (todayFixtures.length === 0) {
             : { revenue: 0, avgPrice: 0 };
           const additionalRevenues = isHome ? FinanceService.calculateMatchdayAdditionalRevenuesForClub(fixture.attendance || 0, c) : null;
           const additionalTotal = additionalRevenues ? (additionalRevenues.catering + additionalRevenues.merchandising + additionalRevenues.programs + additionalRevenues.parking) : 0;
-          const netChange = ticketRevenue + additionalTotal - matchExpenses;
+
+          const clubPlayers = isHome ? hPlayers : aPlayers;
+          const opponentScore = isHome ? result.awayScore : result.homeScore;
+          let performanceBonusCost = 0;
+          result.scorers.forEach(s => {
+            const scorer = clubPlayers.find(p => p.id === s.playerId);
+            if (scorer?.goalBonus) performanceBonusCost += scorer.goalBonus;
+            if (s.assistId) {
+              const assister = clubPlayers.find(p => p.id === s.assistId);
+              if (assister?.assistBonus) performanceBonusCost += assister.assistBonus;
+            }
+          });
+          if (opponentScore === 0) {
+            const playingGK = clubPlayers.find(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id));
+            if (playingGK?.cleanSheetBonus) performanceBonusCost += playingGK.cleanSheetBonus;
+          }
+
+          const netChange = ticketRevenue + additionalTotal - matchExpenses - performanceBonusCost;
 
           // Tworzymy logi finansowe z poprzednim saldem
           const financeLogsToAdd: any[] = [];
@@ -396,6 +413,18 @@ if (todayFixtures.length === 0) {
             runningBalance -= matchExpenses;
           }
 
+          if (performanceBonusCost > 0) {
+            financeLogsToAdd.push({
+              id: Math.random().toString(36).substr(2, 9),
+              date: currentDate.toISOString().split('T')[0],
+              amount: -performanceBonusCost,
+              type: 'EXPENSE' as const,
+              description: `Premie zawodnicze (vs ${isHome ? away.name : home.name})`,
+              previousBalance: runningBalance
+            });
+            runningBalance -= performanceBonusCost;
+          }
+
           return {
             ...c,
             budget: c.budget + netChange,
@@ -435,8 +464,14 @@ if (todayFixtures.length === 0) {
         currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type);
       });
 
-
-
+      if (result.awayScore === 0) {
+        const homeGKs = hPlayers.filter(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id)).map(p => p.id);
+        if (homeGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, home.id, homeGKs);
+      }
+      if (result.homeScore === 0) {
+        const awayGKs = aPlayers.filter(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id)).map(p => p.id);
+        if (awayGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, away.id, awayGKs);
+      }
 
 
       // Zmęczenie i kontuzje

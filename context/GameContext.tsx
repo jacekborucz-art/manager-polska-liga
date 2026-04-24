@@ -1670,6 +1670,9 @@ setMessages([welcomeMail, fanMail]);
           salary: neg.salary,
           years: neg.years,
           bonus: neg.bonus,
+          goalBonus: neg.goalBonus,
+          assistBonus: neg.assistBonus,
+          cleanSheetBonus: neg.cleanSheetBonus,
            responseDate: neg.responseDate,
           status: decision.accepted ? NegotiationStatus.ACCEPTED : NegotiationStatus.REJECTED,
           isAiOffer: false,
@@ -6629,6 +6632,9 @@ const finalResult: SimulationOutput = {
         salary: Math.round(contractInput.salary),
         bonus: Math.round(contractInput.bonus),
         years: contractInput.years,
+        goalBonus: contractInput.goalBonus,
+        assistBonus: contractInput.assistBonus,
+        cleanSheetBonus: contractInput.cleanSheetBonus,
         status: TransferOfferStatus.PLAYER_REJECTED,
         playerReason: playerDecision.reason
       };
@@ -6659,6 +6665,9 @@ const finalResult: SimulationOutput = {
       salary: Math.round(contractInput.salary),
       bonus: Math.round(contractInput.bonus),
       years: contractInput.years,
+      goalBonus: contractInput.goalBonus,
+      assistBonus: contractInput.assistBonus,
+      cleanSheetBonus: contractInput.cleanSheetBonus,
       status: TransferOfferStatus.READY_TO_FINALIZE,
       playerReason: playerDecision.reason
     };
@@ -6762,7 +6771,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     // TUTAJ WSTAW TEN KOD (Weryfikacja typu metadanych)
     if (!mail || !mail.metadata || mail.metadata.type !== 'CONTRACT_OFFER' || !userTeamId) return;
 
-    const { playerId, salary, years, bonus } = mail.metadata;
+    const { playerId, salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus } = mail.metadata;
     // KONIEC KODU
     const freeAgents = players['FREE_AGENTS'] || [];
     const playerToSign = freeAgents.find(p => p.id === playerId);
@@ -6863,10 +6872,13 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       currentMonth
     );
 
-    const updatedPlayer = { 
-      ...playerToSign, 
-      clubId: userTeamId, 
-      annualSalary: salary, 
+    const updatedPlayer = {
+      ...playerToSign,
+      clubId: userTeamId,
+      annualSalary: salary,
+      goalBonus: goalBonus ?? undefined,
+      assistBonus: assistBonus ?? undefined,
+      cleanSheetBonus: cleanSheetBonus ?? undefined,
       contractEndDate: newEndDate,
       transferLockoutUntil: transferLockoutDate.toISOString(),
       marketValue: FinanceService.calculateMarketValue(

@@ -55,6 +55,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
   });
   const [bonus, setBonus] = useState(() => Math.min(25000, maxBonusAllowed));
   const [years, setYears] = useState(2);
+  const [goalBonus, setGoalBonus] = useState(() => player ? Math.round(player.overallRating * 80 / 500) * 500 : 0);
+  const [assistBonus, setAssistBonus] = useState(() => player ? Math.round(player.overallRating * 50 / 500) * 500 : 0);
+  const [cleanSheetBonus, setCleanSheetBonus] = useState(() => player ? Math.round(player.overallRating * 80 / 500) * 500 : 0);
   const [isSending, setIsSending] = useState(false);
   const [agentReaction, setAgentReaction] = useState<{ type: string; msg: string } | null>(null);
   const [boardVeto, setBoardVeto] = useState<{ msg: string } | null>(null);
@@ -172,6 +175,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
       }
 
       if (reaction.type !== 'INSULT') {
+        const isGK = player.position === 'GK';
         const newNegotiation = FreeAgentNegotiationService.createNegotiationEntry(
           player,
           myClub,
@@ -179,7 +183,10 @@ export const FreeAgentNegotiationView: React.FC = () => {
           bonus,
           years,
           currentDate,
-          mySquad
+          mySquad,
+          isGK ? undefined : goalBonus || undefined,
+          isGK ? undefined : assistBonus || undefined,
+          isGK ? cleanSheetBonus || undefined : undefined
         );
         setPendingNegotiations(prev => [...prev, newNegotiation]);
       }
@@ -287,6 +294,93 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {player.position === 'GK' ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za czyste konto</span>
+                      <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                        <input
+                          type="number"
+                          value={cleanSheetBonus}
+                          onChange={e => setCleanSheetBonus(Math.min(parseInt(e.target.value, 10) || 0, 25000))}
+                          className="bg-transparent border-none outline-none text-xl font-black text-violet-400 font-mono italic w-32 text-right"
+                        />
+                        <span className="text-xs font-black text-slate-500">PLN</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="25000"
+                      step="500"
+                      value={cleanSheetBonus}
+                      onChange={e => setCleanSheetBonus(parseInt(e.target.value, 10))}
+                      className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                    />
+                    <div className="flex justify-between px-1">
+                      <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                      <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za gola</span>
+                        <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                          <input
+                            type="number"
+                            value={goalBonus}
+                            onChange={e => setGoalBonus(Math.min(parseInt(e.target.value, 10) || 0, 25000))}
+                            className="bg-transparent border-none outline-none text-xl font-black text-amber-400 font-mono italic w-32 text-right"
+                          />
+                          <span className="text-xs font-black text-slate-500">PLN</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="25000"
+                        step="500"
+                        value={goalBonus}
+                        onChange={e => setGoalBonus(parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                      <div className="flex justify-between px-1">
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za asyste</span>
+                        <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                          <input
+                            type="number"
+                            value={assistBonus}
+                            onChange={e => setAssistBonus(Math.min(parseInt(e.target.value, 10) || 0, 18000))}
+                            className="bg-transparent border-none outline-none text-xl font-black text-sky-400 font-mono italic w-32 text-right"
+                          />
+                          <span className="text-xs font-black text-slate-500">PLN</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="18000"
+                        step="500"
+                        value={assistBonus}
+                        onChange={e => setAssistBonus(parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                      />
+                      <div className="flex justify-between px-1">
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 18 000</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="space-y-8 bg-black/20 p-8 rounded-[40px] border border-white/5">

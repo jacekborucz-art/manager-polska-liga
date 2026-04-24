@@ -117,6 +117,9 @@ export const TransferPlayerNegotiationView: React.FC = () => {
   const [salary, setSalary] = useState(100_000);
   const [bonus, setBonus] = useState(0);
   const [years, setYears] = useState(3);
+  const [goalBonus, setGoalBonus] = useState(0);
+  const [assistBonus, setAssistBonus] = useState(0);
+  const [cleanSheetBonus, setCleanSheetBonus] = useState(0);
   const [feedback, setFeedback] = useState<NegotiationFeedback | null>(null);
   const [extraBudget, setExtraBudget] = useState(0);
   const [boardRequestResult, setBoardRequestResult] = useState<BoardRequestResult | null>(null);
@@ -126,6 +129,9 @@ export const TransferPlayerNegotiationView: React.FC = () => {
     setSalary(Math.min(maxSalary, Math.max(50_000, suggestedSalary)));
     setBonus(Math.min(maxBonus, negotiationPlan?.desiredBonus || Math.round((player.annualSalary || 100_000) * 0.25)));
     setYears(negotiationPlan?.desiredYears || 3);
+    setGoalBonus(Math.round(player.overallRating * 80 / 500) * 500);
+    setAssistBonus(Math.round(player.overallRating * 50 / 500) * 500);
+    setCleanSheetBonus(Math.round(player.overallRating * 80 / 500) * 500);
     setFeedback(null);
   }, [player?.id, suggestedSalary, maxSalary, maxBonus, negotiationPlan?.desiredBonus, negotiationPlan?.desiredYears]);
 
@@ -172,7 +178,15 @@ export const TransferPlayerNegotiationView: React.FC = () => {
   };
 
   const handleSubmit = () => {
-    const result = finalizeTransferNegotiation(offer.id, { salary, bonus, years });
+    const isGK = player.position === 'GK';
+    const result = finalizeTransferNegotiation(offer.id, {
+      salary,
+      bonus,
+      years,
+      goalBonus: isGK ? undefined : goalBonus || undefined,
+      assistBonus: isGK ? undefined : assistBonus || undefined,
+      cleanSheetBonus: isGK ? cleanSheetBonus || undefined : undefined,
+    });
     setFeedback({
       ok: result.ok,
       message: result.message,
@@ -343,6 +357,69 @@ export const TransferPlayerNegotiationView: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                {player.position === 'GK' ? (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Bonus za czyste konto</span>
+                      <span className="text-xl font-black text-violet-400 font-mono">{cleanSheetBonus.toLocaleString()} PLN</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="25000"
+                      step="500"
+                      value={cleanSheetBonus}
+                      onChange={e => setCleanSheetBonus(parseInt(e.target.value, 10))}
+                      className="w-full accent-violet-500"
+                    />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                      <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Bonus za gola</span>
+                        <span className="text-xl font-black text-amber-400 font-mono">{goalBonus.toLocaleString()} PLN</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="25000"
+                        step="500"
+                        value={goalBonus}
+                        onChange={e => setGoalBonus(parseInt(e.target.value, 10))}
+                        className="w-full accent-amber-500"
+                      />
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Bonus za asyste</span>
+                        <span className="text-xl font-black text-sky-400 font-mono">{assistBonus.toLocaleString()} PLN</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="18000"
+                        step="500"
+                        value={assistBonus}
+                        onChange={e => setAssistBonus(parseInt(e.target.value, 10))}
+                        className="w-full accent-sky-500"
+                      />
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 18 000</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
 
