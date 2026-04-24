@@ -49,6 +49,10 @@ const CLUB_REPUTATION_BY_ID = new Map<string, number>(
   KNOWN_CLUBS.map(club => [club.id, club.reputation])
 );
 
+const CLUB_LEAGUE_ID_BY_ID = new Map<string, string>(
+  KNOWN_CLUBS.map(club => [club.id, club.leagueId])
+);
+
 const FREE_AGENT_CLUB_ID = 'FREE_AGENTS';
 
 const isFreeAgentPlayer = (player?: Pick<Player, 'clubId'> | null): boolean =>
@@ -137,6 +141,13 @@ const isEligibleForTeam = (
     if (player.nationalityCountry !== team.name) return false;
   } else {
     if (player.nationality !== team.region) return false;
+  }
+
+  if (team.region === Region.POLAND) {
+    const clubLeagueId = CLUB_LEAGUE_ID_BY_ID.get(player.clubId);
+    const isEkstraklasa = clubLeagueId === 'L_PL_1';
+    const isTopForeign = clubLeagueId === 'L_CL' || clubLeagueId === 'L_EL' || clubLeagueId === 'L_CONF';
+    if (!isEkstraklasa && !isTopForeign) return false;
   }
 
   return true;

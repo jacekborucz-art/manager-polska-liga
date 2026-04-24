@@ -23,11 +23,11 @@ export const EUROPEAN_TIER_CONFIG: Record<number, { minBase: number; maxBase: nu
 };
 
 export const POLISH_GK_ATTRIBUTE_CAPS: Partial<Record<keyof PlayerAttributes, number>> = {
-  goalkeeping: 85,
-  defending: 85,
-  positioning: 85,
-  mentality: 85,
-  talent: 95,
+  goalkeeping: 87,
+  defending: 87,
+  positioning: 90,
+  mentality: 90,
+  talent: 99,
 };
 
 export const capInitialGoalkeeperAttributes = (

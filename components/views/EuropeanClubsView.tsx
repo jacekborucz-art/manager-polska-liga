@@ -24,8 +24,8 @@ const FLAG_COLUMNS = 5;
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
-const MANAGER_HEADING_FONT = "font-black italic uppercase tracking-tighter";
-const MANAGER_BUTTON_FONT = "font-black italic uppercase tracking-widest";
+const MANAGER_HEADING_FONT = "font-medium italic uppercase tracking-tighter";
+const MANAGER_BUTTON_FONT = "font-medium italic uppercase tracking-widest";
 
 const FLAG_CODE: Record<string, string> = {
   ALB: 'al', AND: 'ad', ARM: 'am', AUT: 'at', AZE: 'az',
@@ -200,7 +200,6 @@ const ClubRow: React.FC<{ club: ClubEntry; onSelect: () => void }> = ({ club, on
       <span className={`flex-1 text-base text-slate-300 group-hover:text-white transition-colors truncate ${MANAGER_HEADING_FONT}`}>
         {club.name}
       </span>
-      <span className="text-[11px] text-slate-600 tabular-nums shrink-0 font-mono">rep. {club.reputation}</span>
       <span className="text-slate-700 group-hover:text-slate-400 transition-colors text-base shrink-0">›</span>
     </div>
   </button>
@@ -458,7 +457,7 @@ const NTCard: React.FC<{ team: NationalTeam; coachName: string; onSelect: () => 
         </span>
       )}
       <NTFlagBadge teamName={team.name} className="w-10 h-10" />
-      <span className="flex-1 text-lg font-black italic uppercase tracking-wide text-white truncate">
+      <span className="flex-1 text-lg font-medium italic uppercase tracking-wide text-white truncate">
         {team.name}
       </span>
       {showTier && (
@@ -604,7 +603,7 @@ const TacticalKitIcon: React.FC<{
   );
 };
 
-const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; nationalTeamIdByName: Record<string, string>; currentDate: Date; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, nationalTeamIdByName, currentDate, onPlayerClick }) => {
+const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; clubColorsById: Record<string, string[]>; nationalTeamIdByName: Record<string, string>; currentDate: Date; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, clubColorsById, nationalTeamIdByName, currentDate, onPlayerClick }) => {
   const squad = team.squadPlayerIds.map(id => playerById[id]).filter(Boolean) as Player[];
 
   const POS_ORDER: Record<PlayerPosition, number> = {
@@ -817,6 +816,10 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         {/* Wiersze zawodników */}
         {sorted.map(p => {
           const injured = p.health.status === 'INJURED';
+          const clubColors = clubColorsById[p.clubId] || [];
+          const clubPrimary = clubColors[0] || '#020617';
+          const clubSecondary = clubColors[1] || clubPrimary;
+          const clubAccent = clubColors[2] || clubSecondary;
           const clubName = p.clubId === 'FREE_AGENTS' ? 'Wolny agent' : (clubById[p.clubId] || '—');
           return (
             <button
@@ -840,7 +843,15 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
                 {injured && <span className={`text-[8px] text-red-400 shrink-0 ${T}`}>⛌</span>}
               </span>
               {/* Klub */}
-              <span className={`text-[8px] truncate self-stretch flex items-center justify-center px-2 -my-2.5 bg-slate-950 ${T}`}>{clubName}</span>
+              <span
+                className={`text-[8px] truncate self-stretch flex items-center justify-center px-2 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),inset_4px_0_0_rgba(255,255,255,0.22)] ${T}`}
+                style={{
+                  background: `linear-gradient(160deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.08) 100%), linear-gradient(135deg, ${clubPrimary} 0%, ${clubSecondary} 52%, ${clubAccent} 100%)`,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.7)'
+                }}
+              >
+                {clubName}
+              </span>
               {/* Atrybuty */}
               <span title="Tempo" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.pace)}`}>{p.attributes.pace}</span>
               <span title="Atak" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.attacking)}`}>{p.attributes.attacking}</span>
@@ -1129,6 +1140,12 @@ export const EuropeanClubsView: React.FC = () => {
   const clubById = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     clubs.forEach(c => { map[c.id] = c.name; });
+    return map;
+  }, [clubs]);
+
+  const clubColorsById = useMemo<Record<string, string[]>>(() => {
+    const map: Record<string, string[]> = {};
+    clubs.forEach(c => { map[c.id] = c.colors ?? []; });
     return map;
   }, [clubs]);
 
@@ -1514,6 +1531,7 @@ export const EuropeanClubsView: React.FC = () => {
                   coachName={getCoachName(selectedNT)}
                   playerById={playerById}
                   clubById={clubById}
+                  clubColorsById={clubColorsById}
                   nationalTeamIdByName={nationalTeamIdByName}
                   currentDate={currentDate}
                   onPlayerClick={viewPlayerDetails}
