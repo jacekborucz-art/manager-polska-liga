@@ -22,7 +22,13 @@ export const EUROPEAN_TIER_CONFIG: Record<number, { minBase: number; maxBase: nu
   5: { minBase: 28, maxBase: 44, hardCap: 57 },
 };
 
-export const INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP = 60;
+export const POLISH_GK_ATTRIBUTE_CAPS: Partial<Record<keyof PlayerAttributes, number>> = {
+  goalkeeping: 85,
+  defending: 85,
+  positioning: 85,
+  mentality: 85,
+  talent: 95,
+};
 
 export const capInitialGoalkeeperAttributes = (
   attributes: PlayerAttributes,
@@ -32,8 +38,10 @@ export const capInitialGoalkeeperAttributes = (
   if (position !== PlayerPosition.GK || isEuropean) return attributes;
   const capped = { ...attributes };
   (Object.keys(capped) as (keyof PlayerAttributes)[]).forEach(key => {
-    if (key === 'strength' || key === 'stamina') return;
-    capped[key] = Math.max(1, Math.min(INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP, capped[key]));
+    const cap = POLISH_GK_ATTRIBUTE_CAPS[key as keyof PlayerAttributes];
+    if (cap !== undefined) {
+      capped[key] = Math.max(1, Math.min(cap, capped[key]));
+    }
   });
   return capped;
 };
@@ -196,7 +204,7 @@ export const PlayerAttributesGenerator = {
          else if (age > 33) val = Math.min(val, 87);
          else if (age > 30) val = Math.min(val, 91);
 
-         const physicalCap = position === PlayerPosition.GK && key === 'pace' && !isEuropean ? INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP : 99;
+         const physicalCap = 99;
          generated[key] = Math.max(45, Math.min(physicalCap, val));
          return;
       }
@@ -246,7 +254,7 @@ export const PlayerAttributesGenerator = {
           ? 85
           : config.hardCap;
       const attrCap = position === PlayerPosition.GK && !isEuropean
-        ? Math.min(baseAttrCap, INITIAL_POLISH_GOALKEEPER_ATTRIBUTE_CAP)
+        ? (POLISH_GK_ATTRIBUTE_CAPS[key as keyof PlayerAttributes] ?? baseAttrCap)
         : baseAttrCap;
 
       value = Math.max(1, Math.min(Math.floor(value), attrCap));
