@@ -182,6 +182,30 @@ const ClubColorBadge: React.FC<{ club: ClubEntry }> = ({ club }) => {
   );
 };
 
+const ClubMiniBadge: React.FC<{ clubId: string; clubName: string; colors: string[] }> = ({ clubId, clubName, colors }) => {
+  const logo = clubId !== 'FREE_AGENTS' ? getClubLogo(clubId) : null;
+  if (logo) {
+    return (
+      <img
+        src={logo}
+        alt={clubName}
+        className="w-5 h-5 object-contain shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+      />
+    );
+  }
+
+  const primary = colors[0] || '#334155';
+  const secondary = colors[1] || '#0f172a';
+  const accent = colors[2] || secondary;
+
+  return (
+    <div
+      className="w-[18px] h-[18px] min-w-[18px] rounded-[4px] border border-white/20 shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
+      style={{ background: `linear-gradient(135deg, ${primary} 0%, ${secondary} 55%, ${accent} 100%)` }}
+    />
+  );
+};
+
 const ClubRow: React.FC<{ club: ClubEntry; onSelect: () => void }> = ({ club, onSelect }) => (
   <button
     onClick={onSelect}
@@ -844,13 +868,14 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               </span>
               {/* Klub */}
               <span
-                className={`text-[8px] truncate self-stretch flex items-center justify-center px-2 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),inset_4px_0_0_rgba(255,255,255,0.22)] ${T}`}
+                className={`text-[8px] min-w-0 self-stretch flex items-center gap-2 px-2.5 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18),inset_5px_0_0_rgba(255,255,255,0.24),0_0_18px_rgba(0,0,0,0.18)] ${T}`}
                 style={{
-                  background: `linear-gradient(160deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.08) 100%), linear-gradient(135deg, ${clubPrimary} 0%, ${clubSecondary} 52%, ${clubAccent} 100%)`,
-                  textShadow: '0 1px 3px rgba(0,0,0,0.7)'
+                  background: `linear-gradient(90deg, ${clubPrimary} 0%, ${clubSecondary} 58%, ${clubAccent} 100%)`,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.72)'
                 }}
               >
-                {clubName}
+                <ClubMiniBadge clubId={p.clubId} clubName={clubName} colors={clubColors} />
+                <span className="truncate min-w-0 flex-1">{clubName}</span>
               </span>
               {/* Atrybuty */}
               <span title="Tempo" className={`text-[11px] tabular-nums text-center self-center border-r border-amber-400/10 cursor-help ${attrColor(p.attributes.pace)}`}>{p.attributes.pace}</span>
