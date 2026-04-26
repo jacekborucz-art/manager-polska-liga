@@ -119,8 +119,8 @@ export const LineupService = {
     const bGK = findBench(PlayerPosition.GK);
     if (bGK) addToBench(bGK);
 
-    // Sloty 2-4: Minimum 1 obrońca, 1 pomocnik, 1 napastnik
-    const mandatoryPositions = [PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+    // Sloty 2-9: Minimum 3 obrońców, 3 pomocników, 2 napastników
+    const mandatoryPositions = [PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.FWD, PlayerPosition.FWD];
     for (const pos of mandatoryPositions) {
       if (bench.length >= 9) break;
       const p = findBench(pos);
@@ -236,7 +236,7 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
 
     // Faza 5: Ławka (Dynamiczne proporcje)
     const newBench: string[] = [];
-    const benchTarget = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.FWD, PlayerPosition.FWD, PlayerPosition.MID];
+    const benchTarget = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.FWD, PlayerPosition.FWD];
     
     benchTarget.forEach(pos => {
       if (newBench.length >= 9) return;
