@@ -725,6 +725,99 @@ export function simulateSinglePlayoffMatch(
   };
 }
 
+export function simulateWCGroupMatch(
+  homeTeamName: string,
+  awayTeamName: string,
+  matchDate: Date,
+  seed: number,
+  nationalTeams: NationalTeam[],
+  players: Record<string, Player[]>,
+  coaches: Record<string, Coach>,
+): { homeGoals: number; awayGoals: number; goals: MatchGoalEntry[]; cards: MatchCardEntry[] } {
+  const byName = new Map<string, NationalTeam>(nationalTeams.map(t => [t.name, t]));
+  const updatedPlayers = cloneMap(players);
+  const locs = locMap(updatedPlayers);
+
+  const homeTeam = byName.get(homeTeamName) ?? null;
+  const awayTeam = byName.get(awayTeamName) ?? null;
+
+  if (!homeTeam || !awayTeam) {
+    const rng = new Rng(hash(`${seed}|${homeTeamName}|${awayTeamName}|WC_FB`));
+    return { homeGoals: rng.int(0, 3), awayGoals: rng.int(0, 3), goals: [], cards: [] };
+  }
+
+  const squadOf = (team: NationalTeam) =>
+    team.squadPlayerIds.map(id => { const loc = locs[id]; return loc ? updatedPlayers[loc.clubId]?.[loc.index] ?? null : null; }).filter(Boolean) as Player[];
+
+  const homeSquad = squadOf(homeTeam);
+  const awaySquad = squadOf(awayTeam);
+
+  if (homeSquad.length < 11 || awaySquad.length < 11) {
+    const rng = new Rng(hash(`${seed}|WC_FB2`));
+    return { homeGoals: rng.int(0, 3), awayGoals: rng.int(0, 3), goals: [], cards: [] };
+  }
+
+  const homeCoach = homeTeam.coachId ? (coaches[homeTeam.coachId] ?? fallbackCoach(homeTeam.id)) : fallbackCoach(homeTeam.id);
+  const awayCoach = awayTeam.coachId ? (coaches[awayTeam.coachId] ?? fallbackCoach(awayTeam.id)) : fallbackCoach(awayTeam.id);
+  const hs = NationalTeamLineupService.buildMatchSelection(homeTeam, homeSquad, homeCoach);
+  const as = NationalTeamLineupService.buildMatchSelection(awayTeam, awaySquad, awayCoach);
+  const envSeed = `${seed}|${homeTeam.id}|${awayTeam.id}`;
+  const weather = NationalTeamEnvironmentService.getWeather(matchDate, homeTeam, awayTeam, 'FIFA World Cup', envSeed);
+  const wcReferee = RefereeService.assignEuropeanRefereeByRegion(`${envSeed}|WC`, homeTeam.region, awayTeam.region, new Set());
+  const rng = new Rng(hash(`${envSeed}|WC_GROUP`));
+
+  const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: hs.penaltyTakerId };
+  const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: as.penaltyTakerId };
+
+  const goals: MatchGoalEntry[] = [];
+  const cards: MatchCardEntry[] = [];
+  const injuries: MatchInjuryEntry[] = [];
+  const substitutions: MatchSubstitutionEntry[] = [];
+  const timeline: MatchEvent[] = [];
+  const homeScore = { value: 0 };
+  const awayScore = { value: 0 };
+
+  let addedTime = 2;
+  let stop = 0.5;
+  for (let minute = 1; minute <= 90 + addedTime; minute++) {
+    if (minute === 46 || (minute >= 58 && minute <= 88 && minute % 7 === 0)) {
+      maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline);
+      maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline);
+    }
+    const hm = metrics(home);
+    const am = metrics(away);
+    const phases = 1 + (rng.next() < clamp(0.06 + (hm.press + am.press) / 5200 + ((homeCoach.attributes.motivation + awayCoach.attributes.motivation) / 1200), 0.08, 0.34) ? 1 : 0);
+    for (let i = 0; i < phases; i++) {
+      const homeInit = clamp(0.48 + (hm.build - am.press) / 2400 + (hm.create - am.def) / 2600 + (hm.ment - am.ment) / 3000 + (homeCoach.attributes.decisionMaking - awayCoach.attributes.decisionMaking) / 900 + (home.redCardPenalty - away.redCardPenalty) * 0.4 + 0.045, 0.22, 0.78);
+      const att = rng.next() < homeInit ? home : away;
+      const def = att.side === 'HOME' ? away : home;
+      const attM = att.side === 'HOME' ? hm : am;
+      const defM = def.side === 'HOME' ? hm : am;
+      const duelChance = clamp(0.065 + (attM.press + defM.aggr) / 16000 + (weather.weatherIntensity ?? 0) * 0.01, 0.065, 0.14);
+      if (rng.next() < duelChance) {
+        maybeCardOrPenalty(att, def, minute, weather.weatherIntensity ?? 0, rng, goals, cards, timeline, homeScore, awayScore, wcReferee);
+        stop += 0.08;
+      } else {
+        maybeGoal(att, def, minute, weather.weatherIntensity ?? 0, rng, goals, timeline, attM, defM, att.side === 'HOME' ? homeScore : awayScore);
+        const last = timeline[timeline.length - 1];
+        if (last?.minute === minute && (last.type === MatchEventType.GOAL || last.type === MatchEventType.PENALTY_SCORED)) stop += 0.22;
+      }
+    }
+    maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
+    maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
+    fatigueTick(home, minute, weather.weatherIntensity ?? 0, homeScore.value < awayScore.value);
+    fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
+    addedTime = clamp(2 + Math.floor(stop), 2, 7);
+  }
+
+  return {
+    homeGoals: homeScore.value,
+    awayGoals: awayScore.value,
+    goals: [...goals].sort((a, b) => a.minute - b.minute),
+    cards: [...cards].sort((a, b) => a.minute - b.minute),
+  };
+}
+
 export const NationalTeamSimulator = {
   simulateMatchDay: (
     matchDay: NTMatchDay,

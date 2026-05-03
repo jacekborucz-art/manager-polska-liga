@@ -5,7 +5,7 @@ import {
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
-HealthStatus,
+HealthStatus, InjurySeverity,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
 IncomingTransferOffer, IncomingOfferStatus,
@@ -25,6 +25,7 @@ YouthPlayer,
 Scout,
 MatchHistoryEntry,
 WCQPlayoffState,
+WCState,
 CoachSeasonStats,
 AiTransferLogEntry,
 WinterCampLocation,
@@ -94,6 +95,7 @@ import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationSer
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
+import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { SaveState } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
@@ -299,6 +301,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   // Baraże MŚ 2026
   wcqPlayoffState: WCQPlayoffState | null;
   setWcqPlayoffState: React.Dispatch<React.SetStateAction<WCQPlayoffState | null>>;
+  wcState: WCState | null;
+  setWcState: React.Dispatch<React.SetStateAction<WCState | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
   reserveCoachId: string | null;
@@ -391,6 +395,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [lastNTMatchResults, setLastNTMatchResults] = useState<NTMatchResult[] | null>(null);
   // Baraże MŚ 2026
   const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
+  const [wcState, setWcState] = useState<WCState | null>(null);
   const [europeanViewTab, setEuropeanViewTab] = useState<'clubs' | 'nt'>('clubs');
   const [selectedNTId, setSelectedNTId] = useState<string | null>(null);
   const [gameNotification, setGameNotification] = useState<GameNotificationState | null>(null);
@@ -758,9 +763,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       });
     }
 
-    // Losowanie z L_PL_4 — pomijamy już awansowane przez baraże, uzupełniamy do 4 łącznie
+    // Losowanie z L_PL_4: 4 automatyczne awanse + dodatkowi zwycięzcy baraży.
     const remainingL4Pool = potentialL4.filter(c => !playoffPromotedL4Ids.includes(c.id));
-    const randomPromotionsNeeded = 4 - playoffPromotedL4Ids.length;
+    const randomPromotionsNeeded = 4;
     const promotedFromL4Teams = [...remainingL4Pool].sort(() => Math.random() - 0.5).slice(0, randomPromotionsNeeded);
 
     const relegateFromL1Ids = relegatedTeamsL1.map(c => c.id);
@@ -809,7 +814,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       relegations: [
         { from: 'Ekstraklasy', to: '1. Ligi', teams: relegatedTeamsL1.map(t => t.name) },
         { from: '1. Ligi', to: '2. Ligi', teams: relegatedTeamsL2.map(t => t.name) },
-        { from: '2. Ligi', to: 'Regionalnej', teams: relegatedTeamsL3.map(t => t.name) }
+        { from: '2. Ligi', to: 'Regionalnej', teams: [...new Set(relegateFromL3Ids
+          .map(id => clubs.find(c => c.id === id)?.name)
+          .filter((name): name is string => !!name))] }
       ],
       leagueAwards: [getAwards('L_PL_1', 'Ekstraklasa'), getAwards('L_PL_2', '1. Liga'), getAwards('L_PL_3', '2. Liga')]
     };
@@ -1262,7 +1269,7 @@ if (userTeamId) {
   }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults]);
 
   const getSaveState = (): SaveState => ({
-    version: '1.5',
+    version: '1.6',
     savedAt: new Date().toISOString(),
     currentDate,
     sessionSeed,
@@ -1299,6 +1306,7 @@ if (userTeamId) {
     europeanStatus,
     nationalTeams,
     wcqPlayoffState,
+    wcState,
     cupParticipants,
     activeCupDraw,
     activeGroupDraw,
@@ -1325,6 +1333,11 @@ if (userTeamId) {
     supercupWinners,
     matchHistory: MatchHistoryService.getAll(),
     championshipHistory: ChampionshipHistoryService.getAll(),
+    winterCampInvitePending,
+    winterCampProgramPending,
+    summerCampInvitePending,
+    summerCampProgramPending,
+    lastNTMatchResults,
   });
 
   const loadGameFromFile = (data: SaveState): void => {
@@ -1363,6 +1376,7 @@ if (userTeamId) {
     setEuropeanStatus(data.europeanStatus);
     setNationalTeams(data.nationalTeams);
     setWcqPlayoffState(data.wcqPlayoffState);
+    setWcState(data.wcState ?? null);
     setCupParticipants(data.cupParticipants);
     setActiveCupDraw(data.activeCupDraw);
     setActiveGroupDraw(data.activeGroupDraw);
@@ -1387,6 +1401,11 @@ if (userTeamId) {
     setLastUEFASuperCupResult(data.lastUEFASuperCupResult);
     setConfR2QPolishTeamIds(data.confR2QPolishTeamIds);
     setSupercupWinners(data.supercupWinners);
+    setWinterCampInvitePending(data.winterCampInvitePending ?? false);
+    setWinterCampProgramPending(data.winterCampProgramPending ?? false);
+    setSummerCampInvitePending(data.summerCampInvitePending ?? false);
+    setSummerCampProgramPending(data.summerCampProgramPending ?? false);
+    setLastNTMatchResults(data.lastNTMatchResults ?? null);
     MatchHistoryService.clear();
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
     ChampionshipHistoryService.clear();
@@ -2400,6 +2419,212 @@ setMessages([welcomeMail, fanMail]);
     // skipDayAdvance = true oznacza że data NIE zostanie przesunięta
     // (gracz musi jeszcze zagrać mecz lub potwierdzić akcję tego dnia)
     let skipDayAdvance = false;
+
+    const applyWorldCupEffectsAndMail = (completedState: WCState, wcYear: number) => {
+      const wcEffectsKey = `WC_EFFECTS_${wcYear}`;
+      if (sentMailIdsRef.current.has(wcEffectsKey)) return;
+
+      sentMailIdsRef.current.add(wcEffectsKey);
+      const allPlayers = Object.values(players).flat();
+      const effects = WorldCupService.computePlayerEffects(completedState, allPlayers, sessionSeed);
+      completedState.playerEffects = effects;
+
+      if (effects.length > 0) {
+        setPlayers(prev => {
+          if (!userTeamId) return prev;
+          const updatedSquad = (prev[userTeamId] || []).map(player => {
+            const pEffects = effects.filter(e => e.playerId === player.id);
+            if (pEffects.length === 0) return player;
+
+            let updated = { ...player };
+            const injuryEffect = pEffects.find(e => e.type === 'INJURY');
+            const fatigueEffect = pEffects.find(e => e.type === 'FATIGUE');
+
+            if (injuryEffect) {
+              updated = {
+                ...updated,
+                health: {
+                  status: HealthStatus.INJURED,
+                  injury: {
+                    type: 'Zmeczenie po MS',
+                    daysRemaining: injuryEffect.value,
+                    severity: InjurySeverity.LIGHT,
+                    injuryDate: dateToProcess.toISOString().split('T')[0],
+                    totalDays: injuryEffect.value,
+                  },
+                },
+              };
+            }
+
+            if (fatigueEffect) {
+              updated = { ...updated, fatigueDebt: Math.min(100, (updated.fatigueDebt ?? 0) + fatigueEffect.value) };
+            }
+
+            return updated;
+          });
+
+          return { ...prev, [userTeamId]: updatedSquad };
+        });
+      }
+
+      setWcState(prev => prev ? { ...prev, playerEffects: effects } : prev);
+
+      if (completedState.champion) {
+        const champMail: MailMessage = {
+          id: wcEffectsKey,
+          sender: 'FIFA',
+          role: 'Biuro Rozgrywek FIFA',
+          subject: `Mistrz Swiata ${wcYear}: ${completedState.champion}!`,
+          body: `Mistrzostwa Swiata ${wcYear} zakonczyly sie. Mistrzem Swiata zostaje ${completedState.champion}! Otworz widok Mistrzostw Swiata, aby zobaczyc pelne wyniki.`,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 100,
+        };
+        setMessages(prev => [champMail, ...prev]);
+      }
+    };
+
+    const processWorldCupDay = () => {
+      if (!WorldCupService.isWorldCupYear(dateToProcess.getFullYear())) return;
+
+      const wcMonth = dateToProcess.getMonth() + 1;
+      const wcDay = dateToProcess.getDate();
+      const wcYear = dateToProcess.getFullYear();
+      const newProcessedIds: string[] = [];
+      let nextWcState = wcState;
+      let wcChanged = false;
+
+      if (wcMonth === 3 && wcDay === 21 && nextWcState && !nextWcState.playoffSlotsResolved) {
+        const wcFillKey = `WC_FILL_SLOTS_${wcYear}`;
+        if (!sentMailIdsRef.current.has(wcFillKey) && wcqPlayoffState?.finalCompleted) {
+          const winners = wcqPlayoffState.paths
+            .map(p => p.qualifier)
+            .filter((q): q is string => !!q);
+
+          if (winners.length > 0) {
+            sentMailIdsRef.current.add(wcFillKey);
+            nextWcState = WorldCupService.fillPlayoffSlots(nextWcState, winners, nationalTeams);
+            wcChanged = true;
+            const fillMail: MailMessage = {
+              id: wcFillKey,
+              sender: 'FIFA',
+              role: 'Biuro Rozgrywek FIFA',
+              subject: `MS ${wcYear} - Grupy kompletne!`,
+              body: `Zwyciezcy barazy UEFA uzupelnili wszystkie grupy Mistrzostw Swiata ${wcYear}. Sklad wszystkich 12 grup jest juz znany!`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 90,
+            };
+            setMessages(prev => [fillMail, ...prev]);
+          }
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 2 && !nextWcState) {
+        const wcStartFallbackKey = `WC_START_FALLBACK_${wcYear}`;
+        if (!sentMailIdsRef.current.has(wcStartFallbackKey)) {
+          sentMailIdsRef.current.add(wcStartFallbackKey);
+          const wcTeams = WorldCupService.assembleTeams(nationalTeams, wcqPlayoffState, seasonNumber, wcYear, sessionSeed);
+          const wcGroups = WorldCupService.drawGroups(wcTeams, sessionSeed, wcYear);
+          nextWcState = WorldCupService.createInitialState(wcTeams, wcGroups, wcYear);
+          wcChanged = true;
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 2) {
+        const wcStartKey = `WC_START_${wcYear}`;
+        if (!sentMailIdsRef.current.has(wcStartKey)) {
+          sentMailIdsRef.current.add(wcStartKey);
+          const wcMail: MailMessage = {
+            id: wcStartKey,
+            sender: 'FIFA',
+            role: 'Biuro Rozgrywek FIFA',
+            subject: `Mistrzostwa Swiata ${wcYear} - Start!`,
+            body: `Mistrzostwa Swiata ${wcYear} oficjalnie sie rozpoczely! Mecze beda rozgrywane w tle zgodnie z kalendarzem, a pelne wyniki i szczegoly znajdziesz w widoku Mistrzostw Swiata.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 100,
+          };
+          setMessages(prev => [wcMail, ...prev]);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay >= 2 && wcDay <= 12 && nextWcState) {
+        const wcGroupDayKey = `WC_GROUP_${wcYear}_${wcDay}`;
+        if (!processedDrawIds.includes(wcGroupDayKey)) {
+          if (!nextWcState.groupStageComplete) {
+            nextWcState = {
+              ...nextWcState,
+              groups: WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches),
+            };
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcGroupDayKey);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 13 && nextWcState) {
+        const wcBracketKey = `WC_BRACKET_${wcYear}`;
+        if (!processedDrawIds.includes(wcBracketKey)) {
+          if (!nextWcState.groupStageComplete) {
+            nextWcState = {
+              ...nextWcState,
+              knockoutMatches: WorldCupService.buildKnockoutBracket(nextWcState.groups, wcYear),
+              groupStageComplete: true,
+            };
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcBracketKey);
+        }
+      }
+
+      const isKODay = wcMonth === 6 && (
+        (wcDay >= 15 && wcDay <= 18) ||
+        (wcDay >= 19 && wcDay <= 22) ||
+        (wcDay >= 23 && wcDay <= 24) ||
+        (wcDay >= 26 && wcDay <= 27) ||
+        wcDay === 29 || wcDay === 30
+      );
+
+      if (isKODay && nextWcState) {
+        const wcKODayKey = `WC_KO_${wcYear}_${wcDay}`;
+        if (!processedDrawIds.includes(wcKODayKey)) {
+          if (nextWcState.groupStageComplete && !nextWcState.knockoutComplete) {
+            const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches);
+            nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
+
+            if (wcDay === 30) {
+              const finalMatch = updatedKO.find(m => m.round === 'FINAL');
+              const thirdMatch = updatedKO.find(m => m.round === 'THIRD');
+              nextWcState = {
+                ...nextWcState,
+                knockoutComplete: true,
+                champion: finalMatch?.winner ?? undefined,
+                thirdPlace: thirdMatch?.winner ?? undefined,
+              };
+              applyWorldCupEffectsAndMail(nextWcState, wcYear);
+            }
+
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcKODayKey);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 30 && nextWcState?.knockoutComplete) {
+        applyWorldCupEffectsAndMail(nextWcState, wcYear);
+      }
+
+      if (wcChanged && nextWcState) setWcState(nextWcState);
+      if (newProcessedIds.length > 0) {
+        setProcessedDrawIds(prev => [...prev, ...newProcessedIds.filter(id => !prev.includes(id))]);
+      }
+    };
+
+    processWorldCupDay();
 
     if (primaryEvent?.participation === 'player') {
       setTargetJumpTime(null);
@@ -3888,6 +4113,46 @@ setMessages([welcomeMail, fanMail]);
         // musi przejść i przesunąć datę
         lastProcessedLeagueDateRef.current = '';
         return;
+      }
+    }
+
+    // ── LOSOWANIE MISTRZOSTW ŚWIATA (12 Grudnia roku poprzedzającego MŚ) ─────
+    {
+      const nextYear = dateToProcess.getFullYear() + 1;
+      const curMonth = dateToProcess.getMonth() + 1;
+      const curDay = dateToProcess.getDate();
+      if (WorldCupService.isWorldCupYear(nextYear) && curMonth === 12 && curDay === 12 && !wcState) {
+        const wcDrawKey = `WC_DRAW_${nextYear}`;
+        if (!sentMailIdsRef.current.has(wcDrawKey)) {
+          sentMailIdsRef.current.add(wcDrawKey);
+          const wcTeams = WorldCupService.assembleTeamsForDraw(nationalTeams, seasonNumber, nextYear, sessionSeed);
+          const { groups: wcGroups } = WorldCupService.drawGroupsWithFIFARules(wcTeams, sessionSeed, nextYear);
+          const newWcState: WCState = {
+            year: nextYear,
+            teams: wcTeams,
+            groups: wcGroups,
+            knockoutMatches: [],
+            playerEffects: [],
+            groupStageComplete: false,
+            knockoutComplete: false,
+            drawComplete: true,
+            playoffSlotsResolved: false,
+          };
+          setWcState(newWcState);
+          const wcDrawMail: MailMessage = {
+            id: wcDrawKey,
+            sender: 'FIFA',
+            role: 'Biuro Rozgrywek FIFA',
+            subject: `Losowanie Grup MŚ ${nextYear} — 12 Grudnia`,
+            body: `Ceremonia losowania grup Mistrzostw Świata ${nextYear} właśnie się odbyła! 44 drużyny z całego świata poznały swoich grupowych rywali. 4 miejsca są zarezerwowane dla zwycięzców baraży UEFA (marzec ${nextYear}). Otwórz widok losowania aby zobaczyć pełny wynik ceremonii.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 100,
+          };
+          setMessages(prev => [wcDrawMail, ...prev]);
+          navigateTo(ViewState.WC_DRAW);
+        }
       }
     }
 
@@ -7205,6 +7470,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,
+    wcState, setWcState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
     gameNotification, showGameNotification, clearGameNotification,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────

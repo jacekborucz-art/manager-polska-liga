@@ -1,19 +1,171 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType } from '../../types';
+import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType, WCState } from '../../types';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { ChampionshipHistoryService } from '../../data/championship_history';
 import { RefereeService } from '../../services/RefereeService';
+import { computeGroupStandings } from '../../services/WorldCupService';
 import historiaBg from '../../Graphic/themes/historia.png';
+
+const WC_ROUND_LABEL: Record<string, string> = {
+  R32: '1/16 Finału',
+  R16: '1/8 Finału',
+  QF: 'Ćwierćfinał',
+  SF: 'Półfinał',
+  THIRD: 'O 3. miejsce',
+  FINAL: 'Finał',
+};
+
+function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
+  if (!wcState) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center opacity-30">
+        <span className="text-7xl mb-6">🏆</span>
+        <p className="text-xl font-black uppercase tracking-[0.4em] italic text-center">Brak danych MŚ</p>
+      </div>
+    );
+  }
+
+  const rounds: Array<'R32' | 'R16' | 'QF' | 'SF' | 'THIRD' | 'FINAL'> = ['R32', 'R16', 'QF', 'SF', 'THIRD', 'FINAL'];
+
+  return (
+    <div className="p-8 space-y-10">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-amber-400 uppercase tracking-[0.45em]">Mistrzostwa Świata</p>
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">{wcState.year}</h2>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</p>
+          <p className="text-sm font-black uppercase text-white">
+            {wcState.knockoutComplete ? 'Turniej zakończony' : wcState.groupStageComplete ? 'Faza pucharowa' : 'Faza grupowa'}
+          </p>
+          {wcState.champion && <p className="text-xs font-bold text-amber-300 mt-1">Mistrz: {wcState.champion}</p>}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-6 mb-5 px-2">
+          <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.5em] whitespace-nowrap">Grupy</span>
+          <div className="h-px bg-white/10 flex-1" />
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {wcState.groups.map(group => {
+            const standings = computeGroupStandings(group);
+            return (
+              <div key={group.label} className="bg-slate-900/40 rounded-3xl border border-white/10 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-black italic uppercase tracking-tight text-white">Grupa {group.label}</h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/30">{group.matches.length} meczów</span>
+                </div>
+
+                <table className="w-full text-xs mb-5">
+                  <thead>
+                    <tr className="text-white/35 uppercase">
+                      <th className="text-left pb-2">Drużyna</th>
+                      <th className="w-8 text-center">M</th>
+                      <th className="w-8 text-center">W</th>
+                      <th className="w-8 text-center">R</th>
+                      <th className="w-8 text-center">P</th>
+                      <th className="w-14 text-center">B</th>
+                      <th className="w-10 text-center text-white/60">Pkt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standings.map((s, idx) => (
+                      <tr key={s.name} className={`border-t border-white/5 ${idx < 2 ? 'text-white' : 'text-white/45'}`}>
+                        <td className="py-2 font-bold">
+                          <span className={`inline-block w-5 mr-2 text-center ${idx < 2 ? 'text-amber-300' : 'text-white/25'}`}>{idx + 1}</span>
+                          {s.name}
+                        </td>
+                        <td className="text-center">{s.M}</td>
+                        <td className="text-center">{s.W}</td>
+                        <td className="text-center">{s.D}</td>
+                        <td className="text-center">{s.L}</td>
+                        <td className="text-center">{s.GF}:{s.GA}</td>
+                        <td className="text-center font-black text-white">{s.pts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="space-y-2">
+                  {group.matches.length > 0 ? group.matches.map((match, idx) => (
+                    <div key={`${group.label}-${idx}`} className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-2xl bg-black/25 border border-white/5 px-4 py-3">
+                      <span className="text-right text-xs font-black uppercase text-slate-300 truncate">{match.home}</span>
+                      <span className="min-w-[72px] text-center font-mono text-sm font-black text-emerald-300">{match.homeGoals}:{match.awayGoals}</span>
+                      <span className="text-left text-xs font-black uppercase text-slate-300 truncate">{match.away}</span>
+                      <span className="col-span-3 text-center text-[9px] font-bold uppercase tracking-widest text-white/25">{match.date}</span>
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl bg-black/20 border border-white/5 px-4 py-5 text-center text-[10px] font-black uppercase tracking-widest text-white/25">
+                      Mecze nie zostały jeszcze rozegrane
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-6 mb-5 px-2">
+          <span className="text-[10px] font-black text-amber-400 uppercase tracking-[0.5em] whitespace-nowrap">Faza pucharowa</span>
+          <div className="h-px bg-white/10 flex-1" />
+        </div>
+        {wcState.knockoutMatches.length > 0 ? (
+          <div className="space-y-7">
+            {rounds.map(round => {
+              const matches = wcState.knockoutMatches.filter(match => match.round === round);
+              if (matches.length === 0) return null;
+              return (
+                <div key={round} className="bg-slate-900/30 rounded-3xl border border-white/10 p-5">
+                  <h3 className="text-lg font-black italic uppercase tracking-tight text-white mb-4">{WC_ROUND_LABEL[round]}</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {matches.map(match => (
+                      <div key={match.id} className="rounded-2xl bg-black/25 border border-white/5 px-4 py-4">
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+                          <span className={`text-right text-xs font-black uppercase truncate ${match.winner === match.home ? 'text-white' : 'text-slate-500'}`}>{match.home ?? 'TBD'}</span>
+                          <span className="min-w-[92px] text-center font-mono text-sm font-black text-emerald-300">
+                            {match.winner ? `${match.homeGoals ?? 0}:${match.awayGoals ?? 0}` : '-:-'}
+                          </span>
+                          <span className={`text-left text-xs font-black uppercase truncate ${match.winner === match.away ? 'text-white' : 'text-slate-500'}`}>{match.away ?? 'TBD'}</span>
+                        </div>
+                        {(match.wentToET || match.wentToPenalties || match.winner) && (
+                          <div className="mt-2 text-center text-[9px] font-bold uppercase tracking-widest text-white/35">
+                            {match.winner && <>Zwycięzca: <span className="text-amber-300">{match.winner}</span></>}
+                            {match.wentToET && <span> · po dogr.</span>}
+                            {match.wentToPenalties && <span> · k. {match.homePenalties}:{match.awayPenalties}</span>}
+                          </div>
+                        )}
+                        <div className="mt-2 text-center text-[9px] font-bold uppercase tracking-widest text-white/20">{match.date}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-black/20 border border-white/5 px-6 py-14 text-center text-sm font-black uppercase tracking-[0.25em] text-white/25">
+            Drabinka zostanie wygenerowana po fazie grupowej
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 
 export const MatchHistoryView: React.FC = () => {
-  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players } = useGame();
+  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState } = useGame();
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonNumber);
   const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
-  const [viewMode, setViewMode] = useState<'matches' | 'champions'>('matches');
+  const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup'>('matches');
+  const [selectedWorldCupYear, setSelectedWorldCupYear] = useState<number>(wcState?.year ?? 2026);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   const history = useMemo(() => MatchHistoryService.getAll(), [refreshTrigger]);
@@ -292,6 +444,10 @@ export const MatchHistoryView: React.FC = () => {
   useEffect(() => {
     setRefreshTrigger(prev => prev + 1);
   }, [supercupWinners]);
+
+  useEffect(() => {
+    if (wcState) setSelectedWorldCupYear(wcState.year);
+  }, [wcState?.year]);
   
   const groupedHistory = useMemo(() => {
     const base = history.filter(m => {
@@ -358,7 +514,7 @@ export const MatchHistoryView: React.FC = () => {
 });
 
     return groups; 
-  }, [history, selectedLeague]);
+  }, [history, selectedLeague, selectedSeason, nationalTeams]);
 
   const getClub = (id: string) => clubs.find(c => c.id === id) || nationalTeams.find(t => t.id === id);
 
@@ -400,6 +556,16 @@ export const MatchHistoryView: React.FC = () => {
               <span className="text-lg opacity-60">👑</span>
               ZWYCIĘZCY
             </button>
+            <button
+              onClick={() => { setViewMode('worldCup'); setSelectedLeague('WORLD_CUP'); }}
+              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
+                ${viewMode === 'worldCup'
+                  ? 'bg-amber-600 border-amber-400 text-white shadow-lg translate-x-2'
+                  : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+            >
+              <span className="text-lg opacity-60">🏆</span>
+              MISTRZOSTWA ŚWIATA
+            </button>
             {viewMode === 'matches' && [
               { id: 'ALL', label: 'WSZYSTKO', icon: '🌍' },
               { id: 'L_PL_1', label: 'EKSTRAKLASA', icon: '🏆' },
@@ -426,8 +592,11 @@ export const MatchHistoryView: React.FC = () => {
             ))}
 
             <div className="mt-auto p-4 bg-black/20 rounded-2xl border border-white/5">
-               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : 'Historia'}</span>
-               <span className="text-xl font-black italic text-white">{viewMode === 'matches' ? history.length : championshipHistory.length} <span className="text-[10px] opacity-40">{viewMode === 'matches' ? 'MECZÓW' : 'WPISÓW'}</span></span>
+               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' ? 'Turniej' : 'Historia'}</span>
+               <span className="text-xl font-black italic text-white">
+                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : championshipHistory.length}
+                 <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : 'WPISÓW'}</span>
+               </span>
             </div>
         </div>
 
@@ -506,6 +675,21 @@ export const MatchHistoryView: React.FC = () => {
               </div>
             )}
               </div>
+            </>
+          ) : viewMode === 'worldCup' ? (
+            <>
+              <div className="px-8 pt-8 flex gap-4">
+                {[wcState?.year ?? selectedWorldCupYear].map(year => (
+                  <button
+                    key={year}
+                    onClick={() => setSelectedWorldCupYear(year)}
+                    className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all ${selectedWorldCupYear === year ? 'bg-white text-black' : 'bg-white/5 text-slate-500'}`}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+              <WorldCupArchive wcState={wcState && wcState.year === selectedWorldCupYear ? wcState : null} />
             </>
           ) : (
             // CHAMPIONS VIEW

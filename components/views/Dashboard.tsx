@@ -79,6 +79,7 @@ export const Dashboard: React.FC = () => {
     clearSummerCampProgramPending,
     saveSummerCampLocation,
     saveSummerCampProgram,
+    wcState,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1204,6 +1205,13 @@ const boardConfidence = useMemo(() => {
             className="relative group w-full overflow-hidden rounded-[24px] transition-all">
             <img src={instrukcjaButton} alt="INSTRUKCJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
+          {wcState && (
+            <button
+              onClick={() => navigateTo(wcState.groupStageComplete ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
+              className="w-full py-4 rounded-[24px] bg-amber-700 border border-amber-500 hover:bg-amber-600 transition-all">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">🏆 MUNDIAL</span>
+            </button>
+          )}
           <button
             onClick={() => !isResigned && setShowResignConfirm(true)}
             disabled={isResigned}

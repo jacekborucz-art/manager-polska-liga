@@ -54,6 +54,8 @@ import { PreMatchCLFinalView } from './components/views/PreMatchCLFinalView';
 import { PostMatchCLFinalView } from './components/views/PostMatchCLFinalView';
 import { EuropeanClubsView } from './components/views/EuropeanClubsView';
 import NationalTeamResultsView from './components/views/NationalTeamResultsView';
+import WorldCupView from './components/views/WorldCupView';
+import WCDrawView from './components/views/WCDrawView';
 import { WCQPlayoffDrawView } from './components/views/WCQPlayoffDrawView';
 import { WCQPlayoffResultsView } from './components/views/WCQPlayoffResultsView';
 import UEFASuperCupView from './components/views/UEFASuperCupView';
@@ -178,6 +180,10 @@ case ViewState.POST_MATCH_CONF_STUDIO:
 
 case ViewState.NATIONAL_TEAM_RESULTS:
   return <NationalTeamResultsView />;
+case ViewState.WC_DRAW:
+  return <WCDrawView />;
+case ViewState.WORLD_CUP:
+  return <WorldCupView />;
 case ViewState.WCQ_PLAYOFF_DRAW_VIEW:
   return <WCQPlayoffDrawView />;
 case ViewState.WCQ_PLAYOFF_RESULTS_SF:

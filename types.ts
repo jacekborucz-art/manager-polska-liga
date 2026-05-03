@@ -115,6 +115,9 @@ export enum ViewState {
   WCQ_PLAYOFF_DRAW_VIEW = 'WCQ_PLAYOFF_DRAW_VIEW',         // 29 listopada — animowana ceremonia losowania
   WCQ_PLAYOFF_RESULTS_SF = 'WCQ_PLAYOFF_RESULTS_SF',       // 17 marca — wyniki półfinałów
   WCQ_PLAYOFF_RESULTS_FINAL = 'WCQ_PLAYOFF_RESULTS_FINAL', // 20 marca — wyniki finałów + kwalifikacja
+  // ── MISTRZOSTWA ŚWIATA ───────────────────────────────────────────────────
+  WC_DRAW = 'WC_DRAW',
+  WORLD_CUP = 'WORLD_CUP',
 }
 
 // ── BARAŻE WCQ 2026 — typy ────────────────────────────────────────────────
@@ -507,6 +510,14 @@ export enum CompetitionType {
   RELEGATION_PLAYOFF_2 = 'RELEGATION_PLAYOFF_2', // 29 maja — rewanże + rozstrzygnięcie
   // ── SUPERPUCHAR EUROPY ────────────────────────────────────────────────────
   UEFA_SUPER_CUP = 'UEFA_SUPER_CUP', // 23 sierpnia — Superpuchar Europy (CL winner vs EL winner)
+  // ── MISTRZOSTWA ŚWIATA ────────────────────────────────────────────────────
+  WC_GROUP_STAGE = 'WC_GROUP_STAGE',
+  WC_R32 = 'WC_R32',
+  WC_R16 = 'WC_R16',
+  WC_QF = 'WC_QF',
+  WC_SF = 'WC_SF',
+  WC_THIRD = 'WC_THIRD',
+  WC_FINAL = 'WC_FINAL',
   // ── BARAŻE MŚ 2026 — PLAYOFF KWALIFIKACYJNY UEFA ─────────────────────────
   WCQ_PLAYOFF_DRAW = 'WCQ_PLAYOFF_DRAW',   // 29 listopada — losowanie par
   WCQ_PLAYOFF_SF = 'WCQ_PLAYOFF_SF',       // 17 marca — półfinały
@@ -1643,4 +1654,85 @@ export enum TrainingIntensity {
   LIGHT = 'LIGHT',
   NORMAL = 'NORMAL',
   HEAVY = 'HEAVY'
+}
+
+// ── MISTRZOSTWA ŚWIATA — typy ─────────────────────────────────────────────────
+
+export type WCConfederation = 'UEFA' | 'CAF' | 'AFC' | 'CONMEBOL' | 'CONCACAF' | 'OFC' | 'INTERCONT';
+
+export type WCKnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | 'THIRD' | 'FINAL';
+
+export interface WCTeam {
+  name: string;
+  confederation: WCConfederation;
+  reputation: number;
+  colors: string[];
+  isHost: boolean;
+  isPlayoffSlot?: boolean;
+}
+
+export interface WCGroupMatch {
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+  date: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+}
+
+export interface WCGroup {
+  label: string;
+  teams: string[];
+  matches: WCGroupMatch[];
+}
+
+export interface WCGroupStanding {
+  name: string;
+  M: number;
+  W: number;
+  D: number;
+  L: number;
+  GF: number;
+  GA: number;
+  pts: number;
+}
+
+export interface WCKnockoutMatch {
+  id: string;
+  round: WCKnockoutRound;
+  home: string | null;
+  away: string | null;
+  homeGoals?: number;
+  awayGoals?: number;
+  homeGoalsAET?: number;
+  awayGoalsAET?: number;
+  homePenalties?: number;
+  awayPenalties?: number;
+  winner?: string;
+  wentToET?: boolean;
+  wentToPenalties?: boolean;
+  date: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+}
+
+export interface WCPlayerEffect {
+  playerId: string;
+  type: 'INJURY' | 'FATIGUE' | 'MORALE_BOOST';
+  value: number;
+}
+
+export interface WCState {
+  year: number;
+  teams: WCTeam[];
+  groups: WCGroup[];
+  knockoutMatches: WCKnockoutMatch[];
+  champion?: string;
+  thirdPlace?: string;
+  playerEffects: WCPlayerEffect[];
+  groupStageComplete: boolean;
+  knockoutComplete: boolean;
+  drawComplete?: boolean;
+  playoffSlotsResolved?: boolean;
 }

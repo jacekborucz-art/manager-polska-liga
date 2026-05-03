@@ -39,6 +39,7 @@ export interface SaveState {
   europeanStatus: Record<string, any>;
   nationalTeams: any[];
   wcqPlayoffState: any;
+  wcState: any;
   cupParticipants: string[];
   activeCupDraw: any;
   activeGroupDraw: any;
@@ -65,6 +66,11 @@ export interface SaveState {
   supercupWinners: { season: string; winner: string; year: number; }[];
   matchHistory: any[];
   championshipHistory: any[];
+  winterCampInvitePending: boolean;
+  winterCampProgramPending: boolean;
+  summerCampInvitePending: boolean;
+  summerCampProgramPending: boolean;
+  lastNTMatchResults: any;
 }
 
 function reviveDate(_key: string, value: unknown): unknown {
@@ -100,6 +106,18 @@ function normalizeSaveState(data: SaveState): SaveState {
     supercupWinners: data.supercupWinners || [],
     matchHistory: data.matchHistory || [],
     championshipHistory: data.championshipHistory || [],
+    confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA'],
+    lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,
+    currentPolishChampionId: data.currentPolishChampionId ?? 'PL_LECH_POZNAN',
+    currentPolishCupWinnerId: data.currentPolishCupWinnerId ?? 'PL_LEGIA_WARSZAWA',
+    currentCLWinnerId: data.currentCLWinnerId ?? 'EU_CL_PARIS_SAINT_GERMAIN',
+    currentELWinnerId: data.currentELWinnerId ?? 'EU_CL_TOTTENHAM_HOTSPUR',
+    activePlayoffMatch: data.activePlayoffMatch ?? null,
+    winterCampInvitePending: data.winterCampInvitePending ?? false,
+    winterCampProgramPending: data.winterCampProgramPending ?? false,
+    summerCampInvitePending: data.summerCampInvitePending ?? false,
+    summerCampProgramPending: data.summerCampProgramPending ?? false,
+    lastNTMatchResults: data.lastNTMatchResults ?? null,
   };
 }
 
