@@ -391,13 +391,16 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   const prog = creator.attributes.passing * 0.78 + creator.attributes.vision * 0.74 + creator.attributes.technique * 0.64 + creator.attributes.dribbling * 0.58 + attM.build * 0.018 + attM.create * 0.016 + (att.coach?.attributes.decisionMaking ?? 50) * 0.18;
   const disrupt = defender.attributes.defending * 0.72 + defender.attributes.positioning * 0.68 + defender.attributes.pace * 0.42 + defM.def * 0.02 + defM.press * 0.01 + (def.coach?.attributes.decisionMaking ?? 50) * 0.16;
   const numbersAdvantage = def.sentOff.size - att.sentOff.size;
-  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) + Math.max(0, numbersAdvantage) * 0.03 - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty;
+  const overallAtt = attM.att + attM.build + attM.create + attM.def + attM.press;
+  const overallDef = defM.att + defM.build + defM.create + defM.def + defM.press;
+  const dominanceFactor = clamp(overallAtt / overallDef, 0.3, 2.5);
+  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty + Math.max(0, numbersAdvantage) * 0.03 * dominanceFactor;
   if (rng.next() >= phaseChance) return;
   const shot = shooter.attributes.finishing * 0.92 + shooter.attributes.attacking * 0.75 + shooter.attributes.positioning * 0.65 + shooter.attributes.technique * 0.56 + shooter.attributes.heading * 0.26 + creator.attributes.vision * 0.18 + creator.attributes.passing * 0.18 + attM.att * 0.022 + attM.create * 0.015 + (att.coach?.attributes.motivation ?? 50) * 0.18;
   const prev = keeper.attributes.goalkeeping * 0.94 + keeper.attributes.positioning * 0.58 + defM.def * 0.022 + defender.attributes.defending * 0.32 + defender.attributes.positioning * 0.22 + weatherInt * 4;
   const onTarget = clamp(0.2 + (shot - prev) / 920 + Math.max(0, 100 - (att.fatigue[shooter.id] ?? 100)) * -0.001 - weatherInt * 0.035, 0.1, 0.42);
   if (rng.next() >= onTarget) return;
-  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) + Math.max(0, numbersAdvantage) * 0.04 - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty;
+  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty + Math.max(0, numbersAdvantage) * 0.04 * dominanceFactor;
   if (rng.next() < goalChance) {
     const assistant = creator.id !== shooter.id ? creator : null;
     goals.push(goalEntry(shooter, att.team.id, minute, false, assistant));
