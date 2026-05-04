@@ -212,11 +212,11 @@ function weightedPick<T extends { reputation: number }>(
   const remaining = [...available];
 
   for (let i = 0; i < count && remaining.length > 0; i++) {
-    const totalRep = remaining.reduce((s, t) => s + Math.pow(t.reputation, 2), 0);
+    const totalRep = remaining.reduce((s, t) => s + Math.pow(t.reputation, 5), 0);
     let pick = rng.next() * totalRep;
     let chosen = remaining[0];
     for (const t of remaining) {
-      pick -= Math.pow(t.reputation, 2);
+      pick -= Math.pow(t.reputation, 5);
       if (pick <= 0) { chosen = t; break; }
     }
     result.push(chosen);
