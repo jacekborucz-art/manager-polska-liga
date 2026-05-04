@@ -20,7 +20,9 @@ export const TrainingService = {
     const updatedMap = { ...playersMap };
     if (!updatedMap[userTeamId]) return updatedMap;
 
-    const cycle = TRAINING_CYCLES.find(c => c.id === activeTrainingId) || TRAINING_CYCLES[0];
+    const selectedCycle = TRAINING_CYCLES.find(c => c.id === activeTrainingId);
+    const hasGeneralPlan = !!selectedCycle;
+    const cycle = selectedCycle || TRAINING_CYCLES[0];
 
     updatedMap[userTeamId] = updatedMap[userTeamId].map(player => {
       const intensityMultiplier =
@@ -53,9 +55,11 @@ export const TrainingService = {
         let pGrowth = 0.02;
 
         pGrowth *= intensityMultiplier;
-        if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
-        if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
+        if (hasGeneralPlan && cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
+        if (hasGeneralPlan && cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
         if (player.trainingFocus === key) pGrowth += 0.06;
+        if (!hasGeneralPlan) pGrowth *= 0.72;
+        if (!player.trainingFocus) pGrowth *= player.age < 24 ? 0.82 : 0.90;
 
         if (player.age < 21) pGrowth *= 1.5;
         else if (player.age > 32) pGrowth *= 0.3;
@@ -100,6 +104,8 @@ export const TrainingService = {
           else if (age >= 24) pRegress += 0.012;
           else pRegress += 0.006;
         }
+        if (!hasGeneralPlan) pRegress += 0.004;
+        if (!player.trainingFocus) pRegress += player.age < 24 ? 0.004 : 0.002;
 
         const physicalAttrs = ['pace', 'stamina', 'strength'];
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
@@ -116,6 +122,8 @@ export const TrainingService = {
       });
 
       const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
+      const conditionDrift = !hasGeneralPlan && Math.random() < 0.12 ? -1 : 0;
+      const fatigueDrift = !hasGeneralPlan && Math.random() < 0.10 ? 1 : 0;
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },
         clubReputation,
@@ -127,6 +135,8 @@ export const TrainingService = {
         ...updated,
         attributes,
         overallRating: newOvr,
+        condition: Math.max(1, Math.min(100, updated.condition + conditionDrift)),
+        fatigueDebt: Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift)),
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],

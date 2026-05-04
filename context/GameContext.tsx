@@ -2412,9 +2412,12 @@ setMessages([welcomeMail, fanMail]);
     // ─────────────────────────────────────────────────────────────────────────
     // CALENDAR ENGINE: Jedyne źródło prawdy — co dzieje się dziś?
     // ─────────────────────────────────────────────────────────────────────────
-    const primaryEvent = CalendarEngine.getPrimaryEventForDate(
+    const dayEvents = CalendarEngine.getEventsForDate(
       dateToProcess, seasonTemplate, allFixtures, userTeamId, clubs
     );
+    const primaryEvent = dayEvents.find(e => e.participation !== 'info') ?? null;
+    const hasCompetitionToday = (competition: CompetitionType): boolean =>
+      dayEvents.some(e => e.slot.competition === competition);
 
     // skipDayAdvance = true oznacza że data NIE zostanie przesunięta
     // (gracz musi jeszcze zagrać mecz lub potwierdzić akcję tego dnia)
@@ -3779,7 +3782,7 @@ setMessages([welcomeMail, fanMail]);
     lastProcessedLeagueDateRef.current = dateKey;
 
     // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_INVITE && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_INVITE) && userTeamId && !isResigned) {
       const campInviteKey = `WINTER_CAMP_INVITE_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campInviteKey)) {
         sentMailIdsRef.current.add(campInviteKey);
@@ -3809,7 +3812,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     // ── OBÓZ ZIMOWY: PROGRAM (22 grudnia) ───────────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_PROGRAM && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_PROGRAM) && userTeamId && !isResigned) {
       const campProgramKey = `WINTER_CAMP_PROGRAM_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campProgramKey)) {
         const userClub = clubs.find(c => c.id === userTeamId);
@@ -3826,7 +3829,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     // ── OBÓZ ZIMOWY: ZAKOŃCZENIE (15 stycznia) ───────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.WINTER_CAMP_END && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_END) && userTeamId && !isResigned) {
       const campEndKey = `WINTER_CAMP_END_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campEndKey)) {
         sentMailIdsRef.current.add(campEndKey);
@@ -3847,7 +3850,7 @@ setMessages([welcomeMail, fanMail]);
             ? ({ light: 'Lekka', moderate: 'Umiarkowana', intense: 'Intensywna' } as Record<string,string>)[userClub.winterCamp.intensity]
             : 'Brak';
           const moraleSign = moraleDelta >= 0 ? `+${moraleDelta}` : `${moraleDelta}`;
-          const reportTemplateId = userClub.winterCamp.isDeclined ? 'winter_camp_report_declined' : 'winter_camp_report_success';
+          const reportTemplateId = (userClub.winterCamp.isDeclined || !userClub.winterCamp.programChosen) ? 'winter_camp_report_declined' : 'winter_camp_report_success';
           const reportMail = MailService.createFromTemplate(reportTemplateId, {
             CLUB: userClub.name,
             CAMP_LOCATION: locationLabel,
@@ -3864,10 +3867,11 @@ setMessages([welcomeMail, fanMail]);
               if (!effect) return player;
               const newAttrs = { ...player.attributes, ...effect.attrChanges };
               const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
+              const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
               if (effect.injured) {
-                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
               }
-              return { ...player, attributes: newAttrs, fatigueDebt: newDebt };
+              return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition };
             });
             return { ...prev, [userTeamId]: updatedSquad };
           });
@@ -3896,7 +3900,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     // ── OBÓZ LETNI: ZAPROSZENIE (19 maja) ───────────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.SUMMER_CAMP_INVITE && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_INVITE) && userTeamId && !isResigned) {
       const campInviteKey = `SUMMER_CAMP_INVITE_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campInviteKey)) {
         sentMailIdsRef.current.add(campInviteKey);
@@ -3926,7 +3930,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     // ── OBÓZ LETNI: PROGRAM (5 czerwca) ─────────────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.SUMMER_CAMP_PROGRAM && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_PROGRAM) && userTeamId && !isResigned) {
       const campProgramKey = `SUMMER_CAMP_PROGRAM_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campProgramKey)) {
         const userClub = clubs.find(c => c.id === userTeamId);
@@ -3943,7 +3947,7 @@ setMessages([welcomeMail, fanMail]);
     }
 
     // ── OBÓZ LETNI: ZAKOŃCZENIE (28 czerwca) ────────────────────────────────
-    if (primaryEvent?.slot.competition === CompetitionType.SUMMER_CAMP_END && userTeamId && !isResigned) {
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_END) && userTeamId && !isResigned) {
       const campEndKey = `SUMMER_CAMP_END_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campEndKey)) {
         sentMailIdsRef.current.add(campEndKey);
@@ -3964,7 +3968,7 @@ setMessages([welcomeMail, fanMail]);
             ? ({ light: 'Lekka', moderate: 'Umiarkowana', intense: 'Intensywna' } as Record<string,string>)[userClub.summerCamp.intensity]
             : 'Brak';
           const moraleSign = moraleDelta >= 0 ? `+${moraleDelta}` : `${moraleDelta}`;
-          const reportTemplateId = userClub.summerCamp.isDeclined ? 'summer_camp_report_declined' : 'summer_camp_report_success';
+          const reportTemplateId = (userClub.summerCamp.isDeclined || !userClub.summerCamp.programChosen) ? 'summer_camp_report_declined' : 'summer_camp_report_success';
           const reportMail = MailService.createFromTemplate(reportTemplateId, {
             CLUB: userClub.name,
             CAMP_LOCATION: locationLabel,
@@ -3981,10 +3985,11 @@ setMessages([welcomeMail, fanMail]);
               if (!effect) return player;
               const newAttrs = { ...player.attributes, ...effect.attrChanges };
               const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
+              const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
               if (effect.injured) {
-                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
               }
-              return { ...player, attributes: newAttrs, fatigueDebt: newDebt };
+              return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition };
             });
             return { ...prev, [userTeamId]: updatedSquad };
           });

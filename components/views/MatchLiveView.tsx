@@ -247,10 +247,10 @@ export const MatchLiveView = () => {
     const matchDateStr = ctx.fixture.date instanceof Date ? ctx.fixture.date.toISOString().split('T')[0] : String(ctx.fixture.date);
     const matchSeed = new Date(matchDateStr).getTime() / 100000;
     return {
-      home: applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed),
-      away: applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1),
+      home: applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed, ctx.homeClub.id === userTeamId),
+      away: applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1, ctx.awayClub.id === userTeamId),
     };
-  }, [ctx]);
+  }, [ctx, userTeamId]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
     const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(effect, rivalryContext) : effect;

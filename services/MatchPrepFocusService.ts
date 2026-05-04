@@ -36,9 +36,24 @@ export const applyFocusToFormImpact = (
   impact: ClubFormImpact,
   club: Club,
   currentDate: string,
-  seed: number
+  seed: number,
+  applyUnpreparedPenalty = false
 ): ClubFormImpact => {
-  if (!isFocusReady(club, currentDate)) return impact;
+  if (!isFocusReady(club, currentDate)) {
+    if (!applyUnpreparedPenalty) return impact;
+    const hasAnyFocus = !!club.matchPrepFocusId && !!club.matchPrepFocusStartDate;
+    const penaltyScale = hasAnyFocus ? 0.55 : 1.0;
+    return {
+      ...impact,
+      score: impact.score - 0.18 * penaltyScale,
+      momentumBonus: Math.max(-7, impact.momentumBonus - 1.6 * penaltyScale),
+      initiativeModifier: Math.max(-0.026, impact.initiativeModifier - 0.005 * penaltyScale),
+      shotModifier: Math.max(-0.013, impact.shotModifier - 0.003 * penaltyScale),
+      shotResistanceModifier: Math.max(-0.011, impact.shotResistanceModifier - 0.002 * penaltyScale),
+      finishingMultiplier: Math.max(0.95, impact.finishingMultiplier - 0.010 * penaltyScale),
+      goalkeepingMultiplier: Math.max(0.955, impact.goalkeepingMultiplier - 0.007 * penaltyScale),
+    };
+  }
   const focus = MATCH_PREP_FOCUSES.find(f => f.id === club.matchPrepFocusId);
   if (!focus) return impact;
 

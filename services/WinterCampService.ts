@@ -68,6 +68,45 @@ function clampAttr(val: number): number {
   return Math.min(99, Math.max(1, val));
 }
 
+function buildNeglectPenalty(
+  players: Player[],
+  seed: number,
+  severity: 'declined' | 'missing-program',
+): WinterCampResult {
+  const effects: WinterCampEffect[] = [];
+  const moraleBase = severity === 'declined' ? 6 : 4;
+  const moraleRange = severity === 'declined' ? 5 : 4;
+  const moraleDelta = -(moraleBase + Math.floor(Math.abs(Math.sin(seed + 200) * moraleRange)));
+  const fatigueDebtDelta = severity === 'declined' ? 8 : 5;
+  const maxConditionDrop = severity === 'declined' ? 5 : 3;
+  const attrPenaltyChance = severity === 'declined' ? 0.18 : 0.12;
+  const riskyAttrs: AttributeKey[] = ['stamina', 'mentality', 'workRate', 'positioning', 'strength'];
+
+  players.forEach((player, i) => {
+    const rng = Math.abs(Math.sin(seed + 300 + i) * 10000) % 1;
+    const attrChanges: Partial<PlayerAttributes> = {};
+
+    if (rng < attrPenaltyChance) {
+      const idx = Math.floor(Math.abs(Math.sin(seed + 400 + i) * 10000) % riskyAttrs.length);
+      const key = riskyAttrs[idx];
+      attrChanges[key] = clampAttr((player.attributes[key] as number) - 1);
+    }
+
+    const conditionDrop = 1 + Math.floor(Math.abs(Math.sin(seed + 500 + i) * 10000) % maxConditionDrop);
+    effects.push({
+      playerId: player.id,
+      firstName: player.firstName,
+      lastName: player.lastName,
+      attrChanges,
+      injured: false,
+      fatigueDebtDelta,
+      conditionDelta: -conditionDrop,
+    });
+  });
+
+  return { effects, moraleDelta };
+}
+
 // ─── Efekty obozu ────────────────────────────────────────────────────────────
 
 export interface WinterCampEffect {
@@ -77,6 +116,7 @@ export interface WinterCampEffect {
   attrChanges: Partial<PlayerAttributes>;
   injured: boolean;
   fatigueDebtDelta: number;
+  conditionDelta?: number;
 }
 
 export interface WinterCampResult {
@@ -92,22 +132,13 @@ export function applyWinterCampEffects(
   const effects: WinterCampEffect[] = [];
   let moraleDelta = 0;
 
-  if (camp.isDeclined) {
-    moraleDelta = -(5 + Math.floor(Math.abs(Math.sin(seed + 200) * 6)));
-    players.forEach((player, i) => {
-      const rng = Math.abs(Math.sin(seed + 300 + i) * 10000) % 1;
-      if (rng < 0.15) {
-        const attrs = Object.keys(player.attributes) as AttributeKey[];
-        const idx = Math.floor(Math.abs(Math.sin(seed + 400 + i) * 10000) % attrs.length);
-        const key = attrs[idx];
-        const attrChanges: Partial<PlayerAttributes> = { [key]: clampAttr((player.attributes[key] as number) - 1) };
-        effects.push({ playerId: player.id, firstName: player.firstName, lastName: player.lastName, attrChanges, injured: false, fatigueDebtDelta: 0 });
-      }
-    });
-    return { effects, moraleDelta };
+  if (camp.isDeclined || !camp.location) {
+    return buildNeglectPenalty(players, seed, 'declined');
   }
 
-  if (!camp.program || !camp.intensity || !camp.location) return { effects, moraleDelta: 0 };
+  if (!camp.program || !camp.intensity || !camp.programChosen) {
+    return buildNeglectPenalty(players, seed, 'missing-program');
+  }
 
   const program = PROGRAM_ATTRS[camp.program];
   const intensity = camp.intensity;
