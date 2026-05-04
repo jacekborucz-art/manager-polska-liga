@@ -1,5 +1,5 @@
 
-const SAVE_VERSION = '1.6';
+const SAVE_VERSION = '1.7';
 
 export interface SaveState {
   version: string;

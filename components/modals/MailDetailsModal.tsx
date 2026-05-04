@@ -12,6 +12,10 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     finalizeFreeAgentContract,
     navigateWithoutHistory,
     setTransferNewsActiveTab,
+    currentDate,
+    clubs,
+    userTeamId,
+    reopenWinterCampInvite,
   } = useGame();
 
   const getTypeColor = (type: MailType) => {
@@ -107,6 +111,30 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           </div>
 
           <div className="flex items-center">
+            {mail.metadata?.type === 'WINTER_CAMP_INVITE' && (() => {
+              const expiryDate = new Date(mail.metadata.expiryDate);
+              expiryDate.setHours(23, 59, 59, 999);
+              const today = new Date(currentDate);
+              const isExpired = today > expiryDate;
+              const userClub = clubs.find(c => c.id === userTeamId);
+              const alreadyChosen = !!(userClub?.winterCamp?.location !== null && userClub?.winterCamp?.location !== undefined) || !!(userClub?.winterCamp?.isDeclined);
+              const isActive = !isExpired && !alreadyChosen && !!userClub?.winterCamp;
+              const label = isExpired ? 'Termin minął' : alreadyChosen ? 'Już zadecydowano' : 'Wybierz lokalizację obozu';
+              return (
+                <button
+                  disabled={!isActive}
+                  onClick={isActive ? () => { reopenWinterCampInvite(); onClose(); } : undefined}
+                  className={`mr-4 rounded-2xl px-10 py-4 text-xs font-black italic uppercase tracking-widest shadow-xl transition-all ${
+                    isActive
+                      ? 'bg-amber-600 text-white hover:scale-105 active:scale-95 cursor-pointer'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })()}
+
             {mail.metadata?.type === 'INCOMING_TRANSFER_OFFER' && (
               <button
                 onClick={() => {

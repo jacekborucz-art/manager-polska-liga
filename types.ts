@@ -351,6 +351,9 @@ export interface MailMessage {
   } | {
     type: 'INCOMING_TRANSFER_OFFER';
     offerId: string;
+  } | {
+    type: 'WINTER_CAMP_INVITE';
+    expiryDate: string;
   };
 }
 
@@ -872,6 +875,33 @@ export interface ClubBoard {
   kompetencja: BoardAttributeLevel;
 }
 
+export type SportingDirectorPersonality =
+  | 'CONTROLLER'
+  | 'VISIONARY'
+  | 'ACCOUNTANT'
+  | 'PARTNER'
+  | 'POLITICIAN'
+  | 'TALENT_HUNTER';
+
+export interface SportingDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  patience: number;
+  control: number;
+  flexibility: number;
+  ambition: number;
+  footballKnowledge: number;
+  negotiation: number;
+  developmentVision: number;
+  financialDiscipline: number;
+  relationshipWithManager: number;
+  personality: SportingDirectorPersonality;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -905,6 +935,7 @@ export interface Club {
   logoFile?: string;
   academy?: ClubAcademy;
   board?: ClubBoard;
+  sportingDirector?: SportingDirector;
   boardConfidence?: number;
   morale?: number;
   lastMotivationDate?: string;

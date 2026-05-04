@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, EventKind, CompetitionType, Club, MailMessage, MailType } from '../../types';
+import { ViewState, EventKind, CompetitionType, Club, MailMessage, MailType, SportingDirectorPersonality } from '../../types';
 import { CalendarEngine } from '../../services/CalendarEngine';
 import stadionBg from '../../Graphic/themes/stadion.png';
 import { Card } from '../ui/Card';
@@ -176,6 +176,26 @@ const boardConfidence = useMemo(() => {
 
     return isSummer || isWinter;
   }, [myClub, currentDate]);
+
+  const sportingDirector = myClub?.sportingDirector;
+
+  const getDirectorPersonalityLabel = (personality?: SportingDirectorPersonality): string => {
+    switch (personality) {
+      case 'CONTROLLER': return 'Kontroler';
+      case 'VISIONARY': return 'Wizjoner';
+      case 'ACCOUNTANT': return 'Ksiegowy';
+      case 'PARTNER': return 'Partner trenera';
+      case 'POLITICIAN': return 'Polityk klubowy';
+      case 'TALENT_HUNTER': return 'Lowca talentow';
+      default: return 'Dyrektor';
+    }
+  };
+
+  const getDirectorRelationshipColor = (value = 50): string => {
+    if (value >= 70) return 'text-emerald-400';
+    if (value >= 45) return 'text-amber-300';
+    return 'text-red-400';
+  };
 
   useEffect(() => {
 
@@ -1042,6 +1062,40 @@ const boardConfidence = useMemo(() => {
                 alt="Zarząd Klubu"
                 className="w-full h-full object-cover"
               />
+            </div>
+           )}
+
+           {!isResigned && sportingDirector && (
+            <div className="relative overflow-hidden rounded-[24px] border border-sky-500/15 bg-slate-950/55 p-4 shadow-xl backdrop-blur-md">
+              <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at top right, ${myClub?.colorsHex[0] ?? '#38bdf8'}55 0%, transparent 55%)` }} />
+              <div className="relative z-10 flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 text-xl font-black text-sky-200">
+                  DS
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[8px] font-black uppercase tracking-[0.28em] text-sky-300/80">Dyrektor sportowy</div>
+                  <div className="mt-1 truncate text-sm font-black italic uppercase text-white">
+                    {sportingDirector.firstName} {sportingDirector.lastName}
+                  </div>
+                  <div className="mt-1 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">
+                    {sportingDirector.nationalityCountry} / {sportingDirector.age} lat / {getDirectorPersonalityLabel(sportingDirector.personality)}
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {[
+                      { label: 'Kontrola', value: sportingDirector.control },
+                      { label: 'Wiedza', value: sportingDirector.footballKnowledge },
+                      { label: 'Relacja', value: sportingDirector.relationshipWithManager, percent: true },
+                    ].map(stat => (
+                      <div key={stat.label} className="rounded-xl border border-white/5 bg-black/25 px-2 py-2">
+                        <div className="text-[7px] font-black uppercase tracking-[0.18em] text-slate-500">{stat.label}</div>
+                        <div className={`mt-1 text-sm font-black ${stat.label === 'Relacja' ? getDirectorRelationshipColor(stat.value) : 'text-white'}`}>
+                          {stat.value}{stat.percent ? '%' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
            )}
 

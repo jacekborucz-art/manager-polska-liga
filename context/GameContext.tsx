@@ -76,6 +76,7 @@ import { CLDrawService } from '../services/CLDrawService';
 import { SuperCupService } from '../services/SuperCupService';
 import { UEFASuperCupService } from '../services/UEFASuperCupService';
 import { CoachService } from '../services/CoachService';
+import { SportingDirectorService } from '../services/SportingDirectorService';
 import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
 import { AiContractService } from '@/services/AiContractService';
@@ -329,6 +330,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   winterCampProgramPending: boolean;
   clearWinterCampInvitePending: () => void;
   clearWinterCampProgramPending: () => void;
+  reopenWinterCampInvite: () => void;
   saveWinterCampLocation: (location: import('../types').WinterCampLocation | null, cost: number, spaOption: boolean) => void;
   saveWinterCampProgram: (program: import('../types').WinterCampProgram, intensity: import('../types').WinterCampIntensity) => void;
   summerCampInvitePending: boolean;
@@ -1269,7 +1271,7 @@ if (userTeamId) {
   }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults]);
 
   const getSaveState = (): SaveState => ({
-    version: '1.6',
+    version: '1.7',
     savedAt: new Date().toISOString(),
     currentDate,
     sessionSeed,
@@ -1341,9 +1343,10 @@ if (userTeamId) {
   });
 
   const loadGameFromFile = (data: SaveState): void => {
+    const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
-    setClubs(data.clubs);
+    setClubs(loadedClubs);
     setLeagues(data.leagues);
     setPlayers(data.players);
     setReserves(data.reserves);
@@ -1422,6 +1425,8 @@ const selectUserTeam = (clubId: string) => {
     setUserTeamId(clubId);
     const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
+    const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, sportingDirector } : c));
 
     const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
@@ -2146,6 +2151,7 @@ setMessages([welcomeMail, fanMail]);
 
   const clearWinterCampInvitePending = useCallback(() => setWinterCampInvitePending(false), []);
   const clearWinterCampProgramPending = useCallback(() => setWinterCampProgramPending(false), []);
+  const reopenWinterCampInvite = useCallback(() => setWinterCampInvitePending(true), []);
 
   const saveWinterCampLocation = useCallback((location: WinterCampLocation | null, cost: number, spaOption: boolean) => {
     if (!userTeamId) return;
@@ -3806,8 +3812,23 @@ setMessages([welcomeMail, fanMail]);
           },
         } : c));
         const inviteMail = MailService.createFromTemplate('winter_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
-        if (inviteMail) setMessages(prev => [inviteMail, ...prev]);
+        if (inviteMail) {
+          inviteMail.metadata = { type: 'WINTER_CAMP_INVITE', expiryDate: new Date(dateToProcess.getFullYear(), 11, 23).toISOString() };
+          setMessages(prev => [inviteMail, ...prev]);
+        }
         setWinterCampInvitePending(true);
+        setTargetJumpTime(null);
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: TERMIN WYBORU (23 grudnia) — auto-odrzucenie ────────────
+    if (dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 23 && userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub?.winterCamp && !userClub.winterCamp.isDeclined && userClub.winterCamp.location === null) {
+        setClubs(prev => prev.map(c => c.id === userTeamId && c.winterCamp
+          ? { ...c, winterCamp: { ...c.winterCamp, isDeclined: true } }
+          : c));
+        setWinterCampInvitePending(false);
       }
     }
 
@@ -3824,6 +3845,7 @@ setMessages([welcomeMail, fanMail]);
           const assistantMail = MailService.createFromTemplate(templateId, { CLUB: userClub.name });
           if (assistantMail) setMessages(prev => [assistantMail, ...prev]);
           setWinterCampProgramPending(true);
+          setTargetJumpTime(null);
         }
       }
     }
@@ -7491,7 +7513,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
     applyWeeklyMotivation,
     winterCampInvitePending, winterCampProgramPending,
-    clearWinterCampInvitePending, clearWinterCampProgramPending,
+    clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,
     summerCampInvitePending, summerCampProgramPending,
     clearSummerCampInvitePending, clearSummerCampProgramPending,
