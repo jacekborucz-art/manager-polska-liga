@@ -11,6 +11,8 @@ export interface SaveState {
   players: Record<string, any[]>;
   reserves: any[];
   reserveCoachId: string | null;
+  reserveFixtures: any[];
+  reserveMatchResults: any[];
   academy: any;
   scoutPool: any[];
   scoutMarket: any[];
@@ -103,6 +105,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     incomingOffers: data.incomingOffers || [],
     aiTransferLog: data.aiTransferLog || [],
     globalFixtures: data.globalFixtures || [],
+    reserveFixtures: data.reserveFixtures || [],
+    reserveMatchResults: data.reserveMatchResults || [],
     supercupWinners: data.supercupWinners || [],
     matchHistory: data.matchHistory || [],
     championshipHistory: data.championshipHistory || [],

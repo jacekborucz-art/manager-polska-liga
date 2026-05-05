@@ -1,7 +1,8 @@
 
 import React, { useMemo } from 'react';
-import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture } from '../../types';
+import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, SportingDirectorPersonality } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { useGame } from '../../context/GameContext';
 
 interface BoardModalProps {
   club: Club;
@@ -325,9 +326,32 @@ const ATTR_ROWS: (keyof ClubBoard)[][] = [
   ['chciwosc', 'oczekiwania', 'kompetencja'],
 ];
 
+const getDirectorPersonalityLabel = (personality?: SportingDirectorPersonality): string => {
+  switch (personality) {
+    case 'CONTROLLER': return 'Kontroler';
+    case 'VISIONARY': return 'Wizjoner';
+    case 'ACCOUNTANT': return 'Ksiegowy';
+    case 'PARTNER': return 'Partner trenera';
+    case 'POLITICIAN': return 'Polityk klubowy';
+    case 'TALENT_HUNTER': return 'Lowca talentow';
+    default: return 'Dyrektor';
+  }
+};
+
+const getDirectorRelationshipColor = (value = 50): string => {
+  if (value >= 70) return 'text-emerald-400';
+  if (value >= 45) return 'text-amber-300';
+  return 'text-red-400';
+};
+
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
+  const { respondToSportingDirectorObjective } = useGame();
   const logo = getClubLogo(club.id);
   const board = club.board;
+  const sportingDirector = club.sportingDirector;
+  const directorPolicy = club.sportingDirectorPolicy;
+  const directorObjective = club.sportingDirectorObjective;
+  const directorBoardInfluence = club.sportingDirectorBoardInfluence ?? 0;
 
   const { situationType, seed } = useMemo<{ situationType: SituationType; seed: number }>(() => {
     const played = club.stats.played;
@@ -397,7 +421,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
       <div
-        className="relative w-full max-w-5xl rounded-[40px] overflow-hidden border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
+        className="relative w-full max-w-7xl max-h-[92vh] overflow-y-auto rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Tło */}
@@ -427,7 +451,8 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         </button>
 
         {/* Zawartość */}
-        <div className="relative z-10 p-10 flex flex-col gap-6">
+        <div className="relative z-10 grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
+          <div className="flex min-w-0 flex-col gap-6">
 
           {/* Nagłówek */}
           <div className="text-center">
@@ -517,6 +542,167 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
             </div>
           </div>
 
+          </div>
+
+          <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+            <div className="mb-5">
+              <p className="text-[9px] font-black uppercase tracking-[0.35em] text-sky-300/80">Panel</p>
+              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tight text-white">Zarzad Klubu</h2>
+            </div>
+
+            {sportingDirector ? (
+              <div className="space-y-5">
+                <div className="rounded-[22px] border border-sky-500/20 bg-sky-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-300/20 bg-black/25 text-xl font-black text-sky-100">
+                      DS
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[8px] font-black uppercase tracking-[0.28em] text-sky-300">Dyrektor sportowy</p>
+                      <p className="mt-1 text-lg font-black italic uppercase leading-tight text-white">
+                        {sportingDirector.firstName} {sportingDirector.lastName}
+                      </p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                        {sportingDirector.nationalityCountry} / {sportingDirector.age} lat
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-white/5 bg-black/25 p-3">
+                    <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-500">Profil pracy</p>
+                    <p className="mt-1 text-sm font-black italic uppercase text-white">
+                      {getDirectorPersonalityLabel(sportingDirector.personality)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'Kontrola', value: sportingDirector.control },
+                    { label: 'Elastycznosc', value: sportingDirector.flexibility },
+                    { label: 'Ambicja', value: sportingDirector.ambition },
+                    { label: 'Wiedza', value: sportingDirector.footballKnowledge },
+                    { label: 'Negocjacje', value: sportingDirector.negotiation },
+                    { label: 'Finanse', value: sportingDirector.financialDiscipline },
+                    { label: 'Rozwoj', value: sportingDirector.developmentVision },
+                    { label: 'Relacja', value: sportingDirector.relationshipWithManager, percent: true },
+                  ].map(stat => (
+                    <div key={stat.label} className="rounded-[16px] border border-white/5 bg-black/25 p-3">
+                      <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-500">{stat.label}</p>
+                      <p className={`mt-1 text-lg font-black ${stat.label === 'Relacja' ? getDirectorRelationshipColor(stat.value) : 'text-white'}`}>
+                        {stat.value}{stat.percent ? '%' : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-500">Polityka sportowa</p>
+                  {directorPolicy ? (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-xs leading-relaxed text-slate-300">{directorPolicy.summary}</p>
+                      {[
+                        { title: 'Chronieni', items: directorPolicy.protectedPlayers },
+                        { title: 'Do sprzedazy', items: directorPolicy.sellCandidates },
+                        { title: 'Do rozwoju', items: directorPolicy.developmentPlayers },
+                      ].map(group => (
+                        <div key={group.title}>
+                          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-sky-300/80">{group.title}</p>
+                          <div className="mt-1 space-y-1">
+                            {group.items.length > 0 ? group.items.slice(0, 2).map(item => (
+                              <div key={item.playerId} className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                                <p className="text-[11px] font-black uppercase text-white">{item.playerName}</p>
+                                <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{item.note}</p>
+                              </div>
+                            )) : (
+                              <p className="text-[10px] text-slate-500">Brak wskazan.</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                      Polityka sportowa pojawi sie przed najblizszym oknem transferowym.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-500">Cel dyrektora</p>
+                  {directorObjective ? (
+                    <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-black uppercase text-white">{directorObjective.title.replace('Cel dyrektora: ', '')}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] ${
+                          directorObjective.status === 'COMPLETED'
+                            ? 'bg-emerald-500/15 text-emerald-300'
+                            : directorObjective.status === 'FAILED'
+                              ? 'bg-red-500/15 text-red-300'
+                              : 'bg-amber-500/15 text-amber-300'
+                        }`}>
+                          {directorObjective.status === 'COMPLETED' ? 'Zrobione' : directorObjective.status === 'FAILED' ? 'Nieudane' : 'Aktywne'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-400">{directorObjective.description}</p>
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        Termin: {new Date(directorObjective.dueAt).toLocaleDateString('pl-PL')}
+                      </p>
+                      {directorObjective.resultNote && (
+                        <p className="mt-2 text-[11px] leading-snug text-slate-300">{directorObjective.resultNote}</p>
+                      )}
+                      {directorObjective.status === 'ACTIVE' && (
+                        <div className="mt-3 grid grid-cols-1 gap-2">
+                          <button
+                            disabled={directorObjective.managerResponse === 'ACCEPTED'}
+                            onClick={() => respondToSportingDirectorObjective('ACCEPT')}
+                            className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-200 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Akceptuj cel
+                          </button>
+                          <button
+                            disabled={!!directorObjective.renegotiated}
+                            onClick={() => respondToSportingDirectorObjective('NEGOTIATE')}
+                            className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-sky-200 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Negocjuj warunki
+                          </button>
+                          <button
+                            disabled={directorObjective.managerResponse === 'CHALLENGED'}
+                            onClick={() => respondToSportingDirectorObjective('CHALLENGE')}
+                            className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-red-200 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Zakwestionuj cel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                      Dyrektor nie wyznaczyl jeszcze konkretnego celu dla sztabu.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-500">Wplyw na gre</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                    Dyrektor ocenia wyniki co miesiac i moze blokowac ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
+                  </p>
+                  <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Relacja z zarzadem</p>
+                    <p className={`mt-1 text-sm font-black ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
+                      {directorBoardInfluence > 0 ? '+' : ''}{directorBoardInfluence} pkt zaufania
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[22px] border border-white/5 bg-black/25 p-5 text-sm text-slate-400">
+                Klub nie ma jeszcze przypisanego dyrektora sportowego.
+              </div>
+            )}
+          </aside>
         </div>
       </div>
     </div>

@@ -603,6 +603,65 @@ export interface ReserveProgressEntry {
 
 export type ReserveProgressPoint = number | ReserveProgressEntry;
 
+export interface ReserveSeasonStats {
+  matches: number;
+  goals: number;
+  assists: number;
+  cards: number;
+  totalRatingPoints: number;
+}
+
+export interface ReserveHistoryEntry {
+  season: number;
+  clubName: string;
+  matches: number;
+  goals: number;
+  assists: number;
+  cards: number;
+  avgRating: number;
+}
+
+export interface ReserveFixture {
+  id: string;
+  date: string;
+  isHome: boolean;
+  opponentClubId: string;
+  opponentClubName: string;
+  round: 1 | 2;
+  resultId?: string;
+}
+
+export interface ReserveMatchResult {
+  id: string;
+  date: string;
+  season: number;
+  homeTeamName: string;
+  awayTeamName: string;
+  isUserHome: boolean;
+  homeScore: number;
+  awayScore: number;
+  venue: string;
+  opponentClubId: string;
+  goals: MatchGoalEntry[];
+  missedPenalties?: MatchGoalEntry[];
+  cards: MatchCardEntry[];
+  substitutions: MatchSubstitutionEntry[];
+  injuries: MatchInjuryEntry[];
+  ratings: Record<string, number>;
+  userStartingXI: string[];
+  manOfTheMatch?: string;
+  matchPlayers?: ReserveMatchPlayerEntry[];
+}
+
+export interface ReserveMatchPlayerEntry {
+  id: string;
+  name: string;
+  position: PlayerPosition;
+  teamId: 'HOME' | 'AWAY';
+  starter: boolean;
+  rating?: number;
+}
+
 export interface PlayerCareerStatsSnapshot {
   matchesPlayed: number;
   goals: number;
@@ -841,6 +900,8 @@ export interface Player {
   transferReportDate?: string;
   trainingFocus?: keyof PlayerAttributes | null;
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  reserveStats?: ReserveSeasonStats;
+  reserveHistory?: ReserveHistoryEntry[];
 }
 
 export interface TeamStats {
@@ -902,6 +963,42 @@ export interface SportingDirector {
   personality: SportingDirectorPersonality;
 }
 
+export interface SportingDirectorPolicyItem {
+  playerId: string;
+  playerName: string;
+  note: string;
+}
+
+export interface SportingDirectorPolicy {
+  issuedAt: string;
+  windowType: 'SUMMER' | 'WINTER';
+  protectedPlayers: SportingDirectorPolicyItem[];
+  sellCandidates: SportingDirectorPolicyItem[];
+  developmentPlayers: SportingDirectorPolicyItem[];
+  summary: string;
+}
+
+export type SportingDirectorObjectiveType = 'POINTS_RUN' | 'DEFENSIVE_RUN' | 'YOUTH_DEVELOPMENT';
+export type SportingDirectorObjectiveResponse = 'ACCEPT' | 'NEGOTIATE' | 'CHALLENGE';
+
+export interface SportingDirectorObjective {
+  id: string;
+  type: SportingDirectorObjectiveType;
+  issuedAt: string;
+  dueAt: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'FAILED';
+  title: string;
+  description: string;
+  target: number;
+  baselinePoints: number;
+  baselinePlayed: number;
+  baselineGoalsAgainst: number;
+  baselineYouthAppearances: number;
+  managerResponse?: 'ACCEPTED' | 'NEGOTIATED' | 'CHALLENGED';
+  renegotiated?: boolean;
+  resultNote?: string;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -936,6 +1033,13 @@ export interface Club {
   academy?: ClubAcademy;
   board?: ClubBoard;
   sportingDirector?: SportingDirector;
+  lastSportingDirectorReviewDate?: string;
+  lastSportingDirectorPolicyDate?: string;
+  lastSportingDirectorRelationshipEventDate?: string;
+  lastSportingDirectorObjectiveDate?: string;
+  sportingDirectorBoardInfluence?: number;
+  sportingDirectorPolicy?: SportingDirectorPolicy;
+  sportingDirectorObjective?: SportingDirectorObjective;
   boardConfidence?: number;
   morale?: number;
   lastMotivationDate?: string;

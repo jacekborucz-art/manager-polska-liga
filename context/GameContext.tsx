@@ -101,6 +101,10 @@ import { PlayerCareerService } from '../services/PlayerCareerService';
 import { SaveState } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
+import { ReserveScheduleService } from '../services/ReserveScheduleService';
+import { ReserveOpponentGeneratorService } from '../services/ReserveOpponentGeneratorService';
+import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
+import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -296,6 +300,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   gameNotification: GameNotificationState | null;
   showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone }) => void;
   clearGameNotification: () => void;
+  respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
@@ -307,6 +312,10 @@ finalizeFreeAgentContract: (mailId: string) => void;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
   reserveCoachId: string | null;
+  reserveFixtures: ReserveFixture[];
+  setReserveFixtures: React.Dispatch<React.SetStateAction<ReserveFixture[]>>;
+  reserveMatchResults: ReserveMatchResult[];
+  setReserveMatchResults: React.Dispatch<React.SetStateAction<ReserveMatchResult[]>>;
   academy: ClubAcademy | null;
   initAcademy: () => void;
   submitUpgradeProposal: () => void;
@@ -353,6 +362,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
   const [reserves, setReserves] = useState<Player[]>([]);
   const [reserveCoachId, setReserveCoachId] = useState<string | null>(null);
+  const [reserveFixtures, setReserveFixtures] = useState<ReserveFixture[]>([]);
+  const [reserveMatchResults, setReserveMatchResults] = useState<ReserveMatchResult[]>([]);
   const [academy, setAcademy] = useState<ClubAcademy | null>(null);
   const [scoutPool, setScoutPool] = useState<Scout[]>([]);
   const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
@@ -1280,6 +1291,8 @@ if (userTeamId) {
     players,
     reserves,
     reserveCoachId,
+    reserveFixtures,
+    reserveMatchResults,
     academy,
     scoutPool,
     scoutMarket,
@@ -1351,6 +1364,8 @@ if (userTeamId) {
     setPlayers(data.players);
     setReserves(data.reserves);
     setReserveCoachId(data.reserveCoachId);
+    setReserveFixtures(data.reserveFixtures ?? []);
+    setReserveMatchResults(data.reserveMatchResults ?? []);
     setAcademy(data.academy);
     setScoutPool(data.scoutPool);
     setScoutMarket(data.scoutMarket);
@@ -4329,6 +4344,104 @@ const finalResult: SimulationOutput = {
        // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
     applySimulationResult(finalResult);
 
+    // 4c. Generowanie terminarza rezerw (4 lipca każdego sezonu)
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 4 && userTeamId) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const alreadyGenerated = reserveFixtures.some(f => f.id.startsWith(`res_r1_${seasonNumber}_`));
+      if (userClub && !alreadyGenerated) {
+        const polishClubs = clubs.filter(c =>
+          c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4'
+        );
+        const schedule = ReserveScheduleService.generate(userClub, polishClubs, seasonNumber, sessionSeed);
+        setReserveFixtures(schedule);
+      }
+    }
+
+    // 4d. Symulacja meczu rezerw w tle
+    if (userTeamId && reserves.length > 0 && reserveCoachId) {
+      const todayIso = dateToProcess.toISOString().split('T')[0];
+      const reserveFixture = reserveFixtures.find(f => !f.resultId && f.date.startsWith(todayIso));
+      if (reserveFixture) {
+        const opponentClub = clubs.find(c => c.id === reserveFixture.opponentClubId);
+        const oppReputation = opponentClub?.reputation ?? 5;
+        const matchSeed = sessionSeed + (dateToProcess.getTime() % 1000000);
+        const opponentPlayers = ReserveOpponentGeneratorService.generate(reserveFixture.opponentClubId, oppReputation, matchSeed);
+        const reserveCoachObj = coaches[reserveCoachId];
+        if (reserveCoachObj) {
+          const engineResult = ReserveMatchEngine.simulate(
+            reserves,
+            opponentPlayers,
+            reserveCoachObj,
+            oppReputation,
+            reserveFixture.isHome,
+            matchSeed
+          );
+          const userClub = clubs.find(c => c.id === userTeamId);
+          const userTeamName = `${userClub?.shortName || userClub?.name || 'Drużyna'} II`;
+          const opponentName = `${opponentClub?.shortName || opponentClub?.name || 'Rywal'} II`;
+          const matchResult: ReserveMatchResult = {
+            id: `res_match_${dateToProcess.getTime()}`,
+            date: dateToProcess.toISOString(),
+            season: seasonNumber,
+            homeTeamName: reserveFixture.isHome ? userTeamName : opponentName,
+            awayTeamName: reserveFixture.isHome ? opponentName : userTeamName,
+            isUserHome: reserveFixture.isHome,
+            homeScore: engineResult.homeScore,
+            awayScore: engineResult.awayScore,
+            venue: reserveFixture.isHome
+              ? (userClub?.stadiumName ?? 'Stadion')
+              : (opponentClub?.stadiumName ?? 'Stadion'),
+            opponentClubId: reserveFixture.opponentClubId,
+            goals: engineResult.goals,
+            missedPenalties: engineResult.missedPenalties,
+            cards: engineResult.cards,
+            substitutions: engineResult.substitutions,
+            injuries: engineResult.injuries,
+            ratings: engineResult.ratings,
+            userStartingXI: engineResult.userStartingXI,
+            manOfTheMatch: engineResult.manOfTheMatch,
+            matchPlayers: engineResult.matchPlayers,
+          };
+          setReserveFixtures(prev => prev.map(f =>
+            f.id === reserveFixture.id ? { ...f, resultId: matchResult.id } : f
+          ));
+          setReserveMatchResults(prev => [...prev, matchResult]);
+          setReserves(prev => {
+            const updatedInjured = engineResult.updatedUserReserves;
+            return prev.map(p => {
+              const injuredVersion = updatedInjured.find(u => u.id === p.id);
+              const basePlayer = injuredVersion ?? p;
+              const rating = engineResult.ratings[p.id];
+              const wasInXI = engineResult.userStartingXI.includes(p.id);
+              const wasSub = engineResult.substitutions.some(s => s.playerInId === p.id);
+              if (!wasInXI && !wasSub) return basePlayer;
+              const userSide = reserveFixture.isHome ? 'HOME' : 'AWAY';
+              const playerGoals = engineResult.goals.filter(g => g.teamId === userSide && g.playerId === p.id).length;
+              const playerAssists = engineResult.goals.filter(g => g.teamId === userSide && g.assistantId === p.id).length;
+              const playerCards = engineResult.cards.filter(c => c.playerId === p.id).length;
+              const prev2 = basePlayer.reserveStats ?? { matches: 0, goals: 0, assists: 0, cards: 0, totalRatingPoints: 0 };
+              const newStats: ReserveSeasonStats = {
+                matches: prev2.matches + 1,
+                goals: prev2.goals + playerGoals,
+                assists: prev2.assists + playerAssists,
+                cards: prev2.cards + playerCards,
+                totalRatingPoints: prev2.totalRatingPoints + (rating ?? 6.0),
+              };
+              return { ...basePlayer, reserveStats: newStats };
+            });
+          });
+        }
+      }
+    }
+
+    // 4e. Regeneracja kondycji rezerw
+    if (reserves.length > 0) {
+      setReserves(prev => {
+        const reservesMap = { RES: prev };
+        return RecoveryService.applyDailyRecovery(reservesMap, dateToProcess, TrainingIntensity.NORMAL, recoveryDelta, 1.0)['RES'];
+      });
+    }
+
     // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
     // Pomijamy dzień UEFA_SUPER_CUP — mecz jest przetwarzany bezpośrednio w case CompetitionType.UEFA_SUPER_CUP
     const isUEFASuperCupDay = primaryEvent?.slot.competition === CompetitionType.UEFA_SUPER_CUP;
@@ -4433,12 +4546,12 @@ const finalResult: SimulationOutput = {
       let newConfidence: number;
       if (club.leagueId === 'NONE') {
         const base = 100 - (club.reputation * 2);
-        newConfidence = Math.min(99, Math.max(5, base + resultScore + (club.europeanBonusPoints ?? 0)));
+        newConfidence = Math.min(99, Math.max(5, base + resultScore + (club.europeanBonusPoints ?? 0) + (club.sportingDirectorBoardInfluence ?? 0)));
       } else {
         const rankList = leagueSortedIds.get(club.leagueId) || [];
         const rank = rankList.indexOf(club.id) + 1 || 1;
         const rankImpact = (18 - rank) * 2;
-        newConfidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (club.reputation * 2)));
+        newConfidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (club.reputation * 2) + (club.sportingDirectorBoardInfluence ?? 0)));
       }
       return { ...club, boardConfidence: newConfidence };
     });
@@ -4462,10 +4575,10 @@ const finalResult: SimulationOutput = {
       let confidence: number;
       if (userClub.leagueId === 'NONE') {
         const base = 100 - (userClub.reputation * 2);
-        confidence = Math.min(99, Math.max(5, base + resultScore + (userClub.europeanBonusPoints ?? 0)));
+        confidence = Math.min(99, Math.max(5, base + resultScore + (userClub.europeanBonusPoints ?? 0) + (userClub.sportingDirectorBoardInfluence ?? 0)));
       } else {
         const rankImpact = (18 - userRank) * 2;
-        confidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (userClub.reputation * 2)));
+        confidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (userClub.reputation * 2) + (userClub.sportingDirectorBoardInfluence ?? 0)));
       }
       
       const recentFixture = allFixtures.find(f => f.date.toDateString() === dateToProcess.toDateString() && (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId));
@@ -4486,6 +4599,83 @@ const finalResult: SimulationOutput = {
     nextDay.setDate(nextDay.getDate() + 1);
     const nextDayIso = nextDay.toISOString().split('T')[0];
 
+    // --- SPORTING DIRECTOR: active objective review ---
+    if (userTeamId && !isResigned) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector || !userClub.sportingDirectorObjective) return prev;
+
+        const objectiveReview = SportingDirectorService.evaluateActiveObjective({
+          club: userClub,
+          players: userSquad,
+          date: nextDay,
+        });
+
+        if (!objectiveReview.mail) return prev;
+        setMessages(prevMessages => [objectiveReview.mail!, ...prevMessages]);
+        return prev.map(c => c.id === userTeamId ? objectiveReview.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
+    // --- SPORTING DIRECTOR: transfer window policy ---
+    if (
+      userTeamId &&
+      !isResigned &&
+      ((nextDay.getMonth() === 6 && nextDay.getDate() === 1) || (nextDay.getMonth() === 0 && nextDay.getDate() === 12))
+    ) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector) return prev;
+
+        const policy = SportingDirectorService.createTransferWindowPolicy({
+          club: userClub,
+          players: userSquad,
+          date: nextDay,
+        });
+
+        if (!policy.mail) return prev;
+        setMessages(prevMessages => [policy.mail!, ...prevMessages]);
+        return prev.map(c => c.id === userTeamId ? policy.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
+    // --- SPORTING DIRECTOR: monthly manager review ---
+    if (userTeamId && !isResigned && nextDay.getDate() === 1) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector || userClub.leagueId === 'NONE') return prev;
+
+        const leagueClubs = prev.filter(c => c.leagueId === userClub.leagueId);
+        const review = SportingDirectorService.reviewManagerMonthly({
+          club: userClub,
+          players: userSquad,
+          leagueClubs,
+          date: nextDay,
+        });
+        const relationshipPressure = SportingDirectorService.evaluateRelationshipPressure({
+          club: review.updatedClub,
+          date: nextDay,
+        });
+        const objective = SportingDirectorService.createMonthlyObjective({
+          club: relationshipPressure.updatedClub,
+          players: userSquad,
+          date: nextDay,
+        });
+
+        const directorMails = [objective.mail, relationshipPressure.mail, review.mail].filter(Boolean) as MailMessage[];
+        if (directorMails.length > 0) {
+          setMessages(prevMessages => [...directorMails, ...prevMessages]);
+        }
+        return prev.map(c => c.id === userTeamId ? objective.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
     if (userTeamId) {
       const userClub = clubs.find(c => c.id === userTeamId);
       if (userClub) {
@@ -4504,10 +4694,10 @@ const finalResult: SimulationOutput = {
           const reminderLevel = userClub.motivationNeglectLevel ?? 0;
           const captainMailBody =
             reminderLevel <= 0
-              ? 'Trenerze,\n\nw szatni zaczyna brakowac wspolnego impulsu. Chlopaki czekaja na rozmowe, bo atmosfera powoli sie rozluznia i nie wszyscy sa juz na tej samej fali.\n\nMysle, ze kilka slow od sztabu dobrze by nam teraz zrobilo.\n\n' + captainName
+              ? 'Trenerze,\n\nW szatni zaczyna brakować wspólnego impulsu. Chłopaki czekają na rozmowę, bo atmosfera powoli się rozluznia i nie wszyscy są już na tej samej fali.\n\nMyslę, że kilka słów od trenera dobrze by nam teraz zrobiło.\n\n' + captainName
               : reminderLevel === 1
-                ? 'Trenerze,\n\nmowie otwarcie: w szatni widac, ze za dlugo nie bylo zadnej rozmowy. Atmosfera nie jest jeszcze zla, ale pojawia sie frustracja i coraz czesciej kazdy idzie w swoja strone.\n\nDruzyna potrzebuje jasnego sygnalu i zebrania nas razem.\n\n' + captainName
-                : 'Trenerze,\n\nmusze to powiedziec wprost. Atmosfera w szatni wyraznie sie psuje i zawodnicy od dawna czekaja na reakcje. Bez rozmowy bedzie nam coraz trudniej utrzymac jednoczesnosc i koncentracje.\n\nTo jest moment, w ktorym zespol potrzebuje Ciebie najbardziej.\n\n' + captainName;
+                ? 'Trenerze,\n\nW szatni widać, że zbyt długo nie było żadnej rozmowy. Atmosfera nie jest jeszcze zła, ale pojawia się frustracja i coraz cześciej każdy idzie w swoją stronę.\n\nDrużyna potrzebuje jasnego sygnału i zebrania nas razem.\n\n' + captainName
+                : 'Trenerze,\n\nAtmosfera w szatni wyraźnie się psuje i zawodnicy od dawna czekają na reakcję. Bez rozmowy będzie nam coraz trudniej utrzymać jedność i koncentracje.\n\nTo jest moment, w którym zespół potrzebuje trenera najbardziej.\n\n' + captainName;
 
           setClubs(prev => prev.map(c => {
             if (c.id !== userTeamId) return c;
@@ -4523,7 +4713,7 @@ const finalResult: SimulationOutput = {
             id: `CAPTAIN_MOTIVATION_${Date.now()}`,
             sender: captainName,
             role: 'Kapitan druzyny',
-            subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Druzyna czeka na rozmowe',
+            subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Drużyna czeka na rozmowę',
             body: captainMailBody,
             date: new Date(nextDay),
             isRead: false,
@@ -6226,6 +6416,36 @@ const finalResult: SimulationOutput = {
 
   const markMessageRead = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
   const deleteMessage = (id: string) => setMessages(prev => prev.filter(m => m.id !== id));
+
+  const respondToSportingDirectorObjective = useCallback((response: import('../types').SportingDirectorObjectiveResponse) => {
+    if (!userTeamId) return;
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub?.sportingDirector || !userClub.sportingDirectorObjective || userClub.sportingDirectorObjective.status !== 'ACTIVE') {
+      showGameNotification({
+        title: 'Brak aktywnego celu',
+        message: 'Dyrektor sportowy nie ma teraz celu do omowienia.',
+        tone: 'info',
+      });
+      return;
+    }
+
+    const decision = SportingDirectorService.respondToObjective({
+      club: userClub,
+      date: currentDate,
+      response,
+    });
+
+    setClubs(prev => prev.map(club => club.id === userTeamId ? decision.updatedClub : club));
+    if (decision.mail) {
+      setMessages(prev => [decision.mail!, ...prev]);
+    }
+    showGameNotification({
+      title: 'Rozmowa z dyrektorem',
+      message: decision.message,
+      tone: response === 'CHALLENGE' ? 'warning' : 'info',
+    });
+  }, [clubs, currentDate, showGameNotification, userTeamId]);
  const updatePlayer = (clubId: string, playerId: string, newData: Partial<Player>) => {
     setPlayers(prev => ({
       ...prev,
@@ -6239,6 +6459,24 @@ const finalResult: SimulationOutput = {
     const player = squad.find(p => p.id === playerId);
     if (player) {
       if (player.transferPendingClubId) return;
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (!player.isOnTransferList && userClub?.sportingDirector) {
+        const directorDecision = SportingDirectorService.evaluateTransferListDecision({
+          club: userClub,
+          player,
+          squad,
+          requestedPrice: price,
+          date: currentDate,
+        });
+
+        if (directorDecision.blocked) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? directorDecision.updatedClub : c));
+          if (directorDecision.mail) setMessages(prev => [directorDecision.mail!, ...prev]);
+          alert(`Dyrektor sportowy blokuje ruch: ${directorDecision.message}`);
+          return;
+        }
+      }
+
       updatePlayer(userTeamId, playerId, {
         isOnTransferList: !player.isOnTransferList,
         transferListPrice: !player.isOnTransferList ? price : undefined
@@ -6321,6 +6559,25 @@ const finalResult: SimulationOutput = {
           playerNegotiationStartedAt: dateStr,
         };
       } else if (response === 'accept') {
+        if (sellerClub.sportingDirector) {
+          const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
+            club: sellerClub,
+            player,
+            squad: players[userTeamId] || [],
+            buyerClub,
+            fee: currentActiveFee,
+            date: currentDate,
+          });
+
+          if (directorDecision.blocked) {
+            updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
+            setClubs(prevClubs => prevClubs.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
+            if (directorDecision.mail) setMessages(prevMessages => [directorDecision.mail!, ...prevMessages]);
+            alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
+            return updated;
+          }
+        }
+
         const resolveIn = Math.random() < 0.5 ? 2 : 3;
         const resolveDate = IncomingTransferService.addDays(dateStr, resolveIn);
         const acceptedFee = currentActiveFee;
@@ -6358,6 +6615,27 @@ const finalResult: SimulationOutput = {
     const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
     const sellerClub = clubs.find(c => c.id === userTeamId);
     if (!player || !buyerClub || !sellerClub) return;
+
+    if (sellerClub.sportingDirector) {
+      const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
+        club: sellerClub,
+        player,
+        squad: players[userTeamId] || [],
+        buyerClub,
+        fee: offer.fee,
+        date: currentDate,
+      });
+
+      if (directorDecision.blocked) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        setClubs(prev => prev.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
+        if (directorDecision.mail) setMessages(prev => [directorDecision.mail!, ...prev]);
+        alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
+        return;
+      }
+    }
 
     // Estymuj warunki kontraktu (negocjowane przez AI w tle)
     const estimatedSalary = Math.round(player.annualSalary * 1.15 / 10000) * 10000;
@@ -6964,6 +7242,33 @@ const finalResult: SimulationOutput = {
       playerReason: playerDecision.reason
     };
 
+    const directorPurchaseDecision = buyerClub.sportingDirector
+      ? SportingDirectorService.evaluateIncomingPurchaseDecision({
+          club: buyerClub,
+          player: targetPlayer,
+          squad: buyerSquad,
+          sellerClub,
+          fee: readyOffer.fee,
+          contract: contractInput,
+          date: currentDate,
+        })
+      : null;
+
+    if (directorPurchaseDecision?.blocked) {
+      setClubs(prev => prev.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club));
+      if (directorPurchaseDecision.mail) setMessages(prev => [directorPurchaseDecision.mail!, ...prev]);
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Dyrektor sportowy zablokowal transfer: ${directorPurchaseDecision.message}`,
+        offer: transferOffer,
+      };
+    }
+
+    const clubsAfterDirectorApproval = directorPurchaseDecision && directorPurchaseDecision.relationDelta !== 0
+      ? clubs.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club)
+      : clubs;
+
     if (transferOffer.timing !== TransferTiming.IMMEDIATE) {
       const agreedOffer: TransferOffer = {
         ...readyOffer,
@@ -6971,8 +7276,13 @@ const finalResult: SimulationOutput = {
         effectiveDate: transferOffer.effectiveDate || targetPlayer.contractEndDate
       };
 
+      if (directorPurchaseDecision?.relationDelta) {
+        setClubs(clubsAfterDirectorApproval);
+      }
       setTransferOffers(prev => prev.map(offer => offer.id === offerId ? agreedOffer : offer));
-      setMessages(prev => [{
+      setMessages(prev => [
+        ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
+        {
         id: `MAIL_TRANSFER_PRECONTRACT_DONE_${agreedOffer.id}`,
         sender: `Agent gracza ${targetPlayer.lastName}`,
         role: 'Agencja menadzerska',
@@ -6998,7 +7308,7 @@ const finalResult: SimulationOutput = {
 
     const execution = TransferExecutionService.finalizeTransfer(
       readyOffer,
-      clubs,
+      clubsAfterDirectorApproval,
       players,
       currentDate
     );
@@ -7038,7 +7348,9 @@ const finalResult: SimulationOutput = {
     };
 
     setTransferOffers(prev => prev.map(offer => offer.id === offerId ? completedOffer : offer));
-    setMessages(prev => [{
+    setMessages(prev => [
+      ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
+      {
       id: `MAIL_TRANSFER_DONE_${completedOffer.id}`,
       sender: 'Centrum transferowe',
       role: 'System rejestracji transferow',
@@ -7135,8 +7447,33 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         tone: 'error'
       });
     }
+
+    const directorFreeAgentDecision = userClub.sportingDirector
+      ? SportingDirectorService.evaluateFreeAgentSigningDecision({
+          club: userClub,
+          player: playerToSign,
+          squad: userSquad,
+          contract: { salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus },
+          date: currentDate,
+        })
+      : null;
+
+    if (directorFreeAgentDecision?.blocked) {
+      setClubs(prev => prev.map(c => c.id === userTeamId ? directorFreeAgentDecision.updatedClub : c));
+      setMessages(prev => [
+        ...(directorFreeAgentDecision.mail ? [directorFreeAgentDecision.mail] : []),
+        ...prev.filter(existingMail => existingMail.id !== mailId)
+      ]);
+
+      return showGameNotification({
+        title: 'Weto dyrektora sportowego',
+        message: directorFreeAgentDecision.message,
+        tone: 'error'
+      });
+    }
+
     setClubs(prev => prev.map(c => c.id === userTeamId ? {
-      ...c,
+      ...(directorFreeAgentDecision?.relationDelta ? directorFreeAgentDecision.updatedClub : c),
       transferBudget: c.transferBudget - contractCost,
       financeHistory: [
         {
@@ -7190,7 +7527,10 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     }));
 
     // 4. Usuń wiadomość e-mail
-    setMessages(prev => prev.filter(m => m.id !== mailId));
+    setMessages(prev => [
+      ...(directorFreeAgentDecision?.mail ? [directorFreeAgentDecision.mail] : []),
+      ...prev.filter(m => m.id !== mailId)
+    ]);
     return showGameNotification({
       title: 'Transfer sfinalizowany',
       message: `${playerToSign.firstName} ${playerToSign.lastName} dolaczyl do kadry ${userClub?.name || ''}.`,
@@ -7499,7 +7839,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
-    gameNotification, showGameNotification, clearGameNotification,
+    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,
     confirmRelegationPlayoffMatch1, confirmRelegationPlayoffMatch2,
@@ -7509,6 +7849,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
     reserves, setReserves, reserveCoachId,
+    reserveFixtures, setReserveFixtures,
+    reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
     applyWeeklyMotivation,

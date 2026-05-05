@@ -4,6 +4,7 @@ import { PlayerPosition, PlayerAttributes, ViewState, Player, ReserveProgressPoi
 import { Button } from '../ui/Button';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { ReserveScheduleModal } from '../modals/ReserveScheduleModal';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -347,6 +348,7 @@ export const ReservesView: React.FC = () => {
           coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [hoveredProgressPoint, setHoveredProgressPoint] = useState<HoveredProgressPoint | null>(null);
   const [progressRange, setProgressRange] = useState<ProgressRange>('DAY');
   const [progressWindowOffset, setProgressWindowOffset] = useState(0);
@@ -494,6 +496,13 @@ export const ReservesView: React.FC = () => {
               </button>
             )}
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              className="group flex items-center gap-3 rounded-2xl border border-blue-500/40 bg-blue-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-blue-400/60 hover:bg-blue-600/25 active:scale-95"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-500/50 bg-black/45 text-blue-400 transition-colors group-hover:bg-blue-400 group-hover:text-black">📅</span>
+              <span className="block text-[13px] italic text-white">Terminarz</span>
+            </button>
             <button
               onClick={() => setShowReport(true)}
               className="group flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-amber-400/60 hover:bg-amber-600/25 active:scale-95"
@@ -859,6 +868,10 @@ export const ReservesView: React.FC = () => {
           </div>
         </div>
       </div>
+    )}
+
+    {showScheduleModal && (
+      <ReserveScheduleModal onClose={() => setShowScheduleModal(false)} />
     )}
 
     {showReport && weeklyReport && (
