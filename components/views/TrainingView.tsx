@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useGame } from '../../context/GameContext';
-import { ViewState } from '../../types';
+import { ViewState, Player } from '../../types';
 import { TRAINING_CYCLES } from '../../data/training_definitions_pl';
-import { TrainingAssistantService } from '../../services/TrainingAssistantService';
+import { TrainingAssistantService, generatePlayerReport } from '../../services/TrainingAssistantService';
 import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
 import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusService';
 
@@ -26,9 +27,15 @@ export const TrainingView: React.FC = () => {
   } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(activeTrainingId);
   const [hoveredAttribute, setHoveredAttribute] = useState<{ label: string; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; player: Player } | null>(null);
+  const [reportPlayer, setReportPlayer] = useState<Player | null>(null);
+  const [modalPos, setModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'training' | 'focus'>('training');
   const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
+  const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
+  const cachedReport = useMemo(() => reportPlayer ? generatePlayerReport(reportPlayer, teamPlayers, allLeaguePlayers) : null, [reportPlayer]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
   const currentCycle = TRAINING_CYCLES.find(c => c.id === selectedId) || null;
@@ -233,7 +240,7 @@ export const TrainingView: React.FC = () => {
                           : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
                         const stickyBg = idx % 2 === 0 ? 'bg-slate-950' : 'bg-[#090e1a]';
                         return (
-                          <tr key={player.id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
+                          <tr key={player.id} onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-context-menu ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
                             <td className={`py-2 px-3 sticky left-0 z-10 whitespace-nowrap ${stickyBg}`}>
                               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border mr-2 ${posColor}`}>{player.position}</span>
                               <button onClick={() => viewPlayerDetails(player.id)} className="font-black text-white hover:text-emerald-400 transition-colors cursor-pointer">{player.firstName[0]}. {player.lastName}</button>
@@ -677,6 +684,243 @@ export const TrainingView: React.FC = () => {
             </p>
          </div>
       </footer>
+
+      {/* MENU KONTEKSTOWE */}
+      {contextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[140]" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-[150] bg-slate-900 border border-white/15 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] overflow-hidden"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => { setReportPlayer(contextMenu.player); setModalPos({ x: Math.max(0, window.innerWidth / 2 - 610), y: Math.max(20, window.innerHeight / 2 - 320) }); setContextMenu(null); }}
+              className="flex items-center gap-3 px-5 py-3 w-full text-left hover:bg-white/10 transition-colors"
+            >
+              <span className="text-xl">🧠</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-white">Raport Asystenta</span>
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* MODAL RAPORTU INDYWIDUALNEGO */}
+      {reportPlayer && cachedReport && createPortal((() => {
+        const report = cachedReport;
+        const posColor = reportPlayer.position === 'GK' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+          : reportPlayer.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
+          : reportPlayer.position === 'MID' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+          : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
+        const effColor = report.positionEffectivenessScore >= 78 ? 'text-emerald-400' : report.positionEffectivenessScore >= 68 ? 'text-amber-400' : 'text-rose-400';
+        return (
+          <div
+            className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm"
+            onClick={() => { if (!dragging) setReportPlayer(null); }}
+            onMouseMove={e => { if (!dragging) return; setModalPos({ x: dragging.originX + (e.clientX - dragging.startX), y: dragging.originY + (e.clientY - dragging.startY) }); }}
+            onMouseUp={() => setDragging(null)}
+            onMouseLeave={() => setDragging(null)}
+          >
+            <div
+              className="fixed bg-slate-950 border border-white/10 rounded-[36px] w-[1220px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] p-8 flex flex-col gap-5"
+              style={{ left: modalPos.x, top: modalPos.y }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* NAGŁÓWEK — drag handle */}
+              <div
+                className="flex items-center justify-between select-none pb-5 border-b border-white/10"
+                style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+                onMouseDown={e => { e.preventDefault(); setDragging({ startX: e.clientX, startY: e.clientY, originX: modalPos.x, originY: modalPos.y }); }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-[18px] bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-3xl shrink-0">🧠</div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${posColor}`}>{reportPlayer.position}</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">OVR {reportPlayer.overallRating}</span>
+                      <span className="text-slate-700">•</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{reportPlayer.age} lat</span>
+                      <span className="text-slate-700">•</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${reportPlayer.attributes.talent >= 75 ? 'text-emerald-400' : reportPlayer.attributes.talent >= 60 ? 'text-amber-400' : 'text-slate-500'}`}>Talent {reportPlayer.attributes.talent}</span>
+                    </div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{reportPlayer.firstName} {reportPlayer.lastName}</h2>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-black text-blue-400/50 uppercase tracking-widest">Raport Indywidualny • Asystent</span>
+                  <button onClick={() => setReportPlayer(null)} className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-lg">✕</button>
+                </div>
+              </div>
+
+              {/* BODY — 3 kolumny */}
+              <div className="flex gap-5">
+
+                {/* KOLUMNA 1 — statystyki + słabe/mocne */}
+                <div className="w-[286px] shrink-0 flex flex-col gap-4">
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Statystyki Sezonowe</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(() => {
+                        const items = [
+                          { label: 'Mecze', value: String(reportPlayer.stats.matchesPlayed), color: 'text-white' },
+                          { label: 'Minuty', value: String(reportPlayer.stats.minutesPlayed), color: 'text-white' },
+                          { label: 'Bramki', value: String(reportPlayer.stats.goals), color: 'text-white' },
+                          { label: 'Asysty', value: String(reportPlayer.stats.assists), color: 'text-white' },
+                          { label: 'Żółte kartki', value: String(reportPlayer.stats.yellowCards), color: 'text-amber-400' },
+                          { label: 'Czerwone kartki', value: String(reportPlayer.stats.redCards), color: 'text-rose-400' },
+                          ...(reportPlayer.position === 'GK' ? [{ label: 'Czyste konta', value: String(reportPlayer.stats.cleanSheets), color: 'text-emerald-400' }] : []),
+                        ];
+                        return items.map((s, i) => (
+                          <div key={i} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-tight">{s.label}</span>
+                            <span className={`text-[13px] font-black tabular-nums ${s.color}`}>{s.value}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="bg-rose-950/30 border border-rose-500/20 rounded-2xl p-4 flex flex-col gap-2">
+                    <span className="text-[10px] font-black text-rose-400 uppercase tracking-[0.4em]">Słabe Strony</span>
+                    {report.weakAttributes.length > 0 ? report.weakAttributes.map(a => (
+                      <div key={a.attr} className="flex items-center justify-between">
+                        <span className="text-[12px] font-black italic uppercase tracking-tighter text-rose-300">{a.label}</span>
+                        <span className="text-[13px] font-black tabular-nums text-rose-400">{a.value}</span>
+                      </div>
+                    )) : (
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter text-rose-300/50">Brak wyraźnych słabości</p>
+                    )}
+                  </div>
+
+                  <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-2">
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.4em]">Mocne Strony</span>
+                    {report.strongAttributes.length > 0 ? report.strongAttributes.map(a => (
+                      <div key={a.attr} className="flex items-center justify-between">
+                        <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">{a.label}</span>
+                        <span className="text-[13px] font-black tabular-nums text-emerald-400">{a.value}</span>
+                      </div>
+                    )) : (
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300/50">Brak wyraźnych atutów</p>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* KOLUMNA 2 — wykres formy + ocena + skuteczność */}
+                <div className="flex-1 flex flex-col gap-4">
+                  {(() => {
+                    const ratings = (reportPlayer.stats.ratingHistory || []).slice(-15);
+                    if (ratings.length < 2) return (
+                      <div className="bg-slate-900/40 border border-white/10 rounded-2xl flex items-center justify-center h-[117px]">
+                        <span className="text-[12px] font-black text-slate-600 uppercase tracking-widest italic">Brak danych meczowych</span>
+                      </div>
+                    );
+                    const W = 546, H = 104;
+                    const PAD = { top: 12, right: 12, bottom: 22, left: 32 };
+                    const innerW = W - PAD.left - PAD.right;
+                    const innerH = H - PAD.top - PAD.bottom;
+                    const minVal = Math.max(0, Math.min(...ratings) - 0.5);
+                    const maxVal = Math.min(10, Math.max(...ratings) + 0.5);
+                    const range = maxVal - minVal || 1;
+                    const toX = (i: number) => PAD.left + (i / (ratings.length - 1)) * innerW;
+                    const toY = (v: number) => PAD.top + innerH - ((v - minVal) / range) * innerH;
+                    const pts = ratings.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+                    const area = `${toX(0)},${PAD.top + innerH} ${pts} ${toX(ratings.length - 1)},${PAD.top + innerH}`;
+                    const last = ratings[ratings.length - 1];
+                    const lc = last >= 7.5 ? '#10b981' : last >= 6.5 ? '#f59e0b' : '#f43f5e';
+                    return (
+                      <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Forma — Ostatnie Mecze</span>
+                          <span className="text-[13px] font-black italic uppercase tracking-tighter" style={{ color: lc }}>{last.toFixed(1)}</span>
+                        </div>
+                        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block' }}>
+                          <defs>
+                            <linearGradient id="fg2" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={lc} stopOpacity="0.25" />
+                              <stop offset="100%" stopColor={lc} stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+                          {[0, 0.5, 1].map((t, i) => {
+                            const y = PAD.top + innerH * (1 - t);
+                            return (
+                              <g key={i}>
+                                <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                <text x={PAD.left - 5} y={y + 4} fill="rgba(148,163,184,0.55)" fontSize="9" textAnchor="end" fontWeight="bold">{(minVal + range * t).toFixed(1)}</text>
+                              </g>
+                            );
+                          })}
+                          <polygon points={area} fill="url(#fg2)" />
+                          <polyline points={pts} fill="none" stroke={lc} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+                          {ratings.map((v, i) => {
+                            const pc = v >= 7.5 ? '#10b981' : v >= 6.5 ? '#f59e0b' : '#f43f5e';
+                            return <circle key={i} cx={toX(i)} cy={toY(v)} r={i === ratings.length - 1 ? 4.5 : 3} fill={pc} stroke="#0f172a" strokeWidth="1.5" />;
+                          })}
+                          <text x={toX(ratings.length - 1)} y={toY(last) - 8} fill={lc} fontSize="10" textAnchor="middle" fontWeight="bold">{last.toFixed(1)}</text>
+                          {ratings.map((_, i) => (
+                            <text key={i} x={toX(i)} y={H - 2} fill="rgba(148,163,184,0.35)" fontSize="8" textAnchor="middle">{i + 1}</text>
+                          ))}
+                        </svg>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex-1">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Ocena Ogólna</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter text-white leading-relaxed">{report.overallAssessment}</p>
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Skuteczność na Pozycji</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter text-white leading-relaxed">{report.positionEffectivenessText}</p>
+                  </div>
+                </div>
+
+                {/* KOLUMNA 3 — metryki + rekomendacje + inwestycja */}
+                <div className="w-[273px] shrink-0 flex flex-col gap-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-black/40 border border-white/10 rounded-xl p-2.5 flex flex-col items-center gap-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center leading-tight">Wartość</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${report.valueColor}`}>{report.valueForTeam}</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/10 rounded-xl p-2.5 flex flex-col items-center gap-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center leading-tight">Potencjał</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${report.potentialColor}`}>{report.developmentPotential}</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/10 rounded-xl p-2.5 flex flex-col items-center gap-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center leading-tight">Poz. Eff.</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${effColor}`}>{report.positionEffectivenessScore}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex-1">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Ocena Asystenta</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter text-white leading-relaxed">{report.trainingRecommendationText}</p>
+                  </div>
+
+                  <div className="bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4 flex flex-col gap-2.5">
+                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em]">Rekomendacje</span>
+                    <div className="bg-black/30 rounded-xl p-2.5 flex flex-col gap-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fokus Indywidualny</span>
+                      <span className="text-[13px] font-black italic uppercase tracking-tighter text-blue-300">{report.recommendedFocusLabel}</span>
+                    </div>
+                    <div className="bg-black/30 rounded-xl p-2.5 flex flex-col gap-1">
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Program Drużynowy</span>
+                      <span className="text-[13px] font-black italic uppercase tracking-tighter text-blue-300">{report.recommendedCycleName}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-950/30 border border-amber-500/20 rounded-2xl p-4 flex-1">
+                    <span className="block text-[10px] font-black text-amber-400 uppercase tracking-[0.4em] mb-2">Opłacalność Inwestycji</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter text-amber-200 leading-relaxed">{report.investmentText}</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
