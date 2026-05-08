@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam } from '../../types';
+import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -17,7 +17,7 @@ import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
-          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams } = useGame();
+          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -27,7 +27,7 @@ export const SquadView: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE'>('SQUAD');
+  const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
 
   const getAverageRatingBadgeClass = (rating: number | null): string => {
     if (rating === null) return 'bg-slate-700 border-slate-500 text-slate-200';
@@ -84,6 +84,44 @@ export const SquadView: React.FC = () => {
     const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     return sorted.findIndex(c => c.id === myClub.id) + 1;
   }, [leagueClubs, myClub]);
+
+  const mySchedule = useMemo(() => {
+    if (!userTeamId) return [];
+    return [...fixtures]
+      .filter(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [fixtures, userTeamId]);
+
+  const getCompLabel = (leagueId: string): string => {
+    if (leagueId === CompetitionType.POLISH_CUP) return 'PUCHAR POLSKI';
+    if (leagueId === CompetitionType.SUPER_CUP) return 'SUPERPUCHAR';
+    if (leagueId === CompetitionType.UEFA_SUPER_CUP) return 'UEFA SUPER';
+    if (leagueId === CompetitionType.FRIENDLY) return 'SPARINGI';
+    if (leagueId.startsWith('CL_')) return 'LM';
+    if (leagueId.startsWith('EL_')) return 'LE';
+    if (leagueId.startsWith('CONF_')) return 'KONF';
+    if (leagueId.startsWith('WC')) return 'MŚ';
+    if (leagueId.startsWith('PLAYOFF') || leagueId.startsWith('PROMOTION') || leagueId.startsWith('RELEGATION')) return 'BARAŻE';
+    if (leagueId === 'L_PL_1') return 'EKSTRAKLASA';
+    if (leagueId === 'L_PL_2') return '1. LIGA';
+    if (leagueId === 'L_PL_3') return '2. LIGA';
+    if (leagueId === 'L_PL_4') return '3. LIGA';
+    const league = leagues.find(l => l.id === leagueId);
+    return league ? league.name.toUpperCase() : 'LIGA';
+  };
+
+  const neutralTypes: string[] = [
+    CompetitionType.SUPER_CUP, CompetitionType.UEFA_SUPER_CUP,
+    CompetitionType.CL_FINAL, CompetitionType.EL_FINAL, CompetitionType.CONF_FINAL,
+  ];
+
+  const getVenueInfo = (f: Fixture): { label: string; color: string } => {
+    if (f.neutralVenue || neutralTypes.includes(f.leagueId as string)) {
+      return { label: 'NEUTRALNY', color: 'text-amber-400' };
+    }
+    if (f.homeTeamId === userTeamId) return { label: 'DOM', color: 'text-emerald-400' };
+    return { label: 'WYJAZD', color: 'text-sky-400' };
+  };
 
   const nationalTeamByPlayerId = useMemo(() => {
     const map = new Map<string, NationalTeam>();
@@ -681,6 +719,14 @@ export const SquadView: React.FC = () => {
               onClick={() => setActiveTab('MORALE')}
               className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border ${getMoraleInfo(myClub.morale ?? 50).border} ${getMoraleInfo(myClub.morale ?? 50).color} shadow-lg` : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
             >MORALE</button>
+            <button
+              onClick={() => setActiveTab('SCHEDULE')}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'SCHEDULE' ? 'bg-amber-500/20 border border-amber-500/50 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+            >TERMINARZ</button>
+            <button
+              onClick={() => setActiveTab('TABLE')}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'TABLE' ? 'bg-white/15 border border-white/30 text-white shadow-lg' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+            >TABELA</button>
           </div>
 
           {activeTab === 'MORALE' && (() => {
@@ -749,6 +795,224 @@ export const SquadView: React.FC = () => {
                 </div>
 
 
+              </div>
+            );
+          })()}
+
+          {activeTab === 'TABLE' && (() => {
+            const sorted = [...leagueClubs].sort((a, b) =>
+              b.stats.points - a.stats.points ||
+              b.stats.goalDifference - a.stats.goalDifference ||
+              b.stats.goalsFor - a.stats.goalsFor
+            );
+            const leagueName = getCompLabel(myClub.leagueId);
+            const total = sorted.length;
+            const isEkstraklasa = myClub.leagueId === 'L_PL_1';
+            const isL3 = myClub.leagueId === 'L_PL_3';
+            return (
+              <div className="shrink-0 bg-slate-900/40 rounded-[40px] border border-white/10 backdrop-blur-3xl shadow-2xl overflow-hidden">
+                <div className="px-6 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <span className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Tabela</span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-md border text-[9px] font-black italic uppercase tracking-tighter text-white bg-red-600 border-red-600">{leagueName}</span>
+                </div>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.02]">
+                      <th className="px-4 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-8">#</th>
+                      <th className="px-4 py-2 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Klub</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-10">M</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-10">W</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-10">R</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-10">P</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-16">G</th>
+                      <th className="px-3 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-12">+/-</th>
+                      <th className="px-4 py-2 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-14">PKT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((club, idx) => {
+                      const pos = idx + 1;
+                      const isUser = club.id === userTeamId;
+                      const logo = getClubLogo(club.id);
+                      const gd = club.stats.goalDifference;
+
+                      const isCL              = isEkstraklasa && pos === 1;
+                      const isConf            = isEkstraklasa && pos >= 2 && pos <= 3;
+                      const isPromotion       = !isEkstraklasa && pos <= 2;
+                      const isPlayoff         = !isEkstraklasa && pos >= 3 && pos <= 6;
+                      const isRelegationPO    = isL3 && pos >= 13 && pos <= 14;
+                      const isRelegation      = isL3 ? pos > total - 4 : pos > total - 3;
+
+                      const blue  = 'inset 0 1px 0 rgba(96,165,250,0.3)';
+                      const red   = 'inset 0 1px 0 rgba(248,113,113,0.3)';
+                      const orange = 'inset 0 1px 0 rgba(251,146,60,0.35)';
+                      const separatorStyle: React.CSSProperties = isEkstraklasa
+                        ? (pos === 2 || pos === 4 ? { boxShadow: blue } : pos === total - 2 ? { boxShadow: red } : {})
+                        : isL3
+                          ? (pos === 3 || pos === 7 ? { boxShadow: blue } : pos === 13 ? { boxShadow: orange } : pos === 15 ? { boxShadow: red } : {})
+                          : (pos === 3 || pos === 7 ? { boxShadow: blue } : pos === total - 2 ? { boxShadow: red } : {});
+
+                      const rowBg = isUser
+                        ? 'bg-emerald-500/15 border-l-2 border-l-emerald-400'
+                        : isCL
+                          ? 'bg-cyan-500/[0.07] border-l-2 border-l-cyan-400/60'
+                          : isConf
+                            ? 'bg-green-500/[0.07] border-l-2 border-l-green-400/60'
+                            : isPromotion
+                              ? 'bg-yellow-500/[0.07] border-l-2 border-l-yellow-400/60'
+                              : isPlayoff
+                                ? 'bg-cyan-500/[0.07] border-l-2 border-l-cyan-400/60'
+                                : isRelegationPO
+                                  ? 'bg-orange-500/[0.07] border-l-2 border-l-orange-400/60'
+                                  : isRelegation
+                                    ? 'bg-red-500/[0.07] border-l-2 border-l-red-400/60'
+                                    : 'hover:bg-white/[0.02]';
+
+                      const posColor = 'text-white';
+                      return (
+                        <tr key={club.id} className={`border-b border-white/[0.04] transition-colors ${rowBg}`} style={separatorStyle}>
+                          <td className="px-4 py-2.5 text-center align-middle">
+                            <span className={`text-[11px] font-black italic tracking-tighter ${posColor}`}>{pos}.</span>
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            <div className="flex items-center gap-3">
+                              {logo ? (
+                                <img src={logo} alt={club.shortName} className="w-5 h-5 object-contain shrink-0" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                                  <div className="flex-1" style={{ backgroundColor: club.colorsHex[0] }} />
+                                  <div className="flex-1" style={{ backgroundColor: club.colorsHex[1] || club.colorsHex[0] }} />
+                                </div>
+                              )}
+                              <span className={`text-[11px] font-black italic uppercase tracking-tighter ${isUser ? 'text-yellow-400' : 'text-white'}`}>{club.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className="text-[11px] font-black italic tracking-tighter text-slate-300">{club.stats.played}</span></td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className="text-[11px] font-black italic tracking-tighter text-emerald-400">{club.stats.wins}</span></td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className="text-[11px] font-black italic tracking-tighter text-slate-400">{club.stats.draws}</span></td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className="text-[11px] font-black italic tracking-tighter text-red-400">{club.stats.losses}</span></td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className="text-[11px] font-black italic tracking-tighter text-slate-300">{club.stats.goalsFor}:{club.stats.goalsAgainst}</span></td>
+                          <td className="px-3 py-2.5 text-center align-middle"><span className={`text-[11px] font-black italic tracking-tighter ${gd > 0 ? 'text-emerald-400' : gd < 0 ? 'text-red-400' : 'text-slate-500'}`}>{gd > 0 ? `+${gd}` : gd}</span></td>
+                          <td className="px-4 py-2.5 text-center align-middle"><span className={`text-[13px] font-black italic tracking-tighter ${isUser ? 'text-emerald-300' : 'text-white'}`}>{club.stats.points}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="px-6 py-3 border-t border-white/5 flex items-center gap-6">
+                  {isEkstraklasa ? (
+                    <>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-cyan-400"><span className="w-2 h-2 rounded-full bg-cyan-400" />Liga Mistrzów</span>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-green-400"><span className="w-2 h-2 rounded-full bg-green-400" />Puchar Konferencji</span>
+                    </>
+                  ) : isL3 ? (
+                    <>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-yellow-400"><span className="w-2 h-2 rounded-full bg-yellow-400" />Awans bezpośredni</span>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-cyan-400"><span className="w-2 h-2 rounded-full bg-cyan-400" />Baraże awansowe</span>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-orange-400"><span className="w-2 h-2 rounded-full bg-orange-400" />Baraże o utrzymanie</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-yellow-400"><span className="w-2 h-2 rounded-full bg-yellow-400" />Awans bezpośredni</span>
+                      <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-cyan-400"><span className="w-2 h-2 rounded-full bg-cyan-400" />Baraże</span>
+                    </>
+                  )}
+                  <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-red-400"><span className="w-2 h-2 rounded-full bg-red-400" />Spadek</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {activeTab === 'SCHEDULE' && (() => {
+            const isLeagueBadge = (label: string) =>
+              !['PUCHAR POLSKI','SUPERPUCHAR','UEFA SUPER','LM','LE','KONF','SPARINGI','BARAŻE','MŚ'].includes(label);
+            const compCupColors: Record<string, string> = {
+              'PUCHAR POLSKI': 'text-red-600 bg-white border-white',
+              'SUPERPUCHAR': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+              'UEFA SUPER': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+              'LM': 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+              'LE': 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+              'KONF': 'text-green-400 bg-green-500/10 border-green-500/30',
+              'SPARINGI': 'text-slate-400 bg-slate-500/10 border-slate-500/30',
+              'BARAŻE': 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+              'MŚ': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+            };
+            return (
+              <div className="shrink-0 bg-slate-900/40 rounded-[40px] border border-white/10 backdrop-blur-3xl shadow-2xl overflow-hidden">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.02]">
+                      <th className="px-6 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-28">Data</th>
+                      <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-28">Miejsce</th>
+                      <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-36">Rozgrywki</th>
+                      <th className="px-6 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500 w-20">Wynik</th>
+                      <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Przeciwnik</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mySchedule.length === 0 && (
+                      <tr><td colSpan={5} className="py-12 text-center text-[10px] font-black italic uppercase tracking-tighter opacity-20">Brak meczów w terminarzu</td></tr>
+                    )}
+                    {mySchedule.map((f, i) => {
+                      const isHome = f.homeTeamId === userTeamId;
+                      const opponentId = isHome ? f.awayTeamId : f.homeTeamId;
+                      const opponent = clubs.find(c => c.id === opponentId);
+                      const venue = getVenueInfo(f);
+                      const compLabel = getCompLabel(f.leagueId as string);
+                      const isLeague = isLeagueBadge(compLabel);
+                      const compCls = isLeague
+                        ? 'text-white bg-red-600 border-red-600'
+                        : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
+                      const isFinished = f.status === MatchStatus.FINISHED;
+                      const isPast = new Date(f.date) < currentDate;
+                      const myScore = isHome ? f.homeScore : f.awayScore;
+                      const oppScore = isHome ? f.awayScore : f.homeScore;
+                      const resultColor = isFinished
+                        ? myScore! > oppScore! ? 'text-emerald-400' : myScore! < oppScore! ? 'text-red-400' : 'text-slate-300'
+                        : 'text-slate-600';
+                      const logo = opponent ? getClubLogo(opponent.id) : null;
+                      const d = new Date(f.date);
+                      const dateStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+                      const isNext = !isPast && (i === 0 || new Date(mySchedule[i-1].date) < currentDate);
+                      return (
+                        <tr
+                          key={f.id}
+                          className={`border-b border-white/[0.04] transition-colors ${isNext ? 'bg-amber-500/[0.06] border-l-2 border-l-amber-500/50' : isPast ? 'opacity-50' : 'hover:bg-white/[0.02]'}`}
+                        >
+                          <td className="px-6 py-2.5 align-middle whitespace-nowrap">
+                            <span className="text-[11px] font-black italic uppercase tracking-tighter font-mono text-slate-300">{dateStr}</span>
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            <span className={`text-[10px] font-black italic uppercase tracking-tighter ${venue.color}`}>{venue.label}</span>
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[8px] font-black italic uppercase tracking-tighter ${compCls}`}>
+                              {compLabel}
+                            </span>
+                          </td>
+                          <td className="px-6 py-2.5 text-center align-middle">
+                            <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                              {isFinished ? `${myScore}:${oppScore}` : '-:-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            <div className="flex items-center gap-3">
+                              {logo ? (
+                                <img src={logo} alt={opponent?.name ?? ''} className="w-6 h-6 object-contain shrink-0" />
+                              ) : opponent ? (
+                                <div className="w-6 h-6 rounded-full overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                                  <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[0] }} />
+                                  <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[1] || opponent.colorsHex[0] }} />
+                                </div>
+                              ) : null}
+                              <span className="text-[11px] font-black italic uppercase tracking-tighter text-white">{opponent?.name ?? opponentId}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             );
           })()}
