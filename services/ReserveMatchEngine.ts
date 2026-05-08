@@ -1,5 +1,5 @@
 
-import { Player, Coach, PlayerPosition, HealthStatus, InjurySeverity, MatchGoalEntry, MatchCardEntry, MatchSubstitutionEntry, MatchInjuryEntry, ReserveMatchPlayerEntry } from '../types';
+import { Player, Coach, PlayerPosition, HealthStatus, InjurySeverity, MatchGoalEntry, MatchCardEntry, MatchSubstitutionEntry, MatchInjuryEntry, ReserveMatchPlayerEntry, Region } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 
 const INJURY_TYPES = ['Naciągnięcie mięśnia', 'Skręcenie kostki', 'Stłuczenie', 'Naderwanie więzadła', 'Kontuzja kolana'];
@@ -14,6 +14,9 @@ const TACTIC_PROFILES: Record<string, { atkMult: number; defMult: number }> = {
   '4-1-4-1': { atkMult: 0.90, defMult: 1.08 },
 };
 
+const POLISH_FIRST_NAMES = ['Jakub', 'Mateusz', 'Bartosz', 'Kamil', 'Łukasz', 'Piotr', 'Michał', 'Tomasz', 'Paweł', 'Marcin', 'Krzysztof', 'Grzegorz', 'Szymon', 'Maciej', 'Rafał'];
+const POLISH_LAST_NAMES = ['Kowalski', 'Nowak', 'Wiśniewski', 'Wójcik', 'Kowalczyk', 'Kamiński', 'Lewandowski', 'Zieliński', 'Szymański', 'Woźniak', 'Dąbrowski', 'Kozłowski', 'Jankowski', 'Mazur', 'Kwiatkowski'];
+
 function makeRng(seed: number) {
   let s = (seed ^ 0xdeadbeef) >>> 0;
   return (offset: number) => {
@@ -26,17 +29,95 @@ function rollRng(rng: (o: number) => number, base: number): number {
   return rng(base + Math.floor(rng(base * 7) * 9999));
 }
 
+function generateJuniorGK(seed: number, index: number): Player {
+  const rng = makeRng(seed + index * 777);
+  const firstName = POLISH_FIRST_NAMES[Math.floor(rng(1) * POLISH_FIRST_NAMES.length)];
+  const lastName = POLISH_LAST_NAMES[Math.floor(rng(2) * POLISH_LAST_NAMES.length)];
+  const gkStat = 35 + Math.floor(rng(3) * 20);
+  const low = (o: number) => 20 + Math.floor(rng(o) * 20);
+  return {
+    id: `junior_gk_temp_${seed}_${index}`,
+    firstName,
+    lastName,
+    age: 16 + Math.floor(rng(16) * 4),
+    clubId: 'JUNIOR',
+    nationality: Region.POLAND,
+    position: PlayerPosition.GK,
+    overallRating: 42 + Math.floor(rng(4) * 10),
+    attributes: {
+      strength: low(5),
+      stamina: low(6),
+      pace: low(7),
+      defending: low(8),
+      passing: low(9),
+      attacking: low(10),
+      finishing: low(11),
+      technique: low(12),
+      vision: low(13),
+      dribbling: low(14),
+      heading: low(15),
+      positioning: 30 + Math.floor(rng(17) * 15),
+      goalkeeping: gkStat,
+      freeKicks: low(18),
+      talent: 40 + Math.floor(rng(19) * 30),
+      penalties: low(20),
+      corners: low(21),
+      aggression: low(22),
+      crossing: low(23),
+      leadership: low(24),
+      mentality: 40 + Math.floor(rng(25) * 20),
+      workRate: 50 + Math.floor(rng(26) * 20),
+    },
+    stats: {
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+      cleanSheets: 0,
+      matchesPlayed: 0,
+      minutesPlayed: 0,
+      seasonalChanges: {},
+      ratingHistory: [],
+    },
+    health: { status: HealthStatus.HEALTHY },
+    condition: 75 + Math.floor(rng(27) * 15),
+    suspensionMatches: 0,
+    contractEndDate: '2099-06-30',
+    annualSalary: 0,
+    history: [],
+    boardLockoutUntil: null,
+    isUntouchable: false,
+    negotiationStep: 0,
+    negotiationLockoutUntil: null,
+    contractLockoutUntil: null,
+    fatigueDebt: 0,
+    isNegotiationPermanentBlocked: false,
+    transferLockoutUntil: null,
+    freeAgentLockoutUntil: null,
+  };
+}
+
 // Wybiera najlepszych startowych 11 z dostępnych rezerw
 function pickReserveLineup(
   reserves: Player[],
   tacticId: string,
-  rng: (o: number) => number
-): { xi: Player[]; bench: Player[] } {
+  rng: (o: number) => number,
+  seed: number
+): { xi: Player[]; bench: Player[]; juniors: Player[] } {
   const tactic = TacticRepository.getById(tacticId);
   const available = reserves.filter(p =>
     p.health.status === HealthStatus.HEALTHY &&
     p.suspensionMatches === 0
   );
+
+  const juniors: Player[] = [];
+  const availableGKCount = available.filter(p => p.position === PlayerPosition.GK).length;
+  const missingGKs = Math.max(0, 2 - availableGKCount);
+  for (let i = 0; i < missingGKs; i++) {
+    const junior = generateJuniorGK(seed, i);
+    juniors.push(junior);
+    available.push(junior);
+  }
 
   const needed: Record<PlayerPosition, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
   for (const slot of tactic.slots) {
@@ -56,32 +137,34 @@ function pickReserveLineup(
     byPos[pos].sort((a, b) => b.overallRating - a.overallRating);
   }
 
+  const fallbackOrder: Record<PlayerPosition, PlayerPosition[]> = {
+    [PlayerPosition.GK]:  [PlayerPosition.GK],
+    [PlayerPosition.DEF]: [PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD],
+    [PlayerPosition.MID]: [PlayerPosition.MID, PlayerPosition.DEF, PlayerPosition.FWD],
+    [PlayerPosition.FWD]: [PlayerPosition.FWD, PlayerPosition.MID, PlayerPosition.DEF],
+  };
+
   const xi: Player[] = [];
   const usedIds = new Set<string>();
 
   for (const pos of [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD]) {
     const count = needed[pos] || 0;
     let picked = 0;
-    for (const p of byPos[pos]) {
-      if (picked >= count) break;
-      if (!usedIds.has(p.id)) {
-        xi.push(p);
-        usedIds.add(p.id);
-        picked++;
+    for (const fallbackPos of fallbackOrder[pos]) {
+      for (const p of byPos[fallbackPos]) {
+        if (picked >= count) break;
+        if (!usedIds.has(p.id)) {
+          xi.push(p);
+          usedIds.add(p.id);
+          picked++;
+        }
       }
-    }
-    // fallback: pozycja nieobsadzona — dodaj losowego z dostępnych
-    while (picked < count) {
-      const fallback = available.find(p => !usedIds.has(p.id));
-      if (!fallback) break;
-      xi.push(fallback);
-      usedIds.add(fallback.id);
-      picked++;
+      if (picked >= count) break;
     }
   }
 
   const bench = available.filter(p => !usedIds.has(p.id)).slice(0, 8);
-  return { xi, bench };
+  return { xi, bench, juniors };
 }
 
 // Wybiera 11 zawodników przeciwnika (pierwszych po posortowaniu pozycją)
@@ -245,7 +328,7 @@ export const ReserveMatchEngine = {
     const pitchMod = pitchRoll < 0.20 ? -0.10 : pitchRoll > 0.85 ? 0.05 : 0.0;
 
     // Składy
-    const { xi: userXI, bench: userBench } = pickReserveLineup(userReserves, userTacticId, rng);
+    const { xi: userXI, bench: userBench, juniors } = pickReserveLineup(userReserves, userTacticId, rng, seed);
     const { xi: oppXI, bench: oppBench } = pickOpponentLineup(opponentPlayers);
 
     let hXI = isHome ? [...userXI] : [...oppXI];
@@ -257,7 +340,7 @@ export const ReserveMatchEngine = {
     const homePlayerIds = new Set(hXI.map(p => p.id));
     const awayPlayerIds = new Set(aXI.map(p => p.id));
     const playersById = new Map<string, Player>();
-    [...userReserves, ...opponentPlayers].forEach(player => playersById.set(player.id, player));
+    [...userReserves, ...opponentPlayers, ...juniors].forEach(player => playersById.set(player.id, player));
 
     let hScore = 0;
     let aScore = 0;
@@ -430,7 +513,7 @@ export const ReserveMatchEngine = {
       // Kontuzje (tylko zawodnicy gracza, ~0.006/min/player)
       const userXIRef = isHome ? hXI : aXI;
       for (const p of userXIRef) {
-        if (rng(offset + p.id.length + 30) < 0.006) {
+        if (rng(offset + p.id.length + 30) < 0.002) {
           const isSevere = rng(offset + p.id.length + 31) < 0.15;
           const days = isSevere
             ? 14 + Math.floor(rng(offset + p.id.length + 32) * 30)
