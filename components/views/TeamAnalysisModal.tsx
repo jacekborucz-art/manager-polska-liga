@@ -4,6 +4,7 @@ import bojoPitch from '../../Graphic/themes/bojo.png';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { TeamAnalysisReport } from '../../services/TeamAnalysisService';
+import { SportingDirectorService } from '../../services/SportingDirectorService';
 
 const POSITION_ORDER: PlayerPosition[] = [
   PlayerPosition.GK,
@@ -25,6 +26,7 @@ export const TeamAnalysisModal: React.FC<{
   onClose: () => void;
 }> = ({ club, report, onClose }) => {
   const highlightedNames = getHighlightedNames(report);
+  const directorPerspective = SportingDirectorService.getTeamAnalysisPerspective(club);
   const generatedLabel = new Date(report.generatedAt).toLocaleDateString('pl-PL', {
     day: 'numeric',
     month: 'long',
@@ -139,6 +141,39 @@ export const TeamAnalysisModal: React.FC<{
               </div>
             </div>
           </section>
+
+          {directorPerspective && (
+            <section className="rounded-[28px] border border-amber-500/20 bg-amber-500/5 p-6">
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400">Punkt Widzenia Dyrektora</div>
+                  <h3 className="text-2xl font-black italic text-white mt-2">Polityka Sportowa Klubu</h3>
+                </div>
+              </div>
+              <p className="text-[15px] leading-7 text-slate-200">{directorPerspective.summary}</p>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-5">
+                {[
+                  { title: 'Chronieni', items: directorPerspective.protected },
+                  { title: 'Do rozwoju', items: directorPerspective.development },
+                  { title: 'Do sprzedazy', items: directorPerspective.sales },
+                ].map(section => (
+                  <div key={section.title} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-300 mb-3">{section.title}</div>
+                    <div className="space-y-2 text-sm text-slate-300">
+                      {section.items.length === 0 ? (
+                        <p>Brak jednoznacznych wskazan.</p>
+                      ) : section.items.map(item => (
+                        <div key={item.playerId}>
+                          <div className="font-black text-white">{item.playerName}</div>
+                          <div className="text-xs text-slate-400">{item.note}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="rounded-[28px] border border-white/10 bg-slate-900/45 p-6">

@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { TransferOfferStatus, TransferTiming, ViewState } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { TransferSellerLogicService } from '../../services/TransferSellerLogicService';
+import { SportingDirectorService } from '../../services/SportingDirectorService';
 
 interface TransferFeedback {
   ok: boolean;
@@ -175,6 +176,15 @@ export const TransferOfferView: React.FC = () => {
   };
 
   const activeStatus = submissionFeedback?.status || latestOffer?.status || null;
+  const directorAdvisory = useMemo(() => {
+    if (!buyerClub || !buyerClub.sportingDirector || !player) return [];
+    return SportingDirectorService.getIncomingPurchaseAdvisory({
+      club: buyerClub,
+      player,
+      squad: players[userTeamId] || [],
+      fee: timing === TransferTiming.CONTRACT_END ? 0 : fee,
+    });
+  }, [buyerClub, player, players, userTeamId, fee, timing]);
   const canOpenNegotiation = activeStatus === TransferOfferStatus.PLAYER_NEGOTIATION;
   const isTransferLocked = !!(player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil));
   const isTransferOfferBanned = !!(player.transferOfferBanUntil && new Date(currentDate) < new Date(player.transferOfferBanUntil));
@@ -300,6 +310,20 @@ export const TransferOfferView: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {buyerClub.sportingDirector && directorAdvisory.length > 0 && (
+              <div className="rounded-[28px] border border-amber-500/20 bg-amber-500/5 p-5">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400">Glos Dyrektora Sportowego</p>
+                <div className="mt-4 space-y-2 text-sm text-amber-100">
+                  {directorAdvisory.map((note, index) => (
+                    <p key={`${index}_${note}`}>• {note}</p>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs text-slate-400">
+                  Budzet transferowy: <span className="font-black text-blue-300">{buyerClub.transferBudget.toLocaleString('pl-PL')} PLN</span>
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-[32px] border border-white/10 bg-white/[0.03] p-6 space-y-6">

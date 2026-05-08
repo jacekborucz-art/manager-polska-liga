@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { IncomingOfferStatus, TransferTiming, ViewState, Player } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { IncomingTransferService } from '../../services/IncomingTransferService';
+import { SportingDirectorService } from '../../services/SportingDirectorService';
 
 const COUNTER_STEPS = [5_000, 10_000, 20_000, 50_000, 100_000];
 
@@ -105,6 +106,14 @@ export const IncomingOfferView: React.FC = () => {
 
   const currentDisplayFee = isAICountered ? (offer.aiCounterFee ?? offer.fee) : offer.fee;
   const buyerCountryLabel = buyerClub.country ?? buyerLeague?.name ?? buyerClub.leagueId;
+  const directorAdvisory = sellerClub.sportingDirector
+    ? SportingDirectorService.getIncomingSaleAdvisory({
+        club: sellerClub,
+        player,
+        squad: players[userTeamId] || [],
+        fee: currentDisplayFee,
+      })
+    : [];
 
   return (
     <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-6 relative overflow-hidden">
@@ -232,6 +241,17 @@ export const IncomingOfferView: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {sellerClub.sportingDirector && directorAdvisory.length > 0 && (
+              <div className="rounded-[20px] border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400 mb-2">Glos dyrektora sportowego</p>
+                <div className="space-y-2 text-xs text-amber-100 leading-relaxed">
+                  {directorAdvisory.map((note, index) => (
+                    <p key={`${index}_${note}`}>• {note}</p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Stany terminalne */}
             {offer.status === IncomingOfferStatus.EXPIRED && (

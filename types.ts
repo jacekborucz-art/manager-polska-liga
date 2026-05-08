@@ -976,9 +976,16 @@ export interface SportingDirectorPolicy {
   sellCandidates: SportingDirectorPolicyItem[];
   developmentPlayers: SportingDirectorPolicyItem[];
   summary: string;
+  budgetDirective?: string;
+  transferBudgetAdjustment?: number;
 }
 
-export type SportingDirectorObjectiveType = 'POINTS_RUN' | 'DEFENSIVE_RUN' | 'YOUTH_DEVELOPMENT';
+export type SportingDirectorObjectiveType =
+  | 'POINTS_RUN'
+  | 'DEFENSIVE_RUN'
+  | 'YOUTH_DEVELOPMENT'
+  | 'PLAYER_MINUTES'
+  | 'WAGE_DISCIPLINE';
 export type SportingDirectorObjectiveResponse = 'ACCEPT' | 'NEGOTIATE' | 'CHALLENGE';
 
 export interface SportingDirectorObjective {
@@ -986,7 +993,7 @@ export interface SportingDirectorObjective {
   type: SportingDirectorObjectiveType;
   issuedAt: string;
   dueAt: string;
-  status: 'ACTIVE' | 'COMPLETED' | 'FAILED';
+  status: 'ACTIVE' | 'AWAITING_REVIEW' | 'COMPLETED' | 'FAILED';
   title: string;
   description: string;
   target: number;
@@ -994,6 +1001,12 @@ export interface SportingDirectorObjective {
   baselinePlayed: number;
   baselineGoalsAgainst: number;
   baselineYouthAppearances: number;
+  baselineYouthMinutes?: number;
+  baselinePlayerMinutes?: number;
+  baselineWageBill?: number;
+  targetPlayerId?: string;
+  targetPlayerName?: string;
+  contextTag?: 'STANDARD' | 'ULTIMATUM' | 'PLAYER_PLAN' | 'WAGE_ALERT';
   managerResponse?: 'ACCEPTED' | 'NEGOTIATED' | 'CHALLENGED';
   renegotiated?: boolean;
   resultNote?: string;
@@ -1037,6 +1050,8 @@ export interface Club {
   lastSportingDirectorPolicyDate?: string;
   lastSportingDirectorRelationshipEventDate?: string;
   lastSportingDirectorObjectiveDate?: string;
+  lastSportingDirectorCommunicationDate?: string;
+  lastSportingDirectorBudgetAdjustmentDate?: string;
   sportingDirectorBoardInfluence?: number;
   sportingDirectorPolicy?: SportingDirectorPolicy;
   sportingDirectorObjective?: SportingDirectorObjective;

@@ -527,6 +527,39 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
 
   // Guard: śledzi ID maili już wysłanych w trakcie sesji (by nie duplikować przy stale closure)
   const sentMailIdsRef = React.useRef<Set<string>>(new Set());
+  const sportingDirectorObjectiveResponseLockRef = React.useRef<string | null>(null);
+
+  const buildMailFingerprint = useCallback((mail: MailMessage): string => {
+    const dateKey = mail.date instanceof Date ? mail.date.toISOString() : new Date(mail.date).toISOString();
+    return [
+      mail.id,
+      mail.sender,
+      mail.role,
+      mail.subject,
+      mail.body,
+      mail.type,
+      dateKey,
+      mail.metadata ? JSON.stringify(mail.metadata) : '',
+    ].join('||');
+  }, []);
+
+  const prependUniqueMessages = useCallback((incoming: MailMessage[], directorOnly = false) => {
+    if (incoming.length === 0) return;
+
+    setMessages(prev => {
+      const existing = new Set(prev.map(buildMailFingerprint));
+      const nextUnique = incoming.filter(mail => {
+        if (directorOnly && mail.role !== 'Dyrektor sportowy') return true;
+        const fingerprint = buildMailFingerprint(mail);
+        if (existing.has(fingerprint)) return false;
+        existing.add(fingerprint);
+        return true;
+      });
+
+      if (nextUnique.length === 0) return prev;
+      return [...nextUnique, ...prev];
+    });
+  }, [buildMailFingerprint]);
 
   // Memoized allFixtures
   const allFixtures = useMemo(() => {
@@ -600,6 +633,23 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
   const navigateWithoutHistory = useCallback((view: ViewState) => {
     setViewState(view);
   }, []);
+
+  useEffect(() => {
+    if (!userTeamId) {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+      return;
+    }
+
+    const objective = clubs.find(club => club.id === userTeamId)?.sportingDirectorObjective;
+    if (!objective || objective.status !== 'ACTIVE') {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+      return;
+    }
+
+    if (sportingDirectorObjectiveResponseLockRef.current && sportingDirectorObjectiveResponseLockRef.current !== objective.id) {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+    }
+  }, [clubs, userTeamId]);
 
   const generateSchedules = (template: SeasonTemplate, currentClubs: Club[]): Record<number, LeagueSchedule> => {
     const schedules: Record<number, LeagueSchedule> = {};
@@ -4592,7 +4642,17 @@ const finalResult: SimulationOutput = {
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
       const newMails = MailService.generateDailyMails(dateToProcess, userClub, recoveredPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, lineups[userTeamId]);
-      if (newMails.length > 0) setMessages(prev => [...newMails, ...prev]);
+      if (newMails.length > 0) prependUniqueMessages(newMails);
+
+      const directorCommunication = SportingDirectorService.generateCommunicationMails({
+        club: userClub,
+        players: recoveredPlayers[userTeamId] || [],
+        date: dateToProcess,
+        recentFixture,
+      });
+      if (directorCommunication.length > 0) {
+        prependUniqueMessages(directorCommunication, true);
+      }
     }
 
     const nextDay = new Date(currentDate);
@@ -4613,7 +4673,7 @@ const finalResult: SimulationOutput = {
         });
 
         if (!objectiveReview.mail) return prev;
-        setMessages(prevMessages => [objectiveReview.mail!, ...prevMessages]);
+        prependUniqueMessages([objectiveReview.mail], true);
         return prev.map(c => c.id === userTeamId ? objectiveReview.updatedClub : c);
       });
     }
@@ -4637,7 +4697,7 @@ const finalResult: SimulationOutput = {
         });
 
         if (!policy.mail) return prev;
-        setMessages(prevMessages => [policy.mail!, ...prevMessages]);
+        prependUniqueMessages([policy.mail], true);
         return prev.map(c => c.id === userTeamId ? policy.updatedClub : c);
       });
     }
@@ -4666,12 +4726,27 @@ const finalResult: SimulationOutput = {
           players: userSquad,
           date: nextDay,
         });
+        const budgetAdjustment = SportingDirectorService.applyTransferBudgetAdjustment({
+          club: objective.updatedClub,
+          players: userSquad,
+          date: nextDay,
+        });
 
-        const directorMails = [objective.mail, relationshipPressure.mail, review.mail].filter(Boolean) as MailMessage[];
+        const directorMails = [
+          objective.mail,
+          relationshipPressure.mail,
+          review.mail,
+          budgetAdjustment.mail,
+          ...SportingDirectorService.generateCommunicationMails({
+            club: budgetAdjustment.updatedClub,
+            players: userSquad,
+            date: nextDay,
+          }),
+        ].filter(Boolean) as MailMessage[];
         if (directorMails.length > 0) {
-          setMessages(prevMessages => [...directorMails, ...prevMessages]);
+          prependUniqueMessages(directorMails, true);
         }
-        return prev.map(c => c.id === userTeamId ? objective.updatedClub : c);
+        return prev.map(c => c.id === userTeamId ? budgetAdjustment.updatedClub : c);
       });
     }
     // --- END SPORTING DIRECTOR ---
@@ -6430,6 +6505,17 @@ const finalResult: SimulationOutput = {
       return;
     }
 
+    if (sportingDirectorObjectiveResponseLockRef.current === userClub.sportingDirectorObjective.id) {
+      showGameNotification({
+        title: 'Odpowiedz juz wyslana',
+        message: 'Dyrektor czeka juz na rozliczenie tego celu.',
+        tone: 'info',
+      });
+      return;
+    }
+
+    sportingDirectorObjectiveResponseLockRef.current = userClub.sportingDirectorObjective.id;
+
     const decision = SportingDirectorService.respondToObjective({
       club: userClub,
       date: currentDate,
@@ -6438,7 +6524,7 @@ const finalResult: SimulationOutput = {
 
     setClubs(prev => prev.map(club => club.id === userTeamId ? decision.updatedClub : club));
     if (decision.mail) {
-      setMessages(prev => [decision.mail!, ...prev]);
+      prependUniqueMessages([decision.mail], true);
     }
     showGameNotification({
       title: 'Rozmowa z dyrektorem',
@@ -6471,7 +6557,7 @@ const finalResult: SimulationOutput = {
 
         if (directorDecision.blocked) {
           setClubs(prev => prev.map(c => c.id === userTeamId ? directorDecision.updatedClub : c));
-          if (directorDecision.mail) setMessages(prev => [directorDecision.mail!, ...prev]);
+          if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
           alert(`Dyrektor sportowy blokuje ruch: ${directorDecision.message}`);
           return;
         }
@@ -6572,7 +6658,7 @@ const finalResult: SimulationOutput = {
           if (directorDecision.blocked) {
             updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
             setClubs(prevClubs => prevClubs.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
-            if (directorDecision.mail) setMessages(prevMessages => [directorDecision.mail!, ...prevMessages]);
+            if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
             alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
             return updated;
           }
@@ -6631,7 +6717,7 @@ const finalResult: SimulationOutput = {
           o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
         ));
         setClubs(prev => prev.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
-        if (directorDecision.mail) setMessages(prev => [directorDecision.mail!, ...prev]);
+        if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
         alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
         return;
       }
@@ -7256,7 +7342,7 @@ const finalResult: SimulationOutput = {
 
     if (directorPurchaseDecision?.blocked) {
       setClubs(prev => prev.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club));
-      if (directorPurchaseDecision.mail) setMessages(prev => [directorPurchaseDecision.mail!, ...prev]);
+      if (directorPurchaseDecision.mail) prependUniqueMessages([directorPurchaseDecision.mail], true);
       return {
         ok: false,
         status: 'VALIDATION_ERROR',
@@ -7265,13 +7351,21 @@ const finalResult: SimulationOutput = {
       };
     }
 
+    const finalFee = directorPurchaseDecision?.negotiatedFee && directorPurchaseDecision.negotiatedFee < readyOffer.fee
+      ? directorPurchaseDecision.negotiatedFee
+      : readyOffer.fee;
+    const finalReadyOffer: TransferOffer = {
+      ...readyOffer,
+      fee: finalFee,
+    };
+
     const clubsAfterDirectorApproval = directorPurchaseDecision && directorPurchaseDecision.relationDelta !== 0
       ? clubs.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club)
       : clubs;
 
     if (transferOffer.timing !== TransferTiming.IMMEDIATE) {
       const agreedOffer: TransferOffer = {
-        ...readyOffer,
+        ...finalReadyOffer,
         status: TransferOfferStatus.AGREED_PRECONTRACT,
         effectiveDate: transferOffer.effectiveDate || targetPlayer.contractEndDate
       };
@@ -7280,7 +7374,7 @@ const finalResult: SimulationOutput = {
         setClubs(clubsAfterDirectorApproval);
       }
       setTransferOffers(prev => prev.map(offer => offer.id === offerId ? agreedOffer : offer));
-      setMessages(prev => [
+      prependUniqueMessages([
         ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
         {
         id: `MAIL_TRANSFER_PRECONTRACT_DONE_${agreedOffer.id}`,
@@ -7294,7 +7388,7 @@ const finalResult: SimulationOutput = {
         isRead: false,
         type: MailType.SYSTEM,
         priority: 98
-      }, ...prev]);
+      }]);
 
       return {
         ok: true,
@@ -7307,7 +7401,7 @@ const finalResult: SimulationOutput = {
     }
 
     const execution = TransferExecutionService.finalizeTransfer(
-      readyOffer,
+      finalReadyOffer,
       clubsAfterDirectorApproval,
       players,
       currentDate
@@ -7343,24 +7437,24 @@ const finalResult: SimulationOutput = {
     });
 
     const completedOffer: TransferOffer = {
-      ...readyOffer,
+      ...finalReadyOffer,
       status: TransferOfferStatus.COMPLETED
     };
 
     setTransferOffers(prev => prev.map(offer => offer.id === offerId ? completedOffer : offer));
-    setMessages(prev => [
+    prependUniqueMessages([
       ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
       {
       id: `MAIL_TRANSFER_DONE_${completedOffer.id}`,
       sender: 'Centrum transferowe',
       role: 'System rejestracji transferow',
       subject: `Transfer potwierdzony: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
-      body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolacza do ${buyerClub.name}. Klub ${sellerClub.name} zaakceptowal kwote ${readyOffer.fee.toLocaleString()} PLN, a zawodnik podpisal kontrakt na ${contractInput.years} lata.`,
+      body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolacza do ${buyerClub.name}. Klub ${sellerClub.name} zaakceptowal kwote ${completedOffer.fee.toLocaleString()} PLN, a zawodnik podpisal kontrakt na ${contractInput.years} lata.`,
       date: new Date(currentDate),
       isRead: false,
       type: MailType.SYSTEM,
       priority: 98
-    }, ...prev]);
+    }]);
 
     return {
       ok: true,
@@ -7460,10 +7554,10 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
 
     if (directorFreeAgentDecision?.blocked) {
       setClubs(prev => prev.map(c => c.id === userTeamId ? directorFreeAgentDecision.updatedClub : c));
-      setMessages(prev => [
-        ...(directorFreeAgentDecision.mail ? [directorFreeAgentDecision.mail] : []),
-        ...prev.filter(existingMail => existingMail.id !== mailId)
-      ]);
+      setMessages(prev => prev.filter(existingMail => existingMail.id !== mailId));
+      if (directorFreeAgentDecision.mail) {
+        prependUniqueMessages([directorFreeAgentDecision.mail], true);
+      }
 
       return showGameNotification({
         title: 'Weto dyrektora sportowego',
@@ -7527,10 +7621,10 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     }));
 
     // 4. Usuń wiadomość e-mail
-    setMessages(prev => [
-      ...(directorFreeAgentDecision?.mail ? [directorFreeAgentDecision.mail] : []),
-      ...prev.filter(m => m.id !== mailId)
-    ]);
+    setMessages(prev => prev.filter(m => m.id !== mailId));
+    if (directorFreeAgentDecision?.mail) {
+      prependUniqueMessages([directorFreeAgentDecision.mail], true);
+    }
     return showGameNotification({
       title: 'Transfer sfinalizowany',
       message: `${playerToSign.firstName} ${playerToSign.lastName} dolaczyl do kadry ${userClub?.name || ''}.`,

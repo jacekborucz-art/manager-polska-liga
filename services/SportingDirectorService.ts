@@ -47,6 +47,14 @@ const PERSONALITIES: SportingDirectorPersonality[] = [
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
+const slugify = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
+
 const randomInt = (min: number, max: number, rng: () => number): number =>
   Math.floor(min + rng() * (max - min + 1));
 
@@ -156,6 +164,35 @@ const getExpectedPosition = (club: Club, leagueSize: number): number => {
   return clamp(Math.round(leagueSize + 1 - (reputation / 10) * leagueSize), 1, leagueSize);
 };
 
+const getResultScoreFloor = (params: {
+  club: Club;
+  leaguePosition: number;
+  expectedPosition: number;
+  boardConfidence: number;
+}): number => {
+  const { club, leaguePosition, expectedPosition, boardConfidence } = params;
+  const outperformance = expectedPosition - leaguePosition;
+
+  if (leaguePosition === 1) {
+    return expectedPosition >= 4 ? 84 : 78;
+  }
+
+  if (leaguePosition === 2) {
+    if (expectedPosition >= 5) return 78;
+    if (expectedPosition >= 3) return 72;
+  }
+
+  if (outperformance >= 4) return 74;
+  if (outperformance >= 2) return 68;
+  if (leaguePosition <= expectedPosition) return boardConfidence >= 80 ? 64 : 60;
+
+  if ((club.boardConfidence ?? 75) >= 88 && outperformance >= 1) {
+    return 66;
+  }
+
+  return 0;
+};
+
 const getRecentFormScore = (club: Club): number => {
   const recent = (club.stats.form || []).slice(-5);
   if (recent.length === 0) return 0;
@@ -171,8 +208,12 @@ const getYouthUsageScore = (players: Player[]): number => {
   const prospects = players.filter(player => player.age <= 21 && player.attributes.talent >= 70);
   if (prospects.length === 0) return 55;
 
-  const totalStartsSignal = prospects.reduce((sum, player) => sum + Math.min(player.stats.matchesPlayed, 12), 0);
-  return clamp((totalStartsSignal / Math.max(1, prospects.length * 8)) * 100, 0, 100);
+  const totalMinutesSignal = prospects.reduce((sum, player) => {
+    const playerCap = player.attributes.talent >= 80 ? 540 : 360;
+    return sum + Math.min(getPlayerMinutes(player), playerCap);
+  }, 0);
+  const maxSignal = prospects.reduce((sum, player) => sum + (player.attributes.talent >= 80 ? 540 : 360), 0);
+  return clamp((totalMinutesSignal / Math.max(1, maxSignal)) * 100, 0, 100);
 };
 
 const getFinancialScore = (club: Club): number => {
@@ -218,6 +259,31 @@ const isYoungAsset = (player: Player): boolean =>
 const getEstimatedValue = (player: Player): number =>
   player.marketValue || player.transferListPrice || Math.max(100_000, player.overallRating * player.overallRating * 1200);
 
+const getTotalWageBill = (players: Player[]): number =>
+  players.reduce((sum, player) => sum + Math.max(0, player.annualSalary || 0), 0);
+
+const getPlayerMinutes = (player: Player | undefined): number =>
+  player?.stats?.minutesPlayed ?? Math.max(0, (player?.stats?.matchesPlayed ?? 0) * 70);
+
+const getYouthProspects = (players: Player[]): Player[] =>
+  players.filter(player => player.age <= 21 && player.attributes.talent >= 68);
+
+const getYouthMinutesSignal = (players: Player[]): number =>
+  getYouthProspects(players).reduce((sum, player) => sum + getPlayerMinutes(player), 0);
+
+const getUnderusedYouthProspects = (club: Club, players: Player[]): Player[] => {
+  const matchesPlayed = Math.max(1, club.stats.played);
+  return getYouthProspects(players).filter(player => {
+    const minutes = getPlayerMinutes(player);
+    const baseline = player.attributes.talent >= 80
+      ? Math.min(540, matchesPlayed * 45)
+      : player.attributes.talent >= 74
+        ? Math.min(420, matchesPlayed * 32)
+        : Math.min(300, matchesPlayed * 24);
+    return minutes < baseline;
+  });
+};
+
 const buildDirectorMail = (params: {
   club: Club;
   director: SportingDirector;
@@ -225,8 +291,11 @@ const buildDirectorMail = (params: {
   subject: string;
   body: string;
   priority?: number;
+  key?: string;
 }): MailMessage => ({
-  id: `SPORTING_DIRECTOR_${params.club.id}_${params.date.getTime()}_${Math.round(Math.random() * 10000)}`,
+  id: params.key
+    ? `SPORTING_DIRECTOR_${slugify(params.club.id)}_${slugify(params.key)}`
+    : `SPORTING_DIRECTOR_${slugify(params.club.id)}_${params.date.getTime()}_${slugify(params.subject)}`,
   sender: `${params.director.firstName} ${params.director.lastName}`,
   role: 'Dyrektor sportowy',
   subject: params.subject,
@@ -258,8 +327,8 @@ const pickProtectedPlayers = (squad: Player[], director: SportingDirector): Spor
   const candidates = [...squad]
     .filter(player => player.squadRole === 'KEY_PLAYER' || player.overallRating >= 68 || isYoungAsset(player))
     .sort((a, b) =>
-      ((b.squadRole === 'KEY_PLAYER' ? 16 : 0) + b.overallRating + b.attributes.talent * 0.35 + (isYoungAsset(b) ? director.developmentVision : 0)) -
-      ((a.squadRole === 'KEY_PLAYER' ? 16 : 0) + a.overallRating + a.attributes.talent * 0.35 + (isYoungAsset(a) ? director.developmentVision : 0))
+      ((b.squadRole === 'KEY_PLAYER' ? 16 : 0) + b.overallRating + b.attributes.talent * 0.35 + (isYoungAsset(b) ? director.developmentVision : 0) + ((b.attributes.leadership ?? 0) >= 80 ? 10 : 0)) -
+      ((a.squadRole === 'KEY_PLAYER' ? 16 : 0) + a.overallRating + a.attributes.talent * 0.35 + (isYoungAsset(a) ? director.developmentVision : 0) + ((a.attributes.leadership ?? 0) >= 80 ? 10 : 0))
     );
 
   return uniqueById(candidates).slice(0, 3).map(player => {
@@ -322,9 +391,7 @@ const getPositionFitScore = (player: Player, squad: Player[]): number => {
 };
 
 const getYouthAppearanceSignal = (players: Player[]): number =>
-  players
-    .filter(player => player.age <= 21 && player.attributes.talent >= 68)
-    .reduce((sum, player) => sum + player.stats.matchesPlayed, 0);
+  getYouthProspects(players).reduce((sum, player) => sum + player.stats.matchesPlayed, 0);
 
 const addDaysIso = (date: Date, days: number): string => {
   const next = new Date(date);
@@ -333,10 +400,31 @@ const addDaysIso = (date: Date, days: number): string => {
 };
 
 const chooseObjectiveType = (club: Club, players: Player[], director: SportingDirector): SportingDirectorObjectiveType => {
-  const hasYouthProspect = players.some(player => player.age <= 21 && player.attributes.talent >= 68);
+  const underusedYouthProspects = getUnderusedYouthProspects(club, players);
+  const youthUsageScore = getYouthUsageScore(players);
+  const wageBill = getTotalWageBill(players);
+  const averageSalary = players.length > 0 ? wageBill / players.length : 0;
+  const payrollPressure = club.budget < averageSalary * 4 || wageBill > Math.max(club.budget * 0.8, 6_000_000);
 
-  if (hasYouthProspect && (director.personality === 'TALENT_HUNTER' || director.personality === 'VISIONARY' || director.developmentVision >= 15)) {
-    return 'YOUTH_DEVELOPMENT';
+  if ((director.relationshipWithManager < 30 && (club.boardConfidence ?? 75) < 46) || ((club.boardConfidence ?? 75) < 35 && director.control >= 14)) {
+    return 'POINTS_RUN';
+  }
+
+  if (payrollPressure && director.financialDiscipline >= 14) {
+    return 'WAGE_DISCIPLINE';
+  }
+
+  if (
+    underusedYouthProspects.length > 0 &&
+    youthUsageScore < 58 &&
+    (director.personality === 'TALENT_HUNTER' || director.personality === 'VISIONARY' || director.developmentVision >= 15)
+  ) {
+    const topProspect = [...underusedYouthProspects].sort((a, b) =>
+      b.attributes.talent - a.attributes.talent ||
+      b.overallRating - a.overallRating ||
+      getPlayerMinutes(a) - getPlayerMinutes(b)
+    )[0];
+    return (director.developmentVision >= 15 && (topProspect?.attributes.talent ?? 0) >= 74) ? 'PLAYER_MINUTES' : 'YOUTH_DEVELOPMENT';
   }
 
   if (director.personality === 'ACCOUNTANT' || director.control >= 15) {
@@ -352,18 +440,51 @@ const chooseObjectiveType = (club: Club, players: Player[], director: SportingDi
 
 const buildObjectiveDetails = (
   type: SportingDirectorObjectiveType,
-  director: SportingDirector
-): { title: string; description: string; target: number } => {
+  director: SportingDirector,
+  club?: Club,
+  focusPlayer?: Player | null,
+  squad?: Player[]
+): {
+  title: string;
+  description: string;
+  target: number;
+  dueDays?: number;
+  contextTag?: SportingDirectorObjective['contextTag'];
+} => {
   const demanding = director.relationshipWithManager < 35 || director.ambition >= 15 || director.control >= 15;
 
   switch (type) {
+    case 'PLAYER_MINUTES': {
+      const playerLabel = focusPlayer ? `${focusPlayer.firstName} ${focusPlayer.lastName}` : 'wskazanego mlodego zawodnika';
+      return {
+        title: `Cel dyrektora: minuty dla ${focusPlayer?.lastName ?? 'mlodego'}`,
+        description: demanding
+          ? `Chce, zeby ${playerLabel} dostal co najmniej 270 minut w najblizszych 5 meczach. To jest dla mnie test, czy sztab rzeczywiscie rozwija talent.`
+          : `Oczekuje, ze ${playerLabel} dostanie co najmniej 180 minut w najblizszych tygodniach. Potrzebuje dla niego realnej sciezki rozwoju.`,
+        target: demanding ? 270 : 180,
+        dueDays: demanding ? 35 : 28,
+      };
+    }
+    case 'WAGE_DISCIPLINE': {
+      const wageBill = getTotalWageBill(squad || []);
+      const reductionTarget = Math.max(180_000, Math.round(wageBill * (demanding ? 0.07 : 0.045)));
+      return {
+        title: 'Cel dyrektora: obnizyc budzet plac',
+        description: demanding
+          ? `Musisz obciac roczny budzet plac przynajmniej o ${reductionTarget.toLocaleString('pl-PL')} PLN. Ta struktura wynagrodzen staje sie dla klubu ryzykowna.`
+          : `Chce zobaczyc redukcje budzetu plac o co najmniej ${reductionTarget.toLocaleString('pl-PL')} PLN. Potrzebujemy wiekszej dyscypliny finansowej.`,
+        target: reductionTarget,
+        dueDays: 35,
+        contextTag: 'WAGE_ALERT',
+      };
+    }
     case 'YOUTH_DEVELOPMENT':
       return {
         title: 'Cel dyrektora: minuty dla mlodych',
         description: demanding
-          ? 'W najblizszych tygodniach oczekuje co najmniej 4 wystepow zawodnikow U21 o wysokim potencjale.'
-          : 'W najblizszych tygodniach oczekuje co najmniej 3 wystepow zawodnikow U21 o wysokim potencjale.',
-        target: demanding ? 4 : 3,
+          ? 'W najblizszych tygodniach oczekuje co najmniej 360 lacznych minut dla zawodnikow U21 o wysokim potencjale.'
+          : 'W najblizszych tygodniach oczekuje co najmniej 240 lacznych minut dla zawodnikow U21 o wysokim potencjale.',
+        target: demanding ? 360 : 240,
       };
     case 'DEFENSIVE_RUN':
       return {
@@ -375,6 +496,15 @@ const buildObjectiveDetails = (
       };
     case 'POINTS_RUN':
     default:
+      if ((club?.boardConfidence ?? 75) < 40 || director.relationshipWithManager < 30) {
+        return {
+          title: 'Cel dyrektora: ultimatum punktowe',
+          description: 'To jest ultimatum. Oczekuje 7 punktow w 5 meczach ligowych. Jesli nie bedzie reakcji, moja cierpliwosc i wplyw na zarzad wyraznie sie zmienia.',
+          target: 7,
+          dueDays: 35,
+          contextTag: 'ULTIMATUM',
+        };
+      }
       return {
         title: 'Cel dyrektora: seria punktowa',
         description: demanding
@@ -400,11 +530,36 @@ const evaluateObjectiveProgress = (
   }
 
   if (objective.type === 'YOUTH_DEVELOPMENT') {
-    const youthAppearances = getYouthAppearanceSignal(players) - objective.baselineYouthAppearances;
+    const usesLegacyAppearances = objective.target <= 10 && objective.baselineYouthMinutes == null;
+    const youthProgress = usesLegacyAppearances
+      ? getYouthAppearanceSignal(players) - objective.baselineYouthAppearances
+      : getYouthMinutesSignal(players) - (objective.baselineYouthMinutes ?? objective.baselineYouthAppearances);
     return {
-      completed: youthAppearances >= objective.target,
-      progress: youthAppearances,
-      note: `Wystepy mlodych zawodnikow: ${youthAppearances}/${objective.target}.`,
+      completed: youthProgress >= objective.target,
+      progress: youthProgress,
+      note: usesLegacyAppearances
+        ? `Wystepy mlodych zawodnikow: ${youthProgress}/${objective.target}.`
+        : `Minuty mlodych zawodnikow: ${youthProgress}/${objective.target}.`,
+    };
+  }
+
+  if (objective.type === 'PLAYER_MINUTES') {
+    const targetPlayer = players.find(player => player.id === objective.targetPlayerId);
+    const gainedMinutes = getPlayerMinutes(targetPlayer) - (objective.baselinePlayerMinutes ?? 0);
+    return {
+      completed: gainedMinutes >= objective.target,
+      progress: gainedMinutes,
+      note: `${objective.targetPlayerName ?? 'Wskazany zawodnik'} dostal ${gainedMinutes}/${objective.target} minut.`,
+    };
+  }
+
+  if (objective.type === 'WAGE_DISCIPLINE') {
+    const currentWageBill = getTotalWageBill(players);
+    const saved = Math.max(0, (objective.baselineWageBill ?? currentWageBill) - currentWageBill);
+    return {
+      completed: saved >= objective.target,
+      progress: saved,
+      note: `Redukcja budzetu plac: ${saved.toLocaleString('pl-PL')}/${objective.target.toLocaleString('pl-PL')} PLN.`,
     };
   }
 
@@ -425,7 +580,16 @@ const softenObjective = (objective: SportingDirectorObjective): SportingDirector
   }
 
   if (objective.type === 'YOUTH_DEVELOPMENT') {
-    return { ...objective, target: Math.max(1, objective.target - 1), dueAt };
+    const nextTarget = objective.target <= 10 ? Math.max(1, objective.target - 1) : Math.max(120, objective.target - 90);
+    return { ...objective, target: nextTarget, dueAt };
+  }
+
+  if (objective.type === 'PLAYER_MINUTES') {
+    return { ...objective, target: Math.max(90, objective.target - 90), dueAt };
+  }
+
+  if (objective.type === 'WAGE_DISCIPLINE') {
+    return { ...objective, target: Math.max(100_000, Math.round(objective.target * 0.75)), dueAt };
   }
 
   return { ...objective, target: objective.target + 2, dueAt };
@@ -437,7 +601,16 @@ const sharpenObjective = (objective: SportingDirectorObjective): SportingDirecto
   }
 
   if (objective.type === 'YOUTH_DEVELOPMENT') {
-    return { ...objective, target: objective.target + 1 };
+    const nextTarget = objective.target <= 10 ? objective.target + 1 : objective.target + 90;
+    return { ...objective, target: nextTarget };
+  }
+
+  if (objective.type === 'PLAYER_MINUTES') {
+    return { ...objective, target: objective.target + 90 };
+  }
+
+  if (objective.type === 'WAGE_DISCIPLINE') {
+    return { ...objective, target: Math.round(objective.target * 1.2) };
   }
 
   return { ...objective, target: Math.max(1, objective.target - 1) };
@@ -498,7 +671,9 @@ const buildReviewBody = (params: {
     opening,
     '',
     `Ocena miesiaca: ${Math.round(score)}/100.`,
-    `Pozycja w lidze: ${leaguePosition}. Oczekiwana pozycja wedlug profilu klubu: ${expectedPosition}.`,
+    leaguePosition <= expectedPosition
+      ? `Pozycja w lidze: ${leaguePosition}. To wynik na poziomie lub powyzej oczekiwan klubu (${expectedPosition}).`
+      : `Pozycja w lidze: ${leaguePosition}. To jest ponizej oczekiwanego poziomu dla klubu (${expectedPosition}).`,
     `Forma z ostatnich spotkan: ${Math.round(formScore)}/100.`,
     youthLine,
     financeLine,
@@ -510,6 +685,81 @@ const buildReviewBody = (params: {
     `${director.firstName} ${director.lastName}`,
     `Dyrektor sportowy ${club.name}`,
   ].join('\n');
+};
+
+const getDevelopmentTarget = (players: Player[], club?: Club): Player | null => {
+  const candidatePool = club ? getUnderusedYouthProspects(club, players) : getYouthProspects(players);
+  return [...candidatePool]
+    .sort((a, b) =>
+      b.attributes.talent - a.attributes.talent ||
+      b.overallRating - a.overallRating ||
+      getPlayerMinutes(a) - getPlayerMinutes(b)
+    )[0] ?? null;
+};
+
+const hasAdequateReplacement = (player: Player, squad: Player[]): boolean =>
+  squad.some(candidate =>
+    candidate.id !== player.id &&
+    candidate.position === player.position &&
+    candidate.overallRating >= player.overallRating - 5
+  );
+
+const isLockerRoomLeader = (player: Player, club: Club): boolean =>
+  club.captainId === player.id || (player.attributes.leadership ?? 0) >= 80;
+
+const hasMarketingWeight = (player: Player): boolean =>
+  player.overallRating >= 77 ||
+  (player.stats.goals ?? 0) + (player.stats.assists ?? 0) >= 14;
+
+const buildDirectorAdvice = (params: {
+  club: Club;
+  player?: Player;
+  squad?: Player[];
+  fee?: number;
+  salary?: number;
+  years?: number;
+}): string[] => {
+  const { club, player, squad = [], fee, salary, years } = params;
+  const director = club.sportingDirector;
+  if (!director) return [];
+
+  const notes: string[] = [];
+  if (player) {
+    if (isYoungAsset(player) && director.developmentVision >= 13) {
+      notes.push('Chroni mlodych z wysokim potencjalem i nie lubi sprzedazy bez planu rozwoju.');
+    }
+    if (isLockerRoomLeader(player, club)) {
+      notes.push('Duza wage przyklada do wpływu zawodnika na szatnie i hierarchie druzyny.');
+    }
+    if (hasMarketingWeight(player)) {
+      notes.push('Patrzy tez na znaczenie marketingowe i wizerunkowe pilkarza.');
+    }
+  }
+  if (typeof fee === 'number' && player) {
+    const feeRatio = getEstimatedValue(player) > 0 ? fee / getEstimatedValue(player) : 1;
+    if (feeRatio < 1 && director.financialDiscipline >= 13) {
+      notes.push('Nie lubi schodzic ponizej wewnetrznej wyceny przy negocjacjach.');
+    }
+    if (feeRatio > 1.35 && director.financialDiscipline >= 13) {
+      notes.push('Przy zbyt wysokiej cenie potrafi przyhamowac rozmowy i szukac lepszych warunkow.');
+    }
+  }
+  if (typeof salary === 'number') {
+    const averageSalary = squad.length > 0 ? getTotalWageBill(squad) / squad.length : salary;
+    if (salary > averageSalary * 1.7 && director.financialDiscipline >= 13) {
+      notes.push('Pilnuje struktury plac i nie chce rozbijac szatni jedna pensja.');
+    }
+  }
+  if (typeof years === 'number' && player && player.age >= 30 && years >= 3) {
+    notes.push('Dlugi kontrakt dla starszego pilkarza bedzie dla niego ryzykowny.');
+  }
+  if (director.relationshipWithManager >= 75) {
+    notes.push('Przy dobrej relacji daje trenerowi wiecej swobody.');
+  } else if (director.relationshipWithManager <= 35) {
+    notes.push('Przy slabej relacji chetniej wchodzi w decyzje trenera.');
+  }
+
+  return notes.slice(0, 3);
 };
 
 export const SportingDirectorService = {
@@ -572,6 +822,7 @@ export const SportingDirectorService = {
     const formScore = getRecentFormScore(club);
     const youthScore = getYouthUsageScore(players);
     const financialScore = getFinancialScore(club);
+    const boardConfidence = club.boardConfidence ?? 75;
 
     const patienceShield = (director.patience + director.flexibility) * 0.55;
     const ambitionPressure = (director.ambition + director.control) * 0.65;
@@ -585,9 +836,25 @@ export const SportingDirectorService = {
       (youthScore * developmentWeight) +
       (financialScore * financialWeight);
 
-    const score = clamp(baseScore + patienceShield - ambitionPressure + personalityReviewBias(director), 0, 100);
+    const rawScore = clamp(baseScore + patienceShield - ambitionPressure + personalityReviewBias(director), 0, 100);
+    const resultScoreFloor = getResultScoreFloor({
+      club,
+      leaguePosition,
+      expectedPosition,
+      boardConfidence,
+    });
+    const score = Math.max(rawScore, resultScoreFloor);
     const tone = getTone(score);
     let relationDelta = Math.round((score - 50) / 9);
+
+    if (leaguePosition <= expectedPosition && tone === 'NEGATIVE') {
+      relationDelta = Math.max(relationDelta, 0);
+    }
+    if (leaguePosition === 1 && expectedPosition >= 3) {
+      relationDelta = Math.max(relationDelta, 3);
+    } else if (leaguePosition === 2 && expectedPosition >= 5) {
+      relationDelta = Math.max(relationDelta, 2);
+    }
 
     if (tone === 'NEGATIVE' && director.control >= 15) relationDelta -= 1;
     if (tone === 'POSITIVE' && director.flexibility >= 15) relationDelta += 1;
@@ -703,6 +970,7 @@ export const SportingDirectorService = {
       subject,
       body,
       priority,
+      key: `RELATIONSHIP_${club.id}_${eventDate}_${subject}`,
     });
 
     return {
@@ -721,7 +989,9 @@ export const SportingDirectorService = {
     const director = club.sportingDirector;
     if (!director) return { updatedClub: club, mail: null };
     if (club.leagueId === 'NONE' || club.stats.played < 3) return { updatedClub: club, mail: null };
-    if (club.sportingDirectorObjective?.status === 'ACTIVE') return { updatedClub: club, mail: null };
+    if (club.sportingDirectorObjective && ['ACTIVE', 'AWAITING_REVIEW'].includes(club.sportingDirectorObjective.status)) {
+      return { updatedClub: club, mail: null };
+    }
 
     const objectiveMonth = date.toISOString().slice(0, 7);
     if (club.lastSportingDirectorObjectiveDate === objectiveMonth) {
@@ -729,9 +999,10 @@ export const SportingDirectorService = {
     }
 
     const type = chooseObjectiveType(club, players, director);
-    const details = buildObjectiveDetails(type, director);
+    const focusPlayer = type === 'PLAYER_MINUTES' ? getDevelopmentTarget(players, club) : null;
+    const details = buildObjectiveDetails(type, director, club, focusPlayer, players);
     const issuedAt = date.toISOString().slice(0, 10);
-    const dueAt = addDaysIso(date, 28);
+    const dueAt = addDaysIso(date, details.dueDays ?? 28);
     const objective: SportingDirectorObjective = {
       id: `SD_OBJECTIVE_${club.id}_${issuedAt}_${type}`,
       type,
@@ -745,6 +1016,12 @@ export const SportingDirectorService = {
       baselinePlayed: club.stats.played,
       baselineGoalsAgainst: club.stats.goalsAgainst,
       baselineYouthAppearances: getYouthAppearanceSignal(players),
+      baselineYouthMinutes: getYouthMinutesSignal(players),
+      baselinePlayerMinutes: focusPlayer ? getPlayerMinutes(focusPlayer) : undefined,
+      baselineWageBill: type === 'WAGE_DISCIPLINE' ? getTotalWageBill(players) : undefined,
+      targetPlayerId: focusPlayer?.id,
+      targetPlayerName: focusPlayer ? playerName(focusPlayer) : undefined,
+      contextTag: details.contextTag ?? 'STANDARD',
     };
 
     const body = [
@@ -772,11 +1049,12 @@ export const SportingDirectorService = {
         director,
         date,
         subject: details.title,
-        body,
-        priority: director.relationshipWithManager < 35 ? 88 : 73,
-      }),
-    };
-  },
+      body,
+      priority: director.relationshipWithManager < 35 ? 88 : 73,
+      key: `OBJECTIVE_${club.id}_${objective.id}`,
+    }),
+  };
+},
 
   evaluateActiveObjective(params: {
     club: Club;
@@ -786,7 +1064,7 @@ export const SportingDirectorService = {
     const { club, players, date } = params;
     const director = club.sportingDirector;
     const objective = club.sportingDirectorObjective;
-    if (!director || !objective || objective.status !== 'ACTIVE') {
+    if (!director || !objective || !['ACTIVE', 'AWAITING_REVIEW'].includes(objective.status)) {
       return { updatedClub: club, mail: null };
     }
 
@@ -853,6 +1131,7 @@ export const SportingDirectorService = {
         subject: completed ? `Cel zrealizowany: ${objective.title}` : `Cel niezrealizowany: ${objective.title}`,
         body,
         priority: completed ? 60 : 91,
+        key: `OBJECTIVE_REVIEW_${club.id}_${objective.id}_${completed ? 'DONE' : 'FAILED'}`,
       }),
     };
   },
@@ -899,14 +1178,23 @@ export const SportingDirectorService = {
 
       return {
         updatedClub,
-        mail: buildDirectorMail({ club, director, date, subject, body, priority }),
+        mail: buildDirectorMail({
+          club,
+          director,
+          date,
+          subject,
+          body,
+          priority,
+          key: `OBJECTIVE_RESPONSE_${club.id}_${objective.id}_${response}_${subject}`,
+        }),
       };
     };
-
     if (response === 'ACCEPT') {
       const nextObjective: SportingDirectorObjective = {
         ...objective,
+        status: 'AWAITING_REVIEW',
         managerResponse: 'ACCEPTED',
+        resultNote: `Cel czeka teraz na ocene w dniu ${new Date(objective.dueAt).toLocaleDateString('pl-PL')}.`,
       };
       const result = updateClub(
         nextObjective,
@@ -948,9 +1236,12 @@ export const SportingDirectorService = {
       if (accepts) {
         const nextObjective: SportingDirectorObjective = {
           ...softenObjective(objective),
+          status: 'AWAITING_REVIEW',
           managerResponse: 'NEGOTIATED',
           renegotiated: true,
+          resultNote: '',
         };
+        nextObjective.resultNote = `Skorygowany cel czeka na ocene w dniu ${new Date(nextObjective.dueAt).toLocaleDateString('pl-PL')}.`;
         const result = updateClub(
           nextObjective,
           1,
@@ -967,7 +1258,12 @@ export const SportingDirectorService = {
       }
 
       const result = updateClub(
-        { ...objective, managerResponse: 'NEGOTIATED' },
+        {
+          ...objective,
+          status: 'AWAITING_REVIEW',
+          managerResponse: 'NEGOTIATED',
+          resultNote: `Cel pozostaje bez zmian i czeka na ocene w dniu ${new Date(objective.dueAt).toLocaleDateString('pl-PL')}.`,
+        },
         -2,
         -1,
         'Negocjacja celu odrzucona',
@@ -982,8 +1278,11 @@ export const SportingDirectorService = {
 
     const nextObjective: SportingDirectorObjective = {
       ...sharpenObjective(objective),
+      status: 'AWAITING_REVIEW',
       managerResponse: 'CHALLENGED',
+      resultNote: '',
     };
+    nextObjective.resultNote = `Zaostrzony cel czeka na ocene w dniu ${new Date(nextObjective.dueAt).toLocaleDateString('pl-PL')}.`;
     const result = updateClub(
       nextObjective,
       -(director.control >= 15 ? 5 : 4),
@@ -1016,6 +1315,9 @@ export const SportingDirectorService = {
     const keyPlayer = player.squadRole === 'KEY_PLAYER' || squadRank <= 3;
     const starter = player.squadRole === 'STARTER' || squadRank <= 8;
     const youngAsset = isYoungAsset(player);
+    const lockerRoomLeader = isLockerRoomLeader(player, club);
+    const marketingWeight = hasMarketingWeight(player);
+    const weakReplacement = !hasAdequateReplacement(player, squad);
     const protectedByPolicy = club.sportingDirectorPolicy?.protectedPlayers.some(item => item.playerId === player.id) ?? false;
     const sellCandidateByPolicy = club.sportingDirectorPolicy?.sellCandidates.some(item => item.playerId === player.id) ?? false;
 
@@ -1023,6 +1325,9 @@ export const SportingDirectorService = {
     if (keyPlayer) resistance += 28;
     else if (starter) resistance += 14;
     if (youngAsset) resistance += director.developmentVision * 1.7;
+    if (lockerRoomLeader) resistance += 12;
+    if (marketingWeight) resistance += 10;
+    if (weakReplacement) resistance += 18;
     if (protectedByPolicy) resistance += 18;
     if (sellCandidateByPolicy) resistance -= 18;
     if (priceRatio < 0.9) resistance += director.financialDiscipline * 1.4;
@@ -1039,8 +1344,14 @@ export const SportingDirectorService = {
 
     const reason = protectedByPolicy
       ? `${player.firstName} ${player.lastName} znajduje sie na liscie zawodnikow chronionych w polityce sportowej.`
+      : lockerRoomLeader
+      ? 'To wazny zawodnik dla szatni i nie chce tracic go bez mocnego uzasadnienia.'
       : youngAsset
-      ? `${player.firstName} ${player.lastName} jest traktowany jako wazny kapital rozwojowy klubu.`
+      ? 'Nie sprzedajemy takiego talentu bez planu zastepstwa i dalszego rozwoju kadry.'
+      : marketingWeight
+        ? 'Ten zawodnik jest dla klubu wazny sportowo i marketingowo.'
+        : weakReplacement
+          ? 'Nie zgadzam sie na oslabienie tej pozycji bez czytelnego planu zastepstwa.'
       : keyPlayer
         ? `${player.firstName} ${player.lastName} jest zbyt wazny sportowo, aby wystawiac go na liste bez mocniejszego planu.`
         : priceRatio < 0.9
@@ -1064,19 +1375,20 @@ export const SportingDirectorService = {
       `Dyrektor sportowy ${club.name}`,
     ].join('\n');
 
-    return {
-      blocked: true,
-      message: reason,
-      updatedClub,
-      mail: buildDirectorMail({
+      return {
+        blocked: true,
+        message: reason,
+        updatedClub,
+        mail: buildDirectorMail({
         club,
         director,
         date,
-        subject: `Blokada listy transferowej: ${player.lastName}`,
-        body,
-        priority: 82,
-      }),
-    };
+          subject: `Blokada listy transferowej: ${player.lastName}`,
+          body,
+          priority: 82,
+          key: `TRANSFER_LIST_BLOCK_${club.id}_${player.id}_${date.toISOString().slice(0, 10)}`,
+        }),
+      };
   },
 
   evaluateIncomingSaleDecision(params: {
@@ -1098,6 +1410,9 @@ export const SportingDirectorService = {
     const starter = player.squadRole === 'STARTER' || squadRank <= 8;
     const youngAsset = isYoungAsset(player);
     const directRival = club.leagueId !== 'NONE' && club.leagueId === buyerClub.leagueId;
+    const lockerRoomLeader = isLockerRoomLeader(player, club);
+    const marketingWeight = hasMarketingWeight(player);
+    const weakReplacement = !hasAdequateReplacement(player, squad);
     const protectedByPolicy = club.sportingDirectorPolicy?.protectedPlayers.some(item => item.playerId === player.id) ?? false;
     const sellCandidateByPolicy = club.sportingDirectorPolicy?.sellCandidates.some(item => item.playerId === player.id) ?? false;
 
@@ -1105,6 +1420,9 @@ export const SportingDirectorService = {
     if (keyPlayer) resistance += 30;
     else if (starter) resistance += 12;
     if (youngAsset) resistance += director.developmentVision * 1.55;
+    if (lockerRoomLeader) resistance += 10;
+    if (marketingWeight) resistance += 10;
+    if (weakReplacement) resistance += 16;
     if (protectedByPolicy) resistance += 20;
     if (sellCandidateByPolicy) resistance -= 20;
     if (feeRatio < 1.05) resistance += director.financialDiscipline * 1.45;
@@ -1123,8 +1441,14 @@ export const SportingDirectorService = {
 
     const reason = protectedByPolicy
       ? `${player.firstName} ${player.lastName} jest wpisany jako zawodnik chroniony w aktualnej polityce sportowej.`
+      : lockerRoomLeader
+      ? 'To wazny zawodnik dla szatni i nie chce otwierac takiego ruchu w tym momencie.'
       : youngAsset
       ? `${player.firstName} ${player.lastName} ma zbyt duzy potencjal rozwojowy, zeby sprzedawac go w tej chwili.`
+      : marketingWeight
+        ? `${player.firstName} ${player.lastName} jest dla klubu wazny marketingowo i sportowo.`
+        : weakReplacement
+          ? 'Nie zgadzam sie na oslabienie tej pozycji bez gotowego planu zastepstwa.'
       : keyPlayer
         ? `${player.firstName} ${player.lastName} jest filarem kadry i sprzedaz oslabia projekt sportowy.`
         : directRival
@@ -1160,6 +1484,7 @@ export const SportingDirectorService = {
         subject: `Weto transferowe: ${player.lastName}`,
         body,
         priority: 88,
+        key: `SALE_BLOCK_${club.id}_${player.id}_${buyerClub.id}_${date.toISOString().slice(0, 10)}`,
       }),
     };
   },
@@ -1172,7 +1497,7 @@ export const SportingDirectorService = {
     fee: number;
     contract: TransferContractInput;
     date: Date;
-  }): { blocked: boolean; message: string; updatedClub: Club; mail?: MailMessage; relationDelta: number } {
+  }): { blocked: boolean; message: string; updatedClub: Club; mail?: MailMessage; relationDelta: number; negotiatedFee?: number } {
     const { club, player, squad, sellerClub, fee, contract, date } = params;
     const director = club.sportingDirector;
     if (!director) return { blocked: false, message: 'Brak dyrektora sportowego.', updatedClub: club, relationDelta: 0 };
@@ -1206,6 +1531,11 @@ export const SportingDirectorService = {
     if (director.relationshipWithManager < 35) resistance += 10;
 
     const blocked = resistance >= 72;
+    const canNegotiateBetter = !blocked && director.negotiation >= 14 && feeRatio > 1.05 && budgetUsage <= 0.82;
+    const negotiatedFee = canNegotiateBetter ? Math.max(Math.round(estimatedValue * 0.98 / 50_000) * 50_000, Math.round(fee * 0.93 / 50_000) * 50_000) : undefined;
+    const finalFee = negotiatedFee && negotiatedFee < fee ? negotiatedFee : fee;
+    const finalCommitment = finalFee + contract.salary * contract.years + contract.bonus;
+    const finalBudgetUsage = club.transferBudget > 0 ? finalCommitment / club.transferBudget : budgetUsage;
     const positive = !blocked && (youngAsset || positionFit >= 8 || feeRatio <= 0.9) && budgetUsage <= 0.7;
     const relationDelta = blocked ? -3 : positive ? 2 : 0;
     const updatedDirector: SportingDirector = {
@@ -1224,6 +1554,8 @@ export const SportingDirectorService = {
             : positionFit < -4
               ? `Nie widze pilnej potrzeby wzmacniania tej pozycji takim kosztem.`
               : `Ten ruch nie pasuje do aktualnej polityki sportowej klubu.`
+      : negotiatedFee && negotiatedFee < fee
+        ? `${playerName(player)} pasuje sportowo, a ja zepchnalem kwote do ${negotiatedFee.toLocaleString('pl-PL')} PLN.`
       : positive
         ? `${playerName(player)} pasuje do kierunku sportowego klubu. Akceptuje ten ruch.`
         : `Dyrektor sportowy nie blokuje transferu, ale bedzie ocenial jego skutki.`;
@@ -1251,7 +1583,10 @@ export const SportingDirectorService = {
           `Akceptuje finalizacje transferu ${playerName(player)} z klubu ${sellerClub.name}.`,
           reason,
           '',
-          'To jest ruch zgodny z kierunkiem, ktory chcemy budowac.',
+          negotiatedFee && negotiatedFee < fee
+            ? `Po mojej rozmowie finalna kwota schodzi z ${fee.toLocaleString('pl-PL')} PLN do ${negotiatedFee.toLocaleString('pl-PL')} PLN.`
+            : `Laczne zobowiazanie po tej decyzji wynosi ${finalCommitment.toLocaleString('pl-PL')} PLN.`,
+          finalBudgetUsage > 0.7 ? 'To dalej kosztowny ruch, ale miesci sie jeszcze w granicach akceptowalnego ryzyka.' : 'To jest ruch zgodny z kierunkiem, ktory chcemy budowac.',
           '',
           `${director.firstName} ${director.lastName}`,
           `Dyrektor sportowy ${club.name}`,
@@ -1262,6 +1597,7 @@ export const SportingDirectorService = {
       message: reason,
       updatedClub,
       relationDelta,
+      negotiatedFee,
       mail: buildDirectorMail({
         club,
         director,
@@ -1269,6 +1605,7 @@ export const SportingDirectorService = {
         subject: blocked ? `Weto transferowe: ${player.lastName}` : `Akceptacja transferu: ${player.lastName}`,
         body,
         priority: blocked ? 90 : 62,
+        key: `PURCHASE_${blocked ? 'BLOCK' : 'OK'}_${club.id}_${player.id}_${sellerClub.id}_${date.toISOString().slice(0, 10)}`,
       }),
     };
   },
@@ -1372,6 +1709,321 @@ export const SportingDirectorService = {
         subject: blocked ? `Weto kontraktu: ${player.lastName}` : `Akceptacja kontraktu: ${player.lastName}`,
         body,
         priority: blocked ? 86 : 58,
+        key: `FREE_AGENT_${blocked ? 'BLOCK' : 'OK'}_${club.id}_${player.id}_${date.toISOString().slice(0, 10)}`,
+      }),
+    };
+  },
+
+  getIncomingSaleAdvisory(params: {
+    club: Club;
+    player: Player;
+    squad: Player[];
+    fee: number;
+  }): string[] {
+    const { club, player, squad, fee } = params;
+    const replacementReady = hasAdequateReplacement(player, squad);
+    const notes = buildDirectorAdvice({ club, player, squad, fee });
+
+    if (!replacementReady) notes.unshift('Na tej pozycji nie widzi dzis czytelnego planu zastępstwa.');
+    if (isLockerRoomLeader(player, club)) notes.unshift('To zawodnik bardzo ważny dla szatni.');
+    return [...new Set(notes)].slice(0, 3);
+  },
+
+  getIncomingPurchaseAdvisory(params: {
+    club: Club;
+    player: Player;
+    squad: Player[];
+    fee: number;
+    salary?: number;
+    years?: number;
+  }): string[] {
+    return buildDirectorAdvice(params);
+  },
+
+  getContractRenewalAdvisory(params: {
+    club: Club;
+    player: Player;
+    squad: Player[];
+    salary: number;
+    years: number;
+  }): string[] {
+    const { club, player, squad, salary, years } = params;
+    const notes = buildDirectorAdvice({ club, player, squad, salary, years });
+    if (player.age <= 22 && club.sportingDirector?.developmentVision && club.sportingDirector.developmentVision >= 13) {
+      notes.unshift('Jesli to mlody gracz, dyrektor zaakceptuje pensje latwiej, gdy idzie za tym jasna sciezka rozwoju.');
+    }
+    return [...new Set(notes)].slice(0, 3);
+  },
+
+  evaluateContractRenewalDecision(params: {
+    club: Club;
+    player: Player;
+    squad: Player[];
+    salary: number;
+    years: number;
+    bonus: number;
+  }): { blocked: boolean; reason: string } {
+    const { club, player, squad, salary, years, bonus } = params;
+    const director = club.sportingDirector;
+    if (!director) return { blocked: false, reason: 'Brak dyrektora sportowego.' };
+
+    const averageSalary = squad.length > 0 ? getTotalWageBill(squad) / squad.length : salary;
+    const salaryRatio = averageSalary > 0 ? salary / averageSalary : 1;
+    let resistance = director.control * 1.1 + director.financialDiscipline * 1.6 - director.flexibility;
+
+    if (salaryRatio > 1.75) resistance += 22;
+    if (salaryRatio > 2.15) resistance += 18;
+    if (player.age >= 31 && years >= 3) resistance += 24;
+    if (bonus > Math.max(250_000, salary * 0.45)) resistance += 12;
+    if (director.relationshipWithManager < 35) resistance += 10;
+    if (director.personality === 'ACCOUNTANT') resistance += 12;
+    if (isYoungAsset(player) && director.developmentVision >= 14) resistance -= 16;
+    if (player.squadRole === 'KEY_PLAYER') resistance -= 10;
+
+    if (resistance < 66) {
+      return { blocked: false, reason: 'Dyrektor sportowy nie blokuje odnowienia umowy.' };
+    }
+
+    const reason =
+      salaryRatio > 2.15
+        ? 'Dyrektor sportowy nie zgadza sie na tak wysoka pensje wzgledem obecnej struktury plac.'
+        : player.age >= 31 && years >= 3
+          ? 'Dyrektor sportowy nie akceptuje tak dlugiej umowy dla zawodnika w tym wieku.'
+          : bonus > Math.max(250_000, salary * 0.45)
+            ? 'Dyrektor sportowy uznal bonus za podpis za zbyt wysoki.'
+            : 'Dyrektor sportowy nie widzi uzasadnienia dla takiego pakietu kontraktowego.';
+
+    return { blocked: true, reason };
+  },
+
+  getTeamAnalysisPerspective(club: Club): { summary: string; protected: SportingDirectorPolicyItem[]; development: SportingDirectorPolicyItem[]; sales: SportingDirectorPolicyItem[] } | null {
+    if (!club.sportingDirector || !club.sportingDirectorPolicy) return null;
+    return {
+      summary: club.sportingDirectorPolicy.summary,
+      protected: club.sportingDirectorPolicy.protectedPlayers,
+      development: club.sportingDirectorPolicy.developmentPlayers,
+      sales: club.sportingDirectorPolicy.sellCandidates,
+    };
+  },
+
+  generateCommunicationMails(params: {
+    club: Club;
+    players: Player[];
+    date: Date;
+    recentFixture?: { status?: string | null; homeScore?: number | null; awayScore?: number | null; homeTeamId?: string; awayTeamId?: string } | null;
+  }): MailMessage[] {
+    const { club, players, date, recentFixture } = params;
+    const director = club.sportingDirector;
+    if (!director) return [];
+
+    const mails: MailMessage[] = [];
+    const isoDate = date.toISOString().slice(0, 10);
+    const monthKey = date.toISOString().slice(0, 7);
+    const recentForm = club.stats.form.slice(-5);
+    const wins = recentForm.filter(result => result === 'W').length;
+    const losses = recentForm.filter(result => result === 'L').length;
+    const youthTarget = getDevelopmentTarget(players, club);
+    const wageBill = getTotalWageBill(players);
+    const averageSalary = players.length > 0 ? wageBill / players.length : 0;
+    const payrollPressure = club.budget < averageSalary * 4 || wageBill > Math.max(club.budget * 0.8, 6_000_000);
+
+    if (recentFixture?.status === 'FINISHED' && wins >= 4) {
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: 'Pochwala za ostatnia serie',
+        body: [
+          'Trenerze,',
+          '',
+          'Dobra seria daje klubowi tlen i pokazuje, ze sztab ma druzyne pod kontrola.',
+          'W takich momentach latwiej mi bronic Twoich decyzji przed zarzadem i dawac Ci wiecej swobody na rynku.',
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 57,
+        key: `COMM_WIN_STREAK_${club.id}_${isoDate}`,
+      }));
+    } else if (recentFixture?.status === 'FINISHED' && losses >= 3) {
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: 'Ostrzezenie po zlej serii',
+        body: [
+          'Trenerze,',
+          '',
+          'Seria porazek zaczyna podkopywac spokoj w klubie. Nie chodzi juz o pojedynczy wynik, tylko o kierunek.',
+          'Potrzebuje szybkiej reakcji taktycznej i kadrowej, bo cierpliwosc zarzadu nie bedzie nieskonczona.',
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 85,
+        key: `COMM_LOSS_STREAK_${club.id}_${isoDate}`,
+      }));
+    }
+
+    if (date.getDate() === 1 && youthTarget && director.developmentVision >= 12) {
+      const targetMinutes = getPlayerMinutes(youthTarget);
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: `Sugestia rozwoju: ${youthTarget.lastName}`,
+        body: [
+          'Trenerze,',
+          '',
+          `Chce zwrocic szczegolna uwage na rozwoj ${playerName(youthTarget)}. To profil, ktory warto chronic i wprowadzac coraz odwazniej.`,
+          `Na dzis dostal tylko ${targetMinutes} minut, wiec oczekuje dla niego jasniejszej sciezki: wiecej minut, konkretna rola treningowa i cierpliwosc bez pochopnych ocen.`,
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 63,
+        key: `COMM_YOUTH_${club.id}_${monthKey}_${youthTarget.id}`,
+      }));
+    }
+
+    if (date.getDate() === 1 && payrollPressure) {
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: 'Presja finansowa w pionie sportowym',
+        body: [
+          'Trenerze,',
+          '',
+          'Struktura kosztow kadry zaczyna ciagnac klub w zla strone. Nie chce blokowac wszystkiego, ale potrzebuje wiekszej dyscypliny przy pensjach i kontraktach.',
+          `Roczny budzet plac jest dzis dla mnie zbyt ciezki: ${wageBill.toLocaleString('pl-PL')} PLN.`,
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 82,
+        key: `COMM_FINANCE_${club.id}_${monthKey}`,
+      }));
+    }
+
+    if (date.getDate() === 1 && youthTarget && director.relationshipWithManager < 58) {
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: `Prosba o plan dla zawodnika: ${youthTarget.lastName}`,
+        body: [
+          'Trenerze,',
+          '',
+          `Chce wiedziec, jaki masz plan dla ${playerName(youthTarget)}. Jesli mamy chronic ten talent, potrzebuje od sztabu jasnego pomyslu: minuty, rola i tempo rozwoju.`,
+          'Nie oczekuje elaboratu, ale oczekuje spojnego kierunku.',
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 74,
+        key: `COMM_PLAN_${club.id}_${monthKey}_${youthTarget.id}`,
+      }));
+    }
+
+    if (date.getDate() === 1 && (club.boardConfidence ?? 75) < 46) {
+      mails.push(buildDirectorMail({
+        club,
+        director,
+        date,
+        subject: 'Presja na wynik rosnie',
+        body: [
+          'Trenerze,',
+          '',
+          'Zarzad zaczyna patrzec na wyniki coraz ostrzej. Moja rola nie polega na sianiu paniki, ale musze otwarcie powiedziec: margines bledu robi sie mniejszy.',
+          'Najblizszy miesiac bedzie mial duze znaczenie dla oceny calego pionu sportowego.',
+          '',
+          `${director.firstName} ${director.lastName}`,
+          `Dyrektor sportowy ${club.name}`,
+        ].join('\n'),
+        priority: 84,
+        key: `COMM_RESULTS_${club.id}_${monthKey}`,
+      }));
+    }
+
+    return mails;
+  },
+
+  applyTransferBudgetAdjustment(params: {
+    club: Club;
+    players: Player[];
+    date: Date;
+  }): { updatedClub: Club; mail: MailMessage | null } {
+    const { club, players, date } = params;
+    const director = club.sportingDirector;
+    if (!director) return { updatedClub: club, mail: null };
+
+    const budgetKey = date.toISOString().slice(0, 7);
+    if (club.lastSportingDirectorBudgetAdjustmentDate === budgetKey) {
+      return { updatedClub: club, mail: null };
+    }
+
+    const wageBill = getTotalWageBill(players);
+    const payrollPressure = wageBill > Math.max(club.budget * 0.8, 6_500_000);
+    const goodTrust = director.relationshipWithManager >= 78 && (club.boardConfidence ?? 75) >= 68;
+    const healthyBudget = club.budget >= 7_500_000;
+
+    let adjustment = 0;
+    let subject = '';
+    let body = '';
+
+    if (payrollPressure && director.financialDiscipline >= 14) {
+      adjustment = -Math.max(250_000, Math.round(club.transferBudget * 0.08));
+      subject = 'Korekta budzetu transferowego w dol';
+      body = [
+        'Trenerze,',
+        '',
+        'Przy obecnej presji plac i kosztow kadry ograniczam dostepny budzet transferowy. To ma ostudzic zbyt agresywne ruchy do czasu poprawy struktury finansowej.',
+        `Korekta: ${adjustment.toLocaleString('pl-PL')} PLN.`,
+        '',
+        `${director.firstName} ${director.lastName}`,
+        `Dyrektor sportowy ${club.name}`,
+      ].join('\n');
+    } else if (goodTrust && healthyBudget && director.flexibility >= 13) {
+      adjustment = Math.max(200_000, Math.round(club.transferBudget * 0.06));
+      subject = 'Wieksza swoboda na rynku';
+      body = [
+        'Trenerze,',
+        '',
+        'Przy obecnej relacji i stabilnej sytuacji klubu daje Ci troche wiecej przestrzeni na rynku. Oczekuje jednak, ze wykorzystasz to rozsadnie.',
+        `Dodatkowy margines: +${adjustment.toLocaleString('pl-PL')} PLN.`,
+        '',
+        `${director.firstName} ${director.lastName}`,
+        `Dyrektor sportowy ${club.name}`,
+      ].join('\n');
+    }
+
+    if (adjustment === 0) {
+      return {
+        updatedClub: {
+          ...club,
+          lastSportingDirectorBudgetAdjustmentDate: budgetKey,
+        },
+        mail: null,
+      };
+    }
+
+    const updatedClub: Club = {
+      ...club,
+      transferBudget: Math.max(0, club.transferBudget + adjustment),
+      lastSportingDirectorBudgetAdjustmentDate: budgetKey,
+    };
+
+    return {
+      updatedClub,
+      mail: buildDirectorMail({
+        club,
+        director,
+        date,
+        subject,
+        body,
+        priority: adjustment < 0 ? 83 : 61,
+        key: `BUDGET_SHIFT_${club.id}_${budgetKey}`,
       }),
     };
   },
@@ -1404,6 +2056,11 @@ export const SportingDirectorService = {
         : director.personality === 'CONTROLLER'
           ? 'Priorytet: zadnych pochopnych ruchow bez zgody pionu sportowego.'
           : 'Priorytet: elastyczna praca na rynku, ale bez naruszania rdzenia zespolu.';
+    const budgetDirective = director.financialDiscipline >= 14
+      ? 'Budzet transferowy ma pracowac ostroznie. Wysokie pensje i oferty ponizej wyceny beda blokowane czesciej.'
+      : director.flexibility >= 14
+        ? 'Na rynku dopuszczam troche wiecej swobody, jesli ruch ma sens sportowy.'
+        : 'Budzet transferowy zostaje pod normalnym nadzorem pionu sportowego.';
 
     const policy = {
       issuedAt: policyDate,
@@ -1412,6 +2069,8 @@ export const SportingDirectorService = {
       sellCandidates,
       developmentPlayers,
       summary,
+      budgetDirective,
+      transferBudgetAdjustment: 0,
     };
 
     const listLine = (title: string, items: SportingDirectorPolicyItem[]): string => {
@@ -1425,6 +2084,7 @@ export const SportingDirectorService = {
       `Przed ${windowType === 'SUMMER' ? 'letnim' : 'zimowym'} oknem transferowym przedstawiam aktualna polityke sportowa klubu.`,
       '',
       summary,
+      budgetDirective,
       '',
       listLine('Zawodnicy chronieni', protectedPlayers),
       '',
@@ -1453,6 +2113,7 @@ export const SportingDirectorService = {
         : 'Polityka sportowa przed zimowym oknem',
       body,
       priority: 74,
+      key: `POLICY_${club.id}_${policyDate}`,
     });
 
     return { updatedClub, mail };

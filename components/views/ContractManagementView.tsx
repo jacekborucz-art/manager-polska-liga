@@ -5,6 +5,7 @@ import { ViewState } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { MailService } from '../../services/MailService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
+import { SportingDirectorService } from '../../services/SportingDirectorService';
 
 export const ContractManagementView: React.FC = () => {
   const { 
@@ -64,6 +65,16 @@ export const ContractManagementView: React.FC = () => {
     ? clubs.find(c => c.id === player.transferPendingClubId)
     : null;
   const hasPendingTransfer = !!player.transferPendingClubId && !!player.transferReportDate;
+  const directorRenewalAdvisory = useMemo(() => {
+    if (!club.sportingDirector || managementMode !== 'NEGOTIATE') return [];
+    return SportingDirectorService.getContractRenewalAdvisory({
+      club,
+      player,
+      squad,
+      salary: offerSalary,
+      years: offerYears,
+    });
+  }, [club, player, squad, managementMode, offerSalary, offerYears]);
 
   const requestBoardApproval = () => {
     setIsProcessing(true);
@@ -105,6 +116,21 @@ export const ContractManagementView: React.FC = () => {
     setTimeout(() => {
       // VETO ZARZĄDU przy przedłużeniu kontraktu
       const squad = players[club.id] || [];
+      const directorCheck = club.sportingDirector
+        ? SportingDirectorService.evaluateContractRenewalDecision({
+            club,
+            player,
+            squad,
+            salary: offerSalary,
+            years: offerYears,
+            bonus: offerBonus,
+          })
+        : { blocked: false, reason: '' };
+      if (directorCheck.blocked) {
+        setIsProcessing(false);
+        setRenewalVeto(directorCheck.reason);
+        return;
+      }
       const boardCheck = FinanceService.evaluateRenewalBoardDecision(player, offerSalary, offerBonus, squad, club);
       if (!boardCheck.approved) {
         setIsProcessing(false);
@@ -404,6 +430,20 @@ export const ContractManagementView: React.FC = () => {
                       </div>
                    ) : (
                       <>
+                        {club.sportingDirector && directorRenewalAdvisory.length > 0 && (
+                           <div className="rounded-[28px] border border-amber-500/20 bg-amber-500/5 p-5">
+                              <div className="flex items-center justify-between gap-3">
+                                 <span className="text-[10px] font-black text-amber-400 uppercase tracking-[0.35em]">Glos Dyrektora Sportowego</span>
+                                 <span className="text-[10px] font-black text-slate-500 uppercase">Struktura plac</span>
+                              </div>
+                              <div className="mt-4 space-y-2 text-sm text-amber-100">
+                                 {directorRenewalAdvisory.map((note, index) => (
+                                    <p key={`${index}_${note}`}>• {note}</p>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+
                         <div className="flex justify-between items-end shrink-0">
                            <div>
                               <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">OFERTA KONTRAKTOWA</span>
