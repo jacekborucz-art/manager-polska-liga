@@ -296,7 +296,8 @@ export const ReserveMatchEngine = {
     reserveCoach: Coach,
     opponentClubReputation: number,
     isHome: boolean,
-    seed: number
+    seed: number,
+    currentDate: string
   ): ReserveMatchEngineResult {
     const rng = makeRng(seed);
 
@@ -478,7 +479,7 @@ export const ReserveMatchEngine = {
       }
 
       // Faule i kartki (p~0.013/min home, ~0.013/min away)
-      const cardChance = 0.013;
+      const cardChance = 0.00975;
       for (const [side, xi] of [['H', hXI], ['A', aXI]] as ['H' | 'A', Player[]][]) {
         if (rng(offset + (side === 'H' ? 10 : 11)) < cardChance) {
           const fouler = pickFouler(xi, rng, offset + (side === 'H' ? 12 : 13));
@@ -490,7 +491,7 @@ export const ReserveMatchEngine = {
             expelled.add(fouler.id);
             const idx = xi.indexOf(fouler);
             if (idx !== -1) xi.splice(idx, 1);
-            if (side === 'H') hRedPenalty *= 0.80; else aRedPenalty *= 0.80;
+            if (side === 'H') hRedPenalty *= 0.68; else aRedPenalty *= 0.68;
           } else if (yellows === 0) {
             yellowCounts[fouler.id] = 1;
             yellowMinutes[fouler.id] = min;
@@ -505,53 +506,60 @@ export const ReserveMatchEngine = {
             expelled.add(fouler.id);
             const idx = xi.indexOf(fouler);
             if (idx !== -1) xi.splice(idx, 1);
-            if (side === 'H') hRedPenalty *= 0.80; else aRedPenalty *= 0.80;
+            if (side === 'H') hRedPenalty *= 0.68; else aRedPenalty *= 0.68;
           }
         }
       }
 
-      // Kontuzje (tylko zawodnicy gracza, ~0.006/min/player)
+      // Kontuzje (tylko zawodnicy gracza, ~2% szansa/min na drużynę)
       const userXIRef = isHome ? hXI : aXI;
-      for (const p of userXIRef) {
-        if (rng(offset + p.id.length + 30) < 0.002) {
-          const isSevere = rng(offset + p.id.length + 31) < 0.15;
-          const days = isSevere
-            ? 14 + Math.floor(rng(offset + p.id.length + 32) * 30)
-            : 2 + Math.floor(rng(offset + p.id.length + 33) * 7);
-          const severity = isSevere ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
-          const injuryType = INJURY_TYPES[Math.floor(rng(offset + p.id.length + 34) * INJURY_TYPES.length)];
-          injuries.push({
-            playerName: `${p.firstName} ${p.lastName}`,
-            playerId: p.id,
+      if (userXIRef.length > 0 && rng(offset + 30) < 0.02) {
+        const pIdx = Math.floor(rng(offset + 31) * userXIRef.length);
+        const p = userXIRef[pIdx];
+        const isSevere = rng(offset + 32) < 0.15;
+        const days = isSevere
+          ? 14 + Math.floor(rng(offset + 33) * 30)
+          : 2 + Math.floor(rng(offset + 34) * 7);
+        const severity = isSevere ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
+        const injuryType = INJURY_TYPES[Math.floor(rng(offset + 35) * INJURY_TYPES.length)];
+        injuries.push({
+          playerName: `${p.firstName} ${p.lastName}`,
+          playerId: p.id,
+          minute: min,
+          teamId: isHome ? 'HOME' : 'AWAY',
+          severity,
+          days,
+          type: injuryType,
+        });
+        const idx = userXIRef.indexOf(p);
+        if (idx !== -1) userXIRef.splice(idx, 1);
+        const benchArr2 = isHome ? hBench : aBench;
+        const injFallback: Record<PlayerPosition, PlayerPosition[]> = {
+          [PlayerPosition.GK]:  [PlayerPosition.GK],
+          [PlayerPosition.DEF]: [PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD],
+          [PlayerPosition.MID]: [PlayerPosition.MID, PlayerPosition.DEF, PlayerPosition.FWD],
+          [PlayerPosition.FWD]: [PlayerPosition.FWD, PlayerPosition.MID, PlayerPosition.DEF],
+        };
+        let sub: Player | undefined;
+        for (const fallbackPos of injFallback[p.position]) {
+          sub = benchArr2.find(b => b.position === fallbackPos);
+          if (sub) break;
+        }
+        if (sub) {
+          userXIRef.push(sub);
+          benchArr2.splice(benchArr2.indexOf(sub), 1);
+          allPlayed.add(sub.id);
+          if (isHome) homePlayerIds.add(sub.id);
+          else awayPlayerIds.add(sub.id);
+          playersById.set(sub.id, sub);
+          subs.push({
+            playerOutName: `${p.firstName} ${p.lastName}`,
+            playerInName: `${sub.firstName} ${sub.lastName}`,
             minute: min,
             teamId: isHome ? 'HOME' : 'AWAY',
-            severity,
-            days,
-            type: injuryType,
+            playerOutId: p.id,
+            playerInId: sub.id,
           });
-          // Usuń ze składu
-          const idx = userXIRef.indexOf(p);
-          if (idx !== -1) userXIRef.splice(idx, 1);
-          // Zastąp ze ławki
-          const sub = (isHome ? hBench : aBench).find(b => b.position === p.position);
-          if (sub) {
-            userXIRef.push(sub);
-            const benchArr = isHome ? hBench : aBench;
-            benchArr.splice(benchArr.indexOf(sub), 1);
-            allPlayed.add(sub.id);
-            if (isHome) homePlayerIds.add(sub.id);
-            else awayPlayerIds.add(sub.id);
-            playersById.set(sub.id, sub);
-            subs.push({
-              playerOutName: `${p.firstName} ${p.lastName}`,
-              playerInName: `${sub.firstName} ${sub.lastName}`,
-              minute: min,
-              teamId: isHome ? 'HOME' : 'AWAY',
-              playerOutId: p.id,
-              playerInId: sub.id,
-            });
-          }
-          break;
         }
       }
     }
@@ -658,7 +666,9 @@ export const ReserveMatchEngine = {
     const updatedUserReserves = userReserves.map(p => {
       const injury = injuries.find(i => i.playerId === p.id);
       if (!injury) return p;
-      const now = new Date().toISOString();
+      const conditionAtInjury = injury.days > 30
+        ? 30 + Math.floor(Math.random() * 21)
+        : 70;
       return {
         ...p,
         health: {
@@ -667,8 +677,9 @@ export const ReserveMatchEngine = {
             type: injury.type,
             daysRemaining: injury.days,
             severity: injury.severity,
-            injuryDate: now,
+            injuryDate: currentDate,
             totalDays: injury.days,
+            conditionAtInjury,
           },
         },
       };

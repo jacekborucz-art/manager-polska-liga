@@ -128,7 +128,7 @@ export const MatchLiveView = () => {
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
-  const [showBriefing, setShowBriefing] = useState(true);
+  const [showBriefing, setShowBriefing] = useState(() => !matchState?.preMatchMotivation);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [activePenalty, setActivePenalty] = useState<{
@@ -3193,7 +3193,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
   </div>
 </div>
               
-                              <div className={`fixed bottom-[29px] left-1/2 -translate-x-1/2 z-[1100] flex flex-col items-center gap-2 max-w-5xl transition-opacity duration-200 ${isTacticsOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                              <div className={`fixed bottom-[29px] left-1/2 -translate-x-1/2 z-[1100] flex flex-col items-center gap-2 max-w-5xl transition-opacity duration-200 ${isTacticsOpen ? 'opacity-0 pointer-events-none' : showBriefing ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
   {matchState.isFinished ? (
     <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
       <button
@@ -3453,7 +3453,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       </div>
 
       {/* ── DOLNY BOX: Start / Taktyka / Prędkość / Przebieg ── */}
-      <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
+      <div className={`flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl${showBriefing ? ' pointer-events-none opacity-40' : ''}`}>
         <button
           disabled={hasMandatorySub}
           onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, period: 2, minute: 45, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))), halftimeMomentumBonus: 0, oppHalftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}

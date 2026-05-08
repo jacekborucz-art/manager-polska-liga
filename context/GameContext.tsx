@@ -4424,7 +4424,8 @@ const finalResult: SimulationOutput = {
             reserveCoachObj,
             oppReputation,
             reserveFixture.isHome,
-            matchSeed
+            matchSeed,
+            dateToProcess.toISOString()
           );
           const userClub = clubs.find(c => c.id === userTeamId);
           const userTeamName = `${userClub?.shortName || userClub?.name || 'Drużyna'} II`;
@@ -4461,14 +4462,21 @@ const finalResult: SimulationOutput = {
             return prev.map(p => {
               const injuredVersion = updatedInjured.find(u => u.id === p.id);
               const basePlayer = injuredVersion ?? p;
+              const servedReserveSuspension = (p.suspensionMatches ?? 0) > 0;
+              const baseSuspension = servedReserveSuspension
+                ? Math.max(0, (basePlayer.suspensionMatches ?? 0) - 1)
+                : (basePlayer.suspensionMatches ?? 0);
               const rating = engineResult.ratings[p.id];
               const wasInXI = engineResult.userStartingXI.includes(p.id);
               const wasSub = engineResult.substitutions.some(s => s.playerInId === p.id);
-              if (!wasInXI && !wasSub) return basePlayer;
+              if (!wasInXI && !wasSub) {
+                return { ...basePlayer, suspensionMatches: baseSuspension };
+              }
               const userSide = reserveFixture.isHome ? 'HOME' : 'AWAY';
               const playerGoals = engineResult.goals.filter(g => g.teamId === userSide && g.playerId === p.id).length;
               const playerAssists = engineResult.goals.filter(g => g.teamId === userSide && g.assistantId === p.id).length;
               const playerCards = engineResult.cards.filter(c => c.playerId === p.id).length;
+              const gotRedCard = engineResult.cards.some(c => c.playerId === p.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
               const prev2 = basePlayer.reserveStats ?? { matches: 0, goals: 0, assists: 0, cards: 0, totalRatingPoints: 0 };
               const newStats: ReserveSeasonStats = {
                 matches: prev2.matches + 1,
@@ -4477,7 +4485,11 @@ const finalResult: SimulationOutput = {
                 cards: prev2.cards + playerCards,
                 totalRatingPoints: prev2.totalRatingPoints + (rating ?? 6.0),
               };
-              return { ...basePlayer, reserveStats: newStats };
+              return {
+                ...basePlayer,
+                reserveStats: newStats,
+                suspensionMatches: gotRedCard ? 1 : baseSuspension
+              };
             });
           });
         }
@@ -4670,6 +4682,7 @@ const finalResult: SimulationOutput = {
           club: userClub,
           players: userSquad,
           date: nextDay,
+          leagueClubs: prev.filter(c => c.leagueId === userClub.leagueId),
         });
 
         if (!objectiveReview.mail) return prev;
@@ -4725,6 +4738,8 @@ const finalResult: SimulationOutput = {
           club: relationshipPressure.updatedClub,
           players: userSquad,
           date: nextDay,
+          leagueClubs,
+          fixtures,
         });
         const budgetAdjustment = SportingDirectorService.applyTransferBudgetAdjustment({
           club: objective.updatedClub,

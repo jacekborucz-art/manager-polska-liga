@@ -231,9 +231,9 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
                 <span className={`font-bold ${ratingColor(sub.playerInId, incomingRating)}`}>{formatRating(incomingRating)}</span>
               </div>
               <div className="mt-1 grid grid-cols-[28px_1fr] gap-x-2 text-gray-400">
-                <span className="text-[10px] font-black text-red-300">OUT</span>
+                <span className="text-[13px] font-black text-red-400">←</span>
                 <span className="truncate">{sub.playerOutName}</span>
-                <span className="text-[10px] font-black text-emerald-300">IN</span>
+                <span className="text-[13px] font-black text-emerald-400">→</span>
                 <span className="truncate font-semibold text-white">{sub.playerInName}</span>
               </div>
             </div>
@@ -374,7 +374,7 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
               const isHome = teamId === 'HOME';
               return (
                 <div key={teamId} className={`flex-1 flex flex-col gap-0.5 text-sm font-normal text-white ${isHome ? 'items-end pr-28' : 'items-start pl-28'}`}>
-                  {goals.length === 0 && reds.length === 0 && missed.length === 0 && <span className="text-slate-400">Brak bramek</span>}
+                  {goals.length === 0 && reds.length === 0 && missed.length === 0 && <span></span>}
                   {goals.map((g, i) => {
                     const parts = g.playerName.split(' ');
                     const short = parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(' ')}` : g.playerName;
@@ -437,9 +437,9 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
     const displayScore = getDisplayScore(r);
     const userScore = r.isUserHome ? displayScore.homeScore : displayScore.awayScore;
     const oppScore = r.isUserHome ? displayScore.awayScore : displayScore.homeScore;
-    if (userScore > oppScore) return { text: `${userScore}:${oppScore} W`, color: 'text-green-400' };
-    if (userScore === oppScore) return { text: `${userScore}:${oppScore} R`, color: 'text-yellow-300' };
-    return { text: `${userScore}:${oppScore} P`, color: 'text-red-400' };
+    if (userScore > oppScore) return { text: `${userScore}:${oppScore}`, color: 'text-green-400' };
+    if (userScore === oppScore) return { text: `${userScore}:${oppScore}`, color: 'text-yellow-300' };
+    return { text: `${userScore}:${oppScore}`, color: 'text-red-400' };
   };
 
   const getOppColors = (clubId: string): string[] => {
@@ -461,7 +461,7 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
           onClick={e => e.stopPropagation()}
         >
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-white font-bold text-lg">Terminarz Rezerw - Sezon {seasonNumber}</h2>
+            <h2 className="text-white text-lg italic uppercase tracking-tighter">Terminarz Rezerw - Sezon {seasonNumber}</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">x</button>
           </div>
 
@@ -477,13 +477,13 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
               if (roundFixtures.length === 0) return null;
               const roundLabel = round === 1 ? 'Runda Jesienna' : 'Runda Wiosenna';
               return (
-                <div key={round}>
+                <div key={round} className="border border-white/10 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-black uppercase tracking-widest text-gray-400">{roundLabel}</span>
+                    <span className="text-xs italic uppercase tracking-tighter text-gray-400">{roundLabel}</span>
                     <div className="flex-1 h-px bg-gray-700" />
                   </div>
                   <div className="space-y-1">
-                    {roundFixtures.map((f, idx) => {
+                    {roundFixtures.map((f) => {
                       const resultLabel = getResultLabel(f);
                       const result = getResult(f);
                       const oppLabel = `${f.opponentClubName} II`;
@@ -496,20 +496,19 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
                           style={{ background: gradient }}
                           onClick={() => { if (result) { setSelectedResult(result); setSelectedFixture(f); } }}
                         >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className="text-gray-400 text-xs w-4 shrink-0">{idx + 1}</span>
-                            <span className="text-gray-300 text-xs w-16 shrink-0">{formatDate(f.date)}</span>
-                            <span className={`text-xs font-bold w-4 shrink-0 ${f.isHome ? 'text-green-400' : 'text-blue-400'}`}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span className={`text-xs w-4 shrink-0 italic uppercase tracking-tighter ${f.isHome ? 'text-green-400' : 'text-blue-400'}`}>
                               {f.isHome ? 'D' : 'W'}
                             </span>
-                            <span className="text-white truncate font-medium text-xs">{oppLabel}</span>
-                          </div>
-                          <div className="ml-1 shrink-0">
-                            {resultLabel ? (
-                              <span className={`font-bold text-xs ${resultLabel.color}`}>{resultLabel.text}</span>
-                            ) : (
-                              <span className="text-gray-500 text-xs">-</span>
-                            )}
+                            <span className="text-gray-300 text-xs w-16 shrink-0 italic uppercase tracking-tighter">{formatDate(f.date)}</span>
+                            <div className="shrink-0">
+                              {resultLabel ? (
+                                <span className={`text-xs italic uppercase tracking-tighter ${resultLabel.color}`}>{resultLabel.text}</span>
+                              ) : (
+                                <span className="text-gray-500 text-xs italic">-</span>
+                              )}
+                            </div>
+                            <span className="text-white text-xs italic uppercase tracking-tighter">{oppLabel}</span>
                           </div>
                         </div>
                       );

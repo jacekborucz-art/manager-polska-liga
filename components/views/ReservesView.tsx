@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { PlayerPosition, PlayerAttributes, ViewState, Player, ReserveProgressPoint } from '../../types';
+import { PlayerPosition, PlayerAttributes, ViewState, Player, ReserveProgressPoint, HealthStatus } from '../../types';
 import { Button } from '../ui/Button';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
@@ -538,11 +538,11 @@ export const ReservesView: React.FC = () => {
               {sortedReserves.map((player) => (
                 <tr
                   key={player.id}
-                  className={`${POSITION_ROW_BG[player.position]} border-b border-slate-700/50 hover:brightness-110 transition-all cursor-pointer`}
+                  className={`${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30 opacity-50' : POSITION_ROW_BG[player.position]} border-b border-slate-700/50 hover:brightness-110 transition-all cursor-pointer`}
                   onClick={() => viewPlayerDetails(player.id)}
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }}
                 >
-                  <td className={`px-1 py-1.5 sticky left-0 z-10 ${POSITION_ROW_BG[player.position]}`}>
+                  <td className={`px-1 py-1.5 sticky left-0 z-10 ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30' : POSITION_ROW_BG[player.position]}`}>
                     <div className="relative group/pos w-8">
                       <div className={`flex h-8 w-8 items-center justify-center rounded-full text-center text-[8px] font-black italic leading-none tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
                         {POSITION_LABEL[player.position]}
@@ -555,8 +555,17 @@ export const ReservesView: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className={`px-2 py-1.5 sticky left-[44px] z-10 whitespace-nowrap ${POSITION_ROW_BG[player.position]}`}>
-                    <span className="font-semibold italic tracking-tight uppercase text-slate-100 text-[15px]">{player.firstName} {player.lastName}</span>
+                  <td className={`px-2 py-1.5 sticky left-[44px] z-10 whitespace-nowrap ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30' : POSITION_ROW_BG[player.position]}`}>
+                    <span className={`font-semibold italic tracking-tight uppercase text-[15px] ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'text-slate-400' : 'text-slate-100'}`}>{player.firstName} {player.lastName}</span>
+                    {player.health.status === HealthStatus.INJURED && (
+                      <span className="ml-2 inline-flex items-center gap-0.5 text-red-400 font-black text-[11px] align-middle">
+                        <span>✚</span>
+                        <span>{player.health.injury?.daysRemaining}d</span>
+                      </span>
+                    )}
+                    {player.suspensionMatches > 0 && (
+                      <span className="ml-2 inline-flex items-center justify-center w-3 h-4 bg-red-600 rounded-[2px] align-middle" />
+                    )}
                   </td>
                   {ATTR_KEYS.map(key => {
                     const val = player.attributes[key];

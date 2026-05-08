@@ -16,7 +16,16 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     clubs,
     userTeamId,
     reopenWinterCampInvite,
+    respondToSportingDirectorObjective,
   } = useGame();
+
+  const userClub = clubs.find(c => c.id === userTeamId);
+  const activeDirectorObjective = userClub?.sportingDirectorObjective;
+  const canRespondToObjective =
+    mail.metadata?.type === 'SPORTING_DIRECTOR_OBJECTIVE' &&
+    !!activeDirectorObjective &&
+    activeDirectorObjective.status === 'ACTIVE' &&
+    activeDirectorObjective.id === mail.metadata.objectiveId;
 
   const getTypeColor = (type: MailType) => {
     switch (type) {
@@ -158,6 +167,38 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               >
                 Podpisz kontrakt
               </button>
+            )}
+
+            {canRespondToObjective && (
+              <>
+                <button
+                  onClick={() => {
+                    respondToSportingDirectorObjective('ACCEPT');
+                    onClose();
+                  }}
+                  className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Akceptuj cel
+                </button>
+                <button
+                  onClick={() => {
+                    respondToSportingDirectorObjective('NEGOTIATE');
+                    onClose();
+                  }}
+                  className="mr-4 rounded-2xl bg-sky-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Negocjuj
+                </button>
+                <button
+                  onClick={() => {
+                    respondToSportingDirectorObjective('CHALLENGE');
+                    onClose();
+                  }}
+                  className="mr-4 rounded-2xl bg-red-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Odrzuc cel
+                </button>
+              </>
             )}
 
             <button

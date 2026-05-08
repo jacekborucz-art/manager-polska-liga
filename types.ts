@@ -354,6 +354,9 @@ export interface MailMessage {
   } | {
     type: 'WINTER_CAMP_INVITE';
     expiryDate: string;
+  } | {
+    type: 'SPORTING_DIRECTOR_OBJECTIVE';
+    objectiveId: string;
   };
 }
 
@@ -981,6 +984,10 @@ export interface SportingDirectorPolicy {
 }
 
 export type SportingDirectorObjectiveType =
+  | 'WIN_NEXT_MATCH'
+  | 'AVOID_DEFEAT'
+  | 'HOLD_TOP_SPOT'
+  | 'STAY_IN_TOP_THREE'
   | 'POINTS_RUN'
   | 'DEFENSIVE_RUN'
   | 'YOUTH_DEVELOPMENT'
@@ -1050,6 +1057,7 @@ export interface Club {
   lastSportingDirectorPolicyDate?: string;
   lastSportingDirectorRelationshipEventDate?: string;
   lastSportingDirectorObjectiveDate?: string;
+  lastSportingDirectorObjectiveResolvedDate?: string;
   lastSportingDirectorCommunicationDate?: string;
   lastSportingDirectorBudgetAdjustmentDate?: string;
   sportingDirectorBoardInfluence?: number;

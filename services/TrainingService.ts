@@ -164,7 +164,36 @@ export const TrainingService = {
     const coachMultiplier = 0.70 + (coachTrainingAttr / 100) * 0.50;
 
     return reserves.map(player => {
-      if (player.health.status === HealthStatus.INJURED) return player;
+      if (player.health.status === HealthStatus.INJURED) {
+        const totalDays = player.health.injury?.totalDays || player.health.injury?.daysRemaining || 0;
+        if (totalDays <= 7) return player;
+
+        const updated = { ...player };
+        const stats = { ...updated.stats };
+        const seasonalChanges = { ...(stats.seasonalChanges || {}) };
+        const attributes = { ...updated.attributes };
+
+        const pRegress = totalDays > 14 ? 0.006 : 0.003;
+        const physicalAttrs: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength'];
+
+        physicalAttrs.forEach(key => {
+          if (Math.random() < pRegress) {
+            const currentChange = seasonalChanges[key as string] || 0;
+            if (currentChange > -3 && attributes[key] > 10) {
+              attributes[key] -= 1;
+              seasonalChanges[key as string] = currentChange - 1;
+            }
+          }
+        });
+
+        const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
+        return {
+          ...updated,
+          attributes,
+          overallRating: newOvr,
+          stats: { ...player.stats, ratingHistory: player.stats.ratingHistory || [], seasonalChanges }
+        };
+      }
 
       const updated = { ...player };
       const stats = { ...updated.stats };

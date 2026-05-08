@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, SportingDirectorPersonality } from '../../types';
+import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
 
@@ -330,10 +330,10 @@ const getDirectorPersonalityLabel = (personality?: SportingDirectorPersonality):
   switch (personality) {
     case 'CONTROLLER': return 'Kontroler';
     case 'VISIONARY': return 'Wizjoner';
-    case 'ACCOUNTANT': return 'Ksiegowy';
+    case 'ACCOUNTANT': return 'Księgowy';
     case 'PARTNER': return 'Partner trenera';
     case 'POLITICIAN': return 'Polityk klubowy';
-    case 'TALENT_HUNTER': return 'Lowca talentow';
+    case 'TALENT_HUNTER': return 'Łowca talentów';
     default: return 'Dyrektor';
   }
 };
@@ -355,8 +355,182 @@ const getDirectorBoardInfluenceLabel = (value = 0): string => {
   return 'Super';
 };
 
+const getDirectorRelationshipLabel = (value = 50): string => {
+  if (value >= 85) return 'Bardzo dobra';
+  if (value >= 70) return 'Dobra';
+  if (value >= 45) return 'Poprawna';
+  if (value >= 30) return 'Chlodna';
+  return 'Zla';
+};
+
+const clampObjectiveProgress = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
+
+const getHighPotentialYouthMinutes = (squad: Player[]): number =>
+  squad
+    .filter(player => player.age <= 21 && player.attributes.talent >= 68)
+    .reduce((sum, player) => sum + player.stats.minutesPlayed, 0);
+
+const getSquadWageBill = (squad: Player[]): number =>
+  squad.reduce((sum, player) => sum + (player.annualSalary ?? 0), 0);
+
+const getObjectiveStatusLabel = (status: SportingDirectorObjective['status']): string => {
+  switch (status) {
+    case 'COMPLETED': return 'Zaliczone';
+    case 'FAILED': return 'Niezaliczone';
+    case 'AWAITING_REVIEW': return 'W realizacji';
+    default: return 'Aktywne';
+  }
+};
+
+const getObjectiveStatusClasses = (status: SportingDirectorObjective['status']): string => {
+  switch (status) {
+    case 'COMPLETED': return 'bg-emerald-500/15 text-emerald-300 border-emerald-400/20';
+    case 'FAILED': return 'bg-red-500/15 text-red-300 border-red-400/20';
+    case 'AWAITING_REVIEW': return 'bg-sky-500/15 text-sky-300 border-sky-400/20';
+    default: return 'bg-amber-500/15 text-amber-300 border-amber-400/20';
+  }
+};
+
+const getObjectiveProgressClasses = (status: SportingDirectorObjective['status']): string => {
+  switch (status) {
+    case 'COMPLETED': return 'bg-emerald-400';
+    case 'FAILED': return 'bg-red-400';
+    case 'AWAITING_REVIEW': return 'bg-sky-400';
+    default: return 'bg-amber-400';
+  }
+};
+
+const getObjectivePanelData = (
+  objective: SportingDirectorObjective,
+  club: Club,
+  rank: number,
+  squad: Player[]
+): {
+  progressPercent: number;
+  progressLabel: string;
+  summaryLabel: string;
+  summaryValue: string;
+  resolvedMark: 'V' | 'X' | null;
+} => {
+  if (objective.status === 'COMPLETED') {
+    return {
+      progressPercent: 100,
+      progressLabel: 'Cel został wykonany',
+      summaryLabel: 'Wynik',
+      summaryValue: 'Zadanie domknięte pozytywnie',
+      resolvedMark: 'V',
+    };
+  }
+
+  if (objective.status === 'FAILED') {
+    return {
+      progressPercent: 100,
+      progressLabel: 'Cel został przegrany',
+      summaryLabel: 'Wynik',
+      summaryValue: 'Zadanie zakończone niepowodzeniem',
+      resolvedMark: 'X',
+    };
+  }
+
+  const matchesDelta = Math.max(0, club.stats.played - objective.baselinePlayed);
+  const pointsDelta = Math.max(0, club.stats.points - objective.baselinePoints);
+  const goalsAgainstDelta = Math.max(0, club.stats.goalsAgainst - objective.baselineGoalsAgainst);
+  const youthMinutesDelta = Math.max(0, getHighPotentialYouthMinutes(squad) - (objective.baselineYouthMinutes ?? 0));
+  const playerMinutesDelta = objective.targetPlayerId
+    ? Math.max(0, (squad.find(player => player.id === objective.targetPlayerId)?.stats.minutesPlayed ?? objective.baselinePlayerMinutes ?? 0) - (objective.baselinePlayerMinutes ?? 0))
+    : 0;
+  const wageReduction = objective.baselineWageBill != null
+    ? Math.max(0, objective.baselineWageBill - getSquadWageBill(squad))
+    : 0;
+
+  switch (objective.type) {
+    case 'WIN_NEXT_MATCH':
+      return {
+        progressPercent: clampObjectiveProgress((pointsDelta / 3) * 100),
+        progressLabel: `${Math.min(pointsDelta, 3)}/3 pkt`,
+        summaryLabel: 'Warunek',
+        summaryValue: matchesDelta > 0 ? 'Najbliższy mecz został rozegrany' : 'Czekamy na kolejny mecz ligowy',
+        resolvedMark: null,
+      };
+    case 'AVOID_DEFEAT':
+      return {
+        progressPercent: clampObjectiveProgress(pointsDelta >= 1 ? 100 : 0),
+        progressLabel: pointsDelta >= 1 ? 'Minimum punkt jest' : 'Punkt jeszcze nie został zdobyty',
+        summaryLabel: 'Warunek',
+        summaryValue: matchesDelta > 0 ? 'Najbliższy mecz został rozegrany' : 'Czekamy na kolejny mecz ligowy',
+        resolvedMark: null,
+      };
+    case 'HOLD_TOP_SPOT':
+      return {
+        progressPercent: clampObjectiveProgress(rank <= 1 ? 100 : Math.max(0, 100 - (rank - 1) * 35)),
+        progressLabel: rank <= 1 ? 'Lider utrzymany' : `Aktualnie ${rank}. miejsce`,
+        summaryLabel: 'Cel tabeli',
+        summaryValue: 'Utrzymać 1. miejsce',
+        resolvedMark: null,
+      };
+    case 'STAY_IN_TOP_THREE':
+      return {
+        progressPercent: clampObjectiveProgress(rank <= 3 ? 100 : Math.max(0, 100 - (rank - 3) * 20)),
+        progressLabel: rank <= 3 ? 'Czołówka utrzymana' : `Aktualnie ${rank}. miejsce`,
+        summaryLabel: 'Cel tabeli',
+        summaryValue: 'Utrzymać miejsce w top 3',
+        resolvedMark: null,
+      };
+    case 'POINTS_RUN':
+      return {
+        progressPercent: clampObjectiveProgress((pointsDelta / Math.max(1, objective.target)) * 100),
+        progressLabel: `${Math.min(pointsDelta, objective.target)}/${objective.target} pkt`,
+        summaryLabel: 'Seria',
+        summaryValue: `${matchesDelta} mecz. od startu celu`,
+        resolvedMark: null,
+      };
+    case 'DEFENSIVE_RUN': {
+      const remaining = Math.max(0, objective.target - goalsAgainstDelta);
+      return {
+        progressPercent: clampObjectiveProgress((remaining / Math.max(1, objective.target)) * 100),
+        progressLabel: `${goalsAgainstDelta}/${objective.target} straconych`,
+        summaryLabel: 'Limit',
+        summaryValue: `${remaining} zapasu do limitu`,
+        resolvedMark: null,
+      };
+    }
+    case 'YOUTH_DEVELOPMENT':
+      return {
+        progressPercent: clampObjectiveProgress((youthMinutesDelta / Math.max(1, objective.target)) * 100),
+        progressLabel: `${Math.min(youthMinutesDelta, objective.target)}/${objective.target} minut`,
+        summaryLabel: 'Minuty U21',
+        summaryValue: 'Liczą się minuty talentów U21',
+        resolvedMark: null,
+      };
+    case 'PLAYER_MINUTES':
+      return {
+        progressPercent: clampObjectiveProgress((playerMinutesDelta / Math.max(1, objective.target)) * 100),
+        progressLabel: `${Math.min(playerMinutesDelta, objective.target)}/${objective.target} minut`,
+        summaryLabel: 'Zawodnik',
+        summaryValue: objective.targetPlayerName ?? 'Wskazany młody zawodnik',
+        resolvedMark: null,
+      };
+    case 'WAGE_DISCIPLINE':
+      return {
+        progressPercent: clampObjectiveProgress((wageReduction / Math.max(1, objective.target)) * 100),
+        progressLabel: `${Math.min(wageReduction, objective.target).toLocaleString('pl-PL')} / ${objective.target.toLocaleString('pl-PL')} PLN`,
+        summaryLabel: 'Redukcja',
+        summaryValue: 'Spadek budżetu płac',
+        resolvedMark: null,
+      };
+    default:
+      return {
+        progressPercent: 0,
+        progressLabel: 'Brak danych',
+        summaryLabel: 'Status',
+        summaryValue: 'Czekamy na aktualizację',
+        resolvedMark: null,
+      };
+  }
+};
+
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
-  const { respondToSportingDirectorObjective } = useGame();
+  const { respondToSportingDirectorObjective, players } = useGame();
   const [isDirectorModalOpen, setIsDirectorModalOpen] = useState(false);
   const logo = getClubLogo(club.id);
   const board = club.board;
@@ -364,6 +538,10 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
   const directorPolicy = club.sportingDirectorPolicy;
   const directorObjective = club.sportingDirectorObjective;
   const directorBoardInfluence = club.sportingDirectorBoardInfluence ?? 0;
+  const squad = players[club.id] ?? [];
+  const objectivePanelData = directorObjective
+    ? getObjectivePanelData(directorObjective, club, rank, squad)
+    : null;
 
   const { situationType, seed } = useMemo<{ situationType: SituationType; seed: number }>(() => {
     const played = club.stats.played;
@@ -429,11 +607,11 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
   const confidenceTextColor = confidence > 70 ? 'text-emerald-400' : confidence > 40 ? 'text-amber-400' : 'text-red-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
       <div
-        className="relative w-full max-w-7xl max-h-[92vh] overflow-y-auto rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
+        className="relative w-full max-w-[1560px] max-h-[92vh] overflow-y-auto rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Tło */}
@@ -463,7 +641,60 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         </button>
 
         {/* Zawartość */}
-        <div className="relative z-10 grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
+        <div className="relative z-10 grid gap-6 p-6 xl:grid-cols-[380px_minmax(0,1fr)_500px] xl:p-8">
+          <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+            <div className="mb-5">
+              <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Panel</p>
+              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Członkowie Zarządu</h2>
+            </div>
+
+            {sportingDirector ? (
+              <div className="space-y-5">
+                <button
+                  type="button"
+                  onClick={() => setIsDirectorModalOpen(true)}
+                  className="w-full rounded-[22px] border border-sky-500/20 bg-sky-500/10 p-4 text-left transition-all hover:border-sky-400/35 hover:bg-sky-500/15"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-300/20 bg-black/25 text-xl font-black text-sky-100">
+                      DS
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-300">Dyrektor sportowy</p>
+                      <p className="mt-1 text-lg font-black italic uppercase tracking-tighter leading-tight text-white">
+                        {sportingDirector.firstName} {sportingDirector.lastName}
+                      </p>
+                      <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">Dyrektor sportowy</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-2">
+                    <span className="text-[9px] font-black italic uppercase tracking-tighter text-yellow-300">Szczegóły i interakcje</span>
+                    <span className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300">Otwórz</span>
+                  </div>
+                </button>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z zarządem</p>
+                    <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
+                      {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
+                    </p>
+                    <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
+                      <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500 mb-2">Wpływ na grę</p>
+                      <p className="text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
+                        Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[22px] border border-white/5 bg-black/25 p-5 text-sm text-slate-400">
+                Klub nie ma jeszcze przypisanego dyrektora sportowego.
+              </div>
+            )}
+          </aside>
+
           <div className="flex min-w-0 flex-col gap-6">
 
           {/* Nagłówek */}
@@ -559,49 +790,94 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
           <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
             <div className="mb-5">
               <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Panel</p>
-              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Zarząd Klubu</h2>
+              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Zadania</h2>
             </div>
 
             {sportingDirector ? (
-              <div className="space-y-5">
-                <button
-                  type="button"
-                  onClick={() => setIsDirectorModalOpen(true)}
-                  className="w-full rounded-[22px] border border-sky-500/20 bg-sky-500/10 p-4 text-left transition-all hover:border-sky-400/35 hover:bg-sky-500/15"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-300/20 bg-black/25 text-xl font-black text-sky-100">
-                      DS
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-300">Dyrektor sportowy</p>
-                      <p className="mt-1 text-lg font-black italic uppercase tracking-tighter leading-tight text-white">
-                        {sportingDirector.firstName} {sportingDirector.lastName}
-                      </p>
-                      <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">Dyrektor sportowy</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-2">
-                    <span className="text-[9px] font-black italic uppercase tracking-tighter text-yellow-300">Szczegóły i interakcje</span>
-                    <span className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300">Otwórz</span>
-                  </div>
-                </button>
-
                 <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
-                  <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z Zarządem</p>
-                    <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
-                      {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
-                    </p>
-                    <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
-                      <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500 mb-2">Wpływ na grę</p>
-                      <p className="text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
-                        Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
-                      </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Panel</p>
+                      <h3 className="mt-1 text-lg font-black italic uppercase tracking-tighter text-white">Zadania</h3>
                     </div>
+                    {directorObjective && objectivePanelData?.resolvedMark && (
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-full border text-base font-black italic uppercase tracking-tighter ${
+                        objectivePanelData.resolvedMark === 'V'
+                          ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
+                          : 'border-red-400/25 bg-red-500/15 text-red-300'
+                      }`}>
+                        {objectivePanelData.resolvedMark}
+                      </div>
+                    )}
                   </div>
+
+                  {directorObjective && objectivePanelData ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[11px] font-black italic uppercase tracking-tighter text-white">
+                            {directorObjective.title.replace('Cel dyrektora: ', '')}
+                          </p>
+                          <span className={`shrink-0 rounded-full border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${getObjectiveStatusClasses(directorObjective.status)}`}>
+                            {getObjectiveStatusLabel(directorObjective.status)}
+                          </span>
+                        </div>
+
+                        <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
+                          {directorObjective.description}
+                        </p>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                              {objectivePanelData.summaryLabel}
+                            </p>
+                            <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">
+                              {objectivePanelData.summaryValue}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Termin</p>
+                            <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">
+                              {new Date(directorObjective.dueAt).toLocaleDateString('pl-PL')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between gap-4">
+                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Postęp zadania</p>
+                            <p className="text-[9px] font-black italic uppercase tracking-tighter text-right text-slate-300">
+                              {objectivePanelData.progressLabel}
+                            </p>
+                          </div>
+                          <div className="h-3 w-full overflow-hidden rounded-full bg-black/50">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${getObjectiveProgressClasses(directorObjective.status)}`}
+                              style={{ width: `${objectivePanelData.progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {directorObjective.managerResponse && (
+                          <p className="mt-3 text-[9px] font-black italic uppercase tracking-tighter text-sky-300">
+                            Odpowiedź sztabu: {directorObjective.managerResponse === 'ACCEPTED' ? 'Akceptacja' : directorObjective.managerResponse === 'NEGOTIATED' ? 'Negocjacja' : 'Sprzeciw'}
+                          </p>
+                        )}
+
+                        {directorObjective.resultNote && (
+                          <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
+                            {directorObjective.resultNote}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-[11px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
+                      Brak aktywnego zadania dyrektora. Gdy pojawi się nowy cel, jego postęp będzie widoczny właśnie tutaj.
+                    </p>
+                  )}
                 </div>
-              </div>
             ) : (
               <div className="rounded-[22px] border border-white/5 bg-black/25 p-5 text-sm text-slate-400">
                 Klub nie ma jeszcze przypisanego dyrektora sportowego.
@@ -661,13 +937,13 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     { label: 'Kontrola', value: sportingDirector.control },
-                    { label: 'Elastycznosc', value: sportingDirector.flexibility },
+                    { label: 'Elastyczność', value: sportingDirector.flexibility },
                     { label: 'Ambicja', value: sportingDirector.ambition },
                     { label: 'Wiedza', value: sportingDirector.footballKnowledge },
                     { label: 'Negocjacje', value: sportingDirector.negotiation },
                     { label: 'Finanse', value: sportingDirector.financialDiscipline },
-                    { label: 'Rozwoj', value: sportingDirector.developmentVision },
-                    { label: 'Relacja', value: sportingDirector.relationshipWithManager, percent: true },
+                    { label: 'Rozwój', value: sportingDirector.developmentVision },
+                    { label: 'Relacja z trenerem', value: sportingDirector.relationshipWithManager, percent: true },
                   ].map(stat => (
                     <div key={stat.label} className="rounded-[16px] border border-white/5 bg-black/25 p-3">
                       <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{stat.label}</p>
@@ -676,6 +952,13 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                       </p>
                     </div>
                   ))}
+                </div>
+
+                <div className="rounded-[20px] border border-sky-500/10 bg-sky-500/[0.06] p-4">
+                  <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Jak to czytać</p>
+                  <p className="mt-2 text-xs font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
+                    Relacja z trenerem pokazuje osobistą współpracę z dyrektorem sportowym. Osobno, niżej, widzisz jego wpływ na zarząd, czyli to jak mocno wspiera albo podkopuje Twoją pozycję politycznie.
+                  </p>
                 </div>
 
                 <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
