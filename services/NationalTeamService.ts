@@ -537,9 +537,38 @@ export const NationalTeamService = {
       let changed = false;
 
       for (const pos of POSITIONS) {
+        const REQUIRED: Record<PlayerPosition, number> = {
+          [PlayerPosition.GK]:  NT_GK,
+          [PlayerPosition.DEF]: NT_DEF,
+          [PlayerPosition.MID]: NT_MID,
+          [PlayerPosition.FWD]: NT_FWD,
+        };
+        const required = REQUIRED[pos] ?? 0;
+
         const squadAtPos = squadIds
           .map((id, idx) => ({ id, idx, player: playerMap[id] }))
           .filter(entry => entry.player?.position === pos);
+
+        const missing = required - squadAtPos.length;
+        if (missing > 0) {
+          const isEligibleFiller = (p: Player): boolean => {
+            if (p.position !== pos) return false;
+            if (p.health.status !== HealthStatus.HEALTHY) return false;
+            return isEligibleForTeam(team, p, squadIds);
+          };
+          const fillers = clubPlayersList
+            .filter(isEligibleFiller)
+            .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+            .sort((a, b) => b.score - a.score)
+            .map(x => x.player)
+            .slice(0, missing);
+          fillers.forEach(p => {
+            squadIds.push(p.id);
+            allPlayerUpdates.push({ id: p.id, assignedNationalTeamId: team.id });
+            calledUpFromClub.push({ playerId: p.id, teamName: team.name });
+            changed = true;
+          });
+        }
 
         if (squadAtPos.length === 0) continue;
 
