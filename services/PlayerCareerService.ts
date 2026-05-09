@@ -64,6 +64,30 @@ export const PlayerCareerService = {
     ];
   },
 
+  reopenOrCreateEntry(
+    history: PlayerHistoryEntry[],
+    player: Player,
+    target: CareerEntryTarget,
+    year: number,
+    month: number
+  ): PlayerHistoryEntry[] {
+    const closeIdx = history.findIndex(e => e.clubId !== target.clubId && e.toYear === null);
+    let closed = closeIdx >= 0
+      ? history.map((e, i) => i === closeIdx
+          ? { ...e, toYear: year, toMonth: month, statsSnapshot: e.statsSnapshot ?? this.buildStatsSnapshot(player) }
+          : e)
+      : [...history];
+
+    const existingIdx = closed.findIndex(e => e.clubId === target.clubId && e.clubName === target.clubName);
+    if (existingIdx >= 0) {
+      return closed.map((e, i) => i === existingIdx
+        ? { ...e, toYear: null, toMonth: null, statsSnapshot: undefined }
+        : e);
+    }
+
+    return this.startNewEntry(closed, target, year, month);
+  },
+
   movePlayer(
     player: Player,
     target: CareerEntryTarget,

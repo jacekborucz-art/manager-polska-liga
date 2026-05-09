@@ -4475,15 +4475,17 @@ const finalResult: SimulationOutput = {
               const userSide = reserveFixture.isHome ? 'HOME' : 'AWAY';
               const playerGoals = engineResult.goals.filter(g => g.teamId === userSide && g.playerId === p.id).length;
               const playerAssists = engineResult.goals.filter(g => g.teamId === userSide && g.assistantId === p.id).length;
-              const playerCards = engineResult.cards.filter(c => c.playerId === p.id).length;
-              const gotRedCard = engineResult.cards.some(c => c.playerId === p.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
-              const prev2 = basePlayer.reserveStats ?? { matches: 0, goals: 0, assists: 0, cards: 0, totalRatingPoints: 0 };
+              const playerYellowCards = engineResult.cards.filter(c => c.playerId === p.id && c.type === 'YELLOW').length;
+              const playerRedCards = engineResult.cards.filter(c => c.playerId === p.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW')).length;
+              const gotRedCard = playerRedCards > 0;
+              const prev2 = basePlayer.reserveStats ?? { matches: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, totalRatingPoints: 0 };
               const newStats: ReserveSeasonStats = {
-                matches: prev2.matches + 1,
-                goals: prev2.goals + playerGoals,
-                assists: prev2.assists + playerAssists,
-                cards: prev2.cards + playerCards,
-                totalRatingPoints: prev2.totalRatingPoints + (rating ?? 6.0),
+                matches: (prev2.matches ?? 0) + 1,
+                goals: (prev2.goals ?? 0) + playerGoals,
+                assists: (prev2.assists ?? 0) + playerAssists,
+                yellowCards: (prev2.yellowCards ?? 0) + playerYellowCards,
+                redCards: (prev2.redCards ?? 0) + playerRedCards,
+                totalRatingPoints: (prev2.totalRatingPoints ?? 0) + (rating ?? 6.0),
               };
               return {
                 ...basePlayer,

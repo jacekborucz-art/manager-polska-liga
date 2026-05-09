@@ -12,6 +12,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
 import { WeeklyMotivationModal } from '../modals/WeeklyMotivationModal';
 import { WeeklyMotivationService } from '../../services/WeeklyMotivationService';
+import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
@@ -182,7 +183,20 @@ export const SquadView: React.FC = () => {
 
     updateLineup(userTeamId, newLineup);
     setPlayers(prev => ({ ...prev, [userTeamId]: prev[userTeamId].filter(p => p.id !== player.id) }));
-    setReserves(prev => [...prev, player]);
+    const clubData = clubs.find(c => c.id === userTeamId);
+    let updatedPlayer = player;
+    if (clubData) {
+      const d = currentDate instanceof Date ? currentDate : new Date(currentDate);
+      const newHistory = PlayerCareerService.reopenOrCreateEntry(
+        player.history || [],
+        player,
+        { clubId: userTeamId, clubName: `${clubData.name} II` },
+        d.getFullYear(),
+        d.getMonth() + 1
+      );
+      updatedPlayer = { ...player, history: newHistory };
+    }
+    setReserves(prev => [...prev, updatedPlayer]);
   };
 
   const currentTactic = useMemo(() => {

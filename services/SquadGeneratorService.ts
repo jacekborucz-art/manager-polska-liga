@@ -899,7 +899,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         marketValue: 0, // obliczone poniżej
         isOnTransferList: false,
         history: [{
-          clubName: clubName,
+          clubName: `${clubName} II`,
           clubId: clubId,
           fromYear: 2024,
           fromMonth: 7,

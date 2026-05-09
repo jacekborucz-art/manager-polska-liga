@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { ReserveScheduleModal } from '../modals/ReserveScheduleModal';
+import { PlayerCareerService } from '../../services/PlayerCareerService';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -356,11 +357,23 @@ export const ReservesView: React.FC = () => {
 
   const moveToFirstTeam = (player: Player) => {
     if (!userTeamId) return;
+    const clubData = clubs.find(c => c.id === userTeamId);
+    if (!clubData) return;
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const newHistory = PlayerCareerService.reopenOrCreateEntry(
+      player.history || [],
+      player,
+      { clubId: userTeamId, clubName: clubData.name },
+      year,
+      month
+    );
+    const updatedPlayer = { ...player, history: newHistory };
     setReserves(prev => prev.filter(p => p.id !== player.id));
-    setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), player] }));
+    setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), updatedPlayer] }));
     const currentLineup = lineups[userTeamId];
     if (currentLineup) {
-      updateLineup(userTeamId, { ...currentLineup, reserves: [...currentLineup.reserves, player.id] });
+      updateLineup(userTeamId, { ...currentLineup, reserves: [...currentLineup.reserves, updatedPlayer.id] });
     }
   };
 

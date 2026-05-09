@@ -35,20 +35,20 @@ export const PlayerCard: React.FC = () => {
             budget: 0, boardStrictness: 0, signingBonusPool: 0, transferBudget: 0
           };
         }
-        return { player, club: clubData! };
+        return { player, club: clubData!, isReserve: false };
       }
     }
     const reservePlayer = reserves.find(p => p.id === viewedPlayerId);
     if (reservePlayer) {
       const clubData = clubs.find(c => c.id === reservePlayer.clubId);
-      return { player: reservePlayer, club: clubData! };
+      return { player: reservePlayer, club: clubData!, isReserve: true };
     }
     return null;
   }, [viewedPlayerId, players, reserves, clubs]);
 
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
-  const { player, club } = data;
+  const { player, club, isReserve } = data;
   const isContractLocked = player.contractLockoutUntil && new Date(currentDate) < new Date(player.contractLockoutUntil);
   const isTransferLocked = player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil);
   const visibleInterestedClubs = (player.interestedClubs || []).filter(clubId => clubId !== player.clubId);
@@ -123,7 +123,7 @@ export const PlayerCard: React.FC = () => {
       const d = new Date(currentDate);
       baseHistory.push({
         clubId: player.clubId,
-        clubName: club.name,
+        clubName: isReserve ? `${club.name} II` : club.name,
         fromYear: d.getFullYear(),
         fromMonth: d.getMonth() + 1,
         toYear: null,
@@ -133,8 +133,20 @@ export const PlayerCard: React.FC = () => {
     return baseHistory
       .map((entry, index) => {
         const isCurrentClubEntry = entry.toYear === null && entry.clubId === player.clubId;
+        const isReserveEntry = entry.clubName.endsWith(' II');
         const statsSnapshot: PlayerCareerStatsSnapshot | null = isCurrentClubEntry
-          ? PlayerCareerService.buildStatsSnapshot(player)
+          ? (isReserveEntry && player.reserveStats
+              ? {
+                  matchesPlayed: player.reserveStats.matches,
+                  goals: player.reserveStats.goals,
+                  assists: player.reserveStats.assists,
+                  yellowCards: player.reserveStats.yellowCards ?? 0,
+                  redCards: player.reserveStats.redCards ?? 0,
+                  averageRating: player.reserveStats.matches > 0
+                    ? parseFloat((player.reserveStats.totalRatingPoints / player.reserveStats.matches).toFixed(1))
+                    : null
+                }
+              : PlayerCareerService.buildStatsSnapshot(player))
           : entry.statsSnapshot || null;
 
         return {
@@ -146,7 +158,7 @@ export const PlayerCard: React.FC = () => {
         };
       })
       .reverse();
-  }, [clubs, player, club, currentDate]);
+  }, [clubs, player, club, currentDate, isReserve]);
 
 
 
@@ -216,7 +228,7 @@ export const PlayerCard: React.FC = () => {
                  <div className="flex flex-col gap-1">
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Status Kontraktu</span>
                     <span className="text-xs font-black text-white italic uppercase tracking-tight">
-                       {club.id === 'FREE_AGENTS' ? 'Wolny Agent' : player.id.startsWith('RES_') ? `${club.name} II` : club.name}
+                       {club.id === 'FREE_AGENTS' ? 'Wolny Agent' : isReserve ? `${club.name} II` : club.name}
                     </span>
                  </div>
                  <div className="w-10 h-10 rounded-xl flex flex-col overflow-hidden border border-white/20 shadow-lg">
@@ -305,6 +317,29 @@ export const PlayerCard: React.FC = () => {
               </div>
             </div>
 
+            {player.reserveStats && (
+              <div className="flex-shrink-0 flex flex-col gap-2">
+                <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
+                  <span className="w-8 h-px bg-violet-400/30" /> Statystyki Sezonowe — Rezerwy
+                </h3>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[
+                    { label: 'Mecze', val: player.reserveStats.matches, icon: '📅' },
+                    { label: 'Gole', val: player.reserveStats.goals, icon: '⚽', color: 'text-emerald-400' },
+                    { label: 'Asysty', val: player.reserveStats.assists, icon: '👟', color: 'text-blue-400' },
+                    { label: 'Żółte', val: player.reserveStats.yellowCards ?? 0, icon: '🟨', color: 'text-amber-400' },
+                    { label: 'Czerwone', val: player.reserveStats.redCards ?? 0, icon: '🟥', color: 'text-red-500' },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-transparent p-2 rounded-2xl border border-white/5 text-center group hover:border-white/10 transition-all">
+                      <span className="text-sm mb-0.5 block transform group-hover:scale-125 transition-transform">{s.icon}</span>
+                      <span className={`text-lg font-black font-mono block drop-shadow ${s.color || 'text-white'}`}>{s.val}</span>
+                      <span className="text-[7px] font-black text-white uppercase tracking-widest drop-shadow">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* STAN ZDROWIA */}
             <div className="flex-shrink-0 flex flex-col gap-2">
               <h3 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
@@ -382,7 +417,7 @@ export const PlayerCard: React.FC = () => {
                           </td>
                           <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             <span className="block max-w-[92px] truncate">
-                              {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : entry.clubName}
+                              {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : (isReserve && isCurrentClubEntry && !entry.clubName.endsWith(' II')) ? `${entry.clubName} II` : entry.clubName}
                             </span>
                           </td>
                           <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>

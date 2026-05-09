@@ -612,7 +612,8 @@ export interface ReserveSeasonStats {
   matches: number;
   goals: number;
   assists: number;
-  cards: number;
+  yellowCards: number;
+  redCards: number;
   totalRatingPoints: number;
 }
 
