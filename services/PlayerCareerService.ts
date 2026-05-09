@@ -13,11 +13,11 @@ export const PlayerCareerService = {
       : null;
 
     return {
-      matchesPlayed: player.stats?.matchesPlayed || 0,
-      goals: player.stats?.goals || 0,
-      assists: player.stats?.assists || 0,
-      yellowCards: player.stats?.yellowCards || 0,
-      redCards: player.stats?.redCards || 0,
+      matchesPlayed: (player.stats?.matchesPlayed || 0) + (player.cupStats?.matchesPlayed || 0) + (player.euroStats?.matchesPlayed || 0),
+      goals: (player.stats?.goals || 0) + (player.cupStats?.goals || 0) + (player.euroStats?.goals || 0),
+      assists: (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0),
+      yellowCards: (player.stats?.yellowCards || 0) + (player.cupStats?.yellowCards || 0) + (player.euroStats?.yellowCards || 0),
+      redCards: (player.stats?.redCards || 0) + (player.cupStats?.redCards || 0) + (player.euroStats?.redCards || 0),
       averageRating
     };
   },

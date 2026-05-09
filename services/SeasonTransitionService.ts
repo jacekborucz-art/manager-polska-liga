@@ -80,18 +80,9 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             suspensionMatches: 0, // Reset kar ligowych
             stats: {
               ...player.stats,
-              goals: 0,
-              assists: 0,
-              yellowCards: 0,
-              redCards: 0,
-              cleanSheets: 0,
-              matchesPlayed: 0,
-              minutesPlayed: 0,
               seasonalChanges: {},
-               ratingHistory: []  // Reset limitu rozwoju treningowego
+              ratingHistory: []  // Reset limitu rozwoju treningowego
             },
-            cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
-            euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
             cupSuspensionMatches: 0,
             euroSuspensionMatches: 0
           });
