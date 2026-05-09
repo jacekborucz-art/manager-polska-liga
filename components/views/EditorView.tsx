@@ -101,13 +101,16 @@ export const EditorView: React.FC = () => {
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
 
   const allExportableClubs = useMemo(() =>
-    clubs.filter(c => c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4'),
+    clubs.filter(c =>
+      c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4' ||
+      ((c.leagueId === 'L_CL' || c.leagueId === 'L_EL' || c.leagueId === 'L_CONF') && ['ENG', 'ESP', 'ITA', 'GER', 'FRA'].includes(c.country ?? ''))
+    ),
   [clubs]);
 
   const exportClubsByTier = useMemo(() => {
     const map: Record<string, typeof allExportableClubs> = {};
     allExportableClubs.forEach(c => {
-      const key = c.leagueId;
+      const key = (c.leagueId === 'L_CL' || c.leagueId === 'L_EL' || c.leagueId === 'L_CONF') ? (c.country ?? c.leagueId) : c.leagueId;
       if (!map[key]) map[key] = [];
       map[key].push(c);
     });
@@ -119,6 +122,11 @@ export const EditorView: React.FC = () => {
     'L_PL_2': 'Liga 2',
     'L_PL_3': 'Liga 3',
     'L_PL_4': 'Liga 4',
+    'ENG': 'Anglia',
+    'ESP': 'Hiszpania',
+    'ITA': 'Włochy',
+    'GER': 'Niemcy',
+    'FRA': 'Francja',
   };
 
   const toggleExportClub = (id: string) => {
@@ -537,7 +545,7 @@ export const EditorView: React.FC = () => {
               <button onClick={() => setShowExportModal(false)} className="text-slate-500 hover:text-white text-lg leading-none">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto editor-scroll px-5 py-3">
-              {(['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4'] as const).map(leagueId => {
+              {(['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', 'ENG', 'ESP', 'ITA', 'GER', 'FRA']).map(leagueId => {
                 const tierClubs = exportClubsByTier[leagueId] ?? [];
                 if (tierClubs.length === 0) return null;
                 const allChecked = tierClubs.every(c => exportSelected.has(c.id));
