@@ -150,6 +150,11 @@ const isEligibleForTeam = (
     if (!isEkstraklasa && !isTopForeign) return false;
   }
 
+  if (team.reputation >= 14 && team.region !== Region.POLAND) {
+    const clubLeagueId = CLUB_LEAGUE_ID_BY_ID.get(player.clubId);
+    if (clubLeagueId && clubLeagueId.startsWith('L_PL_') && clubLeagueId !== 'L_PL_1') return false;
+  }
+
   return true;
 };
 

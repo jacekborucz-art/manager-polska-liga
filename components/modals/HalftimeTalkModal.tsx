@@ -261,21 +261,21 @@ export const HalftimeTalkModal = ({
 
           <div className="flex flex-col gap-2.5">
             {statsRows.map((row, idx) => {
-              const uBarColor = idx % 2 === 0 ? userKitPrimary : userKitSecondary;
-              const oBarColor = idx % 2 === 0 ? oppKitPrimary  : oppKitSecondary;
+              const leftBarColor  = idx % 2 === 0 ? homeKitPrimary  : homeKitSecondary;
+              const rightBarColor = idx % 2 === 0 ? awayKitPrimary  : awayKitSecondary;
               return (
                 <div key={row.label} className="flex items-center gap-3">
                   <span className="w-12 text-right text-xl font-black italic leading-none text-white">
                     {row.uVal}
                   </span>
                   <div className="flex-1 flex items-center h-4 overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
-                    <div className="h-full rounded-l-full transition-all" style={{ width: `${row.u}%`, backgroundColor: uBarColor }} />
+                    <div className="h-full rounded-l-full transition-all" style={{ width: `${row.u}%`, backgroundColor: leftBarColor }} />
                   </div>
                   <span className="text-[8px] font-black text-white/70 uppercase tracking-widest shrink-0 w-24 text-center">
                     {row.label}
                   </span>
                   <div className="flex-1 h-4 overflow-hidden rounded-r-full bg-white/[0.04]">
-                    <div className="h-full rounded-r-full transition-all" style={{ width: `${row.o}%`, backgroundColor: oBarColor }} />
+                    <div className="h-full rounded-r-full transition-all" style={{ width: `${row.o}%`, backgroundColor: rightBarColor }} />
                   </div>
                   <span className="w-12 text-left text-xl font-black italic leading-none text-white">
                     {row.oVal}

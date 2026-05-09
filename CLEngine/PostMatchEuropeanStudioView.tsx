@@ -206,7 +206,7 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
     const isMOTM = motm?.playerId === p.playerId;
     const rating = p.rating || 6.0;
     return (
-      <div key={p.playerId} className={`flex items-center gap-3 p-2 mb-1 transition-all rounded-lg ${isMOTM ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5 border border-transparent'} ${isSub ? 'opacity-40 grayscale-[0.6] bg-white/[0.01]' : ''}`}>
+      <div key={p.playerId} className={`flex items-center gap-3 py-[3px] px-2 mb-0 transition-all rounded-lg ${isMOTM ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5 border border-transparent'} ${isSub ? 'opacity-40 grayscale-[0.6] bg-white/[0.01]' : ''}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border shrink-0 ${PlayerPresentationService.getPositionBadgeClass(p.position)}`}>
           {p.position}
         </div>
@@ -319,7 +319,7 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
         <div className={`${GLASS_PANEL} w-80 rounded-[45px] p-6 flex flex-col shrink-0`}>
           <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 text-center">RAPORT: {homeClub.shortName}</h3>
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-            <div className="space-y-[4px]">
+            <div className="space-y-0">
               <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-2">Pierwszy Skład</span>
               {sortedData.homeStarters.map(p => renderPlayerRow(p, 'LEFT'))}
               {sortedData.homeSubs.length > 0 && (
@@ -382,7 +382,7 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
         <div className={`${GLASS_PANEL} w-80 rounded-[45px] p-6 flex flex-col shrink-0`}>
           <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 text-center">RAPORT: {awayClub.shortName}</h3>
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-            <div className="space-y-[4px]">
+            <div className="space-y-0">
               <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mr-2 text-right">Pierwszy Skład</span>
               {sortedData.awayStarters.map(p => renderPlayerRow(p, 'RIGHT'))}
               {sortedData.awaySubs.length > 0 && (

@@ -5,13 +5,15 @@ import { Button } from '../ui/Button';
 import szpitalBg from '../../Graphic/themes/szpital.png';
 
 export const HospitalView: React.FC = () => {
-  const { navigateTo, userTeamId, players } = useGame();
+  const { navigateTo, userTeamId, players, reserves } = useGame();
 
   const injuredPlayers = useMemo(() => {
     if (!userTeamId) return [];
     const squad = players[userTeamId] || [];
-    return squad.filter(p => p.health.status === HealthStatus.INJURED && p.health.injury);
-  }, [players, userTeamId]);
+    const mainInjured = squad.filter(p => p.health.status === HealthStatus.INJURED && p.health.injury);
+    const reserveInjured = reserves.filter(p => p.health.status === HealthStatus.INJURED && p.health.injury);
+    return [...mainInjured, ...reserveInjured];
+  }, [players, userTeamId, reserves]);
 
   return (
     <>

@@ -13,6 +13,7 @@ import { TeamAnalysisModal } from './TeamAnalysisModal';
 import { WeeklyMotivationModal } from '../modals/WeeklyMotivationModal';
 import { WeeklyMotivationService } from '../../services/WeeklyMotivationService';
 import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
+import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 
 export const SquadView: React.FC = () => {
@@ -88,7 +89,10 @@ export const SquadView: React.FC = () => {
   const mySchedule = useMemo(() => {
     if (!userTeamId) return [];
     return [...fixtures]
-      .filter(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      .filter(f =>
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        !String(f.leagueId).endsWith('_DRAW')
+      )
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [fixtures, userTeamId]);
 
@@ -971,9 +975,17 @@ export const SquadView: React.FC = () => {
                         : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
                       const isFinished = f.status === MatchStatus.FINISHED;
                       const isPast = new Date(f.date) < currentDate;
-                      const myScore = isHome ? f.homeScore : f.awayScore;
-                      const oppScore = isHome ? f.awayScore : f.homeScore;
-                      const resultColor = isFinished
+                      const histEntry = !isFinished && isPast
+                        ? MatchHistoryService.getAll().find(e => e.matchId === f.id)
+                        : undefined;
+                      const isDisplayFinished = isFinished || !!histEntry;
+                      const myScore = isHome
+                        ? (f.homeScore ?? histEntry?.homeScore ?? null)
+                        : (f.awayScore ?? histEntry?.awayScore ?? null);
+                      const oppScore = isHome
+                        ? (f.awayScore ?? histEntry?.awayScore ?? null)
+                        : (f.homeScore ?? histEntry?.homeScore ?? null);
+                      const resultColor = isDisplayFinished
                         ? myScore! > oppScore! ? 'text-emerald-400' : myScore! < oppScore! ? 'text-red-400' : 'text-slate-300'
                         : 'text-slate-600';
                       const logo = opponent ? getClubLogo(opponent.id) : null;
@@ -998,7 +1010,7 @@ export const SquadView: React.FC = () => {
                           </td>
                           <td className="px-6 py-2.5 text-center align-middle">
                             <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
-                              {isFinished ? `${myScore}:${oppScore}` : '-:-'}
+                              {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
                             </span>
                           </td>
                           <td className="px-4 py-2.5 align-middle">

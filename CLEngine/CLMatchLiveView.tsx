@@ -3302,7 +3302,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     )}
 
     {/* Etykieta Końca Meczu */}
-    {matchState.isFinished && (
+    {matchState.isFinished && !showPostMatchDebrief && (
       <div className="absolute inset-0 z-[999] flex items-center justify-center pointer-events-none" style={{ transform: 'rotateX(-24deg)' }}>
         <div className="bg-slate-950/90 backdrop-blur-2xl border-y-4 border-emerald-500 px-20 py-12 rounded-[50px] shadow-[0_0_120px_rgba(34,197,94,0.6)] animate-pulse">
           <div className="flex flex-col items-center gap-4">

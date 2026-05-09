@@ -65,6 +65,8 @@ import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { TalkEffect } from '../services/HalftimeTalkService';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
 import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
+import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.EL_R1Q, CompetitionType.EL_R1Q_RETURN,
@@ -93,6 +95,13 @@ const FIRST_LEG_MAP: Partial<Record<CompetitionType, CompetitionType>> = {
 };
 
 const getEuropeanBriefingMatchStage = (competition: CompetitionType): BriefingMatchStage => {
+  if (competition === CompetitionType.EL_FINAL) return 'CUP_FINAL';
+  if (competition === CompetitionType.EL_SF || competition === CompetitionType.EL_SF_RETURN) return 'CUP_SEMIFINAL';
+  if (competition === CompetitionType.EL_GROUP_STAGE) return 'LEAGUE';
+  return 'CUP';
+};
+
+const getEuropeanDebriefMatchStage = (competition: CompetitionType): DebriefMatchStage => {
   if (competition === CompetitionType.EL_FINAL) return 'CUP_FINAL';
   if (competition === CompetitionType.EL_SF || competition === CompetitionType.EL_SF_RETURN) return 'CUP_SEMIFINAL';
   if (competition === CompetitionType.EL_GROUP_STAGE) return 'LEAGUE';
@@ -164,6 +173,16 @@ export const ELMatchLiveView = () => {
   const [showBriefing, setShowBriefing] = useState(true);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
+  const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [pendingFinishPayload, setPendingFinishPayload] = useState<{
+    simResultMerged: any;
+    matchHistoryArgs: any;
+    summary: MatchSummary;
+    userTeamId: string;
+    debriefContext: DebriefContext;
+    debriefMatchStage: DebriefMatchStage;
+    sessionSeed: number;
+  } | null>(null);
   const [activePenalty, setActivePenalty] = useState<{
     side: 'HOME' | 'AWAY',
     kicker: Player,
@@ -2010,19 +2029,7 @@ const summary: MatchSummary = {
     });
     // KONIEC WSTAWKI
 
-    applySimulationResult({ 
-      ...simResult, 
-      updatedClubs, 
-      updatedFixtures: clBgResult.updatedFixtures, 
-      updatedPlayers, 
-      roundResults: finalRoundResults, 
-      seasonNumber, 
-      ratings: finalRatingsMap 
-    });
-
-
-
-    MatchHistoryService.logMatch({
+    const matchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
       season: seasonNumber,
@@ -2032,8 +2039,6 @@ const summary: MatchSummary = {
       homeScore: matchState.homeScore,
       awayScore: matchState.awayScore,
       attendance: attendance,
-
-
       goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
         .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
      cards: (() => {
@@ -2043,9 +2048,9 @@ const summary: MatchSummary = {
             .filter(l => l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD)
             .sort((a, b) => a.minute - b.minute)
             .map(l => {
-               const pId = l.playerName || '?'; 
+               const pId = l.playerName || '?';
                let finalType: 'YELLOW' | 'RED' | 'SECOND_YELLOW' = l.type === MatchEventType.RED_CARD ? 'RED' : 'YELLOW';
-               
+
                if (finalType === 'YELLOW') {
                   playerYellowCount[pId] = (playerYellowCount[pId] || 0) + 1;
                   if (playerYellowCount[pId] === 2) finalType = 'SECOND_YELLOW';
@@ -2059,10 +2064,42 @@ const summary: MatchSummary = {
                };
             });
         })()
-    });
+    };
+
+    const debriefUserScore    = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+    const debriefOppScore     = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+    const debriefUserRep      = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+    const debriefOppRep       = userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+    const debriefUserGoals    = userSide === 'HOME' ? matchState.homeGoals.filter(g => !g.varDisallowed) : matchState.awayGoals.filter(g => !g.varDisallowed);
+    const debriefOppGoals     = userSide === 'HOME' ? matchState.awayGoals.filter(g => !g.varDisallowed) : matchState.homeGoals.filter(g => !g.varDisallowed);
+    const debriefUserHasRed   = matchState.sentOffIds.some(id => (userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id));
+    const debriefCtx          = getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRed);
 
     setLastMatchSummary(summary);
+    setPendingFinishPayload({
+      simResultMerged: { ...simResult, updatedClubs, updatedFixtures: clBgResult.updatedFixtures, updatedPlayers, roundResults: finalRoundResults, seasonNumber, ratings: finalRatingsMap },
+      matchHistoryArgs,
+      summary,
+      userTeamId: userTeamId!,
+      debriefContext: debriefCtx,
+      debriefMatchStage: getEuropeanDebriefMatchStage(ctx.fixture.leagueId as CompetitionType),
+      sessionSeed,
+    });
+    setShowPostMatchDebrief(true);
+  };
+
+  const handleELDebriefClose = (effect: DebriefEffect) => {
+    if (!pendingFinishPayload) return;
+    const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
+      if (c.id !== pendingFinishPayload.userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      return { ...c, morale: newMorale };
+    });
+    applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
+    MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
     setMatchState(null);
+    setShowPostMatchDebrief(false);
+    setPendingFinishPayload(null);
     navigateTo(ViewState.POST_MATCH_EUROPEAN_STUDIO);
   };
 
@@ -3043,6 +3080,21 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           sessionSeed={matchState.sessionSeed} />
       )}
 
+      {showPostMatchDebrief && pendingFinishPayload && (
+        <PostMatchDebriefModal
+          isOpen={true}
+          onClose={handleELDebriefClose}
+          context={pendingFinishPayload.debriefContext}
+          matchStage={pendingFinishPayload.debriefMatchStage}
+          userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
+          oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
+          userSide={userSide}
+          homeClubName={pendingFinishPayload.summary.homeClub.name}
+          awayClubName={pendingFinishPayload.summary.awayClub.name}
+          sessionSeed={pendingFinishPayload.sessionSeed}
+        />
+      )}
+
       {isTacticsOpen && (
         <div className="fixed inset-0 z-[990] backdrop-blur-md bg-black/40 pointer-events-none" />
       )}
@@ -3202,7 +3254,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     )}
 
     {/* Etykieta Końca Meczu */}
-    {matchState.isFinished && (
+    {matchState.isFinished && !showPostMatchDebrief && (
       <div className="absolute inset-0 z-[999] flex items-center justify-center pointer-events-none" style={{ transform: 'rotateX(-24deg)' }}>
         <div className="bg-slate-950/90 backdrop-blur-2xl border-y-4 border-emerald-500 px-20 py-12 rounded-[50px] shadow-[0_0_120px_rgba(34,197,94,0.6)] animate-pulse">
           <div className="flex flex-col items-center gap-4">

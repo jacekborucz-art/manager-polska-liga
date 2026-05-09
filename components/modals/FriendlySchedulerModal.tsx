@@ -95,10 +95,10 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   const today = useMemo(() => new Date(currentDate), [currentDate]);
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
 
-  // Minimum date: tomorrow (at least 1 day in advance for any team)
+  // Minimum date: at least 3 days in advance for any team
   const minDate = useMemo(() => {
     const d = new Date(today);
-    d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + 3);
     d.setHours(0, 0, 0, 0);
     return d;
   }, [today]);
@@ -208,7 +208,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   // Confirmed = accepted fixture already exists on this date
   const hasConfirmed  = (day: number) => confirmedFriendlyDates.has(dateKey(day));
 
-  // A date is bookable if: it's a friendly slot, at least 1 day in the future, no pending/confirmed match
+  // A date is bookable if: it's a friendly slot, at least 3 days in the future, no pending/confirmed match
   const isBookable   = (day: number) => {
     if (!isFriendly(day)) return false;
     if (hasPending(day)) return false;
