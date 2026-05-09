@@ -91,7 +91,7 @@ import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
-import { BriefingEffect } from '../../services/PreMatchBriefingService';
+import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 import {
@@ -316,6 +316,15 @@ const isPausedForSevereInjury = useMemo(() => {
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed
       );
+      const aiBriefingEffect = adjustBriefingEffectForPressure(
+        calculateAiCoachBriefingEffect(
+          aiClubInit.reputation,
+          userClubInit.reputation,
+          aiCoachInit?.attributes,
+          sessionSeed + 17
+        ),
+        aiPressureProfile
+      );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
 
       setMatchState({
@@ -369,6 +378,15 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
          lastChangeMinute: -5,},
           playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
+        aiPreMatchMotivation: {
+          actionMod:     aiBriefingEffect.actionMod,
+          goalMod:       aiBriefingEffect.goalMod,
+          momentumBonus: aiBriefingEffect.momentumBonus,
+          expiryMinute:  aiBriefingEffect.expiryMinute,
+          fatigueMult:   aiBriefingEffect.fatigueMult,
+          rivalBoost:    aiBriefingEffect.rivalBoost,
+          label:         aiBriefingEffect.label,
+        },
         aiNextInstructionMinute: aiInitNextMin,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
@@ -377,7 +395,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, aiPressureProfile]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1375,11 +1393,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute
             ? prev.preMatchMotivation
             : null;
+        const activeAiBriefing =
+          prev.aiPreMatchMotivation && nextMinute <= prev.aiPreMatchMotivation.expiryMinute
+            ? prev.aiPreMatchMotivation
+            : null;
         const briefingFinishingFitMod = activeBriefing
           ? Math.max(0.96, Math.min(1.05, 1 + activeBriefing.goalMod * 1.25))
           : 1.0;
+        const aiBriefingFinishingFitMod = activeAiBriefing
+          ? Math.max(0.96, Math.min(1.05, 1 + activeAiBriefing.goalMod * 1.25))
+          : 1.0;
         const briefingFreshnessDelta = activeBriefing
           ? Math.max(-3, Math.min(3, (1 - activeBriefing.fatigueMult) * 45))
+          : 0;
+        const aiBriefingFreshnessDelta = activeAiBriefing
+          ? Math.max(-3, Math.min(3, (1 - activeAiBriefing.fatigueMult) * 45))
           : 0;
         // ────────────────────────────────────────────────────────────────────────
 
@@ -1392,9 +1420,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             shotThreshold += activeBriefing.rivalBoost * 0.012;
           }
         }
+        if (activeAiBriefing) {
+          if (isAiAttacking) {
+            shotThreshold += activeAiBriefing.actionMod * 0.12;
+            shotThreshold += (1 - activeAiBriefing.fatigueMult) * 0.04;
+          } else if (activeAiBriefing.rivalBoost !== 0) {
+            shotThreshold += activeAiBriefing.rivalBoost * 0.012;
+          }
+        }
         // PRE-MATCH BRIEFING — jednorazowy impuls momentum przy minucie 1
         if (nextMinute === 1 && activeBriefing?.momentumBonus && isUserAttacking) {
           shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
+        }
+        if (nextMinute === 1 && activeAiBriefing?.momentumBonus && isAiAttacking) {
+          shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
         }
         shotThreshold = Math.max(
           0.035,
@@ -1562,11 +1601,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
            const scorerBriefingFatigue = activeSide === userSide
              ? Math.max(0, Math.min(100, scorerLiveFatigue + briefingFreshnessDelta))
+             : activeSide !== userSide
+               ? Math.max(0, Math.min(100, scorerLiveFatigue + aiBriefingFreshnessDelta))
              : scorerLiveFatigue;
             const scorerBriefingFitMod = activeSide === userSide
               ? scorerFitMod * briefingFinishingFitMod
+              : activeSide !== userSide
+                ? scorerFitMod * aiBriefingFinishingFitMod
               : scorerFitMod;
-            const scorerCounterFitMod = counterAttackTriggered && activeSide === userSide
+            const scorerCounterFitMod = (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide)
               ? scorerBriefingFitMod * 1.06
               : scorerBriefingFitMod;
             const scorerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
@@ -1718,9 +1761,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const cornerOppFatigue = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
                 const headerBriefingFatigue = activeSide === userSide
                   ? Math.max(0, Math.min(100, hScorerFat + briefingFreshnessDelta))
+                  : activeSide !== userSide
+                    ? Math.max(0, Math.min(100, hScorerFat + aiBriefingFreshnessDelta))
                   : hScorerFat;
                 const headerBriefingFitMod = activeSide === userSide
                   ? briefingFinishingFitMod
+                  : activeSide !== userSide
+                    ? aiBriefingFinishingFitMod
                   : 1.0;
                 const headerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
                 const headerGkBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
@@ -1909,7 +1956,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }, 3500);
         }
 
-        const momentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const briefingMomentumImpulse =
+          nextMinute === 1
+            ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)
+              + (activeAiBriefing?.momentumBonus ?? 0) * (aiSide === 'HOME' ? 1 : -1)
+            : 0;
+        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const momentumUpdate = Math.max(-100, Math.min(100, rawMomentumUpdate + briefingMomentumImpulse));
 
      if (priorityAiTrigger) {
            const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory }, ctx, aiSide, true);
@@ -3198,13 +3251,15 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
     <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
       <button
         onClick={() => setShowCommentHistory(!showCommentHistory)}
-        className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+        className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+        style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
       >
         PRZEBIEG MECZU
       </button>
       <button
         onClick={handleFinishMatch}
-        className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
+        className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:translate-y-[2px] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
+        style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
       >
         <span>STUDIO POMECZOWE</span>
         <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
@@ -3235,7 +3290,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Tempo – blokada ${remaining}'` : 'Tempo'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'SLOW' as InstructionTempo,   label: 'Wolno',     activeClass: 'bg-blue-600/50 text-blue-200 border-blue-500/50' },
                 { val: 'NORMAL' as InstructionTempo, label: 'Normalnie', activeClass: 'bg-white/20 text-white border-white/20' },
@@ -3275,7 +3330,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Postawa – blokada ${remaining}'` : 'Postawa'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'DEFENSIVE' as InstructionMindset, label: 'Defensywna', activeClass: 'bg-emerald-600/50 text-emerald-200 border-emerald-500/50' },
                 { val: 'NEUTRAL' as InstructionMindset,   label: 'Neutralna',  activeClass: 'bg-white/20 text-white border-white/20' },
@@ -3315,7 +3370,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Styl gry – blokada ${remaining}'` : 'Styl gry'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'CAUTIOUS' as InstructionIntensity,   label: 'Ostrożnie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
                 { val: 'NORMAL' as InstructionIntensity,     label: 'Normalnie',  activeClass: 'bg-white/20 text-white border-white/20' },
@@ -3355,7 +3410,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Podania – blokada ${remaining}'` : 'Podania'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'SHORT' as InstructionPassing, label: 'Krótkie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
                 { val: 'MIXED' as InstructionPassing, label: 'Mieszane', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
@@ -3395,7 +3450,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Pressing – blokada ${remaining}'` : 'Pressing'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'NORMAL'   as InstructionPressing, label: 'Normalnie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
                 { val: 'PRESSING' as InstructionPressing, label: 'Pressing',  activeClass: 'bg-purple-600/50 text-purple-200 border-purple-500/50' },
@@ -3432,7 +3487,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Kontra - blokada ${remaining}'` : 'Kontra'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
                 { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak', activeClass: 'bg-cyan-600/50 text-cyan-200 border-cyan-500/50' },
@@ -3457,21 +3512,23 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         <button
           disabled={hasMandatorySub}
           onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, period: 2, minute: 45, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))), halftimeMomentumBonus: 0, oppHalftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
-          className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95 shadow-2xl border
+          className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b
             ${hasMandatorySub
-              ? 'bg-red-600/20 border-red-500/40 text-red-500 hover:bg-red-600/30 shadow-red-500/10'
+              ? 'bg-red-600/20 border-t-red-400/40 border-x-red-500/20 border-b-black/60 text-red-500 hover:bg-red-600/30'
               : matchState.isPaused || matchState.isHalfTime
-                ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30 shadow-blue-500/10'
-                : 'bg-white/5 border-white/20 text-white hover:bg-white/10 shadow-white/5'
+                ? 'bg-blue-600/20 border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-blue-400 hover:bg-blue-600/30'
+                : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-white hover:bg-white/10'
             }
           `}
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           {getActionLabel()}
         </button>
 
         <button
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           ⚙ TAKTYKA
         </button>
@@ -3482,14 +3539,16 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             const next = s.speed === 1 ? 2.5 : s.speed === 2.5 ? 3.5 : s.speed === 3.5 ? 5 : 1;
             return { ...s, speed: next };
           })}
-          className="min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border border-white/10 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           {matchState.speed === 5 ? '⏩ x5' : matchState.speed === 3.5 ? '⏩ x3.5' : matchState.speed === 2.5 ? '⏩ x2.5' : '⏪ x1'}
         </button>
 
         <button
           onClick={() => setShowCommentHistory(!showCommentHistory)}
-          className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           PRZEBIEG MECZU
         </button>
@@ -3541,6 +3600,10 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
           userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
           oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          userClubColors={userSide === 'HOME' ? ctx.homeClub.colorsHex : ctx.awayClub.colorsHex}
+          oppClubColors={userSide === 'HOME' ? ctx.awayClub.colorsHex : ctx.homeClub.colorsHex}
+          userClubId={userSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id}
+          oppClubId={userSide === 'HOME' ? ctx.awayClub.id : ctx.homeClub.id}
           sessionSeed={matchState.sessionSeed}
         />
       )}
@@ -3642,6 +3705,12 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             userSide={userSide}
             homeClubName={ctx.homeClub.name}
             awayClubName={ctx.awayClub.name}
+            homeClubColors={ctx.homeClub.colorsHex}
+            awayClubColors={ctx.awayClub.colorsHex}
+            homeKitPrimary={kitColors.home.primary}
+            homeKitSecondary={kitColors.home.secondary}
+            awayKitPrimary={kitColors.away.primary}
+            awayKitSecondary={kitColors.away.secondary}
             userShots={calibUShots}
             userShotsOnTarget={calibUSOT}
             userCorners={calibUCorners}

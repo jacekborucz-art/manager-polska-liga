@@ -534,9 +534,10 @@ export const MatchHistoryView: React.FC = () => {
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">ARCHIWUM ROZGRYWEK</p>
           </div>
         </div>
-        <button 
-          onClick={() => navigateTo(ViewState.DASHBOARD)} 
-          className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
+        <button
+          onClick={() => navigateTo(ViewState.DASHBOARD)}
+          className="px-8 py-3 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all active:translate-y-[2px]"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
         >
           &larr; Wyjdź
         </button>
@@ -546,22 +547,24 @@ export const MatchHistoryView: React.FC = () => {
         {/* SIDEBAR FILTERS */}
         <div className="w-64 flex flex-col gap-3 shrink-0 bg-slate-900/20 rounded-[35px] border border-white/5 p-6">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 px-2">Kategorie</span>
-            <button 
-              onClick={() => { setViewMode('champions'); setSelectedLeague('ALL'); }} 
-              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
-                ${viewMode === 'champions' 
-                  ? 'bg-yellow-600 border-yellow-400 text-white shadow-lg translate-x-2' 
-                  : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+            <button
+              onClick={() => { setViewMode('champions'); setSelectedLeague('ALL'); }}
+              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
+                viewMode === 'champions'
+                  ? 'border-t border-x border-b border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 bg-yellow-600 text-white'
+                  : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               <span className="text-lg opacity-60">👑</span>
               ZWYCIĘZCY
             </button>
             <button
               onClick={() => { setViewMode('worldCup'); setSelectedLeague('WORLD_CUP'); }}
-              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
-                ${viewMode === 'worldCup'
-                  ? 'bg-amber-600 border-amber-400 text-white shadow-lg translate-x-2'
-                  : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
+                viewMode === 'worldCup'
+                  ? 'border-t border-x border-b border-t-amber-400/60 border-x-amber-500/30 border-b-black/60 bg-amber-600 text-white'
+                  : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               <span className="text-lg opacity-60">🏆</span>
               MISTRZOSTWA ŚWIATA
@@ -578,13 +581,14 @@ export const MatchHistoryView: React.FC = () => {
               { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', icon: '🌐' },
               { id: 'FRIENDLY', label: 'MECZE TOWARZYSKIE', icon: '🤝' }
             ].map(l => (
-              <button 
-                key={l.id} 
-                onClick={() => { setViewMode('matches'); setSelectedLeague(l.id); }} 
-                className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
-                  ${selectedLeague === l.id && viewMode === 'matches'
-                    ? 'bg-blue-600 border-blue-400 text-white shadow-lg translate-x-2' 
-                    : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+              <button
+                key={l.id}
+                onClick={() => { setViewMode('matches'); setSelectedLeague(l.id); }}
+                className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
+                  selectedLeague === l.id && viewMode === 'matches'
+                    ? 'border-t border-x border-b border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 bg-blue-600 text-white'
+                    : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 <span className="text-lg opacity-60">{l.icon}</span>
                 {l.label}
@@ -606,10 +610,14 @@ export const MatchHistoryView: React.FC = () => {
             <>
               <div className="px-8 pt-8 flex gap-4">
                  {Array.from({length: seasonNumber}, (_, i) => i + 1).map(s => (
-                   <button 
+                   <button
                      key={s}
                      onClick={() => setSelectedSeason(s)}
-                     className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all ${selectedSeason === s ? 'bg-white text-black' : 'bg-white/5 text-slate-500'}`}
+                     className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all active:translate-y-[2px] ${
+                       selectedSeason === s
+                         ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-black'
+                         : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500'}`}
+                     style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                    >
                      SEZON {s}
                    </button>
@@ -683,7 +691,11 @@ export const MatchHistoryView: React.FC = () => {
                   <button
                     key={year}
                     onClick={() => setSelectedWorldCupYear(year)}
-                    className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all ${selectedWorldCupYear === year ? 'bg-white text-black' : 'bg-white/5 text-slate-500'}`}
+                    className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all active:translate-y-[2px] ${
+                      selectedWorldCupYear === year
+                        ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-black'
+                        : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500'}`}
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     {year}
                   </button>
@@ -1121,7 +1133,7 @@ export const MatchHistoryView: React.FC = () => {
 
               {/* Zamknij */}
               <div className="px-8 pb-8 text-center">
-                 <button onClick={() => setSelectedMatch(null)} className="px-16 py-3 bg-white text-slate-900 font-black italic uppercase tracking-widest rounded-2xl text-xs hover:scale-105 transition-all shadow-xl active:scale-95">
+                 <button onClick={() => setSelectedMatch(null)} className="px-16 py-3 bg-white text-slate-900 font-black italic uppercase tracking-widest rounded-2xl text-xs border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 transition-all active:translate-y-[2px]" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
                     Zamknij raport
                  </button>
               </div>

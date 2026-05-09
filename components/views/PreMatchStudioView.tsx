@@ -461,7 +461,8 @@ export const PreMatchStudioView: React.FC = () => {
                  {isUserHome && (
                    <button
                      onClick={() => setShowKitModal(true)}
-                     className="px-5 py-2 rounded-2xl bg-blue-600/30 border border-blue-400/30 text-blue-300 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600/50 transition-all shadow-lg"
+                     className="px-5 py-2 rounded-2xl bg-yellow-500/20 border-t border-x border-b border-t-yellow-400/50 border-x-yellow-500/25 border-b-black/60 text-yellow-300 font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500/35 hover:text-yellow-100 transition-all active:translate-y-[2px]"
+                     style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                    >
                      👕 ZMIEŃ KOSZULKĘ
                    </button>
@@ -565,7 +566,8 @@ export const PreMatchStudioView: React.FC = () => {
                  {!isUserHome && (
                    <button
                      onClick={() => setShowKitModal(true)}
-                     className="px-5 py-2 rounded-2xl bg-emerald-600/30 border border-emerald-400/30 text-emerald-300 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600/50 transition-all shadow-lg"
+                     className="px-5 py-2 rounded-2xl bg-yellow-500/20 border-t border-x border-b border-t-yellow-400/50 border-x-yellow-500/25 border-b-black/60 text-yellow-300 font-black text-[10px] uppercase tracking-widest hover:bg-yellow-500/35 hover:text-yellow-100 transition-all active:translate-y-[2px]"
+                     style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                    >
                      👕 ZMIEŃ KOSZULKĘ
                    </button>
@@ -577,13 +579,15 @@ export const PreMatchStudioView: React.FC = () => {
            <div className="mt-auto mt-[10px] w-full max-w-[864px] bg-slate-900/30 rounded-[30px] border border-white/10 p-3 flex items-center justify-center gap-3 backdrop-blur-[1px] shadow-2xl shrink-0">
               <button
                 onClick={() => setShowExpertCommentary(true)}
-                className="flex-1 px-8 py-6 rounded-[32px] bg-blue-600/30 border-b-8 border-blue-900 text-blue-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2.5"
+                className="flex-1 px-8 py-6 rounded-[32px] bg-blue-600/30 border-t border-x border-b border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-blue-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2.5"
+                style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 🎙️ ANALIZA EKSPERTÓW
               </button>
               <button
                 onClick={() => { setPendingMatchKits(matchKits); navigateTo(ViewState.MATCH_LIVE); }}
-                className="group relative flex-1 px-8 py-6 rounded-[32px] bg-white text-slate-950 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(255,255,255,0.2)] border-b-8 border-slate-300 overflow-hidden animate-shimmer"
+                className="group relative flex-1 px-8 py-6 rounded-[32px] bg-white text-slate-950 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] overflow-hidden"
+                style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
               >
                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10 flex items-center justify-center gap-2.5">
@@ -592,7 +596,8 @@ export const PreMatchStudioView: React.FC = () => {
               </button>
               <button
                 onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
-                className="flex-1 px-8 py-6 rounded-[32px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2.5"
+                className="flex-1 px-8 py-6 rounded-[32px] bg-emerald-600/30 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-emerald-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2.5"
+                style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 ✏️ ZMIEŃ SKŁAD
               </button>

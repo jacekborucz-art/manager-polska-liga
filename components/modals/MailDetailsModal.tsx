@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MailMessage, MailType, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
+import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
 
 interface MailDetailsModalProps {
   mail: MailMessage;
@@ -18,6 +19,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     reopenWinterCampInvite,
     respondToSportingDirectorObjective,
   } = useGame();
+
+  const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
 
   const userClub = clubs.find(c => c.id === userTeamId);
   const activeDirectorObjective = userClub?.sportingDirectorObjective;
@@ -201,6 +204,25 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </>
             )}
 
+            {mail.metadata?.type === 'LEAGUE_FINANCE_REPORT' && (
+              <>
+                {[
+                  { id: 'L_PL_1', name: 'Ekstraklasa' },
+                  { id: 'L_PL_2', name: '1. Liga' },
+                  { id: 'L_PL_3', name: '2. Liga' },
+                  { id: 'L_PL_4', name: 'Liga Regionalna' },
+                ].map(league => (
+                  <button
+                    key={league.id}
+                    onClick={() => setFinanceReportLeague(league)}
+                    className="mr-3 rounded-2xl bg-emerald-700 px-7 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                  >
+                    {league.name}
+                  </button>
+                ))}
+              </>
+            )}
+
             <button
               onClick={onClose}
               className="rounded-2xl bg-white px-10 py-4 text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95"
@@ -210,6 +232,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           </div>
         </div>
       </div>
+
+      {financeReportLeague && (
+        <LeagueFinanceReportModal
+          leagueName={financeReportLeague.name}
+          clubs={clubs.filter(c => c.leagueId === financeReportLeague.id)}
+          onClose={() => setFinanceReportLeague(null)}
+        />
+      )}
     </div>
   );
 };

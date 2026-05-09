@@ -357,6 +357,8 @@ export interface MailMessage {
   } | {
     type: 'SPORTING_DIRECTOR_OBJECTIVE';
     objectiveId: string;
+  } | {
+    type: 'LEAGUE_FINANCE_REPORT';
   };
 }
 
@@ -1482,6 +1484,15 @@ isPenalties?: boolean;
   oppHalftimeMomentumBonus?: number;
   aiNextInstructionMinute?: number;
   preMatchMotivation?: {
+    actionMod: number;
+    goalMod: number;
+    momentumBonus: number;
+    expiryMinute: number;
+    fatigueMult: number;
+    rivalBoost: number;
+    label: string;
+  };
+  aiPreMatchMotivation?: {
     actionMod: number;
     goalMod: number;
     momentumBonus: number;

@@ -4739,7 +4739,7 @@ const finalResult: SimulationOutput = {
           players: userSquad,
           date: nextDay,
           leagueClubs,
-          fixtures,
+          fixtures: allFixtures,
         });
         const budgetAdjustment = SportingDirectorService.applyTransferBudgetAdjustment({
           club: objective.updatedClub,
@@ -5408,6 +5408,47 @@ const finalResult: SimulationOutput = {
     if (nextDay.getDate() === 1) {
       const updatedCoachesMonthly = AiTransferDecisionService.updateCoachFavorites(clubs, players, coaches, nextDay, sessionSeed, userTeamId);
       setCoaches(updatedCoachesMonthly);
+    }
+
+    // ── KOSZTY OPERACYJNE: odliczenie miesięczne (1. dzień miesiąca) ─────────
+    if (nextDay.getDate() === 1) {
+      const dateStr = nextDay.toISOString().split('T')[0];
+      setClubs(prev => prev.map(club => {
+        if (club.leagueId === 'NONE') return club;
+        const monthlyCost = FinanceService.calculateMonthlyOperationalCosts(club);
+        const newBudget = club.budget - monthlyCost;
+        const logEntry = {
+          id: `OPEX_${club.id}_${dateStr}`,
+          date: dateStr,
+          amount: -monthlyCost,
+          type: 'EXPENSE' as const,
+          description: 'Koszty operacyjne (stadion, infrastruktura, administracja)',
+          previousBalance: club.budget,
+        };
+        return {
+          ...club,
+          budget: newBudget,
+          financeHistory: [logEntry, ...(club.financeHistory || [])].slice(0, 50),
+        };
+      }));
+    }
+
+    // ── SPRAWOZDANIE FINANSOWE: mail miesięczny (1. dzień miesiąca) ──────────
+    if (nextDay.getDate() === 1 && userTeamId) {
+      const monthLabel = nextDay.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+      const reportMail = {
+        id: `FINANCE_REPORT_${nextDay.toISOString().split('T')[0]}`,
+        sender: 'Biuro Ligowe PZPN',
+        role: 'Dział Finansowy',
+        subject: `Sprawozdanie finansowe lig — ${monthLabel}`,
+        body: `Szanowny Panie Menedżerze,\n\nPrzesyłamy miesięczne sprawozdanie finansowe polskich lig piłkarskich.\n\nAby zobaczyć aktualne salda drużyn, proszę wybrać ligę z przycisków poniżej.`,
+        date: new Date(nextDay),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 30,
+        metadata: { type: 'LEAGUE_FINANCE_REPORT' as const },
+      };
+      setMessages(prev => [reportMail, ...prev]);
     }
 
     // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────

@@ -188,11 +188,11 @@ export const IncomingTransferService = {
     );
 
     const PRIORITY_PROB: Record<1 | 2 | 3 | 4 | 5, number> = {
-      1: 0.012,
-      2: 0.008,
-      3: 0.006,
-      4: 0.006,
-      5: 0.003,
+      1: 0.0036,
+      2: 0.0024,
+      3: 0.0018,
+      4: 0.0018,
+      5: 0.0009,
     };
 
     let prob = priority !== false ? PRIORITY_PROB[priority] : 0;

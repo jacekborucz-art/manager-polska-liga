@@ -1265,7 +1265,8 @@ export const EuropeanClubsView: React.FC = () => {
         <div className="flex items-center justify-between gap-4 mb-5">
           <button
             onClick={handleBack}
-            className={`order-2 ml-auto shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_30px_rgba(15,23,42,0.35)] hover:bg-white/15 hover:border-white/30 hover:shadow-[0_18px_40px_rgba(15,23,42,0.42)] transition-all ${MANAGER_BUTTON_FONT}`}
+            className={`order-2 ml-auto shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/10 text-white hover:bg-white/15 transition-all active:translate-y-[2px] ${MANAGER_BUTTON_FONT}`}
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
           >
             ← Wróć
           </button>
@@ -1308,11 +1309,12 @@ export const EuropeanClubsView: React.FC = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2.5 rounded-2xl text-[11px] transition-all ${MANAGER_BUTTON_FONT} ${
+                className={`px-5 py-2.5 rounded-2xl text-[11px] transition-all active:translate-y-[2px] ${MANAGER_BUTTON_FONT} ${
                   activeTab === tab
-                    ? 'bg-indigo-500 text-white shadow-[0_0_24px_rgba(99,102,241,0.35)]'
-                    : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.07] border border-white/[0.08]'
+                    ? 'border-t border-x border-b border-t-indigo-400/60 border-x-indigo-500/30 border-b-black/60 bg-indigo-500 text-white'
+                    : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/[0.04] text-slate-400 hover:bg-white/[0.07]'
                 }`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 {tab === 'clubs' ? '🏟 Kluby' : '🌍 Reprezentacje'}
               </button>
@@ -1513,11 +1515,12 @@ export const EuropeanClubsView: React.FC = () => {
                     <button
                       key={key}
                       onClick={() => setActiveContinent(key)}
-                      className={`px-5 py-2 rounded-xl text-xs transition-all ${MANAGER_BUTTON_FONT} ${
+                      className={`px-5 py-2 rounded-xl text-xs transition-all active:translate-y-[2px] ${MANAGER_BUTTON_FONT} ${
                         activeContinent === key
-                          ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)]'
-                          : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.07] border border-white/[0.08]'
+                          ? 'border-t border-x border-b border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60 bg-emerald-500 text-white'
+                          : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/[0.04] text-slate-400 hover:bg-white/[0.07]'
                       }`}
+                      style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                     >
                       {label}
                     </button>

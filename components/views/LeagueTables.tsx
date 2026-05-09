@@ -79,31 +79,35 @@ export const LeagueTables: React.FC = () => {
          {/* NAVIGATION CONTROLS */}
          <div className="flex items-center gap-4">
             <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-<button 
+<button
   onClick={() => navigateTo(ViewState.CL_HISTORY)}
-  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-300"
+  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300 active:translate-y-[2px]"
+  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
 >
   Liga Mistrzów
 </button>
 
-<button 
+<button
   onClick={() => navigateTo(ViewState.EL_HISTORY)}
-  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-300"
+  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300 active:translate-y-[2px]"
+  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
 >
   Liga Europy
 </button>
 
-<button 
+<button
   onClick={() => navigateTo(ViewState.CONF_HISTORY)}
-  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-300"
+  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300 active:translate-y-[2px]"
+  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
 >
   Liga Konferencji
 </button>
 
 
-<button 
+<button
   onClick={() => navigateTo(ViewState.POLISH_CUP_BRACKET)}
-  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-300"
+  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300 active:translate-y-[2px]"
+  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
 >
   Puchar Polski
 </button>
@@ -111,28 +115,32 @@ export const LeagueTables: React.FC = () => {
 
                <button
                   onClick={() => setViewMode('TABLE')}
-                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${viewMode === 'TABLE' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px]
+                    ${viewMode === 'TABLE' ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-slate-900' : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300'}`}
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                >
                  Tabela
                </button>
                <button
                   onClick={() => setViewMode('SCHEDULE')}
-                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${viewMode === 'SCHEDULE' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px]
+                    ${viewMode === 'SCHEDULE' ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-slate-900' : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300'}`}
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                >
                  Terminarz
                </button>
                <button
                   onClick={() => setViewMode('INTERNATIONAL')}
-                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${viewMode === 'INTERNATIONAL' ? 'bg-amber-400 text-slate-900 shadow-xl' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px]
+                    ${viewMode === 'INTERNATIONAL' ? 'border-t border-x border-b border-t-amber-400/60 border-x-amber-400/30 border-b-black/60 bg-amber-400 text-slate-900' : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300'}`}
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                >
                  Miedzynarodowe
                </button>
                <button
                   onClick={() => navigateTo(ViewState.REFEREE_LIST)}
-                  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-300"
+                  className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300 active:translate-y-[2px]"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                >
                  Lista Sędziów
                </button>
@@ -140,9 +148,10 @@ export const LeagueTables: React.FC = () => {
 
             <div className="w-px h-10 bg-white/10 mx-2" />
 
-            <button 
+            <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all active:scale-95"
+              className="px-6 py-3 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
             >
               &larr; Wyjdź
             </button>
@@ -156,14 +165,15 @@ export const LeagueTables: React.FC = () => {
             <button
               key={l.id}
               onClick={() => { setSelectedLeagueId(l.id); setSelectedRound(1); }}
-              className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border
-                ${selectedLeagueId === l.id 
-                  ? 'bg-slate-900 border-white/20 text-white shadow-2xl scale-[1.02]' 
-                  : 'bg-black/20 border-white/5 text-slate-500 hover:text-slate-300 hover:bg-black/40'
+              className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:translate-y-[2px]
+                ${selectedLeagueId === l.id
+                  ? 'border-t border-x border-b border-t-white/30 border-x-white/15 border-b-black/60 bg-slate-900 text-white'
+                  : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-black/20 text-slate-500 hover:text-slate-300 hover:bg-black/40'
                 }
               `}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
-              {l.name.replace('Polish League ', '')}
+              {getTier(l.id) === 1 ? 'Ekstraklasa' : getTier(l.id) === 2 ? '1 Liga' : '2 Liga'}
             </button>
           ))}
         </div>
@@ -338,7 +348,8 @@ export const LeagueTables: React.FC = () => {
                 <button 
                   disabled={selectedRound <= 1}
                   onClick={() => setSelectedRound(r => r - 1)}
-                  className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-20 transition-all active:scale-90"
+                  className="w-12 h-12 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-20 transition-all active:translate-y-[2px]"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
                 >
                   &larr;
                 </button>
@@ -355,7 +366,8 @@ export const LeagueTables: React.FC = () => {
                 <button 
                   disabled={selectedRound >= 34}
                   onClick={() => setSelectedRound(r => r + 1)}
-                  className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-20 transition-all active:scale-90"
+                  className="w-12 h-12 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-20 transition-all active:translate-y-[2px]"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
                 >
                   &rarr;
                 </button>

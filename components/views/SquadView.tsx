@@ -576,11 +576,12 @@ export const SquadView: React.FC = () => {
          <div className="flex items-center gap-5">
             <button
               onClick={() => canMotivate && setIsMotivationOpen(true)}
-              className={`relative group px-8 py-5 rounded-[24px] text-[11px] font-black uppercase italic tracking-widest transition-all active:scale-95 shadow-xl overflow-hidden border ${
+              className={`relative group px-8 py-5 rounded-[24px] text-[11px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] overflow-hidden border-t border-x border-b ${
                 canMotivate
-                  ? 'bg-violet-600/10 border-violet-500/30 text-violet-300 hover:bg-violet-600/20 hover:border-violet-400 cursor-pointer'
-                  : 'bg-white/[0.02] border-white/5 text-slate-600 cursor-not-allowed'
+                  ? 'bg-violet-600/10 border-t-violet-400/40 border-x-violet-500/20 border-b-black/60 text-violet-300 hover:bg-violet-600/20 cursor-pointer'
+                  : 'bg-white/[0.02] border-t-white/10 border-x-white/5 border-b-black/40 text-slate-600 cursor-not-allowed'
               }`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               title={canMotivate ? 'Przeprowadź tygodniową rozmowę motywacyjną' : 'Dostępne raz na tydzień'}
             >
               <span className="relative z-10 flex items-center gap-2">💬 MOTYWACJA{!canMotivate && <span className="text-[8px] normal-case not-italic font-bold text-slate-600">· użyta</span>}</span>
@@ -588,17 +589,18 @@ export const SquadView: React.FC = () => {
             </button>
             <button
               onClick={() => setIsAnalysisOpen(true)}
-              className="relative group px-8 py-5 rounded-[24px] bg-emerald-600/10 border border-emerald-500/30 text-[11px] font-black uppercase italic tracking-widest text-emerald-300 hover:bg-emerald-600/20 hover:border-emerald-400 transition-all active:scale-95 shadow-xl overflow-hidden"
+              className="relative group px-8 py-5 rounded-[24px] bg-emerald-600/10 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-emerald-300 hover:bg-emerald-600/20 transition-all active:translate-y-[2px] overflow-hidden"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
                <span className="relative z-10 flex items-center gap-3">ANALIZA DRUŻYNY</span>
                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
-            <button onClick={handleAutoPick} className="relative group px-10 py-5 rounded-[24px] bg-blue-600/10 border border-blue-500/30 text-[11px] font-black uppercase italic tracking-widest text-blue-400 hover:bg-blue-600/20 hover:border-blue-400 transition-all active:scale-95 shadow-xl overflow-hidden">
+            <button onClick={handleAutoPick} className="relative group px-10 py-5 rounded-[24px] bg-blue-600/10 border-t border-x border-b border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-blue-400 hover:bg-blue-600/20 transition-all active:translate-y-[2px] overflow-hidden" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
                <span className="relative z-10 flex items-center gap-3">🪄 AUTO WYBÓR</span>
                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
             <div className="w-px h-12 bg-white/10 mx-2" />
-            <button onClick={() => navigateTo(ViewState.DASHBOARD)} className="px-10 py-5 rounded-[24px] bg-white text-slate-900 font-black uppercase italic tracking-widest text-xs hover:scale-105 transition-all active:scale-95 shadow-[0_20px_40px_rgba(255,255,255,0.1)]">&larr; POWRÓT</button>
+            <button onClick={() => navigateTo(ViewState.DASHBOARD)} className="px-10 py-5 rounded-[24px] bg-white text-slate-900 font-black uppercase italic tracking-widest text-xs hover:scale-105 transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/80 border-x-white/40 border-b-slate-400/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}>&larr; POWRÓT</button>
          </div>
       </header>
 
@@ -713,19 +715,23 @@ export const SquadView: React.FC = () => {
           <div className="shrink-0 flex gap-2 px-1">
             <button
               onClick={() => setActiveTab('SQUAD')}
-              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'SQUAD' ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.15)]' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'SQUAD' ? 'bg-blue-500/20 border-t-blue-400/50 border-x-blue-500/25 border-b-black/60 text-blue-300' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >SKŁAD</button>
             <button
               onClick={() => setActiveTab('MORALE')}
-              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border ${getMoraleInfo(myClub.morale ?? 50).border} ${getMoraleInfo(myClub.morale ?? 50).color} shadow-lg` : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border-t-white/30 border-x-white/15 border-b-black/60 ${getMoraleInfo(myClub.morale ?? 50).color}` : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >MORALE</button>
             <button
               onClick={() => setActiveTab('SCHEDULE')}
-              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'SCHEDULE' ? 'bg-amber-500/20 border border-amber-500/50 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'SCHEDULE' ? 'bg-amber-500/20 border-t-amber-400/50 border-x-amber-500/25 border-b-black/60 text-amber-300' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >TERMINARZ</button>
             <button
               onClick={() => setActiveTab('TABLE')}
-              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all ${activeTab === 'TABLE' ? 'bg-white/15 border border-white/30 text-white shadow-lg' : 'bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'TABLE' ? 'bg-white/15 border-t-white/40 border-x-white/20 border-b-black/60 text-white' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >TABELA</button>
           </div>
 

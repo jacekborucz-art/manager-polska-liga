@@ -962,14 +962,16 @@ const boardConfidence = useMemo(() => {
                 onClick={() => { setIsProcessing(true); setTimeout(actionConfig.action, 0); }}
                 disabled={actionConfig.disabled}
                 className={`
-                  relative group px-14 py-6 rounded-[32px] transition-all duration-500 transform hover:scale-105 active:scale-95
-                  flex flex-col items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.5)] border-2
-                  ${actionConfig.isMatch 
-                    ? (actionConfig.error ? 'bg-red-600 border-red-400 text-white' : 'bg-emerald-600 border-emerald-400 text-white') 
-                    : 'bg-white border-white text-slate-900'}
+                  relative group px-14 py-6 rounded-[32px] transition-all duration-500 transform active:translate-y-[2px]
+                  flex flex-col items-center justify-center border-t border-x border-b
+                  ${actionConfig.isMatch
+                    ? (actionConfig.error
+                      ? 'bg-red-600 border-t-red-400/60 border-x-red-500/30 border-b-black/60 text-white'
+                      : 'bg-emerald-600 border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60 text-white')
+                    : 'bg-white border-t-white/40 border-x-white/20 border-b-black/60 text-slate-900'}
                   disabled:opacity-50 disabled:cursor-not-allowed
                 `}
-                style={actionConfig.isMatch && !actionConfig.error ? { boxShadow: `0 0 40px ${myClub?.colorsHex[0]}66` } : {}}
+                style={{ boxShadow: actionConfig.isMatch && !actionConfig.error ? `0 4px 0 rgba(0,0,0,0.5), 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 40px ${myClub?.colorsHex[0]}66` : '0 4px 0 rgba(0,0,0,0.5), 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5)' }}
               >
                 <span className="text-2xl font-black italic uppercase tracking-tighter relative z-10 text-center leading-tight">
                    {actionConfig.text}

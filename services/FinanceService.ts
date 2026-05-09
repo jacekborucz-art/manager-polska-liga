@@ -754,12 +754,12 @@ export const FinanceService = {
         max = 217000000;
         break;
       case 2: // 1 Liga
-        min = 20000000;
-        max = 70000000;
+        min = 12800000;
+        max = 44800000;
         break;
       case 3: // 2 Liga
-        min = 3500000;
-        max = 16000000;
+        min = 2800000;
+        max = 12800000;
         break;
       case 4: // Tier 4
         min = 800000;
@@ -933,6 +933,42 @@ export const FinanceService = {
       club.reputation * p.away.repScale[tier];
 
     return Math.min(p.away.maxCap[tier], Math.floor(rawCost));
+  },
+
+  calculateMonthlyOperationalCosts: (club: Club): number => {
+    const KOMPETENCJA_MULTIPLIER: Record<string, number> = {
+      bardzo_niska:  1.35,
+      niska:         1.20,
+      przecietna:    1.05,
+      wysoka:        0.95,
+      bardzo_wysoka: 0.85,
+    };
+
+    const kompetencja = club.board?.kompetencja ?? 'przecietna';
+    const kompetencjaFactor = KOMPETENCJA_MULTIPLIER[kompetencja] ?? 1.05;
+
+    if (isEuropeanCommercialClub(club)) {
+      const tier = Math.min(4, Math.max(1, club.tier ?? 1));
+      const monthlyFactor = ({ 1: 0.015, 2: 0.012, 3: 0.010, 4: 0.008 } as Record<number, number>)[tier] ?? 0.010;
+      const rawCost = club.budget * monthlyFactor * kompetencjaFactor;
+      return Math.round(clamp(rawCost, 50_000, 80_000_000) / 1_000) * 1_000;
+    }
+
+    const tier = Math.min(4, Math.max(1, parseInt((club.leagueId as string).split('_')[2] || '4')));
+    const cappedCapacity = Math.max(500, Math.min(80_000, club.stadiumCapacity));
+    const cappedRep = Math.max(1, Math.min(10, club.reputation));
+
+    const costPerSeat  = ({ 1: 18,  2: 9,   3: 4.5, 4: 2   } as Record<number, number>)[tier] ?? 2;
+    const opsBase      = ({ 1: 350_000, 2: 65_000, 3: 16_000, 4: 5_000 } as Record<number, number>)[tier] ?? 5_000;
+    const opsPerRep    = ({ 1: 65_000,  2: 16_000, 3: 4_500,  4: 1_500 } as Record<number, number>)[tier] ?? 1_500;
+    const tierMin      = ({ 1: 350_000, 2: 70_000, 3: 18_000, 4: 5_000 } as Record<number, number>)[tier] ?? 5_000;
+    const tierMax      = ({ 1: 3_000_000, 2: 900_000, 3: 180_000, 4: 55_000 } as Record<number, number>)[tier] ?? 55_000;
+
+    const stadiumCost = cappedCapacity * costPerSeat;
+    const opsCost     = opsBase + cappedRep * opsPerRep;
+    const rawCost     = (stadiumCost + opsCost) * 1.30 * kompetencjaFactor;
+
+    return Math.round(clamp(rawCost, tierMin, tierMax) / 1_000) * 1_000;
   },
 
   calculateSeasonalIncome: (tier: number, reputation: number, rank: number): number => {

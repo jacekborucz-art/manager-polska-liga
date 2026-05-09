@@ -1,5 +1,6 @@
 import type { BriefingSpeech } from '../data/prematch_briefing_pl';
 import { BriefingSpeechType, PREMATCH_BRIEFINGS } from '../data/prematch_briefing_pl';
+import type { CoachAttributes } from '../types';
 export { PREMATCH_BRIEFINGS };
 export type { BriefingSpeechType };
 
@@ -419,3 +420,52 @@ export const getSilenceEffect = (): BriefingEffect => ({
   reactionText:  'Szatnia w ciszy. Każdy przygotowuje się sam.',
   wasSurprise:   false,
 });
+
+export const calculateAiCoachBriefingEffect = (
+  ownRep: number,
+  opponentRep: number,
+  coachAttributes: CoachAttributes | null | undefined,
+  seed: number,
+  matchStage: BriefingMatchStage = 'LEAGUE'
+): BriefingEffect => {
+  const motivation = coachAttributes?.motivation ?? 50;
+  const decisionMaking = coachAttributes?.decisionMaking ?? 50;
+  const experience = coachAttributes?.experience ?? 50;
+
+  const realScenario = detectScenario(ownRep, opponentRep);
+  const rngContext = seededRng(seed, 701);
+  const rngType = seededRng(seed, 702);
+  const rngNoise = seededRng(seed, 703);
+
+  const readChance = Math.min(
+    0.92,
+    Math.max(
+      0.30,
+      0.35 + (decisionMaking / 100) * 0.28 + (experience / 100) * 0.22 + (motivation / 100) * 0.12
+    )
+  );
+
+  const scenarios: BriefingScenario[] = ['UNDERDOG', 'EQUAL', 'FAVORITE'];
+  const selectedScenario = rngContext < readChance
+    ? realScenario
+    : scenarios[Math.floor(rngContext * scenarios.length)];
+
+  const options = getBriefingsForScenario(selectedScenario, matchStage);
+  if (options.length === 0) return getSilenceEffect();
+
+  const pressureBias = (motivation - 50) / 50;
+  const controlBias = ((decisionMaking + experience) / 2 - 50) / 50;
+  const preferredTypes: BriefingSpeechType[] =
+    realScenario === 'UNDERDOG'
+      ? (pressureBias > 0.25 ? ['UPRISING', 'WOUNDED_PRIDE', 'KAMIKAZE'] : ['FORTRESS', 'TACTICIAN', 'PATIENCE'])
+      : realScenario === 'FAVORITE'
+        ? (controlBias > 0.15 ? ['PROFESSIONALISM', 'TACTICIAN', 'DOMINANCE'] : ['LOOSE', 'DOMINANCE', 'BLITZ'])
+        : (pressureBias > 0.2 ? ['BLITZ', 'DOMINANCE', 'WOUNDED_PRIDE'] : ['TACTICIAN', 'PROFESSIONALISM', 'PATIENCE']);
+
+  const preferred = options.filter(option => preferredTypes.includes(option.hiddenType));
+  const pool = preferred.length > 0 && rngType < readChance ? preferred : options;
+  const chosen = pool[Math.floor(rngType * pool.length)];
+  const effectSeed = seed + Math.round((motivation + decisionMaking + experience) * 13) + Math.floor(rngNoise * 1000);
+
+  return calculateBriefingEffect(chosen.hiddenType, realScenario, effectSeed, chosen.originalIndex);
+};

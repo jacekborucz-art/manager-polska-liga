@@ -112,11 +112,12 @@ export const LeagueStatsView: React.FC = () => {
               <button
                 key={league.id}
                 onClick={() => setSelectedLeagueId(league.id)}
-                className={`rounded-xl px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`rounded-xl px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
                   selectedLeagueId === league.id
-                    ? 'bg-white text-slate-900 shadow-xl'
-                    : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
+                    ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-slate-900'
+                    : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:bg-white/5 hover:text-slate-300'
                 }`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 {league.label}
               </button>
@@ -127,7 +128,8 @@ export const LeagueStatsView: React.FC = () => {
 
           <button
             onClick={() => navigateTo(ViewState.DASHBOARD)}
-            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-white/10 active:scale-95"
+            className="rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/5 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-white/10 active:translate-y-[2px]"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
           >
             {'\u2190 Wyjd\u017a'}
           </button>
@@ -139,11 +141,12 @@ export const LeagueStatsView: React.FC = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-3 rounded-2xl border px-8 py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+            className={`flex items-center gap-3 rounded-2xl px-8 py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all active:translate-y-[2px] ${
               activeTab === tab.id
-                ? 'scale-[1.02] border-white/20 bg-slate-900 text-white shadow-2xl'
-                : 'border-white/5 bg-black/20 text-slate-500 hover:bg-black/40 hover:text-slate-300'
+                ? 'border-t border-x border-b border-t-white/30 border-x-white/15 border-b-black/60 bg-slate-900 text-white'
+                : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-black/20 text-slate-500 hover:bg-black/40 hover:text-slate-300'
             }`}
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             <span>{tab.icon}</span>
             {tab.label}

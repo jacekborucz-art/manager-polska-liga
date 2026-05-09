@@ -480,7 +480,8 @@ export const ReservesView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowProgressModal(true)}
-                className="group flex items-center gap-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-300 hover:bg-emerald-500/20 active:scale-95"
+                className="group flex items-center gap-3 rounded-2xl border-t border-x border-b border-t-emerald-400/40 border-x-emerald-400/20 border-b-black/60 bg-emerald-500/10 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:border-t-emerald-300/60 hover:border-x-emerald-300/40 hover:bg-emerald-500/20 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 aria-label="Otworz szczegolowy progres rezerw"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-300/50 bg-black/45 text-emerald-300 transition-colors group-hover:bg-emerald-400 group-hover:text-black">
@@ -498,21 +499,24 @@ export const ReservesView: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={() => setShowScheduleModal(true)}
-              className="group flex items-center gap-3 rounded-2xl border border-blue-500/40 bg-blue-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-blue-400/60 hover:bg-blue-600/25 active:scale-95"
+              className="group flex items-center gap-3 rounded-2xl border-t border-x border-b border-t-blue-500/40 border-x-blue-500/20 border-b-black/60 bg-blue-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:border-t-blue-400/60 hover:border-x-blue-400/30 hover:bg-blue-600/25 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-500/50 bg-black/45 text-blue-400 transition-colors group-hover:bg-blue-400 group-hover:text-black">📅</span>
               <span className="block text-[13px] italic text-white">Terminarz</span>
             </button>
             <button
               onClick={() => setShowReport(true)}
-              className="group flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-amber-400/60 hover:bg-amber-600/25 active:scale-95"
+              className="group flex items-center gap-3 rounded-2xl border-t border-x border-b border-t-amber-500/40 border-x-amber-500/20 border-b-black/60 bg-amber-600/15 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:border-t-amber-400/60 hover:border-x-amber-400/30 hover:bg-amber-600/25 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/50 bg-black/45 text-amber-400 transition-colors group-hover:bg-amber-400 group-hover:text-black">📋</span>
               <span className="block text-[13px] italic text-white">Analiza trenera</span>
             </button>
             <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-white/25 hover:bg-white/10 active:scale-95"
+              className="group flex items-center gap-3 rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/5 px-5 py-3 text-left uppercase tracking-tighter text-white backdrop-blur-sm transition-all hover:border-t-white/35 hover:border-x-white/20 hover:bg-white/10 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-black/45 text-white transition-colors group-hover:bg-white group-hover:text-black">←</span>
               <span className="block text-[13px] italic text-white">Powrót</span>

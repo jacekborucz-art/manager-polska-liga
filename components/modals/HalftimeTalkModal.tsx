@@ -7,6 +7,20 @@ import {
   calculateTalkEffect,
 } from '../../services/HalftimeTalkService';
 
+const JerseyIcon = ({ primary, secondary, size = "w-10 h-10" }: { primary: string, secondary: string, size?: string }) => (
+  <div className="relative">
+    <div className="absolute inset-[-10px] rounded-full blur-2xl opacity-40" style={{ backgroundColor: primary }} />
+    <div className={`relative ${size} flex items-center justify-center p-1`}>
+      <svg viewBox="0 0 24 30" className="w-full h-full drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" fill={primary} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+        <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" />
+        <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.6" />
+        <path d="M5 20h6v9H5z" fill={secondary} />
+        <path d="M13 20h6v9h-6z" fill={secondary} />
+      </svg>
+    </div>
+  </div>
+);
+
 interface HalftimeTalkModalProps {
   isOpen: boolean;
   onClose: (effect: TalkEffect) => void;
@@ -15,6 +29,12 @@ interface HalftimeTalkModalProps {
   userSide: 'HOME' | 'AWAY';
   homeClubName: string;
   awayClubName: string;
+  homeClubColors: string[];
+  awayClubColors: string[];
+  homeKitPrimary: string;
+  homeKitSecondary: string;
+  awayKitPrimary: string;
+  awayKitSecondary: string;
   userShots: number;
   userShotsOnTarget: number;
   userCorners: number;
@@ -41,6 +61,12 @@ export const HalftimeTalkModal = ({
   userSide,
   homeClubName,
   awayClubName,
+  homeClubColors,
+  awayClubColors,
+  homeKitPrimary,
+  homeKitSecondary,
+  awayKitPrimary,
+  awayKitSecondary,
   userShots,
   userShotsOnTarget,
   userCorners,
@@ -92,6 +118,11 @@ export const HalftimeTalkModal = ({
   const rightClubName = userSide === 'HOME' ? oppClubName  : userClubName;
   const leftScore     = userSide === 'HOME' ? userScore    : oppScore;
   const rightScore    = userSide === 'HOME' ? oppScore     : userScore;
+
+  const leftKitPrimary    = homeKitPrimary;
+  const leftKitSecondary  = homeKitSecondary;
+  const rightKitPrimary   = awayKitPrimary;
+  const rightKitSecondary = awayKitSecondary;
 
   const getContextLabel = (): string => {
     if (context === 'DRAW_LOW')     return 'Remis bez bramek';
@@ -172,6 +203,10 @@ export const HalftimeTalkModal = ({
   };
 
   const oppPossession = 100 - userPossession;
+  const userKitPrimary   = userSide === 'HOME' ? homeKitPrimary   : awayKitPrimary;
+  const userKitSecondary = userSide === 'HOME' ? homeKitSecondary : awayKitSecondary;
+  const oppKitPrimary    = userSide === 'HOME' ? awayKitPrimary   : homeKitPrimary;
+  const oppKitSecondary  = userSide === 'HOME' ? awayKitSecondary : homeKitSecondary;
   const userShotsOff = userShots - userShotsOnTarget;
   const oppShotsOff  = oppShots  - oppShotsOnTarget;
 
@@ -187,7 +222,7 @@ export const HalftimeTalkModal = ({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 animate-fade-in">
-      <div className="w-full max-w-4xl mx-4 bg-slate-900/60 border border-white/10 rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative">
+      <div className="w-full max-w-4xl mx-4 border border-white/10 rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" style={{ background: `linear-gradient(135deg, ${homeKitPrimary}cc 0%, rgba(15,23,42,0.75) 45%, rgba(15,23,42,0.75) 55%, ${awayKitPrimary}cc 100%)` }}>
 
         {/* ── GRADIENT BAR GÓRNY ── */}
         <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent ${getContextAccent()} to-transparent`} />
@@ -198,55 +233,51 @@ export const HalftimeTalkModal = ({
         {/* ── SCOREBOARD ── */}
         <div className="relative flex items-center justify-between px-10 pt-8 pb-6 border-b border-white/5">
 
-          <div className="flex-1 flex flex-col gap-1">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]"></span>
+          <div className="flex-1 flex items-center gap-3">
+            <JerseyIcon primary={leftKitPrimary} secondary={leftKitSecondary} size="w-20 h-20" />
             <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{leftClubName}</h2>
           </div>
 
           <div className="flex flex-col items-center gap-2 px-10">
-            <span className={`text-[9px] font-black uppercase tracking-widest border px-3 py-1 rounded-full ${getContextColor()}`}>
-              {getContextLabel()}
-            </span>
             <div className="text-7xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
               {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
             </div>
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">PRZERWA</span>
           </div>
 
-          <div className="flex-1 flex flex-col items-end gap-1">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]"></span>
+          <div className="flex-1 flex items-center justify-end gap-3">
             <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none text-right">{rightClubName}</h2>
+            <JerseyIcon primary={rightKitPrimary} secondary={rightKitSecondary} size="w-20 h-20" />
           </div>
 
         </div>
 
         {/* ── STATYSTYKI I POŁOWY ── */}
         <div className="relative px-10 py-5 border-b border-white/5">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-black italic uppercase tracking-tighter text-white/30">{userClubName}</span>
-            <span className="text-[8px] font-black text-slate-600 uppercase tracking-[0.35em]">STATYSTYKI I POŁOWY</span>
-            <span className="text-xs font-black italic uppercase tracking-tighter text-white/30 text-right">{oppClubName}</span>
+          <div className="flex flex-col items-center gap-3 mb-4">
+            <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">STATYSTYKI I POŁOWY</span>
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
           </div>
 
           <div className="flex flex-col gap-2.5">
-            {statsRows.map(row => {
-              const uWins = row.uNum > row.oNum;
-              const oWins = row.oNum > row.uNum;
+            {statsRows.map((row, idx) => {
+              const uBarColor = idx % 2 === 0 ? userKitPrimary : userKitSecondary;
+              const oBarColor = idx % 2 === 0 ? oppKitPrimary  : oppKitSecondary;
               return (
                 <div key={row.label} className="flex items-center gap-3">
-                  <span className={`w-12 text-right text-xl font-black italic leading-none ${uWins ? 'text-white' : 'text-slate-500'}`}>
+                  <span className="w-12 text-right text-xl font-black italic leading-none text-white">
                     {row.uVal}
                   </span>
-                  <div className="flex-1 flex items-center h-0.5 overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
-                    <div className={`h-full rounded-l-full transition-all ${uWins ? 'bg-blue-500/70' : 'bg-white/15'}`} style={{ width: `${row.u}%` }} />
+                  <div className="flex-1 flex items-center h-4 overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
+                    <div className="h-full rounded-l-full transition-all" style={{ width: `${row.u}%`, backgroundColor: uBarColor }} />
                   </div>
-                  <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest shrink-0 w-24 text-center">
+                  <span className="text-[8px] font-black text-white/70 uppercase tracking-widest shrink-0 w-24 text-center">
                     {row.label}
                   </span>
-                  <div className="flex-1 h-0.5 overflow-hidden rounded-r-full bg-white/[0.04]">
-                    <div className={`h-full rounded-r-full transition-all ${oWins ? 'bg-slate-400/50' : 'bg-white/15'}`} style={{ width: `${row.o}%` }} />
+                  <div className="flex-1 h-4 overflow-hidden rounded-r-full bg-white/[0.04]">
+                    <div className="h-full rounded-r-full transition-all" style={{ width: `${row.o}%`, backgroundColor: oBarColor }} />
                   </div>
-                  <span className={`w-12 text-left text-xl font-black italic leading-none ${oWins ? 'text-white' : 'text-slate-500'}`}>
+                  <span className="w-12 text-left text-xl font-black italic leading-none text-white">
                     {row.oVal}
                   </span>
                 </div>
@@ -255,7 +286,6 @@ export const HalftimeTalkModal = ({
 
             {/* ── NASTRÓJ ── */}
             <div className="flex items-center justify-center gap-3 mt-1 pt-3 border-t border-white/5">
-              <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">OCENA</span>
               <span className={`text-sm font-black italic ${getMoodColor()}`}>{getMoodLabel()}</span>
             </div>
           </div>
@@ -264,17 +294,18 @@ export const HalftimeTalkModal = ({
         {/* ── FAZA WYBORU ── */}
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
-            <div className="px-10 pt-5 pb-3">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+            <div className="px-10 pt-5 pb-3 flex justify-center">
+              <span className="text-lg font-black italic uppercase tracking-tighter text-yellow-400">
                 ROZMOWA MOTYWACYJNA
               </span>
             </div>
-            <div className="px-6 pb-6 grid grid-cols-2 gap-2 max-h-[260px] overflow-y-auto custom-scrollbar">
+            <div className="px-6 pb-6 grid grid-cols-2 gap-1.5 max-h-[340px] overflow-y-auto custom-scrollbar">
               {talks.map((opt, idx) => (
                 <button
                   key={opt.id}
                   onClick={() => handleSelect(opt, idx)}
-                  className="w-full text-left px-5 py-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-slate-300 text-sm font-medium leading-snug hover:bg-white/[0.08] hover:border-white/20 hover:text-white transition-all active:scale-[0.99]"
+                  className="w-full text-left px-3.5 py-2 rounded-xl bg-white/[0.04] border border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-xs font-medium leading-snug hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:scale-[0.99] active:translate-y-[2px]"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
                   {opt.text}
                 </button>

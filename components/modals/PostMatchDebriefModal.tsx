@@ -115,7 +115,8 @@ export const PostMatchDebriefModal = ({
                 <button
                   key={opt.id}
                   onClick={() => handleSelect(opt, idx)}
-                  className="w-full text-left px-5 py-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-slate-300 text-sm font-medium leading-snug hover:bg-white/[0.08] hover:border-white/20 hover:text-white transition-all active:scale-[0.99]"
+                  className="w-full text-left px-5 py-3 rounded-2xl bg-white/[0.03] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-sm font-medium leading-snug hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:translate-y-[2px]"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
                   {opt.text}
                 </button>
