@@ -111,9 +111,9 @@ export const AiMarketNewsView: React.FC = () => {
           </span>
           <button
             onClick={() => navigateTo(ViewState.TRANSFER_NEWS)}
-            className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+            className="amn-btn px-8 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest group"
           >
-            <span className="group-hover:text-emerald-400 transition-colors">&larr; Aktywność rynkowa</span>
+            <span className="group-hover:text-emerald-400 transition-colors text-slate-300">&larr; Aktywność rynkowa</span>
           </button>
         </div>
       </header>
@@ -123,10 +123,8 @@ export const AiMarketNewsView: React.FC = () => {
         {/* Status filter */}
         <button
           onClick={() => setStatusFilter('ALL')}
-          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-            statusFilter === 'ALL'
-              ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-300'
-              : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+            statusFilter === 'ALL' ? 'amn-btn-active' : 'amn-btn'
           }`}
         >
           Wszystkie ({aiTransferLog.length})
@@ -135,10 +133,8 @@ export const AiMarketNewsView: React.FC = () => {
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
-            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              statusFilter === s
-                ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              statusFilter === s ? 'amn-btn-active' : 'amn-btn'
             }`}
           >
             {STATUS_LABEL[s]} ({counts[s] ?? 0})
@@ -153,10 +149,8 @@ export const AiMarketNewsView: React.FC = () => {
           <button
             key={p}
             onClick={() => setPosFilter(p)}
-            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              posFilter === p
-                ? 'bg-slate-400/20 border-slate-400/50 text-slate-200'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              posFilter === p ? 'amn-btn-pos-active' : 'amn-btn'
             }`}
           >
             {p === 'ALL' ? 'Poz: Wszystkie' : p}
@@ -289,6 +283,46 @@ export const AiMarketNewsView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <style>{`
+        .amn-btn {
+          background: linear-gradient(to bottom, #3b4f63 0%, #1e3347 100%);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-bottom: 4px solid rgba(0,0,0,0.75);
+          box-shadow: 0 6px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+          color: #94a3b8;
+          transition: transform 0.08s ease, box-shadow 0.08s ease, border-bottom-width 0.08s ease, background 0.08s ease;
+        }
+        .amn-btn:hover {
+          background: linear-gradient(to bottom, #4a5f74 0%, #273d55 100%);
+          transform: translateY(-3px);
+          box-shadow: 0 10px 18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+          color: #e2e8f0;
+        }
+        .amn-btn:active {
+          transform: translateY(4px);
+          border-bottom-width: 1px;
+          box-shadow: inset 0 3px 8px rgba(0,0,0,0.7);
+        }
+        .amn-btn-active {
+          background: linear-gradient(to bottom, rgba(120,53,15,0.5) 0%, rgba(92,52,8,0.4) 100%);
+          border: 1px solid rgba(234,179,8,0.45);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #fde047;
+          transition: none;
+        }
+        .amn-btn-pos-active {
+          background: linear-gradient(to bottom, rgba(51,65,85,0.7) 0%, rgba(30,41,59,0.6) 100%);
+          border: 1px solid rgba(148,163,184,0.4);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #f1f5f9;
+          transition: none;
+        }
+      `}</style>
 
       {/* Tooltip fixed — nie jest przycinany przez overflow:hidden rodziców */}
       {tooltip && (

@@ -202,7 +202,14 @@ export const PlayerCard: React.FC = () => {
                  {player.firstName}<br/>
                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-400 to-slate-600">{player.lastName}</span>
               </h2>
-              
+
+              {(player.nationalStats?.matchesPlayed ?? 0) >= 1 && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 mb-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-red-300">Kadra Narodowa</span>
+                  <span className="text-[10px] font-black text-white font-mono">{player.nationalStats!.matchesPlayed}/{player.nationalStats!.goals}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-center gap-4 mt-2">
                  <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
                     {player.position}
@@ -295,50 +302,43 @@ export const PlayerCard: React.FC = () => {
               </div>
             </div>
 
-            {/* STATYSTYKI SEZONOWE */}
-            <div className="flex-shrink-0 flex flex-col gap-2">
-              <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
-                <span className="w-8 h-px bg-emerald-500/30" /> Statystyki Sezonowe
-              </h3>
-              <div className="grid grid-cols-5 gap-1.5">
-                {[
-                  { label: 'Mecze', val: player.stats.matchesPlayed, icon: '📅' },
-                  { label: 'Gole', val: player.stats.goals, icon: '⚽', color: 'text-emerald-400' },
-                  { label: 'Asysty', val: player.stats.assists, icon: '👟', color: 'text-blue-400' },
-                  { label: 'Żółte', val: player.stats.yellowCards, icon: '🟨', color: 'text-amber-400' },
-                  { label: 'Czerwone', val: player.stats.redCards, icon: '🟥', color: 'text-red-500' },
-                ].map((s, i) => (
-                  <div key={i} className="bg-transparent p-2 rounded-2xl border border-white/5 text-center group hover:border-white/10 transition-all">
-                    <span className="text-sm mb-0.5 block transform group-hover:scale-125 transition-transform">{s.icon}</span>
-                    <span className={`text-lg font-black font-mono block drop-shadow ${s.color || 'text-white'}`}>{s.val}</span>
-                    <span className="text-[7px] font-black text-white uppercase tracking-widest drop-shadow">{s.label}</span>
-                  </div>
-                ))}
+            {/* STATYSTYKI SEZONOWE — tabela */}
+            <div className="flex-shrink-0">
+              <div className="overflow-hidden rounded-[10px] border border-white/20">
+                <table className="w-full text-left" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="bg-slate-800">
+                      <th className="px-2 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-slate-400 drop-shadow border-b border-r border-white/20" style={{ minWidth: '90px' }}>Rozgrywki</th>
+                      <th className="px-2 py-1.5 text-center text-[8px] font-black italic uppercase tracking-tighter text-white drop-shadow border-b border-r border-white/20">M</th>
+                      <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-r border-white/20">⚽</th>
+                      <th className="px-2 py-1.5 text-center text-[8px] font-black italic uppercase tracking-tighter text-sky-400 drop-shadow border-b border-r border-white/20">A</th>
+                      <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-r border-white/20">🟨</th>
+                      <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-white/20">🟥</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const rows: { label: string; labelClass: string; m: number; g: number; a: number; y: number; r: number }[] = [];
+                      rows.push({ label: 'Liga', labelClass: 'text-emerald-400', m: player.stats.matchesPlayed, g: player.stats.goals, a: player.stats.assists, y: player.stats.yellowCards, r: player.stats.redCards });
+                      if (player.reserveStats) rows.push({ label: 'Rezerwy', labelClass: 'text-violet-400', m: player.reserveStats.matches, g: player.reserveStats.goals, a: player.reserveStats.assists, y: player.reserveStats.yellowCards ?? 0, r: player.reserveStats.redCards ?? 0 });
+                      if ((player.cupStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Puchar PL', labelClass: 'text-orange-400', m: player.cupStats!.matchesPlayed, g: player.cupStats!.goals, a: player.cupStats!.assists, y: player.cupStats!.yellowCards, r: player.cupStats!.redCards });
+                      if ((player.euroStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Europejskie', labelClass: 'text-blue-400', m: player.euroStats!.matchesPlayed, g: player.euroStats!.goals, a: player.euroStats!.assists, y: player.euroStats!.yellowCards, r: player.euroStats!.redCards });
+                      if ((player.nationalStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Reprezentacja', labelClass: 'text-red-400', m: player.nationalStats!.matchesPlayed, g: player.nationalStats!.goals, a: player.nationalStats!.assists, y: player.nationalStats!.yellowCards, r: player.nationalStats!.redCards });
+                      return rows.map((row, i) => (
+                        <tr key={row.label} className={i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800'}>
+                          <td className={`px-2 py-1.5 text-[9px] font-black italic uppercase tracking-tighter drop-shadow border-r border-white/20 ${row.labelClass} ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.label}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-white drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.m}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-emerald-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.g}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-sky-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.a}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-yellow-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.y}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-red-500 drop-shadow ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.r}</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            {player.reserveStats && (
-              <div className="flex-shrink-0 flex flex-col gap-2">
-                <h3 className="text-[10px] font-black text-violet-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">
-                  <span className="w-8 h-px bg-violet-400/30" /> Statystyki Sezonowe — Rezerwy
-                </h3>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {[
-                    { label: 'Mecze', val: player.reserveStats.matches, icon: '📅' },
-                    { label: 'Gole', val: player.reserveStats.goals, icon: '⚽', color: 'text-emerald-400' },
-                    { label: 'Asysty', val: player.reserveStats.assists, icon: '👟', color: 'text-blue-400' },
-                    { label: 'Żółte', val: player.reserveStats.yellowCards ?? 0, icon: '🟨', color: 'text-amber-400' },
-                    { label: 'Czerwone', val: player.reserveStats.redCards ?? 0, icon: '🟥', color: 'text-red-500' },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-transparent p-2 rounded-2xl border border-white/5 text-center group hover:border-white/10 transition-all">
-                      <span className="text-sm mb-0.5 block transform group-hover:scale-125 transition-transform">{s.icon}</span>
-                      <span className={`text-lg font-black font-mono block drop-shadow ${s.color || 'text-white'}`}>{s.val}</span>
-                      <span className="text-[7px] font-black text-white uppercase tracking-widest drop-shadow">{s.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* STAN ZDROWIA */}
             <div className="flex-shrink-0 flex flex-col gap-2">

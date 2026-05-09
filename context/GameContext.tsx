@@ -105,6 +105,28 @@ import { ReserveScheduleService } from '../services/ReserveScheduleService';
 import { ReserveOpponentGeneratorService } from '../services/ReserveOpponentGeneratorService';
 import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
 import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
+import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
+import { pickNationalityForRegion } from '../services/NationalityService';
+
+export interface ImportedSquadPlayer {
+  firstName: string;
+  lastName: string;
+  age: number;
+  position: PlayerPosition;
+  nationality?: Region;
+  nationalityCountry?: string;
+  annualSalary?: number;
+  marketValue?: number;
+  contractEndDate?: string;
+  attributes: {
+    strength: number; stamina: number; pace: number; defending: number;
+    passing: number; attacking: number; finishing: number; technique: number;
+    vision: number; dribbling: number; heading: number; positioning: number;
+    goalkeeping: number; freeKicks: number; talent: number; penalties: number;
+    corners: number; aggression: number; crossing: number; leadership: number;
+    mentality: number; workRate: number;
+  };
+}
 
 const generateRuntimeSeed = (): number => {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
@@ -261,6 +283,7 @@ interface GameContextType {
   processBackgroundCupMatches: () => void;
     processCLMatchDay: () => void;
   updatePlayer: (clubId: string, playerId: string, newData: Partial<Player>) => void;
+  importSquad: (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => void;
   toggleTransferList: (playerId: string, price?: number) => void;
   setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
   pendingNegotiations: PendingNegotiation[];
@@ -6597,6 +6620,46 @@ const finalResult: SimulationOutput = {
     }));
   };
 
+  const importSquad = (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => {
+    const newPlayersChunk: Record<string, Player[]> = {};
+    const newLineupsChunk: Record<string, Lineup> = {};
+    const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    entries.forEach(({ clubId, players: imported }) => {
+      const squad: Player[] = imported.map((p, idx) => {
+        const nat = p.nationality ?? Region.POLAND;
+        const country = p.nationalityCountry ?? pickNationalityForRegion(nat);
+        const attrs = { ...p.attributes };
+        const overall = PlayerAttributesGenerator.calculateOverall(attrs, p.position);
+        const contractYears = p.age < 25 ? 3 : p.age < 32 ? 2 : 1;
+        const contractEnd = p.contractEndDate
+          ? p.contractEndDate
+          : new Date(now.getFullYear() + contractYears, now.getMonth(), now.getDate()).toISOString();
+        const salary = p.annualSalary ?? Math.round(overall * 800);
+        const mval = p.marketValue ?? Math.round(overall * 3000);
+        const id = `IMPORT_${clubId}_${idx}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        return {
+          id, firstName: p.firstName, lastName: p.lastName, age: p.age,
+          clubId, nationality: nat, nationalityCountry: country,
+          position: p.position, overallRating: overall, attributes: attrs,
+          stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+          health: { status: HealthStatus.HEALTHY },
+          condition: 80, suspensionMatches: 0,
+          cupSuspensionMatches: 0, euroSuspensionMatches: 0, nationalSuspensionMatches: 0,
+          contractEndDate: contractEnd, annualSalary: salary, marketValue: mval,
+          history: [], boardLockoutUntil: null, isUntouchable: false,
+          negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
+          fatigueDebt: 0, isNegotiationPermanentBlocked: false,
+          transferLockoutUntil: null, freeAgentLockoutUntil: null,
+        } as Player;
+      });
+      newPlayersChunk[clubId] = squad;
+      const coach = Object.values(coaches).find(c => c.clubId === clubId) ?? null;
+      newLineupsChunk[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
+    });
+    setPlayers(prev => ({ ...prev, ...newPlayersChunk }));
+    setLineups(prev => ({ ...prev, ...newLineupsChunk }));
+  };
+
   const toggleTransferList = (playerId: string, price?: number) => {
     if (!userTeamId) return;
     const squad = players[userTeamId] || [];
@@ -7985,7 +8048,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, toggleTransferList, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,

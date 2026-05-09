@@ -480,13 +480,13 @@ export const TransferNewsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigateTo(ViewState.AI_MARKET_NEWS)}
-            className="px-6 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+            className="tnv-btn px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest group"
           >
             <span className="group-hover:text-yellow-400 transition-colors">📊 Market News</span>
           </button>
           <button
             onClick={() => navigateTo(ViewState.JOB_MARKET)}
-            className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+            className="tnv-btn px-8 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest group"
           >
             <span className="group-hover:text-emerald-400 transition-colors">&larr; Centrum transferowe</span>
           </button>
@@ -499,10 +499,8 @@ export const TransferNewsView: React.FC = () => {
             <button
               key={league.id}
               onClick={() => setLeagueFilter(league.id)}
-              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-                leagueFilter === league.id
-                  ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-300'
-                  : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                leagueFilter === league.id ? 'tnv-btn-active-yellow' : 'tnv-btn'
               }`}
             >
               {league.label}
@@ -513,50 +511,40 @@ export const TransferNewsView: React.FC = () => {
         <div className="flex gap-2 shrink-0 flex-wrap justify-end">
           <button
             onClick={() => setTransferNewsActiveTab('scouting')}
-            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              activeTab === 'scouting'
-                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              activeTab === 'scouting' ? 'tnv-btn-active-emerald' : 'tnv-btn'
             }`}
           >
             Skauting ({scoutingWatch.length})
           </button>
           <button
             onClick={() => setTransferNewsActiveTab('released')}
-            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              activeTab === 'released'
-                ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              activeTab === 'released' ? 'tnv-btn-active-amber' : 'tnv-btn'
             }`}
           >
             Zwolnienia ({releasedPlayers.length})
           </button>
           <button
             onClick={() => setTransferNewsActiveTab('activity')}
-            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              activeTab === 'activity'
-                ? 'bg-blue-500/20 border-blue-400/50 text-blue-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              activeTab === 'activity' ? 'tnv-btn-active-blue' : 'tnv-btn'
             }`}
           >
             📡 NEGOCJACJE ({activityCount})
           </button>
           <button
             onClick={() => setTransferNewsActiveTab('completed')}
-            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              activeTab === 'completed'
-                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              activeTab === 'completed' ? 'tnv-btn-active-emerald' : 'tnv-btn'
             }`}
           >
             ✅ Sfinalizowane ({completed.length})
           </button>
           <button
             onClick={() => setTransferNewsActiveTab('incoming')}
-            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-              activeTab === 'incoming'
-                ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
-                : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+            className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+              activeTab === 'incoming' ? 'tnv-btn-active-amber' : 'tnv-btn'
             }`}
           >
             📨 OFERTY ZA MOICH ({activeIncomingOffers.length})
@@ -570,20 +558,16 @@ export const TransferNewsView: React.FC = () => {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setScoutingMarketFilter('POLAND')}
-                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-                  scoutingMarketFilter === 'POLAND'
-                    ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-300'
-                    : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                  scoutingMarketFilter === 'POLAND' ? 'tnv-btn-active-yellow' : 'tnv-btn'
                 }`}
               >
                 Polska
               </button>
               <button
                 onClick={() => setScoutingMarketFilter('REST_WORLD')}
-                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
-                  scoutingMarketFilter === 'REST_WORLD'
-                    ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                    : 'bg-white/[0.03] border-white/10 text-slate-400 hover:bg-white/[0.07]'
+                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                  scoutingMarketFilter === 'REST_WORLD' ? 'tnv-btn-active-emerald' : 'tnv-btn'
                 }`}
               >
                 Reszta swiata
@@ -932,7 +916,7 @@ export const TransferNewsView: React.FC = () => {
                   </div>
                   <button
                     onClick={() => navigateToIncomingOffer(offer.id)}
-                    className="shrink-0 px-5 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black uppercase tracking-widest text-[9px] hover:bg-amber-500/30 transition-all"
+                    className="tnv-btn-action shrink-0 px-5 py-2 rounded-xl font-black uppercase tracking-widest text-[9px]"
                   >
                     Przejdź
                   </button>
@@ -967,6 +951,82 @@ export const TransferNewsView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <style>{`
+        .tnv-btn {
+          background: linear-gradient(to bottom, #3b4f63 0%, #1e3347 100%);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-bottom: 4px solid rgba(0,0,0,0.75);
+          box-shadow: 0 6px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+          color: #94a3b8;
+          transition: transform 0.08s ease, box-shadow 0.08s ease, border-bottom-width 0.08s ease, background 0.08s ease;
+        }
+        .tnv-btn:hover {
+          background: linear-gradient(to bottom, #4a5f74 0%, #273d55 100%);
+          transform: translateY(-3px);
+          box-shadow: 0 10px 18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+          color: #e2e8f0;
+        }
+        .tnv-btn:active {
+          transform: translateY(4px);
+          border-bottom-width: 1px;
+          box-shadow: inset 0 3px 8px rgba(0,0,0,0.7);
+        }
+        .tnv-btn-active-yellow {
+          background: linear-gradient(to bottom, rgba(120,53,15,0.5) 0%, rgba(92,52,8,0.4) 100%);
+          border: 1px solid rgba(234,179,8,0.45);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #fde047;
+          transition: none;
+        }
+        .tnv-btn-active-emerald {
+          background: linear-gradient(to bottom, rgba(6,78,59,0.5) 0%, rgba(4,55,46,0.4) 100%);
+          border: 1px solid rgba(52,211,153,0.45);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #6ee7b7;
+          transition: none;
+        }
+        .tnv-btn-active-amber {
+          background: linear-gradient(to bottom, rgba(120,53,15,0.45) 0%, rgba(92,52,8,0.35) 100%);
+          border: 1px solid rgba(251,191,36,0.45);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #fcd34d;
+          transition: none;
+        }
+        .tnv-btn-active-blue {
+          background: linear-gradient(to bottom, rgba(30,58,138,0.5) 0%, rgba(23,37,84,0.4) 100%);
+          border: 1px solid rgba(96,165,250,0.45);
+          border-bottom: 1px solid rgba(0,0,0,0.6);
+          box-shadow: inset 0 4px 10px rgba(0,0,0,0.65);
+          transform: translateY(4px);
+          color: #93c5fd;
+          transition: none;
+        }
+        .tnv-btn-action {
+          background: linear-gradient(to bottom, rgba(146,64,14,0.6) 0%, rgba(120,53,15,0.5) 100%);
+          border: 1px solid rgba(251,191,36,0.45);
+          border-bottom: 4px solid rgba(0,0,0,0.7);
+          box-shadow: 0 6px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+          color: #fcd34d;
+          transition: transform 0.08s ease, box-shadow 0.08s ease, border-bottom-width 0.08s ease;
+        }
+        .tnv-btn-action:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 10px 18px rgba(0,0,0,0.6);
+          color: #fde68a;
+        }
+        .tnv-btn-action:active {
+          transform: translateY(4px);
+          border-bottom-width: 1px;
+          box-shadow: inset 0 3px 8px rgba(0,0,0,0.7);
+        }
+      `}</style>
     </div>
   );
 };

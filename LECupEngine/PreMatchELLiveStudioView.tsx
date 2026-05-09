@@ -125,7 +125,7 @@ export const PreMatchELLiveStudioView: React.FC = () => {
     if (!userTeamId || !fixture || userXICount >= 11) return false;
     const userPlayers = players[userTeamId] || [];
     const availableCount = userPlayers.filter(p =>
-      (p.suspensionMatches || 0) === 0 &&
+      (p.euroSuspensionMatches || 0) === 0 &&
       p.condition >= 60 &&
       (p.health.status !== HealthStatus.INJURED || (p.health.injury?.severity !== InjurySeverity.SEVERE && (p.health.injury?.daysRemaining ?? 0) <= 2))
     ).length;

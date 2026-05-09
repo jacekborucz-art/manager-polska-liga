@@ -908,6 +908,12 @@ export interface Player {
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   reserveStats?: ReserveSeasonStats;
   reserveHistory?: ReserveHistoryEntry[];
+  cupStats?: PlayerStats;
+  euroStats?: PlayerStats;
+  nationalStats?: PlayerStats;
+  cupSuspensionMatches?: number;
+  euroSuspensionMatches?: number;
+  nationalSuspensionMatches?: number;
 }
 
 export interface TeamStats {

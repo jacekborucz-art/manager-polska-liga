@@ -1,4 +1,4 @@
-import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, HealthStatus, InjurySeverity, PlayerPosition } from '../types';
+import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, HealthStatus, InjurySeverity, PlayerPosition, PlayerStats } from '../types';
 import { PolandWeatherService } from './PolandWeatherService';
 import { PlayerStatsService } from './PlayerStatsService';
 import { AiMatchPreparationService } from './AiMatchPreparationService';
@@ -573,20 +573,51 @@ export const BackgroundMatchProcessorPolishCup = {
         return c;
       });
 
-      // ── STATYSTYKI GRACZY ──────────────────────────────────
+      // ── STATYSTYKI PUCHARU (cupStats + cupSuspensionMatches) ──────────────
       const participatingIdsHome = [...hLineup.startingXI].filter(Boolean) as string[];
       const participatingIdsAway = [...aLineup.startingXI].filter(Boolean) as string[];
+      const emptyS = (): PlayerStats => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] });
 
-      currentPlayers = PlayerStatsService.processMatchDayEndForClub(currentPlayers, home.id, participatingIdsHome);
-      currentPlayers = PlayerStatsService.processMatchDayEndForClub(currentPlayers, away.id, participatingIdsAway);
-
+      for (const [cId, pIds] of [[home.id, participatingIdsHome], [away.id, participatingIdsAway]] as [string, string[]][]) {
+        currentPlayers[cId] = currentPlayers[cId].map(p => {
+          if (!pIds.includes(p.id)) return p;
+          const cup = { ...(p.cupStats ?? emptyS()) };
+          cup.matchesPlayed += 1;
+          cup.minutesPlayed += 90;
+          return { ...p, cupStats: cup };
+        });
+      }
+      for (const cId of [home.id, away.id]) {
+        currentPlayers[cId] = currentPlayers[cId].map(p => ({
+          ...p,
+          cupSuspensionMatches: Math.max(0, (p.cupSuspensionMatches ?? 0) - 1)
+        }));
+      }
       result.scorers.forEach(s => {
-        currentPlayers = PlayerStatsService.applyGoal(currentPlayers, s.playerId, s.assistId);
+        for (const cId of Object.keys(currentPlayers)) {
+          currentPlayers[cId] = currentPlayers[cId].map(p => {
+            if (p.id === s.playerId) return { ...p, cupStats: { ...(p.cupStats ?? emptyS()), goals: (p.cupStats?.goals ?? 0) + 1 } };
+            if (s.assistId && p.id === s.assistId) return { ...p, cupStats: { ...(p.cupStats ?? emptyS()), assists: (p.cupStats?.assists ?? 0) + 1 } };
+            return p;
+          });
+        }
       });
-
       result.cards.forEach(card => {
-        if (card.type === MatchEventType.RED_CARD) {
-          currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type);
+        for (const cId of Object.keys(currentPlayers)) {
+          currentPlayers[cId] = currentPlayers[cId].map(p => {
+            if (p.id !== card.playerId) return p;
+            const cup = { ...(p.cupStats ?? emptyS()) };
+            let cupSusp = p.cupSuspensionMatches ?? 0;
+            if (card.type === MatchEventType.YELLOW_CARD) {
+              cup.yellowCards += 1;
+              if (cup.yellowCards % 4 === 0) cupSusp += 1;
+            }
+            if (card.type === MatchEventType.RED_CARD) {
+              cup.redCards += 1;
+              cupSusp += 2;
+            }
+            return { ...p, cupStats: cup, cupSuspensionMatches: cupSusp };
+          });
         }
       });
 

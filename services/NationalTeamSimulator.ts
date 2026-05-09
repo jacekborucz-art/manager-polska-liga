@@ -421,11 +421,15 @@ const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, L
       if (!loc || !updated[loc.clubId]?.[loc.index]) return;
       const next = clonePlayer(updated[loc.clubId][loc.index]);
       const mins = lt.minutes[id] ?? 0;
-      if (mins > 0) { next.stats.matchesPlayed += 1; next.stats.minutesPlayed += mins; }
-      next.stats.goals += goalBy[id] ?? 0;
-      next.stats.assists += assistBy[id] ?? 0;
-      next.stats.yellowCards += yellowBy[id] ?? 0;
-      next.stats.redCards += redBy[id] ?? 0;
+      if (!next.nationalStats) next.nationalStats = { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] };
+      if (mins > 0) { next.nationalStats.matchesPlayed += 1; next.nationalStats.minutesPlayed += mins; }
+      next.nationalStats.goals += goalBy[id] ?? 0;
+      next.nationalStats.assists += assistBy[id] ?? 0;
+      next.nationalStats.yellowCards += yellowBy[id] ?? 0;
+      next.nationalStats.redCards += redBy[id] ?? 0;
+      next.nationalSuspensionMatches = Math.max(0, (next.nationalSuspensionMatches ?? 0) - 1);
+      if ((yellowBy[id] ?? 0) > 0 && next.nationalStats.yellowCards % 4 === 0) next.nationalSuspensionMatches += 1;
+      if ((redBy[id] ?? 0) > 0) next.nationalSuspensionMatches += 2;
       if (lt.fatigue[id] !== undefined) next.condition = clamp(lt.fatigue[id], 0, 100);
       if (lt.debt[id] !== undefined) { next.fatigueDebt = clamp((next.fatigueDebt ?? 0) + lt.debt[id], 0, 100); next.condition = Math.min(next.condition, 100 - next.fatigueDebt); }
       if (injBy[id]) {

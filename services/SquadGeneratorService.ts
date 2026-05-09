@@ -391,14 +391,20 @@ export const SquadGeneratorService = {
             stats: {
                 matchesPlayed: 0,
                 minutesPlayed: 0,
-                goals: 0, 
-                assists: 0, 
-                yellowCards: 0, 
-                redCards: 0, 
+                goals: 0,
+                assists: 0,
+                yellowCards: 0,
+                redCards: 0,
                 cleanSheets: 0,
                 seasonalChanges: {},
-                ratingHistory: [] 
+                ratingHistory: []
             },
+            cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+            euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+            nationalStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+            cupSuspensionMatches: 0,
+            euroSuspensionMatches: 0,
+            nationalSuspensionMatches: 0,
             health: {
               status: HealthStatus.HEALTHY
             },

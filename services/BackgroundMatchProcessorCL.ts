@@ -1,4 +1,4 @@
-import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
+import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach, PlayerStats } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
@@ -875,28 +875,51 @@ export const BackgroundMatchProcessorCL = {
         [fixture.awayTeamId]: applyFatigueToTeam(result.updatedAwayPlayers),
       };
 
-      // ── Kartki → statystyki i zawieszenia (jak w BackgroundMatchProcessor) ─
-      updatedPlayersMap = PlayerStatsService.processMatchDayEndForClub(
-        updatedPlayersMap,
-        home.id,
-        result.participatingHomePlayerIds
-      );
-      updatedPlayersMap = PlayerStatsService.processMatchDayEndForClub(
-        updatedPlayersMap,
-        away.id,
-        result.participatingAwayPlayerIds
-      );
+      // ── STATYSTYKI EUROPEJSKIE (euroStats + euroSuspensionMatches) ─────────
+      const emptyS = (): PlayerStats => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] });
 
-      result.cards.forEach(card => {
-        const eventType = card.type === 'RED' || card.type === 'SECOND_YELLOW'
-          ? MatchEventType.RED_CARD
-          : MatchEventType.YELLOW_CARD;
-        updatedPlayersMap = PlayerStatsService.applyCard(updatedPlayersMap, card.playerId, eventType);
-      });
-
-      // ── Gole i asysty → statystyki ──────────────────────────────────
+      for (const [cId, pIds] of [[home.id, result.participatingHomePlayerIds], [away.id, result.participatingAwayPlayerIds]] as [string, string[]][]) {
+        updatedPlayersMap[cId] = updatedPlayersMap[cId].map(p => {
+          if (!pIds.includes(p.id)) return p;
+          const eur = { ...(p.euroStats ?? emptyS()) };
+          eur.matchesPlayed += 1;
+          eur.minutesPlayed += 90;
+          return { ...p, euroStats: eur };
+        });
+      }
+      for (const cId of [home.id, away.id]) {
+        updatedPlayersMap[cId] = updatedPlayersMap[cId].map(p => ({
+          ...p,
+          euroSuspensionMatches: Math.max(0, (p.euroSuspensionMatches ?? 0) - 1)
+        }));
+      }
       result.goals.filter(g => !g.varDisallowed && g.playerId).forEach(g => {
-        updatedPlayersMap = PlayerStatsService.applyGoal(updatedPlayersMap, g.playerId!, g.assistId);
+        for (const cId of Object.keys(updatedPlayersMap)) {
+          updatedPlayersMap[cId] = updatedPlayersMap[cId].map(p => {
+            if (p.id === g.playerId) return { ...p, euroStats: { ...(p.euroStats ?? emptyS()), goals: (p.euroStats?.goals ?? 0) + 1 } };
+            if (g.assistId && p.id === g.assistId) return { ...p, euroStats: { ...(p.euroStats ?? emptyS()), assists: (p.euroStats?.assists ?? 0) + 1 } };
+            return p;
+          });
+        }
+      });
+      result.cards.forEach(card => {
+        const evType = card.type === 'RED' || card.type === 'SECOND_YELLOW' ? MatchEventType.RED_CARD : MatchEventType.YELLOW_CARD;
+        for (const cId of Object.keys(updatedPlayersMap)) {
+          updatedPlayersMap[cId] = updatedPlayersMap[cId].map(p => {
+            if (p.id !== card.playerId) return p;
+            const eur = { ...(p.euroStats ?? emptyS()) };
+            let euroSusp = p.euroSuspensionMatches ?? 0;
+            if (evType === MatchEventType.YELLOW_CARD) {
+              eur.yellowCards += 1;
+              if (eur.yellowCards % 4 === 0) euroSusp += 1;
+            }
+            if (evType === MatchEventType.RED_CARD) {
+              eur.redCards += 1;
+              euroSusp += 2;
+            }
+            return { ...p, euroStats: eur, euroSuspensionMatches: euroSusp };
+          });
+        }
       });
 
       // ── Statystyki sędziego ──────────────────────────────────────────

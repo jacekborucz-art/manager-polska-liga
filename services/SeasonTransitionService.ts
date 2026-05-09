@@ -89,7 +89,11 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
               minutesPlayed: 0,
               seasonalChanges: {},
                ratingHistory: []  // Reset limitu rozwoju treningowego
-            }
+            },
+            cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+            euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+            cupSuspensionMatches: 0,
+            euroSuspensionMatches: 0
           });
         }
       });
@@ -140,8 +144,14 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       health: { status: HealthStatus.HEALTHY },
       stats: {
         goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0,
-        seasonalChanges: {},  ratingHistory: [] 
+        seasonalChanges: {},  ratingHistory: []
       },
+      cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      nationalStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      cupSuspensionMatches: 0,
+      euroSuspensionMatches: 0,
+      nationalSuspensionMatches: 0,
       history: [{
         clubName: "Akademia",
         clubId: clubId,
@@ -196,7 +206,13 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       annualSalary: 15000,
       contractEndDate: new Date(new Date().getFullYear(), 11, 31).toISOString(),
       health: { status: HealthStatus.HEALTHY },
-      stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: []  },
+      stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      nationalStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+      cupSuspensionMatches: 0,
+      euroSuspensionMatches: 0,
+      nationalSuspensionMatches: 0,
       history: [{ clubName: "Akademia", clubId: clubId, fromYear: new Date().getFullYear(), fromMonth: 7, toYear: null, toMonth: null }],
       boardLockoutUntil: null,
       isUntouchable: false,

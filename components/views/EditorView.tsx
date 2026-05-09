@@ -1,6 +1,7 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
+import { ImportedSquadPlayer } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Region, PlayerAttributes } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion } from '../../services/NationalityService';
@@ -61,7 +62,116 @@ const selectCls = 'bg-black/40 border border-slate-700 rounded text-white   font
 const labelCls  = 'text-yellow-400 text-xs font-black italic uppercase tracking-tighter';
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, getOrGenerateSquad, updatePlayer, navigateTo } = useGame();
+  const { clubs, players, getOrGenerateSquad, updatePlayer, importSquad, navigateTo } = useGame();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importMsg, setImportMsg] = useState<string>('');
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        const entries: { clubId: string; players: ImportedSquadPlayer[] }[] = Array.isArray(raw) ? raw : [raw];
+        const valid: { clubId: string; players: ImportedSquadPlayer[] }[] = [];
+        let errors = 0;
+        entries.forEach(entry => {
+          const match = clubs.find(c => c.id === entry.clubId || c.name === entry.clubId);
+          if (!match || !Array.isArray(entry.players) || entry.players.length === 0) { errors++; return; }
+          valid.push({ clubId: match.id, players: entry.players });
+        });
+        if (valid.length === 0) {
+          setImportMsg(`Błąd: żaden klub nie pasuje (${errors} błędów).`);
+          return;
+        }
+        importSquad(valid);
+        const totalPlayers = valid.reduce((s, e) => s + e.players.length, 0);
+        setImportMsg(`Zaimportowano ${totalPlayers} zawodników do ${valid.length} klub(ów).${errors > 0 ? ` (${errors} błędów)` : ''}`);
+      } catch {
+        setImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+
+  const allExportableClubs = useMemo(() =>
+    clubs.filter(c => c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4'),
+  [clubs]);
+
+  const exportClubsByTier = useMemo(() => {
+    const map: Record<string, typeof allExportableClubs> = {};
+    allExportableClubs.forEach(c => {
+      const key = c.leagueId;
+      if (!map[key]) map[key] = [];
+      map[key].push(c);
+    });
+    return map;
+  }, [allExportableClubs]);
+
+  const TIER_LABELS: Record<string, string> = {
+    'L_PL_1': 'Ekstraklasa (Liga 1)',
+    'L_PL_2': 'Liga 2',
+    'L_PL_3': 'Liga 3',
+    'L_PL_4': 'Liga 4',
+  };
+
+  const toggleExportClub = (id: string) => {
+    setExportSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleExportTier = (leagueId: string) => {
+    const tierIds = (exportClubsByTier[leagueId] ?? []).map(c => c.id);
+    const allSelected = tierIds.every(id => exportSelected.has(id));
+    setExportSelected(prev => {
+      const next = new Set(prev);
+      if (allSelected) tierIds.forEach(id => next.delete(id));
+      else tierIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const handleExportConfirm = () => {
+    if (exportSelected.size === 0) return;
+    const data = Array.from(exportSelected).map(clubId => {
+      const squad = getOrGenerateSquad(clubId);
+      return {
+        clubId,
+        players: squad.map(p => ({
+          firstName: p.firstName,
+          lastName: p.lastName,
+          age: p.age,
+          position: p.position,
+          nationality: p.nationality,
+          nationalityCountry: p.nationalityCountry ?? '',
+          annualSalary: p.annualSalary,
+          marketValue: p.marketValue ?? 0,
+          contractEndDate: p.contractEndDate,
+          attributes: { ...p.attributes },
+        })),
+      };
+    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = exportSelected.size === 1
+      ? `skład_${clubs.find(c => c.id === Array.from(exportSelected)[0])?.name ?? 'klub'}.json`
+      : `składy_${exportSelected.size}_klubów.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportModal(false);
+    setExportSelected(new Set());
+  };
 
   const [selectedTier, setSelectedTier]     = useState<string>('1');
   const [selectedClubId, setSelectedClubId] = useState<string>('');
@@ -182,7 +292,29 @@ export const EditorView: React.FC = () => {
           <option value="">— wybierz klub —</option>
           {filteredClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {importMsg && (
+            <span className="text-xs text-emerald-400 max-w-xs truncate">{importMsg}</span>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <button
+            onClick={() => { setShowExportModal(true); setExportSelected(new Set()); }}
+            className="px-4 py-1.5 bg-slate-700 border border-slate-600 rounded text-xs text-slate-300 hover:text-white hover:border-slate-400 transition-colors"
+          >
+            Eksportuj składy
+          </button>
+          <button
+            onClick={() => { setImportMsg(''); fileInputRef.current?.click(); }}
+            className="px-4 py-1.5 bg-blue-900 border border-blue-700 rounded text-xs text-blue-300 hover:text-white hover:border-blue-500 transition-colors"
+          >
+            Importuj składy z pliku
+          </button>
           <button
             onClick={() => navigateTo(ViewState.DASHBOARD)}
             className="px-4 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
@@ -396,6 +528,60 @@ export const EditorView: React.FC = () => {
         .editor-scroll::-webkit-scrollbar-track { background: transparent; }
         .editor-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
       `}</style>
+
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => setShowExportModal(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-lg w-[520px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
+              <span className="text-sm text-yellow-400">Wybierz kluby do eksportu</span>
+              <button onClick={() => setShowExportModal(false)} className="text-slate-500 hover:text-white text-lg leading-none">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto editor-scroll px-5 py-3">
+              {(['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4'] as const).map(leagueId => {
+                const tierClubs = exportClubsByTier[leagueId] ?? [];
+                if (tierClubs.length === 0) return null;
+                const allChecked = tierClubs.every(c => exportSelected.has(c.id));
+                return (
+                  <div key={leagueId} className="mb-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs text-yellow-400">{TIER_LABELS[leagueId]}</span>
+                      <button
+                        onClick={() => toggleExportTier(leagueId)}
+                        className="text-[10px] px-2 py-0.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 transition-colors"
+                      >
+                        {allChecked ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {tierClubs.map(c => (
+                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-slate-800 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={exportSelected.has(c.id)}
+                            onChange={() => toggleExportClub(c.id)}
+                            className="accent-yellow-400"
+                          />
+                          <span className="text-xs text-white">{c.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-700 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-slate-400">Zaznaczono: {exportSelected.size} klub(ów)</span>
+              <button
+                onClick={handleExportConfirm}
+                disabled={exportSelected.size === 0}
+                className="px-5 py-1.5 bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded text-xs text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Pobierz plik JSON
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
