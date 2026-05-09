@@ -59,6 +59,8 @@ export const Dashboard: React.FC = () => {
    processCLMatchDay,
    coaches,
    viewCoachDetails,
+   viewPlayerDetails,
+   nationalTeams,
     fixtures,
     confirmSeasonEnd,
     setElHistoryInitialRound,
@@ -525,16 +527,30 @@ const boardConfidence = useMemo(() => {
       .map(c => ({ ...c, searchType: 'CLUB' }));
 
     // -> tutaj wstaw kod
+    // Filtrowanie piłkarzy
+    const filteredPlayers = Object.values(players)
+      .flat()
+      .filter(p =>
+        p.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.lastName.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(p => ({ ...p, searchType: 'PLAYER' }));
+
+    // Filtrowanie reprezentacji
+    const filteredNationalTeams = nationalTeams
+      .filter(nt => nt.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .map(nt => ({ ...nt, searchType: 'NATIONAL_TEAM' }));
+
     // Filtrowanie trenerów
     const filteredCoaches = Object.values(coaches)
-      .filter(c => 
-        c.firstName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      .filter(c =>
+        c.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.lastName.toLowerCase().includes(searchTerm.toLowerCase())
       )
       .map(c => ({ ...c, searchType: 'COACH' }));
 
-    return [...filteredClubs, ...filteredCoaches].slice(0, 10);
-  }, [searchTerm, clubs, coaches]);
+    return [...filteredClubs, ...filteredNationalTeams, ...filteredPlayers, ...filteredCoaches].slice(0, 10);
+  }, [searchTerm, clubs, coaches, players, nationalTeams]);
 
   const getMailIcon = (type: MailType) => {
     switch (type) {
@@ -798,7 +814,9 @@ const boardConfidence = useMemo(() => {
                       key={item.id}
                       onClick={() => {
                         if (item.searchType === 'CLUB') viewClubDetails(item.id);
-                        else viewCoachDetails(item.id); // -> tutaj wstaw kod
+                        else if (item.searchType === 'PLAYER') viewPlayerDetails(item.id);
+                        else if (item.searchType === 'NATIONAL_TEAM') navigateTo(ViewState.EUROPEAN_CLUBS);
+                        else viewCoachDetails(item.id);
                         setIsSearchFocused(false);
                         setSearchTerm('');
                       }}
@@ -810,6 +828,15 @@ const boardConfidence = useMemo(() => {
                               <div style={{ backgroundColor: item.colorsHex[0] }} className="flex-1" />
                               <div style={{ backgroundColor: item.colorsHex[1] }} className="flex-1" />
                             </div>
+                          ) : item.searchType === 'NATIONAL_TEAM' ? (
+                            <div className="flex flex-col w-2 h-8 rounded-full overflow-hidden shrink-0 border border-white/10 shadow-lg">
+                              <div style={{ backgroundColor: item.colorsHex[0] }} className="flex-1" />
+                              <div style={{ backgroundColor: item.colorsHex[1] }} className="flex-1" />
+                            </div>
+                          ) : item.searchType === 'PLAYER' ? (
+                            <div className="w-8 h-8 rounded-lg bg-emerald-600/20 flex items-center justify-center text-lg border border-emerald-500/20 shadow-lg shrink-0">
+                               ⚽
+                            </div>
                           ) : (
                             <div className="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center text-lg border border-blue-500/20 shadow-lg shrink-0">
                                👨‍💼
@@ -817,15 +844,21 @@ const boardConfidence = useMemo(() => {
                           )}
                           <div className="text-left">
                             <span className="block text-sm font-black text-white group-hover:text-blue-400 transition-colors uppercase italic">
-                              {item.searchType === 'CLUB' ? item.name : `${item.firstName} ${item.lastName}`}
+                              {item.searchType === 'CLUB' || item.searchType === 'NATIONAL_TEAM' ? item.name : `${item.firstName} ${item.lastName}`}
                             </span>
                             <span className="block text-[9px] font-black text-slate-500 uppercase tracking-tighter">
-                                {item.searchType === 'CLUB' ? `Stadion: ${item.stadiumName}` : `${item.nationalityFlag} ${item.nationality} • Doświadczenie: ${item.attributes.experience}`}
+                                {item.searchType === 'CLUB'
+                                  ? `Stadion: ${item.stadiumName}`
+                                  : item.searchType === 'NATIONAL_TEAM'
+                                    ? `${item.continent} • Reputacja: ${item.reputation}`
+                                    : item.searchType === 'PLAYER'
+                                      ? `Pozycja: ${item.position} • Ocena: ${item.overallRating}`
+                                      : `${item.nationalityFlag} ${item.nationality} • Doświadczenie: ${item.attributes.experience}`}
                             </span>
                           </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-[7px] font-black px-2 py-0.5 rounded border ${item.searchType === 'CLUB' ? 'text-amber-500 border-amber-500/20 bg-amber-500/5' : 'text-blue-500 border-blue-500/20 bg-blue-500/5'}`}>
+                        <span className={`text-[7px] font-black px-2 py-0.5 rounded border ${item.searchType === 'CLUB' || item.searchType === 'NATIONAL_TEAM' ? 'text-amber-500 border-amber-500/20 bg-amber-500/5' : item.searchType === 'PLAYER' ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' : 'text-blue-500 border-blue-500/20 bg-blue-500/5'}`}>
                            {item.searchType}
                         </span>
                         <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-[-10px]">
