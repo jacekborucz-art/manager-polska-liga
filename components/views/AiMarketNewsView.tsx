@@ -101,7 +101,7 @@ export const AiMarketNewsView: React.FC = () => {
               MARKET <span className="text-yellow-400">NEWS</span>
             </h1>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em] mt-1">
-              Log transferów AI • śledzenie transakcji
+              
             </p>
           </div>
         </div>
@@ -176,7 +176,7 @@ export const AiMarketNewsView: React.FC = () => {
       </div>
 
       {/* TABELA */}
-      <div className="w-full max-w-[1680px] mx-auto" style={{ height: 'calc(100vh - 220px)', overflowY: 'scroll', scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
+      <div key={statusFilter + posFilter} className="w-full max-w-[1680px] mx-auto" style={{ height: 'calc(100vh - 220px)', overflowY: 'scroll', scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-600">
             <div className="text-4xl mb-4">📭</div>

@@ -376,49 +376,79 @@ export const ReserveMatchEngine = {
         aXI
       );
 
-      // Zmiany (min 60, co 5 minut)
+      // Zmiany
       const doSub = (
         xi: Player[],
         bench: Player[],
         used: number,
-        side: 'H' | 'A'
+        side: 'H' | 'A',
+        attackingMode: boolean,
+        forced: boolean
       ): number => {
         if (used >= 3 || bench.length === 0) return used;
-        const tired = xi.find(p => p.condition < 88);
+        const subFallback: Record<PlayerPosition, PlayerPosition[]> = {
+          [PlayerPosition.GK]:  [PlayerPosition.GK],
+          [PlayerPosition.DEF]: [PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD],
+          [PlayerPosition.MID]: [PlayerPosition.MID, PlayerPosition.DEF, PlayerPosition.FWD],
+          [PlayerPosition.FWD]: [PlayerPosition.FWD, PlayerPosition.MID, PlayerPosition.DEF],
+        };
+        const outfield = [...xi].filter(p => p.position !== PlayerPosition.GK);
+        outfield.sort((a, b) => a.condition - b.condition);
+        const tired = outfield[0] ?? xi[0];
         if (!tired) return used;
-        const candidate = bench.find(b => b.position === tired.position);
+        if (!forced) {
+          const threshold = attackingMode ? 88 : 83;
+          if (tired.condition >= threshold) return used;
+        }
+        let candidate: Player | undefined;
+        if (attackingMode) {
+          candidate = bench.find(b => b.position === PlayerPosition.FWD)
+            ?? bench.find(b => b.position === PlayerPosition.MID);
+        }
+        if (!candidate) {
+          for (const pos of subFallback[tired.position]) {
+            candidate = bench.find(b => b.position === pos);
+            if (candidate) break;
+          }
+        }
         if (!candidate) return used;
         const idx = xi.indexOf(tired);
         xi[idx] = candidate;
-        const removedIdx = bench.indexOf(candidate);
-        bench.splice(removedIdx, 1);
+        bench.splice(bench.indexOf(candidate), 1);
         allPlayed.add(candidate.id);
         if (side === 'H') homePlayerIds.add(candidate.id);
         else awayPlayerIds.add(candidate.id);
         playersById.set(candidate.id, candidate);
-        const teamId = side === 'H' ? 'HOME' : 'AWAY';
         subs.push({
           playerOutName: `${tired.firstName} ${tired.lastName}`,
           playerInName: `${candidate.firstName} ${candidate.lastName}`,
           minute: min,
-          teamId,
+          teamId: side === 'H' ? 'HOME' : 'AWAY',
           playerOutId: tired.id,
           playerInId: candidate.id,
         });
         return used + 1;
       };
 
-      if (min >= 60 && min % 5 === 0) {
-        hSubsUsed = doSub(hXI, hBench, hSubsUsed, 'H');
-        aSubsUsed = doSub(aXI, aBench, aSubsUsed, 'A');
+      if (min >= 55 && min % 3 === 0) {
+        const hAttacking = hScore < aScore && min >= 65;
+        const aAttacking = aScore < hScore && min >= 65;
+        hSubsUsed = doSub(hXI, hBench, hSubsUsed, 'H', hAttacking, false);
+        aSubsUsed = doSub(aXI, aBench, aSubsUsed, 'A', aAttacking, false);
+      }
+      if (min >= 55 && rng(offset + 82) < 0.07) {
+        hSubsUsed = doSub(hXI, hBench, hSubsUsed, 'H', false, true);
+      }
+      if (min >= 55 && rng(offset + 84) < 0.07) {
+        aSubsUsed = doSub(aXI, aBench, aSubsUsed, 'A', false, true);
       }
       if (min === 45 && rng(offset + 77) < 0.3) {
-        hSubsUsed = doSub(hXI, hBench, hSubsUsed, 'H');
+        hSubsUsed = doSub(hXI, hBench, hSubsUsed, 'H', false, false);
       }
 
       // Zmęczenie
       for (const p of [...hXI, ...aXI]) {
-        p.condition = Math.max(50, p.condition - (rng(offset + p.id.length) * 0.08 + 0.05));
+        p.condition = Math.max(50, p.condition - (rng(offset + p.id.length) * 0.15 + 0.10));
       }
 
       // XG na minutę
@@ -513,7 +543,7 @@ export const ReserveMatchEngine = {
 
       // Kontuzje (tylko zawodnicy gracza, ~2% szansa/min na drużynę)
       const userXIRef = isHome ? hXI : aXI;
-      if (userXIRef.length > 0 && rng(offset + 30) < 0.02) {
+      if (userXIRef.length > 0 && rng(offset + 30) < 0.002) {
         const pIdx = Math.floor(rng(offset + 31) * userXIRef.length);
         const p = userXIRef[pIdx];
         const isSevere = rng(offset + 32) < 0.15;

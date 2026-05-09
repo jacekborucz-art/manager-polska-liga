@@ -3192,6 +3192,12 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             userSide={userSide}
             homeClubName={ctx.homeClub.name}
             awayClubName={ctx.awayClub.name}
+            homeKitPrimary={kitColors!.home.primary}
+            homeKitSecondary={kitColors!.home.secondary}
+            awayKitPrimary={kitColors!.away.primary}
+            awayKitSecondary={kitColors!.away.secondary}
+            homeClubColors={[kitColors!.home.primary, kitColors!.home.secondary]}
+            awayClubColors={[kitColors!.away.primary, kitColors!.away.secondary]}
             userShots={uStats.shots}
             userShotsOnTarget={uStats.shotsOnTarget}
             userCorners={uStats.corners}

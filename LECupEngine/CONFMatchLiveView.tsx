@@ -163,7 +163,7 @@ export const CONFMatchLiveView = () => {
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
-  const [showBriefing, setShowBriefing] = useState(true);
+  const [showBriefing, setShowBriefing] = useState(() => matchState?.preMatchMotivation == null);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
@@ -2748,7 +2748,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
   ) : (
     <>
       {/* ── GÓRNY BOX: Tempo / Postawa / Styl gry ── */}
-      <div className="flex gap-3 justify-center py-1.5 px-6 bg-black-400 border-5 border-white/50 rounded-[24px] shadow-4xl relative overflow-hidden">
+      <div className={`flex gap-3 justify-center py-1.5 px-6 bg-black-400 border-5 border-white/50 rounded-[24px] shadow-4xl relative overflow-hidden${showBriefing ? ' opacity-40 pointer-events-none' : ''}`}>
         <div className="absolute inset-0 rounded-[7px] pointer-events-none" style={{boxShadow:'inset 0 2px 2px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px 0 rgba(255,255,255,0.10)'}} />
       {/* ── TEMPO ── */}
       {(() => {
@@ -2984,7 +2984,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       {/* ── DOLNY BOX: Start / Taktyka / Prędkość / Przebieg ── */}
       <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
         <button
-          disabled={hasMandatorySub}
+          disabled={hasMandatorySub || showBriefing}
           onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0))), halftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
           className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95 shadow-2xl border
             ${hasMandatorySub
@@ -2999,8 +2999,9 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         </button>
 
         <button
+          disabled={showBriefing}
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className={`min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2${showBriefing ? ' opacity-40 cursor-not-allowed' : ''}`}
         >
           ⚙ TAKTYKA
         </button>
@@ -3135,6 +3136,12 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             userSide={userSide}
             homeClubName={ctx.homeClub.name}
             awayClubName={ctx.awayClub.name}
+            homeKitPrimary={kitColors!.home.primary}
+            homeKitSecondary={kitColors!.home.secondary}
+            awayKitPrimary={kitColors!.away.primary}
+            awayKitSecondary={kitColors!.away.secondary}
+            homeClubColors={[kitColors!.home.primary, kitColors!.home.secondary]}
+            awayClubColors={[kitColors!.away.primary, kitColors!.away.secondary]}
             userShots={uStats.shots}
             userShotsOnTarget={uStats.shotsOnTarget}
             userCorners={uStats.corners}
