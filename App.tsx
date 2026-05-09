@@ -3,6 +3,7 @@ import { GameProvider, useGame } from './context/GameContext';
 import { ViewState } from './types';
 import { StartMenu } from './components/views/StartMenu';
 import { TeamSelection } from './components/views/TeamSelection';
+import { SquadImportView } from './components/views/SquadImportView';
 import { Dashboard } from './components/views/Dashboard';
 import { LeagueTables } from './components/views/LeagueTables';
 import { MatchView } from './components/views/MatchView';
@@ -236,6 +237,8 @@ case ViewState.POLISH_CUP_BRACKET:
         return <ManagerCreation />;
       case ViewState.TEAM_SELECTION:
         return <TeamSelection />;
+      case ViewState.SQUAD_IMPORT:
+        return <SquadImportView />;
       case ViewState.GAME_MANUAL:
         return <GameManual />;
       case ViewState.TRAINING_VIEW:

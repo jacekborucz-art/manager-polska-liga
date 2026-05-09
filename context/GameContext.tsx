@@ -1567,7 +1567,7 @@ const selectUserTeam = (clubId: string) => {
 const fanMail = MailService.generateFanWelcomeMail(club, squad, currentDate); // Tę funkcję zaraz dopiszemy
 setMessages([welcomeMail, fanMail]);
 
-    navigateTo(ViewState.DASHBOARD);
+    navigateTo(ViewState.SQUAD_IMPORT);
   };
 
   const resignFromClub = () => {
@@ -2390,8 +2390,9 @@ setMessages([welcomeMail, fanMail]);
         });
       }
 
-      // ── Tygodniowy przegląd kadry (każdy poniedziałek) ───────────────────────
-      if (dateToProcess.getDay() === 1) {
+      // ── Tygodniowy przegląd kadry (każdy poniedziałek, poza oknem zamrożenia NT) ─
+      const ntSeasonYear = dateToProcess.getMonth() >= 6 ? dateToProcess.getFullYear() : dateToProcess.getFullYear() - 1;
+      if (dateToProcess.getDay() === 1 && !NationalTeamService.isSquadFrozen(dateToProcess, ntSeasonYear)) {
         const ntMonthly = NationalTeamService.reviewMonthlySquad(nationalTeams, coaches, players);
         const monthlyAnyChanged = ntMonthly.updatedTeams.some((t, i) => t !== nationalTeams[i]);
         if (monthlyAnyChanged) setNationalTeams(ntMonthly.updatedTeams);
@@ -6656,7 +6657,38 @@ const finalResult: SimulationOutput = {
       const coach = Object.values(coaches).find(c => c.clubId === clubId) ?? null;
       newLineupsChunk[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
     });
-    setPlayers(prev => ({ ...prev, ...newPlayersChunk }));
+    const hasImportedPlayers = Object.keys(newPlayersChunk).length > 0;
+    const canReviewNT = hasImportedPlayers && nationalTeams.length > 0;
+
+    if (!canReviewNT) {
+      setPlayers(prev => ({ ...prev, ...newPlayersChunk }));
+      setLineups(prev => ({ ...prev, ...newLineupsChunk }));
+      return;
+    }
+
+    const mergedPlayers = { ...players, ...newPlayersChunk };
+    let currentTeams = nationalTeams;
+    let currentPlayers = mergedPlayers;
+    for (let i = 0; i < 8; i++) {
+      const review = NationalTeamService.reviewMonthlySquad(currentTeams, coaches, currentPlayers);
+      const anyChanged = review.updatedTeams.some((t, idx) => t !== currentTeams[idx]) || review.playerUpdates.length > 0;
+      if (!anyChanged) break;
+      currentTeams = review.updatedTeams;
+      if (review.playerUpdates.length > 0) {
+        const updateMap: Record<string, string | null> = {};
+        review.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
+        const updatedPlayers: Record<string, Player[]> = {};
+        for (const [clubId, squad] of Object.entries(currentPlayers)) {
+          updatedPlayers[clubId] = squad.map(p =>
+            p.id in updateMap ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
+          );
+        }
+        currentPlayers = updatedPlayers;
+      }
+    }
+
+    setPlayers(currentPlayers);
+    if (currentTeams !== nationalTeams) setNationalTeams(currentTeams);
     setLineups(prev => ({ ...prev, ...newLineupsChunk }));
   };
 

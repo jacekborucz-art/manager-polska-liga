@@ -1,4 +1,5 @@
 import { NationalTeam, Coach, Player, Region, PlayerPosition, HealthStatus } from '../types';
+import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
 import { pickNationalityForRegion } from './NationalityService';
 import { NATIONAL_TEAMS_EUROPE } from '../resources/static_db/NationalTeams/NationalTeamsEurope';
 import { NATIONAL_TEAMS_AFRICA } from '../resources/static_db/NationalTeams/NationalTeamsAfrica';
@@ -157,6 +158,8 @@ const isEligibleForTeam = (
 
   return true;
 };
+
+const NT_FREEZE_DAYS = 7;
 
 export const NationalTeamService = {
 
@@ -667,5 +670,24 @@ export const NationalTeamService = {
       newPlayers: allNewPlayers,
       playerUpdates: allPlayerUpdates
     };
+  },
+
+  // ─── 9. SPRAWDZENIE OKNA ZAMROŻENIA KADRY ────────────────────────────────────
+
+  isSquadFrozen: (currentDate: Date, seasonStartYear: number): boolean => {
+    const schedule = NT_SCHEDULE_BY_YEAR[seasonStartYear];
+    if (!schedule) return false;
+
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+    const limitMs = today.getTime() + NT_FREEZE_DAYS * 24 * 60 * 60 * 1000;
+
+    return schedule.some(md => {
+      const calYear = md.month >= 6 ? seasonStartYear : seasonStartYear + 1;
+      const matchDate = new Date(calYear, md.month, md.day);
+      matchDate.setHours(0, 0, 0, 0);
+      const matchMs = matchDate.getTime();
+      return matchMs >= today.getTime() && matchMs <= limitMs;
+    });
   },
 };
