@@ -210,6 +210,8 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Konyaspor", country: "TUR", tier:3, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "Konya Büyükşehir Stadium", capacity: 42076, reputation: 6 },
   { name: "Adana Demirspor", country: "TUR", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FFD700'], stadium: "Yeni Adana Stadium", capacity: 33500, reputation: 6 },
   { name: "Alanyaspor", country: "TUR", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Bahçeşehir Okulları Stadium", capacity: 10842, reputation: 5 },
+  { name: "Gaziantep FK", country: "TUR", tier: 3, colors: ['#e41919', '#FFFFFF', '#000000'], stadium: "Gaziantep Atatürk Stadium", capacity: 42222, reputation: 6 },
+{name: "Kocaelispor", country: "TUR", tier: 3, colors: ['#00590c', '#000000', '#ffffff'], stadium: "İzmit Stadium", capacity: 34400, reputation: 5 },
 
   // Ukraina (UKR)
   { name: "FC Oleksandriya", country: "UKR", tier: 4, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "CSC Nika Stadium", capacity: 5682, reputation: 6 },
@@ -230,6 +232,8 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
  
   { name: "Torino FC", country: "ITA", tier: 3, colors: ['#FF0000', '#000000', '#FFFFFF'], stadium: "Stadio Olimpico Grande Torino", capacity: 27994, reputation: 10 },
   { name: "Genoa CFC", country: "ITA", tier: 3, colors: ['#FF0000', '#000000', '#FFFFFF'], stadium: "Stadio Luigi Ferraris", capacity: 36585, reputation: 9 },
+  { name: "Palermo", country: "ITA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stadio Renzo Barbera", capacity: 36000, reputation: 8 },
+
 
 
   // Węgry (HUN) – tier 4
@@ -264,6 +268,8 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Stade de Reims", country: "FRA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade Auguste-Delaune", capacity: 21684, reputation: 7 },
   { name: "FC Lorient", country: "FRA", tier: 3, colors: ['#FF6600', '#000000', '#FFFFFF'], stadium: "Stade du Moustoir", capacity: 18970, reputation: 7 },
  { name: "Strasbourg", country: "FRA", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stade de la Meinau", capacity: 29000, reputation: 8 },
+ { name: "Stade Rennais", country: "FRA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade de la Mosquée", capacity: 38512, reputation: 8 },
+
 
   // Grecja (GRE) – niższe miejsce w Super League
   { name: "Panetolikos GFS", country: "GRE", tier: 3, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "Panetolikos Stadium", capacity: 7321, reputation: 6 },

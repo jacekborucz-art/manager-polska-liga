@@ -1,6 +1,11 @@
 export const CLUBS_ASIAN = [
 
   // === Arabia Saudyjska – absolutna czołówka (reputacja do 10) ===
+  
+  {name: "Neom SC", country: "KSA", tier: 2, colors: ["#0022ff", "#FFFFFF", "#0022ff"], stadium: "Neom Stadium", capacity: 22000, reputation: 10},
+  
+  
+  
   { 
     name: "Al-Hilal", 
     country: "KSA", 
