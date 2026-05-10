@@ -268,7 +268,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "Stade de Reims", country: "FRA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade Auguste-Delaune", capacity: 21684, reputation: 7 },
   { name: "FC Lorient", country: "FRA", tier: 3, colors: ['#FF6600', '#000000', '#FFFFFF'], stadium: "Stade du Moustoir", capacity: 18970, reputation: 7 },
  { name: "Strasbourg", country: "FRA", tier: 3, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stade de la Meinau", capacity: 29000, reputation: 8 },
- { name: "Stade Rennais", country: "FRA", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade de la Mosquée", capacity: 38512, reputation: 8 },
+ { name: "Stade Rennais", country: "FRA", tier: 3, colors: ['#FF0000', '#000000', '#ffffff'], stadium: "Stade de la Mosquée", capacity: 38512, reputation: 8 },
 
 
   // Grecja (GRE) – niższe miejsce w Super League
