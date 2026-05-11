@@ -4418,6 +4418,34 @@ const finalResult: SimulationOutput = {
        // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
     applySimulationResult(finalResult);
 
+    if (userTeamId) {
+      const formatPln = (value?: number) => `${(value || 0).toLocaleString('pl-PL')} PLN`;
+      const gulfMegaOfferMails: MailMessage[] = (finalResult.aiTransferLogEntries || [])
+        .filter(entry => entry.isGulfMegaOffer && (entry.status === 'OFFER_MADE' || entry.status === 'TRANSFER_SIGNED'))
+        .map(entry => {
+          const signed = entry.status === 'TRANSFER_SIGNED';
+          const fromClub = entry.fromClub || 'poprzedni klub';
+          const years = entry.contractYears || 1;
+          return {
+            id: `gulf-mega-${entry.id}`,
+            sender: 'Dział Transferowy',
+            role: 'Rynek międzynarodowy',
+            subject: signed
+              ? `Bajeczny kontrakt podpisany: ${entry.playerName}`
+              : `Gigantyczna oferta z Azji: ${entry.playerName}`,
+            body: signed
+              ? `${entry.playerName} zaakceptował ofertę klubu ${entry.toClub}. Zawodnik przechodzi z: ${fromClub}. Kontrakt: ${years} ${years === 1 ? 'rok' : 'lata'}, pensja ${formatPln(entry.salary)}, premia za podpis ${formatPln(entry.bonus)}.`
+              : `${entry.toClub} złożył gigantyczną ofertę zawodnikowi ${entry.playerName}. Źródło zainteresowania: ${fromClub}. Propozycja: ${years} ${years === 1 ? 'rok' : 'lata'}, pensja ${formatPln(entry.salary)}, premia za podpis ${formatPln(entry.bonus)}.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: signed ? 85 : 75,
+          };
+        });
+
+      if (gulfMegaOfferMails.length > 0) prependUniqueMessages(gulfMegaOfferMails);
+    }
+
     // 4c. Generowanie terminarza rezerw (4 lipca każdego sezonu)
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 4 && userTeamId) {
       const userClub = clubs.find(c => c.id === userTeamId);

@@ -51,8 +51,10 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
           return; // nie trafia do nextSquad
         }
 
+        const retirementLocked = !!player.retirementLockUntil && new Date(player.retirementLockUntil) > seasonEndDate;
+
         // Logika emerytury: > 35 lat + losowa decyzja (0,1)
-        if (player.age >= 35 && Math.random() < 0.5) {
+        if (player.age >= 35 && !retirementLocked && Math.random() < 0.5) {
           // Zawodnik odchodzi - generujemy Newgena na jego miejsce
           const newgen = SeasonTransitionService.generateNewgen(
             clubId, 
@@ -77,6 +79,9 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
           nextSquad.push({
             ...player,
             age: player.age + 1,
+            retirementLockUntil: player.retirementLockUntil && new Date(player.retirementLockUntil) <= seasonEndDate
+              ? null
+              : player.retirementLockUntil,
             condition: 100, // Pełna regeneracja na start sezonu
             suspensionMatches: 0, // Reset kar ligowych
             stats: {

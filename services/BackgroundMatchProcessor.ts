@@ -85,6 +85,8 @@ if (todayFixtures.length === 0) {
       const transferResolvedUpdate = AiContractService.resolveAiTransferPending(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
 
       const aiTransferLogEntries: AiTransferLogEntry[] = [
+        ...recruitmentUpdate.logEntries,
+        ...resolvedUpdate.logEntries,
         ...transferSigningsUpdate.logEntries,
         ...interestedTargetingUpdate.logEntries,
         ...transferResolvedUpdate.logEntries,
@@ -528,6 +530,8 @@ if (todayFixtures.length === 0) {
     const transferResolvedFinal = AiContractService.resolveAiTransferPending(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
 
     const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [
+      ...finalUpdate.logEntries,
+      ...resolvedFinal.logEntries,
       ...transferSigningsFinal.logEntries,
       ...interestedTargetingFinal.logEntries,
       ...transferResolvedFinal.logEntries,

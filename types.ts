@@ -828,6 +828,10 @@ export interface AiTransferLogEntry {
   playerId?: string;
   fromClubId?: string;
   toClubId?: string;
+  isGulfMegaOffer?: boolean;
+  salary?: number;
+  bonus?: number;
+  contractYears?: number;
 }
 
 export interface TransferContractInput {
@@ -903,8 +907,12 @@ export interface Player {
   transferPendingClubId?: string;
   /** Kwota transferu zapłacona przy złożeniu oferty — używana przy finalizacji do zapisania w historii kariery */
   transferPendingFee?: number;
+  transferPendingSalary?: number;
+  transferPendingBonus?: number;
+  transferPendingContractYears?: number;
   /** Data ISO kiedy zawodnik "melduje się" w nowym klubie (currentDate + 3 dni) */
   transferReportDate?: string;
+  retirementLockUntil?: string | null;
   trainingFocus?: keyof PlayerAttributes | null;
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   reserveStats?: ReserveSeasonStats;
