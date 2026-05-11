@@ -24,8 +24,19 @@ export const GameNotification: React.FC = () => {
       glow: 'from-amber-500/30 via-amber-400/10 to-transparent',
       accent: 'bg-amber-400',
       border: 'border-amber-400/20'
+    },
+    error: {
+      badge: 'text-rose-300',
+      glow: 'from-rose-500/30 via-rose-400/10 to-transparent',
+      accent: 'bg-rose-400',
+      border: 'border-rose-400/20'
     }
-  }[gameNotification.tone];
+  }[gameNotification.tone] || {
+    badge: 'text-sky-300',
+    glow: 'from-sky-500/30 via-sky-400/10 to-transparent',
+    accent: 'bg-sky-400',
+    border: 'border-sky-400/20'
+  };
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-5 z-[1400] flex justify-center px-4">

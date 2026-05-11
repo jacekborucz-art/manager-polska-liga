@@ -46,6 +46,15 @@ const getSelectionScore = (player: Player): number => {
   return moraleScore + roleBonus;
 };
 
+const isUnavailableForLineup = (player: Player): boolean => {
+  const injuryDays = player.health.injury?.daysRemaining ?? 0;
+  return (
+    (player.suspensionMatches || 0) > 0 ||
+    (player.health.status === HealthStatus.INJURED &&
+      (player.health.injury?.severity === InjurySeverity.SEVERE || injuryDays > 2))
+  );
+};
+
 export const LineupService = {
   /**
    * Deterministyczny wybór składu.
@@ -69,10 +78,10 @@ export const LineupService = {
     const tactic = TacticRepository.getById(tacticId);
     
     // Na start wybieramy tylko tych, którzy są w stanie grać (nie SEVERE, nie zawieszeni, daysRemaining <= 2, kondycja >= 60)
-    const availablePlayers = players.filter(p => 
-      (p.suspensionMatches || 0) === 0 && 
+    const availablePlayers = players.filter(p =>
+      !isUnavailableForLineup(p) &&
       p.condition >= 60 &&
-      (p.health.status === HealthStatus.HEALTHY || (p.health.injury?.severity !== InjurySeverity.SEVERE && (p.health.injury?.daysRemaining ?? 0) <= 2))
+      (p.health.status === HealthStatus.HEALTHY || (p.health.injury?.daysRemaining ?? 0) <= 2)
     );
         const COND_XI    = 90;
     const COND_BENCH = 85;
@@ -192,7 +201,7 @@ export const LineupService = {
 repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     const AI_FRESH_THRESHOLD = 87;
     const tactic = TacticRepository.getById(lineup.tacticId);
-    const canPlay = (p: Player) => (p.suspensionMatches || 0) === 0 && p.condition >= 60 && (p.health.status !== HealthStatus.INJURED || p.health.injury?.severity !== InjurySeverity.SEVERE);
+    const canPlay = (p: Player) => !isUnavailableForLineup(p) && p.condition >= 60;
     
     const allAvailable = players.filter(canPlay);
     const freshPool = allAvailable.filter(p => p.condition >= AI_FRESH_THRESHOLD).sort((a,b) => getSelectionScore(b) - getSelectionScore(a));
@@ -267,9 +276,7 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     const isRestricted = (id: string) => {
       const p = players.find(x => x.id === id);
       if (!p) return false;
-      const isSuspended = (p.suspensionMatches || 0) > 0;
-      const isSevereInjured = p.health.status === HealthStatus.INJURED && p.health.injury?.severity === InjurySeverity.SEVERE;
-      return isSuspended || isSevereInjured;
+      return isUnavailableForLineup(p);
     };
     newLineup.startingXI = newLineup.startingXI.map(id => {
       if (id && isRestricted(id)) {
@@ -296,7 +303,7 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     const hasGK = startPlayers.some(p => p.position === PlayerPosition.GK);
     if (!hasGK) return { valid: false, error: "Brak bramkarza w podstawowej jedenastce!" };
     if (startPlayers.some(p => (p.suspensionMatches || 0) > 0)) return { valid: false, error: "W wyjściowym składzie znajduje się zawieszony zawodnik!" };
-    if (startPlayers.some(p => p.health.status === HealthStatus.INJURED && p.health.injury?.severity === InjurySeverity.SEVERE)) return { valid: false, error: "W wyjściowym składzie znajduje się poważnie kontuzjowany zawodnik!" };
+    if (startPlayers.some(p => p.health.status === HealthStatus.INJURED && (p.health.injury?.severity === InjurySeverity.SEVERE || (p.health.injury?.daysRemaining ?? 0) > 2))) return { valid: false, error: "W wyjściowym składzie znajduje się kontuzjowany zawodnik!" };
     return { valid: true };
   },
 

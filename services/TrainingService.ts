@@ -5,7 +5,7 @@ import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { PlayerMoraleService } from './PlayerMoraleService';
 
-const WEEKLY_TRAINING_INJURY_CHANCE = 0.01;
+const DAILY_TRAINING_INJURY_CHANCE = 0.01;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
 
 const dateOnly = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -55,9 +55,14 @@ export const TrainingService = {
     for (const clubId of Object.keys(updatedMap)) {
       if (isTrainingHolidayForClub(currentDate, clubId, fixtures)) continue;
 
+      const healthyPlayers = updatedMap[clubId].filter(player => player.health.status !== HealthStatus.INJURED);
+      if (healthyPlayers.length === 0 || random() >= DAILY_TRAINING_INJURY_CHANCE) continue;
+
+      const injuredPlayerId = healthyPlayers[Math.floor(random() * healthyPlayers.length)]?.id;
+      if (!injuredPlayerId) continue;
+
       updatedMap[clubId] = updatedMap[clubId].map(player => {
-        if (player.health.status === HealthStatus.INJURED) return player;
-        if (random() >= WEEKLY_TRAINING_INJURY_CHANCE) return player;
+        if (player.id !== injuredPlayerId) return player;
 
         const severity = random() < TRAINING_SEVERE_INJURY_CHANCE
           ? InjurySeverity.SEVERE

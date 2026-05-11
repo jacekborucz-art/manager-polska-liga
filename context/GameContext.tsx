@@ -154,7 +154,7 @@ interface SimulationOutput {
   aiTransferLogEntries?: AiTransferLogEntry[];
 }
 
-type GameNotificationTone = 'success' | 'info' | 'warning';
+type GameNotificationTone = 'success' | 'info' | 'warning' | 'error';
 
 interface GameNotificationState {
   title: string;
