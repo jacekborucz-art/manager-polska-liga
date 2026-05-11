@@ -2,9 +2,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, HealthStatus } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
-import { pickNationalityForRegion } from '../../services/NationalityService';
+import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
+import { NameGeneratorService } from '../../services/NameGeneratorService';
+import { FinanceService } from '../../services/FinanceService';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -38,6 +40,27 @@ const REGION_LABELS: Record<Region, string> = {
   [Region.SOUTH_AMERICAN]: 'Ameryka Płd.'
 };
 
+const COUNTRY_OPTIONS = (Object.entries(REGION_TO_NT_LIST) as [Region, { name: string; reputation: number }[]][])
+  .flatMap(([region, countries]) => countries.map(country => ({
+    region,
+    name: country.name,
+    reputation: country.reputation
+  })))
+  .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+
+const getCountriesForRegion = (region: Region) =>
+  COUNTRY_OPTIONS
+    .filter(country => country.region === region)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+
+const findRegionForCountry = (countryName: string): Region | null =>
+  COUNTRY_OPTIONS.find(country => country.name === countryName)?.region ?? null;
+
+const getDefaultCountryForRegion = (region: Region): string => {
+  const regionCountries = getCountriesForRegion(region);
+  return regionCountries[0]?.name ?? pickNationalityForRegion(region);
+};
+
 const DEFAULT_ATTRS: PlayerAttributes = {
   strength: 50, stamina: 50, pace: 50, defending: 50, passing: 50, attacking: 50,
   finishing: 50, technique: 50, vision: 50, dribbling: 50, heading: 50, positioning: 50,
@@ -65,8 +88,34 @@ const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', '
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
 
+const emptyStats = () => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: []
+});
+
+const getClubEditorTier = (leagueId: string, reputation = 5): number => {
+  const polishTier = leagueId.match(/^L_PL_(\d)$/)?.[1];
+  if (polishTier) return parseInt(polishTier, 10);
+  if (reputation >= 16) return 1;
+  if (reputation >= 11) return 2;
+  if (reputation >= 7) return 3;
+  return 4;
+};
+
+const getTierFilterForClub = (leagueId: string): string => {
+  const polishTier = leagueId.match(/^L_PL_(\d)$/)?.[1];
+  return polishTier ?? 'ALL';
+};
+
 export const EditorView: React.FC = () => {
-  const { clubs, players, getOrGenerateSquad, updatePlayer, importSquad, navigateTo } = useGame();
+  const { clubs, players, currentDate, getOrGenerateSquad, updatePlayer, setPlayers, importSquad, navigateTo } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -103,6 +152,8 @@ export const EditorView: React.FC = () => {
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+  const [isCreatingPlayer, setIsCreatingPlayer] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
 
   const allExportableClubs = useMemo(() =>
     clubs.filter(c =>
@@ -217,7 +268,12 @@ export const EditorView: React.FC = () => {
   const [marketValue,   setMarketValue]     = useState<number>(0);
   const [contractEndDate, setContractEndDate] = useState<string>('');
 
-  const filteredClubs = useMemo(() => clubs.filter(c => c.leagueId === `L_PL_${selectedTier}`), [clubs, selectedTier]);
+  const filteredClubs = useMemo(() => {
+    const list = selectedTier === 'ALL'
+      ? clubs
+      : clubs.filter(c => c.leagueId === `L_PL_${selectedTier}`);
+    return [...list].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  }, [clubs, selectedTier]);
 
   const clubPlayers = useMemo(() => {
     if (!selectedClubId) return [];
@@ -225,6 +281,13 @@ export const EditorView: React.FC = () => {
   }, [selectedClubId, getOrGenerateSquad, players]);
 
   const selectedClub = useMemo(() => clubs.find(c => c.id === selectedClubId), [clubs, selectedClubId]);
+  const nationalityCountryOptions = useMemo(() => {
+    const regionCountries = getCountriesForRegion(nationality);
+    if (nationalityCountry && !regionCountries.some(country => country.name === nationalityCountry)) {
+      return [{ region: nationality, name: nationalityCountry, reputation: 1 }, ...regionCountries];
+    }
+    return regionCountries;
+  }, [nationality, nationalityCountry]);
 
   const sortedPlayers = useMemo(() => {
     return [...clubPlayers].sort((a, b) => {
@@ -232,6 +295,32 @@ export const EditorView: React.FC = () => {
       return pd !== 0 ? pd : b.overallRating - a.overallRating;
     });
   }, [clubPlayers]);
+
+  const playerSearchResults = useMemo(() => {
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return [];
+
+    const byKey = new Map<string, { player: Player; clubName: string; clubId: string }>();
+    Object.entries(players).forEach(([clubId, squad]) => {
+      const clubName = clubs.find(c => c.id === clubId)?.name ?? (clubId === 'FREE_AGENTS' ? 'Bez klubu' : clubId);
+      squad.forEach(player => {
+        byKey.set(`${clubId}:${player.id}`, { player, clubName, clubId });
+      });
+    });
+
+    clubPlayers.forEach(player => {
+      const clubName = selectedClub?.name ?? selectedClubId;
+      byKey.set(`${selectedClubId}:${player.id}`, { player, clubName, clubId: selectedClubId });
+    });
+
+    return Array.from(byKey.values())
+      .filter(({ player, clubName }) => {
+        const haystack = `${player.firstName} ${player.lastName} ${clubName} ${player.position} ${player.overallRating} ${player.nationalityCountry ?? ''}`.toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => b.player.overallRating - a.player.overallRating)
+      .slice(0, 80);
+  }, [playerSearch, players, clubs, clubPlayers, selectedClub, selectedClubId]);
 
   const liveOvr = useMemo(() => PlayerAttributesGenerator.calculateOverall(attrs, position), [attrs, position]);
 
@@ -244,7 +333,49 @@ export const EditorView: React.FC = () => {
     return `linear-gradient(150deg, ${c0}28 0%, ${c1}18 60%, transparent 100%)`;
   }, [selectedClub]);
 
+  const resetPlayerForm = () => {
+    setFirstName('');
+    setLastName('');
+    setAge(20);
+    setNationality(Region.POLAND);
+    setNationalityCountry('Polska');
+    setPosition(PlayerPosition.MID);
+    setAttrs({ ...DEFAULT_ATTRS });
+    setAnnualSalary(0);
+    setMarketValue(0);
+    const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    setContractEndDate(new Date(now.getFullYear() + 2, 5, 30).toISOString().substring(0, 10));
+  };
+
+  const applyAutoFinance = (nextAttrs = attrs, nextPosition = position, nextAge = age) => {
+    if (!selectedClub) return;
+    const nextOvr = PlayerAttributesGenerator.calculateOverall(nextAttrs, nextPosition);
+    const salary = FinanceService.getFairMarketSalary(nextOvr);
+    const tempPlayer = {
+      id: 'EDITOR_PREVIEW',
+      firstName: firstName || 'Nowy',
+      lastName: lastName || 'Zawodnik',
+      age: nextAge,
+      clubId: selectedClub.id,
+      nationality,
+      nationalityCountry,
+      position: nextPosition,
+      overallRating: nextOvr,
+      attributes: nextAttrs,
+      annualSalary: salary,
+      contractEndDate: contractEndDate || '',
+    } as Player;
+    setAnnualSalary(salary);
+    setMarketValue(FinanceService.calculateMarketValue(
+      tempPlayer,
+      selectedClub.reputation,
+      getClubEditorTier(selectedClub.leagueId, selectedClub.reputation),
+      selectedClub.country
+    ));
+  };
+
   useEffect(() => {
+    if (isCreatingPlayer) return;
     if (selectedPlayerId && selectedClubId) {
       const p = clubPlayers.find(pl => pl.id === selectedPlayerId);
       if (p) {
@@ -260,11 +391,9 @@ export const EditorView: React.FC = () => {
         setContractEndDate(p.contractEndDate);
       }
     } else {
-      setFirstName(''); setLastName(''); setAge(20);
-      setNationality(Region.POLAND); setNationalityCountry('Polska'); setPosition(PlayerPosition.MID);
-      setAttrs({ ...DEFAULT_ATTRS }); setAnnualSalary(0); setMarketValue(0); setContractEndDate('');
+      resetPlayerForm();
     }
-  }, [selectedPlayerId, clubPlayers, selectedClubId]);
+  }, [selectedPlayerId, clubPlayers, selectedClubId, isCreatingPlayer]);
 
   const handleAttrChange = (key: keyof PlayerAttributes, val: string) => {
     let n = parseInt(val);
@@ -278,6 +407,46 @@ export const EditorView: React.FC = () => {
     setAttrs(r);
   };
 
+  const handleNationalityRegionChange = (region: Region) => {
+    setNationality(region);
+    setNationalityCountry(getDefaultCountryForRegion(region));
+  };
+
+  const handleNationalityCountryChange = (countryName: string) => {
+    const region = findRegionForCountry(countryName);
+    if (region) setNationality(region);
+    setNationalityCountry(countryName);
+  };
+
+  const handleRandomProfile = () => {
+    const club = selectedClub;
+    const tier = club ? getClubEditorTier(club.leagueId, club.reputation) : 2;
+    const rep = club?.reputation ?? 8;
+    const generatedAge = 16 + Math.floor(Math.random() * 22);
+    const generated = PlayerAttributesGenerator.generateAttributes(position, tier, rep, generatedAge, !!club && !club.leagueId.startsWith('L_PL_'));
+    const name = NameGeneratorService.getRandomName(nationality);
+    setFirstName(name.firstName);
+    setLastName(name.lastName);
+    setAge(generatedAge);
+    setNationalityCountry(pickNationalityForRegion(nationality));
+    setAttrs(generated.attributes);
+    setTimeout(() => applyAutoFinance(generated.attributes, position, generatedAge), 0);
+  };
+
+  const startCreatePlayer = () => {
+    setSelectedPlayerId('');
+    setIsCreatingPlayer(true);
+    resetPlayerForm();
+  };
+
+  const handleSelectSearchResult = (clubId: string, playerId: string) => {
+    const club = clubs.find(c => c.id === clubId);
+    setSelectedTier(club ? getTierFilterForClub(club.leagueId) : 'ALL');
+    setSelectedClubId(clubId);
+    setSelectedPlayerId(playerId);
+    setIsCreatingPlayer(false);
+  };
+
   const handleAgeChange = (val: string) => {
     let n = parseInt(val);
     if (isNaN(n)) n = 15;
@@ -285,8 +454,76 @@ export const EditorView: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!selectedClubId || !selectedPlayerId) return;
+    if (!selectedClubId) {
+      alert('Najpierw wybierz klub.');
+      return;
+    }
+    const trimmedFirstName = firstName.trim();
+    const trimmedLastName = lastName.trim();
+    if (isCreatingPlayer && !trimmedFirstName && !trimmedLastName) {
+      alert('Podaj imię albo nazwisko zawodnika.');
+      return;
+    }
     const newOvr = PlayerAttributesGenerator.calculateOverall(attrs, position);
+    if (isCreatingPlayer) {
+      const club = clubs.find(c => c.id === selectedClubId);
+      const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+      const contractDate = contractEndDate
+        ? new Date(contractEndDate).toISOString()
+        : new Date(now.getFullYear() + 2, 5, 30).toISOString();
+      const newPlayer: Player = {
+        id: `EDITOR_${selectedClubId}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+        age,
+        clubId: selectedClubId,
+        nationality,
+        nationalityCountry,
+        position,
+        overallRating: newOvr,
+        attributes: { ...attrs },
+        stats: emptyStats(),
+        cupStats: emptyStats(),
+        euroStats: emptyStats(),
+        nationalStats: emptyStats(),
+        health: { status: HealthStatus.HEALTHY },
+        condition: 100,
+        suspensionMatches: 0,
+        cupSuspensionMatches: 0,
+        euroSuspensionMatches: 0,
+        nationalSuspensionMatches: 0,
+        annualSalary,
+        marketValue,
+        contractEndDate: contractDate,
+        history: [{
+          clubName: club?.name ?? selectedClubId,
+          clubId: selectedClubId,
+          fromYear: now.getFullYear(),
+          fromMonth: now.getMonth() + 1,
+          toYear: null,
+          toMonth: null
+        }],
+        boardLockoutUntil: null,
+        isUntouchable: false,
+        negotiationStep: 0,
+        negotiationLockoutUntil: null,
+        contractLockoutUntil: null,
+        fatigueDebt: 0,
+        isNegotiationPermanentBlocked: false,
+        transferLockoutUntil: null,
+        freeAgentLockoutUntil: null,
+        freeAgentClubLockouts: {}
+      };
+      setPlayers(prev => ({
+        ...prev,
+        [selectedClubId]: [...(prev[selectedClubId] ?? []), newPlayer]
+      }));
+      setSelectedPlayerId(newPlayer.id);
+      setIsCreatingPlayer(false);
+      alert(`Stworzono: ${newPlayer.firstName} ${newPlayer.lastName} (OVR: ${newOvr})`);
+      return;
+    }
+    if (!selectedPlayerId) return;
     updatePlayer(selectedClubId, selectedPlayerId, {
       firstName, lastName, age, nationality, nationalityCountry, position,
       attributes: { ...attrs }, overallRating: newOvr,
@@ -295,7 +532,12 @@ export const EditorView: React.FC = () => {
     alert(`Zapisano: ${firstName} ${lastName} (OVR: ${newOvr})`);
   };
 
-  const isSelected = !!selectedPlayerId;
+  const isSelected = !!selectedPlayerId || isCreatingPlayer;
+  const displayedPlayers = playerSearch.trim() ? playerSearchResults : sortedPlayers.map(player => ({
+    player,
+    clubName: selectedClub?.name ?? selectedClubId,
+    clubId: selectedClubId
+  }));
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden text-white font-black italic uppercase tracking-tighter">
@@ -304,18 +546,18 @@ export const EditorView: React.FC = () => {
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <span className="text-sm text-white mr-2">Edytor Piłkarzy</span>
         <span className="w-px h-4 bg-slate-700" />
-        {['1', '2', '3', '4'].map(tier => (
+        {['1', '2', '3', '4', 'ALL'].map(tier => (
           <button
             key={tier}
-            onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); }}
+            onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
             className={`px-3 py-1 rounded text-xs transition-colors border ${selectedTier === tier ? 'bg-blue-600 border-blue-500 text-white' : 'bg-transparent border-slate-700 text-slate-400 hover:text-white'}`}
           >
-            Liga {tier}
+            {tier === 'ALL' ? 'Wszystkie kluby' : `Liga ${tier}`}
           </button>
         ))}
         <select
           value={selectedClubId}
-          onChange={(e) => { setSelectedClubId(e.target.value); setSelectedPlayerId(''); }}
+          onChange={(e) => { setSelectedClubId(e.target.value); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
           className={`${selectCls} px-2 py-1 min-w-[200px]`}
         >
           <option value="">— wybierz klub —</option>
@@ -325,6 +567,12 @@ export const EditorView: React.FC = () => {
           {importMsg && (
             <span className="text-xs text-emerald-400 max-w-xs truncate">{importMsg}</span>
           )}
+          <button
+            onClick={startCreatePlayer}
+            className="px-4 py-1.5 bg-emerald-800 border border-emerald-600 rounded text-xs text-emerald-200 hover:text-white hover:border-emerald-400 transition-colors"
+          >
+            Stwórz zawodnika
+          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -435,11 +683,20 @@ export const EditorView: React.FC = () => {
                 </div>
               </div>
               <div>
-                <div className={`${labelCls} mb-1`}>Narodowość</div>
-                <select value={nationality} onChange={(e) => { const r = e.target.value as Region; setNationality(r); setNationalityCountry(pickNationalityForRegion(r)); }}
+                <div className={`${labelCls} mb-1`}>Region</div>
+                <select value={nationality} onChange={(e) => handleNationalityRegionChange(e.target.value as Region)}
                   className={`${selectCls} px-2 py-1.5 w-36`}>
                   {Object.values(Region).map(r => (
                     <option key={r} value={r}>{REGION_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Narodowość</div>
+                <select value={nationalityCountry} onChange={(e) => handleNationalityCountryChange(e.target.value)}
+                  className={`${selectCls} px-2 py-1.5 w-44`}>
+                  {nationalityCountryOptions.map(country => (
+                    <option key={`${country.region}_${country.name}`} value={country.name}>{country.name}</option>
                   ))}
                 </select>
               </div>
@@ -496,11 +753,19 @@ export const EditorView: React.FC = () => {
             <div className="pt-2 flex gap-3">
               <button onClick={handleSave}
                 className="px-6 py-2 bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded text-sm text-white transition-colors active:scale-95">
-                Zapisz zmiany
+                {isCreatingPlayer ? 'Dodaj do klubu' : 'Zapisz zmiany'}
+              </button>
+              <button onClick={handleRandomProfile}
+                className="px-4 py-2 bg-blue-900 border border-blue-700 rounded text-sm text-blue-200 hover:text-white hover:border-blue-500 transition-colors">
+                Losuj zawodnika
               </button>
               <button onClick={handleRandom}
                 className="px-4 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-300 hover:text-white hover:border-slate-400 transition-colors">
                 Wartości losowe
+              </button>
+              <button onClick={() => applyAutoFinance()}
+                className="px-4 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-300 hover:text-white hover:border-slate-400 transition-colors">
+                Przelicz finanse
               </button>
             </div>
 
@@ -509,14 +774,21 @@ export const EditorView: React.FC = () => {
 
         {/* PRAWA — LISTA ZAWODNIKÓW */}
         <div className="w-72 border-l border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
-          <div className="px-4 py-2 border-b border-slate-800 bg-slate-900">
+          <div className="px-4 py-2 border-b border-slate-800 bg-slate-900 space-y-2">
             <span className="text-xs text-yellow-400">
-              Zawodnicy {selectedClubId ? `(${clubPlayers.length})` : ''}
+              {playerSearch.trim() ? `Wyniki (${displayedPlayers.length})` : `Zawodnicy ${selectedClubId ? `(${clubPlayers.length})` : ''}`}
             </span>
+            <input
+              type="text"
+              value={playerSearch}
+              onChange={(e) => setPlayerSearch(e.target.value)}
+              className={`${inputCls} w-full px-2 py-1.5`}
+              placeholder="szukaj zawodnika..."
+            />
           </div>
           <div className="flex-1 overflow-y-auto editor-scroll">
-            {!selectedClubId ? (
-              <div className="p-6 text-center text-slate-600 text-xs">Wybierz klub</div>
+            {!selectedClubId && !playerSearch.trim() ? (
+              <div className="p-6 text-center text-slate-600 text-xs">Wybierz klub albo wpisz nazwisko</div>
             ) : (
               <table className="w-full border-collapse text-xs">
                 <thead>
@@ -528,22 +800,30 @@ export const EditorView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedPlayers.map(p => (
+                  {displayedPlayers.map(({ player: p, clubName, clubId }) => (
                     <tr
-                      key={p.id}
-                      onClick={() => setSelectedPlayerId(p.id)}
-                      className={`border-b border-slate-800/50 cursor-pointer transition-colors ${selectedPlayerId === p.id ? 'bg-blue-600/20' : 'hover:bg-slate-800/50'}`}
+                      key={`${clubId}:${p.id}`}
+                      onClick={() => handleSelectSearchResult(clubId, p.id)}
+                      className={`border-b border-slate-800/50 cursor-pointer transition-colors ${selectedPlayerId === p.id && selectedClubId === clubId ? 'bg-blue-600/20' : 'hover:bg-slate-800/50'}`}
                     >
                       <td className="px-3 py-1.5">
                         <span className={p.position === PlayerPosition.GK ? 'text-yellow-400' : p.position === PlayerPosition.DEF ? 'text-blue-400' : p.position === PlayerPosition.MID ? 'text-green-400' : 'text-red-400'}>
                           {p.position}
                         </span>
                       </td>
-                      <td className="px-2 py-1.5 text-white">{p.lastName}</td>
+                      <td className="px-2 py-1.5 text-white">
+                        <div>{p.lastName}</div>
+                        {playerSearch.trim() && <div className="text-[9px] text-slate-500 truncate max-w-[92px]">{clubName}</div>}
+                      </td>
                       <td className="px-2 py-1.5 text-slate-400">{p.firstName}</td>
                       <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">{p.overallRating}</td>
                     </tr>
                   ))}
+                  {displayedPlayers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-slate-600">Brak wyników</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             )}

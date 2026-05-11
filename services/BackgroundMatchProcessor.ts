@@ -14,6 +14,91 @@ import { FinanceService } from './FinanceService';
 import { PendingNegotiation } from '@/types';
 import { AiScoutingService } from './AiScoutingService';
 import { buildMatchPressureContext } from './MatchPressureService';
+import { SeasonTransitionService } from './SeasonTransitionService';
+
+const ensureEmergencyGoalkeepers = (
+  clubs: Club[],
+  playersMap: Record<string, Player[]>,
+  fixtures: Fixture[],
+  currentDate: Date,
+  userTeamId: string | null
+): Record<string, Player[]> => {
+  const isEuropeanCompetition = (leagueId: string): boolean =>
+    leagueId === CompetitionType.EURO_CUP ||
+    leagueId === CompetitionType.UEFA_SUPER_CUP ||
+    leagueId.startsWith('CL_') ||
+    leagueId.startsWith('EL_') ||
+    leagueId.startsWith('CONF_');
+
+  const isGoalkeeperAvailableForFixture = (player: Player, fixture: Fixture): boolean => {
+    if (player.position !== 'GK') return false;
+    if (player.health.status === HealthStatus.INJURED) return false;
+
+    if (fixture.leagueId === CompetitionType.POLISH_CUP) {
+      return (player.cupSuspensionMatches || 0) <= 0;
+    }
+
+    if (isEuropeanCompetition(String(fixture.leagueId))) {
+      return (player.euroSuspensionMatches || 0) <= 0;
+    }
+
+    return (player.suspensionMatches || 0) <= 0;
+  };
+
+  const today = new Date(currentDate);
+  today.setHours(0, 0, 0, 0);
+
+  const clubFixturesInThreeDays = new Map<string, Fixture[]>();
+  fixtures
+    .filter(f => f.status === MatchStatus.SCHEDULED)
+    .forEach(fixture => {
+      const matchDate = new Date(fixture.date);
+      matchDate.setHours(0, 0, 0, 0);
+      const daysUntilMatch = Math.round((matchDate.getTime() - today.getTime()) / 86_400_000);
+      if (daysUntilMatch === 3) {
+        clubFixturesInThreeDays.set(fixture.homeTeamId, [...(clubFixturesInThreeDays.get(fixture.homeTeamId) || []), fixture]);
+        clubFixturesInThreeDays.set(fixture.awayTeamId, [...(clubFixturesInThreeDays.get(fixture.awayTeamId) || []), fixture]);
+      }
+    });
+
+  if (clubFixturesInThreeDays.size === 0) return playersMap;
+
+  let updatedPlayers = { ...playersMap };
+
+  for (const [clubId, upcomingFixtures] of clubFixturesInThreeDays.entries()) {
+    if (clubId === userTeamId) continue;
+
+    const club = clubs.find(c => c.id === clubId);
+    const squad = updatedPlayers[clubId] || [];
+    if (!club || upcomingFixtures.every(fixture => squad.some(p => isGoalkeeperAvailableForFixture(p, fixture)))) continue;
+
+    const averageOverall = squad.length > 0
+      ? Math.round(squad.reduce((sum, p) => sum + p.overallRating, 0) / squad.length)
+      : 49;
+    const targetOverall = averageOverall - 4;
+    const tier = club.leagueId === 'L_PL_1'
+      ? 1
+      : club.leagueId === 'L_PL_2'
+        ? 2
+        : club.leagueId === 'L_PL_3'
+          ? 3
+          : 4;
+    const emergencyGoalkeeper = SeasonTransitionService.generateEmergencyGK(
+      club.id,
+      tier,
+      club.reputation,
+      targetOverall,
+      currentDate
+    );
+
+    updatedPlayers = {
+      ...updatedPlayers,
+      [clubId]: [...squad, emergencyGoalkeeper],
+    };
+  }
+
+  return updatedPlayers;
+};
 
 export const BackgroundMatchProcessor = {
   processLeagueEvent: (
@@ -74,10 +159,12 @@ export const BackgroundMatchProcessor = {
     
     // DEBUG
     DebugLoggerService.log('BMP', `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures.length}`, true);
-    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersMap, lineups, userTeamId, coaches);
+    const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersMap, fixtures, currentDate, userTeamId);
+    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches);
 if (todayFixtures.length === 0) {
-      const contractUpdate = AiContractService.processClubsContracts(clubs, playersMap, currentDate, userTeamId);
-      const recruitmentUpdate = AiContractService.processAiRecruitment(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
+      const contractUpdate = AiContractService.processClubsContracts(clubs, playersAfterEmergencyGoalkeepers, currentDate, userTeamId);
+      const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
+      const recruitmentUpdate = AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate, userTeamId);
       const resolvedUpdate = AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate, userTeamId);
       const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId);
       const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId, coaches);
@@ -149,7 +236,7 @@ if (todayFixtures.length === 0) {
     
     let currentFixtures = [...fixtures];
     let currentClubs = [...clubs];
-    let currentPlayers = { ...playersMap };
+    let currentPlayers = { ...playersAfterEmergencyGoalkeepers };
 
     const roundResults: LeagueRoundResults = {
       dateKey: dateStr,
@@ -522,7 +609,8 @@ if (todayFixtures.length === 0) {
 
     const contractResult = AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate, userTeamId);
 
-    const finalUpdate = AiContractService.processAiRecruitment(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
+    const depthFinal = AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
+    const finalUpdate = AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate, userTeamId);
     const resolvedFinal = AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate, userTeamId);
     const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId);
     const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId, coaches);

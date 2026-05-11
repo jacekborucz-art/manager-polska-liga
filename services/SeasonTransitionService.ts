@@ -178,16 +178,23 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
 /**
    * Tworzy słabego, tymczasowego bramkarza w sytuacji kryzysowej.
    */
-  generateEmergencyGK: (clubId: string, tier: number, reputation: number): Player => {
+  generateEmergencyGK: (
+    clubId: string,
+    tier: number,
+    reputation: number,
+    targetOverall?: number,
+    currentDate: Date = new Date()
+  ): Player => {
     const namePair = NameGeneratorService.getRandomName(Region.POLAND);
     // Generujemy atrybuty dla najniższego poziomu (Tier 4, Rep 1)
    const genData = PlayerAttributesGenerator.generateAttributes(PlayerPosition.GK, tier, reputation, 18);
     
-    // Wymuszamy OVR w zakresie 45-56
-    const forcedOvr = 45 + Math.floor(Math.random() * 12);
+    const forcedOvr = targetOverall !== undefined
+      ? Math.max(30, Math.min(95, Math.round(targetOverall)))
+      : 45 + Math.floor(Math.random() * 12);
     
     return {
-      id: `EMERGENCY_GK_${Date.now()}`,
+      id: `EMERGENCY_GK_${clubId}_${currentDate.getTime()}`,
       firstName: namePair.firstName,
       lastName: namePair.lastName,
       age: 18,
@@ -201,7 +208,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       fatigueDebt: 0,
       suspensionMatches: 0,
       annualSalary: 15000,
-      contractEndDate: new Date(new Date().getFullYear(), 11, 31).toISOString(),
+      contractEndDate: new Date(currentDate.getFullYear(), 11, 31).toISOString(),
       health: { status: HealthStatus.HEALTHY },
       stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
       cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
@@ -210,7 +217,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       cupSuspensionMatches: 0,
       euroSuspensionMatches: 0,
       nationalSuspensionMatches: 0,
-      history: [{ clubName: "Akademia", clubId: clubId, fromYear: new Date().getFullYear(), fromMonth: 7, toYear: null, toMonth: null }],
+      history: [{ clubName: "Awaryjny nabór", clubId: clubId, fromYear: currentDate.getFullYear(), fromMonth: currentDate.getMonth() + 1, toYear: null, toMonth: null }],
       boardLockoutUntil: null,
       isUntouchable: false,
       negotiationStep: 0,
