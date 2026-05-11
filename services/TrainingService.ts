@@ -10,6 +10,14 @@ const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
 
 const dateOnly = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
+const getMoraleTrainingModifier = (morale: number = 50): { growth: number; regression: number } => {
+  if (morale <= 19) return { growth: 0.45, regression: 2.20 };
+  if (morale <= 39) return { growth: 0.65, regression: 1.65 };
+  if (morale <= 59) return { growth: 1.00, regression: 1.00 };
+  if (morale <= 79) return { growth: 1.08, regression: 0.92 };
+  return { growth: 1.15, regression: 0.85 };
+};
+
 const isWinterHoliday = (date: Date): boolean => {
   const month = date.getMonth();
   const day = date.getDate();
@@ -126,6 +134,7 @@ export const TrainingService = {
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
+      const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
       const performance =
         lastMatchSummary?.homePlayers.find(p => p.name === player.lastName) ||
@@ -168,6 +177,7 @@ export const TrainingService = {
 
         const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
         pGrowth *= talentMod;
+        pGrowth *= moraleTrainingModifier.growth;
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
@@ -200,6 +210,7 @@ export const TrainingService = {
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
+        pRegress *= moraleTrainingModifier.regression;
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
@@ -290,6 +301,7 @@ export const TrainingService = {
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
+      const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
       const attrKeys: (keyof PlayerAttributes)[] = [
         'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -310,6 +322,7 @@ export const TrainingService = {
         const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
         pGrowth *= talentMod;
         pGrowth *= coachMultiplier;
+        pGrowth *= moraleTrainingModifier.growth;
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
@@ -338,6 +351,7 @@ export const TrainingService = {
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
+        pRegress *= moraleTrainingModifier.regression;
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;

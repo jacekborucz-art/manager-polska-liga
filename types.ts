@@ -373,7 +373,7 @@ export interface MailMessage {
   } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
-    requestType: 'MINUTES' | 'ROLE';
+    requestType: 'MINUTES' | 'ROLE' | 'TRANSFER_LIST';
     requestedRole?: 'STARTER' | 'KEY_PLAYER';
     responseDeadline: string;
   };
@@ -944,6 +944,7 @@ export interface Player {
   minutesDemandBaseline?: number | null;
   roleDemandUntil?: string | null;
   requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  transferListDemandUntil?: string | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;
   transferOfferBanUntil?: string | null;

@@ -14,6 +14,12 @@ export const PlayerCard: React.FC = () => {
   const [priceStep, setPriceStep] = useState(50000);
   const [isTalkPanelOpen, setIsTalkPanelOpen] = useState(false);
   const [talkResult, setTalkResult] = useState<IndividualTalkResult | null>(null);
+  const button3DStyle: React.CSSProperties = {
+    boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+  };
+  const lightButton3DStyle: React.CSSProperties = {
+    boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)',
+  };
 
   const data = useMemo(() => {
     if (!viewedPlayerId) return null;
@@ -81,13 +87,13 @@ export const PlayerCard: React.FC = () => {
   const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
   const playerMorale = PlayerMoraleService.ensurePlayerState(player);
   const moraleInfo = PlayerMoraleService.getInfo(playerMorale.morale);
-  const effectiveOverall = PlayerMoraleService.getEffectiveOverall(playerMorale);
   const canTalk = PlayerMoraleService.canTalk(playerMorale, currentDate);
   const nextTalkDate = PlayerMoraleService.getNextTalkDate(playerMorale);
   const promisedMinutesDeadline = playerMorale.promisedMinutesUntil ? new Date(playerMorale.promisedMinutesUntil) : null;
   const minutesDemandDeadline = playerMorale.minutesDemandUntil ? new Date(playerMorale.minutesDemandUntil) : null;
   const roleDemandDeadline = playerMorale.roleDemandUntil ? new Date(playerMorale.roleDemandUntil) : null;
-  const moraleHistory = playerMorale.moraleHistory ?? [];
+  const transferListDemandDeadline = playerMorale.transferListDemandUntil ? new Date(playerMorale.transferListDemandUntil) : null;
+  const hasActiveTransferListDemand = !!transferListDemandDeadline && !Number.isNaN(transferListDemandDeadline.getTime());
   const activeFreeAgentLockoutUntil = useMemo(() => {
     return FreeAgentNegotiationService.getClubLockoutUntil(player, userTeamId, currentDate);
   }, [player, userTeamId, currentDate]);
@@ -189,7 +195,16 @@ export const PlayerCard: React.FC = () => {
         <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[120px] opacity-5" style={{ background: club.colorsHex[1] }} />
       </div>
 
-      <div className="w-fit bg-slate-900/[0.35] rounded-none border border-transparent overflow-hidden flex flex-col md:flex-row md:items-center" style={{maxHeight:'925px', zoom: 1.44}}>
+      <div className="relative w-fit bg-slate-900/[0.35] rounded-none border border-transparent overflow-hidden flex flex-col md:flex-row md:items-center" style={{maxHeight:'925px', zoom: 1.44}}>
+        <button
+          onClick={() => navigateWithoutHistory(closeTarget)}
+          className="absolute left-3 top-3 z-50 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-900 text-lg font-black transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b border-t-white/80 border-x-white/40 border-b-slate-400/60"
+          style={lightButton3DStyle}
+          aria-label="Zamknij kartę"
+          title="Zamknij kartę"
+        >
+          ×
+        </button>
         
            <div className="w-full md:w-[305px] relative flex flex-col items-center justify-between p-6 border-r border-white/5 overflow-hidden overflow-y-auto custom-scrollbar">
            <div className="absolute inset-0 flex items-center justify-center opacity-[0.02] pointer-events-none">
@@ -269,34 +284,20 @@ export const PlayerCard: React.FC = () => {
               </div>
 
               <div className="p-3 bg-black/25 rounded-[20px] border border-white/5">
-                <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Morale zawodnika</span>
                     <span className={`text-xs font-black italic uppercase tracking-tighter ${moraleInfo.colorClass}`}>{moraleInfo.label}</span>
                   </div>
-                  <span className="text-[11px] font-black text-white font-mono">{playerMorale.morale}</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-2">
-                  <div className={`h-full ${moraleInfo.barClass}`} style={{ width: `${playerMorale.morale}%` }} />
-                </div>
-                <div className="mb-2 flex items-center justify-between rounded-[12px] bg-white/[0.03] px-2 py-1">
-                  <span className="text-[7px] font-black italic uppercase tracking-tighter text-slate-500">Gotowość meczowa</span>
-                  <span className={`text-[10px] font-black italic uppercase tracking-tighter ${effectiveOverall >= player.overallRating ? 'text-emerald-300' : 'text-orange-300'}`}>
-                    {effectiveOverall}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">
-                    {PlayerMoraleService.getPersonalityLabel(playerMorale.moralePersonality)}
-                  </span>
                   {player.clubId === userTeamId && !isMatchContext && (
                     <button
                       onClick={() => { setIsTalkPanelOpen(true); setTalkResult(null); }}
                       disabled={!canTalk}
-                      className={`px-3 py-1.5 rounded-[12px] text-[8px] font-black italic uppercase tracking-tighter border transition-all active:scale-95
+                      className={`px-3 py-1.5 rounded-[12px] text-[8px] font-black italic uppercase tracking-tighter border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px]
                         ${canTalk
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                          : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                          ? 'bg-emerald-500/10 border-t-emerald-400/40 border-x-emerald-500/20 text-emerald-300 hover:bg-emerald-500/20'
+                          : 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 cursor-not-allowed'}`}
+                      style={button3DStyle}
                     >
                       {canTalk ? 'Rozmowa' : nextTalkDate ? `Od ${nextTalkDate.toLocaleDateString('pl-PL')}` : 'Blokada'}
                     </button>
@@ -323,29 +324,15 @@ export const PlayerCard: React.FC = () => {
                     </span>
                   </div>
                 )}
-                {moraleHistory.length > 0 && (
-                  <div className="mt-3 border-t border-white/5 pt-2">
-                    <span className="block mb-1.5 text-[7px] font-black italic uppercase tracking-tighter text-slate-500">Historia morale</span>
-                    <div className="flex flex-col gap-1">
-                      {moraleHistory.slice(0, 4).map(entry => (
-                        <div key={entry.id} className="flex items-start justify-between gap-2 rounded-[10px] bg-white/[0.025] px-2 py-1">
-                          <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400 leading-tight">{entry.reason}</span>
-                          <span className={`shrink-0 text-[8px] font-black italic tracking-tighter ${entry.delta >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-                            {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                {transferListDemandDeadline && !Number.isNaN(transferListDemandDeadline.getTime()) && (
+                  <div className="mt-2 rounded-[12px] border border-red-500/30 bg-red-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-red-300">
+                      Prosi o listę transferową do {transferListDemandDeadline.toLocaleDateString('pl-PL')}
+                    </span>
                   </div>
                 )}
               </div>
 
-<button 
-                onClick={() => navigateWithoutHistory(closeTarget)}
-                className="w-full py-2.5 rounded-[20px] bg-white text-slate-900 font-black italic uppercase tracking-widest text-xs transition-all hover:scale-[1.02] active:scale-95 shadow-2xl"
-              >
-                Zamknij Kartę &times;
-              </button>
            </div>
         </div>
 
@@ -612,8 +599,11 @@ export const PlayerCard: React.FC = () => {
             )}
 
             {player.clubId === userTeamId && !isMatchContext && (
-              <div className="bg-slate-800 border-2 border-yellow-400 rounded-[16px] p-3 mt-1 drop-shadow-lg">
-                <p className="text-[10px] font-black italic uppercase tracking-widest text-yellow-400 mb-2">Rola w zespole</p>
+              <div
+                className="bg-slate-900/70 border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/70 rounded-[16px] p-3 mt-1 drop-shadow-lg"
+                style={button3DStyle}
+              >
+                <p className="text-[10px] font-black italic uppercase tracking-widest text-slate-300 mb-2">Rola w zespole</p>
                 <div className="flex gap-2">
                   {([
                     { value: null, label: 'Brak' },
@@ -623,18 +613,15 @@ export const PlayerCard: React.FC = () => {
                     <button
                       key={String(opt.value)}
                       onClick={() => setSquadRole(player.id, opt.value)}
-                      className={`flex-1 py-2.5 rounded-[12px] font-black italic uppercase tracking-tighter text-[9px] border-2 transition-all active:scale-95 drop-shadow
+                      className={`flex-1 py-2.5 rounded-[12px] font-black italic uppercase tracking-tighter text-[9px] border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px] drop-shadow
                         ${(player.squadRole ?? null) === opt.value
                           ? opt.value === 'KEY_PLAYER'
-                            ? 'bg-rose-600 border-rose-300 text-white'
+                            ? 'bg-rose-600 border-t-rose-300 border-x-rose-500 text-white shadow-[0_0_16px_rgba(225,29,72,0.35)]'
                             : opt.value === 'STARTER'
-                            ? 'bg-blue-600 border-blue-300 text-white'
-                            : 'bg-slate-500 border-slate-200 text-white'
-                          : opt.value === 'KEY_PLAYER'
-                          ? 'bg-slate-800 border-rose-500 text-rose-400'
-                          : opt.value === 'STARTER'
-                          ? 'bg-slate-800 border-blue-500 text-blue-400'
-                          : 'bg-slate-800 border-slate-400 text-slate-200'}`}
+                            ? 'bg-blue-600 border-t-blue-300 border-x-blue-500 text-white shadow-[0_0_16px_rgba(37,99,235,0.35)]'
+                            : 'bg-slate-500 border-t-slate-200 border-x-slate-400 text-white shadow-[0_0_14px_rgba(148,163,184,0.25)]'
+                          : 'bg-slate-800/45 border-t-slate-600/50 border-x-slate-700/40 text-slate-500 opacity-60 grayscale hover:opacity-85 hover:text-slate-300 hover:bg-slate-700/55'}`}
+                      style={button3DStyle}
                     >
                       {opt.label}
                     </button>
@@ -650,7 +637,8 @@ export const PlayerCard: React.FC = () => {
                     setContractManagementInitialMode('RELEASE');
                     navigateTo(ViewState.CONTRACT_MANAGEMENT);
                   }}
-                  className="group relative h-12 bg-red-600/10 border border-red-500/20 rounded-[18px] flex items-center justify-center gap-3 transition-all hover:bg-red-600/20 hover:border-red-500/40 active:scale-95 shadow-xl"
+                  className="group relative h-12 bg-red-600/10 border-t border-x border-b border-t-red-400/40 border-x-red-500/20 border-b-black/60 rounded-[18px] flex items-center justify-center gap-3 transition-all hover:bg-red-600/20 hover:border-t-red-400/60 hover:border-x-red-500/40 active:translate-y-[2px]"
+                  style={button3DStyle}
                 >
                   <span className="text-xl group-hover:rotate-12 transition-transform">📄</span>
                   <div className="text-left">
@@ -664,11 +652,12 @@ export const PlayerCard: React.FC = () => {
                     setContractManagementInitialMode('NEGOTIATE');
                     navigateTo(ViewState.CONTRACT_MANAGEMENT);
                   }}
-                  className={`group relative h-12 rounded-[18px] flex items-center justify-center gap-3 transition-all
+                  className={`group relative h-12 rounded-[18px] flex items-center justify-center gap-3 transition-all border-t border-x border-b border-b-black/60 active:translate-y-[2px]
                     ${isContractLocked || hasPendingTransfer
-                      ? 'bg-slate-800 border-slate-700 opacity-50 cursor-not-allowed'
-                      : 'bg-blue-600/10 border-blue-500/20 hover:bg-blue-600/20 hover:border-blue-500/40 active:scale-95 shadow-xl'
+                      ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 opacity-50 cursor-not-allowed'
+                      : 'bg-blue-600/10 border-t-blue-400/40 border-x-blue-500/20 hover:bg-blue-600/20 hover:border-t-blue-400/60 hover:border-x-blue-500/40'
                     }`}
+                  style={button3DStyle}
                 >
                   <span className="text-xl group-hover:scale-110 transition-transform">
                     {isContractLocked || hasPendingTransfer ? '⏳' : '✍️'}
@@ -702,7 +691,8 @@ export const PlayerCard: React.FC = () => {
                       />
                       <div className="flex items-center gap-2 mb-5">
                         <button onClick={() => setTransferPrice(p => Math.max(0, p - priceStep))}
-                          className="w-10 h-10 rounded-lg bg-red-900/40 border border-red-500/30 text-red-400 text-[18px] font-black italic uppercase tracking-tighter active:scale-95 hover:bg-red-900/70 flex items-center justify-center shrink-0">
+                          className="w-10 h-10 rounded-lg bg-red-900/40 border-t border-x border-b border-t-red-400/40 border-x-red-500/20 border-b-black/60 text-red-400 text-[18px] font-black italic uppercase tracking-tighter active:translate-y-[2px] hover:bg-red-900/70 flex items-center justify-center shrink-0"
+                          style={button3DStyle}>
                           −
                         </button>
                         <select
@@ -716,17 +706,20 @@ export const PlayerCard: React.FC = () => {
                           <option value={500000}>500 000</option>
                         </select>
                         <button onClick={() => setTransferPrice(p => p + priceStep)}
-                          className="w-10 h-10 rounded-lg bg-emerald-900/40 border border-emerald-500/30 text-emerald-400 text-[18px] font-black italic uppercase tracking-tighter active:scale-95 hover:bg-emerald-900/70 flex items-center justify-center shrink-0">
+                          className="w-10 h-10 rounded-lg bg-emerald-900/40 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-emerald-400 text-[18px] font-black italic uppercase tracking-tighter active:translate-y-[2px] hover:bg-emerald-900/70 flex items-center justify-center shrink-0"
+                          style={button3DStyle}>
                           +
                         </button>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setShowPricePanel(false)}
-                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-slate-700 border border-slate-600 text-slate-400 active:scale-95">
+                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-slate-700 border-t border-x border-b border-t-slate-500 border-x-slate-600 border-b-black/60 text-slate-400 active:translate-y-[2px]"
+                          style={button3DStyle}>
                           Anuluj
                         </button>
                         <button onClick={() => { toggleTransferList(player.id, transferPrice); setShowPricePanel(false); }}
-                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-amber-600/20 border border-amber-500/40 text-amber-500 active:scale-95">
+                          className="flex-1 py-2.5 rounded-[14px] font-black italic uppercase tracking-tighter text-[9px] bg-amber-600/20 border-t border-x border-b border-t-amber-400/50 border-x-amber-500/25 border-b-black/60 text-amber-500 active:translate-y-[2px]"
+                          style={button3DStyle}>
                           Wystaw
                         </button>
                       </div>
@@ -734,7 +727,7 @@ export const PlayerCard: React.FC = () => {
                   </div>
                 )}
                 <button
-                  disabled={hasPendingTransfer || player.squadRole === 'KEY_PLAYER'}
+                  disabled={hasPendingTransfer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)}
                   onClick={() => {
                     if (player.isOnTransferList) {
                       toggleTransferList(player.id);
@@ -743,14 +736,15 @@ export const PlayerCard: React.FC = () => {
                       setShowPricePanel(true);
                     }
                   }}
-                  className={`w-full py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-2 active:scale-95 drop-shadow
-                    ${hasPendingTransfer || player.squadRole === 'KEY_PLAYER'
+                  className={`w-full py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-t border-x border-b border-b-black/60 active:translate-y-[2px] drop-shadow
+                    ${hasPendingTransfer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)
                       ? hasPendingTransfer
-                        ? "relative bg-slate-800 border-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
-                        : 'bg-slate-800 border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
+                        ? "relative bg-slate-800 border-t-slate-600 border-x-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
+                        : 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
                       : player.isOnTransferList
-                      ? 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'
-                      : 'bg-amber-600/20 border-amber-500/40 text-amber-500 hover:bg-amber-600/30'}`}
+                      ? 'bg-slate-800 border-t-slate-500 border-x-slate-600 text-slate-400 hover:bg-slate-700'
+                      : 'bg-amber-600/20 border-t-amber-400/50 border-x-amber-500/25 text-amber-500 hover:bg-amber-600/30'}`}
+                  style={button3DStyle}
                 >
                   {player.isOnTransferList ? '❌ Zdejmij z listy transferowej' : '📥 Wystaw na listę transferową'}
                 </button>
@@ -765,10 +759,11 @@ export const PlayerCard: React.FC = () => {
                     onClick={() => {
                       navigateWithoutHistory(ViewState.FREE_AGENT_NEGOTIATION);
                     }}
-                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all shadow-2xl border-b-4
+                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60
                       ${activeFreeAgentLockoutUntil
-                        ? 'bg-slate-800 border-slate-900 text-slate-500 opacity-70 cursor-not-allowed'
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-800 hover:scale-[1.02] active:scale-95'}`}
+                        ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white border-t-emerald-300/60 border-x-emerald-500/40 hover:scale-[1.02]'}`}
+                    style={button3DStyle}
                   >
                     {activeFreeAgentLockoutUntil
                       ? `Kontakt możliwy po ${new Date(activeFreeAgentLockoutUntil).toLocaleDateString('pl-PL')}`
@@ -778,11 +773,12 @@ export const PlayerCard: React.FC = () => {
                   <button
                     disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer}
                     onClick={() => navigateWithoutHistory(ViewState.TRANSFER_OFFER)}
-                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all shadow-2xl border-b-4 ${
+                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 ${
                       (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer)
-                        ? 'bg-slate-800 border-slate-900 text-slate-500 opacity-70 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-800 hover:scale-[1.02] active:scale-95'
+                        ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white border-t-blue-300/60 border-x-blue-500/40 hover:scale-[1.02]'
                     }`}
+                    style={button3DStyle}
                   >
                     ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰
                   </button>
@@ -795,48 +791,51 @@ export const PlayerCard: React.FC = () => {
       </div>
 
       {isTalkPanelOpen && (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setIsTalkPanelOpen(false)}>
-          <div className="w-[620px] max-w-[92vw] bg-slate-950/95 border border-white/10 rounded-[28px] shadow-2xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/75 backdrop-blur-sm p-6" onClick={() => setIsTalkPanelOpen(false)}>
+          <div className="w-[980px] max-w-[94vw] max-h-[88vh] overflow-y-auto custom-scrollbar bg-slate-950/95 border border-white/10 rounded-[34px] shadow-2xl p-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-6 mb-7">
               <div>
-                <div className="text-[9px] font-black italic uppercase tracking-tighter text-emerald-400">Indywidualna rozmowa</div>
-                <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">
+                <div className="text-sm font-black italic uppercase tracking-tighter text-emerald-400">Indywidualna rozmowa</div>
+                <h3 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-none mt-1">
                   {player.firstName} {player.lastName}
                 </h3>
               </div>
-              <button onClick={() => setIsTalkPanelOpen(false)} className="w-8 h-8 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 font-black">
+              <button
+                onClick={() => setIsTalkPanelOpen(false)}
+                className="w-12 h-12 rounded-2xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 text-2xl font-black border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 transition-all active:translate-y-[2px]"
+                style={button3DStyle}
+              >
                 ×
               </button>
             </div>
 
             {!canTalk && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] font-black italic uppercase tracking-tighter mb-4">
+              <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-base font-black italic uppercase tracking-tighter mb-6 leading-snug">
                 Kolejna rozmowa będzie możliwa {nextTalkDate ? nextTalkDate.toLocaleDateString('pl-PL') : 'za kilka dni'}.
               </div>
             )}
 
             {talkResult && (
-              <div className={`p-4 rounded-2xl border mb-4 ${talkResult.isPositive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
-                <div className="text-[9px] font-black italic uppercase tracking-tighter mb-1">
-                  {talkResult.isPositive ? 'Reakcja pozytywna' : 'Reakcja negatywna'}
-                </div>
-                <p className="text-[11px] font-black italic uppercase tracking-tighter leading-relaxed">{talkResult.reactionText}</p>
+              <div className={`p-6 rounded-3xl border mb-6 ${talkResult.isPositive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
+                <div className="text-sm font-black italic uppercase tracking-tighter mb-2">Odpowiedź zawodnika</div>
+                <p className="text-lg font-black italic uppercase tracking-tighter leading-relaxed">{talkResult.reactionText}</p>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-4">
               {INDIVIDUAL_TALK_OPTIONS.map(option => (
                 <button
                   key={option.type}
                   disabled={!canTalk || !!talkResult}
                   onClick={() => handleIndividualTalk(option.type)}
-                  className={`text-left p-4 rounded-2xl border transition-all active:scale-95
+                  className={`text-left min-h-[132px] p-6 rounded-3xl border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px]
                     ${!canTalk || !!talkResult
-                      ? 'bg-slate-900 border-slate-800 opacity-50 cursor-not-allowed'
-                      : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06] hover:border-emerald-500/30'}`}
+                      ? 'bg-slate-900 border-t-slate-700 border-x-slate-800 opacity-50 cursor-not-allowed'
+                      : 'bg-white/[0.03] border-t-white/20 border-x-white/10 hover:bg-white/[0.06] hover:border-t-emerald-400/40 hover:border-x-emerald-500/20'}`}
+                  style={button3DStyle}
                 >
-                  <span className="block text-[11px] font-black italic uppercase tracking-tighter text-white mb-1">{option.title}</span>
-                  <span className="block text-[10px] font-medium text-slate-500 leading-snug">{option.description}</span>
+                  <span className="block text-lg font-black italic uppercase tracking-tighter text-white mb-3 leading-tight">{option.title}</span>
+                  <span className="block text-sm font-bold text-slate-400 leading-snug">{option.description}</span>
                 </button>
               ))}
             </div>

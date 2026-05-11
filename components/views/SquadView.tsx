@@ -39,6 +39,14 @@ export const SquadView: React.FC = () => {
     return 'bg-emerald-600 border-emerald-400 text-white';
   };
 
+  const getMoraleIcon = (morale: number = 50): string => {
+    if (morale <= 19) return '🔴';
+    if (morale <= 39) return '🟠';
+    if (morale <= 59) return '🟡';
+    if (morale <= 79) return '🟢';
+    return '🟢🟢';
+  };
+
   const getPositionBadgeClass = (position: string): string => {
     if (position === 'GK') return 'bg-yellow-500 border-yellow-300 text-slate-950 shadow-[0_0_16px_rgba(250,204,21,0.28)]';
     if (['DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB'].includes(position) || position.startsWith('DEF')) {
@@ -350,7 +358,7 @@ export const SquadView: React.FC = () => {
           <td className="w-6 text-center text-slate-700">
             <span className="inline-flex items-center justify-center text-[10px] font-black">→</span>
           </td>
-          <td colSpan={7} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
+          <td colSpan={8} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
             &gt; SYSTEM_READY_FOR_DEPLOYMENT
           </td>
         </tr>
@@ -410,10 +418,6 @@ export const SquadView: React.FC = () => {
                   {player.lastName}
                 </span>
                 <span className={`text-[9px] font-bold uppercase tracking-widest ${(isSuspended || isSevereInjured || isOverfatigued) ? 'text-slate-400' : 'text-white'}`}>{player.firstName}</span>
-                <span className={`mt-0.5 inline-flex w-fit items-center gap-1 text-[8px] font-black italic uppercase tracking-tighter ${playerMoraleInfo.colorClass}`} title={`Morale: ${playerMoraleInfo.label}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${playerMoraleInfo.barClass}`} />
-                  {playerMoraleInfo.label}{effectiveOverall !== player.overallRating ? ` / GOT. ${effectiveOverall}` : ''}
-                </span>
               </div>
               {myClub?.captainId === player.id && (
                 <span className="w-5 h-5 rounded-full bg-blue-900 border border-blue-400 flex items-center justify-center text-[9px] font-black text-white shrink-0" title="Kapitan">C</span>
@@ -490,6 +494,14 @@ export const SquadView: React.FC = () => {
               </div>
             ))}
           </div>
+        </td>
+        <td className="w-20 text-center relative z-10">
+           <span
+             className={`inline-flex min-w-[54px] items-center justify-center text-[11px] leading-none ${playerMoraleInfo.colorClass}`}
+             title={`Morale: ${playerMoraleInfo.label}${effectiveOverall !== player.overallRating ? ` / Gotowość: ${effectiveOverall}` : ''}`}
+           >
+             {getMoraleIcon(moralePlayer.morale)}
+           </span>
         </td>
         <td className="w-24 text-center relative z-10">
            <span className={`text-[10px] font-black uppercase tracking-widest ${healthInfo.colorClass}`}>{healthInfo.text}</span>
@@ -774,6 +786,7 @@ export const SquadView: React.FC = () => {
                 const promisedMinutesUntil = moralePlayer.promisedMinutesUntil ? new Date(moralePlayer.promisedMinutesUntil) : null;
                 const minutesDemandUntil = moralePlayer.minutesDemandUntil ? new Date(moralePlayer.minutesDemandUntil) : null;
                 const roleDemandUntil = moralePlayer.roleDemandUntil ? new Date(moralePlayer.roleDemandUntil) : null;
+                const transferListDemandUntil = moralePlayer.transferListDemandUntil ? new Date(moralePlayer.transferListDemandUntil) : null;
                 return {
                   player: moralePlayer,
                   moraleInfo,
@@ -782,6 +795,7 @@ export const SquadView: React.FC = () => {
                   promisedMinutesUntil,
                   minutesDemandUntil,
                   roleDemandUntil,
+                  transferListDemandUntil,
                   effectiveOverall: PlayerMoraleService.getEffectiveOverall(moralePlayer),
                   personalityLabel: PlayerMoraleService.getPersonalityLabel(moralePlayer.moralePersonality),
                 };
@@ -789,7 +803,7 @@ export const SquadView: React.FC = () => {
               .sort((a, b) => (a.player.morale ?? 50) - (b.player.morale ?? 50) || b.effectiveOverall - a.effectiveOverall);
             const lowMoraleCount = moraleRows.filter(row => (row.player.morale ?? 50) < 40).length;
             const talksReadyCount = moraleRows.filter(row => row.canTalkPlayer).length;
-            const activePromisesCount = moraleRows.filter(row => !!row.promisedMinutesUntil || !!row.minutesDemandUntil || !!row.roleDemandUntil).length;
+            const activePromisesCount = moraleRows.filter(row => !!row.promisedMinutesUntil || !!row.minutesDemandUntil || !!row.roleDemandUntil || !!row.transferListDemandUntil).length;
             return (
               <div className="shrink-0 flex flex-col gap-4">
 
@@ -854,6 +868,8 @@ export const SquadView: React.FC = () => {
                             ? `Status: ${row.player.requestedSquadRole === 'KEY_PLAYER' ? 'kluczowy' : 'starter'} do ${row.roleDemandUntil.toLocaleDateString('pl-PL')}`
                             : row.minutesDemandUntil
                               ? `Minuty do ${row.minutesDemandUntil.toLocaleDateString('pl-PL')}`
+                              : row.transferListDemandUntil
+                                ? `Transfer do ${row.transferListDemandUntil.toLocaleDateString('pl-PL')}`
                               : row.promisedMinutesUntil
                                 ? `Obietnica do ${row.promisedMinutesUntil.toLocaleDateString('pl-PL')}`
                                 : 'Brak';
@@ -898,7 +914,7 @@ export const SquadView: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-5 py-3">
-                                <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.promisedMinutesUntil || row.minutesDemandUntil || row.roleDemandUntil ? 'text-yellow-300' : 'text-slate-600'}`}>{promiseText}</span>
+                                <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.promisedMinutesUntil || row.minutesDemandUntil || row.roleDemandUntil || row.transferListDemandUntil ? 'text-yellow-300' : 'text-slate-600'}`}>{promiseText}</span>
                               </td>
                             </tr>
                           );
@@ -1200,6 +1216,9 @@ export const SquadView: React.FC = () => {
                             ))}
                           </div>
                         </th>
+                        <th className="w-20 text-center py-2">
+                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Morale</span>
+                        </th>
                         <th className="w-24 text-center py-2">
                           <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Zdrowie</span>
                         </th>
@@ -1242,6 +1261,7 @@ export const SquadView: React.FC = () => {
                             ))}
                           </div>
                         </th>
+                        <th className="w-20" />
                         <th className="w-24" />
                         <th className="w-16" />
                         <th className="pr-6 w-32" />
@@ -1250,7 +1270,7 @@ export const SquadView: React.FC = () => {
                     <tbody className="divide-y divide-white/[0.03]">
                       {benchPlayers.map(pid => renderPlayerRow(pid, 'SUB', 'BENCH'))}
                       {benchPlayers.length === 0 && (
-                        <tr><td colSpan={9} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
+                        <tr><td colSpan={10} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
                       )}
                     </tbody>
                  </table>
@@ -1279,6 +1299,7 @@ export const SquadView: React.FC = () => {
                             ))}
                           </div>
                         </th>
+                        <th className="w-20" />
                         <th className="w-24" />
                         <th className="w-16" />
                         <th className="pr-6 w-32" />
@@ -1287,7 +1308,7 @@ export const SquadView: React.FC = () => {
                     <tbody className="divide-y divide-white/[0.03]">
                       {reservePlayersSorted.map(pid => renderPlayerRow(pid, 'RES', 'RES'))}
                       {reservePlayersSorted.length === 0 && (
-                        <tr><td colSpan={9} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
+                        <tr><td colSpan={10} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
                       )}
                     </tbody>
                  </table>

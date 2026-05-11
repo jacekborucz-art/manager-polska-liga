@@ -6888,7 +6888,37 @@ const finalResult: SimulationOutput = {
         }
       }
 
+      const isAddingToTransferList = !player.isOnTransferList;
+      let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+      if (isAddingToTransferList) {
+        const hasRequestedTransferList = !!moraleAdjustedPlayer.transferListDemandUntil;
+        if (hasRequestedTransferList) {
+          moraleAdjustedPlayer = {
+            ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 8, 'Trener zgodził się na listę transferową', currentDate),
+            transferListDemandUntil: null,
+          };
+        } else {
+          const personality = moraleAdjustedPlayer.moralePersonality ?? 'CALM';
+          const moralePenalty = personality === 'LOYAL'
+            ? -14
+            : personality === 'AMBITIOUS' || personality === 'EGOIST'
+              ? -12
+              : -9;
+          moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+            moraleAdjustedPlayer,
+            moralePenalty,
+            'Wystawienie na listę transferową bez zgody zawodnika',
+            currentDate
+          );
+        }
+      }
+
       updatePlayer(userTeamId, playerId, {
+        morale: moraleAdjustedPlayer.morale,
+        moralePersonality: moraleAdjustedPlayer.moralePersonality,
+        moraleHistory: moraleAdjustedPlayer.moraleHistory,
+        transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
+        squadRole: isAddingToTransferList ? null : player.squadRole,
         isOnTransferList: !player.isOnTransferList,
         transferListPrice: !player.isOnTransferList ? price : undefined
       });

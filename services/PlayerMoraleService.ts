@@ -48,32 +48,32 @@ export const INDIVIDUAL_TALK_OPTIONS: IndividualTalkOption[] = [
   {
     type: 'PRAISE',
     title: 'Pochwal ostatni występ',
-    description: 'Najlepsze po dobrej ocenie, golu, asyście albo solidnej serii występów.',
+    description: 'Świetny występ. Takiej energii i jakości potrzebuję od ciebie dalej.',
   },
   {
     type: 'MOTIVATE',
     title: 'Zmotywuj przed meczem',
-    description: 'Krótki impuls przed kolejnym spotkaniem. Działa szczególnie na ambitnych i pewnych siebie.',
+    description: 'Dzisiaj liczę na ciebie. Wyjdź odważnie i pokaż swoją jakość.',
   },
   {
     type: 'SUPPORT',
     title: 'Wesprzyj po błędzie',
-    description: 'Bezpieczna rozmowa dla zawodników po słabszym meczu lub przy niskim morale.',
+    description: 'Głowa do góry. Błędy się zdarzają, ale wierzę, że szybko wrócisz na właściwy poziom.',
   },
   {
     type: 'CRITICIZE',
     title: 'Skrytykuj słabą formę',
-    description: 'Ryzykowne, ale profesjonalny zawodnik może dobrze zareagować na konkretne wymagania.',
+    description: 'Oczekuję więcej. Masz umiejętności, ale musisz pokazać większą jakość i koncentrację.',
   },
   {
     type: 'PROMISE_MINUTES',
     title: 'Obiecaj więcej minut',
-    description: 'Podnosi morale teraz, ale zawodnik będzie oczekiwał gry w najbliższych tygodniach.',
+    description: 'Dostaniesz więcej minut. Bądź gotowy, bo będę chciał dać ci szansę.',
   },
   {
     type: 'DEMAND_WORK',
     title: 'Zachęć do cięższej pracy',
-    description: 'Najlepsze dla pracowitych i ambitnych. Wrażliwi mogą odebrać to jak presję.',
+    description: 'Potrzebuję od ciebie cięższej pracy na treningach. Stać cię na więcej.',
   },
 ];
 
@@ -101,6 +101,38 @@ const roleLabel = (role: 'STARTER' | 'KEY_PLAYER' | null | undefined): string =>
   if (role === 'KEY_PLAYER') return 'kluczowy zawodnik';
   if (role === 'STARTER') return 'podstawowa jedenastka';
   return 'bez określonego statusu';
+};
+
+const getPlayerTalkResponse = (talkType: IndividualTalkType, isPositive: boolean): string => {
+  const responses: Record<IndividualTalkType, { positive: string; negative: string }> = {
+    PRAISE: {
+      positive: 'Dziękuję, trenerze. Dobrze to słyszeć. Postaram się utrzymać ten poziom.',
+      negative: 'Doceniam słowa, ale czuję, że mogłem dać drużynie jeszcze więcej.',
+    },
+    MOTIVATE: {
+      positive: 'Jestem gotowy. Wyjdę na boisko z pełnym zaangażowaniem.',
+      negative: 'Rozumiem, trenerze, ale potrzebuję jeszcze chwili, żeby złapać pewność.',
+    },
+    SUPPORT: {
+      positive: 'Dzięki za wsparcie. To dla mnie ważne. Odpowiem na boisku.',
+      negative: 'Wiem, że chciał pan dobrze, ale dalej siedzi mi to w głowie.',
+    },
+    CRITICIZE: {
+      positive: 'Przyjmuję to. Wiem, że muszę dać więcej i popracuję nad tym.',
+      negative: 'Rozumiem uwagi, ale czuję, że ocena była zbyt surowa.',
+    },
+    PROMISE_MINUTES: {
+      positive: 'Dobrze, trenerze. Będę gotowy, kiedy dostanę swoją szansę.',
+      negative: 'Chcę w to wierzyć, ale muszę zobaczyć, że naprawdę dostanę okazję.',
+    },
+    DEMAND_WORK: {
+      positive: 'Ma pan rację. Podkręcę tempo na treningach.',
+      negative: 'Pracuję ciężko, trenerze. Mam nadzieję, że też pan to zauważy.',
+    },
+  };
+
+  const response = responses[talkType];
+  return isPositive ? response.positive : response.negative;
 };
 
 const isSameOrHigherRole = (
@@ -144,6 +176,7 @@ export const PlayerMoraleService = {
     minutesDemandBaseline: player.minutesDemandBaseline ?? null,
     roleDemandUntil: player.roleDemandUntil ?? null,
     requestedSquadRole: player.requestedSquadRole ?? null,
+    transferListDemandUntil: player.transferListDemandUntil ?? null,
   }),
 
   withMoraleChange: (player: Player, delta: number, reason: string, date: Date): Player => {
@@ -266,12 +299,23 @@ export const PlayerMoraleService = {
     successChance = Math.max(0.12, Math.min(0.88, successChance));
     const isPositive = rng < successChance;
     const swing = 1 + Math.floor(seededRng(seed, talkType.charCodeAt(0)) * 3);
-    const moraleDelta = isPositive ? base + swing : -(Math.max(2, Math.round(base / 2)) + swing);
-    const newMorale = PlayerMoraleService.clamp(morale + moraleDelta);
+    const backfireRisk =
+      0.22
+      + (talkType === 'CRITICIZE' || talkType === 'DEMAND_WORK' ? 0.18 : 0)
+      + (talkType === 'PROMISE_MINUTES' ? 0.10 : 0)
+      + (personality === 'SENSITIVE' || personality === 'NERVOUS' ? 0.18 : 0)
+      + (personality === 'EGOIST' ? 0.10 : 0);
+    const backfireRoll = seededRng(seed + stableHash(player.id), talkType.charCodeAt(0) + 31);
+    const severeBackfire = !isPositive && backfireRoll < Math.min(0.72, backfireRisk);
+    const negativeDrop = 10 + base + (swing * 3) + (severeBackfire ? 16 + Math.round(morale * 0.12) : 0);
+    const rawMoraleDelta = isPositive ? base + swing : -negativeDrop;
+    const rawNewMorale = PlayerMoraleService.clamp(morale + rawMoraleDelta);
+    const newMorale = !isPositive && talkType === 'CRITICIZE'
+      ? Math.min(rawNewMorale, 39)
+      : rawNewMorale;
+    const moraleDelta = newMorale - morale;
 
-    const reactionText = isPositive
-      ? `${PlayerMoraleService.getPersonalityLabel(personality)} przyjmuje rozmowę dobrze. Morale zmienia się o +${moraleDelta}.`
-      : `${PlayerMoraleService.getPersonalityLabel(personality)} nie reaguje tak, jak oczekiwano. Morale zmienia się o ${moraleDelta}.`;
+    const reactionText = getPlayerTalkResponse(talkType, isPositive);
 
     return { moraleDelta, newMorale, isPositive, reactionText };
   },
@@ -400,7 +444,7 @@ export const PlayerMoraleService = {
       byPosition.set(position, [...playersForPosition].sort((a, b) => b.overallRating - a.overallRating));
     });
 
-    const hasRecentMail = (player: Player, requestType: 'MINUTES' | 'ROLE'): boolean =>
+    const hasRecentMail = (player: Player, requestType: 'MINUTES' | 'ROLE' | 'TRANSFER_LIST'): boolean =>
       existingMessages.some(mail =>
         mail.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
         mail.metadata.playerId === player.id &&
@@ -456,7 +500,45 @@ export const PlayerMoraleService = {
         minutesShare < expectedShare &&
         (withMorale.morale ?? 50) <= (personality === 'LOYAL' ? 30 : personality === 'PROFESSIONAL' ? 38 : 52 + pressureBonus * 5);
 
+      const isClearlyAboveSquadLevel = withMorale.overallRating >= squadAverage + 7 && rank <= Math.max(3, Math.ceil(squad.length * 0.12));
+      const shouldRequestTransferList =
+        isClearlyAboveSquadLevel &&
+        isHealthyEnough &&
+        !demandCooldown &&
+        !withMorale.isOnTransferList &&
+        !withMorale.transferPendingClubId &&
+        !withMorale.transferListDemandUntil &&
+        !hasRecentMail(withMorale, 'TRANSFER_LIST') &&
+        (withMorale.morale ?? 50) <= (personality === 'LOYAL' ? 28 : personality === 'PROFESSIONAL' ? 34 : 44 + pressureBonus * 6);
+
       if (createdMails.length >= 2) return withMorale;
+
+      if (shouldRequestTransferList) {
+        const mailId = `PLAYER_TRANSFER_LIST_REQUEST_${withMorale.id}_${dateKey}`;
+        createdMails.push({
+          id: mailId,
+          sender: `${withMorale.firstName} ${withMorale.lastName}`,
+          role: 'Zawodnik',
+          subject: `Prośba o listę transferową: ${withMorale.lastName}`,
+          body: `Trenerze,\n\nNie czuję się już dobrze w tej drużynie. Mam poczucie, że mój poziom sportowy i ambicje rozchodzą się z miejscem, w którym obecnie jesteśmy jako zespół.\n\nProszę o zgodę na wystawienie mnie na listę transferową. Chcę zachować profesjonalizm, ale potrzebuję jasnej drogi do zmiany otoczenia.\n\n${withMorale.firstName} ${withMorale.lastName}`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 4,
+          metadata: {
+            type: 'PLAYER_MORALE_REQUEST',
+            playerId: withMorale.id,
+            requestType: 'TRANSFER_LIST',
+            responseDeadline: deadlineKey,
+          },
+        });
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -3, 'Zawodnik prosi o wystawienie na listę transferową', currentDate);
+        return {
+          ...withMorale,
+          lastMoraleDemandDate: dateKey,
+          transferListDemandUntil: deadlineKey,
+        };
+      }
 
       if (shouldRequestRole && roleExpectation) {
         const mailId = `PLAYER_ROLE_REQUEST_${withMorale.id}_${dateKey}`;
@@ -523,6 +605,24 @@ export const PlayerMoraleService = {
 
   reviewPlayerDemands: (player: Player, currentDate: Date): Player => {
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
+
+    if (withMorale.transferListDemandUntil) {
+      const deadline = new Date(withMorale.transferListDemandUntil);
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      if (withMorale.isOnTransferList) {
+        withMorale = {
+          ...PlayerMoraleService.withMoraleChange(withMorale, 8, 'Trener zgodził się na listę transferową', currentDate),
+          transferListDemandUntil: null,
+        };
+      } else if (expired) {
+        const personality = withMorale.moralePersonality ?? 'CALM';
+        const penalty = personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -8 : personality === 'EGOIST' || personality === 'AMBITIOUS' ? -16 : -12;
+        withMorale = {
+          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, 'Odrzucona prośba o listę transferową', currentDate),
+          transferListDemandUntil: null,
+        };
+      }
+    }
 
     if (withMorale.minutesDemandUntil) {
       const deadline = new Date(withMorale.minutesDemandUntil);
