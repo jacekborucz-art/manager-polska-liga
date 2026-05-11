@@ -241,7 +241,8 @@ export const ContractManagementView: React.FC = () => {
       playerToRelease,
       { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
       currentYear,
-      currentMonth
+      currentMonth,
+      { clubName: club.name, clubId: club.id }
     );
 
     const releasedPlayer = { 

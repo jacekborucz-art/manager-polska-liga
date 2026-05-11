@@ -43,7 +43,8 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
               player,
               { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
               seasonEndDate.getFullYear(),
-              7
+              7,
+              { clubName: club.name, clubId: club.id }
             )
           };
           releasedPlayers.push(released);

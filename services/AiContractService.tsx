@@ -1306,7 +1306,8 @@ performSeasonSquadReview: (
                 candidate,
                 { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
                 currentYear,
-                currentMonth
+                currentMonth,
+                { clubName: club.name, clubId: club.id }
               );
 
               const releasedPlayer: Player = {
@@ -1426,7 +1427,8 @@ performSeasonSquadReview: (
                 player,
                 { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
                 currentYear,
-                currentMonth
+                currentMonth,
+                { clubName: club.name, clubId: club.id }
               );
               const releasedPlayer: Player = {
                 ...player,
