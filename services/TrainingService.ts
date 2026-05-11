@@ -1,9 +1,92 @@
-import { Player, PlayerAttributes, MatchSummary, HealthStatus, TrainingIntensity, PlayerPosition } from '../types';
+import { Player, PlayerAttributes, MatchSummary, HealthStatus, TrainingIntensity, PlayerPosition, InjurySeverity, Fixture, MatchStatus } from '../types';
 import { TRAINING_CYCLES } from '../data/training_definitions_pl';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
+import { rollInjuryBySeverity } from './InjuryCatalog';
+
+const WEEKLY_TRAINING_INJURY_CHANCE = 0.01;
+const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
+
+const dateOnly = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
+const isWinterHoliday = (date: Date): boolean => {
+  const month = date.getMonth();
+  const day = date.getDate();
+  return (month === 11 && day >= 17) || (month === 0 && day <= 2);
+};
+
+const isSummerHolidayForClub = (date: Date, clubId: string, fixtures: Fixture[] = []): boolean => {
+  const month = date.getMonth();
+  const day = date.getDate();
+  const inSummerVacationWindow = month === 4 || (month === 5 && day <= 18);
+
+  if (!inSummerVacationWindow) return false;
+
+  const today = dateOnly(date);
+  const vacationEnd = new Date(date.getFullYear(), 5, 18).getTime();
+  const hasRemainingClubMatchBeforeVacationEnd = fixtures.some(fixture => {
+    const fixtureDate = new Date(fixture.date);
+    const fixtureTime = dateOnly(fixtureDate);
+
+    return (
+      fixture.status === MatchStatus.SCHEDULED &&
+      fixtureTime > today &&
+      fixtureTime <= vacationEnd &&
+      (fixture.homeTeamId === clubId || fixture.awayTeamId === clubId)
+    );
+  });
+
+  return !hasRemainingClubMatchBeforeVacationEnd;
+};
+
+const isTrainingHolidayForClub = (date: Date, clubId: string, fixtures: Fixture[] = []): boolean =>
+  isWinterHoliday(date) || isSummerHolidayForClub(date, clubId, fixtures);
 
 export const TrainingService = {
+  processWeeklyTrainingInjuries: (
+    playersMap: Record<string, Player[]>,
+    currentDate: Date,
+    fixtures: Fixture[] = [],
+    random: () => number = Math.random
+  ): Record<string, Player[]> => {
+    const updatedMap = { ...playersMap };
+
+    for (const clubId of Object.keys(updatedMap)) {
+      if (isTrainingHolidayForClub(currentDate, clubId, fixtures)) continue;
+
+      updatedMap[clubId] = updatedMap[clubId].map(player => {
+        if (player.health.status === HealthStatus.INJURED) return player;
+        if (random() >= WEEKLY_TRAINING_INJURY_CHANCE) return player;
+
+        const severity = random() < TRAINING_SEVERE_INJURY_CHANCE
+          ? InjurySeverity.SEVERE
+          : InjurySeverity.LIGHT;
+        const injury = rollInjuryBySeverity(severity, random);
+        const basePenalty = severity === InjurySeverity.SEVERE ? 45 : 12;
+        const randomExtra = Math.floor(random() * 12);
+        const conditionAfterInjury = Math.max(0, player.condition - basePenalty - randomExtra);
+
+        return {
+          ...player,
+          condition: conditionAfterInjury,
+          health: {
+            status: HealthStatus.INJURED,
+            injury: {
+              type: injury.type,
+              daysRemaining: injury.days,
+              severity,
+              injuryDate: currentDate.toISOString(),
+              totalDays: injury.days,
+              conditionAtInjury: conditionAfterInjury
+            }
+          }
+        };
+      });
+    }
+
+    return updatedMap;
+  },
+
   /**
    * Main training logic applied after each round.
    */

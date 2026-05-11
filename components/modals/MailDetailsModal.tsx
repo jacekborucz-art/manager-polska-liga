@@ -130,7 +130,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               const isExpired = today > expiryDate;
               const userClub = clubs.find(c => c.id === userTeamId);
               const alreadyChosen = !!(userClub?.winterCamp?.location !== null && userClub?.winterCamp?.location !== undefined) || !!(userClub?.winterCamp?.isDeclined);
-              const isActive = !isExpired && !alreadyChosen && !!userClub?.winterCamp;
+              const isActive = !isExpired && !alreadyChosen;
               const label = isExpired ? 'Termin minął' : alreadyChosen ? 'Już zadecydowano' : 'Wybierz lokalizację obozu';
               return (
                 <button

@@ -212,6 +212,34 @@ export const MailService = {
   /**
    * Generuje wielki raport podsumowujący miniony sezon.
    */
+  generateTrainingInjuryMail: (player: Player, currentDate: Date): MailMessage => {
+    const playerName = `${player.firstName} ${player.lastName}`;
+    const days = player.health.injury?.daysRemaining ?? 0;
+    const injuryType = player.health.injury?.type ?? 'uraz';
+
+    return {
+      id: `TRAINING_INJURY_${player.id}_${currentDate.toISOString().split('T')[0]}`,
+      sender: 'Sztab Medyczny',
+      role: 'Lekarz klubowy',
+      subject: `Kontuzja na treningu: ${playerName}`,
+      body: [
+        'Trenerze,',
+        '',
+        `Podczas dzisiejszego treningu ${playerName} doznał kontuzji: ${injuryType}.`,
+        '',
+        `Zawodnik będzie pauzował przez około ${days} dni.`,
+        '',
+        'Należy dokonać korekty w składzie na nadchodzący mecz.',
+        '',
+        'Sztab medyczny będzie monitorował proces leczenia i poinformuje o postępach rehabilitacji.',
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 85,
+    };
+  },
+
 generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
     const separator = "------------------------------------------";
     const seasonLabel = `${data.year}/${(data.year + 1).toString().slice(2)}`;

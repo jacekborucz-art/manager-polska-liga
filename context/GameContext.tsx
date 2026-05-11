@@ -1658,6 +1658,28 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    const userSquadBeforeTrainingInjuries = userTeamId ? (finalPlayers[userTeamId] || []) : [];
+
+    finalPlayers = TrainingService.processWeeklyTrainingInjuries(
+      finalPlayers,
+      currentDate,
+      simulation.updatedFixtures
+    );
+
+    if (userTeamId && userSquadBeforeTrainingInjuries.length > 0) {
+      const beforeById = new Map(userSquadBeforeTrainingInjuries.map(player => [player.id, player]));
+      const trainingInjuryMails = (finalPlayers[userTeamId] || [])
+        .filter(player => {
+          const before = beforeById.get(player.id);
+          return before?.health.status !== HealthStatus.INJURED && player.health.status === HealthStatus.INJURED;
+        })
+        .map(player => MailService.generateTrainingInjuryMail(player, currentDate));
+
+      if (trainingInjuryMails.length > 0) {
+        setMessages(prev => [...trainingInjuryMails, ...prev]);
+      }
+    }
+
     setPlayers(prev => {
       return { ...prev, ...finalPlayers };
     });
@@ -2237,9 +2259,38 @@ setMessages([welcomeMail, fanMail]);
     }));
   }, [userTeamId, currentDate]);
 
+  const ensureWinterCampInviteState = useCallback((baseDate: Date = currentDate) => {
+    if (!userTeamId) return;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || c.winterCamp) return c;
+
+      const priceSeed = sessionSeed + baseDate.getTime() % 100000;
+      return {
+        ...c,
+        winterCamp: {
+          location: null,
+          cost: 0,
+          program: null,
+          intensity: null,
+          spaOption: false,
+          isDeclined: false,
+          locationPrices: generateLocationPrices(priceSeed),
+          spaCost: generateSpaCost(priceSeed),
+          inviteSent: true,
+          programChosen: false,
+          effectsApplied: false,
+        },
+      };
+    }));
+  }, [currentDate, sessionSeed, userTeamId]);
+
   const clearWinterCampInvitePending = useCallback(() => setWinterCampInvitePending(false), []);
   const clearWinterCampProgramPending = useCallback(() => setWinterCampProgramPending(false), []);
-  const reopenWinterCampInvite = useCallback(() => setWinterCampInvitePending(true), []);
+  const reopenWinterCampInvite = useCallback(() => {
+    ensureWinterCampInviteState();
+    setWinterCampInvitePending(true);
+  }, [ensureWinterCampInviteState]);
 
   const saveWinterCampLocation = useCallback((location: WinterCampLocation | null, cost: number, spaOption: boolean) => {
     if (!userTeamId) return;
@@ -3902,6 +3953,7 @@ setMessages([welcomeMail, fanMail]);
         } : c));
         const inviteMail = MailService.createFromTemplate('winter_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
         if (inviteMail) {
+          inviteMail.date = new Date(dateToProcess);
           inviteMail.metadata = { type: 'WINTER_CAMP_INVITE', expiryDate: new Date(dateToProcess.getFullYear(), 11, 23).toISOString() };
           setMessages(prev => [inviteMail, ...prev]);
         }
@@ -3932,7 +3984,10 @@ setMessages([welcomeMail, fanMail]);
           const suggestion = getAssistantSuggestion(squad, userClub);
           const templateId = suggestion.program === 'tactical' ? 'winter_camp_assistant_tactical' : 'winter_camp_assistant_fitness';
           const assistantMail = MailService.createFromTemplate(templateId, { CLUB: userClub.name });
-          if (assistantMail) setMessages(prev => [assistantMail, ...prev]);
+          if (assistantMail) {
+            assistantMail.date = new Date(dateToProcess);
+            setMessages(prev => [assistantMail, ...prev]);
+          }
           setWinterCampProgramPending(true);
           setTargetJumpTime(null);
         }
@@ -3971,7 +4026,10 @@ setMessages([welcomeMail, fanMail]);
             INJURY_COUNT: String(injuredCount),
             MORALE_CHANGE: moraleSign,
           });
-          if (reportMail) setMessages(prev => [reportMail, ...prev]);
+          if (reportMail) {
+            reportMail.date = new Date(dateToProcess);
+            setMessages(prev => [reportMail, ...prev]);
+          }
           setPlayers(prev => {
             const updatedSquad = (prev[userTeamId] || []).map(player => {
               const effect = effects.find(e => e.playerId === player.id);
