@@ -61,6 +61,10 @@ const inputCls  = 'bg-black/40 border border-slate-700 rounded text-emerald-400 
 const selectCls = 'bg-black/40 border border-slate-700 rounded text-white   font-black italic uppercase tracking-tighter text-xs outline-none focus:border-yellow-500 transition-colors cursor-pointer';
 const labelCls  = 'text-yellow-400 text-xs font-black italic uppercase tracking-tighter';
 
+const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA'];
+const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
+const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
+
 export const EditorView: React.FC = () => {
   const { clubs, players, getOrGenerateSquad, updatePlayer, importSquad, navigateTo } = useGame();
 
@@ -103,14 +107,14 @@ export const EditorView: React.FC = () => {
   const allExportableClubs = useMemo(() =>
     clubs.filter(c =>
       c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4' ||
-      ((c.leagueId === 'L_CL' || c.leagueId === 'L_EL' || c.leagueId === 'L_CONF') && ['ENG', 'ESP', 'ITA', 'GER', 'FRA'].includes(c.country ?? ''))
+      (EXPORT_INTERNATIONAL_LEAGUE_IDS.includes(c.leagueId) && EXPORT_COUNTRY_CODES.includes(c.country ?? ''))
     ),
   [clubs]);
 
   const exportClubsByTier = useMemo(() => {
     const map: Record<string, typeof allExportableClubs> = {};
     allExportableClubs.forEach(c => {
-      const key = (c.leagueId === 'L_CL' || c.leagueId === 'L_EL' || c.leagueId === 'L_CONF') ? (c.country ?? c.leagueId) : c.leagueId;
+      const key = EXPORT_INTERNATIONAL_LEAGUE_IDS.includes(c.leagueId) ? (c.country ?? c.leagueId) : c.leagueId;
       if (!map[key]) map[key] = [];
       map[key].push(c);
     });
@@ -127,6 +131,23 @@ export const EditorView: React.FC = () => {
     'ITA': 'Włochy',
     'GER': 'Niemcy',
     'FRA': 'Francja',
+    'POR': 'Portugalia',
+    'BUL': 'Bułgaria',
+    'BEL': 'Belgia',
+    'NED': 'Holandia',
+    'AUT': 'Austria',
+    'SCO': 'Szkocja',
+    'TUR': 'Turcja',
+    'SUI': 'Szwajcaria',
+    'CZE': 'Czechy',
+    'SWE': 'Szwecja',
+    'CRO': 'Chorwacja',
+    'SRB': 'Serbia',
+    'DEN': 'Dania',
+    'GRE': 'Grecja',
+    'KSA': 'Arabia Saudyjska',
+    'QAT': 'Katar',
+    'USA': 'USA',
   };
 
   const toggleExportClub = (id: string) => {
@@ -545,7 +566,7 @@ export const EditorView: React.FC = () => {
               <button onClick={() => setShowExportModal(false)} className="text-slate-500 hover:text-white text-lg leading-none">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto editor-scroll px-5 py-3">
-              {(['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', 'ENG', 'ESP', 'ITA', 'GER', 'FRA']).map(leagueId => {
+              {EXPORT_GROUP_ORDER.map(leagueId => {
                 const tierClubs = exportClubsByTier[leagueId] ?? [];
                 if (tierClubs.length === 0) return null;
                 const allChecked = tierClubs.every(c => exportSelected.has(c.id));
