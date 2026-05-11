@@ -320,6 +320,16 @@ export interface Coach {
   favoritePlayerIds?: string[];  // Lista ID "ulubieńców trenera" — aktualizowana co miesiąc
 }
 
+export interface AiWeeklyTrainingState {
+  weekKey: string;
+  cycleId: string;
+  intensity: TrainingIntensity;
+  matchModifier: number;
+  fatigueLoad: number;
+  quality: number;
+  validUntil: string;
+}
+
 export interface MailMessage {
   id: string;
   sender: string;
@@ -360,6 +370,12 @@ export interface MailMessage {
     objectiveId: string;
   } | {
     type: 'LEAGUE_FINANCE_REPORT';
+  } | {
+    type: 'PLAYER_MORALE_REQUEST';
+    playerId: string;
+    requestType: 'MINUTES' | 'ROLE';
+    requestedRole?: 'STARTER' | 'KEY_PLAYER';
+    responseDeadline: string;
   };
 }
 
@@ -601,6 +617,32 @@ export interface PlayerStats {
   seasonalChanges: Record<string, number>;
   ratingHistory: number[]; 
 }
+
+export type PlayerMoralePersonality =
+  | 'PROFESSIONAL'
+  | 'AMBITIOUS'
+  | 'SENSITIVE'
+  | 'CONFIDENT'
+  | 'NERVOUS'
+  | 'LOYAL'
+  | 'EGOIST'
+  | 'CALM';
+
+export interface PlayerMoraleHistoryEntry {
+  id: string;
+  date: string;
+  delta: number;
+  reason: string;
+  moraleAfter: number;
+}
+
+export type IndividualTalkType =
+  | 'PRAISE'
+  | 'MOTIVATE'
+  | 'SUPPORT'
+  | 'CRITICIZE'
+  | 'PROMISE_MINUTES'
+  | 'DEMAND_WORK';
 
 export interface ReserveProgressEntry {
   date: string;
@@ -891,6 +933,17 @@ export interface Player {
   negotiationLockoutUntil: string | null; // Blokada czasowa negocjacji
   contractLockoutUntil: string | null;
   fatigueDebt: number; 
+  morale?: number;
+  moralePersonality?: PlayerMoralePersonality;
+  moraleHistory?: PlayerMoraleHistoryEntry[];
+  lastIndividualTalkDate?: string | null;
+  promisedMinutesUntil?: string | null;
+  promisedMinutesBaseline?: number | null;
+  lastMoraleDemandDate?: string | null;
+  minutesDemandUntil?: string | null;
+  minutesDemandBaseline?: number | null;
+  roleDemandUntil?: string | null;
+  requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;
   transferOfferBanUntil?: string | null;
@@ -1088,6 +1141,7 @@ export interface Club {
   motivationNeglectLevel?: number;
   matchPrepFocusId?: string;
   matchPrepFocusStartDate?: string;
+  aiWeeklyTraining?: AiWeeklyTrainingState;
   winterCamp?: WinterCampState;
   summerCamp?: SummerCampState;
 }

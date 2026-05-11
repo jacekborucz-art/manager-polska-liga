@@ -11,6 +11,7 @@ import {
   InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
+import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   let r = 6.0;
@@ -57,6 +58,7 @@ const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) 
   // Bonus za kondycję (świeżość podnosi ocenę)
   const fatigue = (side === 'HOME' ? state.homeFatigue[player.id] : state.awayFatigue[player.id]) || 100;
   if (fatigue > 90) r += 0.2;
+  r += (PlayerMoraleService.getMatchMultiplier(player) - 1) * 5;
   
   return Math.min(10, Math.max(1, r)).toFixed(1);
 };
@@ -1026,8 +1028,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           .filter(p => attackingXI2.includes(p.id) && p.position === PlayerPosition.FWD)
           .sort((a, b) => b.attributes.finishing - a.attributes.finishing)[0];
         const strikerBonus = topStriker
-          ? Math.max(0, (topStriker.attributes.finishing - 55) / (77 - 55)) * 0.012
+          ? Math.max(0, ((topStriker.attributes.finishing * PlayerMoraleService.getMatchMultiplier(topStriker)) - 55) / (77 - 55)) * 0.012
           : 0;
+        const activeMoraleAvg = attackingXI2.length > 0
+          ? attackingTeamPlayers2
+              .filter(p => attackingXI2.includes(p.id))
+              .reduce((sum, p) => sum + (p.morale ?? 50), 0) / attackingXI2.length
+          : 50;
+        const moraleShotModifier = Math.max(-0.006, Math.min(0.006, (activeMoraleAvg - 50) * 0.00024));
         const activeFormImpact = activeSide === 'HOME' ? homeFormImpact : awayFormImpact;
         const defendingFormImpact = activeSide === 'HOME' ? awayFormImpact : homeFormImpact;
         const activeFormStacking = activeSide === 'HOME' ? homeFormStacking : awayFormStacking;
@@ -1101,6 +1109,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold
             - defBiasPenalty
             + strikerBonus
+            + moraleShotModifier
             + activeFatPenalty
             + activeFormImpact.shotModifier * activeFormStacking
             - defendingFormImpact.shotResistanceModifier * defendingFormStacking
@@ -1674,7 +1683,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   const _scoringPlayers = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
                   const _scoringXI = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
                   const _avgRating = _scoringXI.length > 0
-                    ? _scoringPlayers.filter(p => _scoringXI.includes(p.id)).reduce((acc, p) => acc + p.overallRating, 0) / _scoringXI.length
+                    ? _scoringPlayers
+                        .filter(p => _scoringXI.includes(p.id))
+                        .reduce((acc, p) => acc + (p.overallRating * PlayerMoraleService.getMatchMultiplier(p)), 0) / _scoringXI.length
                     : 60;
                   const _teamFactor  = 0.75 + Math.max(0, Math.min(1, (_avgRating - 55) / 25)) * 0.5;
                   const _finalBoost  = parseFloat((_baseBoost * _teamFactor).toFixed(4));
@@ -1813,9 +1824,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               const fkGkAttr = fkGk?.attributes.goalkeeping ?? 50;
               const fkFormAttMod = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
               const fkFormDefMod = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
+              const fkMoraleMod = PlayerMoraleService.getMatchMultiplier(fkTaker);
+              const fkGkMoraleMod = fkGk ? PlayerMoraleService.getMatchMultiplier(fkGk) : 1;
               const fkGoalProb = Math.max(
                 0.05,
-                Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod) * 1.05) - ((fkGkAttr * fkFormDefMod) * 1.20)) / 300)
+                Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod * fkMoraleMod) * 1.05) - ((fkGkAttr * fkFormDefMod * fkGkMoraleMod) * 1.20)) / 300)
               );
               if (seededRng(currentSeed, nextMinute, 5200) < fkGoalProb) {
                 if (activeSide === 'HOME') {
@@ -2250,6 +2263,46 @@ return {
 
     updatedPlayers[ctx.homeClub.id] = applyInjuriesToSquad(updatedPlayers[ctx.homeClub.id], matchState.homeInjuries, matchState.homeInjuryMin);
     updatedPlayers[ctx.awayClub.id] = applyInjuriesToSquad(updatedPlayers[ctx.awayClub.id], matchState.awayInjuries, matchState.awayInjuryMin);
+
+    const applyMatchMoraleToSquad = (
+      squad: Player[],
+      side: 'HOME' | 'AWAY',
+      resultChar: 'W' | 'R' | 'P'
+    ) => {
+      const activeIds = new Set([
+        ...(side === 'HOME' ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI).filter((id): id is string => !!id),
+        ...matchState.playedPlayerIds,
+      ]);
+      const sideGoals = side === 'HOME' ? matchState.homeGoals : matchState.awayGoals;
+      const sideScore = side === 'HOME' ? matchState.homeScore : matchState.awayScore;
+      const oppScore = side === 'HOME' ? matchState.awayScore : matchState.homeScore;
+      const scoreDiff = sideScore - oppScore;
+      const teamDelta = resultChar === 'W' ? (scoreDiff >= 2 ? 5 : 3) : resultChar === 'P' ? (scoreDiff <= -3 ? -6 : -3) : 0;
+
+      return squad.map(player => {
+        const withMorale = PlayerMoraleService.ensurePlayerState(player);
+        let delta = activeIds.has(player.id) ? teamDelta : Math.round(teamDelta * 0.45);
+        const scored = sideGoals.some(goal => goal.scorerId === player.id || goal.playerName === player.lastName);
+        const assisted = sideGoals.some(goal => goal.assistantId === player.id);
+        const cards = (matchState.playerYellowCards[player.id] || 0) + (matchState.sentOffIds.includes(player.id) ? 2 : 0);
+
+        if (scored) delta += 3;
+        if (assisted) delta += 2;
+        if (cards > 0) delta -= cards;
+        if (!activeIds.has(player.id) && player.squadRole === 'KEY_PLAYER') delta -= 2;
+        if (!activeIds.has(player.id) && player.squadRole === 'STARTER') delta -= 1;
+
+        return {
+          ...withMorale,
+          morale: PlayerMoraleService.clamp((withMorale.morale ?? 50) + delta),
+        };
+      });
+    };
+
+    const homeResultChar: 'W' | 'R' | 'P' = matchState.homeScore > matchState.awayScore ? 'W' : matchState.homeScore === matchState.awayScore ? 'R' : 'P';
+    const awayResultChar: 'W' | 'R' | 'P' = matchState.awayScore > matchState.homeScore ? 'W' : matchState.awayScore === matchState.homeScore ? 'R' : 'P';
+    updatedPlayers[ctx.homeClub.id] = applyMatchMoraleToSquad(updatedPlayers[ctx.homeClub.id], 'HOME', homeResultChar);
+    updatedPlayers[ctx.awayClub.id] = applyMatchMoraleToSquad(updatedPlayers[ctx.awayClub.id], 'AWAY', awayResultChar);
 
   const updatedClubs = simResult.updatedClubs.map(c => {
        if (c.id === ctx.homeClub.id || c.id === ctx.awayClub.id) {

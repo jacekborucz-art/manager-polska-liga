@@ -16,6 +16,7 @@ import { NATIONAL_TEAMS_AFC } from './resources/static_db/NationalTeams/National
 import { NATIONAL_TEAMS_CONCACAF } from './resources/static_db/NationalTeams/NationalTeamsCONCACAF';
 import { NATIONAL_TEAMS_CONMEBOL } from './resources/static_db/NationalTeams/NationalTeamsCONMEBOL';
 import { NATIONAL_TEAMS_OFC } from './resources/static_db/NationalTeams/NationalTeamsOFC';
+import { PlayerMoraleService } from './services/PlayerMoraleService';
 
 // (Dodaj resztę importów analogicznie...)
 
@@ -378,7 +379,7 @@ STATIC_LEAGUES.forEach(l => {
 
 // 3. Player Database Generator (Stub)
 export const generatePlaceholderPlayersForClub = (clubId: string): Player[] => {
-  return Array.from({ length: 22 }).map((_, i) => ({
+  return Array.from({ length: 22 }).map((_, i) => PlayerMoraleService.ensurePlayerState({
     id: `PL_${clubId}_${i}`,
     firstName: `Firstname_${i}`,
     lastName: `Lastname_${clubId}_${i}`,

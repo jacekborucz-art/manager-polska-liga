@@ -3,6 +3,7 @@ import { TRAINING_CYCLES } from '../data/training_definitions_pl';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 const WEEKLY_TRAINING_INJURY_CHANCE = 0.01;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
@@ -116,7 +117,7 @@ export const TrainingService = {
         return player;
       }
 
-      const updated = { ...player };
+      const updated = PlayerMoraleService.ensurePlayerState(player);
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
@@ -207,6 +208,7 @@ export const TrainingService = {
       const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
       const conditionDrift = !hasGeneralPlan && Math.random() < 0.12 ? -1 : 0;
       const fatigueDrift = !hasGeneralPlan && Math.random() < 0.10 ? 1 : 0;
+      const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, intensity);
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },
         clubReputation,
@@ -218,6 +220,7 @@ export const TrainingService = {
         ...updated,
         attributes,
         overallRating: newOvr,
+        morale: PlayerMoraleService.clamp((updated.morale ?? 50) + moraleDelta),
         condition: Math.max(1, Math.min(100, updated.condition + conditionDrift)),
         fatigueDebt: Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift)),
         stats: {
@@ -278,7 +281,7 @@ export const TrainingService = {
         };
       }
 
-      const updated = { ...player };
+      const updated = PlayerMoraleService.ensurePlayerState(player);
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
       const attributes = { ...updated.attributes };
@@ -352,6 +355,7 @@ export const TrainingService = {
         ...updated,
         attributes,
         overallRating: newOvr,
+        morale: PlayerMoraleService.clamp((updated.morale ?? 50) + PlayerMoraleService.applyTrainingMood(updated, TrainingIntensity.NORMAL)),
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],

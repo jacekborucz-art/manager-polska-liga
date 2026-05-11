@@ -16,6 +16,7 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
+import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
@@ -371,6 +372,9 @@ export const SquadView: React.FC = () => {
     const averageRating = player.stats?.ratingHistory?.length
       ? player.stats.ratingHistory.reduce((a, b) => a + b, 0) / player.stats.ratingHistory.length
       : null;
+    const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+    const playerMoraleInfo = PlayerMoraleService.getInfo(moralePlayer.morale);
+    const effectiveOverall = PlayerMoraleService.getEffectiveOverall(moralePlayer);
 
     return (
       <tr
@@ -406,6 +410,10 @@ export const SquadView: React.FC = () => {
                   {player.lastName}
                 </span>
                 <span className={`text-[9px] font-bold uppercase tracking-widest ${(isSuspended || isSevereInjured || isOverfatigued) ? 'text-slate-400' : 'text-white'}`}>{player.firstName}</span>
+                <span className={`mt-0.5 inline-flex w-fit items-center gap-1 text-[8px] font-black italic uppercase tracking-tighter ${playerMoraleInfo.colorClass}`} title={`Morale: ${playerMoraleInfo.label}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${playerMoraleInfo.barClass}`} />
+                  {playerMoraleInfo.label}{effectiveOverall !== player.overallRating ? ` / GOT. ${effectiveOverall}` : ''}
+                </span>
               </div>
               {myClub?.captainId === player.id && (
                 <span className="w-5 h-5 rounded-full bg-blue-900 border border-blue-400 flex items-center justify-center text-[9px] font-black text-white shrink-0" title="Kapitan">C</span>
@@ -757,6 +765,31 @@ export const SquadView: React.FC = () => {
             const morale = myClub.morale ?? 50;
             const info = getMoraleInfo(morale);
             const form = myClub.stats.form || [];
+            const moraleRows = [...myPlayers]
+              .map(player => {
+                const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+                const moraleInfo = PlayerMoraleService.getInfo(moralePlayer.morale);
+                const canTalkPlayer = PlayerMoraleService.canTalk(moralePlayer, currentDate);
+                const nextTalkDate = PlayerMoraleService.getNextTalkDate(moralePlayer);
+                const promisedMinutesUntil = moralePlayer.promisedMinutesUntil ? new Date(moralePlayer.promisedMinutesUntil) : null;
+                const minutesDemandUntil = moralePlayer.minutesDemandUntil ? new Date(moralePlayer.minutesDemandUntil) : null;
+                const roleDemandUntil = moralePlayer.roleDemandUntil ? new Date(moralePlayer.roleDemandUntil) : null;
+                return {
+                  player: moralePlayer,
+                  moraleInfo,
+                  canTalkPlayer,
+                  nextTalkDate,
+                  promisedMinutesUntil,
+                  minutesDemandUntil,
+                  roleDemandUntil,
+                  effectiveOverall: PlayerMoraleService.getEffectiveOverall(moralePlayer),
+                  personalityLabel: PlayerMoraleService.getPersonalityLabel(moralePlayer.moralePersonality),
+                };
+              })
+              .sort((a, b) => (a.player.morale ?? 50) - (b.player.morale ?? 50) || b.effectiveOverall - a.effectiveOverall);
+            const lowMoraleCount = moraleRows.filter(row => (row.player.morale ?? 50) < 40).length;
+            const talksReadyCount = moraleRows.filter(row => row.canTalkPlayer).length;
+            const activePromisesCount = moraleRows.filter(row => !!row.promisedMinutesUntil || !!row.minutesDemandUntil || !!row.roleDemandUntil).length;
             return (
               <div className="shrink-0 flex flex-col gap-4">
 
@@ -786,6 +819,93 @@ export const SquadView: React.FC = () => {
 
                   {/* DESCRIPTION */}
                   <p className="text-[11px] text-slate-400 leading-relaxed border-t border-white/5 pt-4">{info.description}</p>
+                </div>
+
+                <div className="rounded-[32px] border border-white/10 bg-slate-950/35 backdrop-blur-xl overflow-hidden">
+                  <div className="px-6 py-4 border-b border-white/10 bg-white/[0.02] flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Indywidualne morale</div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-300 mt-1">
+                        Niskie morale: <span className={lowMoraleCount > 0 ? 'text-orange-400' : 'text-emerald-400'}>{lowMoraleCount}</span> / rozmowy dostępne: <span className="text-violet-300">{talksReadyCount}</span> / obietnice minut: <span className="text-yellow-300">{activePromisesCount}</span>
+                      </div>
+                    </div>
+                    <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Kliknij zawodnika, aby otworzyć kartę i rozmowę</span>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto">
+                    <table className="w-full border-collapse">
+                      <thead className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur-xl">
+                        <tr className="border-b border-white/10">
+                          <th className="px-5 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Zawodnik</th>
+                          <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Pozycja</th>
+                          <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">OVR</th>
+                          <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Got.</th>
+                          <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Morale</th>
+                          <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Charakter</th>
+                          <th className="px-4 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Rozmowa</th>
+                          <th className="px-5 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Obietnica</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {moraleRows.map(row => {
+                          const moraleValue = row.player.morale ?? 50;
+                          const moraleBarWidth = `${moraleValue}%`;
+                          const nextTalkText = row.nextTalkDate ? row.nextTalkDate.toLocaleDateString('pl-PL') : '-';
+                          const promiseText = row.roleDemandUntil && row.player.requestedSquadRole
+                            ? `Status: ${row.player.requestedSquadRole === 'KEY_PLAYER' ? 'kluczowy' : 'starter'} do ${row.roleDemandUntil.toLocaleDateString('pl-PL')}`
+                            : row.minutesDemandUntil
+                              ? `Minuty do ${row.minutesDemandUntil.toLocaleDateString('pl-PL')}`
+                              : row.promisedMinutesUntil
+                                ? `Obietnica do ${row.promisedMinutesUntil.toLocaleDateString('pl-PL')}`
+                                : 'Brak';
+                          return (
+                            <tr
+                              key={row.player.id}
+                              onClick={() => viewPlayerDetails(row.player.id)}
+                              className="group cursor-pointer bg-white/[0.015] hover:bg-white/[0.05] transition-colors"
+                            >
+                              <td className="px-5 py-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] font-black italic uppercase tracking-tighter text-white group-hover:text-blue-300">{row.player.lastName}</span>
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">{row.player.firstName}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <span className={`inline-flex min-w-[34px] justify-center rounded-md border px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter ${getPositionBadgeClass(row.player.position)}`}>{row.player.position}</span>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <span className="text-[12px] font-black italic tracking-tighter text-slate-300">{row.player.overallRating}</span>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <span className={`text-[12px] font-black italic tracking-tighter ${row.effectiveOverall > row.player.overallRating ? 'text-emerald-400' : row.effectiveOverall < row.player.overallRating ? 'text-red-400' : 'text-slate-300'}`}>{row.effectiveOverall}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.moraleInfo.colorClass}`}>{row.moraleInfo.label}</span>
+                                    <span className="text-[9px] font-black italic tracking-tighter text-slate-400">{moraleValue}</span>
+                                  </div>
+                                  <div className="h-1.5 w-32 rounded-full bg-black/40 overflow-hidden border border-white/5">
+                                    <div className={`h-full ${row.moraleInfo.barClass}`} style={{ width: moraleBarWidth }} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-[9px] font-black italic uppercase tracking-tighter text-slate-300">{row.personalityLabel}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex rounded-md border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${row.canTalkPlayer ? 'border-violet-400/40 bg-violet-500/15 text-violet-200' : 'border-slate-500/20 bg-slate-500/10 text-slate-500'}`}>
+                                  {row.canTalkPlayer ? 'Dostępna' : `Od ${nextTalkText}`}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.promisedMinutesUntil || row.minutesDemandUntil || row.roleDemandUntil ? 'text-yellow-300' : 'text-slate-600'}`}>{promiseText}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* FORMA CONTEXT */}

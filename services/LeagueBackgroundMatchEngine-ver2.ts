@@ -93,8 +93,9 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
 
     const homeFormBoost = calculateFormBoost(_homeClub.stats.form || []);
     const awayFormBoost = calculateFormBoost(_awayClub.stats.form || []);
-    const homePrepBoost = getAIFocusLambdaBoost(homeCoach, seed + 999);
-    const awayPrepBoost = getAIFocusLambdaBoost(awayCoach, seed + 1001);
+    const matchDateStr = _fixture.date instanceof Date ? _fixture.date.toISOString().split('T')[0] : String(_fixture.date);
+    const homePrepBoost = getAIFocusLambdaBoost(homeCoach, seed + 999, _homeClub, matchDateStr);
+    const awayPrepBoost = getAIFocusLambdaBoost(awayCoach, seed + 1001, _awayClub, matchDateStr);
 
 const allPlayedIds = new Set<string>([
       ...homeLineup.startingXI.filter(id => id !== null),

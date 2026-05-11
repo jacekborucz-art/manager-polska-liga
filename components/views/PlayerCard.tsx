@@ -1,16 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
+import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
+  const [isTalkPanelOpen, setIsTalkPanelOpen] = useState(false);
+  const [talkResult, setTalkResult] = useState<IndividualTalkResult | null>(null);
 
   const data = useMemo(() => {
     if (!viewedPlayerId) return null;
@@ -76,6 +79,15 @@ export const PlayerCard: React.FC = () => {
 
   const healthInfo = PlayerPresentationService.getHealthDisplay(player);
   const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
+  const playerMorale = PlayerMoraleService.ensurePlayerState(player);
+  const moraleInfo = PlayerMoraleService.getInfo(playerMorale.morale);
+  const effectiveOverall = PlayerMoraleService.getEffectiveOverall(playerMorale);
+  const canTalk = PlayerMoraleService.canTalk(playerMorale, currentDate);
+  const nextTalkDate = PlayerMoraleService.getNextTalkDate(playerMorale);
+  const promisedMinutesDeadline = playerMorale.promisedMinutesUntil ? new Date(playerMorale.promisedMinutesUntil) : null;
+  const minutesDemandDeadline = playerMorale.minutesDemandUntil ? new Date(playerMorale.minutesDemandUntil) : null;
+  const roleDemandDeadline = playerMorale.roleDemandUntil ? new Date(playerMorale.roleDemandUntil) : null;
+  const moraleHistory = playerMorale.moraleHistory ?? [];
   const activeFreeAgentLockoutUntil = useMemo(() => {
     return FreeAgentNegotiationService.getClubLockoutUntil(player, userTeamId, currentDate);
   }, [player, userTeamId, currentDate]);
@@ -116,6 +128,12 @@ export const PlayerCard: React.FC = () => {
     if (fee >= 1_000_000) return `${(fee / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
     if (fee >= 1_000) return `${Math.round(fee / 1_000)}K`;
     return fee.toString();
+  };
+  const handleIndividualTalk = (talkType: IndividualTalkType) => {
+    const result = conductIndividualTalk(player.id, talkType);
+    if (result) {
+      setTalkResult(result);
+    }
   };
   const careerRows = useMemo(() => {
     const baseHistory = [...(player.history || [])];
@@ -248,6 +266,78 @@ export const PlayerCard: React.FC = () => {
                       </>
                     )}
                  </div>
+              </div>
+
+              <div className="p-3 bg-black/25 rounded-[20px] border border-white/5">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div>
+                    <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Morale zawodnika</span>
+                    <span className={`text-xs font-black italic uppercase tracking-tighter ${moraleInfo.colorClass}`}>{moraleInfo.label}</span>
+                  </div>
+                  <span className="text-[11px] font-black text-white font-mono">{playerMorale.morale}</span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-2">
+                  <div className={`h-full ${moraleInfo.barClass}`} style={{ width: `${playerMorale.morale}%` }} />
+                </div>
+                <div className="mb-2 flex items-center justify-between rounded-[12px] bg-white/[0.03] px-2 py-1">
+                  <span className="text-[7px] font-black italic uppercase tracking-tighter text-slate-500">Gotowość meczowa</span>
+                  <span className={`text-[10px] font-black italic uppercase tracking-tighter ${effectiveOverall >= player.overallRating ? 'text-emerald-300' : 'text-orange-300'}`}>
+                    {effectiveOverall}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">
+                    {PlayerMoraleService.getPersonalityLabel(playerMorale.moralePersonality)}
+                  </span>
+                  {player.clubId === userTeamId && !isMatchContext && (
+                    <button
+                      onClick={() => { setIsTalkPanelOpen(true); setTalkResult(null); }}
+                      disabled={!canTalk}
+                      className={`px-3 py-1.5 rounded-[12px] text-[8px] font-black italic uppercase tracking-tighter border transition-all active:scale-95
+                        ${canTalk
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                          : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                    >
+                      {canTalk ? 'Rozmowa' : nextTalkDate ? `Od ${nextTalkDate.toLocaleDateString('pl-PL')}` : 'Blokada'}
+                    </button>
+                  )}
+                </div>
+                {promisedMinutesDeadline && !Number.isNaN(promisedMinutesDeadline.getTime()) && (
+                  <div className="mt-2 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-amber-300">
+                      Obiecane minuty do {promisedMinutesDeadline.toLocaleDateString('pl-PL')}
+                    </span>
+                  </div>
+                )}
+                {minutesDemandDeadline && !Number.isNaN(minutesDemandDeadline.getTime()) && (
+                  <div className="mt-2 rounded-[12px] border border-orange-500/30 bg-orange-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-orange-300">
+                      Domaga się występów do {minutesDemandDeadline.toLocaleDateString('pl-PL')}
+                    </span>
+                  </div>
+                )}
+                {roleDemandDeadline && !Number.isNaN(roleDemandDeadline.getTime()) && playerMorale.requestedSquadRole && (
+                  <div className="mt-2 rounded-[12px] border border-violet-500/30 bg-violet-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-violet-300">
+                      Domaga się statusu: {playerMorale.requestedSquadRole === 'KEY_PLAYER' ? 'kluczowy zawodnik' : 'podstawowa jedenastka'} do {roleDemandDeadline.toLocaleDateString('pl-PL')}
+                    </span>
+                  </div>
+                )}
+                {moraleHistory.length > 0 && (
+                  <div className="mt-3 border-t border-white/5 pt-2">
+                    <span className="block mb-1.5 text-[7px] font-black italic uppercase tracking-tighter text-slate-500">Historia morale</span>
+                    <div className="flex flex-col gap-1">
+                      {moraleHistory.slice(0, 4).map(entry => (
+                        <div key={entry.id} className="flex items-start justify-between gap-2 rounded-[10px] bg-white/[0.025] px-2 py-1">
+                          <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400 leading-tight">{entry.reason}</span>
+                          <span className={`shrink-0 text-[8px] font-black italic tracking-tighter ${entry.delta >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                            {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
 <button 
@@ -704,6 +794,56 @@ export const PlayerCard: React.FC = () => {
         </div>
       </div>
 
+      {isTalkPanelOpen && (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setIsTalkPanelOpen(false)}>
+          <div className="w-[620px] max-w-[92vw] bg-slate-950/95 border border-white/10 rounded-[28px] shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="text-[9px] font-black italic uppercase tracking-tighter text-emerald-400">Indywidualna rozmowa</div>
+                <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">
+                  {player.firstName} {player.lastName}
+                </h3>
+              </div>
+              <button onClick={() => setIsTalkPanelOpen(false)} className="w-8 h-8 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 font-black">
+                ×
+              </button>
+            </div>
+
+            {!canTalk && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] font-black italic uppercase tracking-tighter mb-4">
+                Kolejna rozmowa będzie możliwa {nextTalkDate ? nextTalkDate.toLocaleDateString('pl-PL') : 'za kilka dni'}.
+              </div>
+            )}
+
+            {talkResult && (
+              <div className={`p-4 rounded-2xl border mb-4 ${talkResult.isPositive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
+                <div className="text-[9px] font-black italic uppercase tracking-tighter mb-1">
+                  {talkResult.isPositive ? 'Reakcja pozytywna' : 'Reakcja negatywna'}
+                </div>
+                <p className="text-[11px] font-black italic uppercase tracking-tighter leading-relaxed">{talkResult.reactionText}</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {INDIVIDUAL_TALK_OPTIONS.map(option => (
+                <button
+                  key={option.type}
+                  disabled={!canTalk || !!talkResult}
+                  onClick={() => handleIndividualTalk(option.type)}
+                  className={`text-left p-4 rounded-2xl border transition-all active:scale-95
+                    ${!canTalk || !!talkResult
+                      ? 'bg-slate-900 border-slate-800 opacity-50 cursor-not-allowed'
+                      : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06] hover:border-emerald-500/30'}`}
+                >
+                  <span className="block text-[11px] font-black italic uppercase tracking-tighter text-white mb-1">{option.title}</span>
+                  <span className="block text-[10px] font-medium text-slate-500 leading-snug">{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -715,5 +855,3 @@ export const PlayerCard: React.FC = () => {
     </div>
   );
 };
-
-

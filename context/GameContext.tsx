@@ -3,7 +3,7 @@ import {
   ViewState, Club, League, Player, Lineup, Fixture, FinanceLog,
   SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
-Coach, TrainingIntensity,
+Coach, TrainingIntensity, IndividualTalkType,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
 HealthStatus, InjurySeverity,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
@@ -66,6 +66,7 @@ import { isRecoveryFocusReady } from '../services/MatchPrepFocusService';
 import { MailService, SeasonSummaryData } from '../services/MailService';
 import { TrainingService } from '../services/TrainingService';
 import { TrainingAssistantService } from '../services/TrainingAssistantService';
+import { AiWeeklyTrainingService } from '../services/AiWeeklyTrainingService';
 import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
@@ -107,6 +108,7 @@ import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
 import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
 import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion } from '../services/NationalityService';
+import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -358,6 +360,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   refreshScoutMarket: () => void;
   scoutMarketRefreshDate: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
+  conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
   winterCampInvitePending: boolean;
   winterCampProgramPending: boolean;
   clearWinterCampInvitePending: () => void;
@@ -592,58 +595,59 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
 
 const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (players[clubId]) return players[clubId];
+    const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
 
     // Sprawdź czy to klub europejski (CL)
     const rawCL = RAW_CHAMPIONS_LEAGUE_CLUBS.find(c => generateEuropeanClubId(c.name) === clubId);
     if (rawCL) {
-        const newSquad = SquadGeneratorService.generateEuropeanSquad(clubId, rawCL.tier, rawCL.reputation, rawCL.country);
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCL.tier, rawCL.reputation, rawCL.country));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawEL = RAW_EUROPA_LEAGUE_CLUBS.find(c => generateELClubId(c.name) === clubId);
     if (rawEL) {
-        const newSquad = SquadGeneratorService.generateEuropeanSquad(clubId, rawEL.tier, rawEL.reputation, rawEL.country);
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawEL.tier, rawEL.reputation, rawEL.country));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawCONF = RAW_CONFERENCE_LEAGUE_CLUBS.find(c => generateCONFClubId(c.name) === clubId);
     if (rawCONF) {
-        const newSquad = SquadGeneratorService.generateEuropeanSquad(clubId, rawCONF.tier, rawCONF.reputation, rawCONF.country);
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCONF.tier, rawCONF.reputation, rawCONF.country));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawSA = CLUBS_SOUTH_AMERICA.find(c => generateSAClubId(c.name) === clubId);
     if (rawSA) {
-        const newSquad = SquadGeneratorService.generateSouthAmericanSquad(clubId, rawSA.tier, rawSA.reputation, rawSA.country);
+        const newSquad = withMoraleState(SquadGeneratorService.generateSouthAmericanSquad(clubId, rawSA.tier, rawSA.reputation, rawSA.country));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawAsian = CLUBS_ASIAN.find(c => generateAsianClubId(c.name) === clubId);
     if (rawAsian) {
-        const newSquad = SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAsian.tier, rawAsian.reputation, rawAsian.country, 'Asia');
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAsian.tier, rawAsian.reputation, rawAsian.country, 'Asia'));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawAfrican = CLUBS_AFRICAN.find(c => generateAfricanClubId(c.name) === clubId);
     if (rawAfrican) {
-        const newSquad = SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAfrican.tier, rawAfrican.reputation, rawAfrican.country, 'Africa');
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAfrican.tier, rawAfrican.reputation, rawAfrican.country, 'Africa'));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
     const rawNorthAmerica = CLUBS_NORTH_AMERICA.find(c => generateNorthAmericaClubId(c.name) === clubId);
     if (rawNorthAmerica) {
-        const newSquad = SquadGeneratorService.generateIntercontinentalSquad(clubId, rawNorthAmerica.tier, rawNorthAmerica.reputation, rawNorthAmerica.country, 'North America');
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawNorthAmerica.tier, rawNorthAmerica.reputation, rawNorthAmerica.country, 'North America'));
         setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
         return newSquad;
     }
 
-    const newSquad = SquadGeneratorService.generateSquadForClub(clubId);
+    const newSquad = withMoraleState(SquadGeneratorService.generateSquadForClub(clubId));
     setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
     return newSquad;
 }, [players]);
@@ -1589,7 +1593,7 @@ setMessages([welcomeMail, fanMail]);
     if (simulation.aiTransferLogEntries && simulation.aiTransferLogEntries.length > 0) {
       setAiTransferLog(prev => [...simulation.aiTransferLogEntries!, ...prev].slice(0, 1000));
     }
-    setClubs(simulation.updatedClubs);
+    let finalClubs = simulation.updatedClubs;
     
    let finalPlayers = simulation.updatedPlayers;
 
@@ -1608,7 +1612,7 @@ setMessages([welcomeMail, fanMail]);
 
     if (userTeamId) {
       // TUTAJ WSTAW TEN KOD
-      const userClub = simulation.updatedClubs.find(c => c.id === userTeamId);
+      const userClub = finalClubs.find(c => c.id === userTeamId);
       const tier = parseInt(userClub?.leagueId.split('_')[2] || '1');
       
       finalPlayers = TrainingService.processTrainingEffects(
@@ -1645,10 +1649,11 @@ setMessages([welcomeMail, fanMail]);
           tier,
           userClub?.country
         );
-        setReserves(updatedReserves);
-        if (updatedReserves.length > 0) {
+        const reviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
+        setReserves(reviewedReserves);
+        if (reviewedReserves.length > 0) {
           const avgOvrRes = Math.round(
-            updatedReserves.reduce((sum, p) => sum + p.overallRating, 0) / updatedReserves.length
+            reviewedReserves.reduce((sum, p) => sum + p.overallRating, 0) / reviewedReserves.length
           );
           setReserveProgressHistory(prev => [
             ...prev.slice(-19),
@@ -1657,6 +1662,18 @@ setMessages([welcomeMail, fanMail]);
         }
       }
     }
+
+    const aiTrainingUpdate = AiWeeklyTrainingService.processWeeklyTraining(
+      finalPlayers,
+      finalClubs,
+      coaches,
+      userTeamId,
+      currentDate,
+      simulation.updatedFixtures,
+      sessionSeed
+    );
+    finalPlayers = aiTrainingUpdate.updatedPlayers;
+    finalClubs = aiTrainingUpdate.updatedClubs;
 
     const userSquadBeforeTrainingInjuries = userTeamId ? (finalPlayers[userTeamId] || []) : [];
 
@@ -1677,6 +1694,30 @@ setMessages([welcomeMail, fanMail]);
 
       if (trainingInjuryMails.length > 0) {
         setMessages(prev => [...trainingInjuryMails, ...prev]);
+      }
+    }
+
+    setClubs(finalClubs);
+
+    finalPlayers = Object.fromEntries(
+      Object.entries(finalPlayers).map(([clubId, squad]) => [
+        clubId,
+        PlayerMoraleService.processPeriodicReview(squad, currentDate),
+      ])
+    );
+
+    if (userTeamId) {
+      const userClub = finalClubs.find(c => c.id === userTeamId);
+      const userSquad = finalPlayers[userTeamId] || [];
+      if (userClub && userSquad.length > 0) {
+        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: demandResult.players,
+        };
+        if (demandResult.mails.length > 0) {
+          prependUniqueMessages(demandResult.mails);
+        }
       }
     }
 
@@ -1730,7 +1771,7 @@ setMessages([welcomeMail, fanMail]);
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument
@@ -2258,6 +2299,51 @@ setMessages([welcomeMail, fanMail]);
       };
     }));
   }, [userTeamId, currentDate]);
+
+  const conductIndividualTalk = useCallback((playerId: string, talkType: IndividualTalkType): IndividualTalkResult | null => {
+    if (!userTeamId) return null;
+
+    const todayIso = currentDate.toISOString().split('T')[0];
+    const seed = (sessionSeed ?? 1) + currentDate.getTime();
+    const promiseDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 21).toISOString().split('T')[0];
+    const firstTeamPlayer = (players[userTeamId] || []).find(p => p.id === playerId);
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    const target = firstTeamPlayer ?? reservePlayer;
+
+    if (!target) return null;
+
+    const withMorale = PlayerMoraleService.ensurePlayerState(target);
+    if (!PlayerMoraleService.canTalk(withMorale, currentDate)) return null;
+
+    const result = PlayerMoraleService.calculateTalkResult(withMorale, talkType, currentDate, seed);
+    const withTalkHistory = PlayerMoraleService.withMoraleChange(
+      withMorale,
+      result.newMorale - (withMorale.morale ?? 50),
+      result.isPositive ? 'Indywidualna rozmowa z trenerem' : 'Nieudana rozmowa z trenerem',
+      currentDate
+    );
+    const updatedPlayer: Player = {
+      ...withTalkHistory,
+      lastIndividualTalkDate: todayIso,
+      promisedMinutesUntil: talkType === 'PROMISE_MINUTES'
+        ? promiseDate
+        : withTalkHistory.promisedMinutesUntil ?? null,
+      promisedMinutesBaseline: talkType === 'PROMISE_MINUTES'
+        ? PlayerMoraleService.getTotalMinutesPlayed(withTalkHistory)
+        : withTalkHistory.promisedMinutesBaseline ?? null,
+    };
+
+    if (firstTeamPlayer) {
+      setPlayers(prev => ({
+        ...prev,
+        [userTeamId]: (prev[userTeamId] || []).map(p => p.id === playerId ? updatedPlayer : p),
+      }));
+    } else {
+      setReserves(prev => prev.map(p => p.id === playerId ? updatedPlayer : p));
+    }
+
+    return result;
+  }, [currentDate, players, reserves, sessionSeed, userTeamId]);
 
   const ensureWinterCampInviteState = useCallback((baseDate: Date = currentDate) => {
     if (!userTeamId) return;
@@ -6724,7 +6810,7 @@ const finalResult: SimulationOutput = {
         const salary = p.annualSalary ?? Math.round(overall * 800);
         const mval = p.marketValue ?? Math.round(overall * 3000);
         const id = `IMPORT_${clubId}_${idx}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-        return {
+        return PlayerMoraleService.ensurePlayerState({
           id, firstName: p.firstName, lastName: p.lastName, age: p.age,
           clubId, nationality: nat, nationalityCountry: country,
           position: p.position, overallRating: overall, attributes: attrs,
@@ -6737,7 +6823,7 @@ const finalResult: SimulationOutput = {
           negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
           fatigueDebt: 0, isNegotiationPermanentBlocked: false,
           transferLockoutUntil: null, freeAgentLockoutUntil: null,
-        } as Player;
+        } as Player);
       });
       newPlayersChunk[clubId] = squad;
       const coach = Object.values(coaches).find(c => c.clubId === clubId) ?? null;
@@ -8186,7 +8272,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
-    applyWeeklyMotivation,
+    applyWeeklyMotivation, conductIndividualTalk,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,

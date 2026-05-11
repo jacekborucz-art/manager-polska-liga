@@ -1,5 +1,6 @@
 import { Lineup, Player, PlayerPosition, Tactic, InjurySeverity, HealthStatus, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 const FAVORITE_TACTIC_MAP: Record<string, string> = {
   '4-3-3 Atak':         '4-3-3',
@@ -38,6 +39,13 @@ const checkTacticFeasibility = (players: Player[], tacticId: string): boolean =>
   return Object.entries(required).every(([pos, count]) => (available[pos] || 0) >= count);
 };
 
+const getSelectionScore = (player: Player): number => {
+  const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+  const moraleScore = PlayerMoraleService.getEffectiveOverall(moralePlayer);
+  const roleBonus = player.squadRole === 'KEY_PLAYER' ? 1.2 : player.squadRole === 'STARTER' ? 0.7 : 0;
+  return moraleScore + roleBonus;
+};
+
 export const LineupService = {
   /**
    * Deterministyczny wybór składu.
@@ -68,7 +76,7 @@ export const LineupService = {
     );
         const COND_XI    = 90;
     const COND_BENCH = 85;
-    const sortedAll   = [...availablePlayers].sort((a, b) => b.overallRating - a.overallRating);
+    const sortedAll   = [...availablePlayers].sort((a, b) => getSelectionScore(b) - getSelectionScore(a));
     const poolXI      = sortedAll.filter(p => p.condition >= COND_XI);
     const poolBench   = sortedAll.filter(p => p.condition >= COND_BENCH && p.condition < COND_XI);
     const poolRest    = sortedAll.filter(p => p.condition < COND_BENCH);
@@ -157,22 +165,23 @@ export const LineupService = {
     const attr = player.attributes;
     const isGkPlayer = player.position === PlayerPosition.GK;
     const isGkRole = role === PlayerPosition.GK;
+    const moraleFit = (PlayerMoraleService.getMatchMultiplier(PlayerMoraleService.ensurePlayerState(player)) - 1) * 8;
 
     if ((isGkPlayer && !isGkRole) || (!isGkPlayer && isGkRole)) {
-      return -2000 + player.overallRating;
+      return -2000 + getSelectionScore(player);
     }
 
     switch (role) {
       case PlayerPosition.GK:
-        return attr.goalkeeping * 2 + attr.positioning;
+        return attr.goalkeeping * 2 + attr.positioning + moraleFit;
       case PlayerPosition.DEF:
-        return attr.defending * 1.5 + attr.strength + attr.positioning;
+        return attr.defending * 1.5 + attr.strength + attr.positioning + moraleFit;
       case PlayerPosition.MID:
-        return attr.passing * 1.2 + attr.vision + attr.technique;
+        return attr.passing * 1.2 + attr.vision + attr.technique + moraleFit;
       case PlayerPosition.FWD:
-        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5;
+        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5 + moraleFit;
       default:
-        return player.overallRating;
+        return getSelectionScore(player);
     }
   },
 
@@ -186,8 +195,8 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     const canPlay = (p: Player) => (p.suspensionMatches || 0) === 0 && p.condition >= 60 && (p.health.status !== HealthStatus.INJURED || p.health.injury?.severity !== InjurySeverity.SEVERE);
     
     const allAvailable = players.filter(canPlay);
-    const freshPool = allAvailable.filter(p => p.condition >= AI_FRESH_THRESHOLD).sort((a,b) => b.overallRating - a.overallRating);
-    const tiredPool = allAvailable.filter(p => p.condition < AI_FRESH_THRESHOLD).sort((a,b) => b.overallRating - a.overallRating);
+    const freshPool = allAvailable.filter(p => p.condition >= AI_FRESH_THRESHOLD).sort((a,b) => getSelectionScore(b) - getSelectionScore(a));
+    const tiredPool = allAvailable.filter(p => p.condition < AI_FRESH_THRESHOLD).sort((a,b) => getSelectionScore(b) - getSelectionScore(a));
     
     let usedIds = new Set<string>();
     const newXI: (string | null)[] = new Array(11).fill(null);
