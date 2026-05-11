@@ -416,8 +416,8 @@ const getPositionalDisorder = (
 const checkShootoutWinner = (
   seq: NonNullable<MatchLiveState['penaltySequence']>
 ): 'HOME' | 'AWAY' | null => {
-  const homeShots = seq.filter((_, i) => i % 2 === 0);
-  const awayShots = seq.filter((_, i) => i % 2 === 1);
+  const homeShots = seq.filter(s => s.side === 'HOME');
+  const awayShots = seq.filter(s => s.side === 'AWAY');
   const homeScored = homeShots.filter(s => s.result === 'SCORED').length;
   const awayScored = awayShots.filter(s => s.result === 'SCORED').length;
   const homeTaken = homeShots.length;
@@ -432,16 +432,13 @@ const checkShootoutWinner = (
     return null;
   }
 
-  if (homeTaken >= 5 && awayTaken >= 5) {
+  if (homeTaken >= 5 && awayTaken >= 5 && homeTaken === awayTaken) {
     if (homeScored !== awayScored) return homeScored > awayScored ? 'HOME' : 'AWAY';
 
-    const extraRoundsCompleted = Math.floor((seq.length - 10) / 2);
-    for (let round = 0; round <= extraRoundsCompleted; round++) {
-      const homeIndex = 10 + round * 2;
-      const awayIndex = 11 + round * 2;
-      if (homeIndex < seq.length && awayIndex < seq.length) {
-        const homeResult = seq[homeIndex].result;
-        const awayResult = seq[awayIndex].result;
+    for (let round = 5; round < homeTaken; round++) {
+      const homeResult = homeShots[round]?.result;
+      const awayResult = awayShots[round]?.result;
+      if (homeResult && awayResult) {
         if (homeResult === 'SCORED' && awayResult === 'MISSED') return 'HOME';
         if (awayResult === 'SCORED' && homeResult === 'MISSED') return 'AWAY';
       }
@@ -449,6 +446,14 @@ const checkShootoutWinner = (
   }
 
   return null;
+};
+
+const getNextShootoutSide = (
+  seq: NonNullable<MatchLiveState['penaltySequence']>
+): 'HOME' | 'AWAY' => {
+  const homeTaken = seq.filter(s => s.side === 'HOME').length;
+  const awayTaken = seq.filter(s => s.side === 'AWAY').length;
+  return homeTaken <= awayTaken ? 'HOME' : 'AWAY';
 };
 
 const getPenaltyDisplayName = (player: Player) => `${player.firstName} ${player.lastName}`;
@@ -1014,7 +1019,7 @@ useEffect(() => {
         }
 
         const currentRound = penaltySequence.length;
-        const side: 'HOME' | 'AWAY' = (currentRound % 2 === 0) ? 'HOME' : 'AWAY';
+        const side = getNextShootoutSide(penaltySequence);
         const shootoutTeamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
         const shootoutLineup = side === 'HOME' ? prev.homeLineup : prev.awayLineup;
         const injuries = side === 'HOME' ? prev.homeInjuries : prev.awayInjuries;
