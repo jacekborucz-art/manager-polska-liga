@@ -357,17 +357,17 @@ const ReservePlayerKitFigure: React.FC<{ shirtColor: string; shortsColor: string
         clipPath: 'polygon(24% 0, 76% 0, 100% 22%, 86% 48%, 78% 36%, 78% 100%, 22% 100%, 22% 36%, 14% 48%, 0 22%)',
       }}
     />
-    <span className="absolute bottom-1 left-1/2 h-[19px] w-[35px] -translate-x-1/2">
+    <span className="absolute bottom-1 left-1/2 h-[19px] w-[25px] -translate-x-1/2">
       <span
         className="absolute left-0 top-0 h-1.5 w-full border border-white/15"
         style={{ background: shortsColor }}
       />
       <span
-        className="absolute bottom-0 left-0 h-3.5 w-[17px] border border-white/15"
+        className="absolute bottom-0 left-0 h-3.5 w-3 border border-white/15"
         style={{ background: shortsColor }}
       />
       <span
-        className="absolute bottom-0 right-0 h-3.5 w-[17px] border border-white/15"
+        className="absolute bottom-0 right-0 h-3.5 w-3 border border-white/15"
         style={{ background: shortsColor }}
       />
     </span>
@@ -1135,17 +1135,17 @@ export const ReservesView: React.FC = () => {
                         >
                           {`${player.firstName[0]}${player.lastName[0]}`}
                         </span>
-                        <span className="absolute bottom-1 left-1/2 h-3 w-6 -translate-x-1/2 drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]">
+                        <span className="absolute bottom-1 left-1/2 h-3 w-4 -translate-x-1/2 drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]">
                           <span
                             className="absolute left-0 top-0 h-1 w-full border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]"
                             style={{ background: kit.shorts }}
                           />
                           <span
-                            className="absolute bottom-0 left-0 h-2 w-[11px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
+                            className="absolute bottom-0 left-0 h-2 w-[7px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
                             style={{ background: kit.shorts }}
                           />
                           <span
-                            className="absolute bottom-0 right-0 h-2 w-[11px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
+                            className="absolute bottom-0 right-0 h-2 w-[7px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
                             style={{ background: kit.shorts }}
                           />
                         </span>
