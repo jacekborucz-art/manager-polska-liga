@@ -6,6 +6,7 @@ import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { ReserveScheduleModal } from '../modals/ReserveScheduleModal';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
+import { TacticRepository } from '../../resources/tactics_db';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -14,12 +15,7 @@ const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.FWD]: 'NAP',
 };
 
-const POSITION_ROW_BG: Record<PlayerPosition, string> = {
-  [PlayerPosition.GK]: 'bg-yellow-900/40',
-  [PlayerPosition.DEF]: 'bg-blue-900/40',
-  [PlayerPosition.MID]: 'bg-emerald-900/40',
-  [PlayerPosition.FWD]: 'bg-red-900/40',
-};
+const RESERVE_ROW_BG = 'bg-slate-950/35';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -27,6 +23,8 @@ const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'goalkeeping', 'freeKicks', 'talent', 'penalties', 'corners', 'aggression',
   'crossing', 'leadership', 'mentality', 'workRate',
 ];
+
+const RESERVE_TABLE_COLUMN_COUNT = ATTR_KEYS.length + 4;
 
 const RESERVE_PROGRESS_ATTR_KEYS = ATTR_KEYS.filter(key => !['talent', 'leadership'].includes(key));
 
@@ -102,10 +100,47 @@ const POSITION_FULL_NAME: Record<PlayerPosition, string> = {
 };
 
 const POSITION_BADGE_STYLE: Record<PlayerPosition, string> = {
-  [PlayerPosition.GK]:  'bg-yellow-500/20 border border-yellow-500/60 text-yellow-300',
-  [PlayerPosition.DEF]: 'bg-blue-500/20 border border-blue-500/60 text-blue-300',
-  [PlayerPosition.MID]: 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300',
-  [PlayerPosition.FWD]: 'bg-red-500/20 border border-red-500/60 text-red-300',
+  [PlayerPosition.GK]:  'border border-yellow-300/70 bg-[radial-gradient(circle_at_35%_25%,rgba(254,240,138,0.75),rgba(234,179,8,0.32)_42%,rgba(113,63,18,0.82)_100%)] text-yellow-50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),inset_0_-3px_6px_rgba(0,0,0,0.42),0_3px_0_rgba(113,63,18,0.8),0_7px_12px_rgba(0,0,0,0.45)]',
+  [PlayerPosition.DEF]: 'border border-blue-300/70 bg-[radial-gradient(circle_at_35%_25%,rgba(147,197,253,0.85),rgba(37,99,235,0.42)_42%,rgba(30,58,138,0.86)_100%)] text-blue-50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-3px_6px_rgba(0,0,0,0.42),0_3px_0_rgba(30,58,138,0.85),0_7px_12px_rgba(0,0,0,0.45)]',
+  [PlayerPosition.MID]: 'border border-emerald-300/70 bg-[radial-gradient(circle_at_35%_25%,rgba(110,231,183,0.85),rgba(16,185,129,0.42)_42%,rgba(6,95,70,0.86)_100%)] text-emerald-50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-3px_6px_rgba(0,0,0,0.42),0_3px_0_rgba(6,95,70,0.85),0_7px_12px_rgba(0,0,0,0.45)]',
+  [PlayerPosition.FWD]: 'border border-red-300/70 bg-[radial-gradient(circle_at_35%_25%,rgba(252,165,165,0.88),rgba(239,68,68,0.45)_42%,rgba(127,29,29,0.88)_100%)] text-red-50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-3px_6px_rgba(0,0,0,0.42),0_3px_0_rgba(127,29,29,0.85),0_7px_12px_rgba(0,0,0,0.45)]',
+};
+
+const GOALKEEPER_KIT_COLORS = ['#16a34a', '#facc15', '#ec4899', '#dc2626', '#14b8a6', '#d6b48c', '#f97316'];
+
+const parseHexColor = (color?: string): [number, number, number] | null => {
+  if (!color?.startsWith('#')) return null;
+  const hex = color.slice(1);
+  if (![3, 6].includes(hex.length)) return null;
+  const normalized = hex.length === 3 ? hex.split('').map(char => char + char).join('') : hex;
+  const value = Number.parseInt(normalized, 16);
+  if (Number.isNaN(value)) return null;
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+};
+
+const getColorDistance = (a: string, b: string): number => {
+  const first = parseHexColor(a);
+  const second = parseHexColor(b);
+  if (!first || !second) return 0;
+  return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+};
+
+const pickContrastingGoalkeeperKitColor = (fieldKitColors: string[]): string => {
+  const validFieldColors = fieldKitColors.filter(color => Boolean(parseHexColor(color)));
+  if (!validFieldColors.length) return GOALKEEPER_KIT_COLORS[0];
+
+  return GOALKEEPER_KIT_COLORS.reduce((best, color) => {
+    const colorScore = Math.min(...validFieldColors.map(fieldColor => getColorDistance(color, fieldColor)));
+    const bestScore = Math.min(...validFieldColors.map(fieldColor => getColorDistance(best, fieldColor)));
+    return colorScore > bestScore ? color : best;
+  }, GOALKEEPER_KIT_COLORS[0]);
+};
+
+const getReadableBadgeTextColor = (colors: string[]): string => {
+  const parsed = colors.map(parseHexColor).filter((color): color is [number, number, number] => Boolean(color));
+  if (!parsed.length) return '#ffffff';
+  const avgLuminance = parsed.reduce((sum, [r, g, b]) => sum + (0.2126 * r + 0.7152 * g + 0.0722 * b), 0) / parsed.length;
+  return avgLuminance > 168 ? '#0f172a' : '#ffffff';
 };
 
 const POS_PRAISE: Record<PlayerPosition, string[]> = {
@@ -233,6 +268,112 @@ const formatProgressShortDate = (date: string): string => {
   });
 };
 
+const formatReservePanelDate = (date: string): string => {
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+
+  return parsed.toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: '2-digit',
+  });
+};
+
+const getReserveResultDisplay = (result: { isUserHome: boolean; homeScore: number; awayScore: number }) => {
+  const userScore = result.isUserHome ? result.homeScore : result.awayScore;
+  const opponentScore = result.isUserHome ? result.awayScore : result.homeScore;
+  const colorClass = userScore > opponentScore
+    ? 'text-emerald-300'
+    : userScore === opponentScore
+    ? 'text-amber-300'
+    : 'text-rose-300';
+
+  return {
+    label: `${userScore}:${opponentScore}`,
+    colorClass,
+  };
+};
+
+const getReserveAverageRating = (player: Player): number => {
+  const reserveStats = player.reserveStats;
+  if (reserveStats?.matches) return reserveStats.totalRatingPoints / reserveStats.matches;
+
+  const ratings = player.stats.ratingHistory ?? [];
+  if (!ratings.length) return 0;
+  return ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+};
+
+const getReserveTopPlayerScore = (player: Player): number => (
+  player.overallRating + getReserveAverageRating(player) * 10 + player.attributes.talent
+);
+
+const getReserveDevTotal = (player: Player): number => (
+  Object.values(player.stats.seasonalChanges ?? {}).reduce((sum, value) => sum + value, 0)
+);
+
+const getFirstTeamReadiness = (player: Player): { label: string; colorClass: string; score: number } => {
+  const score = (
+    player.overallRating
+    + player.attributes.talent * 0.45
+    + Math.max(0, getReserveAverageRating(player) - 6) * 8
+    + Math.max(0, getReserveDevTotal(player)) * 0.15
+  );
+
+  if (score >= 118 || player.overallRating >= 66) {
+    return { label: 'Gotowy', colorClass: 'text-emerald-300', score };
+  }
+
+  if (score >= 108 || player.overallRating >= 62) {
+    return { label: 'Blisko', colorClass: 'text-amber-300', score };
+  }
+
+  return { label: 'Obserwuj', colorClass: 'text-blue-300', score };
+};
+
+const resolveReserveTactic = (tacticNameOrId?: string | null) => {
+  const allTactics = TacticRepository.getAll();
+  return allTactics.find(tactic => tactic.id === tacticNameOrId || tactic.name === tacticNameOrId)
+    ?? TacticRepository.getDefault();
+};
+
+const pickReservePitchLineup = (players: Player[], tactic = TacticRepository.getDefault()) => {
+  const available = [...players].sort((a, b) => b.overallRating - a.overallRating);
+  const used = new Set<string>();
+
+  return tactic.slots.map(slot => {
+    const preferred = available.find(player => !used.has(player.id) && player.position === slot.role);
+    const fallback = available.find(player => !used.has(player.id));
+    const player = preferred ?? fallback ?? null;
+    if (player) used.add(player.id);
+    return { slot, player };
+  });
+};
+
+const ReservePlayerKitFigure: React.FC<{ shirtColor: string; shortsColor: string }> = ({ shirtColor, shortsColor }) => (
+  <span className="relative block h-16 w-16" aria-hidden="true">
+    <span
+      className="absolute left-1/2 top-1 flex h-[39px] w-[50px] -translate-x-1/2 border border-white/20"
+      style={{
+        background: shirtColor,
+        clipPath: 'polygon(24% 0, 76% 0, 100% 22%, 86% 48%, 78% 36%, 78% 100%, 22% 100%, 22% 36%, 14% 48%, 0 22%)',
+      }}
+    />
+    <span className="absolute bottom-1 left-1/2 h-[19px] w-[35px] -translate-x-1/2">
+      <span
+        className="absolute left-0 top-0 h-1.5 w-full border border-white/15"
+        style={{ background: shortsColor }}
+      />
+      <span
+        className="absolute bottom-0 left-0 h-3.5 w-[17px] border border-white/15"
+        style={{ background: shortsColor }}
+      />
+      <span
+        className="absolute bottom-0 right-0 h-3.5 w-[17px] border border-white/15"
+        style={{ background: shortsColor }}
+      />
+    </span>
+  </span>
+);
+
 const normalizeReserveProgressHistory = (
   history: ReserveProgressPoint[],
   currentDate: Date
@@ -346,7 +487,8 @@ function generateCoachReport(players: Player[], seed: number): CoachReport {
 export const ReservesView: React.FC = () => {
   const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, currentDate, seasonNumber,
           players, setPlayers, setReserves, lineups, updateLineup,
-          coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory } = useGame();
+          coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory,
+          reserveFixtures, reserveMatchResults } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -399,6 +541,144 @@ export const ReservesView: React.FC = () => {
     });
   }, [reserves]);
 
+  const reserveTactic = useMemo(
+    () => resolveReserveTactic(reserveCoach?.favoriteTactics.neutral ?? reserveCoach?.favoriteTactics.offensive),
+    [reserveCoach]
+  );
+
+  const projectedReserveLineup = useMemo(
+    () => pickReservePitchLineup(sortedReserves, reserveTactic),
+    [sortedReserves, reserveTactic]
+  );
+
+  const reserveFieldKitColors = useMemo(() => {
+    const fieldPlayer = projectedReserveLineup.find(({ slot, player }) => (
+      player && slot.role !== PlayerPosition.GK && player.position !== PlayerPosition.GK
+    ))?.player;
+    const fieldClub = clubs.find(club => club.id === fieldPlayer?.clubId)
+      ?? clubs.find(club => club.id === userTeamId);
+
+    return [fieldClub?.colorsHex?.[0], fieldClub?.colorsHex?.[1]].filter((color): color is string => Boolean(color));
+  }, [clubs, projectedReserveLineup, userTeamId]);
+
+  const reserveGoalkeeperKitColor = useMemo(
+    () => pickContrastingGoalkeeperKitColor(reserveFieldKitColors),
+    [reserveFieldKitColors]
+  );
+
+  const getPitchPlayerKitColors = (player: Player) => {
+    const playerClub = clubs.find(club => club.id === player.clubId)
+      ?? clubs.find(club => club.id === userTeamId);
+    const primary = playerClub?.colorsHex?.[0] ?? '#111827';
+    const secondary = playerClub?.colorsHex?.[1] ?? primary;
+    const isGoalkeeper = player.position === PlayerPosition.GK;
+    const shirt = isGoalkeeper ? reserveGoalkeeperKitColor : primary;
+    const shorts = isGoalkeeper ? reserveGoalkeeperKitColor : secondary;
+
+    return {
+      shirt,
+      shorts,
+      text: getReadableBadgeTextColor([shirt]),
+    };
+  };
+
+  const seasonReserveFixtures = useMemo(() => (
+    reserveFixtures.filter(fixture => {
+      const result = fixture.resultId ? reserveMatchResults.find(match => match.id === fixture.resultId) : null;
+      return !result || result.season === seasonNumber || fixture.id.includes(`_${seasonNumber}_`);
+    })
+  ), [reserveFixtures, reserveMatchResults, seasonNumber]);
+
+  const reservePanelMatches = useMemo(() => {
+    const withResults = seasonReserveFixtures
+      .map(fixture => ({
+        fixture,
+        result: fixture.resultId ? reserveMatchResults.find(match => match.id === fixture.resultId) ?? null : null,
+      }));
+
+    const played = withResults
+      .filter(item => item.result)
+      .sort((a, b) => new Date(b.result?.date ?? b.fixture.date).getTime() - new Date(a.result?.date ?? a.fixture.date).getTime())
+      .slice(0, 5);
+
+    const upcoming = withResults
+      .filter(item => !item.result && new Date(item.fixture.date).getTime() >= currentDate.getTime())
+      .sort((a, b) => new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime())
+      .slice(0, 3);
+
+    return { played, upcoming };
+  }, [currentDate, reserveMatchResults, seasonReserveFixtures]);
+
+  const reserveHighlights = useMemo(() => {
+    const topPlayers = [...reserves]
+      .sort((a, b) => getReserveTopPlayerScore(b) - getReserveTopPlayerScore(a))
+      .slice(0, 3);
+
+    const topScorer = [...reserves]
+      .sort((a, b) => (b.reserveStats?.goals ?? 0) - (a.reserveStats?.goals ?? 0) || b.overallRating - a.overallRating)[0] ?? null;
+    const topAssistant = [...reserves]
+      .sort((a, b) => (b.reserveStats?.assists ?? 0) - (a.reserveStats?.assists ?? 0) || b.overallRating - a.overallRating)[0] ?? null;
+    const topRated = [...reserves]
+      .filter(player => getReserveAverageRating(player) > 0)
+      .sort((a, b) => getReserveAverageRating(b) - getReserveAverageRating(a) || b.overallRating - a.overallRating)[0] ?? null;
+    const progressPlayers = [...reserves]
+      .map(player => ({ player, dev: getReserveDevTotal(player) }))
+      .filter(item => item.dev > 0)
+      .sort((a, b) => (
+        b.dev - a.dev
+        || b.player.attributes.talent - a.player.attributes.talent
+        || b.player.overallRating - a.player.overallRating
+      ))
+      .slice(0, 3);
+    const firstTeamReady = [...reserves]
+      .map(player => ({ player, readiness: getFirstTeamReadiness(player) }))
+      .sort((a, b) => b.readiness.score - a.readiness.score || b.player.overallRating - a.player.overallRating)
+      .slice(0, 3);
+
+    return {
+      topPlayers,
+      topScorer: topScorer && (topScorer.reserveStats?.goals ?? 0) > 0 ? topScorer : null,
+      topAssistant: topAssistant && (topAssistant.reserveStats?.assists ?? 0) > 0 ? topAssistant : null,
+      topRated,
+      progressPlayers,
+      firstTeamReady,
+    };
+  }, [reserves]);
+
+  const reserveAverageProfile = useMemo(() => {
+    if (reserves.length === 0) {
+      return {
+        age: 0,
+        overall: 0,
+        talent: 0,
+        rating: 0,
+        dev: 0,
+      };
+    }
+
+    const totals = reserves.reduce((sum, player) => ({
+      age: sum.age + player.age,
+      overall: sum.overall + player.overallRating,
+      talent: sum.talent + player.attributes.talent,
+      rating: sum.rating + getReserveAverageRating(player),
+      dev: sum.dev + getReserveDevTotal(player),
+    }), {
+      age: 0,
+      overall: 0,
+      talent: 0,
+      rating: 0,
+      dev: 0,
+    });
+
+    return {
+      age: totals.age / reserves.length,
+      overall: totals.overall / reserves.length,
+      talent: totals.talent / reserves.length,
+      rating: totals.rating / reserves.length,
+      dev: totals.dev / reserves.length,
+    };
+  }, [reserves]);
+
   const reserveProgressPoints = useMemo(
     () => normalizeReserveProgressHistory(reserveProgressHistory, currentDate),
     [reserveProgressHistory, currentDate]
@@ -444,6 +724,71 @@ export const ReservesView: React.FC = () => {
   const reserveProgressDiff = latestReserveProgress && previousReserveProgress
     ? latestReserveProgress.overall - previousReserveProgress.overall
     : 0;
+
+  const getReserveHighlightKit = (player: Player | null) => {
+    const playerClub = player
+      ? clubs.find(club => club.id === player.clubId) ?? myClub
+      : myClub;
+    const shirtColor = playerClub?.colorsHex?.[0] ?? '#2563eb';
+    const shortsColor = playerClub?.colorsHex?.[1] ?? shirtColor;
+    return {
+      shirtColor,
+      shortsColor,
+    };
+  };
+
+  const renderReserveHighlightCard = (label: string, player: Player | null, details: string[] = []) => {
+    const kit = getReserveHighlightKit(player);
+
+    return (
+      <button
+        key={`${label}-${player?.id ?? 'empty'}`}
+        type="button"
+        disabled={!player}
+        onClick={() => player && viewPlayerDetails(player.id)}
+        className="group flex min-h-[118px] min-w-0 flex-col items-center justify-end rounded-lg border border-white/10 bg-white/[0.04] px-2 pb-2.5 pt-2 text-center transition-colors hover:border-blue-300/35 hover:bg-blue-500/10 disabled:cursor-default disabled:hover:border-white/10 disabled:hover:bg-white/[0.04]"
+      >
+        <p className="mb-1 font-black italic uppercase tracking-tighter text-[10px] text-blue-300">{label}</p>
+        <ReservePlayerKitFigure shirtColor={kit.shirtColor} shortsColor={kit.shortsColor} />
+        <p className="mt-1 max-w-full truncate font-black italic uppercase tracking-tighter text-[10px] leading-tight text-white">
+          {player ? `${player.firstName} ${player.lastName}` : 'Brak danych'}
+        </p>
+        {player && details.length > 0 && (
+          <div className="mt-1 flex max-w-full flex-wrap justify-center gap-x-2 gap-y-0.5">
+            {details.map(detail => (
+              <span key={detail} className="font-black italic uppercase tracking-tighter text-[9px] leading-none text-slate-400">
+                {detail}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  const renderReserveMiniRow = (
+    player: Player | null,
+    subLabel: string,
+    valueLabel: string,
+    valueColorClass = 'text-slate-300'
+  ) => (
+    <button
+      type="button"
+      disabled={!player}
+      onClick={() => player && viewPlayerDetails(player.id)}
+      className="grid min-h-[38px] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 rounded-md border border-white/10 bg-white/[0.035] px-2 py-1.5 text-left transition-colors hover:border-blue-300/35 hover:bg-blue-500/10 disabled:cursor-default disabled:hover:border-white/10 disabled:hover:bg-white/[0.035]"
+    >
+      <span className="truncate font-black italic uppercase tracking-tighter text-[10px] leading-none text-white">
+        {player ? `${player.firstName} ${player.lastName}` : 'Brak danych'}
+      </span>
+      <span className={`font-black italic uppercase tracking-tighter text-[10px] leading-none ${player ? valueColorClass : 'text-slate-500'}`}>
+        {player ? valueLabel : '-'}
+      </span>
+      <span className="truncate font-black italic uppercase tracking-tighter text-[9px] leading-none text-slate-500">
+        {player ? subLabel : ''}
+      </span>
+    </button>
+  );
 
   return (
     <>
@@ -538,30 +883,41 @@ export const ReservesView: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-slate-700">
-          <table className="w-full text-xs border-collapse">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_450px_360px]">
+        <div className="min-w-0 overflow-x-auto rounded-lg border border-slate-700 bg-slate-950/20">
+          <table className="w-max min-w-[1040px] border-collapse text-[10px]">
             <thead>
-              <tr className="bg-slate-800 text-slate-400 uppercase tracking-wider">
-                <th className="px-2 py-2 text-left sticky left-0 bg-slate-800 z-10 whitespace-nowrap">Poz</th>
-                <th className="px-2 py-2 text-left sticky left-[44px] bg-slate-800 z-10 whitespace-nowrap min-w-[130px]">Zawodnik</th>
+              <tr className="bg-slate-800 text-slate-400 uppercase tracking-tight">
+                <th className="px-1 py-1.5 text-left sticky left-0 bg-slate-800 z-10 whitespace-nowrap w-10">Poz</th>
+                <th className="px-1.5 py-1.5 text-left sticky left-10 bg-slate-800 z-10 whitespace-nowrap w-[194px]">Zawodnik</th>
                 {ATTR_KEYS.map(key => (
-                  <th key={key} title={ATTR_FULL_NAMES[key]} className="px-1 py-2 text-center whitespace-nowrap cursor-help">{ATTR_LABELS[key]}</th>
+                  <th key={key} title={ATTR_FULL_NAMES[key]} className="w-8 min-w-8 max-w-8 px-0 py-1.5 text-center font-black italic tracking-tighter text-[9px] whitespace-nowrap cursor-help">{ATTR_LABELS[key]}</th>
                 ))}
-                <th className="px-2 py-2 text-center whitespace-nowrap">Wiek</th>
-                <th className="px-2 py-2 text-center whitespace-nowrap text-emerald-400">DEV</th>
+                <th className="w-9 px-0 py-1.5 text-center font-black italic tracking-tighter text-[9px] whitespace-nowrap">Wiek</th>
+                <th className="w-9 px-0 py-1.5 text-center font-black italic tracking-tighter text-[9px] whitespace-nowrap text-emerald-400">DEV</th>
               </tr>
             </thead>
             <tbody>
-              {sortedReserves.map((player) => (
-                <tr
-                  key={player.id}
-                  className={`${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30 opacity-50' : POSITION_ROW_BG[player.position]} border-b border-slate-700/50 hover:brightness-110 transition-all cursor-pointer`}
+              {sortedReserves.map((player, index) => {
+                const isUnavailable = player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0;
+                const startsPositionGroup = index > 0 && sortedReserves[index - 1].position !== player.position;
+                const rowBg = isUnavailable ? 'bg-red-800/30' : RESERVE_ROW_BG;
+
+                return (
+                  <React.Fragment key={player.id}>
+                    {startsPositionGroup && (
+                      <tr aria-hidden="true">
+                        <td colSpan={RESERVE_TABLE_COLUMN_COUNT} className="h-px bg-white/20 p-0" />
+                      </tr>
+                    )}
+                    <tr
+                  className={`${rowBg} ${isUnavailable ? 'opacity-50' : ''} border-b border-slate-700/45 hover:bg-slate-900/55 transition-all cursor-pointer`}
                   onClick={() => viewPlayerDetails(player.id)}
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }}
                 >
-                  <td className={`px-1 py-1.5 sticky left-0 z-10 ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30' : POSITION_ROW_BG[player.position]}`}>
-                    <div className="relative group/pos w-8">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-center text-[8px] font-black italic leading-none tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
+                  <td className={`px-1 py-1 sticky left-0 z-10 ${rowBg}`}>
+                    <div className="relative group/pos w-7">
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-full text-center text-[7px] font-black italic leading-none tracking-tight ${POSITION_BADGE_STYLE[player.position]}`}>
                         {POSITION_LABEL[player.position]}
                       </div>
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 opacity-0 group-hover/pos:opacity-100 transition-opacity duration-150">
@@ -572,16 +928,16 @@ export const ReservesView: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className={`px-2 py-1.5 sticky left-[44px] z-10 whitespace-nowrap ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'bg-red-800/30' : POSITION_ROW_BG[player.position]}`}>
-                    <span className={`font-semibold italic tracking-tight uppercase text-[15px] ${player.health.status === HealthStatus.INJURED || player.suspensionMatches > 0 ? 'text-slate-400' : 'text-slate-100'}`}>{player.firstName} {player.lastName}</span>
+                  <td className={`px-1.5 py-1 sticky left-10 z-10 whitespace-nowrap w-[194px] max-w-[194px] ${rowBg}`}>
+                    <span title={`${player.firstName} ${player.lastName}`} className={`block max-w-[176px] truncate font-medium italic tracking-tighter uppercase text-[13px] leading-tight ${isUnavailable ? 'text-slate-400' : 'text-slate-100'}`}>{player.firstName} {player.lastName}</span>
                     {player.health.status === HealthStatus.INJURED && (
-                      <span className="ml-2 inline-flex items-center gap-0.5 text-red-400 font-black text-[11px] align-middle">
+                      <span className="ml-1 inline-flex items-center gap-0.5 text-red-400 font-black text-[9px] align-middle">
                         <span>✚</span>
                         <span>{player.health.injury?.daysRemaining}d</span>
                       </span>
                     )}
                     {player.suspensionMatches > 0 && (
-                      <span className="ml-2 inline-flex items-center justify-center w-3 h-4 bg-red-600 rounded-[2px] align-middle" />
+                      <span className="ml-1 inline-flex items-center justify-center w-2.5 h-3.5 bg-red-600 rounded-[2px] align-middle" />
                     )}
                   </td>
                   {ATTR_KEYS.map(key => {
@@ -595,26 +951,286 @@ export const ReservesView: React.FC = () => {
                       ? { outline: '1px solid rgba(244,63,94,0.45)', backgroundColor: 'rgba(244,63,94,0.07)' }
                       : {};
                     return (
-                      <td key={key} className={`px-1 py-1.5 text-center font-medium italic tracking-tight text-[11px] ${isTop ? 'text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]' : isWeak ? 'text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]' : 'text-slate-100'}`} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)', ...ringStyle }}>
+                      <td key={key} className={`w-8 min-w-8 max-w-8 px-0 py-1 text-center font-black italic tracking-tighter text-[9px] ${isTop ? 'text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]' : isWeak ? 'text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]' : 'text-slate-100'}`} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)', ...ringStyle }}>
                         {val}
                       </td>
                     );
                   })}
-                  <td className="px-2 py-1.5 text-center text-slate-300 font-medium">{player.age}</td>
+                  <td className="w-9 px-0 py-1 text-center text-[9px] text-slate-300 font-black italic tabular-nums">{player.age}</td>
                   {(() => {
                     const totalDev = Object.values(player.stats.seasonalChanges ?? {}).reduce((s, v) => s + v, 0);
                     const devColor = totalDev > 0 ? 'text-emerald-400' : totalDev < 0 ? 'text-red-400' : 'text-slate-500';
                     const devLabel = totalDev > 0 ? `+${totalDev}` : `${totalDev}`;
                     return (
-                      <td className={`px-2 py-1.5 text-center font-black italic text-[11px] tabular-nums ${devColor}`}>
+                        <td className={`w-9 px-0 py-1 text-center font-black italic text-[9px] tabular-nums ${devColor}`}>
                         {totalDev === 0 ? '—' : devLabel}
                       </td>
                     );
                   })()}
-                </tr>
-              ))}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+
+        <section className="flex min-h-0 flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/55 p-3 shadow-2xl backdrop-blur-sm">
+          <div>
+            <h2 className="font-black italic uppercase tracking-tighter text-xl leading-none text-white">Liderzy</h2>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }, (_, index) => (
+              renderReserveHighlightCard(
+                `Top ${index + 1}`,
+                reserveHighlights.topPlayers[index] ?? null,
+                reserveHighlights.topPlayers[index]
+                  ? [`OVR ${reserveHighlights.topPlayers[index].overallRating}`, `${reserveHighlights.topPlayers[index].age} lat`]
+                  : []
+              )
+            ))}
+          </div>
+
+          <div className="h-px bg-white/10" />
+
+          <div className="grid grid-cols-2 gap-2">
+            {renderReserveHighlightCard(
+              'Top strzelec',
+              reserveHighlights.topScorer,
+              reserveHighlights.topScorer
+                ? [`${reserveHighlights.topScorer.age} lat`, `${reserveHighlights.topScorer.reserveStats?.goals ?? 0} goli`]
+                : []
+            )}
+            {renderReserveHighlightCard(
+              'Top asystent',
+              reserveHighlights.topAssistant,
+              reserveHighlights.topAssistant
+                ? [`${reserveHighlights.topAssistant.age} lat`, `${reserveHighlights.topAssistant.reserveStats?.assists ?? 0} asyst`]
+                : []
+            )}
+          </div>
+
+          <div className="h-px bg-white/10" />
+
+          {renderReserveHighlightCard(
+            'Najwyższa ocena',
+            reserveHighlights.topRated,
+            reserveHighlights.topRated
+              ? [`${reserveHighlights.topRated.age} lat`, `Śr. ${getReserveAverageRating(reserveHighlights.topRated).toFixed(2)}`]
+              : []
+          )}
+
+          <div className="h-px bg-white/10" />
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+              <p className="mb-1.5 font-black italic uppercase tracking-tighter text-[10px] leading-none text-blue-300">Progres</p>
+              <div className="space-y-1">
+                {Array.from({ length: 3 }, (_, index) => {
+                  const item = reserveHighlights.progressPlayers[index];
+                  return (
+                    <React.Fragment key={`progress-${item?.player.id ?? index}`}>
+                      {renderReserveMiniRow(
+                        item?.player ?? null,
+                        item ? `${item.player.age} lat` : '',
+                        item ? `+${item.dev}` : '-',
+                        'text-emerald-300'
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+              <p className="mb-1.5 font-black italic uppercase tracking-tighter text-[10px] leading-none text-blue-300">Pierwsza drużyna</p>
+              <div className="space-y-1">
+                {Array.from({ length: 3 }, (_, index) => {
+                  const item = reserveHighlights.firstTeamReady[index];
+                  return (
+                    <React.Fragment key={`ready-${item?.player.id ?? index}`}>
+                      {renderReserveMiniRow(
+                        item?.player ?? null,
+                        item ? `OVR ${item.player.overallRating}` : '',
+                        item?.readiness.label ?? '-',
+                        item?.readiness.colorClass ?? 'text-slate-500'
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="h-px bg-white/10" />
+
+          <div className="rounded-lg border border-cyan-300/15 bg-cyan-950/10 p-2.5">
+            <p className="mb-2 font-black italic uppercase tracking-tighter text-[10px] leading-none text-cyan-300">Średni profil rezerw</p>
+            <div className="grid grid-cols-5 gap-1.5">
+              {[
+                { label: 'Wiek', value: reserves.length ? reserveAverageProfile.age.toFixed(1) : '-' },
+                { label: 'OVR', value: reserves.length ? reserveAverageProfile.overall.toFixed(1) : '-' },
+                { label: 'Talent', value: reserves.length ? reserveAverageProfile.talent.toFixed(1) : '-' },
+                { label: 'Ocena', value: reserves.length && reserveAverageProfile.rating > 0 ? reserveAverageProfile.rating.toFixed(2) : '-' },
+                { label: 'DEV', value: reserves.length && reserveAverageProfile.dev !== 0 ? `${reserveAverageProfile.dev > 0 ? '+' : ''}${reserveAverageProfile.dev.toFixed(1)}` : '-' },
+              ].map(item => (
+                <div key={item.label} className="rounded-md border border-white/10 bg-white/[0.035] px-1.5 py-2 text-center">
+                  <p className="font-black italic uppercase tracking-tighter text-[9px] leading-none text-slate-500">{item.label}</p>
+                  <p className="mt-1 font-black italic uppercase tracking-tighter text-[13px] leading-none text-white">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/55 p-3 shadow-2xl backdrop-blur-sm">
+          <section className="rounded-lg border border-emerald-400/20 bg-emerald-950/20 p-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <p className="font-black italic uppercase tracking-tighter text-[10px] text-emerald-300">Taktyka rezerw</p>
+                <h2 className="font-black italic uppercase tracking-tighter text-xl leading-none text-white">{reserveTactic.id}</h2>
+              </div>
+              <div className="text-right">
+                <p className="font-black italic uppercase tracking-tighter text-[9px] text-slate-400">Styl</p>
+                <p className="font-black italic uppercase tracking-tighter text-[11px] text-white">{reserveTactic.category}</p>
+              </div>
+            </div>
+
+            <div className="relative h-[330px] overflow-hidden rounded-lg border border-white/15 bg-[linear-gradient(180deg,rgba(16,185,129,0.38),rgba(6,78,59,0.42))]">
+              <div className="absolute inset-3 border border-white/25" />
+              <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-white/25" />
+              <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25" />
+              <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/35" />
+              <div className="absolute left-[22%] right-[22%] top-3 h-[23%] border-x border-b border-white/25" />
+              <div className="absolute bottom-3 left-[22%] right-[22%] h-[23%] border-x border-t border-white/25" />
+              <div className="absolute left-[38%] right-[38%] top-3 h-[8%] border-x border-b border-white/25" />
+              <div className="absolute bottom-3 left-[38%] right-[38%] h-[8%] border-x border-t border-white/25" />
+              <div className="absolute left-1/2 top-[19%] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25" />
+              <div className="absolute bottom-[19%] left-1/2 h-1.5 w-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/25" />
+
+              {projectedReserveLineup.map(({ slot, player }) => {
+                const kit = player ? getPitchPlayerKitColors(player) : null;
+
+                return (
+                  <button
+                    key={slot.index}
+                    type="button"
+                    disabled={!player}
+                    onClick={() => player && viewPlayerDetails(player.id)}
+                    title={player ? `${player.firstName} ${player.lastName}` : POSITION_FULL_NAME[slot.role]}
+                    className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-transform ${player ? 'hover:scale-110' : 'opacity-45'}`}
+                    style={{ left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
+                  >
+                    {kit ? (
+                      <span className="relative block h-11 w-11 drop-shadow-[0_8px_10px_rgba(0,0,0,0.5)]">
+                        <span
+                          className="absolute left-1/2 top-0 flex h-7 w-9 -translate-x-1/2 items-center justify-center border border-white/30 text-[8px] font-black italic uppercase tracking-tighter shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-4px_7px_rgba(0,0,0,0.38),0_2px_0_rgba(0,0,0,0.45)]"
+                          style={{
+                            background: `radial-gradient(circle at 35% 18%, rgba(255,255,255,0.34), transparent 34%), ${kit.shirt}`,
+                            color: kit.text,
+                            clipPath: 'polygon(24% 0, 76% 0, 100% 22%, 86% 47%, 78% 36%, 78% 100%, 22% 100%, 22% 36%, 14% 47%, 0 22%)',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+                          }}
+                        >
+                          {`${player.firstName[0]}${player.lastName[0]}`}
+                        </span>
+                        <span className="absolute bottom-1 left-1/2 h-3 w-6 -translate-x-1/2 drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]">
+                          <span
+                            className="absolute left-0 top-0 h-1 w-full border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]"
+                            style={{ background: kit.shorts }}
+                          />
+                          <span
+                            className="absolute bottom-0 left-0 h-2 w-[11px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
+                            style={{ background: kit.shorts }}
+                          />
+                          <span
+                            className="absolute bottom-0 right-0 h-2 w-[11px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]"
+                            style={{ background: kit.shorts }}
+                          />
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/35 text-[8px] font-black italic uppercase tracking-tighter text-white/40 shadow-[0_8px_18px_rgba(0,0,0,0.45)]">
+                        {POSITION_LABEL[slot.role]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+          </section>
+
+          <section className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-black italic uppercase tracking-tighter text-[11px] leading-none text-white">Forma</p>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: 5 }, (_, index) => {
+                  const match = reservePanelMatches.played[index];
+                  const result = match?.result;
+                  const userScore = result ? (result.isUserHome ? result.homeScore : result.awayScore) : 0;
+                  const opponentScore = result ? (result.isUserHome ? result.awayScore : result.homeScore) : 0;
+                  const circleClass = !result
+                    ? 'border-slate-600/50 bg-slate-800/70'
+                    : userScore > opponentScore
+                    ? 'border-emerald-300/80 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.45)]'
+                    : userScore === opponentScore
+                    ? 'border-yellow-300/80 bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.42)]'
+                    : 'border-red-300/80 bg-red-500 shadow-[0_0_10px_rgba(248,113,113,0.42)]';
+
+                  return (
+                    <span
+                      key={match?.fixture.id ?? `empty-form-${index}`}
+                      title={result ? `${match.fixture.opponentClubName} II ${userScore}:${opponentScore}` : 'Brak meczu'}
+                      className={`h-3.5 w-3.5 rounded-full border ${circleClass}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-blue-400/20 bg-blue-950/20 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-black italic uppercase tracking-tighter text-[13px] text-white">Kalendarz</h3>
+            </div>
+            <div className="space-y-1.5">
+              {reservePanelMatches.played.length === 0 && reservePanelMatches.upcoming.length === 0 && (
+                <p className="font-black italic uppercase tracking-tighter text-[11px] text-slate-500">Brak wydarzeń</p>
+              )}
+              {reservePanelMatches.played.map(({ fixture, result }) => {
+                const score = result ? getReserveResultDisplay(result) : null;
+                return (
+                  <button
+                    key={fixture.id}
+                    type="button"
+                    onClick={() => setShowScheduleModal(true)}
+                    className="grid w-full grid-cols-[42px_24px_1fr_42px] items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-left hover:bg-white/[0.08]"
+                  >
+                    <span className="font-black italic uppercase tracking-tighter text-[10px] text-slate-400">{formatReservePanelDate(result?.date ?? fixture.date)}</span>
+                    <span className={`font-black italic uppercase tracking-tighter text-[10px] ${fixture.isHome ? 'text-emerald-300' : 'text-blue-300'}`}>{fixture.isHome ? 'D' : 'W'}</span>
+                    <span className="truncate font-black italic uppercase tracking-tighter text-[11px] text-white">{fixture.opponentClubName} II</span>
+                    <span className={`text-right font-black italic uppercase tracking-tighter text-[12px] ${score?.colorClass ?? 'text-slate-500'}`}>{score?.label ?? '-'}</span>
+                  </button>
+                );
+              })}
+
+              {reservePanelMatches.upcoming.map(({ fixture }) => (
+                <button
+                  key={fixture.id}
+                  type="button"
+                  onClick={() => setShowScheduleModal(true)}
+                  className="grid w-full grid-cols-[42px_24px_1fr] items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-left hover:bg-white/[0.08]"
+                >
+                  <span className="font-black italic uppercase tracking-tighter text-[10px] text-slate-400">{formatReservePanelDate(fixture.date)}</span>
+                  <span className={`font-black italic uppercase tracking-tighter text-[10px] ${fixture.isHome ? 'text-emerald-300' : 'text-blue-300'}`}>{fixture.isHome ? 'D' : 'W'}</span>
+                  <span className="truncate font-black italic uppercase tracking-tighter text-[11px] text-white">{fixture.opponentClubName} II</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </aside>
         </div>
       </div>
     </div>
