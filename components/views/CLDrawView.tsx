@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../../resources/static_db/clubs/ChampionsLeagueTeams';
-import LigaMistrzowBg from '../../Graphic/themes/cl_theme.png';
+import LigaMistrzowBg from '../../Graphic/themes/CL_theme.png';
 
 export const CLDrawView: React.FC = () => {
   const { activeCupDraw, confirmCLDraw, clubs } = useGame();

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
-import ligaMistrzowBg from '../Graphic/themes/cl_theme.png';
+import ligaMistrzowBg from '../Graphic/themes/CL_theme.png';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
