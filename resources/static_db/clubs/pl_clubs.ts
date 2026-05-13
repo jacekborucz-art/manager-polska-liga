@@ -7,6 +7,7 @@ export interface RawClubData {
   capacity: number;
   reputation: number;
   logoFile?: string;
+  stadiumSeatColors?: string[];
 }
 
 // Helper for ID generation (simple slug)
@@ -49,7 +50,7 @@ export const RAW_PL_CLUBS: RawClubData[] = [
   { name: "Chrobry Głogów", tier: 2, colors: ['#FF5F1F', '#000000', '#FFFFFF'], stadium: "Stadion Miejski w Głogowie", capacity: 3000, reputation: 5, logoFile: 'chrobry_glogow.png' },
   { name: "Stal Rzeszów", tier: 2, colors: ['#FFFFFF', '#0000FF', '#FF0000'], stadium: "Stadion Miejski w Rzeszowie", capacity: 11500, reputation: 6, logoFile: 'stal-rzeszow-2025-logo.png' },
   { name: "Śląsk Wrocław", tier: 2, colors: ['#008000', '#FFFFFF', '#FF0000'], stadium: "Tarczyński Arena", capacity: 42771, reputation: 10, logoFile: 'Slask_Wroclaw.png' },
-  { name: "Polonia Warszawa", tier: 2, colors: ['#000000', '#FFFFFF', '#ff0000e9'], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8, logoFile: 'Polonia_warszawa.png' },
+  { name: "Polonia Warszawa", tier: 2, colors: ['#000000', '#FFFFFF', '#ff0000e9'], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8, logoFile: 'Polonia_warszawa.png', stadiumSeatColors: ['#111111', '#cc0000', '#ffffff'] },
   { name: "Wieczysta Kraków", tier: 2, colors: ['#FFFF00', '#FF0000', '#000000'], stadium: "Stadion Prądniczanki", capacity: 2000, reputation: 5, logoFile: 'wieczysta-krakow-logo.png' },
   { name: "Ruch Chorzów", tier: 2, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Chorzowie", capacity: 9300, reputation: 9, logoFile: 'ruch-chorzow-2021-logo.png' },
   { name: "Miedź Legnica", tier: 2, colors: ['#008000', '#FF0000', '#0000FF'], stadium: "Stadion Orła Białego", capacity: 6194, reputation: 8, logoFile: 'miedz-legnica-2022-logo.png' },

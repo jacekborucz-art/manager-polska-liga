@@ -1185,6 +1185,7 @@ export interface Club {
   aiWeeklyTraining?: AiWeeklyTrainingState;
   winterCamp?: WinterCampState;
   summerCamp?: SummerCampState;
+  stadiumSeatColors?: string[];
   stadiumExpansionProjects?: StadiumExpansionProject[];
 }
 

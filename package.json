@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-    "engines": { "node": "20.x" },
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npx --yes vite build",
@@ -12,12 +14,16 @@
     "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@types/three": "^0.184.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.4.3",
+    "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.475.0",
-    "framer-motion": "^12.4.3",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.0.1"
+    "tailwind-merge": "^3.0.1",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -169,6 +169,7 @@ const loadClubsForTier = (tier: number, leagueId: string, limit: number): Club[]
         raw.reputation
       ),
       logoFile: raw.logoFile,
+      stadiumSeatColors: raw.stadiumSeatColors,
       board: generateRandomBoard(),
       boardConfidence: 75,
       colorPrimary: raw.colors[0],

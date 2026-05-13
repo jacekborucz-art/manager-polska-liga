@@ -6,6 +6,7 @@ import { useGame } from '../../context/GameContext';
 import { BoardRequestModal } from './BoardRequestModal';
 import { StadiumModal } from './StadiumModal';
 import { StadiumExpansionRequestModal } from './StadiumExpansionRequestModal';
+import { Stadium3DViewer } from '../stadium/Stadium3DViewer';
 
 interface BoardModalProps {
   club: Club;
@@ -805,6 +806,29 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
           </div>
 
           <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+
+            {/* ── STADION ── */}
+            <button
+              type="button"
+              onClick={() => setIsStadiumModalOpen(true)}
+              className="w-full rounded-[22px] border border-white/5 bg-black/30 overflow-hidden mb-5 hover:border-white/10 transition-all group"
+            >
+              <div className="w-full" style={{ aspectRatio: '16/9' }}>
+                <Stadium3DViewer capacity={club.stadiumCapacity} primaryColor={club.colorsHex?.[0]} seatColors={club.stadiumSeatColors} />
+              </div>
+              <div className="px-4 py-3 flex items-center justify-between gap-2">
+                <div className="text-left min-w-0">
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500 truncate">{club.stadiumName}</p>
+                  <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">
+                    {club.stadiumCapacity.toLocaleString('pl-PL')} miejsc
+                  </p>
+                </div>
+                <span className="shrink-0 text-[9px] font-black italic uppercase tracking-tighter text-amber-300/60 group-hover:text-amber-300 transition-colors">
+                  SZCZEGÓŁY →
+                </span>
+              </div>
+            </button>
+
             <div className="mb-5">
               <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Panel</p>
               <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Zadania</h2>

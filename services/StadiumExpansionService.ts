@@ -419,10 +419,26 @@ export class StadiumExpansionService {
       reasons.push(`Reputacja (${club.reputation}) zbyt niska — wymagana: ${MIN_REPUTATION[stand]}`);
     }
 
+    const BIG_STADIUM_THRESHOLD = 30_000;
+    const ABSOLUTE_CAP          = 45_000;
+
+    if (club.stadiumCapacity >= ABSOLUTE_CAP) {
+      reasons.push('Zarząd odmawia dalszej rozbudowy — obiekt osiągnął rozmiar areny narodowej');
+    }
+
     if (attendanceHistory.length >= 5) {
-      const avg = attendanceHistory.reduce((a, b) => a + b, 0) / attendanceHistory.length;
+      const avg      = attendanceHistory.reduce((a, b) => a + b, 0) / attendanceHistory.length;
       const fillRate = avg / club.stadiumCapacity;
-      if (fillRate < 0.65) {
+
+      if (club.stadiumCapacity >= BIG_STADIUM_THRESHOLD && club.stadiumCapacity < ABSOLUTE_CAP) {
+        const requiredFill = club.reputation >= 9 ? 0.75 : 0.80;
+        if (fillRate < requiredFill) {
+          reasons.push(
+            `Zarząd uważa, że stadion (${club.stadiumCapacity.toLocaleString('pl-PL')} miejsc) jest na chwilę obecną wystarczający` +
+            ` — wymagana frekwencja ${Math.round(requiredFill * 100)}% (obecna: ${Math.round(fillRate * 100)}%)`
+          );
+        }
+      } else if (fillRate < 0.65) {
         reasons.push(`Średnia frekwencja (${Math.round(fillRate * 100)}%) poniżej 65% pojemności`);
       }
     }
