@@ -7,7 +7,8 @@ import {
   MatchStatus, SubstitutionRecord, MatchLogEntry, PlayerAttributes,
 TacticalInstructions,
 PromotionPlayoffSingleMatchResult,
-PromotionPlayoffSemiResults
+PromotionPlayoffSemiResults,
+PlayerStats
 } from '../types';
 import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
 import { MatchEngineService } from '../services/MatchEngineService';
@@ -63,6 +64,18 @@ const getCupBriefingMatchStage = (fixtureId: string, playoffMatchType?: string):
   if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'CUP_SEMIFINAL';
   return 'CUP';
 };
+
+const createEmptyCupStats = (): PlayerStats => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: []
+});
 
 type CupInstructionAssessment = {
   score: number;
@@ -797,6 +810,7 @@ useEffect(() => {
         const finalHGoals = [...latest.homeGoals];
         const finalAGoals = [...latest.awayGoals];
         const eventInfo = {
+          scorerId: scorer.id,
           playerName: `${scorer.firstName.charAt(0)}. ${scorer.lastName}`,
           minute: latest.minute,
           isPenalty: true,
@@ -2547,7 +2561,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
                 eventType = MatchEventType.GOAL;
                 const formattedName = `${scorer.firstName.charAt(0)}. ${scorer.lastName}`;
                 currentScorerName = formattedName;
-                const goalData = { playerName: formattedName, minute: nextMinute, isPenalty: false };
+                const goalData = { scorerId: scorer.id, playerName: formattedName, minute: nextMinute, isPenalty: false };
                 
                 if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); } 
                 else { aScore++; updatedAwayGoals.push(goalData); }
@@ -2667,7 +2681,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                             eventType = MatchEventType.GOAL;
                             const formattedName = `${upsetScorer.firstName.charAt(0)}. ${upsetScorer.lastName}`;
                             currentScorerName = formattedName;
-                            const goalData = { playerName: formattedName, minute: nextMinute, isPenalty: false };
+                            const goalData = { scorerId: upsetScorer.id, playerName: formattedName, minute: nextMinute, isPenalty: false };
                             if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); }
                             else { aScore++; updatedAwayGoals.push(goalData); }
                             nextLastGoalBoostMinute = nextMinute;
@@ -3175,6 +3189,72 @@ if (activePlayerTempo === 'SLOW') {
           // KONIEC KODU (Zastąp pętlę mapującą tym blokiem)
        });
     });
+
+    if (!isPlayoffMode) {
+      const buildParticipantSet = (side: 'HOME' | 'AWAY') => {
+        const lineup = side === 'HOME' ? matchState.homeLineup : matchState.awayLineup;
+        const subs = side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory;
+        return new Set(
+          [
+            ...lineup.startingXI,
+            ...subs.flatMap(sub => [sub.playerInId, sub.playerOutId])
+          ].filter((id): id is string => !!id)
+        );
+      };
+
+      const getGoalEvents = (side: 'HOME' | 'AWAY') => (
+        side === 'HOME' ? matchState.homeGoals : matchState.awayGoals
+      ).filter(goal => !goal.isMiss && !goal.varDisallowed);
+
+      const updateCupStatsForClub = (clubId: string, side: 'HOME' | 'AWAY', goalsAgainst: number) => {
+        const participantIds = buildParticipantSet(side);
+        const goalEvents = getGoalEvents(side);
+        const cardEvents = matchState.logs.filter(log =>
+          log.teamSide === side &&
+          (log.type === MatchEventType.YELLOW_CARD || log.type === MatchEventType.RED_CARD)
+        );
+
+        finalPlayers[clubId] = finalPlayers[clubId].map(player => {
+          const displayName = `${player.firstName.charAt(0)}. ${player.lastName}`;
+          const cup = { ...(player.cupStats ?? createEmptyCupStats()) };
+          let cupSuspensionMatches = Math.max(0, (player.cupSuspensionMatches ?? 0) - 1);
+
+          if (participantIds.has(player.id)) {
+            cup.matchesPlayed += 1;
+            cup.minutesPlayed += 90;
+            if (goalsAgainst === 0 && player.position === PlayerPosition.GK) {
+              cup.cleanSheets += 1;
+            }
+          }
+
+          goalEvents.forEach(goal => {
+            if (goal.scorerId === player.id || goal.playerName === displayName || goal.playerName === player.lastName) {
+              cup.goals += 1;
+            }
+            if (goal.assistantId === player.id || goal.assistantName === displayName || goal.assistantName === player.lastName) {
+              cup.assists += 1;
+            }
+          });
+
+          cardEvents.forEach(card => {
+            if (card.playerName !== player.lastName && card.playerName !== displayName) return;
+            if (card.type === MatchEventType.YELLOW_CARD) {
+              cup.yellowCards += 1;
+              if (cup.yellowCards % 4 === 0) cupSuspensionMatches += 1;
+            }
+            if (card.type === MatchEventType.RED_CARD) {
+              cup.redCards += 1;
+              cupSuspensionMatches += 2;
+            }
+          });
+
+          return { ...player, cupStats: cup, cupSuspensionMatches };
+        });
+      };
+
+      updateCupStatsForClub(ctx.homeClub.id, 'HOME', matchState.awayScore);
+      updateCupStatsForClub(ctx.awayClub.id, 'AWAY', matchState.homeScore);
+    }
 
     const cupApplyArgs = {
       updatedFixtures: isPlayoffMode

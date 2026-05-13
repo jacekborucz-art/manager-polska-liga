@@ -51,7 +51,7 @@ import { PolandWeatherService } from '../services/PolandWeatherService';
 import { DisciplineService } from '../services/DisciplineService';
 import { AiMatchDecisionService } from '../services/AiMatchDecisionService';
 import { PostMatchCommentSelector } from '../PolishCupEngine/PostMatchCommentSelector';
-import { PlayerStatsService } from '../services/PlayerStatsService';
+import { EuropeanPlayerStatsService } from '../services/EuropeanPlayerStatsService';
 import { MATCH_COMMENTARY_DB } from '../data/match_commentary_pl';
 import { KitSelectionService } from '../services/KitSelectionService';
 import { InjuryEventGenerator } from '../services/InjuryEventGenerator';
@@ -1744,8 +1744,14 @@ return {
 
     const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
     const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.homeClub.id, Array.from(playedIdsHome) as string[]);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.awayClub.id, Array.from(playedIdsAway) as string[]);
+    updatedPlayers = EuropeanPlayerStatsService.applyMatchStats(
+      updatedPlayers,
+      matchState,
+      ctx.homeClub.id,
+      ctx.awayClub.id,
+      ctx.homePlayers,
+      ctx.awayPlayers
+    );
 
   const applyFatigueDebtToSquad = (squad: Player[], playedIds: Set<string>) => {
       return squad.map(p => {
@@ -1758,20 +1764,6 @@ return {
     };
     updatedPlayers[ctx.homeClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.homeClub.id], playedIdsHome);
     updatedPlayers[ctx.awayClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.awayClub.id], playedIdsAway);
-
-    matchState.homeGoals.filter(g => !g.varDisallowed).forEach(g => {
-       const pFound = ctx.homePlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
-    });
-    matchState.awayGoals.filter(g => !g.varDisallowed).forEach(g => {
-       const pFound = ctx.awayPlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
-    });
-
-    Object.entries(matchState.playerYellowCards).forEach(([pId, count]) => {
-       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD);
-    });
-    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD));
 
     const applyInjuriesToSquad = (squad: Player[], sideInjuries: Record<string, InjurySeverity>, sideInMins: Record<string, number>) => {
       return squad.map(p => {
