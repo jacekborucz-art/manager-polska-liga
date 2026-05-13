@@ -3,8 +3,11 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus } from '../../types';
 
+type ContractStatusFilter = 'ALL' | 'FREE_AGENT' | 'CONTRACT' | 'TRANSFER_LIST';
+type MarketOriginFilter = 'ALL' | 'LOCAL' | 'FOREIGN';
+
 const initialFilters = {
-  age: { min: 16, max: 35 },
+  age: { min: 16, max: 43 },
   pace: { min: 1, max: 99 },
   strength: { min: 1, max: 99 },
   stamina: { min: 1, max: 99 },
@@ -23,6 +26,8 @@ const initialFilters = {
 const _persisted = {
   posFilter: 'ALL' as string,
   searchTermPlayers: '' as string,
+  contractStatusFilter: 'ALL' as ContractStatusFilter,
+  playerNationalityFilter: 'ALL' as string,
   filters: { ...initialFilters } as typeof initialFilters,
   priceFilter: { min: 0, max: 200000000 } as { min: number; max: number },
 };
@@ -33,12 +38,14 @@ export const JobMarketView: React.FC = () => {
   // Filtry Piłkarzy - inicjalizowane z ostatnich zapamiętanych wartości
   const [searchTermPlayers, setSearchTermPlayers] = useState(_persisted.searchTermPlayers);
   const [posFilter, setPosFilter] = useState(_persisted.posFilter);
+  const [contractStatusFilter, setContractStatusFilter] = useState<ContractStatusFilter>(_persisted.contractStatusFilter);
+  const [playerNationalityFilter, setPlayerNationalityFilter] = useState(_persisted.playerNationalityFilter);
   
   // Stan dla Listy Transferowej
   const [searchTermTransfer, setSearchTermTransfer] = useState('');
   const [priceFilter, setPriceFilter] = useState(_persisted.priceFilter);
   const [priceStep, setPriceStep] = useState(100000);
-  const [nationalityFilter, setNationalityFilter] = useState<'ALL' | 'LOCAL' | 'FOREIGN'>('ALL');
+  const [marketOriginFilter, setMarketOriginFilter] = useState<MarketOriginFilter>('ALL');
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
@@ -46,6 +53,15 @@ export const JobMarketView: React.FC = () => {
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId) ?? null, [clubs, userTeamId]);
 
   const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
+  const clubById = useMemo(() => new Map(clubs.map(club => [club.id, club])), [clubs]);
+
+  const nationalityOptions = useMemo(() =>
+    Array.from(new Set(
+      allPlayersFlat
+        .map(player => (player.nationalityCountry || player.nationality || '').trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, 'pl')),
+  [allPlayersFlat]);
 
   const activeTransferOffers = useMemo(() =>
     transferOffers.filter(o =>
@@ -75,6 +91,8 @@ export const JobMarketView: React.FC = () => {
   // Synchronizacja stanu do persystentnego obiektu modułowego
   useEffect(() => { _persisted.posFilter = posFilter; }, [posFilter]);
   useEffect(() => { _persisted.searchTermPlayers = searchTermPlayers; }, [searchTermPlayers]);
+  useEffect(() => { _persisted.contractStatusFilter = contractStatusFilter; }, [contractStatusFilter]);
+  useEffect(() => { _persisted.playerNationalityFilter = playerNationalityFilter; }, [playerNationalityFilter]);
   useEffect(() => { _persisted.filters = filters; }, [filters]);
   useEffect(() => { _persisted.priceFilter = priceFilter; }, [priceFilter]);
 
@@ -83,7 +101,7 @@ export const JobMarketView: React.FC = () => {
   const handleFilterChange = (key: keyof typeof filters, field: 'min' | 'max', value: number) => {
     let val = isNaN(value) ? (field === 'min' ? 1 : 99) : value;
     const limitMin = key === 'age' ? 16 : 1;
-    const limitMax = key === 'age' ? 35 : 99;
+    const limitMax = key === 'age' ? 43 : 99;
     
     val = Math.max(limitMin, Math.min(limitMax, val));
 
@@ -106,62 +124,58 @@ export const JobMarketView: React.FC = () => {
     clubs.filter(c => !c.coachId).sort((a,b) => b.reputation - a.reputation)
   , [clubs]);
 
+  const matchesCommonPlayerFilters = (p: Player) => {
+    const q = searchTermPlayers.trim().toLowerCase();
+    const playerNationality = (p.nationalityCountry || p.nationality || '').trim();
+    const matchesSearch = !q || p.lastName.toLowerCase().includes(q) || p.firstName.toLowerCase().includes(q);
+    const matchesPosition = posFilter === 'ALL' || p.position === posFilter;
+    const matchesNationality = playerNationalityFilter === 'ALL' || playerNationality === playerNationalityFilter;
+    const matchesAttributes =
+      p.age >= filters.age.min && p.age <= filters.age.max &&
+      p.attributes.pace >= filters.pace.min && p.attributes.pace <= filters.pace.max &&
+      p.attributes.strength >= filters.strength.min && p.attributes.strength <= filters.strength.max &&
+      p.attributes.stamina >= filters.stamina.min && p.attributes.stamina <= filters.stamina.max &&
+      p.attributes.defending >= filters.defending.min && p.attributes.defending <= filters.defending.max &&
+      p.attributes.passing >= filters.passing.min && p.attributes.passing <= filters.passing.max &&
+      p.attributes.attacking >= filters.attacking.min && p.attributes.attacking <= filters.attacking.max &&
+      p.attributes.finishing >= filters.finishing.min && p.attributes.finishing <= filters.finishing.max &&
+      p.attributes.technique >= filters.technique.min && p.attributes.technique <= filters.technique.max &&
+      p.attributes.dribbling >= filters.dribbling.min && p.attributes.dribbling <= filters.dribbling.max &&
+      p.attributes.vision >= filters.vision.min && p.attributes.vision <= filters.vision.max &&
+      p.attributes.positioning >= filters.positioning.min && p.attributes.positioning <= filters.positioning.max &&
+      p.attributes.goalkeeping >= filters.goalkeeping.min && p.attributes.goalkeeping <= filters.goalkeeping.max;
+
+    return matchesSearch && matchesPosition && matchesNationality && matchesAttributes;
+  };
+
   // TUTAJ WSTAW TEN KOD: Logika pustej listy transferowej
   const transferListedPlayers = useMemo(() => {
-    let list = Object.values(players).flat().filter(p => p.isOnTransferList);
-    if (searchTermPlayers) {
-      list = list.filter(p => p.lastName.toLowerCase().includes(searchTermPlayers.toLowerCase()) || p.firstName.toLowerCase().includes(searchTermPlayers.toLowerCase()));
+    if (contractStatusFilter === 'FREE_AGENT') return [];
+    let list = Object.values(players).flat().filter(p => p.clubId !== 'FREE_AGENTS');
+    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
+    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => !p.isOnTransferList);
+    list = list.filter(matchesCommonPlayerFilters);
+    const transferQuery = searchTermTransfer.trim().toLowerCase();
+    if (transferQuery) {
+      list = list.filter(p => p.lastName.toLowerCase().includes(transferQuery) || p.firstName.toLowerCase().includes(transferQuery));
     }
-    if (posFilter !== 'ALL') {
-      list = list.filter(p => p.position === posFilter);
-    }
-    list = list.filter(p =>
-      p.age >= filters.age.min && p.age <= filters.age.max &&
-      p.attributes.pace >= filters.pace.min && p.attributes.pace <= filters.pace.max &&
-      p.attributes.strength >= filters.strength.min && p.attributes.strength <= filters.strength.max &&
-      p.attributes.stamina >= filters.stamina.min && p.attributes.stamina <= filters.stamina.max &&
-      p.attributes.defending >= filters.defending.min && p.attributes.defending <= filters.defending.max &&
-      p.attributes.passing >= filters.passing.min && p.attributes.passing <= filters.passing.max &&
-      p.attributes.attacking >= filters.attacking.min && p.attributes.attacking <= filters.attacking.max &&
-      p.attributes.finishing >= filters.finishing.min && p.attributes.finishing <= filters.finishing.max &&
-      p.attributes.technique >= filters.technique.min && p.attributes.technique <= filters.technique.max &&
-      p.attributes.dribbling >= filters.dribbling.min && p.attributes.dribbling <= filters.dribbling.max &&
-      p.attributes.vision >= filters.vision.min && p.attributes.vision <= filters.vision.max &&
-      p.attributes.positioning >= filters.positioning.min && p.attributes.positioning <= filters.positioning.max &&
-      p.attributes.goalkeeping >= filters.goalkeeping.min && p.attributes.goalkeeping <= filters.goalkeeping.max
-    );
     list = list.filter(p => (p.marketValue || 0) >= priceFilter.min && (p.marketValue || 0) <= priceFilter.max);
-    if (nationalityFilter === 'LOCAL') list = list.filter(p => clubs.find(c => c.id === p.clubId)?.leagueId?.startsWith('L_PL_'));
-    if (nationalityFilter === 'FOREIGN') list = list.filter(p => !clubs.find(c => c.id === p.clubId)?.leagueId?.startsWith('L_PL_'));
+    if (marketOriginFilter === 'LOCAL') list = list.filter(p => clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
+    if (marketOriginFilter === 'FOREIGN') list = list.filter(p => !clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
     return list.sort((a,b) => b.overallRating - a.overallRating);
-  }, [players, searchTermPlayers, posFilter, filters, priceFilter, nationalityFilter, clubs]);
+  }, [players, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
 
-  const freeAgentPlayers = useMemo(() => {
-    let list = [...(players['FREE_AGENTS'] || [])];
-    if (searchTermPlayers) {
-      list = list.filter(p => p.lastName.toLowerCase().includes(searchTermPlayers.toLowerCase()) || p.firstName.toLowerCase().includes(searchTermPlayers.toLowerCase()));
-    }
-    if (posFilter !== 'ALL') {
-      list = list.filter(p => p.position === posFilter);
-    }
-    list = list.filter(p => 
-      p.age >= filters.age.min && p.age <= filters.age.max &&
-      p.attributes.pace >= filters.pace.min && p.attributes.pace <= filters.pace.max &&
-      p.attributes.strength >= filters.strength.min && p.attributes.strength <= filters.strength.max &&
-      p.attributes.stamina >= filters.stamina.min && p.attributes.stamina <= filters.stamina.max &&
-      p.attributes.defending >= filters.defending.min && p.attributes.defending <= filters.defending.max &&
-      p.attributes.passing >= filters.passing.min && p.attributes.passing <= filters.passing.max &&
-      p.attributes.attacking >= filters.attacking.min && p.attributes.attacking <= filters.attacking.max &&
-      p.attributes.finishing >= filters.finishing.min && p.attributes.finishing <= filters.finishing.max &&
-      p.attributes.technique >= filters.technique.min && p.attributes.technique <= filters.technique.max &&
-      p.attributes.dribbling >= filters.dribbling.min && p.attributes.dribbling <= filters.dribbling.max &&
-      p.attributes.vision >= filters.vision.min && p.attributes.vision <= filters.vision.max &&
-      p.attributes.positioning >= filters.positioning.min && p.attributes.positioning <= filters.positioning.max &&
-      p.attributes.goalkeeping >= filters.goalkeeping.min && p.attributes.goalkeeping <= filters.goalkeeping.max
-    );
-    
+  const filteredPlayerResults = useMemo(() => {
+    let list = allPlayersFlat;
+    if (contractStatusFilter === 'FREE_AGENT') list = list.filter(p => p.clubId === 'FREE_AGENTS');
+    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => p.clubId !== 'FREE_AGENTS' && !p.isOnTransferList);
+    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
+    list = list.filter(matchesCommonPlayerFilters);
     return list.sort((a, b) => b.overallRating - a.overallRating);
-  }, [players, searchTermPlayers, posFilter, filters]);
+  }, [allPlayersFlat, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter]);
+
+  const getPlayerClubName = (player: Player) =>
+    player.clubId === 'FREE_AGENTS' ? 'Wolny agent' : clubById.get(player.clubId)?.name ?? 'Bez klubu';
 
   const getPosTheme = (pos: PlayerPosition) => {
     switch (pos) {
@@ -190,6 +204,15 @@ export const JobMarketView: React.FC = () => {
     if (!textHex) return getContrastColor(bgHex);
     return Math.abs(getLum(bgHex) - getLum(textHex)) > 0.3 ? textHex : getContrastColor(bgHex);
   };
+
+  const marketListTitle =
+    contractStatusFilter === 'CONTRACT' ? 'Zawodnicy z Kontraktem' :
+    contractStatusFilter === 'TRANSFER_LIST' ? 'Lista Transferowa' :
+    'Rynek Klubowy';
+  const marketEmptyLabel =
+    contractStatusFilter === 'CONTRACT' ? 'Brak zawodników z kontraktem dla tych filtrów' :
+    contractStatusFilter === 'FREE_AGENT' ? 'Wybierz status kontraktu albo listę transferową' :
+    'Brak dostępnych ofert na liście transferowej';
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden relative font-sans text-white bg-black">
@@ -340,7 +363,7 @@ export const JobMarketView: React.FC = () => {
               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-300">Wyszukaj zawodnika</h3>
             </div>
 
-            <div className="space-y-6 flex-1 overflow-y-auto custom-scrollbar pr-4">
+            <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-4">
               <div className="bg-black/40 p-3 rounded-xl border border-white/5 shadow-inner">
                 <input 
                   type="text" 
@@ -351,6 +374,40 @@ export const JobMarketView: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-2 pt-1">
+                <span className="block text-[9px] font-black italic uppercase tracking-tighter text-slate-400">Status kontraktu</span>
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/5 bg-black/30 p-1">
+                  {([
+                    ['ALL', 'Każdy'],
+                    ['FREE_AGENT', 'Wolny agent'],
+                    ['CONTRACT', 'Kontrakt'],
+                    ['TRANSFER_LIST', 'Lista transferowa']
+                  ] as [ContractStatusFilter, string][]).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setContractStatusFilter(value)}
+                      className={`px-2 py-1.5 rounded-lg text-[8px] font-black italic uppercase tracking-tighter transition-all ${contractStatusFilter === value ? 'bg-white text-black' : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="block text-[9px] font-black italic uppercase tracking-tighter text-slate-400">Narodowość</span>
+                <select
+                  value={playerNationalityFilter}
+                  onChange={(e) => setPlayerNationalityFilter(e.target.value)}
+                  className="w-full rounded-xl border border-white/5 bg-black/40 px-3 py-2 text-[9px] font-black italic uppercase tracking-tighter text-white outline-none transition-colors hover:border-white/10 focus:border-emerald-500"
+                >
+                  <option value="ALL">Każda</option>
+                  {nationalityOptions.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Age Range Filter */}
               <div className="space-y-1">
                 <div className="flex justify-between items-center px-1 relative h-6">
@@ -358,21 +415,21 @@ export const JobMarketView: React.FC = () => {
                   <span className="absolute left-1/2 -translate-x-1/2 text-[9px] font-black text-amber-400 uppercase tracking-widest whitespace-nowrap">Zakres Wieku</span>
                   <input type="number" value={filters.age.max} onChange={(e) => handleFilterChange('age', 'max', parseInt(e.target.value))} className="bg-transparent border-none w-10 text-right text-sm font-black text-rose-400 outline-none tabular-nums" />
                 </div>
-                <div className="relative h-8 flex items-center px-1">
+                <div className="relative h-6 flex items-center px-1">
                    <div className="absolute w-full h-1 bg-white/5 rounded-full" />
                    <div 
                       className="absolute h-1 bg-emerald-500/30 rounded-full" 
                       style={{ 
-                        left: `${((filters.age.min - 16) / (35 - 16)) * 100}%`, 
-                        right: `${100 - ((filters.age.max - 16) / (35 - 16)) * 100}%` 
+                        left: `${((filters.age.min - 16) / (43 - 16)) * 100}%`, 
+                        right: `${100 - ((filters.age.max - 16) / (43 - 16)) * 100}%` 
                       }} 
                    />
-                   <input type="range" min="16" max="35" value={filters.age.min} onChange={(e) => handleFilterChange('age', 'min', parseInt(e.target.value))} className="dual-range-input accent-emerald-500" style={{ zIndex: filters.age.min > 30 ? 5 : 4 }} />
-                   <input type="range" min="16" max="35" value={filters.age.max} onChange={(e) => handleFilterChange('age', 'max', parseInt(e.target.value))} className="dual-range-input accent-rose-500" />
+                   <input type="range" min="16" max="43" value={filters.age.min} onChange={(e) => handleFilterChange('age', 'min', parseInt(e.target.value))} className="dual-range-input accent-emerald-500" style={{ zIndex: filters.age.min > 30 ? 5 : 4 }} />
+                   <input type="range" min="16" max="43" value={filters.age.max} onChange={(e) => handleFilterChange('age', 'max', parseInt(e.target.value))} className="dual-range-input accent-rose-500" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 pt-4 border-t border-white/5">
+              <div className="grid grid-cols-1 gap-3 pt-3 border-t border-white/5">
                 {[
                   { k: 'pace', l: 'Szybkość' }, { k: 'strength', l: 'Siła' }, { k: 'stamina', l: 'Kondycja' },
                   { k: 'defending', l: 'Obrona' }, { k: 'passing', l: 'Podania' }, { k: 'attacking', l: 'Atak' },
@@ -385,7 +442,7 @@ export const JobMarketView: React.FC = () => {
                       <span className="absolute left-1/2 -translate-x-1/2 text-[9px] font-black text-amber-400 uppercase tracking-widest group-hover:text-amber-300 transition-colors whitespace-nowrap">{attr.l}</span>
                       <input type="number" value={filters[attr.k as keyof typeof filters].max} onChange={(e) => handleFilterChange(attr.k as any, 'max', parseInt(e.target.value))} className="bg-transparent border-none w-10 text-right text-sm font-black text-indigo-400 outline-none tabular-nums" />
                     </div>
-                    <div className="relative h-8 flex items-center px-1">
+                    <div className="relative h-6 flex items-center px-1">
                       <div className="absolute w-full h-1 bg-white/5 rounded-full" />
                       <div 
                         className="absolute h-1 bg-blue-500/20 rounded-full" 
@@ -402,17 +459,26 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
             <button 
-              onClick={() => { setFilters(initialFilters); _persisted.filters = { ...initialFilters }; }}
+              onClick={() => {
+                setFilters(initialFilters);
+                setContractStatusFilter('ALL');
+                setPlayerNationalityFilter('ALL');
+                setSearchTermPlayers('');
+                _persisted.filters = { ...initialFilters };
+                _persisted.contractStatusFilter = 'ALL';
+                _persisted.playerNationalityFilter = 'ALL';
+                _persisted.searchTermPlayers = '';
+              }}
               className="mt-4 w-full py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-white hover:bg-white/[0.08] transition-all"
             >
               Resetuj filtry
             </button>
           </aside>
 
-          {/* COLUMN 2: FREE AGENTS */}
+          {/* COLUMN 2: FILTER RESULTS */}
           <section className="flex-1 bg-white/[0.02] border border-white/10 rounded-[40px] flex flex-col overflow-hidden shadow-2xl relative">
             <div className="p-5 border-b border-white/10 flex flex-col gap-3 bg-white/[0.02]">
-              <h2 className="text-[10px] font-black text-white uppercase tracking-widest text-center italic">Wolni Agenci</h2>
+              <h2 className="text-[10px] font-black text-white uppercase tracking-widest text-center italic">Wyniki filtrowania ({filteredPlayerResults.length})</h2>
               <div className="text-[10px] flex bg-black/30 p-2 rounded-xl border border-white/5">
                 {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
                   <button 
@@ -425,47 +491,36 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {freeAgentPlayers.map((player, index) => {
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+              {filteredPlayerResults.map((player, index) => {
                 const theme = getPosTheme(player.position);
                 return (
-                  <div 
+                  <button 
                     key={player.id} 
                     onClick={() => viewPlayerDetails(player.id)}
-                    className={`group relative p-4 bg-black/20 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-all cursor-pointer overflow-hidden shadow-lg`}
+                    className="group w-full grid grid-cols-[28px_1fr_34px_92px] items-center gap-2 border-b border-white/[0.04] px-2 py-2 text-left transition-colors hover:bg-white/[0.04]"
                   >
-                    {(() => {
-                      const posColors: Record<string, string> = { GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#f43f5e' };
-                      const posColor = posColors[player.position] || '#64748b';
-                      return (
-                        <div
-                          className="absolute inset-0 opacity-[0.12] pointer-events-none"
-                          style={{ background: `linear-gradient(135deg, ${posColor} 0%, transparent 100%)` }}
-                        />
-                      );
-                    })()}
-                    <div className="relative z-10 flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                          <span className="text-[8px] font-mono text-slate-600 w-5 shrink-0 group-hover:text-emerald-500 transition-colors">
-                            {String(index + 1).padStart(2, '0')}.
-                          </span>
-                          <div className={`w-0.5 h-6 rounded-full ${theme.bg} ${theme.glow} shrink-0`} />
-                          <div className="min-w-0">
-                             <span className="block text-sm font-black text-white uppercase italic truncate max-w-[210px] group-hover:text-emerald-400 transition-colors leading-tight">
-                               {player.lastName} {player.firstName}
-                             </span>
-                             <span className={`text-[12px] font-black uppercase tracking-tighter ${theme.color}`}>
-                               {player.position} • {player.overallRating} OVR
-                             </span>
-                          </div>
-                       </div>
-                       <div className="text-right">
-                          <span className="block text-[12px] font-black font-mono text-emerald-400 tabular-nums leading-none tracking-tighter">{player.age}LAT</span>
-                       </div>
-                    </div>
-                  </div>
+                    <span className="text-[8px] font-mono text-slate-600 group-hover:text-emerald-500 transition-colors">
+                      {String(index + 1).padStart(2, '0')}.
+                    </span>
+                    <span className="min-w-0 truncate text-[11px] font-black italic uppercase tracking-tighter text-white group-hover:text-emerald-400 transition-colors">
+                      {player.firstName} {player.lastName}
+                    </span>
+                    <span className="text-right text-[10px] font-black text-emerald-400 tabular-nums">{player.age}</span>
+                    <span className="truncate text-right text-[8px] font-black uppercase tracking-tighter text-slate-400" title={getPlayerClubName(player)}>
+                      {getPlayerClubName(player)}
+                    </span>
+                    <span className={`col-start-2 -mt-1 text-[8px] font-black uppercase tracking-tighter ${theme.color}`}>
+                      {player.position} • {player.overallRating} OVR
+                    </span>
+                  </button>
                 );
               })}
+              {filteredPlayerResults.length === 0 && (
+                <div className="px-4 py-10 text-center text-[10px] font-black italic uppercase tracking-widest text-slate-600">
+                  Brak wyników dla tych filtrów
+                </div>
+              )}
             </div>
           </section>
 
@@ -473,7 +528,7 @@ export const JobMarketView: React.FC = () => {
           <section className="flex-[1.5] bg-white/[0.02] border border-white/10 rounded-[40px] flex flex-col overflow-hidden shadow-2xl relative">
             <div className="p-6 border-b border-white/10 flex flex-col gap-4 bg-white/[0.02]">
               <div className="flex justify-between items-center">
-                 <h2 className="text-xs font-black text-white uppercase tracking-[0.3em] italic">Lista Transferowa</h2>
+                 <h2 className="text-xs font-black text-white uppercase tracking-[0.3em] italic">{marketListTitle}</h2>
                  <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">Rynek klubowy</span>
               </div>
               <div className="bg-black/40 p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
@@ -520,8 +575,8 @@ export const JobMarketView: React.FC = () => {
                       {(['ALL', 'LOCAL', 'FOREIGN'] as const).map(opt => (
                         <button
                           key={opt}
-                          onClick={() => setNationalityFilter(opt)}
-                          className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${nationalityFilter === opt ? 'bg-white text-black' : 'text-slate-400 hover:text-slate-300'}`}
+                          onClick={() => setMarketOriginFilter(opt)}
+                          className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${marketOriginFilter === opt ? 'bg-white text-black' : 'text-slate-400 hover:text-slate-300'}`}
                         >
                           {opt === 'ALL' ? 'WSZYSCY' : opt === 'LOCAL' ? 'LOKALNI' : 'ZAGRANICZNI'}
                         </button>
@@ -536,13 +591,9 @@ export const JobMarketView: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {transferListedPlayers.length > 0 ? (
                 transferListedPlayers
-                  .filter(p => 
-                    p.lastName.toLowerCase().includes(searchTermTransfer.toLowerCase()) || 
-                    p.firstName.toLowerCase().includes(searchTermTransfer.toLowerCase())
-                  )
                   .map((player, index) => {
                     const theme = getPosTheme(player.position);
-                    const club = clubs.find(c => c.id === player.clubId);
+                    const club = clubById.get(player.clubId);
                     return (
                       <div 
                         key={player.id} 
@@ -610,7 +661,7 @@ export const JobMarketView: React.FC = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center opacity-10 py-10">
                    <span className="text-6xl mb-4">📑</span>
-                   <p className="text-sm font-black uppercase tracking-[0.3em] italic text-center">Brak dostępnych ofert na liście transferowej</p>
+                   <p className="text-sm font-black uppercase tracking-[0.3em] italic text-center">{marketEmptyLabel}</p>
                 </div>
               )}
             </div>

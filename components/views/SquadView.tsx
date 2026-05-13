@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture } from '../../types';
 import { Button } from '../ui/Button';
@@ -17,6 +18,7 @@ import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { generatePlayerReport } from '../../services/TrainingAssistantService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
@@ -25,12 +27,20 @@ export const SquadView: React.FC = () => {
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
   const myLineup = userTeamId ? lineups[userTeamId] : null;
+  const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playerId: string; loc: 'START' | 'BENCH' | 'RES' } | null>(null);
+  const [reportPlayer, setReportPlayer] = useState<Player | null>(null);
+  const [reportModalPos, setReportModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [reportDragging, setReportDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
+  const cachedReport = useMemo(
+    () => reportPlayer ? generatePlayerReport(reportPlayer, myPlayers, allLeaguePlayers) : null,
+    [allLeaguePlayers, myPlayers, reportPlayer]
+  );
 
   const getAverageRatingBadgeClass = (rating: number | null): string => {
     if (rating === null) return 'bg-slate-700 border-slate-500 text-slate-200';
@@ -549,6 +559,19 @@ export const SquadView: React.FC = () => {
       penaltyTakerId:  action === 'penalty'   ? contextMenu.playerId : c.penaltyTakerId,
       freeKickTakerId: action === 'freekick'  ? contextMenu.playerId : c.freeKickTakerId,
     }));
+    setContextMenu(null);
+  };
+
+  const handleOpenAssistantReport = () => {
+    if (!contextMenu) return;
+    const player = myPlayers.find(p => p.id === contextMenu.playerId);
+    if (!player) return;
+
+    setReportPlayer(player);
+    setReportModalPos({
+      x: Math.max(0, window.innerWidth / 2 - 610),
+      y: Math.max(20, window.innerHeight / 2 - 320),
+    });
     setContextMenu(null);
   };
 
@@ -1350,11 +1373,172 @@ export const SquadView: React.FC = () => {
             <span className="text-base">🎯</span> Wyznacz do wolnych
           </button>
           <div className="my-1 border-t border-white/10" />
+          <button onClick={handleOpenAssistantReport} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-blue-300 hover:bg-blue-500/10 transition-colors flex items-center gap-3">
+            <span className="text-base">🧠</span> Raport Asystenta
+          </button>
+          <div className="my-1 border-t border-white/10" />
           <button onClick={() => handleContextAction('reserves')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-3">
             <span className="text-base">↓</span> Przenieś do rezerw
           </button>
         </div>
       )}
+
+      {reportPlayer && cachedReport && createPortal((() => {
+        const report = cachedReport;
+        const posColor = reportPlayer.position === 'GK' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+          : reportPlayer.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
+          : reportPlayer.position === 'MID' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+          : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
+        const effColor = report.positionEffectivenessScore >= 78 ? 'text-emerald-400' : report.positionEffectivenessScore >= 68 ? 'text-amber-400' : 'text-rose-400';
+        const seasonStats = [
+          { label: 'Mecze', value: String(reportPlayer.stats.matchesPlayed), color: 'text-white' },
+          { label: 'Minuty', value: String(reportPlayer.stats.minutesPlayed), color: 'text-white' },
+          { label: 'Bramki', value: String(reportPlayer.stats.goals), color: 'text-white' },
+          { label: 'Asysty', value: String(reportPlayer.stats.assists), color: 'text-white' },
+          { label: 'Żółte kartki', value: String(reportPlayer.stats.yellowCards), color: 'text-amber-400' },
+          { label: 'Czerwone kartki', value: String(reportPlayer.stats.redCards), color: 'text-rose-400' },
+          ...(reportPlayer.position === 'GK' ? [{ label: 'Czyste konta', value: String(reportPlayer.stats.cleanSheets), color: 'text-emerald-400' }] : []),
+        ];
+
+        return (
+          <div
+            className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm"
+            onClick={() => { if (!reportDragging) setReportPlayer(null); }}
+            onMouseMove={e => {
+              if (!reportDragging) return;
+              setReportModalPos({
+                x: reportDragging.originX + (e.clientX - reportDragging.startX),
+                y: reportDragging.originY + (e.clientY - reportDragging.startY),
+              });
+            }}
+            onMouseUp={() => setReportDragging(null)}
+            onMouseLeave={() => setReportDragging(null)}
+          >
+            <div
+              className="fixed flex w-[1220px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] flex-col gap-5 overflow-y-auto rounded-[36px] border border-white/10 bg-slate-950 p-8 shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+              style={{ left: reportModalPos.x, top: reportModalPos.y }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div
+                className="flex items-center justify-between select-none border-b border-white/10 pb-5"
+                style={{ cursor: reportDragging ? 'grabbing' : 'grab' }}
+                onMouseDown={e => {
+                  e.preventDefault();
+                  setReportDragging({ startX: e.clientX, startY: e.clientY, originX: reportModalPos.x, originY: reportModalPos.y });
+                }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border border-blue-500/30 bg-blue-600/20 text-3xl">🧠</div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${posColor}`}>{reportPlayer.position}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">OVR {reportPlayer.overallRating}</span>
+                      <span className="text-slate-700">•</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{reportPlayer.age} lat</span>
+                      <span className="text-slate-700">•</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${reportPlayer.attributes.talent >= 75 ? 'text-emerald-400' : reportPlayer.attributes.talent >= 60 ? 'text-amber-400' : 'text-slate-500'}`}>Talent {reportPlayer.attributes.talent}</span>
+                    </div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{reportPlayer.firstName} {reportPlayer.lastName}</h2>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400/50">Raport Indywidualny • Asystent</span>
+                  <button onClick={() => setReportPlayer(null)} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg font-black text-slate-400 transition-all hover:bg-white/10 hover:text-white">✕</button>
+                </div>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[286px_1fr_273px]">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Statystyki Sezonowe</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {seasonStats.map((stat, index) => (
+                        <div key={`${stat.label}-${index}`} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 leading-tight">{stat.label}</span>
+                          <span className={`text-[13px] font-black tabular-nums ${stat.color}`}>{stat.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 rounded-2xl border border-rose-500/20 bg-rose-950/30 p-4">
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-rose-400">Słabe Strony</span>
+                    {report.weakAttributes.length > 0 ? report.weakAttributes.map(attr => (
+                      <div key={attr.attr} className="flex items-center justify-between">
+                        <span className="text-[12px] font-black italic uppercase tracking-tighter text-rose-300">{attr.label}</span>
+                        <span className="text-[13px] font-black tabular-nums text-rose-400">{attr.value}</span>
+                      </div>
+                    )) : (
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter text-rose-300/50">Brak wyraźnych słabości</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4">
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400">Mocne Strony</span>
+                    {report.strongAttributes.length > 0 ? report.strongAttributes.map(attr => (
+                      <div key={attr.attr} className="flex items-center justify-between">
+                        <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">{attr.label}</span>
+                        <span className="text-[13px] font-black tabular-nums text-emerald-400">{attr.value}</span>
+                      </div>
+                    )) : (
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300/50">Brak wyraźnych atutów</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex-1 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Ocena Ogólna</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter leading-relaxed text-white">{report.overallAssessment}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Skuteczność na Pozycji</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter leading-relaxed text-white">{report.positionEffectivenessText}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Ocena Asystenta</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter leading-relaxed text-white">{report.trainingRecommendationText}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-2.5">
+                      <span className="text-center text-[9px] font-black uppercase tracking-widest leading-tight text-slate-500">Wartość</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${report.valueColor}`}>{report.valueForTeam}</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-2.5">
+                      <span className="text-center text-[9px] font-black uppercase tracking-widest leading-tight text-slate-500">Potencjał</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${report.potentialColor}`}>{report.developmentPotential}</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-2.5">
+                      <span className="text-center text-[9px] font-black uppercase tracking-widest leading-tight text-slate-500">Poz. Eff.</span>
+                      <span className={`text-[13px] font-black italic uppercase tracking-tighter ${effColor}`}>{report.positionEffectivenessScore}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 rounded-2xl border border-blue-500/20 bg-blue-950/30 p-4">
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400">Rekomendacje</span>
+                    <div className="flex flex-col gap-1 rounded-xl bg-black/30 p-2.5">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Fokus Indywidualny</span>
+                      <span className="text-[13px] font-black italic uppercase tracking-tighter text-blue-300">{report.recommendedFocusLabel}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 rounded-xl bg-black/30 p-2.5">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Program Drużynowy</span>
+                      <span className="text-[13px] font-black italic uppercase tracking-tighter text-blue-300">{report.recommendedCycleName}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 rounded-2xl border border-amber-500/20 bg-amber-950/30 p-4">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.4em] text-amber-400">Opłacalność Inwestycji</span>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter leading-relaxed text-amber-200">{report.investmentText}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
 
       {isAnalysisOpen && myClub && teamAnalysisReport && (
         <TeamAnalysisModal

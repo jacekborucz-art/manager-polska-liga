@@ -84,7 +84,7 @@ const inputCls  = 'bg-black/40 border border-slate-700 rounded text-emerald-400 
 const selectCls = 'bg-black/40 border border-slate-700 rounded text-white   font-black italic uppercase tracking-tighter text-xs outline-none focus:border-yellow-500 transition-colors cursor-pointer';
 const labelCls  = 'text-yellow-400 text-xs font-black italic uppercase tracking-tighter';
 
-const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA'];
+const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
 
@@ -199,6 +199,8 @@ export const EditorView: React.FC = () => {
     'KSA': 'Arabia Saudyjska',
     'QAT': 'Katar',
     'USA': 'USA',
+    'ARG': 'Argentyna',
+    'BRA': 'Brazylia',
   };
 
   const toggleExportClub = (id: string) => {
