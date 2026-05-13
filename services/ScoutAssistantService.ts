@@ -10,10 +10,19 @@ function maybeDistort(errorRate: number): boolean {
   return Math.random() < errorRate;
 }
 
+function getErrorMultiplier(quality: number): number {
+  if (quality >= 17) return 0.30 + (20 - quality) / 3 * 0.20;
+  if (quality >= 14) return 0.50 + (17 - quality) / 3 * 0.20;
+  if (quality >= 10) return 0.70 + (14 - quality) / 4 * 0.30;
+  if (quality >= 5)  return 1.00 + (10 - quality) / 5 * 0.50;
+  return Math.min(2.00, 1.50 + (5 - quality) / 4 * 0.50);
+}
+
 // --- MODUŁ 1: Forma przeciwnika ---
 function analyzeOpponentForm(
   opponentId: string,
-  clubs?: Club[]
+  clubs?: Club[],
+  errorMult: number = 1.0
 ): {
   label: string; wins: number; draws: number; losses: number; hasEnoughData: boolean;
   last5: Array<{ date: string; opponentName: string; scored: number; conceded: number; result: 'W' | 'D' | 'L'; competition: string }>;
@@ -53,7 +62,7 @@ function analyzeOpponentForm(
   const labels = ['Fatalna', 'Słaba', 'Przeciętna', 'Dobra', 'Znakomita'];
   let index = Math.round((wins * 2 + draws) / Math.max(history.length, 1) * 2);
   index = Math.min(4, Math.max(0, index));
-  if (maybeDistort(ERROR_RATE_MID)) {
+  if (maybeDistort(ERROR_RATE_MID * errorMult)) {
     index = Math.min(4, Math.max(0, index + (Math.random() > 0.5 ? 1 : -1)));
   }
 
@@ -64,7 +73,8 @@ function analyzeOpponentForm(
 function analyzeKeyPlayers(
   opponentId: string,
   opponentPlayers: Player[],
-  opponentLineup: Lineup
+  opponentLineup: Lineup,
+  errorMult: number = 1.0
 ): { strongest: Player | null; weakest: Player | null; topScorer: string | null; hasMatchData: boolean } {
   const xi = opponentLineup.startingXI
     .map(id => opponentPlayers.find(p => p.id === id))
@@ -74,8 +84,8 @@ function analyzeKeyPlayers(
   let strongest = sorted[0] ?? null;
   let weakest = sorted[sorted.length - 1] ?? null;
 
-  if (maybeDistort(ERROR_RATE_MID) && sorted.length >= 2) strongest = sorted[1];
-  if (maybeDistort(ERROR_RATE_MID) && sorted.length >= 2) weakest = sorted[sorted.length - 2];
+  if (maybeDistort(ERROR_RATE_MID * errorMult) && sorted.length >= 2) strongest = sorted[1];
+  if (maybeDistort(ERROR_RATE_MID * errorMult) && sorted.length >= 2) weakest = sorted[sorted.length - 2];
 
   // Top strzelec — na podstawie statystyk sezonowych zawodnika
   const allOpponentPlayers = opponentPlayers.filter(p => p.stats.goals > 0);
@@ -83,7 +93,7 @@ function analyzeKeyPlayers(
 
   let topScorer: string | null = null;
   if (topScorerPlayer) {
-    if (maybeDistort(ERROR_RATE_MID)) {
+    if (maybeDistort(ERROR_RATE_MID * errorMult)) {
       const secondBest = allOpponentPlayers.sort((a, b) => b.stats.goals - a.stats.goals)[1] ?? topScorerPlayer;
       topScorer = `${secondBest.firstName} ${secondBest.lastName} (${secondBest.stats.goals} gole)`;
     } else {
@@ -100,7 +110,8 @@ function analyzeKeyPlayers(
 function analyzeOpponentTactic(
   opponentClub: Club,
   opponentPlayers: Player[],
-  opponentLineup: Lineup
+  opponentLineup: Lineup,
+  errorMult: number = 1.0
 ): { currentTactic: string; predictedTactic: string; hasCadreProblems: boolean } {
   const currentTacticObj = TacticRepository.getById(opponentLineup.tacticId);
   const currentTactic = currentTacticObj?.id ?? opponentLineup.tacticId;
@@ -116,7 +127,7 @@ function analyzeOpponentTactic(
     const alternatives = tactics.filter(t => t.id !== currentTactic);
     const pick = alternatives[Math.floor(Math.random() * alternatives.length)];
     predictedTactic = pick?.id ?? currentTactic;
-    if (maybeDistort(ERROR_RATE_MID)) {
+    if (maybeDistort(ERROR_RATE_MID * errorMult)) {
       const wrong = alternatives.filter(t => t.id !== predictedTactic);
       predictedTactic = wrong[Math.floor(Math.random() * wrong.length)]?.id ?? predictedTactic;
     }
@@ -134,7 +145,8 @@ const TACTIC_MAP: Record<'ofensywnie' | 'neutralnie' | 'defensywnie', string[]> 
 
 function recommendTacticStyle(
   userXiRating: number,
-  opponentXiRating: number
+  opponentXiRating: number,
+  errorMult: number = 1.0
 ): { style: 'ofensywnie' | 'neutralnie' | 'defensywnie'; suggestedTactics: string[] } {
   const diff = userXiRating - opponentXiRating;
   let style: 'ofensywnie' | 'neutralnie' | 'defensywnie';
@@ -143,7 +155,7 @@ function recommendTacticStyle(
   else if (diff <= -5) style = 'defensywnie';
   else style = 'neutralnie';
 
-  if (maybeDistort(ERROR_RATE_LOW)) {
+  if (maybeDistort(ERROR_RATE_LOW * errorMult)) {
     const options: ('ofensywnie' | 'neutralnie' | 'defensywnie')[] = ['ofensywnie', 'neutralnie', 'defensywnie'];
     const others = options.filter(o => o !== style);
     style = others[Math.floor(Math.random() * others.length)];
@@ -161,7 +173,8 @@ interface SwapSuggestion {
 
 function suggestRotation(
   userPlayers: Player[],
-  userLineup: Lineup
+  userLineup: Lineup,
+  errorMult: number = 1.0
 ): { rest: Player[]; play: Player[]; swaps: SwapSuggestion[]; isOptimal: boolean } {
   const xi = userLineup.startingXI
     .map(id => userPlayers.find(p => p.id === id))
@@ -173,7 +186,7 @@ function suggestRotation(
 
   // Kto powinien odpocząć: niska kondycja lub wysoki fatigueDebt
   const rest = xi.filter(p => {
-    const effectiveCondition = maybeDistort(ERROR_RATE_HIGH) ? p.condition + 15 : p.condition;
+    const effectiveCondition = maybeDistort(ERROR_RATE_HIGH * errorMult) ? p.condition + 15 : p.condition;
     return effectiveCondition < 70 || p.fatigueDebt > 20;
   });
 
@@ -1001,9 +1014,11 @@ export const ScoutAssistantService = {
     opponentLeaguePoints: number;
     opponentLeagueGoalDiff: number;
     leagueName: string;
+    analysisQuality?: number;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality } = params;
+    const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
       .map(id => userPlayers.find(p => p.id === id))
@@ -1019,11 +1034,11 @@ export const ScoutAssistantService = {
       ? opponentXi.reduce((s, p) => s + p.overallRating, 0) / opponentXi.length
       : 70;
 
-    const form = analyzeOpponentForm(opponentClub.id, clubs);
-    const keyPlayers = analyzeKeyPlayers(opponentClub.id, opponentPlayers, opponentLineup);
-    const tactic = analyzeOpponentTactic(opponentClub, opponentPlayers, opponentLineup);
-    const approach = recommendTacticStyle(userAvgRating, opponentAvgRating);
-    const rotation = suggestRotation(userPlayers, userLineup);
+    const form = analyzeOpponentForm(opponentClub.id, clubs, errorMult);
+    const keyPlayers = analyzeKeyPlayers(opponentClub.id, opponentPlayers, opponentLineup, errorMult);
+    const tactic = analyzeOpponentTactic(opponentClub, opponentPlayers, opponentLineup, errorMult);
+    const approach = recommendTacticStyle(userAvgRating, opponentAvgRating, errorMult);
+    const rotation = suggestRotation(userPlayers, userLineup, errorMult);
 
     const body = buildMailBody({
       opponentName: opponentClub.name,

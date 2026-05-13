@@ -82,6 +82,7 @@ import { SuperCupService } from '../services/SuperCupService';
 import { UEFASuperCupService } from '../services/UEFASuperCupService';
 import { CoachService } from '../services/CoachService';
 import { StaffGenerationService } from '../services/StaffGenerationService';
+import { ClubManagementService } from '../services/ClubManagementService';
 import { SportingDirectorService } from '../services/SportingDirectorService';
 import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
@@ -806,7 +807,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const finalClubs = [...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
     const staffData = StaffGenerationService.generateInitialStaff(finalClubs);
     setStaffMembers(staffData.staffMembers);
-    setClubs(staffData.updatedClubs);
+    const clubsWithManagement = ClubManagementService.generateForAllClubs(staffData.updatedClubs);
+    setClubs(clubsWithManagement);
     navigateTo(ViewState.MANAGER_CREATION);
   };
 
@@ -5346,6 +5348,28 @@ const finalResult: SimulationOutput = {
               .filter(c => c.leagueId === opponentClub.leagueId)
               .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
             const opponentLeaguePosition = opponentLeagueStandings.findIndex(c => c.id === opponentClub.id) + 1;
+            const scoutClub = clubs.find(c => c.id === userTeamId);
+            const scoutStaff = (scoutClub?.staffIds ?? [])
+              .map(id => staffMembers[id])
+              .filter((s): s is StaffMember => !!s);
+            const assistantExp = (() => {
+              const assistants = scoutStaff.filter(s => s.role === StaffRole.ASSISTANT_COACH);
+              if (assistants.length === 0) return 5;
+              return Math.round(
+                assistants.reduce((sum, s) => sum + (s.attributes.experience ?? 10), 0) / assistants.length
+              );
+            })();
+            const analystQuality = (() => {
+              const analysts = scoutStaff.filter(s => s.role === StaffRole.VIDEO_ANALYST);
+              if (analysts.length === 0) return 5;
+              return Math.round(
+                analysts.reduce((sum, s) => {
+                  const vals = Object.values(s.attributes) as number[];
+                  return sum + vals.reduce((a, b) => a + b, 0) / vals.length;
+                }, 0) / analysts.length
+              );
+            })();
+            const analysisQuality = Math.round((assistantExp + analystQuality) / 2);
             const scoutMail = ScoutAssistantService.generatePreMatchReport({
               opponentClub,
               opponentPlayers,
@@ -5359,6 +5383,7 @@ const finalResult: SimulationOutput = {
               opponentLeaguePoints: opponentClub.stats.points,
               opponentLeagueGoalDiff: opponentClub.stats.goalDifference,
               leagueName,
+              analysisQuality,
             });
             sentMailIdsRef.current.add(scoutMailKey);
             setMessages(prev => [scoutMail, ...prev]);

@@ -1076,6 +1076,92 @@ export interface SportingDirector {
   personality: SportingDirectorPersonality;
 }
 
+export interface ClubOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  cierpliwosc: number;
+  ambicja: number;
+  hojnosc: number;
+  doswiadczenie: number;
+}
+
+export interface ClubCEO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  cierpliwosc: number;
+  ambicja: number;
+  hojnosc: number;
+  doswiadczenie: number;
+}
+
+export interface ClubCFO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  hojnosc: number;
+  doswiadczenie: number;
+  zdolnosciMarketingowe: number;
+  dyscyplinaFinansowa: number;
+}
+
+export interface ClubCOO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  organizacja: number;
+  zarzadzanieInfrastruktura: number;
+  efektywnoscKosztowa: number;
+  logistykaIPlanowanie: number;
+}
+
+export interface ClubMarketingDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  zdolnosciMarketingowe: number;
+}
+
+export interface ClubAcademyDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  rozwojMlodziezy: number;
+  zarzadzanie: number;
+}
+
+export interface ClubManagement {
+  owner: ClubOwner;
+  ceo?: ClubCEO;
+  sportingDirector?: SportingDirector;
+  cfo: ClubCFO;
+  coo: ClubCOO;
+  marketingDirector: ClubMarketingDirector;
+  academyDirector?: ClubAcademyDirector;
+}
+
 export interface SportingDirectorPolicyItem {
   playerId: string;
   playerName: string;
@@ -1226,6 +1312,7 @@ export interface Club {
   summerCamp?: SummerCampState;
   stadiumSeatColors?: string[];
   stadiumExpansionProjects?: StadiumExpansionProject[];
+  management?: ClubManagement;
 }
 
 export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
