@@ -1,8 +1,11 @@
 
 import React, { useMemo, useState } from 'react';
-import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality } from '../../types';
+import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality, StadiumStand } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
+import { BoardRequestModal } from './BoardRequestModal';
+import { StadiumModal } from './StadiumModal';
+import { StadiumExpansionRequestModal } from './StadiumExpansionRequestModal';
 
 interface BoardModalProps {
   club: Club;
@@ -530,9 +533,23 @@ const getObjectivePanelData = (
 };
 
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
-  const { respondToSportingDirectorObjective, players } = useGame();
+  const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion } = useGame();
   const [isDirectorModalOpen, setIsDirectorModalOpen] = useState(false);
+  const [isBoardRequestOpen, setIsBoardRequestOpen] = useState(false);
+  const [isStadiumModalOpen, setIsStadiumModalOpen] = useState(false);
+  const [isExpansionRequestOpen, setIsExpansionRequestOpen] = useState(false);
   const logo = getClubLogo(club.id);
+
+  const attendanceHistory = useMemo(() => {
+    return fixtures
+      .filter(f => f.homeTeamId === club.id && f.status === MatchStatus.FINISHED && f.attendance != null)
+      .slice(-10)
+      .map(f => f.attendance!);
+  }, [fixtures, club.id]);
+
+  const handleExpansionSubmit = (stand: StadiumStand, requestedIncrease: number) => {
+    requestStadiumExpansion(stand, requestedIncrease);
+  };
   const board = club.board;
   const sportingDirector = club.sportingDirector;
   const directorPolicy = club.sportingDirectorPolicy;
@@ -883,6 +900,23 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                 Klub nie ma jeszcze przypisanego dyrektora sportowego.
               </div>
             )}
+
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setIsBoardRequestOpen(true)}
+                className="w-full rounded-[20px] border border-amber-400/20 bg-amber-500/[0.08] p-4 text-left transition-all hover:border-amber-400/35 hover:bg-amber-500/[0.12] group"
+              >
+                <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-300/70">Komunikacja</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-sm font-black italic uppercase tracking-tighter text-white">PROŚBA DO ZARZĄDU</p>
+                  <span className="text-amber-400/50 group-hover:text-amber-400 transition-colors">→</span>
+                </div>
+                <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
+                  Złóż oficjalną prośbę do zarządu klubu
+                </p>
+              </button>
+            </div>
           </aside>
         </div>
       </div>
@@ -1075,6 +1109,40 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
             </div>
           </div>
         </div>
+      )}
+
+      {isBoardRequestOpen && (
+        <BoardRequestModal
+          club={club}
+          onClose={() => setIsBoardRequestOpen(false)}
+          onSelectStadium={() => {
+            setIsBoardRequestOpen(false);
+            setIsStadiumModalOpen(true);
+          }}
+        />
+      )}
+
+      {isStadiumModalOpen && (
+        <StadiumModal
+          club={club}
+          onClose={() => setIsStadiumModalOpen(false)}
+          onRequestExpansion={() => {
+            setIsStadiumModalOpen(false);
+            setIsExpansionRequestOpen(true);
+          }}
+        />
+      )}
+
+      {isExpansionRequestOpen && (
+        <StadiumExpansionRequestModal
+          club={club}
+          attendanceHistory={attendanceHistory}
+          onClose={() => setIsExpansionRequestOpen(false)}
+          onSubmit={(stand, requestedIncrease) => {
+            handleExpansionSubmit(stand, requestedIncrease);
+            setIsExpansionRequestOpen(false);
+          }}
+        />
       )}
     </div>
   );

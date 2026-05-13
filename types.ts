@@ -1091,6 +1091,46 @@ export interface SportingDirectorObjective {
   resultNote?: string;
 }
 
+export type StadiumStand =
+  | 'MAIN_STAND'
+  | 'OPPOSITE_STAND'
+  | 'NORTH_END'
+  | 'SOUTH_END'
+  | 'LIGHTING'
+  | 'VIP_BOXES';
+
+export type StadiumExpansionPhase =
+  | 'BOARD_REVIEW'
+  | 'FEASIBILITY_STUDY'
+  | 'PLANNING_PERMISSION'
+  | 'TENDER'
+  | 'CONSTRUCTION'
+  | 'SAFETY_INSPECTION'
+  | 'COMPLETED'
+  | 'REJECTED';
+
+export interface StadiumExpansionEvent {
+  date: string;
+  message: string;
+  type: 'INFO' | 'WARNING' | 'SUCCESS' | 'DELAY' | 'COST';
+}
+
+export interface StadiumExpansionProject {
+  id: string;
+  stand: StadiumStand;
+  phase: StadiumExpansionPhase;
+  startDate: string;
+  phaseEndDate: string;
+  requestedCapacityIncrease: number;
+  approvedCapacityIncrease?: number;
+  feasibilityCost?: number;
+  totalCost?: number;
+  financeType?: 'BUDGET' | 'INSTALLMENTS' | 'BANK_CREDIT' | 'CITY_AID';
+  contractorTier?: 'CHEAP' | 'BALANCED' | 'PREMIUM';
+  tempCapacityReduction?: number;
+  log: StadiumExpansionEvent[];
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -1145,6 +1185,7 @@ export interface Club {
   aiWeeklyTraining?: AiWeeklyTrainingState;
   winterCamp?: WinterCampState;
   summerCamp?: SummerCampState;
+  stadiumExpansionProjects?: StadiumExpansionProject[];
 }
 
 export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';

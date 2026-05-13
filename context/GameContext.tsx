@@ -36,7 +36,9 @@ SummerCampLocation,
 SummerCampProgram,
 SummerCampIntensity,
 SummerCampState,
+StadiumStand,
 } from '../types';
+import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { KitSelection } from '../services/KitSelectionService';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -326,6 +328,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone }) => void;
   clearGameNotification: () => void;
   respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
+  requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
@@ -5649,6 +5652,38 @@ const finalResult: SimulationOutput = {
       setMessages(prev => [reportMail, ...prev]);
     }
 
+    // ── ROZBUDOWA STADIONU: codzienna aktualizacja faz ───────────────────────
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub && (userClub.stadiumExpansionProjects?.length ?? 0) > 0) {
+        const dateStr = nextDay.toISOString().split('T')[0];
+        const { updatedClub, events } = StadiumExpansionService.advanceDay(userClub, dateStr);
+        if (events.length > 0) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? updatedClub : c));
+          const stadiumMails: MailMessage[] = events.map(ev => ({
+            id: `STADIUM_EV_${ev.projectId}_${dateStr}_${ev.newPhase}`,
+            sender: 'Zarząd Klubu',
+            role: 'Dyrektor Infrastruktury',
+            subject: ev.subject,
+            body: ev.body,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: ev.isGoodNews ? 65 : 80,
+          }));
+          setMessages(prev => [...stadiumMails, ...prev]);
+          if (events.some(e => e.newPhase === 'COMPLETED')) {
+            showGameNotification({
+              title: 'Rozbudowa zakończona!',
+              message: `Nowa trybuna na stadionie ${userClub.stadiumName} jest gotowa!`,
+              tone: 'success',
+            });
+          }
+        }
+      }
+    }
+    // ── END ROZBUDOWA STADIONU ────────────────────────────────────────────────
+
     // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────
     if (academy && userTeamId && nextDay.getDate() === 1 && academy.youthPlayers.length > 0) {
       const userClub = clubs.find(c => c.id === userTeamId);
@@ -5679,7 +5714,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned]);
 
 
    const confirmCLGroupDraw = () => {
@@ -6786,6 +6821,39 @@ const finalResult: SimulationOutput = {
       tone: response === 'CHALLENGE' ? 'warning' : 'info',
     });
   }, [clubs, currentDate, showGameNotification, userTeamId]);
+
+  const requestStadiumExpansion = useCallback((stand: StadiumStand, requestedIncrease: number) => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+    const dateStr = currentDate instanceof Date
+      ? currentDate.toISOString().split('T')[0]
+      : String(currentDate);
+    const project = StadiumExpansionService.createRequest(userTeamId, stand, requestedIncrease, dateStr);
+    setClubs(prev => prev.map(c =>
+      c.id === userTeamId
+        ? { ...c, stadiumExpansionProjects: [...(c.stadiumExpansionProjects ?? []), project] }
+        : c
+    ));
+    const standLabel = StadiumExpansionService.getStandLabel(stand);
+    setMessages(prev => [{
+      id: `STADIUM_REQ_${project.id}`,
+      sender: 'Zarząd Klubu',
+      role: 'Sekretariat',
+      subject: `Wniosek o rozbudowę przyjęty — ${standLabel}`,
+      body: `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWniosek zostanie rozpatrzony przez zarząd w ciągu 2–4 tygodni. O decyzji zostanie Pan niezwłocznie poinformowany drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
+      date: new Date(dateStr),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 60,
+    }, ...prev]);
+    showGameNotification({
+      title: 'Wniosek złożony',
+      message: `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Odpowiedź w ciągu 2–4 tygodni.`,
+      tone: 'info',
+    });
+  }, [clubs, currentDate, showGameNotification, userTeamId]);
+
  const updatePlayer = (clubId: string, playerId: string, newData: Partial<Player>) => {
     setPlayers(prev => ({
       ...prev,
@@ -8288,7 +8356,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
-    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective,
+    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,
     confirmRelegationPlayoffMatch1, confirmRelegationPlayoffMatch2,
