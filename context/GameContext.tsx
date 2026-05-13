@@ -37,6 +37,7 @@ SummerCampProgram,
 SummerCampIntensity,
 SummerCampState,
 StadiumStand,
+StaffMember,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { KitSelection } from '../services/KitSelectionService';
@@ -79,6 +80,7 @@ import { CLDrawService } from '../services/CLDrawService';
 import { SuperCupService } from '../services/SuperCupService';
 import { UEFASuperCupService } from '../services/UEFASuperCupService';
 import { CoachService } from '../services/CoachService';
+import { StaffGenerationService } from '../services/StaffGenerationService';
 import { SportingDirectorService } from '../services/SportingDirectorService';
 import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
@@ -185,6 +187,7 @@ interface GameContextType {
   lastRecoveryDate: Date;
   lastMatchSummary: MatchSummary | null;
   coaches: Record<string, Coach>;
+  staffMembers: Record<string, StaffMember>;
   roundResults: Record<string, LeagueRoundResults>;
   isJumping: boolean;
   managerProfile: ManagerProfile | null;
@@ -409,6 +412,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastRecoveryDate, setLastRecoveryDate] = useState<Date>(START_DATE);
   const [lastMatchSummary, setLastMatchSummary] = useState<MatchSummary | null>(null);
   const [coaches, setCoaches] = useState<Record<string, Coach>>({});
+  const [staffMembers, setStaffMembers] = useState<Record<string, StaffMember>>({});
   const [roundResults, setRoundResults] = useState<Record<string, LeagueRoundResults>>({});
   const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(null);
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
@@ -703,7 +707,6 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // -> tutaj wstaw kod
     const coachData = CoachService.generateInitialCoaches([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
     setCoaches(coachData.coaches);
-    setClubs(coachData.updatedClubs);
    
 
 
@@ -795,7 +798,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const initialSuperCup = SuperCupService.generateFixture(2025, STATIC_CLUBS);
     const initialUEFASuperCup = UEFASuperCupService.generateFixture(2025, STATIC_CLUBS);
     setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
-    setClubs([...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
+    const finalClubs = [...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
+    const staffData = StaffGenerationService.generateInitialStaff(finalClubs);
+    setStaffMembers(staffData.staffMembers);
+    setClubs(staffData.updatedClubs);
     navigateTo(ViewState.MANAGER_CREATION);
   };
 
@@ -1383,6 +1389,7 @@ if (userTeamId) {
     leagueSchedules,
     lastRecoveryDate,
     coaches,
+    staffMembers,
     roundResults,
     managerProfile,
     seasonNumber,
@@ -1456,6 +1463,7 @@ if (userTeamId) {
     setLeagueSchedules(data.leagueSchedules);
     setLastRecoveryDate(data.lastRecoveryDate);
     setCoaches(data.coaches);
+    setStaffMembers(data.staffMembers ?? {});
     setRoundResults(data.roundResults);
     setManagerProfile(data.managerProfile);
     setSeasonNumber(data.seasonNumber);
@@ -1521,7 +1529,14 @@ const selectUserTeam = (clubId: string) => {
     const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
     const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
-    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, sportingDirector } : c));
+    if (club.coachId) {
+      setCoaches(prev => {
+        const prev_coach = prev[club.coachId!];
+        if (!prev_coach) return prev;
+        return { ...prev, [club.coachId!]: { ...prev_coach, currentClubId: null } };
+      });
+    }
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, coachId: undefined, sportingDirector } : c));
 
     const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
@@ -8339,7 +8354,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
 
   return (
     <GameContext.Provider value={{
-      currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
+      currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
     viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
       lastRecoveryDate,
       managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,

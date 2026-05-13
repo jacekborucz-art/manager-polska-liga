@@ -23,6 +23,7 @@ export interface SaveState {
   leagueSchedules: Record<any, any>;
   lastRecoveryDate: Date;
   coaches: Record<string, any>;
+  staffMembers: Record<string, any>;
   roundResults: Record<string, any>;
   managerProfile: any;
   seasonNumber: number;

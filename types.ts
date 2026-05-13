@@ -320,6 +320,42 @@ export interface Coach {
   favoritePlayerIds?: string[];  // Lista ID "ulubieńców trenera" — aktualizowana co miesiąc
 }
 
+export enum StaffRole {
+  ASSISTANT_COACH = 'ASSISTANT_COACH',
+  GOALKEEPER_COACH = 'GOALKEEPER_COACH',
+  FITNESS_COACH = 'FITNESS_COACH',
+  VIDEO_ANALYST = 'VIDEO_ANALYST',
+  PHYSIOTHERAPIST = 'PHYSIOTHERAPIST',
+  CLUB_DOCTOR = 'CLUB_DOCTOR'
+}
+
+export type StaffAttributes = Record<string, number>;
+
+export interface StaffHistoryEntry {
+  clubId: string;
+  clubName: string;
+  fromYear: number;
+  fromMonth: number;
+  toYear: number | null;
+  toMonth: number | null;
+}
+
+export interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: string;
+  nationalityFlag: string;
+  role: StaffRole;
+  attributes: StaffAttributes;
+  currentClubId: string | null;
+  hiredDate: string;
+  contractEndDate: string;
+  salary: number;
+  history: StaffHistoryEntry[];
+}
+
 export interface AiWeeklyTrainingState {
   weekKey: string;
   cycleId: string;
@@ -1147,6 +1183,7 @@ export interface Club {
   colorSecondary?: string;
   rosterIds: string[];
   coachId?: string;
+  staffIds?: string[];
   stats: TeamStats;
   isInPolishCup?: boolean;
   budget: number;

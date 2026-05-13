@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture } from '../../types';
+import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -13,6 +13,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
 import { WeeklyMotivationModal } from '../modals/WeeklyMotivationModal';
 import { WeeklyMotivationService } from '../../services/WeeklyMotivationService';
+import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
@@ -22,7 +23,8 @@ import { generatePlayerReport } from '../../services/TrainingAssistantService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
-          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues } = useGame();
+          reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
+          coaches, staffMembers, managerProfile } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -36,6 +38,8 @@ export const SquadView: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
+  const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
   const cachedReport = useMemo(
     () => reportPlayer ? generatePlayerReport(reportPlayer, myPlayers, allLeaguePlayers) : null,
@@ -647,6 +651,14 @@ export const SquadView: React.FC = () => {
             >
               <span className="relative z-10 flex items-center gap-2">💬 MOTYWACJA{!canMotivate && <span className="text-[8px] normal-case not-italic font-bold text-slate-600">· użyta</span>}</span>
               {canMotivate && <div className="absolute inset-0 bg-gradient-to-tr from-violet-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />}
+            </button>
+            <button
+              onClick={() => setIsStaffOpen(true)}
+              className="relative group px-8 py-5 rounded-[24px] bg-cyan-600/10 border-t border-x border-b border-t-cyan-400/40 border-x-cyan-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-cyan-300 hover:bg-cyan-600/20 transition-all active:translate-y-[2px] overflow-hidden"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            >
+              <span className="relative z-10 flex items-center gap-2">👥 SZTAB</span>
+              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
             <button
               onClick={() => setIsAnalysisOpen(true)}
@@ -1558,6 +1570,194 @@ export const SquadView: React.FC = () => {
           onClose={() => setIsMotivationOpen(false)}
         />
       )}
+
+      {isStaffOpen && myClub && (() => {
+        const isUserClub = myClub.id === userTeamId;
+        const coachName = isUserClub && managerProfile
+          ? `${managerProfile.firstName} ${managerProfile.lastName}`
+          : myClub.coachId && coaches[myClub.coachId]
+            ? `${coaches[myClub.coachId].firstName} ${coaches[myClub.coachId].lastName}`
+            : null;
+        const clubStaff = (myClub.staffIds ?? []).map(id => staffMembers[id]).filter(Boolean);
+        const grouped: Partial<Record<StaffRole, typeof clubStaff>> = {};
+        clubStaff.forEach(s => {
+          if (!grouped[s.role]) grouped[s.role] = [];
+          grouped[s.role]!.push(s);
+        });
+        const assistants = grouped[StaffRole.ASSISTANT_COACH] ?? [];
+        const gkCoaches  = grouped[StaffRole.GOALKEEPER_COACH] ?? [];
+        const fitness    = grouped[StaffRole.FITNESS_COACH] ?? [];
+        const analysts   = grouped[StaffRole.VIDEO_ANALYST] ?? [];
+        const physios    = grouped[StaffRole.PHYSIOTHERAPIST] ?? [];
+        const doctors    = grouped[StaffRole.CLUB_DOCTOR] ?? [];
+
+        const ROLE_LABELS: Record<StaffRole, string> = {
+          [StaffRole.ASSISTANT_COACH]: 'Asystent trenera',
+          [StaffRole.GOALKEEPER_COACH]: 'Trener bramkarzy',
+          [StaffRole.FITNESS_COACH]: 'Trener przygotowania motorycznego',
+          [StaffRole.VIDEO_ANALYST]: 'Analityk video',
+          [StaffRole.PHYSIOTHERAPIST]: 'Fizjoterapeuta',
+          [StaffRole.CLUB_DOCTOR]: 'Lekarz klubowy',
+        };
+        const MONTHS_PL = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+
+        const selectedMember = selectedStaffId ? clubStaff.find(s => s.id === selectedStaffId) ?? null : null;
+
+        const StaffCard = ({ m, nameColor }: { m: typeof clubStaff[0]; nameColor: string }) => (
+          <div
+            className="flex flex-col items-center gap-0.5 cursor-pointer hover:opacity-70 transition-opacity"
+            onClick={() => setSelectedStaffId(m.id)}
+          >
+            <span className={`text-[17px] font-black italic uppercase tracking-tighter whitespace-nowrap ${nameColor}`}>{m.firstName} {m.lastName}</span>
+          </div>
+        );
+
+        const Band = ({ label, labelColor, nameColor, bg, children }: { label: string; labelColor: string; nameColor: string; bg: string; children: React.ReactNode }) => (
+          <div className={`w-full flex flex-col items-center gap-3 py-6 px-8 ${bg}`}>
+            <span className={`text-[12px] font-black italic uppercase tracking-tighter ${labelColor}`}>{label}</span>
+            <div className="flex items-start justify-center gap-14 flex-wrap">{children}</div>
+          </div>
+        );
+
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => { setIsStaffOpen(false); setSelectedStaffId(null); }}>
+
+            {/* KARTA SZCZEGÓŁÓW */}
+            {selectedMember && (
+              <div
+                className="relative w-[460px] bg-slate-950 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* nagłówek karty */}
+                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-slate-900/60 border-b border-white/6 relative">
+                  <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-500">{ROLE_LABELS[selectedMember.role]}</span>
+                  <span className="text-[24px] font-black italic uppercase tracking-tighter text-white mt-1 whitespace-nowrap">{selectedMember.firstName} {selectedMember.lastName}</span>
+                  <span className="text-[12px] text-slate-400 mt-0.5">{selectedMember.age} lat</span>
+                  <button onClick={() => setSelectedStaffId(null)} className="absolute right-6 top-6 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
+                </div>
+                {/* atrybuty */}
+                <div className="px-8 pt-5 pb-3">
+                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">Atrybuty</div>
+                  <div className="flex flex-col gap-2">
+                    {STAFF_ROLE_ATTRS[selectedMember.role].map(({ key, label }) => {
+                      const val = selectedMember.attributes[key] ?? 0;
+                      return (
+                        <div key={key} className="flex items-center gap-3">
+                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 w-52 shrink-0">{label}</span>
+                          <div className="flex-1 h-2 bg-white/8 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-cyan-400" style={{ width: `${(val / 20) * 100}%` }} />
+                          </div>
+                          <span className="text-[13px] font-black italic text-white w-6 text-right">{val}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* zarobki */}
+                <div className="px-8 pt-4 pb-3 border-t border-white/6 mt-2">
+                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-1">Zarobki roczne</div>
+                  <span className="text-[20px] font-black italic tracking-tighter text-white">{selectedMember.salary.toLocaleString('pl-PL')} PLN</span>
+                </div>
+                {/* historia */}
+                <div className="px-8 pt-4 pb-7 border-t border-white/6">
+                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">Historia kariery</div>
+                  {selectedMember.history.length === 0 ? (
+                    <span className="text-[12px] italic text-slate-600">Brak historii</span>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {selectedMember.history.map((h, i) => (
+                        <div key={i} className="flex items-center justify-between">
+                          <span className="text-[14px] font-black italic uppercase tracking-tighter text-white">{h.clubName}</span>
+                          <span className="text-[11px] italic text-slate-400">
+                            {MONTHS_PL[(h.fromMonth ?? 1) - 1]} {h.fromYear} — {h.toYear ? `${MONTHS_PL[(h.toMonth ?? 1) - 1]} ${h.toYear}` : 'obecnie'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* LISTA SZTABU */}
+            {!selectedMember && (
+              <div
+                className="relative w-[800px] bg-slate-950 rounded-[36px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-center gap-4 pt-7 pb-5 bg-slate-950 relative">
+                  {getClubLogo(myClub.id) && (
+                    <img src={getClubLogo(myClub.id)!} alt="" className="w-10 h-10 object-contain" />
+                  )}
+                  <div className="text-center">
+                    <div className="text-[20px] font-black italic uppercase tracking-tighter text-white">{myClub.name}</div>
+                    <div className="text-[22px] font-black italic uppercase tracking-tighter text-white mt-0.5">Sztab szkoleniowy</div>
+                  </div>
+                  <button onClick={() => setIsStaffOpen(false)} className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
+                </div>
+
+                {coachName && (
+                  <div className="w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40">
+                    <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Trener</span>
+                    <span className="text-[28px] font-black italic uppercase tracking-tighter text-yellow-100 mt-1">{coachName}</span>
+                  </div>
+                )}
+
+                {assistants.length > 0 && (
+                  <Band label="Asystent trenera" labelColor="text-slate-300" nameColor="text-slate-100" bg="bg-gradient-to-b from-slate-700/40 to-slate-800/30">
+                    {assistants.map(m => <StaffCard key={m.id} m={m} nameColor="text-slate-100" />)}
+                  </Band>
+                )}
+
+                {(gkCoaches.length > 0 || fitness.length > 0 || analysts.length > 0) && (
+                  <div className="w-full py-6 px-8 bg-gradient-to-b from-blue-950/50 to-blue-950/30">
+                    <div className="flex items-start justify-center gap-20">
+                      {gkCoaches.length > 0 && (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Trener bramkarzy</span>
+                          <div className="flex flex-col items-center gap-2">{gkCoaches.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
+                        </div>
+                      )}
+                      {fitness.length > 0 && (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Przygotowanie motoryczne</span>
+                          <div className="flex flex-col items-center gap-2">{fitness.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
+                        </div>
+                      )}
+                      {analysts.length > 0 && (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Analityk video</span>
+                          <div className="flex flex-col items-center gap-2">{analysts.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(physios.length > 0 || doctors.length > 0) && (
+                  <div className="w-full py-6 px-8 bg-gradient-to-b from-emerald-950/50 to-emerald-950/30">
+                    <div className="flex items-start justify-center gap-24">
+                      {physios.length > 0 && (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">Fizjoterapeuci</span>
+                          <div className="flex flex-col items-center gap-2">{physios.map(m => <StaffCard key={m.id} m={m} nameColor="text-emerald-100" />)}</div>
+                        </div>
+                      )}
+                      {doctors.length > 0 && (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">Lekarz klubowy</span>
+                          <div className="flex flex-col items-center gap-2">{doctors.map(m => <StaffCard key={m.id} m={m} nameColor="text-emerald-100" />)}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>,
+          document.body
+        );
+      })()}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
