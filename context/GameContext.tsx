@@ -3550,8 +3550,9 @@ setMessages([welcomeMail, fanMail]);
         // ── LM: FINAŁ ────────────────────────────────────────────────────────
         case CompetitionType.CL_FINAL: {
           const finalFixture = allFixtures.find(f => f.leagueId === CompetitionType.CL_FINAL);
-          
-       
+          if (!finalFixture) break;
+
+
           const alreadyPlayed = finalFixture.status === MatchStatus.FINISHED;
           if (!alreadyPlayed) {
             if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
@@ -6536,6 +6537,7 @@ const finalResult: SimulationOutput = {
 
   const confirmCupDraw = (pairs: Fixture[]) => {
     if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
     
     const participantIds = new Set<string>();
     pairs.forEach(f => { participantIds.add(f.homeTeamId); participantIds.add(f.awayTeamId); });
@@ -6552,11 +6554,11 @@ const finalResult: SimulationOutput = {
   
 
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
 
 
     setActiveCupDraw(null);
-    
+
     if (userTeamId) {
       const isUserIn = pairs.some(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId);
       const mail: MailMessage = { 
@@ -6581,6 +6583,7 @@ const finalResult: SimulationOutput = {
 
   const confirmCLDraw = (pairs: Fixture[]) => {
     if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
     setGlobalFixtures(prev => [...prev, ...pairs]);
 
     const year = currentDate.getFullYear();
@@ -6637,7 +6640,7 @@ const finalResult: SimulationOutput = {
     // ── koniec ──
 
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
     setActiveCupDraw(null);
     if (userTeamId) {
       const isUserIn = pairs.some(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId);
@@ -6665,6 +6668,7 @@ const finalResult: SimulationOutput = {
   // ── Liga Europy: potwierdzenie losowania R1Q ─────────────────────────────
   const confirmELDraw = (pairs: Fixture[]) => {
     if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
 
     // Zapisz pary (draw fixtures)
     setGlobalFixtures(prev => [...prev, ...pairs]);
@@ -6697,7 +6701,7 @@ const finalResult: SimulationOutput = {
     });
     setGlobalFixtures(prev => [...prev, ...matchFixtures]);
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
     setActiveCupDraw(null);
 
     if (userTeamId) {
@@ -6724,6 +6728,7 @@ const finalResult: SimulationOutput = {
   // ── Liga Konferencji: potwierdzenie losowania R1Q ────────────────────────
   const confirmCONFDraw = (pairs: Fixture[]) => {
     if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
 
     // Zapisz pary (draw fixtures)
     setGlobalFixtures(prev => [...prev, ...pairs]);
@@ -6756,7 +6761,7 @@ const finalResult: SimulationOutput = {
     });
     setGlobalFixtures(prev => [...prev, ...matchFixtures]);
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
     setActiveCupDraw(null);
 
     if (userTeamId) {
@@ -6783,6 +6788,7 @@ const finalResult: SimulationOutput = {
   // ── Liga Konferencji: potwierdzenie losowania R2Q ───────────────────────
   const confirmCONFR2QDraw = (pairs: Fixture[]) => {
     if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
 
     setGlobalFixtures(prev => [...prev, ...pairs]);
 
@@ -6814,7 +6820,7 @@ const finalResult: SimulationOutput = {
     });
     setGlobalFixtures(prev => [...prev, ...matchFixtures]);
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
     setActiveCupDraw(null);
 
     if (userTeamId) {
@@ -6840,6 +6846,8 @@ const finalResult: SimulationOutput = {
 
   // ── Liga Europy: potwierdzenie losowania R2Q ─────────────────────────────
   const confirmELR2QDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
 
     setGlobalFixtures(prev => [...prev, ...pairs]);
 
@@ -6871,7 +6879,7 @@ const finalResult: SimulationOutput = {
     });
     setGlobalFixtures(prev => [...prev, ...matchFixtures]);
 
-    setProcessedDrawIds(prev => [...prev, activeCupDraw.id]);
+    setProcessedDrawIds(prev => [...prev, drawId]);
     setActiveCupDraw(null);
 
     if (userTeamId) {
@@ -7011,7 +7019,7 @@ const finalResult: SimulationOutput = {
         } as Player);
       });
       newPlayersChunk[clubId] = squad;
-      const coach = Object.values(coaches).find(c => c.clubId === clubId) ?? null;
+      const coach = Object.values(coaches).find(c => c.currentClubId === clubId) ?? null;
       newLineupsChunk[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
     });
     const hasImportedPlayers = Object.keys(newPlayersChunk).length > 0;
@@ -8017,6 +8025,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const userSquad = players[userTeamId] || [];
 
     if (!playerToSign || !userClub) return;
+    const resolvedPlayer = playerToSign;
 
     const failForNoFunds = () => {
       const lockoutDate = new Date(currentDate);
@@ -8025,7 +8034,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       setPlayers(prevPlayers => ({
         ...prevPlayers,
         ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
-          player.id === playerToSign.id
+          player.id === resolvedPlayer.id
             ? {
                 ...player,
                 freeAgentLockoutUntil: null,
@@ -8042,9 +8051,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
 
       const offendedMail: MailMessage = {
         id: `MAIL_FA_NO_FUNDS_${mail.id}`,
-        sender: `Agent gracza ${playerToSign.lastName}`,
+        sender: `Agent gracza ${resolvedPlayer.lastName}`,
         role: 'Agencja Menadzerska',
-        subject: `Rozmowy zerwane: ${playerToSign.firstName} ${playerToSign.lastName}`,
+        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
         body: `Po ponownej weryfikacji okazalo sie, ze klub ${userClub.name} nie ma srodkow na realizacje uzgodnionych warunkow. Moj klient potraktowal to jako brak powagi. Wracamy do rozmow najwczesniej po ${lockoutDate.toLocaleDateString('pl-PL')}.`,
         date: new Date(currentDate),
         isRead: false,
@@ -8056,7 +8065,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
 
       return showGameNotification({
         title: 'Transfer anulowany',
-        message: `${playerToSign.firstName} ${playerToSign.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodkow. Kolejna proba bedzie mozliwa dopiero za rok.`,
+        message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodkow. Kolejna proba bedzie mozliwa dopiero za rok.`,
         tone: 'error'
       });
     };
@@ -8068,7 +8077,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     }
 
     const boardDecision = FinanceService.evaluateFASigningBoardDecision(
-      playerToSign,
+      resolvedPlayer,
       salary,
       bonus,
       userSquad,
@@ -8085,7 +8094,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const directorFreeAgentDecision = userClub.sportingDirector
       ? SportingDirectorService.evaluateFreeAgentSigningDecision({
           club: userClub,
-          player: playerToSign,
+          player: resolvedPlayer,
           squad: userSquad,
           contract: { salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus },
           date: currentDate,
@@ -8115,7 +8124,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
           date: currentDate.toISOString().split('T')[0],
           amount: -contractCost,
           type: 'EXPENSE' as const,
-          description: `Kontrakt z wolnym agentem: ${playerToSign.lastName} (${years}L × ${salary.toLocaleString('pl-PL')} PLN + bonus)`
+          description: `Kontrakt z wolnym agentem: ${resolvedPlayer.lastName} (${years}L × ${salary.toLocaleString('pl-PL')} PLN + bonus)`
         },
         ...(c.financeHistory || [])
       ].slice(0, 50)
@@ -8129,14 +8138,14 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
     const updatedHistory = PlayerCareerService.movePlayer(
-      playerToSign,
+      resolvedPlayer,
       { clubName: userClub?.name || 'Nieznany Klub', clubId: userTeamId },
       currentYear,
       currentMonth
     );
 
     const updatedPlayer = {
-      ...playerToSign,
+      ...resolvedPlayer,
       clubId: userTeamId,
       annualSalary: salary,
       goalBonus: goalBonus ?? undefined,
@@ -8145,7 +8154,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       contractEndDate: newEndDate,
       transferLockoutUntil: transferLockoutDate.toISOString(),
       marketValue: FinanceService.calculateMarketValue(
-        { ...playerToSign, clubId: userTeamId },
+        { ...resolvedPlayer, clubId: userTeamId },
         userClub?.reputation ?? 5,
         userClub?.tier ?? 1,
         userClub?.country
@@ -8167,11 +8176,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     }
     return showGameNotification({
       title: 'Transfer sfinalizowany',
-      message: `${playerToSign.firstName} ${playerToSign.lastName} dolaczyl do kadry ${userClub?.name || ''}.`,
+      message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} dolaczyl do kadry ${userClub?.name || ''}.`,
       tone: 'success'
     });
-
-    alert(`Transfer sfinalizowany! ${playerToSign.firstName} ${playerToSign.lastName} dołączył do kadry.`);
   }, [messages, players, userTeamId, currentDate, clubs, showGameNotification]);
 
   useEffect(() => {
