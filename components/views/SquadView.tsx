@@ -24,7 +24,7 @@ import { generatePlayerReport } from '../../services/TrainingAssistantService';
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
-          coaches, staffMembers, managerProfile } = useGame();
+          coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -40,7 +40,24 @@ export const SquadView: React.FC = () => {
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [isStaffMenuOpen, setIsStaffMenuOpen] = useState(false);
+  const [staffActionMsg, setStaffActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [staffFireConfirmOpen, setStaffFireConfirmOpen] = useState(false);
+  const [staffNegotiationOpen, setStaffNegotiationOpen] = useState(false);
+  const [staffNegPhase, setStaffNegPhase] = useState<'proposal' | 'counter' | 'result'>('proposal');
+  const [staffNegProposedSalary, setStaffNegProposedSalary] = useState(0);
+  const [staffNegProposedYears, setStaffNegProposedYears] = useState(1);
+  const [staffNegCounterSalary, setStaffNegCounterSalary] = useState(0);
+  const [staffNegCounterYears, setStaffNegCounterYears] = useState(1);
+  const [staffNegResultMsg, setStaffNegResultMsg] = useState('');
+  const [staffNegResultOk, setStaffNegResultOk] = useState(false);
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
+
+  const REGION_LABELS: Record<string, string> = {
+    POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
+    SPAIN: 'Hiszpania', ITALY: 'Włochy', BALKANS: 'Bałkany', CZ_SK: 'Czechy/Słowacja',
+    SCANDINAVIA: 'Skandynawia', EX_USSR: 'WNP', BALTIC: 'Kraje bałtyckie', ROMANIA: 'Rumunia',
+  };
   const cachedReport = useMemo(
     () => reportPlayer ? generatePlayerReport(reportPlayer, myPlayers, allLeaguePlayers) : null,
     [allLeaguePlayers, myPlayers, reportPlayer]
@@ -1606,7 +1623,7 @@ export const SquadView: React.FC = () => {
         const StaffCard = ({ m, nameColor }: { m: typeof clubStaff[0]; nameColor: string }) => (
           <div
             className="flex flex-col items-center gap-0.5 cursor-pointer hover:opacity-70 transition-opacity"
-            onClick={() => setSelectedStaffId(m.id)}
+            onClick={() => { setSelectedStaffId(m.id); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }}
           >
             <span className={`text-[17px] font-black italic uppercase tracking-tighter whitespace-nowrap ${nameColor}`}>{m.firstName} {m.lastName}</span>
           </div>
@@ -1625,19 +1642,80 @@ export const SquadView: React.FC = () => {
             {/* KARTA SZCZEGÓŁÓW */}
             {selectedMember && (
               <div
-                className="relative w-[460px] bg-slate-950 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                className="relative w-[460px] bg-slate-950/70 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
                 onClick={e => e.stopPropagation()}
               >
                 {/* nagłówek karty */}
-                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-slate-900/60 border-b border-white/6 relative">
+                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-slate-900/40 border-b border-white/6 relative">
+                  {/* dropdown menu */}
+                  <div className="absolute left-6 top-6">
+                    <button
+                      onClick={e => { e.stopPropagation(); setIsStaffMenuOpen(p => !p); setStaffActionMsg(null); }}
+                      className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 bg-slate-800/80 shadow-[0_4px_12px_rgba(0,0,0,0.6),0_1px_0_rgba(255,255,255,0.08)_inset] active:shadow-[0_1px_4px_rgba(0,0,0,0.6)] active:translate-y-px select-none"
+                    >
+                      ⚙ Akcje
+                    </button>
+                    {isStaffMenuOpen && (
+                      <div className="absolute left-0 top-9 z-50 w-52 rounded-xl border border-white/10 bg-slate-900/95 shadow-[0_20px_60px_rgba(0,0,0,0.8),0_1px_0_rgba(255,255,255,0.06)_inset] overflow-hidden">
+                        {/* Przedłuż kontrakt */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setIsStaffMenuOpen(false);
+                            if (selectedMember.lastNegotiationDate) {
+                              const lastNeg = new Date(selectedMember.lastNegotiationDate);
+                              const unlockDate = new Date(lastNeg);
+                              unlockDate.setMonth(unlockDate.getMonth() + 6);
+                              const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+                              if (now < unlockDate) {
+                                const uf = `${String(unlockDate.getDate()).padStart(2,'0')}.${String(unlockDate.getMonth()+1).padStart(2,'0')}.${unlockDate.getFullYear()}`;
+                                setStaffActionMsg({ text: `Negocjacje zablokowane do ${uf}.`, ok: false });
+                                return;
+                              }
+                            }
+                            const attrVals = Object.values(selectedMember.attributes);
+                            const avg = attrVals.length > 0 ? attrVals.reduce((a, b) => a + b, 0) / attrVals.length : 8;
+                            const raise = 1.08 + (avg / 20) * 0.12 + (Math.random() - 0.5) * 0.06;
+                            const propSalary = Math.round((selectedMember.salary * raise) / 10_000) * 10_000;
+                            const propYears = avg >= 15 ? 3 : avg >= 10 ? 2 : Math.random() < 0.5 ? 2 : 1;
+                            setStaffNegProposedSalary(propSalary);
+                            setStaffNegProposedYears(propYears);
+                            setStaffNegCounterSalary(propSalary);
+                            setStaffNegCounterYears(propYears);
+                            setStaffNegPhase('proposal');
+                            setStaffNegotiationOpen(true);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-[12px] font-black italic uppercase tracking-tighter text-slate-300 hover:bg-white/8 hover:text-white transition-colors"
+                        >
+                          Przedłuż kontrakt
+                        </button>
+                        {/* Zwolnij */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setIsStaffMenuOpen(false);
+                            setStaffFireConfirmOpen(true);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-[12px] font-black italic uppercase tracking-tighter text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors border-t border-white/6"
+                        >
+                          Zwolnij
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-500">{ROLE_LABELS[selectedMember.role]}</span>
                   <span className="text-[24px] font-black italic uppercase tracking-tighter text-white mt-1 whitespace-nowrap">{selectedMember.firstName} {selectedMember.lastName}</span>
-                  <span className="text-[12px] text-slate-400 mt-0.5">{selectedMember.age} lat</span>
-                  <button onClick={() => setSelectedStaffId(null)} className="absolute right-6 top-6 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
+                  <span className="text-[12px] text-slate-400 mt-0.5">{REGION_LABELS[selectedMember.nationality] ?? selectedMember.nationality} · {selectedMember.age} lat</span>
+                  <button onClick={() => { setSelectedStaffId(null); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }} className="absolute right-6 top-6 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
+                  {/* komunikat akcji */}
+                  {staffActionMsg && (
+                    <div className={`mt-3 px-4 py-2 rounded-lg text-[11px] font-black italic uppercase tracking-tighter ${staffActionMsg.ok ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'}`}>
+                      {staffActionMsg.text}
+                    </div>
+                  )}
                 </div>
                 {/* atrybuty */}
-                <div className="px-8 pt-5 pb-3">
-                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">Atrybuty</div>
+                <div className="px-8 pt-5 pb-3 bg-gradient-to-br from-amber-950/50 via-stone-900/60 to-orange-950/40">
                   <div className="flex flex-col gap-2">
                     {STAFF_ROLE_ATTRS[selectedMember.role].map(({ key, label }) => {
                       const val = selectedMember.attributes[key] ?? 0;
@@ -1653,14 +1731,27 @@ export const SquadView: React.FC = () => {
                     })}
                   </div>
                 </div>
-                {/* zarobki */}
-                <div className="px-8 pt-4 pb-3 border-t border-white/6 mt-2">
-                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-1">Zarobki roczne</div>
-                  <span className="text-[20px] font-black italic tracking-tighter text-white">{selectedMember.salary.toLocaleString('pl-PL')} PLN</span>
+                {/* zarobki + kontrakt */}
+                <div className="px-8 pt-4 pb-4 mt-2 bg-gradient-to-br from-yellow-900/60 via-yellow-800/40 to-amber-900/50 border-t border-yellow-600/30">
+                  <div className="text-[11px] font-black italic uppercase tracking-tighter text-yellow-400/80 mb-2 text-center">Informacje o kontrakcie</div>
+                  <div className="border-b border-white/20 mb-3" />
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300/60 mb-1">Zarobki roczne</div>
+                      <span className="text-[15px] font-black italic tracking-tighter text-white">{selectedMember.salary.toLocaleString('pl-PL')} PLN</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300/60 mb-1">Kontrakt do</div>
+                      <span className="text-[15px] font-black italic tracking-tighter text-white">
+                        {(() => { const d = new Date(selectedMember.contractEndDate); return `${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`; })()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 {/* historia */}
-                <div className="px-8 pt-4 pb-7 border-t border-white/6">
-                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">Historia kariery</div>
+                <div className="px-8 pt-4 pb-7 border-t border-amber-800/30 bg-gradient-to-br from-amber-950/50 via-stone-900/60 to-orange-950/40">
+                  <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-300 mb-2 text-center">Historia kariery</div>
+                  <div className="border-b border-white/20 mb-3" />
                   {selectedMember.history.length === 0 ? (
                     <span className="text-[12px] italic text-slate-600">Brak historii</span>
                   ) : (
@@ -1668,7 +1759,7 @@ export const SquadView: React.FC = () => {
                       {selectedMember.history.map((h, i) => (
                         <div key={i} className="flex items-center justify-between">
                           <span className="text-[14px] font-black italic uppercase tracking-tighter text-white">{h.clubName}</span>
-                          <span className="text-[11px] italic text-slate-400">
+                          <span className="text-[11px] italic text-slate-200">
                             {MONTHS_PL[(h.fromMonth ?? 1) - 1]} {h.fromYear} — {h.toYear ? `${MONTHS_PL[(h.toMonth ?? 1) - 1]} ${h.toYear}` : 'obecnie'}
                           </span>
                         </div>
@@ -1676,6 +1767,162 @@ export const SquadView: React.FC = () => {
                     </div>
                   )}
                 </div>
+                {/* modal potwierdzenia zwolnienia */}
+                {staffFireConfirmOpen && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/85 rounded-[32px]" onClick={e => e.stopPropagation()}>
+                    <div className="px-8 py-8 flex flex-col items-center gap-4 max-w-[340px] text-center">
+                      <span className="text-[13px] font-black italic uppercase tracking-tighter text-red-400">Potwierdzenie zwolnienia</span>
+                      <span className="text-[18px] font-black italic uppercase tracking-tighter text-white">{selectedMember.firstName} {selectedMember.lastName}</span>
+                      <div className="border-b border-white/15 w-full" />
+                      <span className="text-[12px] italic text-slate-300">Kwota odprawy:</span>
+                      <span className="text-[24px] font-black italic tracking-tighter text-yellow-400">{Math.round((selectedMember.salary / 12) * 3).toLocaleString('pl-PL')} PLN</span>
+                      <span className="text-[11px] italic text-slate-500">(3 miesięczne pensje)</span>
+                      <div className="flex gap-3 mt-2">
+                        <button
+                          onClick={() => setStaffFireConfirmOpen(false)}
+                          className="px-5 py-2 rounded-xl text-[12px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]"
+                        >
+                          Anuluj
+                        </button>
+                        <button
+                          onClick={() => {
+                            const result = fireStaffMember(selectedMember.id);
+                            setStaffFireConfirmOpen(false);
+                            setStaffActionMsg({ text: result.message, ok: result.success });
+                            if (result.success) setSelectedStaffId(null);
+                          }}
+                          className="px-5 py-2 rounded-xl text-[12px] font-black italic uppercase tracking-tighter text-white border border-red-700/60 bg-red-900/70 hover:bg-red-800/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]"
+                        >
+                          Potwierdź zwolnienie
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* modal negocjacji kontraktu */}
+                {staffNegotiationOpen && (() => {
+                  const boardMaxSalary = (rep: number) => rep <= 3 ? 80_000 : rep <= 6 ? 150_000 : rep <= 9 ? 250_000 : rep <= 14 ? 500_000 : 1_200_000;
+                  const clubRep = myClub?.reputation ?? 5;
+                  const contractEndFormatted = (years: number) => {
+                    const d = new Date(selectedMember.contractEndDate);
+                    d.setFullYear(d.getFullYear() + years);
+                    return `${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+                  };
+                  return (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/90 rounded-[32px]" onClick={e => e.stopPropagation()}>
+                      <div className="px-8 py-7 flex flex-col items-center gap-3 w-full max-w-[360px] text-center">
+                        <span className="text-[13px] font-black italic uppercase tracking-tighter text-yellow-400">Negocjacje kontraktu</span>
+                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">{ROLE_LABELS[selectedMember.role]}</span>
+                        <span className="text-[18px] font-black italic uppercase tracking-tighter text-white">{selectedMember.firstName} {selectedMember.lastName}</span>
+                        <div className="border-b border-white/15 w-full" />
+                        <div className="flex gap-6 w-full justify-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-0.5">Obecne wynagrodzenie</span>
+                            <span className="text-[13px] font-black italic tracking-tighter text-slate-300">{selectedMember.salary.toLocaleString('pl-PL')} PLN</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-0.5">Kontrakt do</span>
+                            <span className="text-[13px] font-black italic tracking-tighter text-slate-300">{(() => { const d = new Date(selectedMember.contractEndDate); return `${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`; })()}</span>
+                          </div>
+                        </div>
+                        <div className="border-b border-white/10 w-full" />
+
+                        {staffNegPhase === 'proposal' && (
+                          <>
+                            <div className="border-b border-white/15 w-full" />
+                            <span className="text-[11px] italic text-slate-400 mt-1">Dziękuję za spotkanie. Moja propozycja na przedłużenie kontraktu to:</span>
+                            <div className="flex gap-6 mt-1">
+                              <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-0.5">Wynagrodzenie</span>
+                                <span className="text-[20px] font-black italic tracking-tighter text-yellow-400">{staffNegProposedSalary.toLocaleString('pl-PL')} PLN</span>
+                              </div>
+                              <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mb-0.5">Czas kontraktu</span>
+                                <span className="text-[20px] font-black italic tracking-tighter text-white">{staffNegProposedYears} {staffNegProposedYears === 1 ? 'rok' : 'lata'}</span>
+                                <span className="text-[10px] italic text-slate-500">do {contractEndFormatted(staffNegProposedYears)}</span>
+                              </div>
+                            </div>
+                            <div className="border-b border-white/15 w-full" />
+                            <div className="flex gap-3 mt-1">
+                              <button onClick={() => setStaffNegotiationOpen(false)} className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]">Anuluj</button>
+                              <button onClick={() => setStaffNegPhase('counter')} className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]">Negocjuj</button>
+                              <button
+                                onClick={() => { negotiateStaffContract(selectedMember.id, staffNegProposedSalary, staffNegProposedYears); setStaffNegotiationOpen(false); setStaffActionMsg({ text: 'Kontrakt przedłużony.', ok: true }); }}
+                                className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-white border border-yellow-700/60 bg-yellow-800/60 hover:bg-yellow-700/70 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]"
+                              >
+                                Akceptuj
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {staffNegPhase === 'counter' && (
+                          <>
+                            <span className="text-[11px] italic text-slate-400 mt-1">Twoja propozycja:</span>
+                            <div className="flex flex-col gap-3 w-full mt-1">
+                              <div className="flex flex-col items-center gap-2">
+                                <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Wynagrodzenie (PLN/rok)</span>
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => setStaffNegCounterSalary(v => Math.max(0, v - 10_000))} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">−</button>
+                                  <span className="text-[16px] font-black italic tracking-tighter text-yellow-400 min-w-[150px] text-center">{staffNegCounterSalary.toLocaleString('pl-PL')} PLN</span>
+                                  <button onClick={() => setStaffNegCounterSalary(v => v + 10_000)} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">+</button>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Czas kontraktu</span>
+                                <div className="flex gap-2">
+                                  {[1, 2, 3].map(y => (
+                                    <button key={y} onClick={() => setStaffNegCounterYears(y)} className={`px-4 py-2 rounded-lg text-[12px] font-black italic uppercase tracking-tighter border transition-colors ${staffNegCounterYears === y ? 'border-yellow-500/60 bg-yellow-800/50 text-yellow-300' : 'border-white/15 bg-slate-800/60 text-slate-400 hover:text-white'}`}>
+                                      {y} {y === 1 ? 'rok' : 'lata'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-3 mt-3">
+                              <button onClick={() => setStaffNegPhase('proposal')} className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]">Wróć</button>
+                              <button
+                                onClick={() => {
+                                  const counterSal = Math.round(staffNegCounterSalary / 10_000) * 10_000;
+                                  const maxSal = boardMaxSalary(clubRep);
+                                  if (counterSal > maxSal) {
+                                    setStaffNegResultMsg(`Zarząd zablokował ofertę — maksymalne wynagrodzenie dla tego klubu to ${maxSal.toLocaleString('pl-PL')} PLN.`);
+                                    setStaffNegResultOk(false);
+                                    setStaffNegPhase('result');
+                                    return;
+                                  }
+                                  const staffAccepts = counterSal >= staffNegProposedSalary * 0.80 && staffNegCounterYears >= staffNegProposedYears - 1;
+                                  if (!staffAccepts) {
+                                    setStaffNegResultMsg('Pracownik odrzucił ofertę — proponowana kwota lub czas kontraktu są zbyt niskie.');
+                                    setStaffNegResultOk(false);
+                                    setStaffNegPhase('result');
+                                    return;
+                                  }
+                                  negotiateStaffContract(selectedMember.id, counterSal, staffNegCounterYears);
+                                  setStaffNegResultMsg(`Kontrakt przedłużony. Nowe wynagrodzenie: ${counterSal.toLocaleString('pl-PL')} PLN, czas: ${staffNegCounterYears} ${staffNegCounterYears === 1 ? 'rok' : 'lata'}.`);
+                                  setStaffNegResultOk(true);
+                                  setStaffNegPhase('result');
+                                }}
+                                className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-white border border-yellow-700/60 bg-yellow-800/60 hover:bg-yellow-700/70 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]"
+                              >
+                                Złóż ofertę
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {staffNegPhase === 'result' && (
+                          <>
+                            <div className={`mt-2 px-5 py-3 rounded-xl text-[12px] font-black italic uppercase tracking-tighter ${staffNegResultOk ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'}`}>
+                              {staffNegResultMsg}
+                            </div>
+                            <button onClick={() => setStaffNegotiationOpen(false)} className="mt-3 px-6 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]">Zamknij</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

@@ -119,6 +119,7 @@ export enum ViewState {
   // ── MISTRZOSTWA ŚWIATA ───────────────────────────────────────────────────
   WC_DRAW = 'WC_DRAW',
   WORLD_CUP = 'WORLD_CUP',
+  STAFF_SEARCH = 'STAFF_SEARCH',
 }
 
 // ── BARAŻE WCQ 2026 — typy ────────────────────────────────────────────────
@@ -354,6 +355,7 @@ export interface StaffMember {
   contractEndDate: string;
   salary: number;
   history: StaffHistoryEntry[];
+  lastNegotiationDate?: string | null;
 }
 
 export interface AiWeeklyTrainingState {

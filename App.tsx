@@ -24,6 +24,7 @@ import { TrainingView } from './components/views/TrainingView';
 import { CupDrawView } from './components/views/CupDrawView';
 import { MatchHistoryView } from './components/views/MatchHistoryView';
 import { JobMarketView } from './components/views/JobMarketView';
+import { StaffSearchView } from './components/views/StaffSearchView';
 import { TransferNewsView } from './components/views/TransferNewsView';
 import { AiMarketNewsView } from './components/views/AiMarketNewsView';
 import { PreMatchCupStudioView } from './PolishCupEngine/PreMatchCupStudioView';
@@ -289,6 +290,8 @@ case ViewState.POLISH_CUP_BRACKET:
         return <EditorView />;
       case ViewState.JOB_MARKET: // -> tutaj wstaw kod
         return <JobMarketView />;
+      case ViewState.STAFF_SEARCH:
+        return <StaffSearchView />;
       case ViewState.TRANSFER_NEWS:
         return <TransferNewsView />;
       case ViewState.AI_MARKET_NEWS:

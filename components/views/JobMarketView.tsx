@@ -247,6 +247,12 @@ export const JobMarketView: React.FC = () => {
               <span className="group-hover:text-cyan-400 transition-colors">📋 Moja lista</span>
             </button>
             <button
+              onClick={() => navigateTo(ViewState.STAFF_SEARCH)}
+              className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+            >
+              <span className="group-hover:text-purple-400 transition-colors">🧑‍💼 Wyszukaj współpracowników</span>
+            </button>
+            <button
               onClick={() => navigateTo(ViewState.TRANSFER_NEWS)}
               className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
             >

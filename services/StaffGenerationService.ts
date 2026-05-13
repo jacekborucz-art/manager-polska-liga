@@ -164,6 +164,7 @@ function createStaffMember(
     contractEndDate: contractEnd(rnd(1, 3)),
     salary: salaryForReputation(reputation),
     history,
+    lastNegotiationDate: null,
   };
 }
 

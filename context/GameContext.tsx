@@ -367,6 +367,10 @@ finalizeFreeAgentContract: (mailId: string) => void;
   scoutMarketRefreshDate: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
   conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
+  fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
+  extendStaffContract: (staffId: string, years: number) => void;
+  negotiateStaffContract: (staffId: string, newSalary: number, years: number) => void;
+  hireStaffMember: (staffId: string, salary: number, years: number, kaucja: number) => { success: boolean; message: string };
   winterCampInvitePending: boolean;
   winterCampProgramPending: boolean;
   clearWinterCampInvitePending: () => void;
@@ -2301,6 +2305,104 @@ setMessages([welcomeMail, fanMail]);
   }, [userTeamId]);
 
   // ── END AKADEMIA ────────────────────────────────────────────────────────────
+
+  const fireStaffMember = useCallback((staffId: string): { success: boolean; message: string; cost?: number } => {
+    if (!userTeamId) return { success: false, message: 'Brak drużyny' };
+    const member = staffMembers[staffId];
+    if (!member) return { success: false, message: 'Nie znaleziono pracownika' };
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return { success: false, message: 'Brak drużyny' };
+    const attrValues = Object.values(member.attributes);
+    const staffAvg = attrValues.length > 0 ? attrValues.reduce((a, b) => a + b, 0) / attrValues.length : 0;
+    const rep = userClub.reputation;
+    const blockThreshold = rep <= 3 ? 8 : rep <= 6 ? 11 : rep <= 9 ? 14 : rep <= 14 ? 17 : 19;
+    if (staffAvg >= blockThreshold) {
+      return { success: false, message: 'Zarząd zablokował zwolnienie — pracownik jest zbyt wartościowy dla poziomu klubu.' };
+    }
+    const severance = Math.round((member.salary / 12) * 3);
+    if (userClub.budget < severance) {
+      return { success: false, message: `Brak funduszy na odprawę (${severance.toLocaleString('pl-PL')} PLN).` };
+    }
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - severance, staffIds: (c.staffIds ?? []).filter(id => id !== staffId) } : c));
+    setStaffMembers(prev => ({ ...prev, [staffId]: { ...prev[staffId], currentClubId: null } }));
+    addFinanceLog(userTeamId, `Odprawa: ${member.firstName} ${member.lastName}`, -severance, currentDate);
+    return { success: true, message: `Pracownik zwolniony. Odprawa: ${severance.toLocaleString('pl-PL')} PLN.`, cost: severance };
+  }, [userTeamId, staffMembers, clubs, currentDate, addFinanceLog]);
+
+  const extendStaffContract = useCallback((staffId: string, years: number): void => {
+    setStaffMembers(prev => {
+      const member = prev[staffId];
+      if (!member) return prev;
+      const d = new Date(member.contractEndDate);
+      d.setFullYear(d.getFullYear() + years);
+      return { ...prev, [staffId]: { ...member, contractEndDate: d.toISOString() } };
+    });
+  }, []);
+
+  const negotiateStaffContract = useCallback((staffId: string, newSalary: number, years: number): void => {
+    const negotiationDate = currentDate instanceof Date ? currentDate.toISOString() : new Date(currentDate).toISOString();
+    setStaffMembers(prev => {
+      const member = prev[staffId];
+      if (!member) return prev;
+      const d = new Date(member.contractEndDate);
+      d.setFullYear(d.getFullYear() + years);
+      return { ...prev, [staffId]: { ...member, salary: newSalary, contractEndDate: d.toISOString(), lastNegotiationDate: negotiationDate } };
+    });
+  }, [currentDate]);
+
+  const hireStaffMember = useCallback((staffId: string, salary: number, years: number, kaucja: number): { success: boolean; message: string } => {
+    if (!userTeamId) return { success: false, message: 'Brak drużyny.' };
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return { success: false, message: 'Nie znaleziono klubu.' };
+    if (userClub.budget < kaucja) return { success: false, message: `Brak środków na kaucję (${kaucja.toLocaleString('pl-PL')} PLN).` };
+    const member = staffMembers[staffId];
+    if (!member) return { success: false, message: 'Nie znaleziono pracownika.' };
+    const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const contractEnd = new Date(now);
+    contractEnd.setFullYear(contractEnd.getFullYear() + years);
+    const prevClubId = member.currentClubId;
+    const prevClub = prevClubId ? clubs.find(c => c.id === prevClubId) : null;
+    const historyEntry = { clubId: userTeamId, clubName: userClub.name, fromYear: now.getFullYear(), fromMonth: now.getMonth() + 1, toYear: null, toMonth: null };
+
+    // Szukanie zastępcy dla starego klubu — wolni agenci tej samej roli
+    let replacementId: string | null = null;
+    let replacementUpdate: Record<string, typeof member> = {};
+    if (prevClubId && prevClub) {
+      const candidates = Object.values(staffMembers).filter(s =>
+        s.currentClubId === null && s.role === member.role && s.id !== staffId
+      );
+      if (candidates.length > 0) {
+        // Wybierz spośród top-5 wg doświadczenia
+        const sorted = [...candidates].sort((a, b) => (b.attributes['experience'] ?? 0) - (a.attributes['experience'] ?? 0));
+        const pick = sorted[Math.floor(Math.random() * Math.min(5, sorted.length))];
+        replacementId = pick.id;
+        const repYears = 1 + Math.floor(Math.random() * 2);
+        const repEnd = new Date(now);
+        repEnd.setFullYear(repEnd.getFullYear() + repYears);
+        const attrVals = Object.values(pick.attributes);
+        const avg = attrVals.length > 0 ? attrVals.reduce((a, b) => a + b, 0) / attrVals.length : 8;
+        const repSalary = Math.round((20_000 + (avg / 20) * 180_000) / 10_000) * 10_000;
+        const repHistory = { clubId: prevClubId, clubName: prevClub.name, fromYear: now.getFullYear(), fromMonth: now.getMonth() + 1, toYear: null, toMonth: null };
+        replacementUpdate[pick.id] = { ...pick, currentClubId: prevClubId, salary: repSalary, contractEndDate: repEnd.toISOString(), history: [...(pick.history ?? []), repHistory] };
+      }
+    }
+
+    setStaffMembers(prev => ({
+      ...prev,
+      [staffId]: { ...prev[staffId], currentClubId: userTeamId, salary, contractEndDate: contractEnd.toISOString(), history: [...(prev[staffId].history ?? []), historyEntry] },
+      ...replacementUpdate,
+    }));
+    setClubs(prev => prev.map(c => {
+      if (c.id === userTeamId) return { ...c, budget: c.budget - kaucja, staffIds: [...(c.staffIds ?? []), staffId] };
+      if (prevClubId && c.id === prevClubId) {
+        const filtered = (c.staffIds ?? []).filter(id => id !== staffId);
+        return { ...c, staffIds: replacementId ? [...filtered, replacementId] : filtered };
+      }
+      return c;
+    }));
+    if (kaucja > 0) addFinanceLog(userTeamId, `Kaucja transferowa: ${member.firstName} ${member.lastName}`, -kaucja, currentDate);
+    return { success: true, message: `${member.firstName} ${member.lastName} dołączył do sztabu.` };
+  }, [userTeamId, clubs, staffMembers, currentDate, addFinanceLog]);
 
   const applyWeeklyMotivation = useCallback((moraleDelta: number) => {
     if (!userTeamId) return;
@@ -8385,7 +8487,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
-    applyWeeklyMotivation, conductIndividualTalk,
+    applyWeeklyMotivation, conductIndividualTalk, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,
