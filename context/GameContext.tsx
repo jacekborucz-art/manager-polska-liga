@@ -4920,7 +4920,19 @@ const finalResult: SimulationOutput = {
           return f;
         });
       });
-      setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
+      if (clResult.matchHistoryEntries.length > 0) {
+        const clParticipantIds = new Set(
+          clResult.matchHistoryEntries.flatMap(entry => [entry.homeTeamId, entry.awayTeamId])
+        );
+        setPlayers(prev => {
+          const nextPlayers = { ...prev };
+          clParticipantIds.forEach(clubId => {
+            const updatedSquad = clResult.updatedPlayers[clubId];
+            if (updatedSquad) nextPlayers[clubId] = updatedSquad;
+          });
+          return nextPlayers;
+        });
+      }
     }
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
 

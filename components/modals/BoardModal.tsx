@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
-import { Club, BoardAttributeLevel, ClubBoard, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality, StadiumStand } from '../../types';
+import { Club, BoardAttributeLevel, ClubBoard, ClubOwner, ClubCEO, ClubCFO, ClubCOO, ClubMarketingDirector, ClubAcademyDirector, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality, StadiumStand } from '../../types';
+import { ManagementMemberModal, MemberEntry } from './ManagementMemberModal';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
 import { BoardRequestModal } from './BoardRequestModal';
@@ -429,7 +430,7 @@ const getObjectivePanelData = (
   if (objective.status === 'FAILED') {
     return {
       progressPercent: 100,
-      progressLabel: 'Cel został przegrany',
+      progressLabel: 'Cel nie został osiągnięty',
       summaryLabel: 'Wynik',
       summaryValue: 'Zadanie zakończone niepowodzeniem',
       resolvedMark: 'X',
@@ -539,6 +540,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
   const [isBoardRequestOpen, setIsBoardRequestOpen] = useState(false);
   const [isStadiumModalOpen, setIsStadiumModalOpen] = useState(false);
   const [isExpansionRequestOpen, setIsExpansionRequestOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<MemberEntry | null>(null);
   const logo = getClubLogo(club.id);
 
   const attendanceHistory = useMemo(() => {
@@ -661,56 +663,126 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         {/* Zawartość */}
         <div className="relative z-10 grid gap-6 p-6 xl:grid-cols-[380px_minmax(0,1fr)_500px] xl:p-8">
           <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
-            <div className="mb-5">
-              <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Panel</p>
+            <div className="mb-5 text-center">
               <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Członkowie Zarządu</h2>
             </div>
 
-            {sportingDirector ? (
-              <div className="space-y-5">
+            <div className="space-y-1">
+              {club.management && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMember({ role: 'Właściciel', data: club.management!.owner })}
+                    className="w-full rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-left transition-colors hover:border-violet-400/35 hover:bg-violet-500/15"
+                  >
+                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-violet-400">Właściciel</p>
+                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.owner.firstName} {club.management.owner.lastName}</p>
+                  </button>
+                  {club.management.ceo && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMember({ role: 'Prezes', data: club.management!.ceo! })}
+                      className="w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left transition-colors hover:border-amber-400/35 hover:bg-amber-500/15"
+                    >
+                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-400">Prezes</p>
+                      <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.ceo.firstName} {club.management.ceo.lastName}</p>
+                    </button>
+                  )}
+                </>
+              )}
+
+              {sportingDirector ? (
                 <button
                   type="button"
                   onClick={() => setIsDirectorModalOpen(true)}
-                  className="w-full rounded-[22px] border border-sky-500/20 bg-sky-500/10 p-4 text-left transition-all hover:border-sky-400/35 hover:bg-sky-500/15"
+                  className="w-full rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-left transition-colors hover:border-sky-400/35 hover:bg-sky-500/15"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-300/20 bg-black/25 text-xl font-black text-sky-100">
-                      DS
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-300">Dyrektor sportowy</p>
-                      <p className="mt-1 text-lg font-black italic uppercase tracking-tighter leading-tight text-white">
-                        {sportingDirector.firstName} {sportingDirector.lastName}
-                      </p>
-                      <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">Dyrektor sportowy</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-2">
-                    <span className="text-[9px] font-black italic uppercase tracking-tighter text-yellow-300">Szczegóły i interakcje</span>
-                    <span className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300">Otwórz</span>
-                  </div>
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-400">Dyrektor sportowy</p>
+                  <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{sportingDirector.firstName} {sportingDirector.lastName}</p>
                 </button>
+              ) : (
+                <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-2 text-[10px] italic text-slate-500">
+                  Brak dyrektora sportowego
+                </div>
+              )}
 
-                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
-                  <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z zarządem</p>
-                    <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
-                      {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
+              {club.management && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMember({ role: 'Dyrektor finansowy', data: club.management!.cfo })}
+                    className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-left transition-colors hover:border-emerald-400/35 hover:bg-emerald-500/15"
+                  >
+                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-emerald-400">Dyrektor finansowy</p>
+                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.cfo.firstName} {club.management.cfo.lastName}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMember({ role: 'Dyrektor operacyjny', data: club.management!.coo })}
+                    className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-left transition-colors hover:border-blue-400/35 hover:bg-blue-500/15"
+                  >
+                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-blue-400">Dyrektor operacyjny</p>
+                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.coo.firstName} {club.management.coo.lastName}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMember({ role: 'Dyrektor marketingu', data: club.management!.marketingDirector })}
+                    className="w-full rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-left transition-colors hover:border-rose-400/35 hover:bg-rose-500/15"
+                  >
+                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-rose-400">Dyrektor marketingu</p>
+                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.marketingDirector.firstName} {club.management.marketingDirector.lastName}</p>
+                  </button>
+                  {club.management.academyDirector && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMember({ role: 'Dyrektor akademii', data: club.management!.academyDirector! })}
+                      className="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-left transition-colors hover:border-orange-400/35 hover:bg-orange-500/15"
+                    >
+                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-orange-400">Dyrektor akademii</p>
+                      <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.academyDirector.firstName} {club.management.academyDirector.lastName}</p>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 border-t border-white/10" />
+
+            {sportingDirector && (
+              <div className="mt-4 rounded-[20px] border border-white/5 bg-black/25 p-4">
+                <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z zarządem</p>
+                  <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
+                    {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
+                  </p>
+                  <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
+                    <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500 mb-2">Wpływ na grę</p>
+                    <p className="text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
+                      Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
                     </p>
-                    <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
-                      <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500 mb-2">Wpływ na grę</p>
-                      <p className="text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
-                        Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
-                      </p>
-                    </div>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="rounded-[22px] border border-white/5 bg-black/25 p-5 text-sm text-slate-400">
-                Klub nie ma jeszcze przypisanego dyrektora sportowego.
-              </div>
             )}
+
+            <div className="mt-4 border-t border-white/10" />
+
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setIsBoardRequestOpen(true)}
+                className="w-full rounded-[20px] border border-amber-400/20 bg-amber-500/[0.08] p-4 text-left transition-all hover:border-amber-400/35 hover:bg-amber-500/[0.12] group"
+              >
+                <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-300/70">Komunikacja</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-sm font-black italic uppercase tracking-tighter text-white">PROŚBA DO ZARZĄDU</p>
+                  <span className="text-amber-400/50 group-hover:text-amber-400 transition-colors">→</span>
+                </div>
+                <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
+                  Złóż oficjalną prośbę do zarządu klubu
+                </p>
+              </button>
+            </div>
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6">
@@ -829,16 +901,10 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
               </div>
             </button>
 
-            <div className="mb-5">
-              <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Panel</p>
-              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Zadania</h2>
-            </div>
-
             {sportingDirector ? (
                 <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Panel</p>
                       <h3 className="mt-1 text-lg font-black italic uppercase tracking-tighter text-white">Zadania</h3>
                     </div>
                     {directorObjective && objectivePanelData?.resolvedMark && (
@@ -925,22 +991,6 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
               </div>
             )}
 
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setIsBoardRequestOpen(true)}
-                className="w-full rounded-[20px] border border-amber-400/20 bg-amber-500/[0.08] p-4 text-left transition-all hover:border-amber-400/35 hover:bg-amber-500/[0.12] group"
-              >
-                <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-300/70">Komunikacja</p>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <p className="text-sm font-black italic uppercase tracking-tighter text-white">PROŚBA DO ZARZĄDU</p>
-                  <span className="text-amber-400/50 group-hover:text-amber-400 transition-colors">→</span>
-                </div>
-                <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
-                  Złóż oficjalną prośbę do zarządu klubu
-                </p>
-              </button>
-            </div>
           </aside>
         </div>
       </div>
@@ -960,39 +1010,20 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
               ×
             </button>
 
-            <div className="mb-6 pr-12">
-              <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Pion sportowy</p>
-              <h3 className="mt-2 text-3xl font-black italic uppercase tracking-tighter text-white">
+            <div className="mb-5 text-center pr-12">
+              <p className="text-xs font-black italic uppercase tracking-tighter text-yellow-400">Dyrektor sportowy</p>
+              <h3 className="mt-1 text-3xl font-black italic uppercase tracking-tighter text-white">
                 {sportingDirector.firstName} {sportingDirector.lastName}
               </h3>
-              <p className="mt-2 text-[11px] font-black italic uppercase tracking-tighter text-slate-400">
-                Dyrektor sportowy
+              <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">
+                {sportingDirector.age} lat, {sportingDirector.nationalityCountry}
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="rounded-[24px] border border-sky-500/20 bg-sky-500/10 p-5">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-sky-300/20 bg-black/25 text-2xl font-black text-sky-100">
-                  DS
-                </div>
-                <div className="mt-4 space-y-3 text-sm text-slate-300">
-                  <div>
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Kraj</p>
-                    <p className="mt-1 font-black italic uppercase tracking-tighter text-white">{sportingDirector.nationalityCountry}</p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Wiek</p>
-                    <p className="mt-1 font-black italic uppercase tracking-tighter text-white">{sportingDirector.age} lat</p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Styl decyzyjny</p>
-                    <p className="mt-1 font-black italic uppercase tracking-tighter text-white">{getDirectorPersonalityLabel(sportingDirector.personality)}</p>
-                  </div>
-                </div>
-              </div>
+            <div className="mb-4 border-t border-white/15" />
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="space-y-4">
+                <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-2 space-y-2">
                   {[
                     { label: 'Kontrola', value: sportingDirector.control },
                     { label: 'Elastyczność', value: sportingDirector.flexibility },
@@ -1001,23 +1032,26 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                     { label: 'Negocjacje', value: sportingDirector.negotiation },
                     { label: 'Finanse', value: sportingDirector.financialDiscipline },
                     { label: 'Rozwój', value: sportingDirector.developmentVision },
-                    { label: 'Relacja z trenerem', value: sportingDirector.relationshipWithManager, percent: true },
-                  ].map(stat => (
-                    <div key={stat.label} className="rounded-[16px] border border-white/5 bg-black/25 p-3">
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{stat.label}</p>
-                      <p className={`mt-1 text-lg font-black italic uppercase tracking-tighter ${stat.label === 'Relacja' ? getDirectorRelationshipColor(stat.value) : 'text-white'}`}>
-                        {stat.value}{stat.percent ? '%' : ''}
-                      </p>
-                    </div>
-                  ))}
+                  ].map(stat => {
+                    const color = stat.value >= 17 ? '#34d399' : stat.value >= 12 ? '#4ade80' : stat.value >= 7 ? '#facc15' : stat.value >= 4 ? '#fb923c' : '#ef4444';
+                    const barWidth = `${(stat.value / 20) * 100}%`;
+                    return (
+                      <div key={stat.label}>
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{stat.label}</p>
+                          <p className="text-[10px] font-black italic uppercase tracking-tighter" style={{ color }}>
+                            {stat.value}
+                          </p>
+                        </div>
+                        <div className="h-0.5 rounded-full bg-white/5">
+                          <div className="h-full rounded-full transition-all" style={{ width: barWidth, backgroundColor: color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div className="rounded-[20px] border border-sky-500/10 bg-sky-500/[0.06] p-4">
-                  <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">Jak to czytać</p>
-                  <p className="mt-2 text-xs font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
-                    Relacja z trenerem pokazuje osobistą współpracę z dyrektorem sportowym. Osobno, niżej, widzisz jego wpływ na zarząd, czyli to jak mocno wspiera albo podkopuje Twoją pozycję politycznie.
-                  </p>
-                </div>
+                <div className="border-t border-white/10" />
 
                 <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
                   <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Polityka sportowa</p>
@@ -1050,6 +1084,8 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                     </p>
                   )}
                 </div>
+
+                <div className="border-t border-white/10" />
 
                 <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
                   <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Cel dyrektora</p>
@@ -1115,21 +1151,6 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                   )}
                 </div>
 
-                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
-                  <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z Zarządem</p>
-                    <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
-                      {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
-                    </p>
-                    <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
-                      <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500 mb-2">Wpływ na grę</p>
-                      <p className="text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">
-                        Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1166,6 +1187,13 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
             handleExpansionSubmit(stand, requestedIncrease);
             setIsExpansionRequestOpen(false);
           }}
+        />
+      )}
+
+      {selectedMember && (
+        <ManagementMemberModal
+          member={selectedMember}
+          onClose={() => setSelectedMember(null)}
         />
       )}
     </div>

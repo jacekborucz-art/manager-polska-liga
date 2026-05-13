@@ -5,7 +5,7 @@ import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { PlayerMoraleService } from './PlayerMoraleService';
 
-const DAILY_TRAINING_INJURY_CHANCE = 0.01;
+const DAILY_TRAINING_INJURY_CHANCE = 0.005;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
 
 const dateOnly = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();

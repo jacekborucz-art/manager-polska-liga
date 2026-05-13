@@ -1489,6 +1489,17 @@ export const SportingDirectorService = {
       return { updatedClub: club, mail: null };
     }
 
+    const MATCH_BASED_TYPES = ['WIN_NEXT_MATCH', 'AVOID_DEFEAT', 'HOLD_TOP_SPOT', 'STAY_IN_TOP_THREE', 'DEFENSIVE_RUN', 'POINTS_RUN'];
+    if (MATCH_BASED_TYPES.includes(objective.type)) {
+      const matchesPlayed = club.stats.played - objective.baselinePlayed;
+      if (matchesPlayed === 0) {
+        return {
+          updatedClub: { ...club, sportingDirectorObjective: { ...objective, dueAt: addDaysIso(new Date(objective.dueAt), 7) } },
+          mail: null,
+        };
+      }
+    }
+
     const result = evaluateObjectiveProgress(objective, club, players, leagueClubs);
     const completed = result.completed;
     const relationDelta = completed
