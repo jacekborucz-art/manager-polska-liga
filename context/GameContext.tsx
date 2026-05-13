@@ -38,6 +38,7 @@ SummerCampIntensity,
 SummerCampState,
 StadiumStand,
 StaffMember,
+StaffRole,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { KitSelection } from '../services/KitSelectionService';
@@ -1616,8 +1617,9 @@ setMessages([welcomeMail, fanMail]);
       setAiTransferLog(prev => [...simulation.aiTransferLogEntries!, ...prev].slice(0, 1000));
     }
     let finalClubs = simulation.updatedClubs;
-    
+
    let finalPlayers = simulation.updatedPlayers;
+    let fitnessCoachQuality: number | undefined = undefined;
 
  if (simulation.ratings) {
       for (const clubId in finalPlayers) {
@@ -1637,15 +1639,53 @@ setMessages([welcomeMail, fanMail]);
       const userClub = finalClubs.find(c => c.id === userTeamId);
       const tier = parseInt(userClub?.leagueId.split('_')[2] || '1');
       
+      const gkCoachMember = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .find(s => s?.role === StaffRole.GOALKEEPER_COACH);
+      const gkCoachQuality = gkCoachMember ? Math.round(
+        ((gkCoachMember.attributes.gkTechnique ?? 10) +
+         (gkCoachMember.attributes.positioning ?? 10) +
+         (gkCoachMember.attributes.footwork ?? 10)) / 3
+      ) : undefined;
+      const assistantCoachMembers = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.ASSISTANT_COACH);
+      const assistantCoachQuality = assistantCoachMembers.length > 0
+        ? Math.round(
+            assistantCoachMembers.reduce((sum, s) =>
+              sum + ((s.attributes.offensiveTactics ?? 10) +
+                     (s.attributes.defensiveTactics ?? 10) +
+                     (s.attributes.motivation ?? 10)) / 3,
+              0
+            ) / assistantCoachMembers.length
+          )
+        : undefined;
+      const fitnessCoachMembers = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.FITNESS_COACH);
+      fitnessCoachQuality = fitnessCoachMembers.length > 0
+        ? Math.round(
+            fitnessCoachMembers.reduce((sum, s) =>
+              sum + ((s.attributes.periodization ?? 10) +
+                     (s.attributes.fitnessTests ?? 10) +
+                     (s.attributes.nutrition ?? 10)) / 3,
+              0
+            ) / fitnessCoachMembers.length
+          )
+        : undefined;
+
       finalPlayers = TrainingService.processTrainingEffects(
-        finalPlayers, 
-        userTeamId, 
-        activeTrainingId, 
+        finalPlayers,
+        userTeamId,
+        activeTrainingId,
         lastMatchSummary,
-        userClub?.reputation || 5, 
+        userClub?.reputation || 5,
         tier,
         activeIntensity,
-        userClub?.country
+        userClub?.country,
+        gkCoachQuality,
+        assistantCoachQuality,
+        fitnessCoachQuality
       );
       // KONIEC WSTAWKI
 
@@ -1692,7 +1732,8 @@ setMessages([welcomeMail, fanMail]);
       userTeamId,
       currentDate,
       simulation.updatedFixtures,
-      sessionSeed
+      sessionSeed,
+      staffMembers
     );
     finalPlayers = aiTrainingUpdate.updatedPlayers;
     finalClubs = aiTrainingUpdate.updatedClubs;
@@ -1702,7 +1743,9 @@ setMessages([welcomeMail, fanMail]);
     finalPlayers = TrainingService.processWeeklyTrainingInjuries(
       finalPlayers,
       currentDate,
-      simulation.updatedFixtures
+      simulation.updatedFixtures,
+      fitnessCoachQuality,
+      userTeamId ?? undefined
     );
 
     if (userTeamId && userSquadBeforeTrainingInjuries.length > 0) {
@@ -4545,7 +4588,30 @@ setMessages([welcomeMail, fanMail]);
     const recoveryDelta = diffDays > 0 ? diffDays : 1;
     const userClubForRecovery = userTeamId ? simulation.updatedClubs.find(c => c.id === userTeamId) : null;
     const recoveryBoost = userClubForRecovery && isRecoveryFocusReady(userClubForRecovery, dateToProcess.toISOString().split('T')[0]) ? 1.15 : 1.0;
-    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta, recoveryBoost);
+    const medicalQuality = (() => {
+      if (!userClubForRecovery) return undefined;
+      const physioMembers = (userClubForRecovery.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.PHYSIOTHERAPIST);
+      const doctorMembers = (userClubForRecovery.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.CLUB_DOCTOR);
+      const qualityValues: number[] = [];
+      if (physioMembers.length > 0) {
+        qualityValues.push(physioMembers.reduce((sum, s) =>
+          sum + ((s.attributes.sportsMassage ?? 10) + (s.attributes.rehabilitation ?? 10) + (s.attributes.muscleInjuries ?? 10)) / 3, 0
+        ) / physioMembers.length);
+      }
+      if (doctorMembers.length > 0) {
+        qualityValues.push(doctorMembers.reduce((sum, s) =>
+          sum + ((s.attributes.diagnostics ?? 10) + (s.attributes.sportsSurgery ?? 10) + (s.attributes.pharmacology ?? 10)) / 3, 0
+        ) / doctorMembers.length);
+      }
+      return qualityValues.length > 0
+        ? Math.round(qualityValues.reduce((a, b) => a + b, 0) / qualityValues.length)
+        : undefined;
+    })();
+    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta, recoveryBoost, medicalQuality, userTeamId ?? undefined);
 
     // 3. Budowanie finalnego wyniku
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu

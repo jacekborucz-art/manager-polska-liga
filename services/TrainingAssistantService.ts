@@ -230,7 +230,7 @@ const chooseCycle = (players: Player[], rng: () => number): TrainingCycle => {
   );
 };
 
-const chooseFocus = (player: Player, cycle: TrainingCycle, rng: () => number): TrainableAttribute => {
+const chooseFocus = (player: Player, cycle: TrainingCycle, rng: () => number, assistantIndividualWork: number = 10): TrainableAttribute => {
   const pool = POSITION_FOCUS_POOLS[player.position];
   const scored = pool
     .map(attr => {
@@ -240,7 +240,8 @@ const chooseFocus = (player: Player, cycle: TrainingCycle, rng: () => number): T
       const roleBonus = ROLE_BONUS[player.position][attr] ?? 0;
       const ageAdjustment = player.age >= 32 && ['pace', 'stamina', 'workRate'].includes(attr) ? -3 : 0;
       const elitePenalty = attrValue >= 88 ? 8 : attrValue >= 82 ? 4 : 0;
-      const jitter = rng() * 6;
+      const jitterMultiplier = assistantIndividualWork <= 7 ? 2.5 : assistantIndividualWork >= 15 ? 0.4 : 1.0;
+      const jitter = rng() * 6 * jitterMultiplier;
 
       return {
         attr,
@@ -750,10 +751,10 @@ export const generatePlayerReport = (player: Player, teamPlayers: Player[], leag
 };
 
 export const TrainingAssistantService = {
-  buildPlan(players: Player[], rng: () => number = Math.random): TrainingAssistantPlan {
+  buildPlan(players: Player[], rng: () => number = Math.random, assistantIndividualWork: number = 10): TrainingAssistantPlan {
     const cycle = chooseCycle(players, rng);
     const playerFocuses = players.reduce<Record<string, TrainableAttribute>>((acc, player) => {
-      acc[player.id] = chooseFocus(player, cycle, rng);
+      acc[player.id] = chooseFocus(player, cycle, rng, assistantIndividualWork);
       return acc;
     }, {});
 

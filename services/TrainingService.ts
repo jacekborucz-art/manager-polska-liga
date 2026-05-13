@@ -56,6 +56,8 @@ export const TrainingService = {
     playersMap: Record<string, Player[]>,
     currentDate: Date,
     fixtures: Fixture[] = [],
+    fitnessCoachQuality?: number,
+    userTeamId?: string,
     random: () => number = Math.random
   ): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
@@ -64,7 +66,16 @@ export const TrainingService = {
       if (isTrainingHolidayForClub(currentDate, clubId, fixtures)) continue;
 
       const healthyPlayers = updatedMap[clubId].filter(player => player.health.status !== HealthStatus.INJURED);
-      if (healthyPlayers.length === 0 || random() >= DAILY_TRAINING_INJURY_CHANCE) continue;
+      const injuryModifier = (userTeamId && clubId === userTeamId) ? (() => {
+        if (fitnessCoachQuality === undefined) return 1.15;
+        const q = fitnessCoachQuality;
+        if (q >= 17) return 0.70 - (q - 17) / 3 * 0.15;
+        if (q >= 14) return 0.85 - (q - 14) / 3 * 0.15;
+        if (q >= 10) return 1.00 - (q - 10) / 4 * 0.15;
+        if (q >= 5)  return 1.08 - (q - 5) / 5 * 0.08;
+        return Math.min(1.12, 1.12 - (q - 1) / 4 * 0.04);
+      })() : 1.0;
+      if (healthyPlayers.length === 0 || random() >= DAILY_TRAINING_INJURY_CHANCE * injuryModifier) continue;
 
       const injuredPlayerId = healthyPlayers[Math.floor(random() * healthyPlayers.length)]?.id;
       if (!injuredPlayerId) continue;
@@ -112,7 +123,10 @@ export const TrainingService = {
     clubReputation: number,
     leagueTier: number,
     intensity: TrainingIntensity,
-    clubCountry?: string
+    clubCountry?: string,
+    gkCoachQuality?: number,
+    assistantCoachQuality?: number,
+    fitnessCoachQuality?: number
   ): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
     if (!updatedMap[userTeamId]) return updatedMap;
@@ -149,6 +163,98 @@ export const TrainingService = {
         'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
       ];
 
+      const isGkPlayer = player.position === PlayerPosition.GK;
+      const GK_COACHED_ATTRS: (keyof PlayerAttributes)[] = ['goalkeeping', 'positioning', 'mentality', 'passing'];
+      const playerTalent = player.attributes.talent;
+      const gkCoachMultiplier = (() => {
+        if (!isGkPlayer) return 1.0;
+        if (!gkCoachQuality || gkCoachQuality <= 0) {
+          if (playerTalent >= 80) return 0.08;
+          if (playerTalent >= 60) return 0.05;
+          return 0.03;
+        }
+        const q = gkCoachQuality;
+        if (q >= 17) return 1.30 + (q - 17) / 3 * 0.20;
+        if (q >= 14) return 1.00 + (q - 14) / 3 * 0.30;
+        if (q >= 10) return 0.15 + (q - 10) / 4 * 0.85;
+        if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
+        return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
+      })();
+      const gkCoachRegressMult = (() => {
+        if (!isGkPlayer) return 1.0;
+        if (!gkCoachQuality || gkCoachQuality <= 0) {
+          if (playerTalent >= 80) return 1.00;
+          if (playerTalent >= 60) return 1.20;
+          return 1.80;
+        }
+        const q = gkCoachQuality;
+        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
+        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
+        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
+        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
+      })();
+      const gkAttrSeasonalCap = isGkPlayer ? (() => {
+        const t = playerTalent;
+        const base = t >= 95 ? 3 : t >= 85 ? 2 : t >= 72 ? 1 : 0;
+        const coachBonus = (gkCoachQuality && gkCoachQuality >= 15) ? 1 : 0;
+        return Math.min(3, base + coachBonus);
+      })() : 3;
+      const coachGrowthMult = (() => {
+        if (assistantCoachQuality === undefined) {
+          if (playerTalent >= 80) return 0.08;
+          if (playerTalent >= 60) return 0.05;
+          if (playerTalent >= 40) return 0.03;
+          return 0.02;
+        }
+        const q = assistantCoachQuality;
+        if (q >= 17) return 1.30 + (q - 17) / 3 * 0.20;
+        if (q >= 14) return 1.00 + (q - 14) / 3 * 0.30;
+        if (q >= 10) return 0.15 + (q - 10) / 4 * 0.85;
+        if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
+        return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
+      })();
+      const coachRegressMult = (() => {
+        if (assistantCoachQuality === undefined) {
+          if (playerTalent >= 80) return 1.00;
+          if (playerTalent >= 60) return 1.20;
+          if (playerTalent >= 40) return 1.60;
+          return 2.00;
+        }
+        const q = assistantCoachQuality;
+        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
+        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
+        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
+        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
+      })();
+      const FITNESS_COACHED_ATTRS: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength'];
+      const fitnessCoachMult = (() => {
+        if (fitnessCoachQuality === undefined) {
+          if (playerTalent >= 80) return 0.08;
+          if (playerTalent >= 60) return 0.05;
+          if (playerTalent >= 40) return 0.03;
+          return 0.02;
+        }
+        const q = fitnessCoachQuality;
+        if (q >= 17) return 1.30 + (q - 17) / 3 * 0.20;
+        if (q >= 14) return 1.00 + (q - 14) / 3 * 0.30;
+        if (q >= 10) return 0.15 + (q - 10) / 4 * 0.85;
+        if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
+        return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
+      })();
+      const fitnessCoachRegressMult = (() => {
+        if (fitnessCoachQuality === undefined) {
+          if (playerTalent >= 80) return 1.00;
+          if (playerTalent >= 60) return 1.20;
+          if (playerTalent >= 40) return 1.60;
+          return 2.00;
+        }
+        const q = fitnessCoachQuality;
+        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
+        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
+        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
+        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
+      })();
+
       attrKeys.forEach(key => {
         let pGrowth = 0.02;
 
@@ -178,10 +284,14 @@ export const TrainingService = {
         const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
         pGrowth *= talentMod;
         pGrowth *= moraleTrainingModifier.growth;
+        pGrowth *= coachGrowthMult;
+        if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) pGrowth *= gkCoachMultiplier;
+        if (FITNESS_COACHED_ATTRS.includes(key)) pGrowth *= fitnessCoachMult;
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
-          if (currentChange < 3 && attributes[key] < 99) {
+          const seasonalCap = (isGkPlayer && GK_COACHED_ATTRS.includes(key)) ? gkAttrSeasonalCap : 3;
+          if (currentChange < seasonalCap && attributes[key] < 99) {
             attributes[key] += 1;
             seasonalChanges[key] = currentChange + 1;
           }
@@ -211,6 +321,13 @@ export const TrainingService = {
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
         pRegress *= moraleTrainingModifier.regression;
+        if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) {
+          pRegress *= gkCoachRegressMult;
+        } else if (FITNESS_COACHED_ATTRS.includes(key)) {
+          pRegress *= fitnessCoachRegressMult;
+        } else {
+          pRegress *= coachRegressMult;
+        }
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
@@ -222,8 +339,20 @@ export const TrainingService = {
       });
 
       const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
-      const conditionDrift = !hasGeneralPlan && Math.random() < 0.12 ? -1 : 0;
-      const fatigueDrift = !hasGeneralPlan && Math.random() < 0.10 ? 1 : 0;
+      const fitnessCondDrift = (() => {
+        if (fitnessCoachQuality === undefined) return Math.random() < 0.15 ? -1 : 0;
+        if (fitnessCoachQuality >= 14) return Math.random() < 0.08 ? 1 : 0;
+        if (fitnessCoachQuality >= 10) return 0;
+        return Math.random() < 0.08 ? -1 : 0;
+      })();
+      const fitnessFatigueDrift = (() => {
+        if (fitnessCoachQuality === undefined) return Math.random() < 0.12 ? 1 : 0;
+        if (fitnessCoachQuality >= 14) return Math.random() < 0.06 ? -1 : 0;
+        if (fitnessCoachQuality >= 10) return 0;
+        return Math.random() < 0.06 ? 1 : 0;
+      })();
+      const conditionDrift = (!hasGeneralPlan && Math.random() < 0.12 ? -1 : 0) + fitnessCondDrift;
+      const fatigueDrift = (!hasGeneralPlan && Math.random() < 0.10 ? 1 : 0) + fitnessFatigueDrift;
       const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, intensity);
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },

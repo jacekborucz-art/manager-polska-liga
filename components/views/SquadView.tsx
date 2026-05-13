@@ -63,6 +63,14 @@ export const SquadView: React.FC = () => {
     [allLeaguePlayers, myPlayers, reportPlayer]
   );
 
+  const assistants = useMemo(() =>
+    (myClub?.staffIds ?? [])
+      .map(id => staffMembers[id])
+      .filter(s => !!s && s.role === StaffRole.ASSISTANT_COACH),
+    [myClub, staffMembers]
+  );
+  const hasAssistant = assistants.length > 0;
+
   const getAverageRatingBadgeClass = (rating: number | null): string => {
     if (rating === null) return 'bg-slate-700 border-slate-500 text-slate-200';
     if (rating < 6.0) return 'bg-red-600 border-red-400 text-white';
@@ -336,6 +344,7 @@ export const SquadView: React.FC = () => {
 
   const handleAutoPick = () => {
     if(!userTeamId) return;
+    if (!hasAssistant) return;
     const newLineup = { ...LineupService.autoPickLineup(userTeamId, myPlayers, currentTactic.id) };
     updateLineup(userTeamId, newLineup);
     fixSpecialRoles(newLineup.startingXI);
@@ -679,13 +688,14 @@ export const SquadView: React.FC = () => {
             </button>
             <button
               onClick={() => setIsAnalysisOpen(true)}
-              className="relative group px-8 py-5 rounded-[24px] bg-emerald-600/10 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-emerald-300 hover:bg-emerald-600/20 transition-all active:translate-y-[2px] overflow-hidden"
+              disabled={!hasAssistant}
+              className="relative group px-8 py-5 rounded-[24px] bg-emerald-600/10 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-emerald-300 hover:bg-emerald-600/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:translate-y-[2px] overflow-hidden"
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
                <span className="relative z-10 flex items-center gap-3">ANALIZA DRUŻYNY</span>
                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
-            <button onClick={handleAutoPick} className="relative group px-10 py-5 rounded-[24px] bg-blue-600/10 border-t border-x border-b border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-blue-400 hover:bg-blue-600/20 transition-all active:translate-y-[2px] overflow-hidden" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <button onClick={handleAutoPick} disabled={!hasAssistant} className="relative group px-10 py-5 rounded-[24px] bg-blue-600/10 border-t border-x border-b border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-[11px] font-black uppercase italic tracking-widest text-blue-400 hover:bg-blue-600/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:translate-y-[2px] overflow-hidden" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
                <span className="relative z-10 flex items-center gap-3">🪄 AUTO WYBÓR</span>
                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
@@ -1402,7 +1412,7 @@ export const SquadView: React.FC = () => {
             <span className="text-base">🎯</span> Wyznacz do wolnych
           </button>
           <div className="my-1 border-t border-white/10" />
-          <button onClick={handleOpenAssistantReport} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-blue-300 hover:bg-blue-500/10 transition-colors flex items-center gap-3">
+          <button onClick={handleOpenAssistantReport} disabled={!hasAssistant} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed text-blue-300 hover:bg-blue-500/10 transition-colors flex items-center gap-3">
             <span className="text-base">🧠</span> Raport Asystenta
           </button>
           <div className="my-1 border-t border-white/10" />
@@ -1471,7 +1481,9 @@ export const SquadView: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400/50">Raport Indywidualny • Asystent</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400/50">
+                    Raport Indywidualny • {assistants[0] ? `${assistants[0].firstName} ${assistants[0].lastName}` : 'Asystent'}
+                  </span>
                   <button onClick={() => setReportPlayer(null)} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg font-black text-slate-400 transition-all hover:bg-white/10 hover:text-white">✕</button>
                 </div>
               </div>
@@ -1574,6 +1586,7 @@ export const SquadView: React.FC = () => {
           club={myClub}
           report={teamAnalysisReport}
           onClose={() => setIsAnalysisOpen(false)}
+          assistantName={assistants[0] ? `${assistants[0].firstName} ${assistants[0].lastName}` : undefined}
         />
       )}
 

@@ -24,7 +24,8 @@ export const TeamAnalysisModal: React.FC<{
   club: Club;
   report: TeamAnalysisReport;
   onClose: () => void;
-}> = ({ club, report, onClose }) => {
+  assistantName?: string;
+}> = ({ club, report, onClose, assistantName }) => {
   const highlightedNames = getHighlightedNames(report);
   const directorPerspective = SportingDirectorService.getTeamAnalysisPerspective(club);
   const generatedLabel = new Date(report.generatedAt).toLocaleDateString('pl-PL', {
@@ -65,7 +66,7 @@ export const TeamAnalysisModal: React.FC<{
                 <div>
                   <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Raport sztabu</div>
                   <h3 className="text-2xl font-black italic text-white mt-2">ANALIZA ASYSTENTA</h3>
-                  <p className="text-xs text-slate-500 mt-1">Raport sporządzony na podstawie dostępnych danych.</p>
+                  <p className="text-xs text-slate-500 mt-1">{assistantName ? `${assistantName} • ` : ''}Raport sporządzony na podstawie dostępnych danych.</p>
                 </div>
                 <div className="px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/25 text-[10px] font-black uppercase tracking-[0.25em] text-blue-300">
                   Raport

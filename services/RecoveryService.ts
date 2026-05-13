@@ -5,10 +5,19 @@ export const RecoveryService = {
    * Wykonuje dobową regenerację dla wszystkich zawodników.
    * daysCount: pozwala na precyzyjne odliczanie czasu.
    */
-  applyDailyRecovery: (playersMap: Record<string, Player[]>, currentDate: Date, intensity: TrainingIntensity, daysCount: number = 1, recoveryMult: number = 1.0): Record<string, Player[]> => {
+  applyDailyRecovery: (playersMap: Record<string, Player[]>, currentDate: Date, intensity: TrainingIntensity, daysCount: number = 1, recoveryMult: number = 1.0, medicalQuality?: number, userTeamId?: string): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
 
     for (const clubId in updatedMap) {
+      const effectiveMedicalQuality = (userTeamId && clubId === userTeamId) ? medicalQuality : undefined;
+      const medicalSpeedFactor = (() => {
+        if (!effectiveMedicalQuality) return 1.0;
+        const q = effectiveMedicalQuality;
+        if (q >= 17) return 1.20 + (q - 17) / 3 * 0.10;
+        if (q >= 14) return 1.12 + (q - 14) / 3 * 0.08;
+        if (q >= 10) return 1.05 + (q - 10) / 4 * 0.07;
+        return 1.00 + (q - 1) / 9 * 0.05;
+      })();
       updatedMap[clubId] = updatedMap[clubId].map(player => {
         const updated = { ...player };
 
@@ -55,7 +64,8 @@ export const RecoveryService = {
           const injStart = new Date(updated.health.injury.injuryDate).setHours(0,0,0,0);
           const simDay   = new Date(currentDate).setHours(0,0,0,0);
           const daysPassed = Math.max(0, Math.floor((simDay - injStart) / (1000 * 60 * 60 * 24)));
-          const targetCond = condAtInjury + (99 - condAtInjury) * (daysPassed / ((updated.health.injury.totalDays || 1) - 1));
+          const effTotalDays = Math.max(2, Math.round((updated.health.injury.totalDays || 1) / medicalSpeedFactor));
+          const targetCond = condAtInjury + (99 - condAtInjury) * (daysPassed / (effTotalDays - 1));
           updated.condition = Math.min(99, Math.max(condAtInjury, targetCond));
         } else {
           const totalConditionChange = dailyRate * ageModifier * injuryModifier * daysCount;
@@ -72,7 +82,9 @@ export const RecoveryService = {
           const totalDaysPassed = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
           
           // Pozostałe dni to pierwotna długość (totalDays) minus upływ czasu
-          const actualRemaining = (updated.health.injury.totalDays || updated.health.injury.daysRemaining) - totalDaysPassed;
+          const rawTotalDays = updated.health.injury.totalDays || updated.health.injury.daysRemaining;
+          const effTotalDays2 = Math.max(1, Math.round(rawTotalDays / medicalSpeedFactor));
+          const actualRemaining = effTotalDays2 - totalDaysPassed;
 
           if (actualRemaining <= 0) {
             // Czas minął - zawodnik zdrowy

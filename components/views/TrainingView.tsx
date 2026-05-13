@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Player } from '../../types';
+import { ViewState, Player, StaffRole } from '../../types';
 import { TRAINING_CYCLES } from '../../data/training_definitions_pl';
 import { TrainingAssistantService, generatePlayerReport } from '../../services/TrainingAssistantService';
 import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
@@ -24,6 +24,7 @@ export const TrainingView: React.FC = () => {
     trainingProgressHistory,
     currentDate,
     setClubs,
+    staffMembers,
   } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(activeTrainingId);
   const [hoveredAttribute, setHoveredAttribute] = useState<{ label: string; x: number; y: number } | null>(null);
@@ -38,6 +39,8 @@ export const TrainingView: React.FC = () => {
   const cachedReport = useMemo(() => reportPlayer ? generatePlayerReport(reportPlayer, teamPlayers, allLeaguePlayers) : null, [reportPlayer]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const hasAssistant = (myClub?.staffIds ?? [])
+    .some(id => staffMembers[id]?.role === StaffRole.ASSISTANT_COACH);
   const currentCycle = TRAINING_CYCLES.find(c => c.id === selectedId) || null;
   const sortedPlayers = useMemo(() => (
     [...teamPlayers].sort((a, b) => {
@@ -75,7 +78,14 @@ export const TrainingView: React.FC = () => {
   const handleAskAssistant = () => {
     if (!userTeamId || teamPlayers.length === 0) return;
 
-    const plan = TrainingAssistantService.buildPlan(teamPlayers);
+    const assistants = (myClub?.staffIds ?? [])
+      .map(id => staffMembers[id])
+      .filter(s => !!s && s.role === StaffRole.ASSISTANT_COACH);
+    const assistantIndividualWork = assistants.length > 0
+      ? assistants.reduce((sum, s) => sum + (s.attributes.individualWork ?? 10), 0) / assistants.length
+      : 10;
+
+    const plan = TrainingAssistantService.buildPlan(teamPlayers, Math.random, assistantIndividualWork);
     const selectedCycle = TRAINING_CYCLES.find(cycle => cycle.id === plan.cycleId);
 
     setSelectedId(plan.cycleId);
@@ -175,7 +185,7 @@ export const TrainingView: React.FC = () => {
             </button>
             <button
               onClick={handleAskAssistant}
-              disabled={teamPlayers.length === 0}
+              disabled={teamPlayers.length === 0 || !hasAssistant}
               className="px-8 py-4 rounded-2xl bg-blue-600/85 hover:bg-blue-500 disabled:opacity-20 text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 shadow-[0_18px_40px_rgba(37,99,235,0.35)] border border-blue-300/20"
             >
               POPROS ASYSTENTA
