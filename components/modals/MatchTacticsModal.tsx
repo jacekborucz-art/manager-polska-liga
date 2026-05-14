@@ -35,7 +35,12 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
   const [localFreeKickTakerId, setLocalFreeKickTakerId] = useState<string | null>(club?.freeKickTakerId ?? null);
   const [roleMenu, setRoleMenu] = useState<{ x: number; y: number; playerId: string } | null>(null);
   const [showSubLimitModal, setShowSubLimitModal] = useState(false);
+  const [tacticNotice, setTacticNotice] = useState<{ title: string; message: string; tone: 'blue' | 'rose' } | null>(null);
   const substitutionLimit = maxSubs ?? 5;
+
+  const showTacticNotice = (title: string, message: string, tone: 'blue' | 'rose' = 'rose') => {
+    setTacticNotice({ title, message, tone });
+  };
 
   const handleRoleAssign = (role: 'captain' | 'penalty' | 'freekick') => {
     if (!roleMenu) return;
@@ -85,14 +90,14 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
 
         if (selectedSlot.loc === 'BENCH' && loc === 'START' && pId === null) {
            if (currentOnPitchCount >= maxAllowedOnPitch) {
-              alert("POZYCJA ZABLOKOWANA PRZEZ WYKLUCZENIE!");
+              showTacticNotice('Pozycja zablokowana', 'Ten ruch nie pasuje do aktualnej liczby zawodników po wykluczeniu.');
               setSelectedSlot(null);
               return;
            }
         }
 
         if (playerEnteringId && substitutedOffIds.has(playerEnteringId)) {
-          alert("ZAWODNIK OPUŚCIŁ JUŻ PLAC GRY!");
+          showTacticNotice('Zmiana zablokowana', 'Ten zawodnik opuścił już plac gry i nie może wrócić na boisko.');
           setSelectedSlot(null);
           return;
         }
@@ -388,6 +393,43 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
            </div>
         </footer>
       </div>
+
+      {tacticNotice && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 backdrop-blur-[2px] px-4" onClick={() => setTacticNotice(null)}>
+          <div
+            className={`relative w-full max-w-sm overflow-hidden rounded-[30px] border p-7 text-center shadow-[0_30px_90px_rgba(0,0,0,0.75)] ${
+              tacticNotice.tone === 'blue'
+                ? 'border-blue-400/30 bg-slate-950/95 shadow-blue-950/20'
+                : 'border-rose-400/30 bg-slate-950/95 shadow-rose-950/20'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`absolute inset-x-0 top-0 h-1 ${tacticNotice.tone === 'blue' ? 'bg-blue-500' : 'bg-rose-500'}`} />
+            <div className={`absolute -right-16 -top-16 h-36 w-36 rounded-full blur-3xl ${tacticNotice.tone === 'blue' ? 'bg-blue-500/10' : 'bg-rose-500/10'}`} />
+            <div className={`mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border text-2xl shadow-[0_0_28px_rgba(244,63,94,0.2)] ${
+              tacticNotice.tone === 'blue'
+                ? 'border-blue-400/30 bg-blue-500/15 text-blue-100'
+                : 'border-rose-400/30 bg-rose-500/15 text-rose-100'
+            }`}>
+              !
+            </div>
+            <p className={`mb-2 text-[10px] font-black uppercase tracking-[0.35em] ${tacticNotice.tone === 'blue' ? 'text-blue-400' : 'text-rose-400'}`}>Protokół zmian</p>
+            <h3 className="mb-3 text-2xl font-black italic uppercase tracking-tight text-white">{tacticNotice.title}</h3>
+            <p className="mb-6 text-sm font-medium leading-relaxed text-slate-300 normal-case">{tacticNotice.message}</p>
+            <button
+              type="button"
+              onClick={() => setTacticNotice(null)}
+              className={`w-full rounded-2xl border px-6 py-3 text-[11px] font-black uppercase tracking-[0.25em] transition-all hover:scale-[1.02] active:scale-95 ${
+                tacticNotice.tone === 'blue'
+                  ? 'border-blue-300/30 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30'
+                  : 'border-rose-300/30 bg-rose-500/20 text-rose-100 hover:bg-rose-500/30'
+              }`}
+            >
+              Zamknij
+            </button>
+          </div>
+        </div>
+      )}
 
       {showSubLimitModal && (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 backdrop-blur-[2px] px-4" onClick={() => setShowSubLimitModal(false)}>

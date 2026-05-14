@@ -32,15 +32,17 @@ export const FreeAgentNegotiationView: React.FC = () => {
     [players, userTeamId]
   );
 
+  const spendableTransferBudget = myClub?.transferBudget || 0;
+
   const maxSalaryAllowed = useMemo(() => {
     if (!myClub || !player) return 500000;
 
     const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
-    const budgetCap = Math.max(150000, Math.floor(myClub.transferBudget * 0.25));
+    const budgetCap = Math.max(150000, Math.floor(spendableTransferBudget * 0.25));
     const marketCap = fairSalary * (player.overallRating >= 80 ? 4.5 : player.overallRating >= 72 ? 3.5 : 3);
 
-    return Math.floor(Math.min(budgetCap, marketCap, myClub.transferBudget));
-  }, [myClub, player]);
+    return Math.floor(Math.min(budgetCap, marketCap, spendableTransferBudget));
+  }, [myClub, player, spendableTransferBudget]);
 
   const maxBonusAllowed = useMemo(() => {
     if (!myClub || !player) return 0;
@@ -82,7 +84,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
   if (!player || !myClub) return null;
 
   const isInterested = agentInterest.interested;
-  const availableBudget = myClub.transferBudget + extraBudget;
+  const availableBudget = spendableTransferBudget + extraBudget;
   const totalCostPreview = salary * years + bonus;
   const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;

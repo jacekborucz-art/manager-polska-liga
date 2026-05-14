@@ -535,7 +535,7 @@ const getObjectivePanelData = (
 };
 
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
-  const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion } = useGame();
+  const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion, submitBoardClubRequest } = useGame();
   const [isDirectorModalOpen, setIsDirectorModalOpen] = useState(false);
   const [isBoardRequestOpen, setIsBoardRequestOpen] = useState(false);
   const [isStadiumModalOpen, setIsStadiumModalOpen] = useState(false);
@@ -1160,6 +1160,10 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         <BoardRequestModal
           club={club}
           onClose={() => setIsBoardRequestOpen(false)}
+          onSelectRequest={(requestType) => {
+            submitBoardClubRequest(requestType);
+            setIsBoardRequestOpen(false);
+          }}
           onSelectStadium={() => {
             setIsBoardRequestOpen(false);
             setIsStadiumModalOpen(true);

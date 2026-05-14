@@ -777,6 +777,33 @@ export const FinanceService = {
     return Math.floor(baseBudget * variability);
   },
 
+  calculateTransferBudgetCap: (budget: number, reputation: number, wageBill: number = 0): number => {
+    if (!Number.isFinite(budget) || budget <= 0) return 0;
+
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const wagePressure = wageBill > 0 ? wageBill / Math.max(1, budget) : 0;
+    let ratio = 0.34 + Math.min(0.14, rep * 0.007);
+
+    if (wagePressure >= 0.85) ratio -= 0.14;
+    else if (wagePressure >= 0.65) ratio -= 0.09;
+    else if (wagePressure >= 0.45) ratio -= 0.04;
+
+    const cappedRatio = Math.max(0.18, Math.min(0.52, ratio));
+    return Math.floor(budget * cappedRatio);
+  },
+
+  calculateInitialTransferBudget: (budget: number, reputation: number): number => {
+    const cap = FinanceService.calculateTransferBudgetCap(budget, reputation);
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const allocationRatio = 0.52 + Math.min(0.28, rep * 0.018) + Math.random() * 0.14;
+    return Math.floor(cap * Math.min(0.95, allocationRatio));
+  },
+
+  normalizeTransferBudget: (budget: number, transferBudget: number, reputation: number, wageBill: number = 0): number => {
+    const cap = FinanceService.calculateTransferBudgetCap(budget, reputation, wageBill);
+    return Math.max(0, Math.min(Math.floor(transferBudget || 0), cap));
+  },
+
   getClubTier: (club?: Pick<Club, 'leagueId' | 'tier'> | null): number => {
     if (!club) return 4;
     if (typeof club.tier === 'number' && Number.isFinite(club.tier)) {

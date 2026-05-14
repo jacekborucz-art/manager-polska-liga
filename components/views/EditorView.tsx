@@ -115,7 +115,7 @@ const getTierFilterForClub = (leagueId: string): string => {
 };
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, currentDate, getOrGenerateSquad, updatePlayer, setPlayers, importSquad, navigateTo } = useGame();
+  const { clubs, players, currentDate, getOrGenerateSquad, updatePlayer, setPlayers, importSquad, navigateTo, showGameNotification } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -457,13 +457,21 @@ export const EditorView: React.FC = () => {
 
   const handleSave = () => {
     if (!selectedClubId) {
-      alert('Najpierw wybierz klub.');
+      showGameNotification({
+        title: 'Brak klubu',
+        message: 'Najpierw wybierz klub, do którego ma trafić zawodnik.',
+        tone: 'warning'
+      });
       return;
     }
     const trimmedFirstName = firstName.trim();
     const trimmedLastName = lastName.trim();
     if (isCreatingPlayer && !trimmedFirstName && !trimmedLastName) {
-      alert('Podaj imię albo nazwisko zawodnika.');
+      showGameNotification({
+        title: 'Brak danych',
+        message: 'Podaj imię albo nazwisko zawodnika.',
+        tone: 'warning'
+      });
       return;
     }
     const newOvr = PlayerAttributesGenerator.calculateOverall(attrs, position);
@@ -522,7 +530,11 @@ export const EditorView: React.FC = () => {
       }));
       setSelectedPlayerId(newPlayer.id);
       setIsCreatingPlayer(false);
-      alert(`Stworzono: ${newPlayer.firstName} ${newPlayer.lastName} (OVR: ${newOvr})`);
+      showGameNotification({
+        title: 'Zawodnik stworzony',
+        message: `${newPlayer.firstName} ${newPlayer.lastName} dołącza do klubu. OVR: ${newOvr}.`,
+        tone: 'success'
+      });
       return;
     }
     if (!selectedPlayerId) return;
@@ -531,7 +543,11 @@ export const EditorView: React.FC = () => {
       attributes: { ...attrs }, overallRating: newOvr,
       annualSalary, marketValue, contractEndDate
     });
-    alert(`Zapisano: ${firstName} ${lastName} (OVR: ${newOvr})`);
+    showGameNotification({
+      title: 'Zapisano zawodnika',
+      message: `${firstName} ${lastName} ma teraz OVR: ${newOvr}.`,
+      tone: 'success'
+    });
   };
 
   const isSelected = !!selectedPlayerId || isCreatingPlayer;

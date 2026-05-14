@@ -102,15 +102,17 @@ export const TransferPlayerNegotiationView: React.FC = () => {
     );
   }, [negotiationPlan, player, buyerClub]);
 
+  const spendableTransferBudget = buyerClub?.transferBudget || 0;
+
   const maxSalary = useMemo(() => {
     if (!buyerClub) return 500_000;
-    return buyerClub.transferBudget;
-  }, [buyerClub]);
+    return spendableTransferBudget;
+  }, [buyerClub, spendableTransferBudget]);
 
   const sliderMax = useMemo(() => {
     if (!buyerClub) return maxSalary;
-    return buyerClub.transferBudget;
-  }, [buyerClub, maxSalary]);
+    return spendableTransferBudget;
+  }, [buyerClub, maxSalary, spendableTransferBudget]);
 
   const maxBonus = useMemo(() => buyerClub?.signingBonusPool || 0, [buyerClub]);
 
@@ -154,7 +156,7 @@ export const TransferPlayerNegotiationView: React.FC = () => {
     );
   }
 
-  const effectiveBudget = buyerClub.transferBudget + extraBudget;
+  const effectiveBudget = spendableTransferBudget + extraBudget;
   const totalCostPreview = offer.fee + salary * years + bonus;
   const boardRequestsUsed = buyerClub.boardBudgetRequestsThisSeason ?? 0;
   const canRequestBoard = totalCostPreview > effectiveBudget && boardRequestsUsed < 2 && extraBudget === 0;

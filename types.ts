@@ -1283,7 +1283,8 @@ export interface Club {
   budget: number;
   transferBudget: number;
   boardBudgetRequestsThisSeason?: number;
-  boardBudgetMonitorState?: 'NORMAL' | 'ALERT';
+  boardExceptionalContractApprovals?: number;
+  boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
   boardStrictness: number;
   signingBonusPool: number; // Pula pieniędzy zarezerwowana tylko na bonusy za podpis
   squadNeeds?: Record<string, number>;
@@ -1323,6 +1324,12 @@ export interface Club {
   stadiumExpansionProjects?: StadiumExpansionProject[];
   management?: ClubManagement;
 }
+
+export type BoardClubRequestType =
+  | 'CLUB_FUNDS'
+  | 'TRANSFER_BUDGET'
+  | 'EXCEPTIONAL_CONTRACT'
+  | 'WAGE_COST_CONTROL';
 
 export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
 export type WinterCampProgram = 'fitness' | 'tactical' | 'technical' | 'strength' | 'recovery';

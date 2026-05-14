@@ -51,7 +51,7 @@ export const GameNotification: React.FC = () => {
 
           <div className="min-w-0 flex-1">
             <div className={`text-[10px] font-black uppercase tracking-[0.38em] ${toneStyles.badge}`}>
-              Centrum transferowe
+              Centrum klubu
             </div>
             <h3 className="mt-2 text-xl font-black uppercase italic tracking-tight text-white sm:text-2xl">
               {gameNotification.title}

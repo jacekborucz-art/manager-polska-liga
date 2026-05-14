@@ -131,11 +131,14 @@ export const ContractManagementView: React.FC = () => {
         setRenewalVeto(directorCheck.reason);
         return;
       }
-      const boardCheck = FinanceService.evaluateRenewalBoardDecision(player, offerSalary, offerBonus, squad, club);
-      if (!boardCheck.approved) {
-        setIsProcessing(false);
-        setRenewalVeto(boardCheck.reason);
-        return;
+      const hasExceptionalContractApproval = (club.boardExceptionalContractApprovals ?? 0) > 0;
+      if (!hasExceptionalContractApproval) {
+        const boardCheck = FinanceService.evaluateRenewalBoardDecision(player, offerSalary, offerBonus, squad, club);
+        if (!boardCheck.approved) {
+          setIsProcessing(false);
+          setRenewalVeto(boardCheck.reason);
+          return;
+        }
       }
 
       setIsOfferSent(true);
@@ -182,7 +185,10 @@ export const ContractManagementView: React.FC = () => {
         setClubs(prev => prev.map(c => c.id === club.id ? { 
           ...c, 
           budget: c.budget - offerBonus,
-          signingBonusPool: Math.max(0, c.signingBonusPool - offerBonus) 
+          signingBonusPool: Math.max(0, c.signingBonusPool - offerBonus),
+          boardExceptionalContractApprovals: hasExceptionalContractApproval
+            ? Math.max(0, (c.boardExceptionalContractApprovals ?? 0) - 1)
+            : c.boardExceptionalContractApprovals
         } : c));
         
         setNegotiationMessage(decision.reason);

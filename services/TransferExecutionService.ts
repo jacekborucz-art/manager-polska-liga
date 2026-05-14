@@ -81,13 +81,15 @@ export const TransferExecutionService = {
 
     const updatedClubs = clubs.map(club => {
       if (club.id === buyerClub.id) {
+        const bonus = offer.bonus ?? 0;
+        const contractCost = offer.fee + bonus + (offer.salary || 0) * (offer.years || 0);
+        const nextTransferBudget = Math.max(0, club.transferBudget - contractCost);
         const buyerFeeLog = buildFinanceLog(
           -offer.fee,
           `Kwota transferu za ${player.firstName} ${player.lastName}`,
           currentDate,
           club.budget
         );
-        const bonus = offer.bonus ?? 0;
         const buyerBonusLog = buildFinanceLog(
           -bonus,
           `Bonus za podpis dla ${player.firstName} ${player.lastName}`,
@@ -97,7 +99,7 @@ export const TransferExecutionService = {
 
         return {
           ...club,
-          transferBudget: club.transferBudget - offer.fee - bonus - (offer.salary || 0) * (offer.years || 0),
+          transferBudget: nextTransferBudget,
           signingBonusPool: Math.max(0, club.signingBonusPool - bonus),
           rosterIds: [...club.rosterIds, player.id],
           financeHistory: [buyerBonusLog, buyerFeeLog, ...(club.financeHistory || [])].slice(0, 50)

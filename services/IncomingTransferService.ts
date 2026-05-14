@@ -115,6 +115,103 @@ export const IncomingTransferService = {
     return multiplier * squadFit.multiplier;
   },
 
+  hasRecentIncomingOfferNoise(
+    player: Player,
+    buyerClub: Club,
+    incomingOffers: IncomingTransferOffer[],
+    currentDate: Date | string
+  ): boolean {
+    const today = new Date(currentDate);
+    const playerOffers = incomingOffers.filter(offer => offer.playerId === player.id);
+
+    return playerOffers.some(offer => {
+      const offerDate = new Date(offer.createdAt || offer.emailSentAt);
+      const daysSinceOffer = IncomingTransferService.daysBetween(offerDate, today);
+      if (daysSinceOffer < 0) return false;
+
+      if (offer.buyerClubId === buyerClub.id && daysSinceOffer < 60) return true;
+
+      if (player.isOnTransferList) {
+        return daysSinceOffer < 4;
+      }
+
+      switch (offer.status) {
+        case IncomingOfferStatus.REJECTED_BY_MANAGER:
+        case IncomingOfferStatus.REJECTED_AT_CONFIRM:
+          return daysSinceOffer < 21;
+        case IncomingOfferStatus.EXPIRED:
+        case IncomingOfferStatus.PLAYER_REFUSED:
+          return daysSinceOffer < 14;
+        case IncomingOfferStatus.COMPLETED:
+          return false;
+        default:
+          return daysSinceOffer < 10;
+      }
+    });
+  },
+
+  isProtectedFromLowerReputationBuyer(
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    sellerPlayers?: Player[]
+  ): boolean {
+    if (player.isOnTransferList) return false;
+
+    const reputationGap = sellerClub.reputation - buyerClub.reputation;
+    if (reputationGap <= 1) return false;
+
+    const matchesPlayed = player.stats?.matchesPlayed ?? 0;
+    const minutesPlayed = player.stats?.minutesPlayed ?? 0;
+    const goals = player.stats?.goals ?? 0;
+    const assists = player.stats?.assists ?? 0;
+    const goalContributions = goals + assists;
+    const avgRating = IncomingTransferService.getAvgRating(player);
+    const gamesSample = Math.max(matchesPlayed, minutesPlayed / 90);
+
+    const regularPlayer = matchesPlayed >= 6 || minutesPlayed >= 450;
+    const goodRecentForm = gamesSample >= 5 && avgRating >= 7.2;
+    const productiveForward =
+      player.position === PlayerPosition.FWD &&
+      gamesSample >= 5 &&
+      (goals >= 5 || goals / gamesSample >= 0.25);
+    const productiveMidfielder =
+      player.position === PlayerPosition.MID &&
+      gamesSample >= 5 &&
+      (goalContributions >= 6 || goalContributions / gamesSample >= 0.25);
+    const productiveSeason = goals >= 8 || goalContributions >= 10;
+    const importantRole =
+      player.isUntouchable ||
+      player.squadRole === 'KEY_PLAYER' ||
+      player.squadRole === 'STARTER';
+
+    let importantInSquad = false;
+    if (sellerPlayers && sellerPlayers.length > 0) {
+      const sortedSquad = [...sellerPlayers].sort((a, b) => b.overallRating - a.overallRating);
+      const playerRank = sortedSquad.findIndex(squadPlayer => squadPlayer.id === player.id);
+      const squadAverage = IncomingTransferService.getSquadAverageOverall(sellerPlayers);
+      importantInSquad =
+        (playerRank >= 0 && playerRank <= 10) ||
+        player.overallRating >= squadAverage + 2;
+    }
+
+    const sellerLevelOverall = Math.max(60, IncomingTransferService.getBuyerIdealOverall(sellerClub) - 7);
+    const strongForSellerLevel = player.overallRating >= sellerLevelOverall;
+    const isValuableRegular =
+      regularPlayer &&
+      (strongForSellerLevel || importantRole || importantInSquad || goodRecentForm);
+
+    return (
+      importantRole ||
+      importantInSquad ||
+      isValuableRegular ||
+      goodRecentForm ||
+      productiveForward ||
+      productiveMidfielder ||
+      productiveSeason
+    );
+  },
+
   shouldGenerateOffer(
     player: Player,
     buyerClub: Club,
@@ -136,6 +233,10 @@ export const IncomingTransferService = {
         o.status !== IncomingOfferStatus.PLAYER_REFUSED
     );
     if (hasActiveOffer) return { shouldGenerate: false, source: null };
+
+    if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
+      return { shouldGenerate: false, source: null };
+    }
 
     if (
       player.transferLockoutUntil &&
@@ -161,15 +262,8 @@ export const IncomingTransferService = {
       return { shouldGenerate: false, source: null };
     }
 
-    if (player.isUntouchable) {
-      const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
-      const contractExpiring = daysLeft > 0 && daysLeft < 180;
-      const sellerSquad = sellerPlayers || [];
-      const monthlyWageBill = sellerSquad.reduce((s, p) => s + (p.annualSalary || 0), 0) / 12;
-      const clubBankrupt = monthlyWageBill > 0 && sellerClub.budget < monthlyWageBill * 5;
-      if (!contractExpiring && !clubBankrupt) {
-        return { shouldGenerate: false, source: null };
-      }
+    if (IncomingTransferService.isProtectedFromLowerReputationBuyer(player, buyerClub, sellerClub, sellerPlayers)) {
+      return { shouldGenerate: false, source: null };
     }
 
     if (player.squadRole === 'KEY_PLAYER') {
@@ -187,6 +281,14 @@ export const IncomingTransferService = {
       sellerPlayers
     );
 
+    if (player.isUntouchable && !player.isOnTransferList) {
+      const buyerIsClearStepUp = buyerClub.reputation >= sellerClub.reputation + 2;
+      const eliteInterest = priority === 1 || priority === 2;
+      if (!buyerIsClearStepUp || !eliteInterest) {
+        return { shouldGenerate: false, source: null };
+      }
+    }
+
     const PRIORITY_PROB: Record<1 | 2 | 3 | 4 | 5, number> = {
       1: 0.0036,
       2: 0.0024,
@@ -201,6 +303,7 @@ export const IncomingTransferService = {
     prob *= IncomingTransferService.getBuyerFitProbabilityMultiplier(player, buyerClub, buyerPlayers);
 
     if (player.isOnTransferList) prob *= 4.0;
+    if (player.isUntouchable && !player.isOnTransferList) prob *= 0.18;
 
     if (player.contractEndDate) {
       const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
@@ -265,6 +368,19 @@ export const IncomingTransferService = {
     } else {
       feeMin = 1.15;
       feeMax = 1.60;
+    }
+
+    if (player.isUntouchable && !player.isOnTransferList) {
+      if (urgency === 1) {
+        feeMin = 1.35;
+        feeMax = 1.70;
+      } else if (urgency === 2) {
+        feeMin = 1.65;
+        feeMax = 2.05;
+      } else {
+        feeMin = 1.95;
+        feeMax = 2.50;
+      }
     }
 
     const feeMultiplier = feeMin + rng2 * (feeMax - feeMin);

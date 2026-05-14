@@ -5,7 +5,7 @@ import { ViewState } from '../../types';
 import bgImg from '../../Graphic/themes/main_theme.png';
 import { importSaveFromFile } from '../../services/SaveGameService';
 export const StartMenu: React.FC = () => {
-  const { startNewGame, navigateTo, loadGameFromFile } = useGame();
+  const { startNewGame, navigateTo, loadGameFromFile, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -15,7 +15,11 @@ export const StartMenu: React.FC = () => {
       const data = await importSaveFromFile(file);
       loadGameFromFile(data);
     } catch {
-      alert('Nieprawidłowy plik zapisu.');
+      showGameNotification({
+        title: 'Nieprawidłowy zapis',
+        message: 'Wybrany plik nie wygląda jak prawidłowy zapis gry.',
+        tone: 'error'
+      });
     }
     e.target.value = '';
   };
@@ -123,7 +127,11 @@ export const StartMenu: React.FC = () => {
           </button>
 
           <button 
-            onClick={() => alert("Ustawienia będą dostępne wkrótce.")}
+            onClick={() => showGameNotification({
+              title: 'Opcje niedostępne',
+              message: 'Panel ustawień będzie dostępny w jednej z kolejnych wersji.',
+              tone: 'info'
+            })}
             className="group relative h-48 bg-slate-900/60 border border-white/5 rounded-[32px] p-6 transition-all duration-500 hover:bg-white/5 hover:border-white/20 hover:-translate-y-2 overflow-hidden shadow-xl"
           >
              <div className="relative z-10 flex flex-col h-full items-center justify-between">

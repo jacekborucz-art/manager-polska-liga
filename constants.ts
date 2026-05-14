@@ -161,6 +161,7 @@ export const STATIC_LEAGUES: League[] = [
 // Helper to generate a placeholder club if real data runs out
 const generatePlaceholderClub = (leagueId: string, index: number, tier: number): Club => {
   const id = `PL_TIER${tier}_PLACEHOLDER_${String(index).padStart(3, '0')}`;
+  const budget = FinanceService.calculateInitialBudget(tier, 1);
   return {
     id,
     name: `Klub Placeholder ${index}`,
@@ -168,7 +169,7 @@ const generatePlaceholderClub = (leagueId: string, index: number, tier: number):
     leagueId,
     tier,
     colorsHex: ['#808080', '#FFFFFF', '#000000'],
-    budget: FinanceService.calculateInitialBudget(tier, 1),
+    budget,
     stadiumName: "Stadion Miejski TBD",
     stadiumCapacity: 1000,
     reputation: 1,
@@ -181,7 +182,7 @@ const generatePlaceholderClub = (leagueId: string, index: number, tier: number):
     form: []
 },
     boardStrictness: Math.floor(Math.random() * 10) + 1,
-    transferBudget: Math.floor(FinanceService.calculateInitialBudget(tier, 1) * (0.25 + Math.random() * 0.45)),
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, 1),
     boardBudgetRequestsThisSeason: 0,
     signingBonusPool: 0,
     board: generateRandomBoard(),
@@ -197,6 +198,7 @@ const loadClubsForTier = (tier: number, leagueId: string, limit: number): Club[]
   rawClubs.forEach((raw, index) => {
     const isActive = index < limit;
     const assignedLeagueId = isActive ? leagueId : 'NONE';
+    const budget = FinanceService.calculateInitialBudget(tier, raw.reputation);
 
     const club: Club = {
       id: generateClubId(raw.name),
@@ -209,12 +211,12 @@ const loadClubsForTier = (tier: number, leagueId: string, limit: number): Club[]
       stadiumCapacity: raw.capacity,
       reputation: raw.reputation,
       isDefaultActive: isActive,
-      budget: FinanceService.calculateInitialBudget(tier, raw.reputation),
-      transferBudget: Math.floor(FinanceService.calculateInitialBudget(tier, raw.reputation) * (0.25 + Math.random() * 0.45)),
+      budget,
+      transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
       boardBudgetRequestsThisSeason: 0,
       boardStrictness: Math.floor(Math.random() * 10) + 1,
       signingBonusPool: FinanceService.calculateInitialSigningPool(
-        FinanceService.calculateInitialBudget(tier, raw.reputation),
+        budget,
         raw.reputation
       ),
       logoFile: raw.logoFile,
@@ -279,7 +281,7 @@ export const STATIC_CL_CLUBS: Club[] = RAW_CHAMPIONS_LEAGUE_CLUBS.map(raw => {
     colorSecondary: raw.colors[1] || '#FFFFFF',
     rosterIds: [],
     budget,
-    transferBudget: Math.floor(budget * (0.25 + Math.random() * 0.45)),
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
     boardBudgetRequestsThisSeason: 0,
     boardStrictness: 5,
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
@@ -308,7 +310,7 @@ export const STATIC_EL_CLUBS: Club[] = RAW_EUROPA_LEAGUE_CLUBS.map(raw => {
     colorSecondary: raw.colors[1] || '#FFFFFF',
     rosterIds: [],
     budget,
-    transferBudget: Math.floor(budget * (0.25 + Math.random() * 0.45)),
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
     boardBudgetRequestsThisSeason: 0,
     boardStrictness: 5,
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
@@ -337,7 +339,7 @@ export const STATIC_CONF_CLUBS: Club[] = RAW_CONFERENCE_LEAGUE_CLUBS.map(raw => 
     colorSecondary: raw.colors[1] || '#FFFFFF',
     rosterIds: [],
     budget,
-    transferBudget: Math.floor(budget * (0.25 + Math.random() * 0.45)),
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
     boardBudgetRequestsThisSeason: 0,
     boardStrictness: 5,
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
@@ -369,7 +371,7 @@ const buildInternationalClub = (
     colorSecondary: raw.colors[1] || '#FFFFFF',
     rosterIds: [],
     budget,
-    transferBudget: Math.floor(budget * (0.25 + Math.random() * 0.45)),
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
     boardBudgetRequestsThisSeason: 0,
     boardStrictness: 5,
     signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),

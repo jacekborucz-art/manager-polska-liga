@@ -39,6 +39,7 @@ SummerCampState,
 StadiumStand,
 StaffMember,
 StaffRole,
+BoardClubRequestType,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { KitSelection } from '../services/KitSelectionService';
@@ -294,6 +295,7 @@ interface GameContextType {
   updatePlayer: (clubId: string, playerId: string, newData: Partial<Player>) => void;
   importSquad: (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => void;
   toggleTransferList: (playerId: string, price?: number) => void;
+  toggleUntouchable: (playerId: string) => void;
   setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
@@ -334,6 +336,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   clearGameNotification: () => void;
   respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
   requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
+  submitBoardClubRequest: (requestType: BoardClubRequestType) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
   setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
@@ -1214,7 +1217,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
           };
           const kompMult = club.board ? (KOMPETENCJA_BUDGET_MULT[club.board.kompetencja] ?? 1.00) : 1.00;
           const boostedInjection = nextSeasonInjection * kompMult;
-          return Math.floor((club.budget + boostedInjection - achievementBonusCost) * (0.25 + Math.random() * 0.45));
+          const nextBudget = club.budget + boostedInjection - achievementBonusCost;
+          return FinanceService.calculateInitialTransferBudget(nextBudget, newReputation);
         })(),
         boardBudgetRequestsThisSeason: 0,
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
@@ -2603,7 +2607,13 @@ setMessages([welcomeMail, fanMail]);
         const userClub = prev.find(c => c.id === userTeamId);
         if (!userClub) return prev;
         const monitorResult = BoardFinanceMonitorService.check(userClub);
-        if (monitorResult.action === 'NONE') return prev;
+        if (monitorResult.action === 'NONE') {
+          if ((userClub.boardBudgetMonitorState ?? 'NORMAL') === monitorResult.newState) return prev;
+          return prev.map(c => c.id === userTeamId ? {
+            ...c,
+            boardBudgetMonitorState: monitorResult.newState,
+          } : c);
+        }
         const budgetMail: MailMessage = {
           id: `BOARD_BUDGET_${Date.now()}`,
           sender: 'Zarząd Klubu',
@@ -2618,8 +2628,22 @@ setMessages([welcomeMail, fanMail]);
         setMessages(prev => [budgetMail, ...prev]);
         return prev.map(c => c.id === userTeamId ? {
           ...c,
+          budget: monitorResult.newBudget,
           transferBudget: monitorResult.newTransferBudget,
           boardBudgetMonitorState: monitorResult.newState,
+          financeHistory: monitorResult.amountChanged > 0 ? [
+            {
+              id: `BOARD_SHIFT_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              date: dateToProcess.toISOString().split('T')[0],
+              amount: monitorResult.action === 'REDUCE' ? monitorResult.amountChanged : -monitorResult.amountChanged,
+              type: monitorResult.action === 'REDUCE' ? 'INCOME' as const : 'EXPENSE' as const,
+              description: monitorResult.action === 'REDUCE'
+                ? 'Przesunięcie środków z budżetu transferowego na saldo klubu'
+                : 'Przesunięcie środków z salda klubu na budżet transferowy',
+              previousBalance: c.budget,
+            },
+            ...(c.financeHistory || [])
+          ].slice(0, 50) : c.financeHistory,
         } : c);
       });
     }
@@ -5584,16 +5608,28 @@ const finalResult: SimulationOutput = {
         });
 
         // 2. Generuj nowe oferty AI
-        const aiClubs = clubs.filter(c => c.id !== userTeamId);
+        const dailyOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + 404);
+        const maxDailyNewOffers = isInsideWindow
+          ? (dailyOfferRoll < 0.08 ? 2 : 1)
+          : (dailyOfferRoll < 0.80 ? 0 : 1);
+        const rotateBySeed = <T,>(items: T[], seedOffset: number): T[] => {
+          if (items.length <= 1) return items;
+          const start = Math.floor(IncomingTransferService.seededRandom(nextDay.getTime() + seedOffset) * items.length);
+          return [...items.slice(start), ...items.slice(0, start)];
+        };
+        const aiClubs = rotateBySeed(clubs.filter(c => c.id !== userTeamId), 911);
+        const offerCandidateSquad = rotateBySeed(userSquad, 1301);
         aiClubs.forEach(aiClub => {
+          if (newOffersToAdd.length >= maxDailyNewOffers) return;
           const buyerSquad = players[aiClub.id] || [];
-          userSquad.forEach(p => {
+          offerCandidateSquad.forEach(p => {
+            if (newOffersToAdd.length >= maxDailyNewOffers) return;
             const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, p.id);
             const offerDecision = IncomingTransferService.shouldGenerateOffer(
               p,
               aiClub,
               userClub,
-              processed,
+              [...newOffersToAdd, ...processed],
               seed,
               nextDay,
               userSquad,
@@ -7199,6 +7235,173 @@ const finalResult: SimulationOutput = {
     });
   }, [clubs, currentDate, showGameNotification, userTeamId]);
 
+  const submitBoardClubRequest = useCallback((requestType: BoardClubRequestType) => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const date = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const squad = players[userTeamId] || [];
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const avgSalary = squad.length > 0 ? Math.round(wageBill / squad.length) : 0;
+    const formatPln = (value: number) => `${Math.round(value).toLocaleString('pl-PL')} PLN`;
+    const levelScore = (level?: import('../types').BoardAttributeLevel): number => ({
+      bardzo_niska: 0,
+      niska: 1,
+      przecietna: 2,
+      wysoka: 3,
+      bardzo_wysoka: 4,
+    }[level ?? 'przecietna']);
+
+    if (requestType === 'WAGE_COST_CONTROL') {
+      const pressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
+      const pressureLabel = pressureRatio >= 0.85
+        ? 'bardzo wysoka'
+        : pressureRatio >= 0.65
+          ? 'wysoka'
+          : pressureRatio >= 0.45
+            ? 'umiarkowana'
+            : 'bezpieczna';
+      const message = `Roczny fundusz płac: ${formatPln(wageBill)}. Średnia pensja: ${formatPln(avgSalary)}. Presja względem salda klubu: ${pressureLabel}.`;
+
+      setMessages(prev => [{
+        id: `BOARD_WAGE_REPORT_${userTeamId}_${Date.now()}`,
+        sender: 'Zarząd Klubu',
+        role: 'Dyrektor finansowy',
+        subject: 'Raport kontroli kosztów płac',
+        body: `Panie Managerze,\n\nPrzygotowaliśmy krótką ocenę struktury płacowej pierwszej drużyny.\n\n${message}\n\n${pressureRatio >= 0.65 ? 'Zalecamy ostrożność przy nowych kontraktach i rozważenie sprzedaży lub renegocjacji najdroższych umów.' : 'Aktualna struktura płac nie wymaga natychmiastowej interwencji.'}\n\nZ poważaniem,\nZarząd Klubu`,
+        date,
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 62,
+      }, ...prev]);
+      showGameNotification({
+        title: 'Raport płacowy',
+        message,
+        tone: pressureRatio >= 0.65 ? 'warning' : 'info',
+      });
+      return;
+    }
+
+    const requestsUsed = userClub.boardBudgetRequestsThisSeason ?? 0;
+    if (requestsUsed >= 2) {
+      showGameNotification({
+        title: 'Wniosek odrzucony',
+        message: 'Zarząd wyczerpał limit specjalnych próśb finansowych w tym sezonie.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const board = userClub.board;
+    const confidence = userClub.boardConfidence ?? 70;
+    const generosity = levelScore(board?.hojnosc);
+    const ambition = levelScore(board?.ambicja);
+    const greed = levelScore(board?.chciwosc);
+    const competence = levelScore(board?.kompetencja);
+    const wagePressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
+    const pressureBonus = userClub.budget < Math.max(wageBill * 0.65, 2_000_000) ? 10 : 0;
+    const roll = Math.random() * 100;
+    let chance = 12 + generosity * 7 + Math.max(0, confidence - 55) * 0.25 - greed * 6;
+    const financialChanceCap = {
+      CLUB_FUNDS: [5, 16, 34, 56, 76],
+      TRANSFER_BUDGET: [7, 20, 40, 62, 82],
+    } as const;
+    let amount = 0;
+    let subject = '';
+    let successTitle = '';
+    let successMessage = '';
+    let updatedClubPatch: Partial<Club> = {};
+
+    if (requestType === 'CLUB_FUNDS') {
+      chance += pressureBonus - 18 + (wagePressureRatio >= 0.9 ? 8 : 0);
+      const generosityAmountFactor = [0.018, 0.028, 0.045, 0.065, 0.085][generosity];
+      amount = Math.max(150_000, Math.round(userClub.budget * generosityAmountFactor));
+      amount = Math.min(amount, Math.max(350_000, userClub.reputation * (450_000 + generosity * 220_000)));
+      chance = Math.min(chance, financialChanceCap.CLUB_FUNDS[generosity] + Math.floor(pressureBonus * 0.5));
+      subject = 'Dodatkowe środki klubowe';
+      successTitle = 'Środki przyznane';
+      successMessage = `Zarząd przyznał dodatkowe środki klubowe: ${formatPln(amount)}.`;
+      updatedClubPatch = { budget: userClub.budget + amount };
+    }
+
+    if (requestType === 'TRANSFER_BUDGET') {
+      chance += ambition * 4 - 14;
+      amount = Math.max(200_000, Math.round(userClub.transferBudget * (0.045 + generosity * 0.018) + userClub.budget * (0.008 + generosity * 0.004)));
+      amount = Math.min(amount, Math.max(450_000, userClub.reputation * (550_000 + generosity * 240_000)));
+      const transferBudgetCap = FinanceService.calculateTransferBudgetCap(userClub.budget, userClub.reputation, wageBill);
+      const nextTransferBudget = Math.max(
+        userClub.transferBudget,
+        Math.min(userClub.transferBudget + amount, transferBudgetCap)
+      );
+      amount = Math.max(0, nextTransferBudget - userClub.transferBudget);
+      if (amount <= 0) chance = 0;
+      chance = Math.min(chance, financialChanceCap.TRANSFER_BUDGET[generosity]);
+      subject = 'Zwiększenie budżetu transferowego';
+      successTitle = 'Budżet transferowy zwiększony';
+      successMessage = `Zarząd zwiększył budżet transferowy o ${formatPln(amount)}.`;
+      updatedClubPatch = {
+        transferBudget: nextTransferBudget
+      };
+    }
+
+    if (requestType === 'EXCEPTIONAL_CONTRACT') {
+      chance += competence * 5 + Math.max(0, confidence - 60) * 0.25 - 10;
+      subject = 'Zgoda na wyjątkowy kontrakt';
+      successTitle = 'Zgoda kontraktowa';
+      successMessage = 'Zarząd przyznał jednorazową zgodę na wyjątkowy kontrakt. Zgoda złagodzi veto zarządu przy najbliższym zaakceptowanym kontrakcie.';
+      updatedClubPatch = { boardExceptionalContractApprovals: (userClub.boardExceptionalContractApprovals ?? 0) + 1 };
+    }
+
+    const approved = chance > 0 && roll <= Math.max(2, Math.min(82, chance));
+    const nextRequestsUsed = requestsUsed + 1;
+    const financeLog = amount > 0 && approved && requestType === 'CLUB_FUNDS'
+      ? {
+          id: Math.random().toString(36).substr(2, 9),
+          date: date.toISOString().split('T')[0],
+          amount,
+          type: 'INCOME' as const,
+          description: subject,
+          previousBalance: userClub.budget,
+        }
+      : null;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      if (!approved) {
+        return { ...c, boardBudgetRequestsThisSeason: nextRequestsUsed };
+      }
+      return {
+        ...c,
+        ...updatedClubPatch,
+        boardBudgetRequestsThisSeason: nextRequestsUsed,
+        financeHistory: financeLog ? [financeLog, ...(c.financeHistory || [])].slice(0, 50) : c.financeHistory,
+      };
+    }));
+
+    const resultMessage = approved
+      ? successMessage
+      : `Zarząd odrzucił wniosek: ${subject.toLowerCase()}. W obecnej sytuacji klub nie chce zwiększać ryzyka finansowego.`;
+
+    setMessages(prev => [{
+      id: `BOARD_REQ_${requestType}_${userTeamId}_${Date.now()}`,
+      sender: 'Zarząd Klubu',
+      role: approved ? 'Prezes Zarządu' : 'Dyrektor finansowy',
+      subject: approved ? `Wniosek zaakceptowany — ${subject}` : `Wniosek odrzucony — ${subject}`,
+      body: `Panie Managerze,\n\n${resultMessage}\n\nWykorzystane specjalne prośby w tym sezonie: ${nextRequestsUsed}/2.\n\nZ poważaniem,\nZarząd Klubu`,
+      date,
+      isRead: false,
+      type: MailType.BOARD,
+      priority: approved ? 72 : 66,
+    }, ...prev]);
+
+    showGameNotification({
+      title: approved ? successTitle : 'Wniosek odrzucony',
+      message: resultMessage,
+      tone: approved ? 'success' : 'warning',
+    });
+  }, [clubs, currentDate, players, showGameNotification, userTeamId]);
+
   const requestStadiumExpansion = useCallback((stand: StadiumStand, requestedIncrease: number) => {
     if (!userTeamId) return;
     const userClub = clubs.find(c => c.id === userTeamId);
@@ -7328,7 +7531,11 @@ const finalResult: SimulationOutput = {
         if (directorDecision.blocked) {
           setClubs(prev => prev.map(c => c.id === userTeamId ? directorDecision.updatedClub : c));
           if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
-          alert(`Dyrektor sportowy blokuje ruch: ${directorDecision.message}`);
+          showGameNotification({
+            title: 'Ruch zablokowany',
+            message: `Dyrektor sportowy blokuje ruch: ${directorDecision.message}`,
+            tone: 'warning',
+          });
           return;
         }
       }
@@ -7364,10 +7571,25 @@ const finalResult: SimulationOutput = {
         moraleHistory: moraleAdjustedPlayer.moraleHistory,
         transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
         squadRole: isAddingToTransferList ? null : player.squadRole,
+        isUntouchable: isAddingToTransferList ? false : player.isUntouchable,
         isOnTransferList: !player.isOnTransferList,
         transferListPrice: !player.isOnTransferList ? price : undefined
       });
     }
+  };
+
+  const toggleUntouchable = (playerId: string) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (!player || player.transferPendingClubId) return;
+
+    const isMarkingUntouchable = !player.isUntouchable;
+    updatePlayer(userTeamId, playerId, {
+      isUntouchable: isMarkingUntouchable,
+      isOnTransferList: isMarkingUntouchable ? false : player.isOnTransferList,
+      transferListPrice: isMarkingUntouchable ? undefined : player.transferListPrice,
+    });
   };
 
   const setSquadRole = (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => {
@@ -7459,7 +7681,11 @@ const finalResult: SimulationOutput = {
             updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
             setClubs(prevClubs => prevClubs.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
             if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
-            alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
+            showGameNotification({
+              title: 'Transfer zawetowany',
+              message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
+              tone: 'warning',
+            });
             return updated;
           }
         }
@@ -7518,7 +7744,11 @@ const finalResult: SimulationOutput = {
         ));
         setClubs(prev => prev.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
         if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
-        alert(`Dyrektor sportowy zawetowal transfer: ${directorDecision.message}`);
+        showGameNotification({
+          title: 'Transfer zawetowany',
+          message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
+          tone: 'warning',
+        });
         return;
       }
     }
@@ -8328,19 +8558,22 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       return failForNoFunds();
     }
 
-    const boardDecision = FinanceService.evaluateFASigningBoardDecision(
-      resolvedPlayer,
-      salary,
-      bonus,
-      userSquad,
-      userClub
-    );
-    if (!boardDecision.approved) {
-      return showGameNotification({
-        title: 'Veto zarzadu',
-        message: boardDecision.reason,
-        tone: 'error'
-      });
+    const hasExceptionalContractApproval = (userClub.boardExceptionalContractApprovals ?? 0) > 0;
+    if (!hasExceptionalContractApproval) {
+      const boardDecision = FinanceService.evaluateFASigningBoardDecision(
+        resolvedPlayer,
+        salary,
+        bonus,
+        userSquad,
+        userClub
+      );
+      if (!boardDecision.approved) {
+        return showGameNotification({
+          title: 'Veto zarzadu',
+          message: boardDecision.reason,
+          tone: 'error'
+        });
+      }
     }
 
     const directorFreeAgentDecision = userClub.sportingDirector
@@ -8367,9 +8600,14 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       });
     }
 
+    const nextTransferBudget = Math.max(0, userClub.transferBudget - contractCost);
+
     setClubs(prev => prev.map(c => c.id === userTeamId ? {
       ...(directorFreeAgentDecision?.relationDelta ? directorFreeAgentDecision.updatedClub : c),
-      transferBudget: c.transferBudget - contractCost,
+      transferBudget: nextTransferBudget,
+      boardExceptionalContractApprovals: hasExceptionalContractApproval
+        ? Math.max(0, (c.boardExceptionalContractApprovals ?? 0) - 1)
+        : c.boardExceptionalContractApprovals,
       financeHistory: [
         {
           id: Math.random().toString(36).substr(2, 9),
@@ -8726,13 +8964,13 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
-    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion,
+    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, submitBoardClubRequest,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,
     confirmRelegationPlayoffMatch1, confirmRelegationPlayoffMatch2,

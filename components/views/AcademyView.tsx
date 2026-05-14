@@ -100,6 +100,7 @@ export const AcademyView: React.FC = () => {
     setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     navigateTo, userTeamId, clubs, currentDate,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
+    showGameNotification,
   } = useGame();
 
   const [tab, setTab] = useState<Tab>('players');
@@ -114,6 +115,7 @@ export const AcademyView: React.FC = () => {
   const [scoutAgeMax, setScoutAgeMax] = useState<number>(21);
   const [selectedMissionScoutId, setSelectedMissionScoutId] = useState<string>('');
   const [fireScoutConfirm, setFireScoutConfirm] = useState<{ id: string; name: string; isOnMission: boolean } | null>(null);
+  const [youthConfirm, setYouthConfirm] = useState<{ id: string; name: string; action: 'reject' | 'dismiss' } | null>(null);
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -348,11 +350,7 @@ export const AcademyView: React.FC = () => {
                                       Podpisz
                                     </button>
                                     <button
-                                      onClick={() => {
-                                        if (window.confirm(`Odrzucić ${youth.firstName} ${youth.lastName}?`)) {
-                                          dismissYouthPlayer(youth.id);
-                                        }
-                                      }}
+                                      onClick={() => setYouthConfirm({ id: youth.id, name: `${youth.firstName} ${youth.lastName}`, action: 'reject' })}
                                       className="px-2 py-1 text-[9px] font-black uppercase rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
                                       title="Odrzuć"
                                     >
@@ -377,7 +375,13 @@ export const AcademyView: React.FC = () => {
                                     <button
                                       onClick={() => {
                                         const ok = startScoutMission(youth.id, undefined);
-                                        if (!ok) alert('Za mało budżetu na zlecenie raportu!');
+                                        if (!ok) {
+                                          showGameNotification({
+                                            title: 'Za mało budżetu',
+                                            message: 'Nie masz wystarczających środków na zlecenie raportu trenera.',
+                                            tone: 'warning'
+                                          });
+                                        }
                                       }}
                                       disabled={!!youth.revealedTalentRating || !!activeMission}
                                       className="px-2 py-1 text-[9px] font-black uppercase rounded bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
@@ -414,11 +418,7 @@ export const AcademyView: React.FC = () => {
                                     </div>
                                     {/* Zwolnij */}
                                     <button
-                                      onClick={() => {
-                                        if (window.confirm(`Zwolnić ${youth.firstName} ${youth.lastName}?`)) {
-                                          dismissYouthPlayer(youth.id);
-                                        }
-                                      }}
+                                      onClick={() => setYouthConfirm({ id: youth.id, name: `${youth.firstName} ${youth.lastName}`, action: 'dismiss' })}
                                       className="px-2 py-1 text-[9px] font-black uppercase rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
                                       title="Zwolnij"
                                     >
@@ -763,7 +763,13 @@ export const AcademyView: React.FC = () => {
                   <button
                     onClick={() => {
                       const ok = startScoutMission(undefined, academy.regionFocus, scoutPosition || undefined, scoutAgeMin, scoutAgeMax, selectedMissionScoutId || undefined);
-                      if (!ok) alert('Za mało budżetu na misję skautingową!');
+                      if (!ok) {
+                        showGameNotification({
+                          title: 'Za mało budżetu',
+                          message: 'Nie masz wystarczających środków na rozpoczęcie misji skautingowej.',
+                          tone: 'warning'
+                        });
+                      }
                     }}
                     className="w-full py-2.5 rounded-xl text-xs font-black bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 transition-all"
                   >
@@ -972,9 +978,22 @@ export const AcademyView: React.FC = () => {
                                 <td className="px-2 py-2 text-center">
                                   <button
                                     onClick={() => {
-                                      if (clubTooSmall) { alert('Twój klub ma za niską reputację dla tego skauta.'); return; }
+                                      if (clubTooSmall) {
+                                        showGameNotification({
+                                          title: 'Reputacja za niska',
+                                          message: 'Twój klub ma za niską reputację dla tego skauta.',
+                                          tone: 'warning'
+                                        });
+                                        return;
+                                      }
                                       const ok = hireScout(scout.id);
-                                      if (!ok) alert('Osiągnięto limit skautów dla tego poziomu akademii.');
+                                      if (!ok) {
+                                        showGameNotification({
+                                          title: 'Limit skautów',
+                                          message: 'Osiągnięto limit skautów dla tego poziomu akademii.',
+                                          tone: 'warning'
+                                        });
+                                      }
                                     }}
                                     disabled={!canHire || clubTooSmall}
                                     className="px-2 py-1 text-[9px] font-black rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
@@ -1037,6 +1056,50 @@ export const AcademyView: React.FC = () => {
 
         </div>
       </div>
+
+      {youthConfirm && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-[32px] border border-rose-500/25 bg-slate-950/95 p-8 shadow-[0_40px_100px_rgba(0,0,0,0.75)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-rose-500" />
+            <div className="absolute -right-20 -top-20 h-44 w-44 rounded-full bg-rose-500/10 blur-3xl" />
+            <div className="relative flex flex-col items-center gap-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[24px] border border-rose-400/30 bg-rose-500/15 text-3xl shadow-[0_0_32px_rgba(244,63,94,0.22)]">
+                !
+              </div>
+              <div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-rose-300">
+                  Decyzja akademii
+                </p>
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
+                  {youthConfirm.action === 'reject' ? 'Odrzucić zawodnika?' : 'Zwolnić zawodnika?'}
+                </h3>
+                <p className="mt-3 text-sm font-medium leading-relaxed text-slate-300 normal-case">
+                  {youthConfirm.name}
+                </p>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setYouthConfirm(null)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissYouthPlayer(youthConfirm.id);
+                    setYouthConfirm(null);
+                  }}
+                  className="rounded-2xl border border-rose-400/35 bg-rose-600/25 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-rose-100 transition-all hover:bg-rose-600/35"
+                >
+                  Potwierdź
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {fireScoutConfirm && (
         <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center">

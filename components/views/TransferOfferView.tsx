@@ -128,12 +128,14 @@ export const TransferOfferView: React.FC = () => {
     return Math.round(base / 50_000) * 50_000;
   }, [player, marketValue]);
 
+  const spendableTransferBudget = buyerClub?.transferBudget || 0;
+
   const maxFee = useMemo(() => {
     if (!player || !buyerClub) return 1_000_000;
     const fairFee = Math.max(marketValue, FinanceService.getFairMarketSalary(player.overallRating) * 6);
     const multiplier = player.age <= 21 || player.overallRating >= 80 ? 3.5 : 2.8;
-    return Math.floor(Math.min(buyerClub.budget, fairFee * multiplier));
-  }, [player, buyerClub, marketValue]);
+    return Math.floor(Math.min(spendableTransferBudget, fairFee * multiplier));
+  }, [player, buyerClub, marketValue, spendableTransferBudget]);
 
   const [fee, setFee] = useState(() => Math.max(100_000, suggestedFee));
   const [submissionFeedback, setSubmissionFeedback] = useState<TransferFeedback | null>(null);
@@ -320,7 +322,7 @@ export const TransferOfferView: React.FC = () => {
                   ))}
                 </div>
                 <p className="mt-4 text-xs text-slate-400">
-                  Budzet transferowy: <span className="font-black text-blue-300">{buyerClub.transferBudget.toLocaleString('pl-PL')} PLN</span>
+                  Budzet transferowy: <span className="font-black text-blue-300">{spendableTransferBudget.toLocaleString('pl-PL')} PLN</span>
                 </p>
               </div>
             )}

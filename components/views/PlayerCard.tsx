@@ -8,7 +8,7 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -220,6 +220,13 @@ export const PlayerCard: React.FC = () => {
                 <div className="mb-4 animate-pulse">
                    <span className="bg-amber-500 text-black text-[10px] font-black px-4 py-1 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.5)]">
                      LISTA TRANSFEROWA
+                   </span>
+                </div>
+              )}
+              {player.isUntouchable && !player.isOnTransferList && (
+                <div className="mb-4">
+                   <span className="bg-rose-600 text-white text-[10px] font-black italic uppercase tracking-tighter px-4 py-1 rounded-full shadow-[0_0_20px_rgba(225,29,72,0.45)]">
+                     NIE NA SPRZEDAŻ
                    </span>
                 </div>
               )}
@@ -626,6 +633,35 @@ export const PlayerCard: React.FC = () => {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {player.clubId === userTeamId && !isMatchContext && (
+              <div
+                className="bg-slate-900/70 border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/70 rounded-[16px] p-3 mt-1 drop-shadow-lg"
+                style={button3DStyle}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-300">Status transferowy</p>
+                    <p className={`text-[8px] font-black italic uppercase tracking-tighter ${player.isUntouchable ? 'text-rose-300' : 'text-slate-500'}`}>
+                      {player.isUntouchable ? 'Tylko oferty wyjątkowe' : 'Standardowe zapytania'}
+                    </p>
+                  </div>
+                  <button
+                    disabled={hasPendingTransfer}
+                    onClick={() => toggleUntouchable(player.id)}
+                    className={`min-w-[120px] py-2.5 px-3 rounded-[12px] font-black italic uppercase tracking-tighter text-[9px] border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px] drop-shadow
+                      ${hasPendingTransfer
+                        ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
+                        : player.isUntouchable
+                        ? 'bg-rose-600 border-t-rose-300 border-x-rose-500 text-white shadow-[0_0_16px_rgba(225,29,72,0.35)]'
+                        : 'bg-slate-800/45 border-t-slate-600/50 border-x-slate-700/40 text-slate-400 hover:bg-rose-600/20 hover:text-rose-200 hover:border-t-rose-400/40 hover:border-x-rose-500/20'}`}
+                    style={button3DStyle}
+                  >
+                    {player.isUntouchable ? 'Odblokuj oferty' : 'Nie na sprzedaż'}
+                  </button>
                 </div>
               </div>
             )}
