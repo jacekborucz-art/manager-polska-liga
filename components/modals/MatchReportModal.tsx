@@ -14,23 +14,24 @@ interface MatchReportModalProps {
 
 const GLASS_PANEL = "bg-slate-900/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
-const GOALKEEPER_KIT_POOL = ['#facc15', '#fb923c', '#f472b6', '#881337', '#dc2626', '#16a34a'];
+const GOALKEEPER_KIT_POOL = [
+  '#facc15', // żółty
+  '#16a34a', // zielony
+  '#f97316', // pomarańczowy
+  '#881337', // bordowy
+  '#0891b2', // turkusowy
+  '#1d4ed8', // niebieski
+  '#111111', // czarny
+  '#f5f0dc', // kremowy
+];
 
-const hashString = (value: string): number => {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-};
-
-const pickGoalkeeperColor = (seed: string, blocked: string[]): string => {
-  const viable = GOALKEEPER_KIT_POOL.filter(c =>
-    blocked.every(b => KitSelectionService.getColorDistance(c, b) > 120)
-  );
-  const pool = viable.length > 0 ? viable : GOALKEEPER_KIT_POOL;
-  return pool[hashString(seed) % pool.length];
+const pickGoalkeeperColor = (blocked: string[]): string => {
+  const scored = GOALKEEPER_KIT_POOL.map(c => ({
+    color: c,
+    minDist: Math.min(...blocked.map(b => KitSelectionService.getColorDistance(c, b)))
+  }));
+  scored.sort((a, b) => b.minDist - a.minDist);
+  return scored[0].color;
 };
 
 const getContrastText = (bgHex: string, secondaryHex: string): string => {
@@ -141,6 +142,8 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
   if (!matchId || !match || !homeClub || !awayClub) return null;
 
+  const kits = KitSelectionService.selectOptimalKits(homeClub, awayClub);
+
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + kartki razem po minucie)
   const buildEvents = (teamId: string) => {
     const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean }[] = [];
@@ -168,13 +171,6 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
   const homeEvents = buildEvents(homeClub.id);
   const awayEvents = buildEvents(awayClub.id);
-
-  const renderColorKit = (colors: string[], rotate?: string) => (
-    <div className={`w-14 h-14 rounded-xl flex flex-col overflow-hidden border-2 border-white/20 shadow-xl shrink-0 ${rotate || ''}`}>
-      <div style={{ backgroundColor: colors[0] }} className="flex-1" />
-      <div style={{ backgroundColor: colors[1] || colors[0] }} className="flex-1" />
-    </div>
-  );
 
   const renderTeamEvents = (events: ReturnType<typeof buildEvents>, align: 'left' | 'right') => (
     <div className={`flex flex-wrap gap-x-4 gap-y-0.5 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
@@ -289,6 +285,81 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
             </div>
           );
         })}
+
+        {subs.length > 0 && (() => {
+          const subPlayers = subs
+            .map(s => ({ sub: s, player: teamPlayers.find(p => p.id === s.playerInId) }))
+            .filter(({ player }) => !!player && !lineupIds.includes(player!.id));
+          if (subPlayers.length === 0) return null;
+          return (
+            <>
+              <div className="border-t border-white/5 my-1" />
+              {subPlayers.map(({ sub, player }) => {
+                if (!player) return null;
+                const rating = match.ratings?.[player.id];
+                const isMOTM = motmId === player.id;
+                const playerGoals = match.goals.filter(g => g.playerId === player.id && !g.isMiss);
+                const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
+                const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
+                const yellowCards = match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW');
+                const redCard = match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
+                const injury = injuries.find(i => i.playerId === player.id);
+                const isRedCarded = !!redCard;
+                const displayName = `${player.firstName.charAt(0)}. ${player.lastName}`;
+                return (
+                  <div
+                    key={player.id}
+                    className={`flex items-center gap-1.5 px-1.5 py-[4px] rounded-md transition-all ${
+                      isMOTM
+                        ? 'bg-amber-500/15 border border-amber-500/30'
+                        : isRedCarded
+                          ? 'bg-red-900/10 border border-red-900/20 opacity-50'
+                          : 'border border-transparent hover:bg-white/5'
+                    }`}
+                  >
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black shrink-0 border ${
+                      player.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : player.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                      : player.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                      : 'bg-red-500/20 border-red-500/40 text-red-300'
+                    }`}>
+                      {player.position}
+                    </div>
+                    <span className={`flex-1 text-[9px] font-bold uppercase truncate ${
+                      isMOTM ? 'text-amber-300' : isRedCarded ? 'text-slate-500 line-through' : 'text-slate-400'
+                    }`}>
+                      {displayName}
+                    </span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
+                      {playerValidGoals.map((g, i) => (
+                        <span key={i} title={`Gol ${g.minute}'`} className="text-[9px]">⚽</span>
+                      ))}
+                      {playerVarGoals.map((g, i) => (
+                        <span key={i} title={`Gol nieuznany VAR ${g.minute}'`} className="text-[9px] opacity-40 line-through">⚽</span>
+                      ))}
+                      {yellowCards.map((c, i) => (
+                        <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
+                      ))}
+                      {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
+                      {injury && <span title={`Kontuzja ${injury.minute}'`} className="text-[8px] font-black text-red-400">✚</span>}
+                      <span title={`Wejście ${sub.minute}'`} className="text-[7px] text-emerald-400">↑{sub.minute}'</span>
+                    </div>
+                    {rating !== undefined ? (
+                      <div className={`w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
+                        {rating.toFixed(1)}
+                      </div>
+                    ) : (
+                      <div className="w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 bg-black/20 text-slate-600 border border-white/5">
+                        –
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
       </div>
     );
   };
@@ -302,13 +373,13 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     const awayXI = (match.awayLineup ?? [])
       .map(id => awayPlayers.find(p => p.id === id) ?? null);
 
-    const homePrimary = homeClub.colorsHex[0] ?? '#1d4ed8';
-    const homeSecondary = homeClub.colorsHex[1] ?? homeClub.colorsHex[0] ?? '#93c5fd';
-    const awayPrimary = awayClub.colorsHex[0] ?? '#dc2626';
-    const awaySecondary = awayClub.colorsHex[1] ?? awayClub.colorsHex[0] ?? '#fca5a5';
+    const homePrimary = kits.home.primary;
+    const homeSecondary = kits.home.secondary;
+    const awayPrimary = kits.away.primary;
+    const awaySecondary = kits.away.secondary;
 
-    const homeGKColor = pickGoalkeeperColor(`${homeClub.id}-gk`, [homePrimary, homeSecondary, awayPrimary, awaySecondary]);
-    const awayGKColor = pickGoalkeeperColor(`${awayClub.id}-gk`, [homePrimary, homeSecondary, awayPrimary, awaySecondary]);
+    const homeGKColor = pickGoalkeeperColor([homePrimary, homeSecondary, awayPrimary, awaySecondary]);
+    const awayGKColor = pickGoalkeeperColor([homePrimary, homeSecondary, awayPrimary, awaySecondary, homeGKColor]);
 
     const homeFormation = homeTactic?.name ?? '–';
     const awayFormation = awayTactic?.name ?? '–';
@@ -324,7 +395,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               const player = homeXI[i] ?? null;
               const isGK = slot.role === PlayerPosition.GK;
               const primary = isGK ? homeGKColor : homePrimary;
-              const secondary = isGK ? '#111827' : homeSecondary;
+              const secondary = isGK ? homeGKColor : homeSecondary;
               const trim = getContrastText(primary, secondary);
               return (
                 <PitchKit
@@ -352,7 +423,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               const player = awayXI[i] ?? null;
               const isGK = slot.role === PlayerPosition.GK;
               const primary = isGK ? awayGKColor : awayPrimary;
-              const secondary = isGK ? '#111827' : awaySecondary;
+              const secondary = isGK ? awayGKColor : awaySecondary;
               const trim = getContrastText(primary, secondary);
               return (
                 <PitchKit
@@ -430,8 +501,19 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
             {/* Row 1: kity + nazwy + wynik (zawsze wyrownane) */}
             <div className="flex items-center gap-4">
               <div className="flex-1 flex items-center justify-end gap-3 min-w-0">
-                <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-right leading-none truncate">{homeClub.name}</span>
-                {renderColorKit(homeClub.colorsHex, '-rotate-3')}
+                <span className="flex-1 min-w-0 text-2xl font-black italic text-white uppercase tracking-tighter text-right leading-none truncate pr-1">{homeClub.name}</span>
+                <div className="flex flex-col items-center shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">
+                    <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.primary} />
+                    <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.home.secondary} fillOpacity="0.9" />
+                    <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.secondary} fillOpacity="0.35" />
+                    <path d="M12 7.2v11.8" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1" strokeOpacity="0.8" />
+                  </svg>
+                  <svg viewBox="0 0 28 18" className="-mt-0.5 w-[14px] h-[8px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
+                    <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.home.secondary} stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1.2" strokeLinejoin="round" />
+                    <path d="M14 3v12" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
+                  </svg>
+                </div>
               </div>
 
               <div className="flex flex-col items-center shrink-0 gap-1">
@@ -449,8 +531,19 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               </div>
 
               <div className="flex-1 flex items-center justify-start gap-3 min-w-0">
-                {renderColorKit(awayClub.colorsHex, 'rotate-3')}
-                <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-left leading-none truncate">{awayClub.name}</span>
+                <div className="flex flex-col items-center shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">
+                    <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.primary} />
+                    <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.away.secondary} fillOpacity="0.9" />
+                    <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.secondary} fillOpacity="0.35" />
+                    <path d="M12 7.2v11.8" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1" strokeOpacity="0.8" />
+                  </svg>
+                  <svg viewBox="0 0 28 18" className="-mt-0.5 w-[14px] h-[8px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
+                    <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.away.secondary} stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1.2" strokeLinejoin="round" />
+                    <path d="M14 3v12" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
+                  </svg>
+                </div>
+                <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-left leading-none truncate pr-1">{awayClub.name}</span>
               </div>
             </div>
 

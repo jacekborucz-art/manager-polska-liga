@@ -55,49 +55,42 @@ export const KitSelectionService = {
     const homeColors = home.colorsHex;
     const awayColors = away.colorsHex;
 
-    let bestHomeIdx = 0;
-    let bestAwayIdx = 0;
-    let maxDistance = -1;
+    // Gospodarze zawsze w stroju podstawowym
+    const hShirt = homeColors[0] ?? '#1d4ed8';
+    const hShorts = homeColors[1] ?? homeColors[0] ?? '#93c5fd';
 
-    // We prioritize Home's primary kit (idx 0), but we check all combinations
-    // to avoid extreme clashes (like white vs yellow)
-    
-    const CLASH_THRESHOLD = 280; // Distance below which colors are considered "similar" (e.g. white vs yellow)
-
-    // Iteration strategy: Try to keep Home Primary as much as possible
-    for (let h = 0; h < homeColors.length; h++) {
-      for (let a = 0; a < awayColors.length; a++) {
-        const dist = KitSelectionService.getColorDistance(homeColors[h], awayColors[a]);
-        
-        // Bonus for staying with primary kits
-        const score = dist + (h === 0 ? 100 : 0) + (a === 0 ? 50 : 0);
-
-        if (score > maxDistance) {
-          maxDistance = score;
-          bestHomeIdx = h;
-          bestAwayIdx = a;
-        }
-      }
-      
-      // If we found a good enough combination with Home Primary, stop searching
-      if (h === 0 && KitSelectionService.getColorDistance(homeColors[0], awayColors[bestAwayIdx]) > CLASH_THRESHOLD) {
-        break;
-      }
+    // Warianty strojów gości: mieszane (koszulka[i] + spodenki[i+1]) + jednolite (koszulka[i] + spodenki[i])
+    interface KitOption { shirt: string; shorts: string; isPrimary: boolean; }
+    const awayOptions: KitOption[] = [];
+    for (let i = 0; i < awayColors.length; i++) {
+      awayOptions.push({ shirt: awayColors[i], shorts: awayColors[(i + 1) % awayColors.length], isPrimary: i === 0 });
+      awayOptions.push({ shirt: awayColors[i], shorts: awayColors[i], isPrimary: false });
     }
 
-    const hPrimary = homeColors[bestHomeIdx];
-    const aPrimary = awayColors[bestAwayIdx];
+    let bestOption = awayOptions[0];
+    let maxScore = -1;
+
+    for (const opt of awayOptions) {
+      // Każdy kolor gości musi być różny od KAŻDEGO koloru gospodarzy
+      const d1 = KitSelectionService.getColorDistance(opt.shirt, hShirt);
+      const d2 = KitSelectionService.getColorDistance(opt.shirt, hShorts);
+      const d3 = KitSelectionService.getColorDistance(opt.shorts, hShirt);
+      const d4 = KitSelectionService.getColorDistance(opt.shorts, hShorts);
+      // Wynik to najgorszy przypadek (najblizszA para) — maksymalizujemy najslabsze ogniwo
+      const score = Math.min(d1, d2, d3, d4) + (opt.isPrimary ? 40 : 0);
+      if (score > maxScore) { maxScore = score; bestOption = opt; }
+    }
 
     return {
       home: {
-        primary: hPrimary,
-        secondary: homeColors[(bestHomeIdx + 1) % homeColors.length] || hPrimary,
-        text: KitSelectionService.isColorLight(hPrimary) ? '#000000' : '#ffffff'
+        primary: hShirt,
+        secondary: hShorts,
+        text: KitSelectionService.isColorLight(hShirt) ? '#000000' : '#ffffff'
       },
       away: {
-        primary: aPrimary,
-        secondary: awayColors[(bestAwayIdx + 1) % awayColors.length] || aPrimary,
-        text: KitSelectionService.isColorLight(aPrimary) ? '#000000' : '#ffffff'
+        primary: bestOption.shirt,
+        secondary: bestOption.shorts,
+        text: KitSelectionService.isColorLight(bestOption.shirt) ? '#000000' : '#ffffff'
       }
     };
   },
