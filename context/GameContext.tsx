@@ -2606,7 +2606,7 @@ setMessages([welcomeMail, fanMail]);
       setClubs(prev => {
         const userClub = prev.find(c => c.id === userTeamId);
         if (!userClub) return prev;
-        const monitorResult = BoardFinanceMonitorService.check(userClub);
+        const monitorResult = BoardFinanceMonitorService.check(userClub, dateToProcess);
         if (monitorResult.action === 'NONE') {
           if ((userClub.boardBudgetMonitorState ?? 'NORMAL') === monitorResult.newState) return prev;
           return prev.map(c => c.id === userTeamId ? {
@@ -2643,6 +2643,8 @@ setMessages([welcomeMail, fanMail]);
           budget: monitorResult.newBudget,
           transferBudget: monitorResult.newTransferBudget,
           boardBudgetMonitorState: monitorResult.newState,
+          boardBudgetLastShiftDate: monitorDateKey,
+          boardBudgetLastShiftAction: monitorResult.action,
           financeHistory: monitorResult.amountChanged > 0 && !(c.financeHistory || []).some(item => item.id === `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`) ? [
             {
               id: `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`,

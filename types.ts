@@ -1285,6 +1285,8 @@ export interface Club {
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
   boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
+  boardBudgetLastShiftDate?: string;
+  boardBudgetLastShiftAction?: 'REDUCE' | 'RESTORE';
   boardStrictness: number;
   signingBonusPool: number; // Pula pieniędzy zarezerwowana tylko na bonusy za podpis
   squadNeeds?: Record<string, number>;

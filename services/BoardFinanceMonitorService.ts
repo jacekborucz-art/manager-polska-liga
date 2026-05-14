@@ -13,12 +13,17 @@ export interface BudgetMonitorResult {
 }
 
 export const BoardFinanceMonitorService = {
-  check: (club: Club): BudgetMonitorResult => {
+  check: (club: Club, date: Date = new Date()): BudgetMonitorResult => {
     const projectedIncome = FinanceService.calculateInitialBudget(club.tier, club.reputation);
     const ratio = projectedIncome > 0 ? club.budget / projectedIncome : 0;
     const currentState = club.boardBudgetMonitorState ?? 'NORMAL';
+    const daysSinceShift = (action: 'REDUCE' | 'RESTORE'): number | null => {
+      if (club.boardBudgetLastShiftAction !== action || !club.boardBudgetLastShiftDate) return null;
+      return Math.floor((date.getTime() - new Date(club.boardBudgetLastShiftDate).getTime()) / 86_400_000);
+    };
     const transferBudgetCap = FinanceService.calculateTransferBudgetCap(club.budget, club.reputation);
-    const transferBudgetGap = Math.max(0, transferBudgetCap - club.transferBudget);
+    const transferBudgetTarget = Math.floor(transferBudgetCap * 0.72);
+    const transferBudgetGap = Math.max(0, transferBudgetTarget - club.transferBudget);
     const newState: 'NORMAL' | 'ALERT' | 'SURPLUS' = ratio <= 0.08
       ? 'ALERT'
       : ratio >= 0.32 && transferBudgetGap >= Math.max(250_000, projectedIncome * 0.015)
@@ -39,6 +44,20 @@ export const BoardFinanceMonitorService = {
     }
 
     if (newState === 'ALERT') {
+      const daysSinceReduce = daysSinceShift('REDUCE');
+      if (daysSinceReduce !== null && daysSinceReduce < 14) {
+        return {
+          action: 'NONE',
+          newBudget: club.budget,
+          newTransferBudget: club.transferBudget,
+          newState,
+          amountChanged: 0,
+          ratio,
+          mailSubject: '',
+          mailBody: ''
+        };
+      }
+
       const severity = Math.min(1, ratio <= 0 ? 1 : 1 - (ratio / 0.08));
       const reductionFraction = ratio <= 0
         ? 1
@@ -77,10 +96,26 @@ export const BoardFinanceMonitorService = {
       };
     }
 
+    const daysSinceRestore = daysSinceShift('RESTORE');
+    if (daysSinceRestore !== null && daysSinceRestore < 45) {
+      return {
+        action: 'NONE',
+        newBudget: club.budget,
+        newTransferBudget: club.transferBudget,
+        newState,
+        amountChanged: 0,
+        ratio,
+        mailSubject: '',
+        mailBody: ''
+      };
+    }
+
+    const daysSinceReduce = daysSinceShift('REDUCE');
+    const restoredAfterRecentCut = daysSinceReduce !== null && daysSinceReduce <= 90;
     const recoveryFactor = Math.min(1, Math.max(0, (ratio - 0.18) / 0.60));
     const amountRestored = Math.min(
       transferBudgetGap,
-      Math.floor(club.budget * (0.04 + recoveryFactor * 0.08))
+      Math.floor(club.budget * (restoredAfterRecentCut ? 0.10 : 0.045) * recoveryFactor)
     );
 
     if (amountRestored <= 0) {
