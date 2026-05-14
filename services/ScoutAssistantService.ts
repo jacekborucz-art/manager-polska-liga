@@ -645,10 +645,13 @@ function buildMailBody(params: {
   userLineup: Lineup;
   userAvgRating: number;
   opponentAvgRating: number;
+  clubs: Club[];
+  userClubId: string;
+  opponentClubId: string;
 }): string {
   const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
     opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
-    opponentPrimaryColor, opponentSecondaryColor,
+    opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating } = params;
 
   // ── STYLE TOKENS (matching game's design language) ─────────────────────
@@ -846,6 +849,7 @@ function buildMailBody(params: {
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating,
   });
   const reportCard = card('#38bdf8', 'Raport szczegółowy',
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0 28px;">` +
     reportSections.map(s =>
       `<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.05);">
          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
@@ -854,8 +858,9 @@ function buildMailBody(params: {
          </div>
          <p style="font-family:${FONT};color:#94a3b8;font-size:13px;font-weight:600;line-height:1.7;margin:0;text-transform:none;letter-spacing:0.01em;font-style:normal;">${s.text}</p>
        </div>`
-    ).join(''),
-    'flex:none;width:480px;height:560px;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding:24px 26px;scrollbar-width:thin;scrollbar-color:rgba(56,189,248,0.35) transparent;'
+    ).join('') +
+    `</div>`,
+    'width:100%;box-sizing:border-box;padding:24px 26px;'
   );
 
   // ── DYSCYPLINA ────────────────────────────────────────────────────────────
@@ -895,6 +900,45 @@ function buildMailBody(params: {
            }).join('')
      }`
   , 'flex:none;width:420px;height:560px;overflow:hidden;box-sizing:border-box;');
+
+  // ── TABELA LIGOWA ─────────────────────────────────────────────────────────
+  const opponentClub = clubs.find(c => c.id === opponentClubId);
+  const userClub = clubs.find(c => c.id === userClubId);
+  const isSameLeague = !!(opponentClub && userClub && opponentClub.leagueId === userClub.leagueId);
+  const leagueClubs = clubs
+    .filter(c => opponentClub && c.leagueId === opponentClub.leagueId)
+    .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+
+  const leagueTableCard = card('#facc15', 'TABELA LIGOWA',
+    `<div style="display:flex;flex-direction:column;gap:0;">
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 6px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <span style="font-family:${FONT};color:#475569;font-size:9px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:0.15em;min-width:22px;text-align:center;">#</span>
+        <span style="font-family:${FONT};color:#475569;font-size:9px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:0.15em;flex:1;">KLUB</span>
+        <span style="font-family:${FONT};color:#475569;font-size:9px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:0.15em;min-width:28px;text-align:center;">PKT</span>
+        <span style="font-family:${FONT};color:#475569;font-size:9px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:0.15em;min-width:28px;text-align:center;">GR</span>
+      </div>
+      ${leagueClubs.map((c, i) => {
+        const isUser = c.id === userClubId;
+        const isOpponent = c.id === opponentClubId;
+        const rowBg = isUser
+          ? 'background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:7px;'
+          : isOpponent
+            ? 'background:rgba(250,204,21,0.10);border:1px solid rgba(250,204,21,0.22);border-radius:7px;'
+            : 'border:1px solid transparent;';
+        const nameColor = isUser ? '#60a5fa' : isOpponent ? '#facc15' : '#94a3b8';
+        const posColor = isUser ? '#60a5fa' : isOpponent ? '#facc15' : '#475569';
+        const gd = c.stats.goalDifference >= 0 ? `+${c.stats.goalDifference}` : `${c.stats.goalDifference}`;
+        const gdColor = c.stats.goalDifference > 0 ? '#10b981' : c.stats.goalDifference < 0 ? '#ef4444' : '#475569';
+        return `<div style="display:flex;align-items:center;gap:4px;padding:5px 6px;${rowBg}">
+          <span style="font-family:${FONT};color:${posColor};font-size:10px;font-weight:900;font-style:italic;min-width:22px;text-align:center;">${i + 1}</span>
+          <span style="font-family:${FONT};color:${nameColor};font-size:11px;font-weight:${isUser || isOpponent ? '900' : '700'};font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;">${c.name}</span>
+          <span style="font-family:${FONT};color:#f8fafc;font-size:11px;font-weight:900;font-style:italic;min-width:28px;text-align:center;">${c.stats.points}</span>
+          <span style="font-family:${FONT};color:${gdColor};font-size:10px;font-weight:700;font-style:italic;min-width:28px;text-align:center;">${gd}</span>
+        </div>`;
+      }).join('')}
+    </div>`,
+    'flex:none;width:380px;height:560px;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding:20px 18px;scrollbar-width:thin;scrollbar-color:rgba(250,204,21,0.3) transparent;'
+  );
 
   // ── KLUCZOWI ZAWODNICY ────────────────────────────────────────────────────
   const strong = keyPlayers.strongest;
@@ -958,39 +1002,24 @@ function buildMailBody(params: {
     <div style="position:absolute;inset:0;opacity:0.025;background-image:linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;border-radius:24px;"></div>
 
     <!-- HEADER -->
-    <div style="${cardBg};border-radius:24px;padding:30px 40px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;border-top:1px solid rgba(255,255,255,0.12);">
-      <div>
-        <span style="${label('#3b82f6')}">RAPORT PRZEDMECZOWY · JUTRO</span>
-        <div style="${bigTitle}font-size:28px;line-height:1.1;margin-bottom:10px;color:#3b82f6;">${opponentName}</div>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:13px;padding:13px 20px;text-align:center;">
-          <div style="${mono}color:#3b82f6;font-size:29px;font-style:italic;line-height:1;">${opponentLeaguePosition > 0 ? opponentLeaguePosition + '' : '—'}</div>
-          <span style="${label('#334155')}margin-bottom:0;">MIEJSCE</span>
-        </div>
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:13px 20px;text-align:center;">
-          <div style="${mono}color:#f8fafc;font-size:29px;font-style:italic;line-height:1;">${opponentLeaguePoints}</div>
-          <span style="${label('#334155')}margin-bottom:0;">PKT</span>
-        </div>
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:13px 20px;text-align:center;">
-          <div style="${mono}font-size:29px;font-style:italic;line-height:1;color:${opponentLeagueGoalDiff>=0?'#10b981':'#ef4444'};">${opponentLeagueGoalDiff}</div>
-          <span style="${label('#334155')}margin-bottom:0;">BRAMKI</span>
-        </div>
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:13px 20px;text-align:center;display:flex;flex-direction:column;justify-content:center;">
-          <div style="${bigTitle}font-size:13px;color:#94a3b8;letter-spacing:0.02em;">${leagueName}</div>
-          <span style="${label('#334155')}margin-bottom:0;margin-top:4px;">ROZGRYWKI</span>
-        </div>
-      </div>
+    <div style="${cardBg};border-radius:24px;padding:30px 40px;margin-bottom:20px;border-top:1px solid rgba(255,255,255,0.12);">
+      <span style="${label('#3b82f6')}">RAPORT PRZEDMECZOWY · JUTRO</span>
+      <div style="${bigTitle}font-size:28px;line-height:1.1;color:#3b82f6;">${opponentName}</div>
     </div>
 
-    <!-- ROW 1: Forma (320x320) | Taktyka + Fairplay side by side (320x450 each) -->
-    <div style="display:flex;flex-direction:row;gap:20px;margin-bottom:20px;align-items:start;">
+    <!-- ROW 1: Forma | Taktyka + Fairplay + Tabela (wyśrodkowane) -->
+    <div style="display:flex;flex-direction:row;gap:20px;margin-bottom:20px;align-items:start;justify-content:center;">
       ${formaCard}
       <div style="display:flex;flex-direction:row;gap:14px;">
         ${tacticVisualCard}
         ${disciplineCard}
-        ${reportCard}
+        ${isSameLeague ? leagueTableCard : ''}
       </div>
+    </div>
+
+    <!-- ROW 2: Raport szczegółowy -->
+    <div style="margin-bottom:20px;">
+      ${reportCard}
     </div>
 
     <!-- FOOTER -->
@@ -1015,9 +1044,10 @@ export const ScoutAssistantService = {
     opponentLeagueGoalDiff: number;
     leagueName: string;
     analysisQuality?: number;
+    userClubId: string;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId } = params;
     const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
@@ -1060,6 +1090,9 @@ export const ScoutAssistantService = {
       userLineup,
       userAvgRating,
       opponentAvgRating,
+      clubs,
+      userClubId,
+      opponentClubId: opponentClub.id,
     });
 
     const mailId = `SCOUT_REPORT_${opponentClub.id}_${matchDate.toISOString().slice(0, 10)}`;

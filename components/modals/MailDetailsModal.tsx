@@ -95,13 +95,15 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
         </div>
 
         <div className="custom-scrollbar flex-1 overflow-y-auto p-10">
-          <div className="mb-10">
-            <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-slate-600">Temat:</span>
-            <h3 className="text-[10px] font-black italic uppercase tracking-tight leading-relaxed text-white">
-              {mail.subject}
-            </h3>
-            <div className="mt-4 h-1 w-12 rounded-full bg-blue-500" />
-          </div>
+          {mail.type !== MailType.SCOUT && (
+            <div className="mb-10">
+              <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-slate-600">Temat:</span>
+              <h3 className="text-[10px] font-black italic uppercase tracking-tight leading-relaxed text-white">
+                {mail.subject}
+              </h3>
+              <div className="mt-4 h-1 w-12 rounded-full bg-blue-500" />
+            </div>
+          )}
 
           <div className="prose prose-invert max-w-none">
             {mail.type === MailType.SCOUT ? (

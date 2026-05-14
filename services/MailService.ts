@@ -79,35 +79,35 @@ const buildRivalryWarningMail = (
 
   const intro =
     rivalryContext.tier === 'CLASSIC' || rivalryContext.tier === 'DERBY'
-      ? 'Dla kibicow ten mecz to swieta wojna.'
-      : 'Dla kibicow ten mecz jest sprawa honoru.';
+      ? 'Dla kibiców ten mecz to święta wojna.'
+      : 'Dla kibiców ten mecz jest sprawą honoru.';
 
   const pressureLine =
     rivalryContext.tier === 'CLASSIC'
-      ? 'Tu nie wystarczy poprawny wystep. Oczekujemy druzyny gotowej oddac wszystko, bo takie mecze buduja pozycje klubu na lata.'
+      ? 'Tu nie wystarczy poprawny występ. Oczekujemy drużyny gotowej oddać wszystko, bo takie mecze budują pozycję klubu na lata.'
       : rivalryContext.tier === 'DERBY'
-        ? 'W derbach nie ma miejsca na alibi. Oczekujemy walki o kazda pilke, ostrosci w pojedynkach i pelnego zaangazowania od pierwszej do ostatniej minuty.'
-        : 'To nie jest zwykla kolejka. Oczekujemy pelnego zaangazowania, charakteru i gotowosci do gry na granicy sportowej intensywnosci.';
+        ? 'W derbach nie ma miejsca na alibi. Oczekujemy walki o każdą piłkę, ostrości w pojedynkach i pełnego zaangażowania od pierwszej do ostatniej minuty.'
+        : 'To nie jest zwykła kolejka. Oczekujemy pełnego zaangażowania, charakteru i gotowości do gry na granicy sportowej intensywności.';
 
   return {
     id: `FANS_RIVALRY_WARNING_${nextFixture.id}`,
-    sender: `Stowarzyszenie Kibicow ${userClub.name}`,
-    role: 'Glos Trybun',
-    subject: `${rivalryContext.label ?? 'Wielki mecz'}: kibice oczekuja pelnego zaangazowania`,
+    sender: `Stowarzyszenie Kibiców ${userClub.name}`,
+    role: 'Głos Trybun',
+    subject: `${rivalryContext.label ?? 'Wielki mecz'}: kibice oczekują pełnego zaangażowania`,
     body: [
       'Trenerze,',
       '',
-      `Przed meczem z ${opponentClub.name} chcemy powiedziec to jasno: ${intro}`,
+      `Przed meczem z ${opponentClub.name} chcemy powiedzieć to jasno: ${intro}`,
       '',
       pressureLine,
       '',
-      'Nie prosimy o ladny futbol za wszelka cene. Chcemy zobaczyc zespol, ktory rozumie wage tego spotkania, nie cofa nogi i walczy dla herbu oraz dla ludzi na trybunach.',
+      'Nie prosimy o ładny futbol za wszelką cenę. Chcemy zobaczyć zespół, który rozumie wagę tego spotkania, nie cofa nogi i walczy dla herbu oraz dla ludzi na trybunach.',
       '',
-      'Kibice poniosa druzyne, ale teraz pilkarze musza pokazac, ze czuja temperature tego starcia i sa gotowi odpowiedziec na nia na boisku.',
+      'Kibice poniosą drużynę, ale teraz piłkarze muszą pokazać, że czują temperaturę tego starcia i są gotowi odpowiedzieć na nią na boisku.',
       '',
-      `Jutro liczy sie tylko jedno: zostawic serce na murawie przeciwko ${opponentClub.name}.`,
+      `Jutro liczy się tylko jedno: zostawić serce na murawie przeciwko ${opponentClub.name}.`,
       '',
-      `Stowarzyszenie Kibicow ${userClub.name}`,
+      `Stowarzyszenie Kibiców ${userClub.name}`,
     ].join('\n'),
     date: new Date(currentDate),
     isRead: false,

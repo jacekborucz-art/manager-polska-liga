@@ -165,7 +165,7 @@ const rivalryGroups: RivalryGroup[] = [
   {
     clubs: ['Zaglebie Lubin', 'Slask Wroclaw', 'Gornik Zabrze', 'Pogon Szczecin'],
     tier: 'RIVAL',
-    label: 'MECZ PODWYZSZONEGO RYZYKA',
+    label: 'MECZ PODWYŻSZONEGO RYZYKA',
     attendanceBoost: 0.07,
     pressureBoost: 0.020,
     briefingBoost: 0.08,
@@ -174,7 +174,7 @@ const rivalryGroups: RivalryGroup[] = [
   {
     clubs: ['Polonia Warszawa', 'Legia Warszawa', 'Znicz Pruszkow', 'Pogon Siedlce', 'Pogon Grodzisk Mazowiecki', 'Wisla Krakow', 'LKS Lodz', 'Slask Wroclaw', 'Ruch Chorzow', 'Pogon Szczecin'],
     tier: 'RIVAL',
-    label: 'MECZ PODWYZSZONEGO RYZYKA',
+    label: 'MECZ PODWYŻSZONEGO RYZYKA',
     attendanceBoost: 0.08,
     pressureBoost: 0.024,
     briefingBoost: 0.10,

@@ -5529,6 +5529,7 @@ const finalResult: SimulationOutput = {
               opponentLeagueGoalDiff: opponentClub.stats.goalDifference,
               leagueName,
               analysisQuality,
+              userClubId: userTeamId!,
             });
             sentMailIdsRef.current.add(scoutMailKey);
             setMessages(prev => [scoutMail, ...prev]);

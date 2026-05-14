@@ -3155,8 +3155,8 @@ if (activePlayerTempo === 'SLOW') {
       awayPenaltyScore: matchState.awayPenaltyScore,
       homeGoals: matchState.homeGoals,
       awayGoals: matchState.awayGoals,
-      homeStats: { shots: 12, shotsOnTarget: 6, corners: 4, fouls: 10, offsides: 1, yellowCards: 1, redCards: 0, possession: 50 },
-      awayStats: { shots: 10, shotsOnTarget: 4, corners: 3, fouls: 12, offsides: 2, yellowCards: 2, redCards: 0, possession: 50 },
+      homeStats: { ...matchState.liveStats.home, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length, possession: Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
+      awayStats: { ...matchState.liveStats.away, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length, possession: 100 - Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
       homePlayers: generatePerformance(ctx.homePlayers, matchState.awayScore),
       awayPlayers: generatePerformance(ctx.awayPlayers, matchState.homeScore),
       timeline: []
