@@ -66,7 +66,7 @@ import { TalkEffect } from '../services/HalftimeTalkService';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
 import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
-import { DebriefEffect, DebriefContext, getDebriefContext } from '../services/PostMatchDebriefService';
+import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CONF_R1Q, CompetitionType.CONF_R1Q_RETURN,
@@ -95,6 +95,13 @@ const FIRST_LEG_MAP: Partial<Record<CompetitionType, CompetitionType>> = {
 };
 
 const getEuropeanBriefingMatchStage = (competition: CompetitionType): BriefingMatchStage => {
+  if (competition === CompetitionType.CONF_FINAL) return 'CUP_FINAL';
+  if (competition === CompetitionType.CONF_SF || competition === CompetitionType.CONF_SF_RETURN) return 'CUP_SEMIFINAL';
+  if (competition === CompetitionType.CONF_GROUP_STAGE) return 'LEAGUE';
+  return 'CUP';
+};
+
+const getEuropeanDebriefMatchStage = (competition: CompetitionType): DebriefMatchStage => {
   if (competition === CompetitionType.CONF_FINAL) return 'CUP_FINAL';
   if (competition === CompetitionType.CONF_SF || competition === CompetitionType.CONF_SF_RETURN) return 'CUP_SEMIFINAL';
   if (competition === CompetitionType.CONF_GROUP_STAGE) return 'LEAGUE';
@@ -173,6 +180,7 @@ export const CONFMatchLiveView = () => {
     summary: MatchSummary;
     userTeamId: string;
     debriefContext: DebriefContext;
+    debriefMatchStage: DebriefMatchStage;
     sessionSeed: number;
   } | null>(null);
   const [activePenalty, setActivePenalty] = useState<{
@@ -2066,6 +2074,7 @@ const summary: MatchSummary = {
       summary,
       userTeamId: userTeamId!,
       debriefContext: debriefCtx,
+      debriefMatchStage: getEuropeanDebriefMatchStage(ctx.fixture.leagueId as CompetitionType),
       sessionSeed,
     });
     setShowPostMatchDebrief(true);
@@ -3163,6 +3172,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           homeClubName={pendingFinishPayload.summary.homeClub.name}
           awayClubName={pendingFinishPayload.summary.awayClub.name}
           sessionSeed={pendingFinishPayload.sessionSeed}
+          matchStage={pendingFinishPayload.debriefMatchStage}
         />
       )}
 

@@ -178,6 +178,7 @@ const getResultScoreFloor = (params: {
   }
 
   if (leaguePosition === 2) {
+    if (expectedPosition === 1) return 70;
     if (expectedPosition >= 5) return 78;
     if (expectedPosition >= 3) return 72;
   }
@@ -1029,13 +1030,19 @@ const buildReviewBody = (params: {
       ? 'Forma z ostatnich spotkan jest nierowna i oczekuje wiekszej powtarzalnosci.'
       : 'Forma z ostatnich spotkan jest zbyt slaba, bym mogl przejsc nad tym spokojnie.';
 
-  const positionLine = leaguePosition < expectedPosition
-    ? `Pozycja w lidze jest lepsza niz zakladany poziom klubu. Jestesmy teraz na ${leaguePosition}. miejscu, a wewnetrznie oczekiwalem okolic ${expectedPosition}.`
-    : leaguePosition === expectedPosition
-      ? `Pozycja w lidze odpowiada obecnym oczekiwaniom klubu. Jestesmy teraz na ${leaguePosition}. miejscu.`
-      : leaguePosition === expectedPosition + 1
-        ? `Pozycja w lidze jest minimalnie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a celem minimum byly okolice ${expectedPosition}. miejsca.`
-        : `Pozycja w lidze jest wyraznie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a klub powinien trzymac poziom blizej ${expectedPosition}. miejsca.`;
+  const positionLine = expectedPosition === 1
+    ? leaguePosition === 1
+      ? 'Pozycja w lidze odpowiada obecnym oczekiwaniom klubu. Jestesmy liderem i tego poziomu chcemy bronic.'
+      : leaguePosition === 2
+        ? 'Pozycja w lidze jest bardzo blisko celu. Jestesmy teraz na 2. miejscu, a oczekiwaniem klubu pozostaje realna walka o 1. miejsce.'
+        : `Pozycja w lidze jest ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a klub oczekuje walki o 1. miejsce.`
+    : leaguePosition < expectedPosition
+      ? `Pozycja w lidze jest lepsza niz zakladany poziom klubu. Jestesmy teraz na ${leaguePosition}. miejscu, a wewnetrznie oczekiwalem okolic ${expectedPosition}. miejsca.`
+      : leaguePosition === expectedPosition
+        ? `Pozycja w lidze odpowiada obecnym oczekiwaniom klubu. Jestesmy teraz na ${leaguePosition}. miejscu.`
+        : leaguePosition === expectedPosition + 1
+          ? `Pozycja w lidze jest minimalnie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a celem minimum byl poziom ${expectedPosition}. miejsca.`
+          : `Pozycja w lidze jest wyraznie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a klub powinien trzymac poziom blizej ${expectedPosition}. miejsca.`;
 
   return [
     'Trenerze,',

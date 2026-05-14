@@ -8,7 +8,8 @@ import {
 TacticalInstructions,
 PromotionPlayoffSingleMatchResult,
 PromotionPlayoffSemiResults,
-PlayerStats
+PlayerStats,
+GoalTickerInfo
 } from '../types';
 import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
 import { MatchEngineService } from '../services/MatchEngineService';
@@ -471,6 +472,28 @@ const getNextShootoutSide = (
 
 const getPenaltyDisplayName = (player: Player) => `${player.firstName} ${player.lastName}`;
 
+const getPlayerGoalNames = (player: Player) => new Set([
+  player.lastName,
+  `${player.firstName.charAt(0)}. ${player.lastName}`,
+  `${player.firstName} ${player.lastName}`,
+]);
+
+const doesGoalBelongToScorer = (goal: GoalTickerInfo & { playerId?: string }, player: Player) => {
+  if (goal.scorerId === player.id || goal.playerId === player.id) return true;
+  return getPlayerGoalNames(player).has(goal.playerName);
+};
+
+const doesGoalBelongToAssistant = (goal: GoalTickerInfo & { playerId?: string }, player: Player) => {
+  if (goal.assistantId === player.id) return true;
+  return !!goal.assistantName && getPlayerGoalNames(player).has(goal.assistantName);
+};
+
+const toCupHistoryGoal = (goal: GoalTickerInfo, teamId: string) => ({
+  ...goal,
+  playerId: goal.scorerId,
+  teamId
+});
+
 export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
@@ -811,6 +834,7 @@ useEffect(() => {
         const finalAGoals = [...latest.awayGoals];
         const eventInfo = {
           scorerId: scorer.id,
+          playerId: scorer.id,
           playerName: `${scorer.firstName.charAt(0)}. ${scorer.lastName}`,
           minute: latest.minute,
           isPenalty: true,
@@ -2434,6 +2458,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
 
             const scorer = GoalAttributionService.pickScorer(attTeam, attLineup as string[], false, () => seededRng(currentSeed, nextMinute, 777));
             if (!scorer) return { ...prev, minute: nextMinute };
+            const assistant = GoalAttributionService.pickAssistant(attTeam, attLineup as string[], scorer.id, false, () => seededRng(currentSeed, nextMinute, 779));
             const keeper = defTeam.find(p => p.id === defLineup[0]) || defTeam[0];
 
             const isRealKeeper = keeper.position === PlayerPosition.GK;
@@ -2561,7 +2586,15 @@ dynamicThreshold *= undedogThresholdMultiplier;
                 eventType = MatchEventType.GOAL;
                 const formattedName = `${scorer.firstName.charAt(0)}. ${scorer.lastName}`;
                 currentScorerName = formattedName;
-                const goalData = { scorerId: scorer.id, playerName: formattedName, minute: nextMinute, isPenalty: false };
+                const goalData = {
+                  scorerId: scorer.id,
+                  playerId: scorer.id,
+                  playerName: formattedName,
+                  minute: nextMinute,
+                  isPenalty: false,
+                  assistantId: assistant?.id,
+                  assistantName: assistant ? `${assistant.firstName.charAt(0)}. ${assistant.lastName}` : undefined
+                };
                 
                 if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); } 
                 else { aScore++; updatedAwayGoals.push(goalData); }
@@ -2675,13 +2708,22 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                     const upsetAttLineup = (eventSide === 'HOME' ? nextHomeLineup : nextAwayLineup).startingXI;
                     const upsetScorer = GoalAttributionService.pickScorer(upsetAttTeam, upsetAttLineup as string[], false, () => seededRng(currentSeed, nextMinute, 9992));
                     if (upsetScorer) {
+                        const upsetAssistant = GoalAttributionService.pickAssistant(upsetAttTeam, upsetAttLineup as string[], upsetScorer.id, false, () => seededRng(currentSeed, nextMinute, 9995));
                         // Konwersja na gola spada wraz z rosnącą przewagą obrony
                         const goalConvRate = Math.max(0.11, 0.28 / upsetPowerGap);
                         if (seededRng(currentSeed, nextMinute, 9993) < goalConvRate) {
                             eventType = MatchEventType.GOAL;
                             const formattedName = `${upsetScorer.firstName.charAt(0)}. ${upsetScorer.lastName}`;
                             currentScorerName = formattedName;
-                            const goalData = { scorerId: upsetScorer.id, playerName: formattedName, minute: nextMinute, isPenalty: false };
+                            const goalData = {
+                              scorerId: upsetScorer.id,
+                              playerId: upsetScorer.id,
+                              playerName: formattedName,
+                              minute: nextMinute,
+                              isPenalty: false,
+                              assistantId: upsetAssistant?.id,
+                              assistantName: upsetAssistant ? `${upsetAssistant.firstName.charAt(0)}. ${upsetAssistant.lastName}` : undefined
+                            };
                             if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); }
                             else { aScore++; updatedAwayGoals.push(goalData); }
                             nextLastGoalBoostMinute = nextMinute;
@@ -3146,8 +3188,8 @@ if (activePlayerTempo === 'SLOW') {
       awayScore: matchState.awayScore,
       homePenaltyScore: matchState.homePenaltyScore,
       awayPenaltyScore: matchState.awayPenaltyScore,
-      goals: matchState.homeGoals.map(g => ({ ...g, teamId: ctx.homeClub.id }))
-        .concat(matchState.awayGoals.map(g => ({ ...g, teamId: ctx.awayClub.id }))),
+      goals: matchState.homeGoals.map(g => toCupHistoryGoal(g, ctx.homeClub.id))
+        .concat(matchState.awayGoals.map(g => toCupHistoryGoal(g, ctx.awayClub.id))),
       cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           return [...matchState.logs]
@@ -3228,10 +3270,10 @@ if (activePlayerTempo === 'SLOW') {
           }
 
           goalEvents.forEach(goal => {
-            if (goal.scorerId === player.id || goal.playerName === displayName || goal.playerName === player.lastName) {
+            if (doesGoalBelongToScorer(goal, player)) {
               cup.goals += 1;
             }
-            if (goal.assistantId === player.id || goal.assistantName === displayName || goal.assistantName === player.lastName) {
+            if (doesGoalBelongToAssistant(goal, player)) {
               cup.assists += 1;
             }
           });
@@ -3286,8 +3328,8 @@ if (activePlayerTempo === 'SLOW') {
       awayScore: matchState.awayScore,
       homePenaltyScore: matchState.homePenaltyScore,
       awayPenaltyScore: matchState.awayPenaltyScore,
-      goals: matchState.homeGoals.map(g => ({ ...g, teamId: ctx.homeClub.id }))
-        .concat(matchState.awayGoals.map(g => ({ ...g, teamId: ctx.awayClub.id }))),
+      goals: matchState.homeGoals.map(g => toCupHistoryGoal(g, ctx.homeClub.id))
+        .concat(matchState.awayGoals.map(g => toCupHistoryGoal(g, ctx.awayClub.id))),
       cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           return [...matchState.logs]

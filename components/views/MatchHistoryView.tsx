@@ -521,12 +521,12 @@ export const MatchHistoryView: React.FC = () => {
   return (
     <>
     <div className="fixed inset-0 -z-10">
-      <div className="absolute inset-0 bg-cover bg-center scale-105" style={{ backgroundImage: `url(${historiaBg})` }} />
+      <div className="absolute inset-0 bg-cover bg-center scale-105 opacity-60" style={{ backgroundImage: `url(${historiaBg})` }} />
       <div className="absolute inset-0 bg-black/85" />
     </div>
     <div className="h-[calc(100vh-3rem)] max-w-[1400px] mx-auto flex flex-col gap-4 animate-fade-in text-white">
       {/* HEADER */}
-      <div className="relative flex items-center justify-between px-8 py-5 bg-white/5 rounded-[32px] border border-white/10 shrink-0 shadow-2xl">
+      <div className="relative flex items-center justify-between px-8 py-5 bg-white/25 rounded-[32px] border border-white/10 shrink-0 shadow-2xl">
         <div className="flex items-center gap-6">
           <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl shadow-inner">📜</div>
           <div>
@@ -545,7 +545,7 @@ export const MatchHistoryView: React.FC = () => {
 
       <div className="relative flex-1 flex gap-6 min-h-0">
         {/* SIDEBAR FILTERS */}
-        <div className="w-64 flex flex-col gap-3 shrink-0 bg-slate-900/20 rounded-[35px] border border-white/5 p-6">
+        <div className="w-64 flex flex-col gap-3 shrink-0 bg-slate-900/40 rounded-[35px] border border-white/5 p-6">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 px-2">Kategorie</span>
             <button
               onClick={() => { setViewMode('champions'); setSelectedLeague('ALL'); }}
@@ -605,7 +605,7 @@ export const MatchHistoryView: React.FC = () => {
         </div>
 
         {/* MATCH LIST */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-900/10 rounded-[40px] border border-white/5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-900/30 rounded-[40px] border border-white/5">
           {viewMode === 'matches' ? (
             <>
               <div className="px-8 pt-8 flex gap-4">

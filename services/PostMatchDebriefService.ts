@@ -61,6 +61,45 @@ const REACTION_UNEXPECTED: string[] = [
 type DebriefOutcome = 'WIN' | 'DRAW' | 'LOSS';
 type CupDebriefStage = Exclude<DebriefMatchStage, 'LEAGUE'>;
 
+const CUP_BIG_WIN_DEBRIEF: DebriefComment[] = [
+  { id: 'cup_bw_1', text: 'Tak trzeba zamykać pucharowe mecze z niżej notowanym rywalem. Pełna kontrola i awans.', hiddenType: 'PRAISE' },
+  { id: 'cup_bw_2', text: 'Zrobiliście dokładnie to, czego oczekiwałem: szybko narzuciliście poziom i nie daliście rywalowi nadziei.', hiddenType: 'PRAISE' },
+  { id: 'cup_bw_3', text: 'Pewny awans. Doceniamy wynik, regenerujemy się i spokojnie przygotowujemy kolejny etap.', hiddenType: 'CALM' },
+  { id: 'cup_bw_4', text: 'Mecz był pod kontrolą od początku do końca. Teraz utrzymujemy ten profesjonalizm.', hiddenType: 'CALM' },
+  { id: 'cup_bw_5', text: 'Tak wygląda różnica klas! Chcę takiej intensywności niezależnie od rywala!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_bw_6', text: 'Nie odpuściliście ani minuty. W pucharze właśnie tak trzeba traktować słabszych przeciwników!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_bw_7', text: 'Wynik jest bardzo dobry, ale nawet przy takim prowadzeniu musimy pilnować koncentracji w detalach.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_bw_8', text: 'Awans był pewny, lecz kilka fragmentów da się zagrać czyściej. Standard ma być wysoki przez cały mecz.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_bw_9', text: 'Pewna robota. Zadanie wykonane.', hiddenType: 'SILENCE' },
+  { id: 'cup_bw_10', text: 'Wygraliśmy wysoko i idziemy dalej.', hiddenType: 'SILENCE' },
+];
+
+const CUP_WIN_STRONG_DEBRIEF: DebriefComment[] = [
+  { id: 'cup_ws_1', text: 'Pokonaliśmy faworyta w meczu, który mógł zbudować ten zespół. Jestem z was dumny.', hiddenType: 'PRAISE' },
+  { id: 'cup_ws_2', text: 'Tak wygląda pucharowy charakter. Silniejszy rywal, duża presja i pełna odpowiedź drużyny.', hiddenType: 'PRAISE' },
+  { id: 'cup_ws_3', text: 'To jest bardzo ważny awans. Doceniamy wynik, ale zachowujemy spokój, bo puchar idzie dalej.', hiddenType: 'CALM' },
+  { id: 'cup_ws_4', text: 'Wygraliśmy z mocniejszym rywalem, bo byliśmy zdyscyplinowani. Teraz musimy utrzymać ten poziom.', hiddenType: 'CALM' },
+  { id: 'cup_ws_5', text: 'Właśnie tak wygrywa się mecze, w których inni nas skreślają! Nie zatrzymujemy się!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_ws_6', text: 'Pokazaliście, że możemy uderzyć w każdego! Taka odwaga ma zostać w tej szatni!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_ws_7', text: 'Wynik jest świetny, ale z takim rywalem każda strata mogła nas zaboleć. Musimy być jeszcze dokładniejsi.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_ws_8', text: 'Awans z faworytem cieszy, ale nie możemy udawać, że nie było momentów nerwowości.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_ws_9', text: 'Pokonaliśmy faworyta. Zapamiętajcie ten wieczór.', hiddenType: 'SILENCE' },
+  { id: 'cup_ws_10', text: 'Dobra robota. Idziemy dalej.', hiddenType: 'SILENCE' },
+];
+
+const CUP_DRAW_STRONG_DEBRIEF: DebriefComment[] = [
+  { id: 'cup_ds_1', text: 'Remis z takim rywalem pokazuje charakter. Nie pękliście pod presją.', hiddenType: 'PRAISE' },
+  { id: 'cup_ds_2', text: 'Postawiliśmy się faworytowi i daliście z siebie bardzo dużo. To ma znaczenie.', hiddenType: 'PRAISE' },
+  { id: 'cup_ds_3', text: 'Ten remis zostawia nas w grze. Głowy spokojne, bo z takim przeciwnikiem liczy się każdy detal.', hiddenType: 'CALM' },
+  { id: 'cup_ds_4', text: 'Nie daliśmy się złamać mocniejszej drużynie. Teraz trzeba chłodno przygotować kolejny krok.', hiddenType: 'CALM' },
+  { id: 'cup_ds_5', text: 'Udowodniliście, że możemy walczyć z faworytem! Teraz trzeba dołożyć jeszcze jeden procent!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_ds_6', text: 'To był rywal z wyższej półki, a my nie cofnęliśmy się ani na moment!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_ds_7', text: 'Remis z faworytem jest coś wart, ale mieliśmy momenty, żeby ten mecz wygrać.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_ds_8', text: 'Doceniam wynik, lecz w pucharze takie szanse trzeba wykorzystywać bez wahania.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_ds_9', text: 'Nie przegraliśmy z faworytem. Rywalizacja trwa.', hiddenType: 'SILENCE' },
+  { id: 'cup_ds_10', text: 'Każdy wie, ile pracy nas to kosztowało.', hiddenType: 'SILENCE' },
+];
+
 const CUP_POST_MATCH_DEBRIEF: Record<CupDebriefStage, Record<DebriefOutcome, DebriefComment[]>> = {
   CUP: {
     WIN: [
@@ -209,8 +248,8 @@ export const getDebriefContext = (
   }
 
   if (isWin) {
-    if (diff >= 3) return 'BIG_WIN';
     if (isStrongOpp) return 'WIN_STRONG';
+    if (diff >= 3) return 'BIG_WIN';
     if (isWeakOpp) return 'WIN_WEAK';
     return 'WIN_NORMAL';
   }
@@ -230,6 +269,18 @@ const getDebriefOutcome = (context: DebriefContext): DebriefOutcome => {
 };
 
 export const getCommentsForContext = (context: DebriefContext, matchStage: DebriefMatchStage = 'LEAGUE'): DebriefComment[] => {
+  if (matchStage === 'CUP' && context === 'BIG_WIN') {
+    return CUP_BIG_WIN_DEBRIEF;
+  }
+
+  if (matchStage !== 'LEAGUE' && matchStage !== 'CUP_FINAL' && context === 'WIN_STRONG') {
+    return CUP_WIN_STRONG_DEBRIEF;
+  }
+
+  if (matchStage !== 'LEAGUE' && matchStage !== 'CUP_FINAL' && context === 'DRAW_STRONG') {
+    return CUP_DRAW_STRONG_DEBRIEF;
+  }
+
   if (matchStage !== 'LEAGUE') {
     return CUP_POST_MATCH_DEBRIEF[matchStage][getDebriefOutcome(context)];
   }

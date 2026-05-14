@@ -84,8 +84,58 @@ function reviveDate(_key: string, value: unknown): unknown {
   return value;
 }
 
+function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHistory: any[]): Record<string, any[]> {
+  const cupCompetitions = new Set(['POLISH_CUP', 'SUPER_CUP']);
+  const playerCupTotals = new Map<string, { goals: number; assists: number }>();
+
+  const ensureTotals = (playerId: string) => {
+    if (!playerCupTotals.has(playerId)) playerCupTotals.set(playerId, { goals: 0, assists: 0 });
+    return playerCupTotals.get(playerId)!;
+  };
+
+  (matchHistory || []).forEach(match => {
+    if (!cupCompetitions.has(String(match?.competition || ''))) return;
+    (match.goals || []).forEach((goal: any) => {
+      const scorerId = goal.playerId || goal.scorerId;
+      if (scorerId) ensureTotals(scorerId).goals += 1;
+      if (goal.assistantId) ensureTotals(goal.assistantId).assists += 1;
+    });
+  });
+
+  if (playerCupTotals.size === 0) return players;
+
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player: any) => {
+        const totals = playerCupTotals.get(player.id);
+        if (!totals) return player;
+        const currentCup = player.cupStats ?? {
+          goals: 0,
+          assists: 0,
+          yellowCards: 0,
+          redCards: 0,
+          cleanSheets: 0,
+          matchesPlayed: 0,
+          minutesPlayed: 0,
+          seasonalChanges: {},
+          ratingHistory: [],
+        };
+        return {
+          ...player,
+          cupStats: {
+            ...currentCup,
+            goals: Math.max(currentCup.goals ?? 0, totals.goals),
+            assists: Math.max(currentCup.assists ?? 0, totals.assists),
+          },
+        };
+      }),
+    ])
+  );
+}
+
 function normalizeSaveState(data: SaveState): SaveState {
-  const normalizedPlayers = Object.fromEntries(
+  const normalizedPlayersBase = Object.fromEntries(
     Object.entries(data.players || {}).map(([clubId, squad]) => [
       clubId,
       (squad || []).map((player: any) => ({
@@ -93,6 +143,10 @@ function normalizeSaveState(data: SaveState): SaveState {
         freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
       })),
     ])
+  );
+  const normalizedPlayers = reconcileCupStatsFromHistory(
+    normalizedPlayersBase,
+    data.matchHistory || []
   );
 
   return {

@@ -1,12 +1,33 @@
 
-import { Club, Player, HealthStatus } from '../types';
+import { Club, Player, HealthStatus, PlayerStats } from '../types';
 
 export interface StatRow {
   player: Player;
   club: Club;
 }
 
+const EMPTY_STATS: PlayerStats = {
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: []
+};
+
+const getStatsForLeagueId = (player: Player, leagueId?: string): PlayerStats => {
+  if (leagueId === 'L_CL' || leagueId === 'L_EL' || leagueId === 'L_CONF') {
+    return player.euroStats ?? EMPTY_STATS;
+  }
+
+  return player.stats ?? EMPTY_STATS;
+};
+
 export const LeagueStatsService = {
+  getStatsForLeagueId,
 
   /**
    * Helper to get all players from valid clubs in a league
@@ -32,18 +53,21 @@ export const LeagueStatsService = {
   /**
    * 1. Top Scorers
    */
-  getTopScorers: (rows: StatRow[], limit = 50): StatRow[] => {
+  getTopScorers: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] => {
     return [...rows]
-      .filter(row => row.player.stats.goals > 0)
+      .filter(row => getStatsForLeagueId(row.player, leagueId).goals > 0)
       .sort((a, b) => {
-        if (b.player.stats.goals !== a.player.stats.goals) {
-            return b.player.stats.goals - a.player.stats.goals;
+        const aStats = getStatsForLeagueId(a.player, leagueId);
+        const bStats = getStatsForLeagueId(b.player, leagueId);
+
+        if (bStats.goals !== aStats.goals) {
+            return bStats.goals - aStats.goals;
         }
-        if (b.player.stats.assists !== a.player.stats.assists) {
-            return b.player.stats.assists - a.player.stats.assists;
+        if (bStats.assists !== aStats.assists) {
+            return bStats.assists - aStats.assists;
         }
-        if (a.player.stats.matchesPlayed !== b.player.stats.matchesPlayed) {
-            return a.player.stats.matchesPlayed - b.player.stats.matchesPlayed;
+        if (aStats.matchesPlayed !== bStats.matchesPlayed) {
+            return aStats.matchesPlayed - bStats.matchesPlayed;
         }
         return a.player.lastName.localeCompare(b.player.lastName);
       })
@@ -53,17 +77,20 @@ export const LeagueStatsService = {
   /**
    * 2. Top Assists
    */
-  getTopAssists: (rows: StatRow[], limit = 50): StatRow[] => {
+  getTopAssists: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] => {
     return [...rows]
-      .filter(row => row.player.stats.assists > 0)
+      .filter(row => getStatsForLeagueId(row.player, leagueId).assists > 0)
       .sort((a, b) => {
-        if (b.player.stats.assists !== a.player.stats.assists) {
-            return b.player.stats.assists - a.player.stats.assists;
+        const aStats = getStatsForLeagueId(a.player, leagueId);
+        const bStats = getStatsForLeagueId(b.player, leagueId);
+
+        if (bStats.assists !== aStats.assists) {
+            return bStats.assists - aStats.assists;
         }
-        if (b.player.stats.goals !== a.player.stats.goals) {
-            return b.player.stats.goals - a.player.stats.goals;
+        if (bStats.goals !== aStats.goals) {
+            return bStats.goals - aStats.goals;
         }
-        return a.player.stats.matchesPlayed - b.player.stats.matchesPlayed;
+        return aStats.matchesPlayed - bStats.matchesPlayed;
       })
       .slice(0, limit);
   },
@@ -71,18 +98,21 @@ export const LeagueStatsService = {
   /**
    * 3. Yellow Cards - Dedicated separate list
    */
-  getYellowCardsList: (rows: StatRow[], limit = 50): StatRow[] => {
+  getYellowCardsList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] => {
     return [...rows]
-      .filter(row => row.player.stats.yellowCards > 0)
+      .filter(row => getStatsForLeagueId(row.player, leagueId).yellowCards > 0)
       .sort((a, b) => {
-        if (b.player.stats.yellowCards !== a.player.stats.yellowCards) {
-          return b.player.stats.yellowCards - a.player.stats.yellowCards;
+        const aStats = getStatsForLeagueId(a.player, leagueId);
+        const bStats = getStatsForLeagueId(b.player, leagueId);
+
+        if (bStats.yellowCards !== aStats.yellowCards) {
+          return bStats.yellowCards - aStats.yellowCards;
         }
         // Tie-breaker: mniejsza liczba czerwonych kartek (gracz "czystszy")
-        if (a.player.stats.redCards !== b.player.stats.redCards) {
-          return a.player.stats.redCards - b.player.stats.redCards;
+        if (aStats.redCards !== bStats.redCards) {
+          return aStats.redCards - bStats.redCards;
         }
-        return a.player.stats.matchesPlayed - b.player.stats.matchesPlayed;
+        return aStats.matchesPlayed - bStats.matchesPlayed;
       })
       .slice(0, limit);
   },
@@ -90,10 +120,10 @@ export const LeagueStatsService = {
   /**
    * 4. Red Cards - Dedicated separate list
    */
-  getRedCardsList: (rows: StatRow[], limit = 50): StatRow[] => {
+  getRedCardsList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] => {
     return [...rows]
-      .filter(row => (row.player.stats.redCards || 0) > 0)
-      .sort((a, b) => (b.player.stats.redCards || 0) - (a.player.stats.redCards || 0))
+      .filter(row => (getStatsForLeagueId(row.player, leagueId).redCards || 0) > 0)
+      .sort((a, b) => (getStatsForLeagueId(b.player, leagueId).redCards || 0) - (getStatsForLeagueId(a.player, leagueId).redCards || 0))
       .slice(0, limit);
   },
 

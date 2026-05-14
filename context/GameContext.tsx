@@ -5264,17 +5264,19 @@ const finalResult: SimulationOutput = {
             };
           }));
 
-          setMessages(prev => [{
-            id: `CAPTAIN_MOTIVATION_${Date.now()}`,
-            sender: captainName,
-            role: 'Kapitan druzyny',
-            subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Drużyna czeka na rozmowę',
-            body: captainMailBody,
-            date: new Date(nextDay),
-            isRead: false,
-            type: MailType.STAFF,
-            priority: 58,
-          }, ...prev]);
+          if ((userClub.morale ?? 50) <= 64) {
+            setMessages(prev => [{
+              id: `CAPTAIN_MOTIVATION_${Date.now()}`,
+              sender: captainName,
+              role: 'Kapitan druzyny',
+              subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Drużyna czeka na rozmowę',
+              body: captainMailBody,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 58,
+            }, ...prev]);
+          }
         }
       }
     }

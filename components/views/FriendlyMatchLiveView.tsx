@@ -7,7 +7,7 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
-  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing
+  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 
@@ -293,6 +293,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           intensity: 'NORMAL',
           passing: 'MIXED',
           pressing: 'NORMAL',
+          counterAttack: 'NORMAL',
           expiryMinute: -1,
           tempoExpiry: -1,
           mindsetExpiry: -1,
@@ -302,11 +303,13 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           intensityCooldown: -1,
           passingCooldown: -1,
           pressingCooldown: -1,
+          counterAttackCooldown: -1,
           tempoResponseFactor: 1.0,
           mindsetResponseFactor: 1.0,
           intensityResponseFactor: 1.0,
           passingResponseFactor: 1.0,
           pressingResponseFactor: 1.0,
+          counterAttackResponseFactor: 1.0,
          lastChangeMinute: -5,},
           playedPlayerIds: [],
         aiActiveShout: null,
@@ -832,7 +835,41 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod));
-        const activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+
+        const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
+        const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
+        const opponentCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
+        const opponentPressure = userSide === 'HOME' ? Math.max(0, -prev.momentum) : Math.max(0, prev.momentum);
+        const userScoreDiff = userSide === 'HOME' ? prev.homeScore - prev.awayScore : prev.awayScore - prev.homeScore;
+        const counterShape =
+          userCounterTactic.defenseBias >= 55 ||
+          opponentPressure >= 35 ||
+          opponentCounterTactic.attackBias >= 62 ||
+          userScoreDiff > 0;
+        const opponentPushes =
+          opponentPressure >= 25 ||
+          opponentCounterTactic.attackBias >= 55 ||
+          userScoreDiff < 0;
+        let counterAttackTriggered = false;
+        let counterAttackShotBonus = 0;
+
+        if (activeSide !== userSide && counterAttackEnabled && counterShape && opponentPushes) {
+          const pressureFactor = Math.max(0, Math.min(1, (opponentPressure - 25) / 75));
+          const shapeFactor = Math.max(0, Math.min(1, (userCounterTactic.defenseBias - 50) / 40));
+          const opponentRiskFactor = Math.max(0, Math.min(1, (opponentCounterTactic.attackBias - 50) / 45));
+          const scoreFactor = userScoreDiff > 0 ? 0.03 : 0;
+          const rf = prev.userInstructions.counterAttackResponseFactor ?? 1.0;
+          const counterChance = Math.max(
+            0,
+            Math.min(0.16, (0.025 + pressureFactor * 0.060 + shapeFactor * 0.025 + opponentRiskFactor * 0.025 + scoreFactor) * rf)
+          );
+          if (seededRng(currentSeed, nextMinute, 631) < counterChance) {
+            activeSide = userSide;
+            counterAttackTriggered = true;
+            counterAttackShotBonus = Math.min(0.026, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006);
+          }
+        }
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.125; // Bazowa szansa
@@ -1092,6 +1129,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             else shotThreshold += penalty;
           }
         }
+        // KONTRATAK
+        if (counterAttackTriggered && activeSide === userSide) {
+          shotThreshold += counterAttackShotBonus;
+        }
         // ───────────────────────────────────────────────────────────────────────
 
         let pauseForEvent = false;
@@ -1274,7 +1315,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 nextLiveStats.away.shots++;
                 nextLiveStats.away.shotsOnTarget++;
               }
-              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
+              const counterPrefix = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
           } else {
               const failRng = seededRng(currentSeed, nextMinute, 780);
@@ -1297,7 +1339,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               immediateEventType = failType;
-              newLog = { id: `MISS_${nextMinute}`, minute: nextMinute, text: getCommentary(failType, scorer.lastName), type: failType, teamSide: activeSide };
+              const counterPrefixMiss = counterAttackTriggered && activeSide === userSide ? 'Kontra! ' : '';
+              newLog = { id: `MISS_${nextMinute}`, minute: nextMinute, text: `${counterPrefixMiss}${getCommentary(failType, scorer.lastName)}`, type: failType, teamSide: activeSide };
            }
            pauseForEvent = isGoal;
 
@@ -2616,13 +2659,15 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     <div className="flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl">
       <button
         onClick={() => setShowCommentHistory(!showCommentHistory)}
-        className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+        className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+        style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10)' }}
       >
         PRZEBIEG MECZU
       </button>
       <button
         onClick={handleFinishMatch}
-        className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
+        className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:translate-y-[2px] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
+        style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 0 30px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.12)' }}
       >
         <span>STUDIO POMECZOWE</span>
         <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
@@ -2651,7 +2696,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Tempo – blokada ${remaining}'` : 'Tempo'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'SLOW' as InstructionTempo,   label: 'Wolno',     activeClass: 'bg-blue-600/50 text-blue-200 border-blue-500/50' },
                 { val: 'NORMAL' as InstructionTempo, label: 'Normalnie', activeClass: 'bg-white/20 text-white border-white/20' },
@@ -2661,7 +2706,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                   key={val}
                   onClick={() => pick(val)}
                   disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
                     cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
                   }`}
                 >{label}</button>
@@ -2689,7 +2734,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Postawa – blokada ${remaining}'` : 'Postawa'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'DEFENSIVE' as InstructionMindset, label: 'Defensywna', activeClass: 'bg-emerald-600/50 text-emerald-200 border-emerald-500/50' },
                 { val: 'NEUTRAL' as InstructionMindset,   label: 'Neutralna',  activeClass: 'bg-white/20 text-white border-white/20' },
@@ -2699,7 +2744,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                   key={val}
                   onClick={() => pick(val)}
                   disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
                     cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
                   }`}
                 >{label}</button>
@@ -2727,7 +2772,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Styl gry – blokada ${remaining}'` : 'Styl gry'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'CAUTIOUS' as InstructionIntensity,   label: 'Ostrożnie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
                 { val: 'NORMAL' as InstructionIntensity,     label: 'Normalnie',  activeClass: 'bg-white/20 text-white border-white/20' },
@@ -2737,7 +2782,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                   key={val}
                   onClick={() => pick(val)}
                   disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
                     cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
                   }`}
                 >{label}</button>
@@ -2767,7 +2812,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Podania – blokada ${remaining}'` : 'Podania'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'SHORT' as InstructionPassing, label: 'Krótkie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
                 { val: 'MIXED' as InstructionPassing, label: 'Mieszane', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
@@ -2777,7 +2822,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                   key={val}
                   onClick={() => pick(val)}
                   disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
                     cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
                   }`}
                 >{label}</button>
@@ -2807,7 +2852,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Pressing – blokada ${remaining}'` : 'Pressing'}
             </span>
-            <div className="flex rounded-md overflow-hidden border border-white/15 shadow-lg">
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {([
                 { val: 'NORMAL'   as InstructionPressing, label: 'Normalnie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
                 { val: 'PRESSING' as InstructionPressing, label: 'Pressing',  activeClass: 'bg-purple-600/50 text-purple-200 border-purple-500/50' },
@@ -2816,7 +2861,45 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                   key={val}
                   onClick={() => pick(val)}
                   disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
+                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
+                  }`}
+                >{label}</button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      {/* ── KONTRATAK ── */}
+      {(() => {
+        const cd = matchState.userInstructions.counterAttackCooldown ?? -1;
+        const locked = cd > 0 && matchState.minute < cd;
+        const remaining = locked ? cd - matchState.minute : 0;
+        const cur = matchState.userInstructions.counterAttack ?? 'NORMAL';
+        const pick = (val: InstructionCounterAttack) => setMatchState(s => {
+          if (!s) return s;
+          const c = s.userInstructions.counterAttackCooldown ?? -1;
+          if (c > 0 && s.minute < c) return s;
+          if ((s.userInstructions.counterAttack ?? 'NORMAL') === val) return s;
+          const rf = val === 'NORMAL' ? 1.0 : parseFloat((0.6 + Math.random() * 0.8).toFixed(2));
+          const cooldown = s.minute + 5 + Math.floor(Math.random() * 6);
+          return { ...s, userInstructions: { ...s.userInstructions, counterAttack: val, counterAttackCooldown: cooldown, counterAttackResponseFactor: rf } };
+        });
+        return (
+          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+            <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
+              {locked ? `Kontra - blokada ${remaining}'` : 'Kontra'}
+            </span>
+            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+              {([
+                { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
+                { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak', activeClass: 'bg-cyan-600/50 text-cyan-200 border-cyan-500/50' },
+              ] as { val: InstructionCounterAttack; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
+                <button
+                  key={val}
+                  onClick={() => pick(val)}
+                  disabled={locked}
+                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors active:translate-y-[1px] border-r last:border-r-0 border-white/10 ${
                     cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
                   }`}
                 >{label}</button>
@@ -2832,21 +2915,23 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         <button
           disabled={hasMandatorySub}
           onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0))), halftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
-          className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95 shadow-2xl border
+          className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:translate-y-[2px] border
             ${hasMandatorySub
-              ? 'bg-red-600/20 border-red-500/40 text-red-500 hover:bg-red-600/30 shadow-red-500/10'
+              ? 'bg-red-600/20 border-red-500/40 text-red-500 hover:bg-red-600/30'
               : matchState.isPaused || matchState.isHalfTime
-                ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30 shadow-blue-500/10'
-                : 'bg-white/5 border-white/20 text-white hover:bg-white/10 shadow-white/5'
+                ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30'
+                : 'bg-white/5 border-white/20 text-white hover:bg-white/10'
             }
           `}
+          style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' }}
         >
           {getActionLabel()}
         </button>
 
         <button
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10)' }}
         >
           ⚙ TAKTYKA
         </button>
@@ -2857,14 +2942,16 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             const next = s.speed === 1 ? 2.5 : s.speed === 2.5 ? 3.5 : s.speed === 3.5 ? 5 : 1;
             return { ...s, speed: next };
           })}
-          className="min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border border-white/10 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border border-white/10 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10)' }}
         >
           {matchState.speed === 5 ? '⏩ x5' : matchState.speed === 3.5 ? '⏩ x3.5' : matchState.speed === 2.5 ? '⏩ x2.5' : '⏪ x1'}
         </button>
 
         <button
           onClick={() => setShowCommentHistory(!showCommentHistory)}
-          className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10)' }}
         >
           PRZEBIEG MECZU
         </button>

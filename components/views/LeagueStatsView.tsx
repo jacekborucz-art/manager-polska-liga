@@ -50,13 +50,13 @@ export const LeagueStatsView: React.FC = () => {
 
     switch (activeTab) {
       case 'SCORERS':
-        return LeagueStatsService.getTopScorers(rawData);
+        return LeagueStatsService.getTopScorers(rawData, 50, selectedLeagueId);
       case 'ASSISTS':
-        return LeagueStatsService.getTopAssists(rawData);
+        return LeagueStatsService.getTopAssists(rawData, 50, selectedLeagueId);
       case 'YELLOW_CARDS':
-        return LeagueStatsService.getYellowCardsList(rawData);
+        return LeagueStatsService.getYellowCardsList(rawData, 50, selectedLeagueId);
       case 'RED_CARDS':
-        return LeagueStatsService.getRedCardsList(rawData);
+        return LeagueStatsService.getRedCardsList(rawData, 50, selectedLeagueId);
       case 'INJURIES':
         return LeagueStatsService.getInjuryList(rawData);
       default:
@@ -254,6 +254,7 @@ export const LeagueStatsView: React.FC = () => {
             <tbody>
               {statsData.map((row, index) => {
                 const { player, club } = row;
+                const playerStats = LeagueStatsService.getStatsForLeagueId(player, selectedLeagueId);
 
                 return (
                   <tr
@@ -300,11 +301,11 @@ export const LeagueStatsView: React.FC = () => {
                     {activeTab === 'SCORERS' && (
                       <>
                         <td className="px-6 text-center align-middle font-mono text-sm font-bold text-slate-500">
-                          {player.stats.matchesPlayed}
+                          {playerStats.matchesPlayed}
                         </td>
                         <td className="px-6 text-center align-middle">
                           <span className="inline-block font-mono text-2xl font-black tracking-tighter text-white tabular-nums transition-transform group-hover:scale-110">
-                            {player.stats.goals}
+                            {playerStats.goals}
                           </span>
                         </td>
                       </>
@@ -313,11 +314,11 @@ export const LeagueStatsView: React.FC = () => {
                     {activeTab === 'ASSISTS' && (
                       <>
                         <td className="px-6 text-center align-middle font-mono text-sm font-bold text-slate-500">
-                          {player.stats.matchesPlayed}
+                          {playerStats.matchesPlayed}
                         </td>
                         <td className="px-6 text-center align-middle">
                           <span className="inline-block font-mono text-2xl font-black tracking-tighter text-white tabular-nums transition-transform group-hover:scale-110">
-                            {player.stats.assists}
+                            {playerStats.assists}
                           </span>
                         </td>
                       </>
@@ -326,11 +327,11 @@ export const LeagueStatsView: React.FC = () => {
                     {activeTab === 'YELLOW_CARDS' && (
                       <>
                         <td className="px-6 text-center align-middle font-mono text-sm font-bold text-slate-500">
-                          {player.stats.matchesPlayed}
+                          {playerStats.matchesPlayed}
                         </td>
                         <td className="px-6 text-center align-middle">
                           <span className="inline-block font-mono text-2xl font-black tracking-tighter text-yellow-500 tabular-nums transition-transform group-hover:scale-110">
-                            {player.stats.yellowCards}
+                            {playerStats.yellowCards}
                           </span>
                         </td>
                       </>
@@ -339,11 +340,11 @@ export const LeagueStatsView: React.FC = () => {
                     {activeTab === 'RED_CARDS' && (
                       <>
                         <td className="px-6 text-center align-middle font-mono text-sm font-bold text-slate-500">
-                          {player.stats.matchesPlayed}
+                          {playerStats.matchesPlayed}
                         </td>
                         <td className="px-6 text-center align-middle">
                           <span className="inline-block font-mono text-2xl font-black tracking-tighter text-red-500 tabular-nums transition-transform group-hover:scale-110">
-                            {player.stats.redCards}
+                            {playerStats.redCards}
                           </span>
                         </td>
                       </>

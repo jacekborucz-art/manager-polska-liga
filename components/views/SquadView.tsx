@@ -399,7 +399,7 @@ export const SquadView: React.FC = () => {
             <span className="inline-flex items-center justify-center text-[10px] font-black">→</span>
           </td>
           <td colSpan={8} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
-            &gt; SYSTEM_READY_FOR_DEPLOYMENT
+            &gt; WSTAW ZAWODNIKA &lt;
           </td>
         </tr>
       );
@@ -756,7 +756,7 @@ export const SquadView: React.FC = () => {
                          slot.role === PlayerPosition.MID ? 'text-emerald-400' :
                          'text-red-400'
                        }`}`}>
-                       {!player ? 'VACANT' : slot.role}
+                       {!player ? 'WSTAW' : slot.role}
                     </div>
                     
                     {/* Position Warning Glow */}
@@ -799,7 +799,7 @@ export const SquadView: React.FC = () => {
                     {/* Name Label */}
                     <div className="-mt-[7px]">
                        <span className={`text-[10px] font-black uppercase italic tracking-widest whitespace-nowrap drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${!player ? 'text-rose-400' : (isOutOfPosition ? 'text-amber-200' : 'text-white')}`}>
-                          {player ? formatPitchPlayerName(player) : 'DEPLOY UNIT'}
+                          {player ? formatPitchPlayerName(player) : 'ZAWODNIKA'}
                        </span>
                     </div>
                   </div>
