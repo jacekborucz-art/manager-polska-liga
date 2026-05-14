@@ -303,6 +303,7 @@ if (todayFixtures.length === 0) {
         goals: result.scorers.map(s => {
           const p = (currentPlayers[home.id].concat(currentPlayers[away.id])).find(x => x.id === s.playerId);
           return {
+            playerId: s.playerId,
             playerName: p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany',
             minute: s.minute,
             teamId: p ? p.clubId : '?',
@@ -326,17 +327,24 @@ if (todayFixtures.length === 0) {
             if (c.type === MatchEventType.YELLOW_CARD) {
               if (playerMatchCards[pId].includes('YELLOW')) {
                 // To jest druga żółta -> zamień na czerwoną w statystyce i nie dodawaj żółtej
-                finalCards.push({ playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'SECOND_YELLOW' });
+                finalCards.push({ playerId: pId, playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'SECOND_YELLOW' });
               } else {
                 playerMatchCards[pId].push('YELLOW');
-                finalCards.push({ playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'YELLOW' });
+                finalCards.push({ playerId: pId, playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'YELLOW' });
               }
             } else {
-              finalCards.push({ playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'RED' });
+              finalCards.push({ playerId: pId, playerName, minute: c.minute, teamId: p?.clubId || '?', type: 'RED' });
             }
           });
           return finalCards;
-        })()
+        })(),
+        venue: home.stadiumName,
+        weather: weather,
+        homeLineup: hLineup.startingXI.filter((id): id is string => id !== null),
+        awayLineup: aLineup.startingXI.filter((id): id is string => id !== null),
+        ratings: result.ratings,
+        homeTacticId: hLineup.tacticId,
+        awayTacticId: aLineup.tacticId
       });
       currentFixtures = currentFixtures.map(f => f.id === fixture.id ? { 
         ...f, 
@@ -354,7 +362,8 @@ if (todayFixtures.length === 0) {
         homeScore: result.homeScore,
         awayScore: result.awayScore,
         homeColors: home.colorsHex,
-        awayColors: away.colorsHex
+        awayColors: away.colorsHex,
+        matchId: fixture.id
       };
 
       if (fixture.leagueId === 'L_PL_1') roundResults.league1Results.push(matchResult);

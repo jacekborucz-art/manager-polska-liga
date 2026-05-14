@@ -1832,6 +1832,7 @@ export interface MatchResult {
   homePenaltyScore?: number;
   awayPenaltyScore?: number;
   isExtraTime?: boolean;
+  matchId?: string;
 }
 export interface MatchGoalEntry {
   playerId?: string;
@@ -1842,6 +1843,7 @@ export interface MatchGoalEntry {
   assistantId?: string;
   assistantName?: string;
   varDisallowed?: boolean;
+  isMiss?: boolean;
 }
 
 export interface MatchCardEntry {
@@ -1893,6 +1895,11 @@ export interface MatchHistoryEntry {
   injuries?: MatchInjuryEntry[];
   timeline?: MatchEvent[];
   refereeName?: string;
+  homeLineup?: string[];
+  awayLineup?: string[];
+  ratings?: Record<string, number>;
+  homeTacticId?: string;
+  awayTacticId?: string;
 }
 export interface LeagueRoundResults {
   dateKey: string;

@@ -6,6 +6,7 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
+import { MatchReportModal } from '../modals/MatchReportModal';
 
 // Zwiększona przezroczystość paneli dla lepszej widoczności tła
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
@@ -14,6 +15,7 @@ export const PostMatchStudioView: React.FC = () => {
   const { lastMatchSummary, navigateTo, roundResults, currentDate, advanceDay, clubs, players } = useGame();
   const [pageIndex, setPageIndex] = useState(1);
   const [showExpertModal, setShowExpertModal] = useState(false);
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   if (!lastMatchSummary) return null;
 
@@ -201,7 +203,7 @@ export const PostMatchStudioView: React.FC = () => {
   };
 
   const renderResultRow = (result: MatchResult, idx: number) => (
-    <div key={idx} className="flex items-center justify-between p-4 bg-white/[0.01] rounded-2xl border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all group">
+    <div key={idx} onClick={() => result.matchId ? setReportMatchId(result.matchId) : undefined} className={`flex items-center justify-between p-4 bg-white/[0.01] rounded-2xl border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all group ${result.matchId ? 'cursor-pointer' : ''}`}>
        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="flex flex-col w-1 h-6 rounded-full overflow-hidden shrink-0 shadow-md">
              <div className="flex-1" style={{ backgroundColor: result.homeColors[0] }} />
@@ -469,6 +471,8 @@ export const PostMatchStudioView: React.FC = () => {
       <div className="relative z-10 w-full max-w-[1800px] h-full flex flex-col gap-6">
         {pageIndex === 1 ? renderPage1() : renderPage2()}
       </div>
+
+      <MatchReportModal matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
 
       {/* EXPERT COMMENT MODAL */}
       {showExpertModal && (

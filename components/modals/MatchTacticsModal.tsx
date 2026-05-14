@@ -4,6 +4,49 @@ import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { LineupService } from '../../services/LineupService';
 
+const GOALKEEPER_KIT_COLORS = ['#16a34a', '#facc15', '#ec4899', '#dc2626', '#14b8a6', '#d6b48c', '#f97316'];
+
+const POSITION_LABEL: Record<PlayerPosition, string> = {
+  [PlayerPosition.GK]: 'BR',
+  [PlayerPosition.DEF]: 'OBR',
+  [PlayerPosition.MID]: 'POM',
+  [PlayerPosition.FWD]: 'NAP',
+};
+
+const parseHexColor = (color?: string): [number, number, number] | null => {
+  if (!color?.startsWith('#')) return null;
+  const hex = color.slice(1);
+  if (![3, 6].includes(hex.length)) return null;
+  const normalized = hex.length === 3 ? hex.split('').map(char => char + char).join('') : hex;
+  const value = Number.parseInt(normalized, 16);
+  if (Number.isNaN(value)) return null;
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+};
+
+const getColorDistance = (a: string, b: string): number => {
+  const first = parseHexColor(a);
+  const second = parseHexColor(b);
+  if (!first || !second) return 0;
+  return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+};
+
+const pickContrastingGoalkeeperKitColor = (fieldKitColors: string[]): string => {
+  const validFieldColors = fieldKitColors.filter(color => Boolean(parseHexColor(color)));
+  if (!validFieldColors.length) return GOALKEEPER_KIT_COLORS[0];
+  return GOALKEEPER_KIT_COLORS.reduce((best, color) => {
+    const colorScore = Math.min(...validFieldColors.map(fieldColor => getColorDistance(color, fieldColor)));
+    const bestScore = Math.min(...validFieldColors.map(fieldColor => getColorDistance(best, fieldColor)));
+    return colorScore > bestScore ? color : best;
+  }, GOALKEEPER_KIT_COLORS[0]);
+};
+
+const getReadableBadgeTextColor = (colors: string[]): string => {
+  const parsed = colors.map(parseHexColor).filter((color): color is [number, number, number] => Boolean(color));
+  if (!parsed.length) return '#ffffff';
+  const avgLuminance = parsed.reduce((sum, [r, g, b]) => sum + (0.2126 * r + 0.7152 * g + 0.0722 * b), 0) / parsed.length;
+  return avgLuminance > 168 ? '#0f172a' : '#ffffff';
+};
+
 interface MatchTacticsModalProps {
   isOpen: boolean;
   onClose: (newLineup: Lineup, subsCount: number, subsHistory: SubstitutionRecord[], captainId: string | null, penaltyTakerId: string | null, freeKickTakerId: string | null) => void;
@@ -36,6 +79,7 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
   const [roleMenu, setRoleMenu] = useState<{ x: number; y: number; playerId: string } | null>(null);
   const [showSubLimitModal, setShowSubLimitModal] = useState(false);
   const [tacticNotice, setTacticNotice] = useState<{ title: string; message: string; tone: 'blue' | 'rose' } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const substitutionLimit = maxSubs ?? 5;
 
   const showTacticNotice = (title: string, message: string, tone: 'blue' | 'rose' = 'rose') => {
@@ -51,6 +95,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
   };
 
   const tactic = TacticRepository.getById(currentLineup.tacticId);
+  const fieldKitColors = [club?.colorsHex?.[0], club?.colorsHex?.[1]].filter(Boolean) as string[];
+  const gkKitColor = pickContrastingGoalkeeperKitColor(fieldKitColors);
   const substitutedOffIds = new Set(currentSubsHistory.map(s => s.playerOutId));
 
   const registeredIds = new Set([...currentLineup.startingXI.filter(id => id !== null), ...currentLineup.bench]);
@@ -135,12 +181,13 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
 
     // Logic: Determine label color based on condition (Stage 1 Pro Addon)
     const conditionLabelClass = p ? (f < 40 ? 'text-red-500' : f < 75 ? 'text-orange-500' : 'text-white') : 'text-white';
+    const slotPosColor = expectedRole === 'GK' ? 'bg-yellow-500 border-yellow-300 shadow-yellow-500/20' : expectedRole === 'DEF' ? 'bg-blue-500 border-blue-300 shadow-blue-500/20' : expectedRole === 'MID' ? 'bg-emerald-500 border-emerald-300 shadow-emerald-500/20' : 'bg-red-500 border-red-300 shadow-red-500/20';
 
     return (
       <div
         onClick={() => { setRoleMenu(null); !isRedBlocked && handleSlotClick(pId, loc, index, expectedRole); }}
         onContextMenu={(e) => { if (loc === 'START' && p && !isOut) { e.preventDefault(); setRoleMenu({ x: e.clientX, y: e.clientY, playerId: p.id }); setSelectedSlot(null); } }}
-        className={`relative w-full h-20 mb-3 rounded-[24px] transition-all duration-500 group overflow-visible
+        className={`relative w-full h-[49px] mb-1 rounded-[24px] transition-all duration-500 group overflow-visible
           ${isSelected 
             ? 'bg-blue-500/20 border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.3)] scale-[1.02] z-30' 
             : isLightInjury
@@ -151,8 +198,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
           }
           ${isOut ? 'opacity-30 grayscale pointer-events-none' : 'cursor-pointer'}
           ${isRedBlocked ? 'bg-black/60 opacity-80 cursor-not-allowed grayscale' : ''}
-          ${p && !isNaturalPos && !isGkMismatch && loc === 'START' ? 'border-amber-500/30' : ''}
-          ${isGkMismatch && loc === 'START' ? 'border-rose-500/50 bg-rose-500/5' : ''}
+          ${p && !isNaturalPos && !isGkMismatch && loc === 'START' ? 'bg-amber-500/20 border-amber-500/60 shadow-[0_0_22px_rgba(245,158,11,0.3)]' : ''}
+          ${isGkMismatch && loc === 'START' ? 'bg-rose-500/20 border-rose-500/60 shadow-[0_0_22px_rgba(244,63,94,0.3)]' : ''}
           border backdrop-blur-xl
         `}
       >
@@ -160,15 +207,15 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
           <div className="absolute -right-1 -top-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-lg z-20 animate-pulse">✓</div>
         )}
         {/* Wizjer Roli (Role Hub Prefix) */}
-        <div className={`absolute -left-6 top-1/2 -translate-y-1/2 w-14 h-14 rounded-2xl flex flex-col items-center justify-center shadow-2xl border-2 z-20 transition-all duration-500
+        <div className={`absolute -left-6 top-1/2 -translate-y-1/2 w-[50px] h-[50px] rounded-2xl flex flex-col items-center justify-center shadow-2xl border-2 z-20 transition-all duration-500
           ${loc === 'BENCH' ? 'hidden' : ''}
-          ${!p ? 'bg-slate-900 border-white/10' : (isNaturalPos ? 'bg-emerald-500 border-emerald-300 shadow-emerald-500/20 rotate-0' : 'bg-amber-600 border-amber-400 shadow-amber-600/20 -rotate-12')}
+          ${!p ? 'bg-slate-900 border-white/10' : (isNaturalPos ? `${slotPosColor} rotate-0` : 'bg-amber-600 border-amber-400 shadow-amber-600/20 -rotate-12')}
           ${isGkMismatch ? 'bg-rose-700 border-rose-400 shadow-rose-600/30' : ''}
         `}>
            <span className="text-[7px] font-black text-white/40 uppercase tracking-tighter leading-none mb-0.5">SLOT</span>
            <span className="text-sm font-black italic text-white leading-none">{expectedRole}</span>
            {p && !isNaturalPos && !isRedBlocked && (
-             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[8px] animate-bounce shadow-lg">⚠️</div>
+             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-[8px] animate-bounce shadow-lg">⚠️</div>
            )}
         </div>
 
@@ -185,7 +232,7 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
                       <span className="text-white text-xs font-black leading-none">✚</span>
                     )}
                     {loc === 'START' && !isNaturalPos && (
-                      <span className="text-[7px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/30 font-black">ZAWODNIK NA NIE SWOJEJ POZYCJI</span>
+                      <span className="text-[7px] bg-red-600 text-white px-1.5 py-0.5 rounded border border-red-500 font-black">ZAWODNIK NA NIE SWOJEJ POZYCJI</span>
                     )}
                     {loc === 'START' && localCaptainId === p.id && (
                       <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[8px] font-black rounded border border-yellow-500/30 leading-none shrink-0">C</span>
@@ -198,7 +245,7 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
                     )}
                   </div>
                   <span className={`text-[9px] font-bold uppercase tracking-widest ${PlayerPresentationService.getPositionColorClass(p.position)}`}>
-                    {p.position} 
+                    {p.position === 'GK' ? 'BRAMKARZ' : p.position === 'DEF' ? 'OBROŃCA' : p.position === 'MID' ? 'POMOCNIK' : 'NAPASTNIK'}
                   </span>
                 </>
               ) : (
@@ -278,8 +325,11 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
               </div>
            </div>
            
-           <button 
-             onClick={() => onClose(currentLineup, currentSubsCount, currentSubsHistory, localCaptainId, localPenaltyTakerId, localFreeKickTakerId)}
+           <button
+             onClick={() => {
+               const hasChanges = currentSubsHistory.length > subsHistory.length || currentLineup.tacticId !== lineup.tacticId;
+               if (hasChanges) { setShowConfirmModal(true); } else { onClose(currentLineup, currentSubsCount, currentSubsHistory, localCaptainId, localPenaltyTakerId, localFreeKickTakerId); }
+             }}
              className="relative group px-16 py-6 bg-white text-slate-950 font-black italic uppercase tracking-tighter text-xl rounded-[30px] transition-all hover:scale-105 active:scale-95 shadow-[0_20px_50px_rgba(255,255,255,0.1)] border-b-4 border-slate-300"
            >
              <span className="relative z-10">ZATWIERDŹ PROTOKÓŁ ⚡</span>
@@ -288,71 +338,93 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
         </header>
 
         {/* THE CORE ENGINE AREA */}
-        <div className="flex-1 overflow-hidden flex p-10 gap-10 relative z-10">
-           
-           {/* SYSTEMS PANEL */}
-           <aside className="w-80 flex flex-col gap-6 shrink-0">
-              <div className="bg-black/40 border border-white/10 rounded-[45px] p-8 flex flex-col gap-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
-                 <div className="absolute top-0 right-0 p-4 opacity-[0.03] text-6xl font-black italic text-white">SYS</div>
-                 <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em] px-1">FORMACJA</h3>
-                 
-                 <div className="space-y-4">
-                    <div className="relative group">
-                       <select 
-                          value={currentLineup.tacticId}
-                          onChange={(e) => setCurrentLineup({...currentLineup, tacticId: e.target.value})}
-                          className="w-full bg-slate-950/80 border border-white/10 text-white rounded-2xl p-5 text-xs font-black italic uppercase outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xl appearance-none"
-                       >
-                          {TacticRepository.getAll().map(t => <option key={t.id} value={t.id} className="bg-slate-900">{t.name}</option>)}
-                       </select>
-                       <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-blue-500 font-black">↓</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 mt-4">
-                       <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-                          <span className="block text-[8px] font-black text-slate-600 uppercase mb-1">STYL</span>
-                          <span className="text-xl font-black text-white italic">{tactic.category.toUpperCase()}</span>
-                       </div>
-                       <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-                          <span className="block text-[8px] font-black text-slate-600 uppercase mb-1">KONDYCJA</span>
-                          <span className="text-xl font-black text-emerald-400 italic">94%</span>
-                       </div>
-                    </div>
-                 </div>
-                 
-                 <div className="h-px bg-white/5 w-full" />
+        <div className="flex-1 overflow-hidden flex flex-col px-10 pt-6 pb-4 gap-3 relative z-10">
 
-                 <div className="bg-white/[0.03] p-6 rounded-3xl border border-white/5 space-y-4">
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Aktualnie na boisku</span>
-                       <span className={`text-sm font-black italic ${currentOnPitchCount < 11 ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`}>
-                         {currentOnPitchCount} / 11
-                       </span>
-                    </div>
-                    <div className="h-1 w-full bg-black/40 rounded-full overflow-hidden">
-                       <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${(currentOnPitchCount / 11) * 100}%` }} />
-                    </div>
+           {/* HEADER ROW */}
+           <div className="flex gap-10 shrink-0 items-center">
+              <div className="w-80 shrink-0">
+                 <div className="relative group">
+                    <select
+                       value={currentLineup.tacticId}
+                       onChange={(e) => setCurrentLineup({...currentLineup, tacticId: e.target.value})}
+                       className="w-full bg-slate-950/80 border border-white/10 text-white rounded-2xl p-5 text-xs font-black italic uppercase outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xl appearance-none"
+                    >
+                       {TacticRepository.getAll().map(t => <option key={t.id} value={t.id} className="bg-slate-900">{t.name}</option>)}
+                    </select>
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-blue-500 font-black">↓</div>
                  </div>
               </div>
-
-              <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-[45px] p-8 flex flex-col justify-center items-center text-center gap-6 group hover:bg-white/[0.04] transition-all">
-                 <div className="w-20 h-20 rounded-[28px] bg-white/5 border border-white/10 flex items-center justify-center text-5xl group-hover:scale-110 transition-transform duration-500 shadow-2xl text-white">📋</div>
-                 <div>
-                   <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest italic mb-3">Dyrektywa Taktyczna</h4>
-                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                     Wybierz odpowiednia taktykę na przeciwnika 
-                   </p>
-                 </div>
-              </div>
-           </aside>
-
-           {/* STARTING XI GRID */}
-           <section className="flex-1 flex flex-col gap-6 min-w-0">
-              <div className="flex items-center justify-between px-10">
+              <div className="flex-1 flex items-center px-10">
                  <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Pierwszy skład</h2>
-                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">KOndycja</span>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar pl-10 pr-4 pb-12">
+              <div className="w-96 shrink-0 flex items-center px-4">
+                 <h2 className="text-2xl font-black italic text-slate-400 uppercase tracking-tighter">Rezerwowi</h2>
+              </div>
+           </div>
+
+           {/* CONTENT ROW */}
+           <div className="flex-1 flex gap-10 overflow-hidden">
+
+              {/* PITCH */}
+              <div className="w-80 shrink-0 relative overflow-hidden rounded-lg border border-white/15 bg-[linear-gradient(180deg,rgba(16,185,129,0.38),rgba(6,78,59,0.42))]">
+                 <div className="absolute inset-3 border border-white/25" />
+                 <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-white/25" />
+                 <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25" />
+                 <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/35" />
+                 <div className="absolute left-[22%] right-[22%] top-3 h-[23%] border-x border-b border-white/25" />
+                 <div className="absolute bottom-3 left-[22%] right-[22%] h-[23%] border-x border-t border-white/25" />
+                 <div className="absolute left-[38%] right-[38%] top-3 h-[8%] border-x border-b border-white/25" />
+                 <div className="absolute bottom-3 left-[38%] right-[38%] h-[8%] border-x border-t border-white/25" />
+                 <div className="absolute left-1/2 top-[19%] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25" />
+                 <div className="absolute bottom-[19%] left-1/2 h-1.5 w-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/25" />
+
+                 {tactic.slots.map((slot, idx) => {
+                    const pid = currentLineup.startingXI[idx];
+                    const p = pid ? registeredPlayers.find(pl => pl.id === pid) : null;
+                    const isGK = p?.position === PlayerPosition.GK;
+                    const shirt = p ? (isGK ? gkKitColor : (club?.colorsHex?.[0] ?? '#111827')) : null;
+                    const shorts = p ? (isGK ? gkKitColor : (club?.colorsHex?.[1] ?? shirt ?? '#111827')) : null;
+                    const textColor = shirt ? getReadableBadgeTextColor([shirt]) : '#ffffff';
+                    return (
+                       <div
+                          key={slot.index}
+                          className={`absolute flex flex-col h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center ${!p ? 'opacity-45' : ''}`}
+                          style={{ left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
+                       >
+                          {p && shirt && shorts ? (
+                             <span className="relative block h-11 w-11 drop-shadow-[0_8px_10px_rgba(0,0,0,0.5)]">
+                                <span
+                                   className="absolute left-1/2 top-0 flex h-7 w-9 -translate-x-1/2 items-center justify-center border border-white/30 text-[8px] font-black italic uppercase tracking-tighter shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-4px_7px_rgba(0,0,0,0.38),0_2px_0_rgba(0,0,0,0.45)]"
+                                   style={{
+                                      background: `radial-gradient(circle at 35% 18%, rgba(255,255,255,0.34), transparent 34%), ${shirt}`,
+                                      color: textColor,
+                                      clipPath: 'polygon(24% 0, 76% 0, 100% 22%, 86% 47%, 78% 36%, 78% 100%, 22% 100%, 22% 36%, 14% 47%, 0 22%)',
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+                                   }}
+                                >
+                                   {`${p.firstName[0]}${p.lastName[0]}`}
+                                </span>
+                                <span className="absolute bottom-1 left-1/2 h-3 w-4 -translate-x-1/2 drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]">
+                                   <span className="absolute left-0 top-0 h-1 w-full border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]" style={{ background: shorts }} />
+                                   <span className="absolute bottom-0 left-0 h-2 w-[7px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]" style={{ background: shorts }} />
+                                   <span className="absolute bottom-0 right-0 h-2 w-[7px] border border-white/20 shadow-[inset_0_-2px_3px_rgba(0,0,0,0.32)]" style={{ background: shorts }} />
+                                </span>
+                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-black text-white drop-shadow-[0_1px_4px_rgba(0,0,0,1)]">
+                                   {`${p.firstName[0]}. ${p.lastName}`}
+                                </span>
+                             </span>
+                          ) : (
+                             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/35 text-[8px] font-black italic uppercase tracking-tighter text-white/40 shadow-[0_8px_18px_rgba(0,0,0,0.45)]">
+                                {POSITION_LABEL[slot.role]}
+                             </span>
+                          )}
+                       </div>
+                    );
+                 })}
+              </div>
+
+              {/* STARTING XI LIST */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar pl-10 pr-4 pb-4">
                  <div className="grid grid-cols-1 gap-1">
                     {currentLineup.startingXI.map((pid, idx) => (
                       <div key={idx} className="animate-blur-in" style={{ animationDelay: `${idx * 0.04}s` }}>
@@ -361,15 +433,9 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
                     ))}
                  </div>
               </div>
-           </section>
 
-           {/* BENCH GRID */}
-           <section className="w-96 flex flex-col gap-6 shrink-0">
-              <div className="flex items-center justify-between px-4">
-                 <h2 className="text-2xl font-black italic text-slate-400 uppercase tracking-tighter">Rezerwowi</h2>
-                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Ławka</span>
-              </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-12">
+              {/* BENCH LIST */}
+              <div className="w-96 shrink-0 overflow-y-auto custom-scrollbar pr-2 pb-4">
                  <div className="grid grid-cols-1 gap-1">
                     {sortedBench.map((pid, idx) => (
                       <div key={pid} className="animate-blur-in" style={{ animationDelay: `${idx * 0.04}s` }}>
@@ -378,7 +444,8 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
                     ))}
                  </div>
               </div>
-           </section>
+
+           </div>
         </div>
 
         {/* CYBER TICKER */}
@@ -454,6 +521,64 @@ export const MatchTacticsModal: React.FC<MatchTacticsModalProps> = ({
           </div>
         </div>
       )}
+
+      {showConfirmModal && (() => {
+        const newSubs = currentSubsHistory.slice(subsHistory.length);
+        const tacticChanged = currentLineup.tacticId !== lineup.tacticId;
+        const oldTactic = TacticRepository.getById(lineup.tacticId);
+        const newTactic = TacticRepository.getById(currentLineup.tacticId);
+        return (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 backdrop-blur-[2px] px-4" onClick={() => { setShowConfirmModal(false); setCurrentLineup(lineup); setCurrentSubsCount(subsCount); setCurrentSubsHistory(subsHistory); setLocalCaptainId(club?.captainId ?? null); setLocalPenaltyTakerId(club?.penaltyTakerId ?? null); setLocalFreeKickTakerId(club?.freeKickTakerId ?? null); }}>
+            <div
+              className="relative w-full max-w-sm overflow-hidden rounded-[30px] border border-blue-400/30 bg-slate-950/95 p-7 text-center shadow-[0_30px_90px_rgba(0,0,0,0.75)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute inset-x-0 top-0 h-1 bg-blue-500" />
+              <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full bg-blue-500/10 blur-3xl" />
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-blue-400">Protokół zmian</p>
+              <h3 className="mb-4 text-2xl font-black italic uppercase tracking-tight text-white">Potwierdź protokół</h3>
+              <div className="mb-6 text-left space-y-2">
+                {tacticChanged && (
+                  <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                    <span className="text-blue-400 text-[10px] font-black uppercase tracking-widest shrink-0">FORMACJA</span>
+                    <span className="text-white text-[11px] font-bold">{oldTactic.name} → {newTactic.name}</span>
+                  </div>
+                )}
+                {newSubs.map((sub, i) => {
+                  const pIn = registeredPlayers.find(p => p.id === sub.playerInId);
+                  const pOut = registeredPlayers.find(p => p.id === sub.playerOutId);
+                  return (
+                    <div key={i} className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                      <span className="text-emerald-400 text-sm font-black shrink-0">↑</span>
+                      <span className="text-white text-[11px] font-bold">{pIn ? `${pIn.firstName.charAt(0)}. ${pIn.lastName}` : '?'}</span>
+                      <span className="text-slate-500 text-[10px] shrink-0">/</span>
+                      <span className="text-rose-400 text-sm font-black shrink-0">↓</span>
+                      <span className="text-white text-[11px] font-bold">{pOut ? `${pOut.firstName.charAt(0)}. ${pOut.lastName}` : '?'}</span>
+                      <span className="ml-auto text-slate-500 text-[9px] font-black shrink-0">{sub.minute}'</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowConfirmModal(false); setCurrentLineup(lineup); setCurrentSubsCount(subsCount); setCurrentSubsHistory(subsHistory); setLocalCaptainId(club?.captainId ?? null); setLocalPenaltyTakerId(club?.penaltyTakerId ?? null); setLocalFreeKickTakerId(club?.freeKickTakerId ?? null); }}
+                  className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-black uppercase tracking-[0.25em] text-slate-300 transition-all hover:bg-white/10 active:scale-95"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowConfirmModal(false); onClose(currentLineup, currentSubsCount, currentSubsHistory, localCaptainId, localPenaltyTakerId, localFreeKickTakerId); }}
+                  className="flex-1 rounded-2xl border border-blue-300/30 bg-blue-500/20 px-4 py-3 text-[11px] font-black uppercase tracking-[0.25em] text-blue-100 transition-all hover:bg-blue-500/30 active:scale-95"
+                >
+                  Potwierdź
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {roleMenu && (
         <>
