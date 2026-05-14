@@ -4492,6 +4492,11 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    let pendingSponsorAmount: number | null = null;
+    let pendingSponsorDate: string | null = null;
+    let pendingSponsorNextCheckDate: string | null = null;
+    let pendingNoSponsorNextCheckDate: string | null = null;
+
     // ── SPONSOR: losowe sprawdzenie co kilkanaście dni ───────────────────────
     if (userTeamId && !isResigned) {
       const userClub = clubs.find(c => c.id === userTeamId);
@@ -4512,24 +4517,9 @@ setMessages([welcomeMail, fanMail]);
           if (Math.random() < probability) {
             const amount = FinanceService.getSponsorAmount(avg);
             const sponsorMailKey = `SPONSOR_${seasonNumber}`;
-            setClubs(prev => prev.map(c => {
-              if (c.id !== userTeamId) return c;
-              const financeLog = {
-                id: Math.random().toString(36).substr(2, 9),
-                date: todayStr,
-                amount,
-                type: 'INCOME' as const,
-                description: 'Przychód ze sponsoringu — nowy kontrakt sponsorski',
-                previousBalance: c.budget,
-              };
-              return {
-                ...c,
-                budget: c.budget + amount,
-                sponsorAcquiredThisSeason: true,
-                nextSponsorCheckDate: nextCheckStr,
-                financeHistory: [financeLog, ...(c.financeHistory || [])].slice(0, 50),
-              };
-            }));
+            pendingSponsorAmount = amount;
+            pendingSponsorDate = todayStr;
+            pendingSponsorNextCheckDate = nextCheckStr;
             if (!sentMailIdsRef.current.has(sponsorMailKey)) {
               sentMailIdsRef.current.add(sponsorMailKey);
               const sponsorMail: MailMessage = {
@@ -4546,9 +4536,7 @@ setMessages([welcomeMail, fanMail]);
               setMessages(prev => [sponsorMail, ...prev]);
             }
           } else {
-            setClubs(prev => prev.map(c =>
-              c.id === userTeamId ? { ...c, nextSponsorCheckDate: nextCheckStr } : c
-            ));
+            pendingNoSponsorNextCheckDate = nextCheckStr;
           }
         }
       }
@@ -4852,6 +4840,33 @@ setMessages([welcomeMail, fanMail]);
           financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50)
         };
       });
+    }
+
+    if (userTeamId) {
+      if (pendingSponsorAmount !== null && pendingSponsorDate !== null && pendingSponsorNextCheckDate !== null) {
+        postReviewClubs = postReviewClubs.map(c => {
+          if (c.id !== userTeamId) return c;
+          const financeLog = {
+            id: Math.random().toString(36).substr(2, 9),
+            date: pendingSponsorDate!,
+            amount: pendingSponsorAmount!,
+            type: 'INCOME' as const,
+            description: 'Przychód ze sponsoringu — nowy kontrakt sponsorski',
+            previousBalance: c.budget,
+          };
+          return {
+            ...c,
+            budget: c.budget + pendingSponsorAmount!,
+            sponsorAcquiredThisSeason: true,
+            nextSponsorCheckDate: pendingSponsorNextCheckDate!,
+            financeHistory: [financeLog, ...(c.financeHistory || [])].slice(0, 50),
+          };
+        });
+      } else if (pendingNoSponsorNextCheckDate !== null) {
+        postReviewClubs = postReviewClubs.map(c =>
+          c.id === userTeamId ? { ...c, nextSponsorCheckDate: pendingNoSponsorNextCheckDate! } : c
+        );
+      }
     }
 
 const finalResult: SimulationOutput = {
