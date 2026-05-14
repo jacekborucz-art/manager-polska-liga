@@ -1,5 +1,7 @@
 
-const SAVE_VERSION = '1.7';
+import { FinanceService } from './FinanceService';
+
+export const SAVE_VERSION = '1.8';
 
 export interface SaveState {
   version: string;
@@ -57,6 +59,8 @@ export interface SaveState {
   elGroups: string[][] | null;
   activeConfGroupDraw: any;
   confGroups: string[][] | null;
+  elHistoryInitialRound: string | null;
+  confHistoryInitialRound: string | null;
   processedDrawIds: string[];
   globalFixtures: any[];
   isResigned: boolean;
@@ -74,6 +78,25 @@ export interface SaveState {
   summerCampInvitePending: boolean;
   summerCampProgramPending: boolean;
   lastNTMatchResults: any;
+}
+
+const DEFAULT_START_DATE = new Date('2025-07-01');
+
+function asArray<T = any>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function asRecord<T = any>(value: unknown): Record<string, T> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, T> : {};
+}
+
+function asDate(value: unknown, fallback: Date = DEFAULT_START_DATE): Date {
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return fallback;
 }
 
 function reviveDate(_key: string, value: unknown): unknown {
@@ -135,11 +158,37 @@ function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHisto
 }
 
 function normalizeSaveState(data: SaveState): SaveState {
+  const normalizedClubs = (data.clubs || []).map((club: any) => ({
+    ...club,
+    rosterIds: asArray<string>(club.rosterIds),
+    stats: club.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+    budget: Number.isFinite(club.budget) ? club.budget : 0,
+    transferBudget: Number.isFinite(club.transferBudget) ? Math.max(0, club.transferBudget) : 0,
+    reserveBudget: Number.isFinite(club.reserveBudget)
+      ? Math.max(0, club.reserveBudget)
+      : FinanceService.calculateInitialReserveBudget(club.budget || 0, club.reputation || 1),
+    boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
+    boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
+    boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',
+    signingBonusPool: club.signingBonusPool ?? 0,
+    financeHistory: asArray(club.financeHistory),
+    stadiumExpansionProjects: asArray(club.stadiumExpansionProjects),
+  }));
   const normalizedPlayersBase = Object.fromEntries(
-    Object.entries(data.players || {}).map(([clubId, squad]) => [
+    Object.entries(asRecord<any[]>(data.players)).map(([clubId, squad]) => [
       clubId,
-      (squad || []).map((player: any) => ({
+      asArray(squad).map((player: any) => ({
         ...player,
+        history: asArray(player.history),
+        boardLockoutUntil: player.boardLockoutUntil ?? null,
+        isUntouchable: player.isUntouchable ?? false,
+        negotiationStep: player.negotiationStep ?? 0,
+        negotiationLockoutUntil: player.negotiationLockoutUntil ?? null,
+        contractLockoutUntil: player.contractLockoutUntil ?? null,
+        fatigueDebt: player.fatigueDebt ?? 0,
+        isNegotiationPermanentBlocked: player.isNegotiationPermanentBlocked ?? false,
+        transferLockoutUntil: player.transferLockoutUntil ?? null,
+        freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
         freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
       })),
     ])
@@ -151,27 +200,74 @@ function normalizeSaveState(data: SaveState): SaveState {
 
   return {
     ...data,
-    version: data.version || SAVE_VERSION,
+    version: SAVE_VERSION,
+    savedAt: data.savedAt || new Date().toISOString(),
+    currentDate: asDate(data.currentDate),
+    sessionSeed: Number.isFinite(data.sessionSeed) ? data.sessionSeed : Date.now(),
+    clubs: normalizedClubs,
+    leagues: asArray(data.leagues),
     players: normalizedPlayers,
+    reserves: asArray(data.reserves),
+    reserveCoachId: data.reserveCoachId ?? null,
+    academy: data.academy ?? null,
+    scoutPool: asArray(data.scoutPool),
+    scoutMarket: asArray(data.scoutMarket),
+    scoutMarketRefreshDate: data.scoutMarketRefreshDate ?? '',
+    lineups: asRecord(data.lineups),
+    seasonTemplate: data.seasonTemplate ?? null,
+    leagueSchedules: asRecord(data.leagueSchedules),
+    lastRecoveryDate: asDate(data.lastRecoveryDate),
+    coaches: asRecord(data.coaches),
+    staffMembers: asRecord(data.staffMembers),
+    roundResults: asRecord(data.roundResults),
+    managerProfile: data.managerProfile ?? null,
+    seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
     messages: data.messages || [],
+    activeTrainingId: data.activeTrainingId ?? 'T_TACTICAL_PERIOD',
+    activeIntensity: data.activeIntensity ?? 'NORMAL',
+    trainingProgressHistory: asArray(data.trainingProgressHistory),
+    reserveProgressHistory: asArray(data.reserveProgressHistory),
     pendingNegotiations: data.pendingNegotiations || [],
     pendingFriendlyRequests: data.pendingFriendlyRequests || [],
+    activeFriendlyFixtureId: data.activeFriendlyFixtureId ?? null,
+    activeFriendlyConditions: data.activeFriendlyConditions ?? null,
     transferOffers: data.transferOffers || [],
     incomingOffers: data.incomingOffers || [],
     aiTransferLog: data.aiTransferLog || [],
-    globalFixtures: data.globalFixtures || [],
-    reserveFixtures: data.reserveFixtures || [],
-    reserveMatchResults: data.reserveMatchResults || [],
-    supercupWinners: data.supercupWinners || [],
-    matchHistory: data.matchHistory || [],
-    championshipHistory: data.championshipHistory || [],
+    europeanStatus: asRecord(data.europeanStatus),
+    nationalTeams: asArray(data.nationalTeams),
+    wcqPlayoffState: data.wcqPlayoffState ?? null,
+    wcState: data.wcState ?? null,
+    cupParticipants: asArray(data.cupParticipants),
+    activeCupDraw: data.activeCupDraw ?? null,
+    activeGroupDraw: data.activeGroupDraw ?? null,
+    activePlayoffDraw: data.activePlayoffDraw ?? null,
+    relegationPlayoffFirstLegResults: data.relegationPlayoffFirstLegResults ?? null,
+    relegationPlayoffFinalResult: data.relegationPlayoffFinalResult ?? null,
+    promotionPlayoffSemiResults: data.promotionPlayoffSemiResults ?? null,
+    promotionPlayoffFinalResults: data.promotionPlayoffFinalResults ?? null,
+    activePlayoffMatch: data.activePlayoffMatch ?? null,
+    clGroups: data.clGroups ?? null,
+    activeELGroupDraw: data.activeELGroupDraw ?? null,
+    elGroups: data.elGroups ?? null,
+    activeConfGroupDraw: data.activeConfGroupDraw ?? null,
+    confGroups: data.confGroups ?? null,
+    elHistoryInitialRound: data.elHistoryInitialRound ?? null,
+    confHistoryInitialRound: data.confHistoryInitialRound ?? null,
+    processedDrawIds: asArray(data.processedDrawIds),
+    globalFixtures: asArray(data.globalFixtures),
+    isResigned: data.isResigned ?? false,
+    reserveFixtures: asArray(data.reserveFixtures),
+    reserveMatchResults: asArray(data.reserveMatchResults),
+    supercupWinners: asArray(data.supercupWinners),
+    matchHistory: asArray(data.matchHistory),
+    championshipHistory: asArray(data.championshipHistory),
     confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA'],
     lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,
     currentPolishChampionId: data.currentPolishChampionId ?? 'PL_LECH_POZNAN',
     currentPolishCupWinnerId: data.currentPolishCupWinnerId ?? 'PL_LEGIA_WARSZAWA',
     currentCLWinnerId: data.currentCLWinnerId ?? 'EU_CL_PARIS_SAINT_GERMAIN',
     currentELWinnerId: data.currentELWinnerId ?? 'EU_CL_TOTTENHAM_HOTSPUR',
-    activePlayoffMatch: data.activePlayoffMatch ?? null,
     winterCampInvitePending: data.winterCampInvitePending ?? false,
     winterCampProgramPending: data.winterCampProgramPending ?? false,
     summerCampInvitePending: data.summerCampInvitePending ?? false,

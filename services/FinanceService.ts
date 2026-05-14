@@ -799,6 +799,14 @@ export const FinanceService = {
     return Math.floor(cap * Math.min(0.95, allocationRatio));
   },
 
+  calculateInitialReserveBudget: (budget: number, reputation: number): number => {
+    if (!Number.isFinite(budget) || budget <= 0) return 0;
+
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const reserveRatio = 0.045 + Math.min(0.08, rep * 0.004);
+    return Math.floor(budget * reserveRatio);
+  },
+
   normalizeTransferBudget: (budget: number, transferBudget: number, reputation: number, wageBill: number = 0): number => {
     const cap = FinanceService.calculateTransferBudgetCap(budget, reputation, wageBill);
     return Math.max(0, Math.min(Math.floor(transferBudget || 0), cap));

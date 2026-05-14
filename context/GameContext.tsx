@@ -106,7 +106,7 @@ import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
-import { SaveState } from '../services/SaveGameService';
+import { SAVE_VERSION, SaveState } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
 import { ReserveScheduleService } from '../services/ReserveScheduleService';
@@ -1211,6 +1211,11 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         leagueId: newLeagueId,
         reputation: newReputation,
         budget: club.budget + nextSeasonInjection - achievementBonusCost,
+        reserveBudget: Math.max(
+          0,
+          (club.reserveBudget ?? FinanceService.calculateInitialReserveBudget(club.budget, club.reputation)) +
+          FinanceService.calculateInitialReserveBudget(nextSeasonInjection, newReputation)
+        ),
         transferBudget: (() => {
           const KOMPETENCJA_BUDGET_MULT: Record<string, number> = {
             bardzo_wysoka: 1.25, wysoka: 1.12, przecietna: 1.00, niska: 0.90, bardzo_niska: 0.80,
@@ -1383,7 +1388,7 @@ if (userTeamId) {
   }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults]);
 
   const getSaveState = (): SaveState => ({
-    version: '1.7',
+    version: SAVE_VERSION,
     savedAt: new Date().toISOString(),
     currentDate,
     sessionSeed,
@@ -1438,6 +1443,8 @@ if (userTeamId) {
     elGroups,
     activeConfGroupDraw,
     confGroups,
+    elHistoryInitialRound,
+    confHistoryInitialRound,
     processedDrawIds,
     globalFixtures,
     isResigned,
@@ -1512,6 +1519,8 @@ if (userTeamId) {
     setElGroups(data.elGroups);
     setActiveConfGroupDraw(data.activeConfGroupDraw);
     setConfGroups(data.confGroups);
+    setElHistoryInitialRound(data.elHistoryInitialRound ?? null);
+    setConfHistoryInitialRound(data.confHistoryInitialRound ?? null);
     setProcessedDrawIds(data.processedDrawIds);
     setGlobalFixtures(data.globalFixtures);
     setIsResigned(data.isResigned);
@@ -2642,6 +2651,7 @@ setMessages([welcomeMail, fanMail]);
           ...c,
           budget: monitorResult.newBudget,
           transferBudget: monitorResult.newTransferBudget,
+          reserveBudget: monitorResult.newReserveBudget,
           boardBudgetMonitorState: monitorResult.newState,
           boardBudgetLastShiftDate: monitorDateKey,
           boardBudgetLastShiftAction: monitorResult.action,
@@ -2649,11 +2659,13 @@ setMessages([welcomeMail, fanMail]);
             {
               id: `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`,
               date: monitorDateKey,
-              amount: monitorResult.action === 'REDUCE' ? monitorResult.amountChanged : -monitorResult.amountChanged,
-              type: monitorResult.action === 'REDUCE' ? 'INCOME' as const : 'EXPENSE' as const,
-              description: monitorResult.action === 'REDUCE'
-                ? 'Przesunięcie środków z budżetu transferowego na saldo klubu'
-                : 'Przesunięcie środków z salda klubu na budżet transferowy',
+              amount: monitorResult.action === 'RESTORE' ? -monitorResult.amountChanged : monitorResult.amountChanged,
+              type: monitorResult.action === 'RESTORE' ? 'EXPENSE' as const : 'INCOME' as const,
+              description: monitorResult.action === 'RESTORE'
+                ? 'Przesunięcie środków z rezerwy zarządu na budżet transferowy'
+                : monitorResult.action === 'RESERVE_SUPPORT'
+                  ? 'Awaryjne wsparcie salda z rezerwy zarządu'
+                  : 'Awaryjne wsparcie salda z rezerwy zarządu i budżetu transferowego',
               previousBalance: c.budget,
             },
             ...(c.financeHistory || [])
@@ -7297,6 +7309,37 @@ const finalResult: SimulationOutput = {
       return;
     }
 
+    if (requestType === 'RESERVE_STATUS') {
+      const reserveBudget = Math.max(0, userClub.reserveBudget ?? FinanceService.calculateInitialReserveBudget(userClub.budget, userClub.reputation));
+      const transferCap = FinanceService.calculateTransferBudgetCap(userClub.budget, userClub.reputation, wageBill);
+      const reserveLabel = reserveBudget >= transferCap * 0.45
+        ? 'wysoka'
+        : reserveBudget >= transferCap * 0.22
+          ? 'stabilna'
+          : reserveBudget > 0
+            ? 'niska'
+            : 'wyczerpana';
+      const message = `Rezerwa zarządu: ${formatPln(reserveBudget)}. Ocena: ${reserveLabel}. Te środki mogą zostać użyte przy specjalnych prośbach, dofinansowaniu budżetu transferowego albo awaryjnym wsparciu salda klubu.`;
+
+      setMessages(prev => [{
+        id: `BOARD_RESERVE_REPORT_${userTeamId}_${Date.now()}`,
+        sender: 'Zarząd Klubu',
+        role: 'Dyrektor finansowy',
+        subject: 'Raport rezerwy zarządu',
+        body: `Panie Managerze,\n\n${message}\n\nZ poważaniem,\nZarząd Klubu`,
+        date,
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 62,
+      }, ...prev]);
+      showGameNotification({
+        title: 'Rezerwa zarządu',
+        message,
+        tone: reserveBudget > 0 ? 'info' : 'warning',
+      });
+      return;
+    }
+
     const requestsUsed = userClub.boardBudgetRequestsThisSeason ?? 0;
     if (requestsUsed >= 2) {
       showGameNotification({
@@ -7313,6 +7356,8 @@ const finalResult: SimulationOutput = {
     const ambition = levelScore(board?.ambicja);
     const greed = levelScore(board?.chciwosc);
     const competence = levelScore(board?.kompetencja);
+    const reserveBudget = Math.max(0, userClub.reserveBudget ?? FinanceService.calculateInitialReserveBudget(userClub.budget, userClub.reputation));
+    const reservePressure = reserveBudget <= 0 ? -35 : reserveBudget < userClub.budget * 0.025 ? -14 : 0;
     const wagePressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
     const pressureBonus = userClub.budget < Math.max(wageBill * 0.65, 2_000_000) ? 10 : 0;
     const roll = Math.random() * 100;
@@ -7328,21 +7373,27 @@ const finalResult: SimulationOutput = {
     let updatedClubPatch: Partial<Club> = {};
 
     if (requestType === 'CLUB_FUNDS') {
-      chance += pressureBonus - 18 + (wagePressureRatio >= 0.9 ? 8 : 0);
+      chance += pressureBonus - 18 + (wagePressureRatio >= 0.9 ? 8 : 0) + reservePressure;
       const generosityAmountFactor = [0.018, 0.028, 0.045, 0.065, 0.085][generosity];
       amount = Math.max(150_000, Math.round(userClub.budget * generosityAmountFactor));
       amount = Math.min(amount, Math.max(350_000, userClub.reputation * (450_000 + generosity * 220_000)));
+      amount = Math.min(amount, reserveBudget);
+      if (amount <= 0) chance = 0;
       chance = Math.min(chance, financialChanceCap.CLUB_FUNDS[generosity] + Math.floor(pressureBonus * 0.5));
       subject = 'Dodatkowe środki klubowe';
       successTitle = 'Środki przyznane';
-      successMessage = `Zarząd przyznał dodatkowe środki klubowe: ${formatPln(amount)}.`;
-      updatedClubPatch = { budget: userClub.budget + amount };
+      successMessage = `Zarząd przyznał dodatkowe środki klubowe z rezerwy: ${formatPln(amount)}.`;
+      updatedClubPatch = {
+        budget: userClub.budget + amount,
+        reserveBudget: reserveBudget - amount,
+      };
     }
 
     if (requestType === 'TRANSFER_BUDGET') {
-      chance += ambition * 4 - 14;
+      chance += ambition * 4 - 14 + reservePressure;
       amount = Math.max(200_000, Math.round(userClub.transferBudget * (0.045 + generosity * 0.018) + userClub.budget * (0.008 + generosity * 0.004)));
       amount = Math.min(amount, Math.max(450_000, userClub.reputation * (550_000 + generosity * 240_000)));
+      amount = Math.min(amount, reserveBudget);
       const transferBudgetCap = FinanceService.calculateTransferBudgetCap(userClub.budget, userClub.reputation, wageBill);
       const nextTransferBudget = Math.max(
         userClub.transferBudget,
@@ -7353,14 +7404,15 @@ const finalResult: SimulationOutput = {
       chance = Math.min(chance, financialChanceCap.TRANSFER_BUDGET[generosity]);
       subject = 'Zwiększenie budżetu transferowego';
       successTitle = 'Budżet transferowy zwiększony';
-      successMessage = `Zarząd zwiększył budżet transferowy o ${formatPln(amount)}.`;
+      successMessage = `Zarząd przesunął z rezerwy na budżet transferowy ${formatPln(amount)}.`;
       updatedClubPatch = {
-        transferBudget: nextTransferBudget
+        transferBudget: nextTransferBudget,
+        reserveBudget: reserveBudget - amount,
       };
     }
 
     if (requestType === 'EXCEPTIONAL_CONTRACT') {
-      chance += competence * 5 + Math.max(0, confidence - 60) * 0.25 - 10;
+      chance += competence * 5 + Math.max(0, confidence - 60) * 0.25 - 10 + (reserveBudget < avgSalary ? -8 : 0);
       subject = 'Zgoda na wyjątkowy kontrakt';
       successTitle = 'Zgoda kontraktowa';
       successMessage = 'Zarząd przyznał jednorazową zgodę na wyjątkowy kontrakt. Zgoda złagodzi veto zarządu przy najbliższym zaakceptowanym kontrakcie.';
@@ -7369,13 +7421,15 @@ const finalResult: SimulationOutput = {
 
     const approved = chance > 0 && roll <= Math.max(2, Math.min(82, chance));
     const nextRequestsUsed = requestsUsed + 1;
-    const financeLog = amount > 0 && approved && requestType === 'CLUB_FUNDS'
+    const financeLog = amount > 0 && approved && (requestType === 'CLUB_FUNDS' || requestType === 'TRANSFER_BUDGET')
       ? {
           id: Math.random().toString(36).substr(2, 9),
           date: date.toISOString().split('T')[0],
-          amount,
-          type: 'INCOME' as const,
-          description: subject,
+          amount: requestType === 'CLUB_FUNDS' ? amount : -amount,
+          type: requestType === 'CLUB_FUNDS' ? 'INCOME' as const : 'EXPENSE' as const,
+          description: requestType === 'CLUB_FUNDS'
+            ? 'Przesunięcie środków z rezerwy zarządu na saldo klubu'
+            : 'Przesunięcie środków z rezerwy zarządu na budżet transferowy',
           previousBalance: userClub.budget,
         }
       : null;

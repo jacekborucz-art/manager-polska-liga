@@ -29,9 +29,17 @@ const requestCards: {
     type: 'TRANSFER_BUDGET',
     category: 'Transfery',
     title: 'Zwiększenie budżetu transferowego',
-    description: 'Wniosek o przesunięcie dodatkowych środków do puli na transfery i kontrakty.',
-    meta: 'Zwiększa transferBudget',
+    description: 'Wniosek o przesunięcie środków z rezerwy zarządu do puli na transfery i kontrakty.',
+    meta: 'Rezerwa → transferBudget',
     tone: 'amber',
+  },
+  {
+    type: 'RESERVE_STATUS',
+    category: 'Finanse',
+    title: 'Stan rezerwy zarządu',
+    description: 'Poproś dyrektora finansowego o informację, ile środków zarząd trzyma poza głównym saldem klubu.',
+    meta: 'Raport bez kosztu',
+    tone: 'emerald',
   },
   {
     type: 'EXCEPTIONAL_CONTRACT',
@@ -59,6 +67,8 @@ const toneClasses: Record<string, { border: string; bg: string; text: string }> 
 };
 
 export const BoardRequestModal: React.FC<BoardRequestModalProps> = ({ club, onClose, onSelectStadium, onSelectRequest }) => {
+  const reserveBudget = Math.max(0, club.reserveBudget ?? 0);
+
   return (
     <div className="fixed inset-0 z-[400] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
@@ -80,6 +90,12 @@ export const BoardRequestModal: React.FC<BoardRequestModalProps> = ({ club, onCl
             <p className="mt-2 text-[11px] font-black italic uppercase tracking-tighter text-slate-400">
               Wybierz temat oficjalnej prośby do zarządu {club.name}
             </p>
+            <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/10 p-4">
+              <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-300/70">Rezerwa zarządu</p>
+              <p className="mt-1 text-lg font-black italic uppercase tracking-tighter text-white">
+                {reserveBudget.toLocaleString('pl-PL')} PLN
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4">

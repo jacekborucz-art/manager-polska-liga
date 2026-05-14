@@ -1282,11 +1282,12 @@ export interface Club {
   isInPolishCup?: boolean;
   budget: number;
   transferBudget: number;
+  reserveBudget?: number;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
   boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
   boardBudgetLastShiftDate?: string;
-  boardBudgetLastShiftAction?: 'REDUCE' | 'RESTORE';
+  boardBudgetLastShiftAction?: 'REDUCE' | 'RESTORE' | 'RESERVE_SUPPORT';
   boardStrictness: number;
   signingBonusPool: number; // Pula pieniędzy zarezerwowana tylko na bonusy za podpis
   squadNeeds?: Record<string, number>;
@@ -1330,6 +1331,7 @@ export interface Club {
 export type BoardClubRequestType =
   | 'CLUB_FUNDS'
   | 'TRANSFER_BUDGET'
+  | 'RESERVE_STATUS'
   | 'EXCEPTIONAL_CONTRACT'
   | 'WAGE_COST_CONTROL';
 

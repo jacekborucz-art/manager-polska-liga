@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { Club } from '../../types';
+import { FinanceService } from '../../services/FinanceService';
 
 interface FinanceHistoryModalProps {
   isOpen: boolean;
@@ -225,7 +226,7 @@ export const FinanceHistoryModal: React.FC<FinanceHistoryModalProps> = ({ isOpen
         </div>
 
         <div className="p-6 bg-black/20 border-t border-white/5">
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-5 gap-4 mb-4">
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
               <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-1">Suma przychodów</span>
               <span className="text-sm font-black font-mono text-emerald-400">+{formatCurrency(totalIncome)}</span>
@@ -241,6 +242,10 @@ export const FinanceHistoryModal: React.FC<FinanceHistoryModalProps> = ({ isOpen
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
               <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest block mb-1">Budżet transferowy</span>
               <span className="text-sm font-black font-mono text-yellow-400">{formatCurrency(club.transferBudget)}</span>
+            </div>
+            <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3">
+              <span className="text-[9px] font-black text-sky-400 uppercase tracking-widest block mb-1">Rezerwa zarządu</span>
+              <span className="text-sm font-black font-mono text-sky-300">{formatCurrency(club.reserveBudget ?? FinanceService.calculateInitialReserveBudget(club.budget, club.reputation))}</span>
             </div>
           </div>
           <button onClick={onClose} className="w-full px-10 py-3 bg-white text-slate-900 font-black italic uppercase tracking-widest text-xs rounded-xl hover:scale-105 transition-all shadow-xl">Zamknij</button>
