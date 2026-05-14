@@ -1,5 +1,5 @@
 
-import { League, LeagueLevel, Club, Player, PlayerPosition, Region, HealthStatus, PlayerAttributes, NationalTeam, ClubBoard, BoardAttributeLevel } from './types';
+import { League, LeagueLevel, Club, Player, PlayerPosition, Region, HealthStatus, PlayerAttributes, NationalTeam, ClubBoard, BoardAttributeLevel, ClubManagement } from './types';
 import { RAW_PL_CLUBS, generateClubId } from './resources/static_db/clubs/pl_clubs';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from './resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from './resources/static_db/clubs/EuropeLeagueTeams';
@@ -29,6 +29,55 @@ export const generateRandomBoard = (): ClubBoard => ({
   oczekiwania: BOARD_LEVELS[Math.floor(Math.random() * 5)],
   kompetencja: BOARD_LEVELS[Math.floor(Math.random() * 5)],
 });
+
+const scoreToLevel = (score: number): BoardAttributeLevel => {
+  if (score >= 17) return 'bardzo_wysoka';
+  if (score >= 13) return 'wysoka';
+  if (score >= 9)  return 'przecietna';
+  if (score >= 5)  return 'niska';
+  return 'bardzo_niska';
+};
+
+export const computeBoardFromManagement = (management: ClubManagement): ClubBoard => {
+  const { owner, ceo, cfo, coo, marketingDirector, academyDirector } = management;
+
+  const hojnoscNum = ceo
+    ? Math.round(owner.hojnosc * 0.40 + ceo.hojnosc * 0.35 + cfo.hojnosc * 0.25)
+    : Math.round(owner.hojnosc * 0.55 + cfo.hojnosc * 0.45);
+
+  const ambicjaNum = ceo
+    ? Math.round((owner.ambicja + ceo.ambicja) / 2)
+    : owner.ambicja;
+
+  const cierpliwoscNum = ceo
+    ? Math.round((owner.cierpliwosc + ceo.cierpliwosc) / 2)
+    : owner.cierpliwosc;
+
+  const chciwoscNum = Math.round((cfo.dyscyplinaFinansowa + coo.efektywnoscKosztowa) / 2);
+
+  const oczekiwaniaNum = ceo
+    ? Math.round(owner.ambicja * 0.60 + ceo.ambicja * 0.40)
+    : owner.ambicja;
+
+  const doswiadczenieValues = [
+    owner.doswiadczenie,
+    ceo?.doswiadczenie,
+    cfo.doswiadczenie,
+    coo.doswiadczenie,
+    marketingDirector.doswiadczenie,
+    academyDirector?.doswiadczenie,
+  ].filter((v): v is number => v !== undefined);
+  const kompetencjaNum = Math.round(doswiadczenieValues.reduce((a, b) => a + b, 0) / doswiadczenieValues.length);
+
+  return {
+    hojnosc:     scoreToLevel(hojnoscNum),
+    ambicja:     scoreToLevel(ambicjaNum),
+    cierpliwosc: scoreToLevel(cierpliwoscNum),
+    chciwosc:    scoreToLevel(chciwoscNum),
+    oczekiwania: scoreToLevel(oczekiwaniaNum),
+    kompetencja: scoreToLevel(kompetencjaNum),
+  };
+};
 
 export const REGION_NATIONALITY_LABEL: Record<Region, string> = {
   [Region.POLAND]:      'Polska',

@@ -22,7 +22,7 @@ interface ManagementMemberModalProps {
   onClose: () => void;
 }
 
-const SKIP_FIELDS = new Set(['id', 'firstName', 'lastName', 'age', 'nationality', 'nationalityCountry']);
+const SKIP_FIELDS = new Set(['id', 'firstName', 'lastName', 'age', 'nationality', 'nationalityCountry', 'monthlySalary']);
 
 const ATTR_LABELS: Record<string, string> = {
   cierpliwosc:              'Cierpliwość',

@@ -54,7 +54,7 @@ import { CLUBS_SOUTH_AMERICA, generateSAClubId } from '../resources/static_db/cl
 import { CLUBS_ASIAN, generateAsianClubId } from '../resources/static_db/clubs/asian_teams';
 import { CLUBS_AFRICAN, generateAfricanClubId } from '../resources/static_db/clubs/african_teams';
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../resources/static_db/clubs/northAME_teams';
-import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS, STATIC_SA_CLUBS, STATIC_ASIAN_CLUBS, STATIC_AFRICAN_CLUBS, STATIC_NA_CLUBS, START_DATE, UNEMPLOYED_MANAGER_CLUB, UNEMPLOYED_MANAGER_CLUB_ID, generateRandomBoard } from '../constants';
+import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS, STATIC_SA_CLUBS, STATIC_ASIAN_CLUBS, STATIC_AFRICAN_CLUBS, STATIC_NA_CLUBS, START_DATE, UNEMPLOYED_MANAGER_CLUB, UNEMPLOYED_MANAGER_CLUB_ID, generateRandomBoard, computeBoardFromManagement } from '../constants';
 import { SeasonTemplateGenerator } from '../services/SeasonTemplateGenerator';
 import { LeagueScheduleGenerator } from '../services/LeagueScheduleGenerator';
 import { CalendarEngine } from '../services/CalendarEngine';
@@ -1094,7 +1094,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       }
       
       const seasonalAwardRank = leagueRanking;
-      let nextSeasonInjection = FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank);
+      const sponsorshipMult = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
+      let nextSeasonInjection = FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank, sponsorshipMult);
       
       // Bonusy ligowe (tylko dla Ekstraklasy - tier 1)
       let leagueBonusAmount = 0;
@@ -1220,8 +1221,11 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
         europeanBonusPoints: 0,
         isInPolishCup: false,
-        board: generateRandomBoard(),
-        boardConfidence: 75
+        board: club.management ? computeBoardFromManagement(club.management) : generateRandomBoard(),
+        boardConfidence: 75,
+        sponsorAcquiredThisSeason: false,
+        nextSponsorCheckDate: undefined,
+        ownerRescueThisSeason: false
       };
     });
 
@@ -4438,6 +4442,68 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    // ── SPONSOR: losowe sprawdzenie co kilkanaście dni ───────────────────────
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub && !userClub.sponsorAcquiredThisSeason) {
+        const todayStr = dateToProcess.toISOString().split('T')[0];
+        const shouldCheck = !userClub.nextSponsorCheckDate || todayStr >= userClub.nextSponsorCheckDate;
+        if (shouldCheck) {
+          const mgmt = userClub.management;
+          const avg = mgmt
+            ? (mgmt.cfo.doswiadczenie + mgmt.cfo.zdolnosciMarketingowe +
+               mgmt.marketingDirector.doswiadczenie + mgmt.marketingDirector.zdolnosciMarketingowe) / 4
+            : 5;
+          const probability = FinanceService.getSponsorCheckProbability(avg);
+          const nextCheckDays = 10 + Math.floor(Math.random() * 11);
+          const nextCheckDate = new Date(dateToProcess);
+          nextCheckDate.setDate(nextCheckDate.getDate() + nextCheckDays);
+          const nextCheckStr = nextCheckDate.toISOString().split('T')[0];
+          if (Math.random() < probability) {
+            const amount = FinanceService.getSponsorAmount(avg);
+            const sponsorMailKey = `SPONSOR_${seasonNumber}`;
+            setClubs(prev => prev.map(c => {
+              if (c.id !== userTeamId) return c;
+              const financeLog = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: todayStr,
+                amount,
+                type: 'INCOME' as const,
+                description: 'Przychód ze sponsoringu — nowy kontrakt sponsorski',
+                previousBalance: c.budget,
+              };
+              return {
+                ...c,
+                budget: c.budget + amount,
+                sponsorAcquiredThisSeason: true,
+                nextSponsorCheckDate: nextCheckStr,
+                financeHistory: [financeLog, ...(c.financeHistory || [])].slice(0, 50),
+              };
+            }));
+            if (!sentMailIdsRef.current.has(sponsorMailKey)) {
+              sentMailIdsRef.current.add(sponsorMailKey);
+              const sponsorMail: MailMessage = {
+                id: `sponsor_${Date.now()}`,
+                sender: 'Dział Marketingu',
+                role: 'Dyrektor Marketingu',
+                subject: 'Nowy sponsor klubu',
+                body: `Z przyjemnością informujemy, że udało nam się pozyskać nowego sponsora dla naszego klubu. Kontrakt wchodzi w życie natychmiast, a środki zostały zasilone na konto klubu. Szczegóły finansowe dostępne są w wykazie finansowym.`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.MEDIA,
+                priority: 2,
+              };
+              setMessages(prev => [sponsorMail, ...prev]);
+            }
+          } else {
+            setClubs(prev => prev.map(c =>
+              c.id === userTeamId ? { ...c, nextSponsorCheckDate: nextCheckStr } : c
+            ));
+          }
+        }
+      }
+    }
+
     // ── Symulacja meczów reprezentacji ──────────────────────────────────────
     // Gdy primaryEvent to NATIONAL_TEAM_MATCH: pobierz mecze z NT_SCHEDULE_BY_YEAR,
     // zasymuluj wyniki w tle i wyświetl je graczowi w NationalTeamResultsView.
@@ -5838,8 +5904,10 @@ const finalResult: SimulationOutput = {
       setClubs(prev => prev.map(club => {
         if (club.leagueId === 'NONE') return club;
         const monthlyCost = FinanceService.calculateMonthlyOperationalCosts(club);
-        const newBudget = club.budget - monthlyCost;
-        const logEntry = {
+        const mgmtSalary = FinanceService.calculateManagementMonthlySalary(club);
+        const budgetAfterOps = club.budget - monthlyCost;
+        const newBudget = budgetAfterOps - mgmtSalary;
+        const opexEntry = {
           id: `OPEX_${club.id}_${dateStr}`,
           date: dateStr,
           amount: -monthlyCost,
@@ -5847,12 +5915,91 @@ const finalResult: SimulationOutput = {
           description: 'Koszty operacyjne (stadion, infrastruktura, administracja)',
           previousBalance: club.budget,
         };
+        const mgmtEntry = mgmtSalary > 0 ? {
+          id: `MGMT_${club.id}_${dateStr}`,
+          date: dateStr,
+          amount: -mgmtSalary,
+          type: 'EXPENSE' as const,
+          description: 'Wynagrodzenia zarządu',
+          previousBalance: budgetAfterOps,
+        } : null;
+        const newEntries = mgmtEntry
+          ? [mgmtEntry, opexEntry]
+          : [opexEntry];
         return {
           ...club,
           budget: newBudget,
-          financeHistory: [logEntry, ...(club.financeHistory || [])].slice(0, 50),
+          financeHistory: [...newEntries, ...(club.financeHistory || [])].slice(0, 50),
         };
       }));
+    }
+
+    // ── RATUNEK WŁAŚCICIELA: miesięczne sprawdzenie długu ────────────────────
+    if (nextDay.getDate() === 1) {
+      const rescueDateStr = nextDay.toISOString().split('T')[0];
+      const rescueMap: Record<string, { amount: number; ownerName: string; clubName: string }> = {};
+      clubs.forEach(club => {
+        if (club.leagueId === 'NONE' || club.ownerRescueThisSeason || !club.management) return;
+        const projected = club.budget
+          - FinanceService.calculateMonthlyOperationalCosts(club)
+          - FinanceService.calculateManagementMonthlySalary(club);
+        if (projected >= -1_000_000) return;
+        const prob = FinanceService.getOwnerRescueProbability(club.management.owner.hojnosc);
+        if (Math.random() < prob) {
+          const debt = Math.abs(projected);
+          const bonus = FinanceService.getOwnerRescueBonus(club.management.owner.hojnosc);
+          rescueMap[club.id] = {
+            amount: debt + bonus,
+            ownerName: `${club.management.owner.firstName} ${club.management.owner.lastName}`,
+            clubName: club.name,
+          };
+        }
+      });
+      if (Object.keys(rescueMap).length > 0) {
+        setClubs(prev => prev.map(club => {
+          const rescue = rescueMap[club.id];
+          if (!rescue) return club;
+          const rescueEntry = {
+            id: `RESCUE_${club.id}_${rescueDateStr}`,
+            date: rescueDateStr,
+            amount: rescue.amount,
+            type: 'INCOME' as const,
+            description: `Zastrzyk kapitałowy od właściciela — ratowanie klubu`,
+            previousBalance: club.budget,
+          };
+          return {
+            ...club,
+            budget: club.budget + rescue.amount,
+            ownerRescueThisSeason: true,
+            financeHistory: [rescueEntry, ...(club.financeHistory || [])].slice(0, 50),
+          };
+        }));
+        if (userTeamId) {
+          const userClub = clubs.find(c => c.id === userTeamId);
+          if (userClub) {
+            Object.entries(rescueMap).forEach(([clubId, info]) => {
+              const rescuedClub = clubs.find(c => c.id === clubId);
+              if (!rescuedClub || rescuedClub.leagueId !== userClub.leagueId) return;
+              const mailKey = `OWNER_RESCUE_${clubId}_${seasonNumber}`;
+              if (!sentMailIdsRef.current.has(mailKey)) {
+                sentMailIdsRef.current.add(mailKey);
+                const mail: MailMessage = {
+                  id: `rescue_${Date.now()}`,
+                  sender: 'Przegląd Sportowy',
+                  role: 'Redakcja',
+                  subject: `${info.ownerName} ratuje ${info.clubName} przed katastrofą finansową`,
+                  body: `Właściciel klubu ${info.clubName}, ${info.ownerName}, zdecydował się pokryć zobowiązania finansowe klubu z własnej kieszeni. Klub znajdował się w poważnych tarapatach finansowych zagrażających jego dalszemu funkcjonowaniu. Decyzja właściciela ocaliła klub przed bankructwem i pozwoli kontynuować rozgrywki sezonu.`,
+                  date: new Date(nextDay),
+                  isRead: false,
+                  type: MailType.MEDIA,
+                  priority: 3,
+                };
+                setMessages(prev => [mail, ...prev]);
+              }
+            });
+          }
+        }
+      }
     }
 
     // ── SPRAWOZDANIE FINANSOWE: mail miesięczny (1. dzień miesiąca) ──────────

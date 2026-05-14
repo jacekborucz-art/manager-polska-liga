@@ -631,7 +631,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
       <div
-        className="relative w-full max-w-[1560px] max-h-[92vh] overflow-y-auto rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
+        className="relative h-[92vh] w-full max-w-[1560px] overflow-hidden rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Tło */}
@@ -661,8 +661,8 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         </button>
 
         {/* Zawartość */}
-        <div className="relative z-10 grid gap-6 p-6 xl:grid-cols-[380px_minmax(0,1fr)_500px] xl:p-8">
-          <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+        <div className="relative z-10 grid h-full min-h-0 items-stretch gap-6 p-6 xl:grid-cols-[380px_minmax(0,1fr)_500px] xl:p-8">
+          <aside className="min-h-0 overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
             <div className="mb-5 text-center">
               <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Członkowie Zarządu</h2>
             </div>
@@ -785,7 +785,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
             </div>
           </aside>
 
-          <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto rounded-[28px] bg-black/10 p-1">
 
           {/* Nagłówek */}
           <div className="text-center">
@@ -877,7 +877,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
           </div>
 
-          <aside className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+          <aside className="min-h-0 overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
 
             {/* ── STADION ── */}
             <button

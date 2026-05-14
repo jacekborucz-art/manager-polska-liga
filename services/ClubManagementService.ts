@@ -13,6 +13,8 @@ import {
 } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { pickNationalityForRegion } from './NationalityService';
+import { computeBoardFromManagement } from '../constants';
+import { CLUBS_WITH_PRESET_ACADEMY } from './AcademyService';
 
 type NatPair = { region: Region; country: string };
 
@@ -65,6 +67,48 @@ const clamp = (v: number, min: number, max: number): number => Math.max(min, Mat
 const randomInt = (min: number, max: number): number => Math.floor(min + Math.random() * (max - min + 1));
 const pickFrom = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)];
 
+const CEO_SALARY: Record<number, { min: number; max: number }> = {
+  1: { min: 40_000, max: 120_000 },
+  2: { min: 15_000, max:  50_000 },
+  3: { min:  5_000, max:  20_000 },
+  4: { min:  1_500, max:   6_000 },
+};
+const DIR_SALARY: Record<number, { min: number; max: number }> = {
+  1: { min: 20_000, max: 50_000 },
+  2: { min:  7_000, max: 20_000 },
+  3: { min:  2_500, max:  7_000 },
+  4: { min:    700, max:  2_500 },
+};
+const ACD_SALARY: Record<number, { min: number; max: number }> = {
+  1: { min: 15_000, max: 40_000 },
+  2: { min:  5_000, max: 15_000 },
+  3: { min:  2_000, max:  5_000 },
+  4: { min:    500, max:  2_000 },
+};
+const OWN_SALARY: Record<number, { min: number; max: number }> = {
+  1: { min:  5_000, max:  60_000 },
+  2: { min:  2_000, max:  25_000 },
+  3: { min:    500, max:   8_000 },
+  4: { min:    200, max:   2_000 },
+};
+
+const getClubTierFromId = (club: Club): number =>
+  Math.min(4, Math.max(1, parseInt((club.leagueId as string).split('_')[2] || '4')));
+
+const calcSalary = (
+  range: { min: number; max: number },
+  reputation: number,
+  avgAttr: number,
+): number => {
+  const rep = Math.min(10, Math.max(1, reputation));
+  const base = range.min + (rep / 10) * (range.max - range.min);
+  const attrMod = 0.85 + (avgAttr / 20) * 0.30;
+  const jitter = 0.90 + Math.random() * 0.20;
+  return Math.round((base * attrMod * jitter) / 500) * 500;
+};
+
+const avg = (...vals: number[]): number => vals.reduce((a, b) => a + b, 0) / vals.length;
+
 const getClubRegion = (club: Club): Region =>
   club.country ? (COUNTRY_CODE_TO_REGION[club.country] ?? Region.POLAND) : Region.POLAND;
 
@@ -111,6 +155,13 @@ const ceoChance = (reputation: number): number =>
 
 const generateOwner = (club: Club, nat: NatPair): ClubOwner => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const hojnosc = biasedAttr(club.reputation);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const salaryProb = Math.max(0.05, 1 - (hojnosc - 1) / 19);
+  const monthlySalary = Math.random() < salaryProb
+    ? calcSalary(OWN_SALARY[tier], club.reputation, doswiadczenie)
+    : 0;
   return {
     id: buildId(club.id, 'OWN', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -118,15 +169,20 @@ const generateOwner = (club: Club, nat: NatPair): ClubOwner => {
     age: seniorAge(45),
     nationality: nat.region,
     nationalityCountry: nat.country,
-    cierpliwosc: biasedAttr(club.reputation),
+    cierpliwosc: randomInt(1, 20),
     ambicja: biasedAttr(club.reputation),
-    hojnosc: biasedAttr(club.reputation),
-    doswiadczenie: biasedAttr(club.reputation),
+    hojnosc,
+    doswiadczenie,
+    monthlySalary,
   };
 };
 
 const generateCEO = (club: Club, nat: NatPair): ClubCEO => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const ambicja = biasedAttr(club.reputation);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const monthlySalary = calcSalary(CEO_SALARY[tier], club.reputation, avg(ambicja, doswiadczenie));
   return {
     id: buildId(club.id, 'CEO', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -134,10 +190,11 @@ const generateCEO = (club: Club, nat: NatPair): ClubCEO => {
     age: seniorAge(45),
     nationality: nat.region,
     nationalityCountry: nat.country,
-    cierpliwosc: biasedAttr(club.reputation),
-    ambicja: biasedAttr(club.reputation),
+    cierpliwosc: randomInt(1, 20),
+    ambicja,
     hojnosc: biasedAttr(club.reputation),
-    doswiadczenie: biasedAttr(club.reputation),
+    doswiadczenie,
+    monthlySalary,
   };
 };
 
@@ -166,6 +223,10 @@ const generateSportingDirector = (club: Club, nat: NatPair): SportingDirector =>
 
 const generateCFO = (club: Club, nat: NatPair): ClubCFO => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const dyscyplinaFinansowa = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const monthlySalary = calcSalary(DIR_SALARY[tier], club.reputation, avg(doswiadczenie, dyscyplinaFinansowa));
   return {
     id: buildId(club.id, 'CFO', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -174,14 +235,19 @@ const generateCFO = (club: Club, nat: NatPair): ClubCFO => {
     nationality: nat.region,
     nationalityCountry: nat.country,
     hojnosc: biasedAttr(club.reputation),
-    doswiadczenie: biasedAttr(club.reputation),
+    doswiadczenie,
     zdolnosciMarketingowe: biasedAttr(club.reputation),
-    dyscyplinaFinansowa: biasedAttr(club.reputation),
+    dyscyplinaFinansowa,
+    monthlySalary,
   };
 };
 
 const generateCOO = (club: Club, nat: NatPair): ClubCOO => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const organizacja = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const monthlySalary = calcSalary(DIR_SALARY[tier], club.reputation, avg(doswiadczenie, organizacja));
   return {
     id: buildId(club.id, 'COO', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -189,16 +255,21 @@ const generateCOO = (club: Club, nat: NatPair): ClubCOO => {
     age: seniorAge(37),
     nationality: nat.region,
     nationalityCountry: nat.country,
-    doswiadczenie: biasedAttr(club.reputation),
-    organizacja: biasedAttr(club.reputation),
+    doswiadczenie,
+    organizacja,
     zarzadzanieInfrastruktura: biasedAttr(club.reputation),
     efektywnoscKosztowa: biasedAttr(club.reputation),
     logistykaIPlanowanie: biasedAttr(club.reputation),
+    monthlySalary,
   };
 };
 
 const generateMarketingDirector = (club: Club, nat: NatPair): ClubMarketingDirector => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const zdolnosciMarketingowe = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const monthlySalary = calcSalary(DIR_SALARY[tier], club.reputation, avg(doswiadczenie, zdolnosciMarketingowe));
   return {
     id: buildId(club.id, 'MKT', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -206,13 +277,19 @@ const generateMarketingDirector = (club: Club, nat: NatPair): ClubMarketingDirec
     age: seniorAge(37),
     nationality: nat.region,
     nationalityCountry: nat.country,
-    doswiadczenie: biasedAttr(club.reputation),
-    zdolnosciMarketingowe: biasedAttr(club.reputation),
+    doswiadczenie,
+    zdolnosciMarketingowe,
+    monthlySalary,
   };
 };
 
 const generateAcademyDirector = (club: Club, nat: NatPair): ClubAcademyDirector => {
   const name = NameGeneratorService.getRandomName(nat.region);
+  const doswiadczenie = biasedAttr(club.reputation);
+  const rozwojMlodziezy = biasedAttr(club.reputation);
+  const zarzadzanie = biasedAttr(club.reputation);
+  const tier = getClubTierFromId(club);
+  const monthlySalary = calcSalary(ACD_SALARY[tier], club.reputation, avg(doswiadczenie, rozwojMlodziezy, zarzadzanie));
   return {
     id: buildId(club.id, 'ACD', name.firstName, name.lastName),
     firstName: name.firstName,
@@ -220,9 +297,10 @@ const generateAcademyDirector = (club: Club, nat: NatPair): ClubAcademyDirector 
     age: seniorAge(37),
     nationality: nat.region,
     nationalityCountry: nat.country,
-    doswiadczenie: biasedAttr(club.reputation),
-    rozwojMlodziezy: biasedAttr(club.reputation),
-    zarzadzanie: biasedAttr(club.reputation),
+    doswiadczenie,
+    rozwojMlodziezy,
+    zarzadzanie,
+    monthlySalary,
   };
 };
 
@@ -243,7 +321,7 @@ export const ClubManagementService = {
     const marketingDirector = generateMarketingDirector(club, pickNationality(clubRegion));
 
     const academyDirector: ClubAcademyDirector | undefined =
-      club.academy && club.academy.level >= 3
+      (club.academy?.level ?? CLUBS_WITH_PRESET_ACADEMY[club.id] ?? 0) >= 3
         ? generateAcademyDirector(club, pickNationality(clubRegion))
         : undefined;
 
@@ -261,7 +339,8 @@ export const ClubManagementService = {
   generateForAllClubs(clubs: Club[]): Club[] {
     return clubs.map(club => {
       if (club.management) return club;
-      return { ...club, management: this.generateForClub(club) };
+      const management = this.generateForClub(club);
+      return { ...club, management, board: computeBoardFromManagement(management) };
     });
   },
 };

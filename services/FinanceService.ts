@@ -868,6 +868,8 @@ export const FinanceService = {
   // Koszty organizacji meczu — progresywna formuła wg. ligi, reputacji i frekwencji
   // attendance (opcjonalne) — liczba kibiców na trybunach (dla meczów u siebie)
   calculateMatchdayExpenses: (club: any, isHome: boolean, attendance?: number): number => {
+    const cfoFactor = 1.15 - ((club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20) * 0.30;
+
     if (isEuropeanCommercialClub(club)) {
       const marketIndex = getEuropeanCommercialIndex(club);
 
@@ -885,7 +887,7 @@ export const FinanceService = {
             club.stadiumCapacity * (5.5 + marketIndex * 1.8) +
             att * (7.0 + marketIndex * 2.4) +
             club.reputation * (16_000 + marketIndex * 8_000)
-          ) * fillMultiplier;
+          ) * fillMultiplier * cfoFactor;
 
         const minFloor = 180_000 + club.stadiumCapacity * (2.0 + marketIndex * 0.8);
         const maxCap = 350_000 + club.stadiumCapacity * (14 + marketIndex * 4.0);
@@ -894,9 +896,11 @@ export const FinanceService = {
       }
 
       const awayRaw =
-        120_000 +
-        club.stadiumCapacity * (1.0 + marketIndex * 0.35) +
-        club.reputation * (7_000 + marketIndex * 3_000);
+        (
+          120_000 +
+          club.stadiumCapacity * (1.0 + marketIndex * 0.35) +
+          club.reputation * (7_000 + marketIndex * 3_000)
+        ) * cfoFactor;
 
       const awayCap = 220_000 + club.stadiumCapacity * (3.5 + marketIndex);
       return Math.round(Math.min(awayRaw, awayCap));
@@ -919,7 +923,7 @@ export const FinanceService = {
       const rawCost =
         (p.home.baseCost[tier] +
          att * p.home.perFanCost[tier] +
-         club.reputation * p.home.repScale[tier]) * fillMultiplier;
+         club.reputation * p.home.repScale[tier]) * fillMultiplier * cfoFactor;
 
       return Math.min(
         p.home.maxCap[tier],
@@ -929,10 +933,23 @@ export const FinanceService = {
 
     // Wyjazd — koszty transportu, zakwaterowania, diet zawodników i sztabu
     const rawCost =
-      p.away.baseCost[tier] +
-      club.reputation * p.away.repScale[tier];
+      (p.away.baseCost[tier] +
+       club.reputation * p.away.repScale[tier]) * cfoFactor;
 
     return Math.min(p.away.maxCap[tier], Math.floor(rawCost));
+  },
+
+  calculateManagementMonthlySalary: (club: Club): number => {
+    if (!club.management) return 0;
+    const { owner, ceo, cfo, coo, marketingDirector, academyDirector } = club.management;
+    return (
+      owner.monthlySalary +
+      (ceo?.monthlySalary ?? 0) +
+      cfo.monthlySalary +
+      coo.monthlySalary +
+      marketingDirector.monthlySalary +
+      (academyDirector?.monthlySalary ?? 0)
+    );
   },
 
   calculateMonthlyOperationalCosts: (club: Club): number => {
@@ -946,11 +963,12 @@ export const FinanceService = {
 
     const kompetencja = club.board?.kompetencja ?? 'przecietna';
     const kompetencjaFactor = KOMPETENCJA_MULTIPLIER[kompetencja] ?? 1.05;
+    const cfoFactor = 1.15 - ((club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20) * 0.30;
 
     if (isEuropeanCommercialClub(club)) {
       const tier = Math.min(4, Math.max(1, club.tier ?? 1));
       const monthlyFactor = ({ 1: 0.015, 2: 0.012, 3: 0.010, 4: 0.008 } as Record<number, number>)[tier] ?? 0.010;
-      const rawCost = club.budget * monthlyFactor * kompetencjaFactor;
+      const rawCost = club.budget * monthlyFactor * kompetencjaFactor * cfoFactor;
       return Math.round(clamp(rawCost, 50_000, 80_000_000) / 1_000) * 1_000;
     }
 
@@ -966,27 +984,27 @@ export const FinanceService = {
 
     const stadiumCost = cappedCapacity * costPerSeat;
     const opsCost     = opsBase + cappedRep * opsPerRep;
-    const rawCost     = (stadiumCost + opsCost) * 1.30 * kompetencjaFactor;
+    const rawCost     = (stadiumCost + opsCost) * 1.30 * kompetencjaFactor * cfoFactor;
 
     return Math.round(clamp(rawCost, tierMin, tierMax) / 1_000) * 1_000;
   },
 
-  calculateSeasonalIncome: (tier: number, reputation: number, rank: number): number => {
+  calculateSeasonalIncome: (tier: number, reputation: number, rank: number, sponsorshipMult: number = 1.0): number => {
     const cappedReputation = Math.max(1, Math.min(10, reputation));
     if (tier === 3) {
       const tvRights = 2000000;
-      const sponsorship = cappedReputation * 500000;
+      const sponsorship = cappedReputation * 500000 * sponsorshipMult;
       const prizeMoney = Math.max(0, (19 - rank) * 150000);
       return Math.floor(tvRights + sponsorship + prizeMoney);
     }
     if (tier === 4) {
       const tvRights = 750000;
-      const sponsorship = cappedReputation * 150000;
+      const sponsorship = cappedReputation * 150000 * sponsorshipMult;
       const prizeMoney = Math.max(0, (20 - rank) * 40000);
       return Math.floor(tvRights + sponsorship + prizeMoney);
     }
     const tvRights = [0, 35000000, 15000000, 6000000, 2000000][tier] || 1000000;
-    const sponsorship = cappedReputation * 4000000;
+    const sponsorship = cappedReputation * 4000000 * sponsorshipMult;
     const prizeMoney = Math.max(0, (19 - rank) * 1500000);
     return Math.floor(tvRights + sponsorship + prizeMoney);
   },
@@ -1487,19 +1505,27 @@ export const FinanceService = {
     programs: number;
     parking: number;
   } => {
+    const mktFactor = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
+
     if (!isEuropeanCommercialClub(club)) {
       const tier = FinanceService.getClubTier(club);
-      return FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, club.reputation);
+      const base = FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, club.reputation);
+      return {
+        catering:      Math.floor(base.catering * mktFactor),
+        merchandising: Math.floor(base.merchandising * mktFactor),
+        programs:      Math.floor(base.programs * mktFactor),
+        parking:       Math.floor(base.parking * mktFactor),
+      };
     }
 
     const marketIndex = getEuropeanCommercialIndex(club);
     const repMultiplier = 0.90 + (club.reputation / 20) * 0.45;
     const rand = () => 0.82 + Math.random() * 0.36;
 
-    const catering = Math.floor(attendance * (2.5 + marketIndex * 2.6) * repMultiplier * rand());
-    const merchandising = Math.floor(attendance * (0.9 + marketIndex * 1.4) * repMultiplier * rand());
-    const programs = Math.floor(attendance * (0.3 + marketIndex * 0.45) * repMultiplier * rand());
-    const parking = Math.floor(attendance * (0.4 + marketIndex * 0.65) * repMultiplier * rand());
+    const catering = Math.floor(attendance * (2.5 + marketIndex * 2.6) * repMultiplier * rand() * mktFactor);
+    const merchandising = Math.floor(attendance * (0.9 + marketIndex * 1.4) * repMultiplier * rand() * mktFactor);
+    const programs = Math.floor(attendance * (0.3 + marketIndex * 0.45) * repMultiplier * rand() * mktFactor);
+    const parking = Math.floor(attendance * (0.4 + marketIndex * 0.65) * repMultiplier * rand() * mktFactor);
 
     return { catering, merchandising, programs, parking };
   },
@@ -1514,10 +1540,12 @@ export const FinanceService = {
   },
 
   calculateVIPBoxRevenueForClub: (club: Club): number => {
+    const mktFactor = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
+
     if (!isEuropeanCommercialClub(club)) {
       const tier = FinanceService.getClubTier(club);
       if (tier !== 1 || club.stadiumCapacity <= 15_000) return 0;
-      return FinanceService.calculateVIPBoxRevenue(club.stadiumCapacity, club.reputation);
+      return Math.floor(FinanceService.calculateVIPBoxRevenue(club.stadiumCapacity, club.reputation) * mktFactor);
     }
 
     if (club.stadiumCapacity < 4_000) return 0;
@@ -1528,7 +1556,7 @@ export const FinanceService = {
     const occupancyFactor = club.leagueId === 'L_CL' ? 1.00 : club.leagueId === 'L_EL' ? 0.92 : 0.86;
     const jitter = 0.90 + Math.random() * 0.20;
 
-    return Math.round(suitesSold * avgSuitePrice * occupancyFactor * jitter);
+    return Math.round(suitesSold * avgSuitePrice * occupancyFactor * jitter * mktFactor);
   },
 
   // Bonusy za pozycję końcową w lidze (Ekstraklasa)
@@ -1655,6 +1683,61 @@ export const FinanceService = {
     const base = min + Math.random() * (max - min);
     const hMult = HOJNOSC_MULTIPLIER[hojnosc] ?? 1.0;
     return Math.floor(base * REP_MULTIPLIER * hMult);
+  },
+
+  getSponsorCheckProbability: (avg: number): number => {
+    const f = Math.floor(Math.max(1, Math.min(20, avg)));
+    if (f >= 20) return 0.50;
+    if (f === 19) return 0.40;
+    if (f === 18) return 0.35;
+    if (f === 17) return 0.30;
+    if (f === 16) return 0.25;
+    if (f === 15) return 0.20;
+    if (f === 14) return 0.15;
+    if (f === 13) return 0.10;
+    if (f === 12) return 0.05;
+    if (f === 11) return 0.035;
+    if (f === 10) return 0.025;
+    if (f === 9)  return 0.018;
+    if (f === 8)  return 0.012;
+    if (f === 7)  return 0.008;
+    if (f === 6)  return 0.005;
+    if (f === 5)  return 0.003;
+    if (f === 4)  return 0.002;
+    if (f === 3)  return 0.001;
+    if (f === 2)  return 0.0005;
+    return 0.0002;
+  },
+
+  getSponsorAmount: (avg: number): number => {
+    const MIN = 100_000;
+    const MAX = 100_000_000;
+    const clamped = Math.max(1, Math.min(20, avg));
+    const exponent = 0.5 + (20 - clamped) * 0.175;
+    const biasedR = Math.pow(Math.random(), exponent);
+    const raw = MIN + (MAX - MIN) * biasedR;
+    return Math.round(raw / 100_000) * 100_000;
+  },
+
+  getOwnerRescueProbability: (hojnosc: number): number => {
+    const h = Math.floor(Math.max(1, Math.min(20, hojnosc)));
+    if (h >= 18) return 0.90;
+    if (h >= 16) return 0.75;
+    if (h >= 14) return 0.60;
+    if (h >= 12) return 0.45;
+    if (h >= 10) return 0.30;
+    if (h >= 8)  return 0.18;
+    if (h >= 6)  return 0.10;
+    if (h >= 4)  return 0.05;
+    if (h >= 2)  return 0.02;
+    return 0.01;
+  },
+
+  getOwnerRescueBonus: (hojnosc: number): number => {
+    const h = Math.max(1, Math.min(20, hojnosc));
+    if (Math.random() >= h / 20) return 0;
+    const raw = 100_000 + Math.random() * h * 250_000;
+    return Math.round(raw / 100_000) * 100_000;
   },
 
 };

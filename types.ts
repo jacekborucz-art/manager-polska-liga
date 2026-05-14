@@ -1087,6 +1087,7 @@ export interface ClubOwner {
   ambicja: number;
   hojnosc: number;
   doswiadczenie: number;
+  monthlySalary: number;
 }
 
 export interface ClubCEO {
@@ -1100,6 +1101,7 @@ export interface ClubCEO {
   ambicja: number;
   hojnosc: number;
   doswiadczenie: number;
+  monthlySalary: number;
 }
 
 export interface ClubCFO {
@@ -1113,6 +1115,7 @@ export interface ClubCFO {
   doswiadczenie: number;
   zdolnosciMarketingowe: number;
   dyscyplinaFinansowa: number;
+  monthlySalary: number;
 }
 
 export interface ClubCOO {
@@ -1127,6 +1130,7 @@ export interface ClubCOO {
   zarzadzanieInfrastruktura: number;
   efektywnoscKosztowa: number;
   logistykaIPlanowanie: number;
+  monthlySalary: number;
 }
 
 export interface ClubMarketingDirector {
@@ -1138,6 +1142,7 @@ export interface ClubMarketingDirector {
   nationalityCountry: string;
   doswiadczenie: number;
   zdolnosciMarketingowe: number;
+  monthlySalary: number;
 }
 
 export interface ClubAcademyDirector {
@@ -1150,6 +1155,7 @@ export interface ClubAcademyDirector {
   doswiadczenie: number;
   rozwojMlodziezy: number;
   zarzadzanie: number;
+  monthlySalary: number;
 }
 
 export interface ClubManagement {
@@ -1301,6 +1307,9 @@ export interface Club {
   sportingDirectorPolicy?: SportingDirectorPolicy;
   sportingDirectorObjective?: SportingDirectorObjective;
   boardConfidence?: number;
+  sponsorAcquiredThisSeason?: boolean;
+  nextSponsorCheckDate?: string;
+  ownerRescueThisSeason?: boolean;
   morale?: number;
   lastMotivationDate?: string;
   motivationMonitoringStartDate?: string;
