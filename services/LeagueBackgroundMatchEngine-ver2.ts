@@ -13,6 +13,7 @@ export interface BackgroundMatchResultV2 {
  scorers: { playerId: string; assistId?: string; minute: number; isPenalty: boolean; isMiss?: boolean; varDisallowed?: boolean }[];
   cards: { playerId: string; type: MatchEventType; minute: number }[];
   injuries: { playerId: string; severity: InjurySeverity; minute: number; days: number; type: string }[];
+  substitutions: { playerOutId: string; playerInId: string; minute: number; isHome: boolean }[];
   playedPlayerIds: string[];
   fatigue: Record<string, number>;
   fatigueDebtMap: Record<string, number>;
@@ -64,6 +65,7 @@ export const LeagueBackgroundMatchEngineV2 = {
 
     let hSubsUsed = 0;
     let aSubsUsed = 0;
+    const substitutions: { playerOutId: string; playerInId: string; minute: number; isHome: boolean }[] = [];
 
       // Im mniej doświadczony sędzia, tym większy chaos meczu
    const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100; // domyślnie 1.0
@@ -158,8 +160,10 @@ const allPlayedIds = new Set<string>([
           const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[tiredIdx].role;
           const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id));
           if (candidate) {
+            const outId = lineup.startingXI[tiredIdx] as string;
             lineup.startingXI[tiredIdx] = candidate;
             allPlayedIds.add(candidate);
+            substitutions.push({ playerOutId: outId, playerInId: candidate, minute, isHome: side === 'H' });
             if (side === 'H') hSubsUsed++; else aSubsUsed++;
           }
         }
@@ -278,7 +282,7 @@ const allPlayedIds = new Set<string>([
       // LOSOWANIE KARNYCH (Zależne od surowości sędziego)
             // Im mniej doświadczony sędzia, tym większa szansa na kontrowersyjny karny
       const penaltyExperienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
-      const penaltyProb = (referee.strictness / 7000) * penaltyExperienceFactor;
+      const penaltyProb = (referee.strictness / 35000) * penaltyExperienceFactor;
       if (seededRng(minute + 700) < penaltyProb) {
         const side = seededRng(minute + 701) < 0.5 ? 'H' : 'A';
         const isScored = seededRng(minute + 702) < 0.78; // 78% skuteczności karnych
@@ -469,6 +473,7 @@ homeLineup.startingXI.forEach((id, idx) => {
       cards,
       ratings,
    injuries,
+      substitutions,
      playedPlayerIds: Array.from(allPlayedIds),
       fatigue: { ...homeFatigue, ...awayFatigue },
       fatigueDebtMap

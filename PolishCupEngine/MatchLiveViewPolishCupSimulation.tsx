@@ -1350,8 +1350,8 @@ useEffect(() => {
         const homeDisorder = getPositionalDisorder(nextHomeLineup.startingXI, ctx.homePlayers, nextHomeLineup.tacticId);
         const awayDisorder = getPositionalDisorder(nextAwayLineup.startingXI, ctx.awayPlayers, nextAwayLineup.tacticId);
         // Zaburzony skład: rywalowi łatwiej atakować (−próg), własny atak trudniejszy (+próg)
-        homeProgressionThreshold = Math.max(0.24, 0.57 + homeDisorder * 0.24 - awayDisorder * 0.42);
-        awayProgressionThreshold = Math.max(0.24, 0.57 + awayDisorder * 0.24 - homeDisorder * 0.42);
+        homeProgressionThreshold = Math.max(0.24, 0.57 + homeDisorder * 0.13 - awayDisorder * 0.22);
+        awayProgressionThreshold = Math.max(0.24, 0.57 + awayDisorder * 0.13 - homeDisorder * 0.22);
 
         // === ŚREDNIA KONDYCJA DRUŻYNY → BEZPOŚREDNI WPŁYW NA PRÓG ===
         // 4 kontuzjowanych graczy (cond ~45) ciągnie średnią z ~80 do ~65
@@ -1429,20 +1429,20 @@ useEffect(() => {
         if (homeDisorder >= 0.10) {
             if (homeTacticObj.defenseBias > 60) {
                 // Mądry wybór: obrona kompensuje brak specjalistów — rywal traci część premii z chaosu
-                awayProgressionThreshold = Math.min(0.95, awayProgressionThreshold + homeDisorder * 0.16);
+                awayProgressionThreshold = Math.min(0.95, awayProgressionThreshold + homeDisorder * 0.09);
             } else if (homeTacticObj.attackBias > 60) {
                 // Blamaż: otwarty atak ze zdezorganizowanym składem — rywal dostaje dodatkową premię
-                awayProgressionThreshold = Math.max(0.24, awayProgressionThreshold - homeDisorder * 0.12);
+                awayProgressionThreshold = Math.max(0.24, awayProgressionThreshold - homeDisorder * 0.07);
                 nextMomentum -= homeDisorder * 4;
             }
         }
         if (awayDisorder >= 0.10) {
             if (awayTacticObj.defenseBias > 60) {
                 // Mądry wybór AI/rywala: defensywa chroni przed skutkami chaosu
-                homeProgressionThreshold = Math.min(0.95, homeProgressionThreshold + awayDisorder * 0.16);
+                homeProgressionThreshold = Math.min(0.95, homeProgressionThreshold + awayDisorder * 0.09);
             } else if (awayTacticObj.attackBias > 60) {
                 // Blamaż rywala: lekkomyślny atak z bezładnym składem — gracz korzysta
-                homeProgressionThreshold = Math.max(0.24, homeProgressionThreshold - awayDisorder * 0.12);
+                homeProgressionThreshold = Math.max(0.24, homeProgressionThreshold - awayDisorder * 0.07);
                 nextMomentum += awayDisorder * 4;
             }
         }
@@ -1682,17 +1682,17 @@ if (prev.isExtraTime && nextMinute >= 121) {
 
         if (instr.passing === 'SHORT') {
           const rf = instr.passingResponseFactor ?? 1.0;
-          pActionMod *= 1 + instructionAssessments.shortPassing.attackDelta * 1.0 * rf;
+          pActionMod *= 1 + instructionAssessments.shortPassing.attackDelta * 0.55 * rf;
           pRiskMod *= 1 + (clamp(-instructionAssessments.shortPassing.score, 0, 20) / 340) * rf;
         } else if (instr.passing === 'LONG') {
           const rf = instr.passingResponseFactor ?? 1.0;
-          pActionMod *= 1 + instructionAssessments.longPassing.attackDelta * 0.95 * rf;
+          pActionMod *= 1 + instructionAssessments.longPassing.attackDelta * 0.52 * rf;
           pRiskMod *= 1 + (clamp(-instructionAssessments.longPassing.score, 0, 20) / 320) * rf;
         }
 
         if ((instr.counterAttack ?? 'NORMAL') === 'COUNTER') {
           const rf = instr.counterAttackResponseFactor ?? 1.0;
-          pActionMod *= 1 + instructionAssessments.counterAttack.attackDelta * 0.75 * rf;
+          pActionMod *= 1 + instructionAssessments.counterAttack.attackDelta * 0.42 * rf;
           pFatigueMod *= 1 + ((instructionAssessments.counterAttack.fatigueMultiplier - 1) * rf);
           pRiskMod *= 1 + (clamp(-instructionAssessments.counterAttack.score, 0, 24) / 340) * rf;
         }
@@ -1703,9 +1703,9 @@ if (prev.isExtraTime && nextMinute >= 121) {
           pGoalMod    += prev.preMatchMotivation.goalMod;
           pFatigueMod += (prev.preMatchMotivation.fatigueMult - 1.0);
         }
-        pActionMod = clamp(pActionMod, 0.88, 1.12);
+        pActionMod = clamp(pActionMod, 0.93, 1.07);
         pFatigueMod = clamp(pFatigueMod, 0.92, 1.14);
-        pRiskMod = clamp(pRiskMod, 0.88, 1.12);
+        pRiskMod = clamp(pRiskMod, 0.93, 1.07);
 
         let aiAdvantageFactor = 1.0;
         // POPRAWKA: pRiskMod zwiększa próg gola dla rywala (kara za ofensywę)
@@ -1724,7 +1724,7 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
            const myPow = userSide === 'HOME' ? pPower : aPower;
            const oppPow = userSide === 'HOME' ? aPower : pPower;
            const relDiff = Math.max(0, (myPow - oppPow) / Math.max(1, myPow));
-           const counterBonus = Math.max(0.03, 0.17 - relDiff * 0.50);
+           const counterBonus = Math.max(0.02, 0.10 - relDiff * 0.40);
            aiGoalMultiplier = 1.0 + counterBonus;
            aiAdvantageFactor = aiGoalMultiplier;
         }
@@ -2365,8 +2365,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
           const rf = instr.pressingResponseFactor ?? 1.0;
           const delta = instructionAssessments.pressing;
           dynamicThreshold = eventSide === userSide
-            ? clamp(dynamicThreshold - (delta.attackDelta * 0.65 * rf), 0.20, 0.95)
-            : clamp(dynamicThreshold + (delta.defendDelta * 0.65 * rf), 0.20, 0.95);
+            ? clamp(dynamicThreshold - (delta.attackDelta * 0.38 * rf), 0.20, 0.95)
+            : clamp(dynamicThreshold + (delta.defendDelta * 0.38 * rf), 0.20, 0.95);
         }
 
         if (instr.passing === 'SHORT' || instr.passing === 'LONG') {
@@ -2375,16 +2375,16 @@ dynamicThreshold *= undedogThresholdMultiplier;
             : instructionAssessments.longPassing;
           const rf = instr.passingResponseFactor ?? 1.0;
           dynamicThreshold = eventSide === userSide
-            ? clamp(dynamicThreshold - (passingDelta.attackDelta * 0.55 * rf), 0.20, 0.95)
-            : clamp(dynamicThreshold + (passingDelta.defendDelta * 0.55 * rf), 0.20, 0.95);
+            ? clamp(dynamicThreshold - (passingDelta.attackDelta * 0.33 * rf), 0.20, 0.95)
+            : clamp(dynamicThreshold + (passingDelta.defendDelta * 0.33 * rf), 0.20, 0.95);
         }
 
         if ((instr.counterAttack ?? 'NORMAL') === 'COUNTER') {
           const rf = instr.counterAttackResponseFactor ?? 1.0;
           const delta = instructionAssessments.counterAttack;
           dynamicThreshold = eventSide === userSide
-            ? clamp(dynamicThreshold - (delta.attackDelta * 0.50 * rf), 0.20, 0.95)
-            : clamp(dynamicThreshold + (delta.defendDelta * 0.50 * rf), 0.20, 0.95);
+            ? clamp(dynamicThreshold - (delta.attackDelta * 0.30 * rf), 0.20, 0.95)
+            : clamp(dynamicThreshold + (delta.defendDelta * 0.30 * rf), 0.20, 0.95);
         }
 
         if (eventSide === aiSide) {
@@ -2427,7 +2427,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
            dynamicThreshold *= (1 + nextPostGoalPenaltyPct);
         }
        
-       const currentThreshold = dynamicThreshold;
+       const currentThreshold = Math.min(0.95, dynamicThreshold * 1.35);
 
         // === GIANT KILLER: minimalna szansa przebicia dla drużyny z niższego Tier ===
         // Formuła: repGap≥5 → (11-repGap)*0.9%/min | repGap<5 → (11-repGap)*0.6%/min

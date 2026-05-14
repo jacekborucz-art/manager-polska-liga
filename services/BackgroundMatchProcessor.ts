@@ -344,7 +344,20 @@ if (todayFixtures.length === 0) {
         awayLineup: aLineup.startingXI.filter((id): id is string => id !== null),
         ratings: result.ratings,
         homeTacticId: hLineup.tacticId,
-        awayTacticId: aLineup.tacticId
+        awayTacticId: aLineup.tacticId,
+        substitutions: result.substitutions.map(s => {
+          const allP = currentPlayers[home.id].concat(currentPlayers[away.id]);
+          const pOut = allP.find(x => x.id === s.playerOutId);
+          const pIn  = allP.find(x => x.id === s.playerInId);
+          return {
+            playerOutId: s.playerOutId,
+            playerOutName: pOut ? `${pOut.firstName.charAt(0)}. ${pOut.lastName}` : 'Nieznany',
+            playerInId: s.playerInId,
+            playerInName: pIn  ? `${pIn.firstName.charAt(0)}.  ${pIn.lastName}` : 'Nieznany',
+            minute: s.minute,
+            teamId: s.isHome ? home.id : away.id
+          };
+        })
       });
       currentFixtures = currentFixtures.map(f => f.id === fixture.id ? { 
         ...f, 

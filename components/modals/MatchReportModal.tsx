@@ -143,15 +143,16 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + kartki razem po minucie)
   const buildEvents = (teamId: string) => {
-    const events: { minute: number; icon: string; name: string; extra?: string }[] = [];
+    const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean }[] = [];
 
     match.goals
-      .filter(g => g.teamId === teamId && !g.isMiss && !g.varDisallowed)
+      .filter(g => g.teamId === teamId && !g.isMiss)
       .forEach(g => events.push({
         minute: g.minute,
         icon: '⚽',
         name: g.playerName,
-        extra: g.isPenalty ? '(k)' : undefined
+        extra: g.isPenalty ? '(k)' : undefined,
+        varDisallowed: g.varDisallowed
       }));
 
     match.cards
@@ -177,7 +178,14 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
   const renderTeamEvents = (events: ReturnType<typeof buildEvents>, align: 'left' | 'right') => (
     <div className={`flex flex-wrap gap-x-4 gap-y-0.5 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-      {events.map((e, i) => (
+      {events.map((e, i) => e.varDisallowed ? (
+        <span key={i} className="text-[10px] font-black text-slate-500 uppercase italic whitespace-nowrap flex items-center gap-1">
+          {align === 'right'
+            ? <><s>{e.name}{e.extra ? ` ${e.extra}` : ''} {e.minute}'</s>&nbsp;⚽(VAR)</>
+            : <>⚽(VAR)&nbsp;<s>{e.minute}' {e.name}{e.extra ? ` ${e.extra}` : ''}</s></>
+          }
+        </span>
+      ) : (
         <span key={i} className="text-[10px] font-black text-white uppercase italic whitespace-nowrap">
           {align === 'right'
             ? <>{e.name}{e.extra ? ` ${e.extra}` : ''} {e.minute}' {e.icon}</>
@@ -214,7 +222,9 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
           if (!player) return null;
           const rating = match.ratings?.[player.id];
           const isMOTM = motmId === player.id;
-          const playerGoals = match.goals.filter(g => g.playerId === player.id && !g.isMiss && !g.varDisallowed);
+          const playerGoals = match.goals.filter(g => g.playerId === player.id && !g.isMiss);
+          const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
+          const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
           const yellowCards = match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW');
           const redCard = match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
           const injury = injuries.find(i => i.playerId === player.id);
@@ -252,8 +262,11 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
               <div className="flex items-center gap-0.5 shrink-0">
                 {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
-                {playerGoals.map((g, i) => (
+                {playerValidGoals.map((g, i) => (
                   <span key={i} title={`Gol ${g.minute}'`} className="text-[9px]">⚽</span>
+                ))}
+                {playerVarGoals.map((g, i) => (
+                  <span key={i} title={`Gol nieuznany VAR ${g.minute}'`} className="text-[9px] opacity-40 line-through">⚽</span>
                 ))}
                 {yellowCards.map((c, i) => (
                   <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
