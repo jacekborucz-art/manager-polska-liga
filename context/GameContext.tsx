@@ -2614,8 +2614,10 @@ setMessages([welcomeMail, fanMail]);
             boardBudgetMonitorState: monitorResult.newState,
           } : c);
         }
+        const monitorDateKey = dateToProcess.toISOString().split('T')[0];
+        const monitorMailKey = `BOARD_BUDGET_${userTeamId}_${monitorResult.action}_${monitorResult.newState}_${monitorDateKey}`;
         const budgetMail: MailMessage = {
-          id: `BOARD_BUDGET_${Date.now()}`,
+          id: monitorMailKey,
           sender: 'Zarząd Klubu',
           role: 'Dyrektor Finansowy',
           subject: monitorResult.mailSubject,
@@ -2625,16 +2627,26 @@ setMessages([welcomeMail, fanMail]);
           type: MailType.BOARD,
           priority: 95,
         };
-        setMessages(prev => [budgetMail, ...prev]);
+        if (!sentMailIdsRef.current.has(monitorMailKey)) {
+          sentMailIdsRef.current.add(monitorMailKey);
+          setMessages(prev => {
+            const withoutDuplicates = prev.filter(message =>
+              !(message.subject === budgetMail.subject &&
+                message.body === budgetMail.body &&
+                new Date(message.date).toISOString().split('T')[0] === monitorDateKey)
+            );
+            return [budgetMail, ...withoutDuplicates];
+          });
+        }
         return prev.map(c => c.id === userTeamId ? {
           ...c,
           budget: monitorResult.newBudget,
           transferBudget: monitorResult.newTransferBudget,
           boardBudgetMonitorState: monitorResult.newState,
-          financeHistory: monitorResult.amountChanged > 0 ? [
+          financeHistory: monitorResult.amountChanged > 0 && !(c.financeHistory || []).some(item => item.id === `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`) ? [
             {
-              id: `BOARD_SHIFT_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              date: dateToProcess.toISOString().split('T')[0],
+              id: `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`,
+              date: monitorDateKey,
               amount: monitorResult.action === 'REDUCE' ? monitorResult.amountChanged : -monitorResult.amountChanged,
               type: monitorResult.action === 'REDUCE' ? 'INCOME' as const : 'EXPENSE' as const,
               description: monitorResult.action === 'REDUCE'
