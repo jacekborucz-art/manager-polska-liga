@@ -67,6 +67,8 @@ export const LeagueBackgroundMatchEngineV2 = {
     let aSubsUsed = 0;
     const substitutions: { playerOutId: string; playerInId: string; minute: number; isHome: boolean }[] = [];
     const lightInjuredOnPitch = new Map<string, number>();
+    const substitutedInIds = new Set<string>();
+    const substitutedOutIds = new Set<string>();
 
       // Im mniej doświadczony sędzia, tym większy chaos meczu
    const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100; // domyślnie 1.0
@@ -158,15 +160,17 @@ const allPlayedIds = new Set<string>([
         // Zasada rezerwy: nie wykorzystuj 5. zmiany przed 88. minutą
         if (usedCount >= 5 || (usedCount === 4 && minute < 88)) return;
 
-        const tiredIdx = lineup.startingXI.findIndex(id => id && fMap[id] < 88.5);
+        const tiredIdx = lineup.startingXI.findIndex(id => id && fMap[id] < 88.5 && !substitutedInIds.has(id));
         if (tiredIdx !== -1) {
           const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[tiredIdx].role;
-          const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id));
+          const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id) && !substitutedOutIds.has(id));
           if (candidate) {
             const outId = lineup.startingXI[tiredIdx] as string;
             lineup.startingXI[tiredIdx] = candidate;
             allPlayedIds.add(candidate);
             substitutions.push({ playerOutId: outId, playerInId: candidate, minute, isHome: side === 'H' });
+            substitutedInIds.add(candidate);
+            substitutedOutIds.add(outId);
             if (side === 'H') hSubsUsed++; else aSubsUsed++;
           }
         }
@@ -385,6 +389,8 @@ const allPlayedIds = new Set<string>([
                 substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
                 lineup.startingXI[pIdx] = candidate;
                 allPlayedIds.add(candidate);
+                substitutedInIds.add(candidate);
+                substitutedOutIds.add(pId as string);
                 if (side === 'H') hSubsUsed++; else aSubsUsed++;
               } else {
                 lineup.startingXI[pIdx] = null;
@@ -408,6 +414,8 @@ const allPlayedIds = new Set<string>([
                   substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
                   lineup.startingXI[pIdx] = candidate;
                   allPlayedIds.add(candidate);
+                  substitutedInIds.add(candidate);
+                  substitutedOutIds.add(pId as string);
                   if (side === 'H') hSubsUsed++; else aSubsUsed++;
                 } else {
                   lightInjuredOnPitch.set(pId as string, 0.4);

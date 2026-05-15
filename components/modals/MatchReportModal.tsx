@@ -60,6 +60,69 @@ const isColorDark = (hex: string): boolean => {
 const getPitchSlotTop = (isHome: boolean, slotY: number): string =>
   `${isHome ? 55 + slotY * 32 : 45 - slotY * 32}%`;
 
+type ReportSubstitution = {
+  playerOutId?: string;
+  playerOutName: string;
+  playerInId?: string;
+  playerInName: string;
+  minute: number;
+  teamId: string;
+};
+
+type ReportCard = {
+  playerId?: string;
+  playerName: string;
+  minute: number;
+  teamId: string;
+  type: string;
+};
+
+const getChronologicalTeamEvents = (
+  lineupIds: string[],
+  rawSubs: ReportSubstitution[],
+  cards: ReportCard[],
+  teamId: string
+): ReportSubstitution[] => {
+  const current: (string | null)[] = [...lineupIds];
+  const result: ReportSubstitution[] = [];
+  const redExits = cards
+    .filter(card => !!card.playerId && card.teamId === teamId && (card.type === 'RED' || card.type === 'SECOND_YELLOW'))
+    .map(card => ({
+      kind: 'red' as const,
+      minute: card.minute,
+      playerOutId: card.playerId as string,
+      playerOutName: card.playerName,
+    }));
+  const timeline = [
+    ...rawSubs.map(sub => ({ kind: 'sub' as const, minute: sub.minute, sub })),
+    ...redExits,
+  ].sort((a, b) => a.minute - b.minute || (a.kind === 'red' ? -1 : 1));
+
+  timeline.forEach(event => {
+    if (event.kind === 'sub') {
+      if (!event.sub.playerOutId) return;
+      const idx = current.indexOf(event.sub.playerOutId);
+      if (idx === -1) return;
+      current[idx] = event.sub.playerInId ?? null;
+      result.push(event.sub);
+      return;
+    }
+
+    const idx = current.indexOf(event.playerOutId);
+    if (idx === -1) return;
+    current[idx] = null;
+    result.push({
+      playerOutId: event.playerOutId,
+      playerOutName: event.playerOutName,
+      playerInName: '',
+      minute: event.minute,
+      teamId,
+    });
+  });
+
+  return result;
+};
+
 const PitchKit: React.FC<{
   player?: Player | null;
   left: string;
@@ -68,13 +131,15 @@ const PitchKit: React.FC<{
   secondary: string;
   trim: string;
   isMom?: boolean;
-}> = ({ player, left, top, primary, secondary, trim, isMom }) => {
+  isRedCarded?: boolean;
+}> = ({ player, left, top, primary, secondary, trim, isMom, isRedCarded }) => {
+  if (!player) return null;
   const shirtText = getContrastText(primary, secondary);
-  const label = player ? `${player.firstName.charAt(0)}. ${player.lastName}` : '?';
+  const label = `${player.firstName.charAt(0)}. ${player.lastName}`;
   return (
     <div
       className="absolute z-20 flex flex-col items-center gap-0"
-      style={{ left, top, transform: 'translate(-50%, -50%)' }}
+      style={{ left, top, transform: 'translate(-50%, -50%)', filter: isRedCarded ? 'grayscale(1)' : undefined, opacity: isRedCarded ? 0.35 : undefined }}
     >
       <div className="relative flex flex-col items-center">
         <svg viewBox="0 0 24 24" className={`w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)] ${isMom ? 'filter drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]' : ''}`}>
@@ -107,8 +172,6 @@ const getCompetitionName = (comp: string) => {
   if (comp.includes('SUPER')) return 'Superpuchar';
   return comp;
 };
-
-const POSITION_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
 
 export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onClose }) => {
   const { clubs, players } = useGame();
@@ -250,7 +313,8 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     const lineupIds = side === 'home' ? (match.homeLineup ?? []) : (match.awayLineup ?? []);
     const teamPlayers = side === 'home' ? homePlayers : awayPlayers;
     const clubId = side === 'home' ? homeClub.id : awayClub.id;
-    const subs = match.substitutions?.filter(s => s.teamId === clubId) ?? [];
+    const rawSubs = (match.substitutions?.filter(s => s.teamId === clubId) ?? []) as ReportSubstitution[];
+    const subs = getChronologicalTeamEvents(lineupIds, rawSubs, match.cards as ReportCard[], clubId);
     const injuries = match.injuries?.filter(i => i.teamId === clubId) ?? [];
 
     if (lineupIds.length === 0) {
@@ -261,172 +325,118 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
       );
     }
 
-    const sorted = lineupIds
-      .map(id => teamPlayers.find(p => p.id === id))
-      .filter(Boolean)
-      .sort((a, b) => {
-        const aLeft = (subs.find(s => s.playerOutId === a!.id) || match.cards.find(c => c.playerId === a!.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'))) ? 1 : 0;
-        const bLeft = (subs.find(s => s.playerOutId === b!.id) || match.cards.find(c => c.playerId === b!.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'))) ? 1 : 0;
-        if (aLeft !== bLeft) return aLeft - bLeft;
-        return (POSITION_ORDER[a!.position] ?? 9) - (POSITION_ORDER[b!.position] ?? 9);
-      });
+    const allPlayersFlat = Object.values(players).flat();
+    const findPlayer = (id: string) => teamPlayers.find(p => p.id === id) ?? allPlayersFlat.find(p => p.id === id) ?? null;
+    const sortedSubs = [...subs].sort((a, b) => a.minute - b.minute);
+    const finalLineupIds: (string | null)[] = [...lineupIds];
+    sortedSubs.forEach(sub => {
+      if (!sub.playerOutId) return;
+      const idx = finalLineupIds.indexOf(sub.playerOutId);
+      if (idx !== -1) finalLineupIds[idx] = sub.playerInId ?? null;
+    });
+
+    const finalPlayers = finalLineupIds
+      .map(id => id ? findPlayer(id) : null)
+      .filter((player): player is Player => !!player);
+
+    const offSubs = sortedSubs.filter(sub => !!sub.playerOutId);
+
+    const renderPlayerRow = (
+      player: Player | null,
+      key: string,
+      displayNameFallback: string,
+      status: 'active' | 'off',
+      minute?: number
+    ) => {
+      const playerId = player?.id;
+      const rating = playerId ? match.ratings?.[playerId] : undefined;
+      const isMOTM = motmId === playerId;
+      const playerGoals = playerId ? match.goals.filter(g => g.playerId === playerId && !g.isMiss) : [];
+      const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
+      const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
+      const yellowCards = playerId ? match.cards.filter(c => c.playerId === playerId && c.type === 'YELLOW') : [];
+      const redCard = playerId ? match.cards.find(c => c.playerId === playerId && (c.type === 'RED' || c.type === 'SECOND_YELLOW')) : undefined;
+      const injury = playerId ? injuries.find(i => i.playerId === playerId) : undefined;
+      const subIn = playerId ? sortedSubs.find(s => s.playerInId === playerId) : undefined;
+      const displayName = player
+        ? `${player.firstName.charAt(0)}. ${player.lastName}`
+        : displayNameFallback;
+      const isRedCarded = !!redCard;
+
+      return (
+        <div
+          key={key}
+          className={`flex items-center gap-1.5 px-1.5 py-[4px] rounded-md transition-all ${
+            isMOTM
+              ? 'bg-amber-500/15 border border-amber-500/30'
+              : isRedCarded
+                ? 'bg-red-900/10 border border-red-900/20 opacity-50'
+                : status === 'off'
+                  ? 'border border-transparent bg-black/10 opacity-75'
+                  : 'border border-transparent hover:bg-white/5'
+          }`}
+        >
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black shrink-0 border ${
+            player?.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+            : player?.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+            : player?.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+            : player?.position === PlayerPosition.FWD ? 'bg-red-500/20 border-red-500/40 text-red-300'
+            : 'bg-slate-500/20 border-slate-500/40 text-slate-300'
+          }`}>
+            {player?.position ?? '?'}
+          </div>
+
+          <span className={`flex-1 text-[9px] font-bold uppercase truncate ${
+            isMOTM ? 'text-amber-300' : isRedCarded ? 'text-slate-500 line-through' : status === 'off' ? 'text-slate-500' : 'text-slate-200'
+          }`}>
+            {displayName}
+          </span>
+
+          <div className="flex items-center gap-0.5 shrink-0">
+            {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
+            {playerValidGoals.length === 1 && (
+              <span title={`Gol ${playerValidGoals[0].minute}'`} className="text-[9px]">⚽</span>
+            )}
+            {playerValidGoals.length > 1 && (
+              <span title={playerValidGoals.map(g => `Gol ${g.minute}'`).join(', ')} className="text-[9px]">⚽({playerValidGoals.length})</span>
+            )}
+            {playerVarGoals.length > 0 && (
+              <span title={playerVarGoals.map(g => `Gol nieuznany VAR ${g.minute}'`).join(', ')} className="text-[9px] opacity-40 line-through">⚽</span>
+            )}
+            {yellowCards.map((c, i) => (
+              <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
+            ))}
+            {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
+            {injury && <span title={`Kontuzja ${injury.severity === 'SEVERE' ? 'ciężka' : 'lekka'} ${injury.minute}'`} className={`text-[11px] font-black ${injury.severity === 'SEVERE' ? 'text-red-600' : 'text-white'}`}>✚</span>}
+            {status === 'active' && subIn && <span title={`Wejście ${subIn.minute}'`} className="text-[7px] text-emerald-400">↑{subIn.minute}'</span>}
+            {status === 'off' && minute !== undefined && <span title={`Zejście ${minute}'`} className="text-[7px] text-red-400">↓{minute}'</span>}
+          </div>
+
+          {rating !== undefined ? (
+            <div className={`w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
+              {rating.toFixed(1)}
+            </div>
+          ) : (
+            <div className="w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 bg-black/20 text-slate-600 border border-white/5">
+              –
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
       <div className="space-y-[2px]">
-        {sorted.map(player => {
-          if (!player) return null;
-          const rating = match.ratings?.[player.id];
-          const isMOTM = motmId === player.id;
-          const playerGoals = match.goals.filter(g => g.playerId === player.id && !g.isMiss);
-          const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
-          const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
-          const yellowCards = match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW');
-          const redCard = match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
-          const injury = injuries.find(i => i.playerId === player.id);
-          const subOut = subs.find(s => s.playerOutId === player.id);
-          const subIn = subs.find(s => s.playerInId === player.id);
-          const displayName = `${player.firstName.charAt(0)}. ${player.lastName}`;
+        {finalPlayers.map(player => renderPlayerRow(player, player.id, '?', 'active'))}
 
-          const isRedCarded = !!redCard;
-
-          return (
-            <div
-              key={player.id}
-              className={`flex items-center gap-1.5 px-1.5 py-[4px] rounded-md transition-all ${
-                isMOTM
-                  ? 'bg-amber-500/15 border border-amber-500/30'
-                  : isRedCarded
-                    ? 'bg-red-900/10 border border-red-900/20 opacity-50'
-                    : 'border border-transparent hover:bg-white/5'
-              }`}
-            >
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black shrink-0 border ${
-                player.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                : player.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                : player.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                : 'bg-red-500/20 border-red-500/40 text-red-300'
-              }`}>
-                {player.position}
-              </div>
-
-              <span className={`flex-1 text-[9px] font-bold uppercase truncate ${
-                isMOTM ? 'text-amber-300' : isRedCarded ? 'text-slate-500 line-through' : 'text-slate-200'
-              }`}>
-                {displayName}
-              </span>
-
-              <div className="flex items-center gap-0.5 shrink-0">
-                {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
-                {playerValidGoals.length === 1 && (
-                  <span title={`Gol ${playerValidGoals[0].minute}'`} className="text-[9px]">⚽</span>
-                )}
-                {playerValidGoals.length > 1 && (
-                  <span title={playerValidGoals.map(g => `Gol ${g.minute}'`).join(', ')} className="text-[9px]">⚽({playerValidGoals.length})</span>
-                )}
-                {playerVarGoals.length > 0 && (
-                  <span title={playerVarGoals.map(g => `Gol nieuznany VAR ${g.minute}'`).join(', ')} className="text-[9px] opacity-40 line-through">⚽</span>
-                )}
-                {yellowCards.map((c, i) => (
-                  <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
-                ))}
-                {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
-                {injury && <span title={`Kontuzja ${injury.severity === 'SEVERE' ? 'ciężka' : 'lekka'} ${injury.minute}'`} className={`text-[11px] font-black ${injury.severity === 'SEVERE' ? 'text-red-600' : 'text-white'}`}>✚</span>}
-                {subOut && <span title={`Zmiana wyj. ${subOut.minute}'`} className="text-[7px] text-slate-500">↓{subOut.minute}'</span>}
-                {subIn && <span title={`Wejście ${subIn.minute}'`} className="text-[7px] text-emerald-400">↑{subIn.minute}'</span>}
-              </div>
-
-              {rating !== undefined ? (
-                <div className={`w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
-                  {rating.toFixed(1)}
-                </div>
-              ) : (
-                <div className="w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 bg-black/20 text-slate-600 border border-white/5">
-                  –
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {subs.length > 0 && (() => {
-          const allPlayers = Object.values(players).flat();
-          const subPlayers = subs
-            .filter(s => !lineupIds.includes(s.playerInId ?? ''))
-            .map(s => ({
-              sub: s,
-              player: allPlayers.find(p => p.id === s.playerInId) ?? null
-            }));
-          if (subPlayers.length === 0) return null;
+        {offSubs.length > 0 && (() => {
           return (
             <>
               <div className="border-t border-white/5 my-1" />
-              {subPlayers.map(({ sub, player }) => {
-                const playerId = player?.id ?? sub.playerInId ?? `sub-${sub.minute}`;
-                const rating = player ? match.ratings?.[player.id] : undefined;
-                const isMOTM = motmId === player?.id;
-                const playerGoals = player ? match.goals.filter(g => g.playerId === player.id && !g.isMiss) : [];
-                const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
-                const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
-                const yellowCards = player ? match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW') : [];
-                const redCard = player ? match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW')) : undefined;
-                const injury = player ? injuries.find(i => i.playerId === player.id) : undefined;
-                const isRedCarded = !!redCard;
-                const displayName = player
-                  ? `${player.firstName.charAt(0)}. ${player.lastName}`
-                  : sub.playerInName;
-                return (
-                  <div
-                    key={playerId}
-                    className={`flex items-center gap-1.5 px-1.5 py-[4px] rounded-md transition-all ${
-                      isMOTM
-                        ? 'bg-amber-500/15 border border-amber-500/30'
-                        : isRedCarded
-                          ? 'bg-red-900/10 border border-red-900/20 opacity-50'
-                          : 'border border-transparent hover:bg-white/5'
-                    }`}
-                  >
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black shrink-0 border ${
-                      player?.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : player?.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                      : player?.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                      : 'bg-red-500/20 border-red-500/40 text-red-300'
-                    }`}>
-                      {player?.position ?? '?'}
-                    </div>
-                    <span className={`flex-1 text-[9px] font-bold uppercase truncate ${
-                      isMOTM ? 'text-amber-300' : isRedCarded ? 'text-slate-500 line-through' : 'text-slate-400'
-                    }`}>
-                      {displayName}
-                    </span>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
-                      {playerValidGoals.length === 1 && (
-                        <span title={`Gol ${playerValidGoals[0].minute}'`} className="text-[9px]">⚽</span>
-                      )}
-                      {playerValidGoals.length > 1 && (
-                        <span title={playerValidGoals.map(g => `Gol ${g.minute}'`).join(', ')} className="text-[9px]">⚽({playerValidGoals.length})</span>
-                      )}
-                      {playerVarGoals.length > 0 && (
-                        <span title={playerVarGoals.map(g => `Gol nieuznany VAR ${g.minute}'`).join(', ')} className="text-[9px] opacity-40 line-through">⚽</span>
-                      )}
-                      {yellowCards.map((c, i) => (
-                        <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
-                      ))}
-                      {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
-                      {injury && <span title={`Kontuzja ${injury.severity === 'SEVERE' ? 'ciężka' : 'lekka'} ${injury.minute}'`} className={`text-[11px] font-black ${injury.severity === 'SEVERE' ? 'text-red-600' : 'text-white'}`}>✚</span>}
-                      <span title={`Wejście ${sub.minute}'`} className="text-[7px] text-emerald-400">↑{sub.minute}'</span>
-                    </div>
-                    {rating !== undefined ? (
-                      <div className={`w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
-                        {rating.toFixed(1)}
-                      </div>
-                    ) : (
-                      <div className="w-7 h-6 rounded flex items-center justify-center text-[9px] font-black shrink-0 bg-black/20 text-slate-600 border border-white/5">
-                        –
-                      </div>
-                    )}
-                  </div>
-                );
+              {offSubs.map(sub => {
+                const player = sub.playerOutId ? findPlayer(sub.playerOutId) : null;
+                const key = sub.playerOutId ?? `sub-out-${sub.minute}-${sub.playerOutName}`;
+                return renderPlayerRow(player, key, sub.playerOutName, 'off', sub.minute);
               })}
             </>
           );
@@ -439,10 +449,24 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     const homeTactic = match.homeTacticId ? TacticRepository.getById(match.homeTacticId) : null;
     const awayTactic = match.awayTacticId ? TacticRepository.getById(match.awayTacticId) : null;
 
-    const homeXI = (match.homeLineup ?? [])
-      .map(id => homePlayers.find(p => p.id === id) ?? null);
-    const awayXI = (match.awayLineup ?? [])
-      .map(id => awayPlayers.find(p => p.id === id) ?? null);
+    const homeRawSubs = (match.substitutions?.filter(s => s.teamId === homeClub.id) ?? []) as ReportSubstitution[];
+    const awayRawSubs = (match.substitutions?.filter(s => s.teamId === awayClub.id) ?? []) as ReportSubstitution[];
+    const homeSubs = getChronologicalTeamEvents(match.homeLineup ?? [], homeRawSubs, match.cards as ReportCard[], homeClub.id);
+    const awaySubs = getChronologicalTeamEvents(match.awayLineup ?? [], awayRawSubs, match.cards as ReportCard[], awayClub.id);
+    const allPlayersFlat = Object.values(players).flat();
+    const findAnyPlayer = (id: string) => allPlayersFlat.find(p => p.id === id) ?? null;
+    const getFinalXI = (lineupIds: string[], subs: typeof homeSubs) => {
+      const current: (string | null)[] = [...lineupIds];
+      [...subs].sort((a, b) => a.minute - b.minute).forEach(sub => {
+        if (!sub.playerOutId) return;
+        const idx = current.indexOf(sub.playerOutId);
+        if (idx !== -1) current[idx] = sub.playerInId ?? null;
+      });
+      return current.map(id => id ? findAnyPlayer(id) : null);
+    };
+
+    const homeXI = getFinalXI(match.homeLineup ?? [], homeSubs);
+    const awayXI = getFinalXI(match.awayLineup ?? [], awaySubs);
 
     const homePrimary = kits.home.primary;
     const homeSecondary = kits.home.secondary;
@@ -468,11 +492,13 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               const primary = isGK ? homeGKColor : homePrimary;
               const secondary = isGK ? homeGKColor : homeSecondary;
               const trim = getContrastText(primary, secondary);
+              const isRedCarded = !!player && match.cards.some(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
               return (
                 <PitchKit
                   key={`h-${i}`}
                   player={player}
                   isMom={!!player && motmId === player.id}
+                  isRedCarded={isRedCarded}
                   left={`${slot.x * 100}%`}
                   top={
                     isGK
@@ -496,11 +522,13 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               const primary = isGK ? awayGKColor : awayPrimary;
               const secondary = isGK ? awayGKColor : awaySecondary;
               const trim = getContrastText(primary, secondary);
+              const isRedCarded = !!player && match.cards.some(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
               return (
                 <PitchKit
                   key={`a-${i}`}
                   player={player}
                   isMom={!!player && motmId === player.id}
+                  isRedCarded={isRedCarded}
                   left={`${slot.x * 100}%`}
                   top={
                     isGK
