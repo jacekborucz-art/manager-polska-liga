@@ -66,6 +66,7 @@ export const LeagueBackgroundMatchEngineV2 = {
     let hSubsUsed = 0;
     let aSubsUsed = 0;
     const substitutions: { playerOutId: string; playerInId: string; minute: number; isHome: boolean }[] = [];
+    const lightInjuredOnPitch = new Map<string, number>();
 
       // Im mniej doświadczony sędzia, tym większy chaos meczu
    const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100; // domyślnie 1.0
@@ -289,7 +290,7 @@ const allPlayedIds = new Set<string>([
         const side = seededRng(minute + 701) < 0.5 ? 'H' : 'A';
         const isScored = seededRng(minute + 702) < 0.78; // 78% skuteczności karnych
         const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
-        if (!kicker) break; // brak kandydatów (np. czerwona kartka wyczyściła skład)
+        if (!kicker) continue; // brak kandydatów (np. czerwona kartka wyczyściła skład)
         if (isScored) {
           if (side === 'H') homeScore++; else awayScore++;
           scorers.push({ playerId: kicker.id, minute, isPenalty: true });
@@ -303,7 +304,7 @@ const allPlayedIds = new Set<string>([
       const yellowExperienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
       const yellowBaseProb = (0.001 + (referee.strictness / 7500)) * yellowExperienceFactor;
       const hCardRoll = seededRng(minute + 300);
-      const aCardRoll = seededRng(minute + 300);
+      const aCardRoll = seededRng(minute + 400);
       const hDesperationCardMod = homeIsChasing ? 1 + lateGamePressure * hPressure.lateChaseMultiplier * 0.75 : 1;
       const aDesperationCardMod = awayIsChasing ? 1 + lateGamePressure * aPressure.lateChaseMultiplier * 0.75 : 1;
       const hCardPressureMod = hPressure.cardMultiplier * hDesperationCardMod * rivalryMultiplier;
@@ -367,7 +368,11 @@ const allPlayedIds = new Set<string>([
           );
 
           injuries.push({ playerId: pId, severity, minute, days, type });
-          
+
+          const fMap = side === 'H' ? homeFatigue : awayFatigue;
+          const injuryPenalty = severity === InjurySeverity.SEVERE ? 55 : 20;
+          if (fMap[pId as string] !== undefined) fMap[pId as string] = Math.max(0, fMap[pId as string] - injuryPenalty);
+
           // Reakcja trenera: jeśli SEVERE, wymuś zmianę kontuzjowanego
           if (severity === InjurySeverity.SEVERE) {
             const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
@@ -386,6 +391,33 @@ const allPlayedIds = new Set<string>([
               }
             } else {
               lineup.startingXI[pIdx] = null;
+            }
+          } else {
+            // LIGHT — zawodnik sygnalizuje chęć zmiany zależnie od mentalności
+            const mentality = pPool.find(p => p.id === pId)?.attributes.mentality ?? 50;
+            const wantsOffProb = Math.max(0.05, (100 - mentality) / 100 * 0.75);
+            const wantsOff = seededRng(minute + 810) < wantsOffProb;
+            if (wantsOff) {
+              const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
+              const canSub = usedCount < 5 && !(usedCount === 4 && minute < 88);
+              if (canSub) {
+                const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx].role;
+                const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id))
+                  ?? lineup.bench.find(id => !lineup.startingXI.includes(id));
+                if (candidate) {
+                  substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
+                  lineup.startingXI[pIdx] = candidate;
+                  allPlayedIds.add(candidate);
+                  if (side === 'H') hSubsUsed++; else aSubsUsed++;
+                } else {
+                  lightInjuredOnPitch.set(pId as string, 0.4);
+                }
+              } else {
+                lightInjuredOnPitch.set(pId as string, 0.4);
+              }
+            } else {
+              // Wojownik — gra z bólem, drobny dodatkowy drenaż kondycji
+              lightInjuredOnPitch.set(pId as string, 0.25);
             }
           }
         }
@@ -407,6 +439,7 @@ homeLineup.startingXI.forEach((id, idx) => {
       currentDrain *= gkReduction;
     }
         homeFatigue[id] = Math.max(0, homeFatigue[id] - currentDrain);
+        if (lightInjuredOnPitch.has(id)) homeFatigue[id] = Math.max(0, homeFatigue[id] - lightInjuredOnPitch.get(id)!);
   }
 });
 
@@ -421,6 +454,7 @@ homeLineup.startingXI.forEach((id, idx) => {
             currentDrain *= gkReduction;
           }
           awayFatigue[id] = Math.max(0, awayFatigue[id] - currentDrain);
+          if (lightInjuredOnPitch.has(id)) awayFatigue[id] = Math.max(0, awayFatigue[id] - lightInjuredOnPitch.get(id)!);
         }
       });
     }

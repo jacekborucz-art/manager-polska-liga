@@ -67,6 +67,39 @@ const getLineStrength = (players: Player[], lineupIds: (string | null)[]) => {
   return { att, def, gk };
 };
 
+const getWeightedLineStrength = (
+  players: Player[],
+  lineup: Lineup,
+  allSubs: { min: number; outId: string; inId: string }[]
+): { att: number; def: number; gk: number } => {
+  const TOTAL = 90;
+  const minutesPlayed: Record<string, number> = {};
+  const currentXI = lineup.startingXI.map(id => ({ id: id ?? null, entryMin: 0 }));
+  const sortedSubs = [...allSubs].sort((a, b) => a.min - b.min);
+  for (const sub of sortedSubs) {
+    const outIdx = currentXI.findIndex(p => p.id === sub.outId);
+    if (outIdx === -1) continue;
+    const leaving = currentXI[outIdx];
+    if (leaving.id) minutesPlayed[leaving.id] = (minutesPlayed[leaving.id] ?? 0) + (sub.min - leaving.entryMin);
+    currentXI[outIdx] = { id: sub.inId, entryMin: sub.min };
+  }
+  for (const slot of currentXI) {
+    if (slot.id) minutesPlayed[slot.id] = (minutesPlayed[slot.id] ?? 0) + (TOTAL - slot.entryMin);
+  }
+  let attSum = 0, defSum = 0, totalMins = 0;
+  for (const [pId, mins] of Object.entries(minutesPlayed)) {
+    const p = players.find(x => x.id === pId);
+    if (!p) continue;
+    attSum += ((p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3) * mins;
+    defSum += ((p.attributes.defending + p.attributes.stamina) / 2) * mins;
+    totalMins += mins;
+  }
+  const att = totalMins > 0 ? attSum / totalMins : 40;
+  const def = totalMins > 0 ? defSum / totalMins : 40;
+  const gk = players.find(p => p.id === lineup.startingXI[0])?.attributes.goalkeeping ?? 40;
+  return { att, def, gk };
+};
+
 // ============================================================
 //  POISSON-LIKE GENERATOR GOLI
 // ============================================================
@@ -364,8 +397,6 @@ const simulateCLMatchFull = (
   const aCoachDefMod = 1.0 + ((awayCoach.attributes.decisionMaking - 50) * 0.002);
 
   // â”€â”€ SiÅ‚a zawodnikÃ³w â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const hStr = getLineStrength(homePlayersAll, homeLineup.startingXI);
-  const aStr = getLineStrength(awayPlayersAll, awayLineup.startingXI);
 
   // â”€â”€ Forma dzienna â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeDailyForm = (rng(11) - 0.5) * 0.3;
@@ -394,6 +425,14 @@ const simulateCLMatchFull = (
     if (rng(20000 + idx + 1500) < directRedProb) awayRedPre++;
     else if (rng(20000 + idx + 1000) < yellowProb && rng(20000 + idx + 1200) < 0.05) awayRedPre++;
   });
+
+  // ── Zmiany (przed obliczeniem xG) ─────────────────────────────────
+  const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5000, rng);
+  const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
+
+  // ── Siła zawodników (ważona czasem gry) ──────────────────────────────
+  const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeSubData.matchSubs);
+  const aStr = getWeightedLineStrength(awayPlayersAll, awayLineup, awaySubData.matchSubs);
 
   // â”€â”€ XG z bonusami trenerÃ³w, taktyki i siÅ‚y zawodnikÃ³w â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const repDiff = homeClub.reputation - awayClub.reputation;
@@ -442,10 +481,6 @@ const simulateCLMatchFull = (
   };
   tryPenalty('H', 9100);
   tryPenalty('A', 9200);
-
-  // â”€â”€ Zmiany â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5000, rng);
-  const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
   // â”€â”€ Kartki i kontuzje z sÄ™dziÄ… (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
@@ -808,4 +843,4 @@ export const BackgroundMatchUEFASuperCup = {
 
     return { updatedFixtures, updatedPlayers: updatedPlayersMap, matchHistoryEntries };
   }
-};
+};

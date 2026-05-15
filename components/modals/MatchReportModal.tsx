@@ -264,7 +264,12 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     const sorted = lineupIds
       .map(id => teamPlayers.find(p => p.id === id))
       .filter(Boolean)
-      .sort((a, b) => (POSITION_ORDER[a!.position] ?? 9) - (POSITION_ORDER[b!.position] ?? 9));
+      .sort((a, b) => {
+        const aLeft = (subs.find(s => s.playerOutId === a!.id) || match.cards.find(c => c.playerId === a!.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'))) ? 1 : 0;
+        const bLeft = (subs.find(s => s.playerOutId === b!.id) || match.cards.find(c => c.playerId === b!.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'))) ? 1 : 0;
+        if (aLeft !== bLeft) return aLeft - bLeft;
+        return (POSITION_ORDER[a!.position] ?? 9) - (POSITION_ORDER[b!.position] ?? 9);
+      });
 
     return (
       <div className="space-y-[2px]">
