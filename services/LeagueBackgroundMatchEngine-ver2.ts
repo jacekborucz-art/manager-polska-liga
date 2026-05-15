@@ -143,6 +143,27 @@ const allPlayedIds = new Set<string>([
     };
 
     // 2. GŁÓWNA PĘTLA MINUTOWA (Discrete Event Simulation)
+    const getPlayerPosition = (players: Player[], playerId: string | null): PlayerPosition | undefined => {
+      if (!playerId) return undefined;
+      return players.find(p => p.id === playerId)?.position;
+    };
+
+    const findBenchReplacement = (
+      lineup: Lineup,
+      players: Player[],
+      roleNeeded: PlayerPosition
+    ): string | undefined => {
+      const isAvailable = (id: string) => !lineup.startingXI.includes(id) && !substitutedOutIds.has(id);
+      const hasPosition = (id: string, position: PlayerPosition) => getPlayerPosition(players, id) === position;
+
+      if (roleNeeded === PlayerPosition.GK) {
+        return lineup.bench.find(id => isAvailable(id) && hasPosition(id, PlayerPosition.GK));
+      }
+
+      return lineup.bench.find(id => isAvailable(id) && hasPosition(id, roleNeeded))
+        ?? lineup.bench.find(id => isAvailable(id) && getPlayerPosition(players, id) !== PlayerPosition.GK);
+    };
+
     for (let minute = 1; minute <= 95; minute++) {
       
       const hPwr = getTeamPower(homePlayers, homeLineup, homeFatigue);
@@ -160,10 +181,16 @@ const allPlayedIds = new Set<string>([
         // Zasada rezerwy: nie wykorzystuj 5. zmiany przed 88. minutą
         if (usedCount >= 5 || (usedCount === 4 && minute < 88)) return;
 
-        const tiredIdx = lineup.startingXI.findIndex(id => id && fMap[id] < 88.5 && !substitutedInIds.has(id));
+        const tacticSlots = TacticRepository.getById(lineup.tacticId).slots;
+        const tiredIdx = lineup.startingXI.findIndex((id, idx) => {
+          if (!id || fMap[id] >= 88.5 || substitutedInIds.has(id)) return false;
+          const roleNeeded = tacticSlots[idx]?.role;
+          if (!roleNeeded) return false;
+          return roleNeeded !== PlayerPosition.GK && getPlayerPosition(pPool, id) !== PlayerPosition.GK;
+        });
         if (tiredIdx !== -1) {
-          const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[tiredIdx].role;
-          const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id) && !substitutedOutIds.has(id));
+          const roleNeeded = tacticSlots[tiredIdx]?.role ?? PlayerPosition.MID;
+          const candidate = findBenchReplacement(lineup, pPool, roleNeeded);
           if (candidate) {
             const outId = lineup.startingXI[tiredIdx] as string;
             lineup.startingXI[tiredIdx] = candidate;
@@ -192,9 +219,13 @@ const allPlayedIds = new Set<string>([
         if (seededRng(minute + 336) > reactionProb) return;
         const expelledPos = expelledPlayer.position;
         let targetToSubOff: string | null = null;
+        const isOutfieldAvailableToSubOff = (id: string | null) =>
+          !!id && getPlayerPosition(pPool, id) !== PlayerPosition.GK && !substitutedInIds.has(id);
         if (coachExp >= 55) {
           // Doświadczony trener: łata dziurę pozycyjną — ściąga napastnika/pomocnika, wpuszcza odpowiedni typ
-          if (expelledPos === PlayerPosition.DEF) {
+          if (expelledPos === PlayerPosition.GK) {
+            targetToSubOff = lineup.startingXI.find(id => isOutfieldAvailableToSubOff(id)) ?? null;
+          } else if (expelledPos === PlayerPosition.DEF) {
             targetToSubOff = lineup.startingXI.find(id => id && pPool.find(p => p.id === id)?.position === PlayerPosition.FWD && !substitutedInIds.has(id)) ?? null;
           } else if (expelledPos === PlayerPosition.MID) {
             targetToSubOff = lineup.startingXI.find(id => id && pPool.find(p => p.id === id)?.position === PlayerPosition.FWD && !substitutedInIds.has(id)) ?? null;
@@ -205,17 +236,28 @@ const allPlayedIds = new Set<string>([
           // Mało doświadczony trener: ściąga najbardziej zmęczonego
           let minFatigue = Infinity;
           lineup.startingXI.forEach(id => {
-            if (!id || substitutedInIds.has(id)) return;
+            if (!isOutfieldAvailableToSubOff(id)) return;
             const f = fMap[id] ?? 100;
             if (f < minFatigue) { minFatigue = f; targetToSubOff = id; }
           });
         }
         if (!targetToSubOff) return;
-        const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === expelledPos && !lineup.startingXI.includes(id) && !substitutedOutIds.has(id))
-          ?? lineup.bench.find(id => !lineup.startingXI.includes(id) && !substitutedOutIds.has(id));
+        const candidate = findBenchReplacement(lineup, pPool, expelledPos);
         if (!candidate) return;
         const outIdx = lineup.startingXI.indexOf(targetToSubOff);
         if (outIdx === -1) return;
+        if (expelledPos === PlayerPosition.GK) {
+          const keeperSlotIdx = lineup.startingXI[0] === null ? 0 : lineup.startingXI.findIndex(id => id === null);
+          if (keeperSlotIdx === -1) return;
+          substitutions.push({ playerOutId: targetToSubOff, playerInId: candidate, minute, isHome: side === 'H' });
+          lineup.startingXI[outIdx] = null;
+          lineup.startingXI[keeperSlotIdx] = candidate;
+          allPlayedIds.add(candidate);
+          substitutedInIds.add(candidate);
+          substitutedOutIds.add(targetToSubOff);
+          if (side === 'H') hSubsUsed++; else aSubsUsed++;
+          return;
+        }
         substitutions.push({ playerOutId: targetToSubOff, playerInId: candidate, minute, isHome: side === 'H' });
         lineup.startingXI[outIdx] = candidate;
         allPlayedIds.add(candidate);
@@ -464,9 +506,8 @@ const allPlayedIds = new Set<string>([
             const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
             const canSub = usedCount < 5 && !(usedCount === 4 && minute < 88);
             if (canSub) {
-              const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx].role;
-              const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id))
-                ?? lineup.bench.find(id => !lineup.startingXI.includes(id));
+              const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx]?.role ?? PlayerPosition.MID;
+              const candidate = findBenchReplacement(lineup, pPool, roleNeeded);
               if (candidate) {
                 substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
                 lineup.startingXI[pIdx] = candidate;
@@ -489,9 +530,8 @@ const allPlayedIds = new Set<string>([
               const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
               const canSub = usedCount < 5 && !(usedCount === 4 && minute < 88);
               if (canSub) {
-                const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx].role;
-                const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id))
-                  ?? lineup.bench.find(id => !lineup.startingXI.includes(id));
+                const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx]?.role ?? PlayerPosition.MID;
+                const candidate = findBenchReplacement(lineup, pPool, roleNeeded);
                 if (candidate) {
                   substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
                   lineup.startingXI[pIdx] = candidate;
