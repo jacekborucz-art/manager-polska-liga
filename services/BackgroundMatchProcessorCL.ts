@@ -1,4 +1,4 @@
-import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach, PlayerStats } from '../types';
+import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchInjuryEntry, MatchEventType, Referee, Coach, PlayerStats } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
@@ -57,6 +57,7 @@ interface CLMatchResult {
   goals: { playerName: string; playerId?: string; assistId?: string; minute: number; teamId: string; isPenalty: boolean; varDisallowed?: boolean }[];
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   substitutions: { playerOutName: string; playerInName: string; minute: number; teamId: string }[];
+  injuries: MatchInjuryEntry[];
   updatedHomePlayers: Player[];
   updatedAwayPlayers: Player[];
   participatingHomePlayerIds: string[];
@@ -189,8 +190,8 @@ const attributeGoalsToPlayers = (
   subs: { min: number; outId: string; inId: string }[],
   rng: (o: number) => number,
   baseOffset: number
-): { playerName: string; minute: number; teamId: string; isPenalty: boolean }[] => {
-  const goals: { playerName: string; minute: number; teamId: string; isPenalty: boolean }[] = [];
+): { playerName: string; playerId?: string; minute: number; teamId: string; isPenalty: boolean }[] => {
+  const goals: { playerName: string; playerId?: string; minute: number; teamId: string; isPenalty: boolean }[] = [];
   const usedMinutes = new Set<number>();
 
   for (let i = 0; i < count; i++) {
@@ -214,6 +215,96 @@ const attributeGoalsToPlayers = (
 };
 
 // ============================================================
+//  SYMULACJA KONTUZJI PER MINUTA (0.4% szansy/minutę)
+// ============================================================
+const simulateInjuriesPerMinute = (
+  lineup: Lineup,
+  players: Player[],
+  teamId: string,
+  preRolledSubs: { min: number; outId: string; inId: string }[],
+  subsAlreadyUsed: number,
+  rng: (o: number) => number,
+  offset: number,
+  refExpFactor: number,
+  matchDate: Date
+): {
+  injuries: MatchInjuryEntry[];
+  updatedPlayers: Player[];
+  injuryPenaltyMap: Record<string, number>;
+  injurySubs: { outId: string; inId: string; min: number }[];
+} => {
+  const currentXI = [...lineup.startingXI] as (string | null)[];
+  const currentBench = [...lineup.bench];
+  let subsUsed = subsAlreadyUsed;
+  const injuryChance = 0.004 * refExpFactor;
+  const injuries: MatchInjuryEntry[] = [];
+  let updatedPlayers = [...players];
+  const injuryPenaltyMap: Record<string, number> = {};
+  const injurySubs: { outId: string; inId: string; min: number }[] = [];
+
+  for (let minute = 1; minute <= 90; minute++) {
+    for (const sub of preRolledSubs) {
+      if (sub.min === minute) {
+        const idx = currentXI.indexOf(sub.outId);
+        if (idx !== -1) {
+          currentXI[idx] = sub.inId;
+          const benchIdx = currentBench.indexOf(sub.inId);
+          if (benchIdx !== -1) currentBench.splice(benchIdx, 1);
+        }
+      }
+    }
+
+    if (rng(offset + minute + 800) >= injuryChance) continue;
+
+    const activeIndices = currentXI.map((id, i) => id ? i : -1).filter(i => i !== -1);
+    if (activeIndices.length === 0) continue;
+    const pIdx = activeIndices[Math.floor(rng(offset + minute + 801) * activeIndices.length)];
+    const pId = currentXI[pIdx] as string;
+    const p = players.find(x => x.id === pId);
+    if (!p) continue;
+
+    const isSev = rng(offset + minute + 803) >= 0.84;
+    const severity = isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
+    let injuryRollOffset = offset + minute + 808;
+    const { days, type } = rollInjuryBySeverity(severity, () => rng(injuryRollOffset++));
+    const playerName = `${p.firstName} ${p.lastName}`;
+
+    injuries.push({ playerId: pId, playerName, minute, teamId, severity, days, type });
+    injuryPenaltyMap[pId] = (isSev ? 55 : 20) + rng(offset + minute + 5000) * 15;
+
+    updatedPlayers = updatedPlayers.map(pl => pl.id === pId ? {
+      ...pl,
+      health: {
+        status: 'INJURED' as any,
+        injury: { type, daysRemaining: days, severity, injuryDate: matchDate.toISOString(), totalDays: days }
+      }
+    } : pl);
+
+    if (isSev) {
+      const canSub = subsUsed < 5 && !(subsUsed === 4 && minute < 88);
+      if (canSub) {
+        const tacticSlots = TacticRepository.getById(lineup.tacticId).slots;
+        const roleNeeded = pIdx < tacticSlots.length ? tacticSlots[pIdx].role : undefined;
+        const candidate = (roleNeeded ? currentBench.find(id => players.find(pl => pl.id === id)?.position === roleNeeded) : undefined)
+          ?? currentBench.find(id => players.find(pl => pl.id === id)?.position !== PlayerPosition.GK);
+        if (candidate) {
+          injurySubs.push({ outId: pId, inId: candidate, min: minute });
+          currentXI[pIdx] = candidate;
+          currentBench.splice(currentBench.indexOf(candidate), 1);
+          subsUsed++;
+        } else {
+          currentXI[pIdx] = null;
+        }
+      } else {
+        currentXI[pIdx] = null;
+      }
+    }
+  }
+
+  return { injuries, updatedPlayers, injuryPenaltyMap, injurySubs };
+};
+
+// ============================================================
 //  SYMULACJA KARTEK I KONTUZJI (z sędzią FIFA/UEFA)
 // ============================================================
 const simulateCardsAndInjuries = (
@@ -223,8 +314,7 @@ const simulateCardsAndInjuries = (
   offset: number,
   rng: (o: number) => number,
   referee: Referee,
-  isHomeTeam: boolean,
-  matchDate: Date
+  isHomeTeam: boolean
 ): {
   cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[];
   redCount: number;
@@ -232,6 +322,7 @@ const simulateCardsAndInjuries = (
   fatigueMap: Record<string, number>;
   fatigueDebtMap: Record<string, number>;
   injuryPenaltyMap: Record<string, number>;
+  injuries: MatchInjuryEntry[];
 } => {
   const cards: { playerId: string; playerName: string; minute: number; teamId: string; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[] = [];
   let redCount = 0;
@@ -239,6 +330,7 @@ const simulateCardsAndInjuries = (
   const fatigueMap: Record<string, number> = {};
   const fatigueDebtMap: Record<string, number> = {};
   const injuryPenaltyMap: Record<string, number> = {};
+  const injuries: MatchInjuryEntry[] = [];
 
   // Sędzia: im mniej doświadczony, tym więcej chaosu; strictness → surowość
   const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
@@ -274,30 +366,6 @@ const simulateCardsAndInjuries = (
       cards.push({ playerId: pId, playerName, minute: m, teamId, type: 'YELLOW' });
     }
 
-    const isInjured = rng(offset + idx + 2000) < 0.0064;
-    if (isInjured) {
-      const isSev = rng(idx + 3000) < 0.15;
-      let injuryRollOffset = offset + idx + 3100;
-      const { days, type } = rollInjuryBySeverity(
-        isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
-        () => rng(injuryRollOffset++)
-      );
-      updatedPlayers = updatedPlayers.map(pl => pl.id === pId ? {
-        ...pl,
-        health: {
-          status: 'INJURED' as any,
-          injury: {
-            type,
-            daysRemaining: days,
-            severity: isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT,
-            injuryDate: matchDate.toISOString(),
-            totalDays: days,
-          }
-        }
-      } : pl);
-      injuryPenaltyMap[pId] = (isSev ? 55 : 20) + rng(offset + idx + 5000) * 15;
-    }
-
     const stamina = p.attributes.stamina || 50;
     const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
     let drain = 2.5 + rng(offset + idx + 4000) * 1.5 + (stamEff * 0.5) + 1.5;
@@ -306,7 +374,7 @@ const simulateCardsAndInjuries = (
     fatigueDebtMap[pId] = 5 + ((100 - stamina) * 0.15);
   });
 
-  return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap };
+  return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap, injuries };
 };
 
 // ============================================================
@@ -494,13 +562,15 @@ const simulateCLMatchFull = (
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
 
   // ── Kartki i kontuzje z sędzią (Stage 2) ────────────────────────────
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false, date);
+  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true);
+  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false);
+  const homeInjuryData = simulateInjuriesPerMinute(homeLineup, homePlayersAll, homeClub.id, homeSubData.matchSubs, homeSubData.matchSubs.length, rng, 10000, refExpFactor, date);
+  const awayInjuryData = simulateInjuriesPerMinute(awayLineup, awayPlayersAll, awayClub.id, awaySubData.matchSubs, awaySubData.matchSubs.length, rng, 20000, refExpFactor, date);
 
   // ── Zmęczenie ────────────────────────────────────────────────────────
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
   const fatigueDebtMap: Record<string, number> = { ...homeCardData.fatigueDebtMap, ...awayCardData.fatigueDebtMap };
-  const injuryPenaltyMap: Record<string, number> = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap };
+  const injuryPenaltyMap: Record<string, number> = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap, ...homeInjuryData.injuryPenaltyMap, ...awayInjuryData.injuryPenaltyMap };
 
   const homeSubIns = homeSubData.allPlayedIds.filter(id => !homeLineup.startingXI.includes(id));
   homeSubIns.forEach((id, idx) => {
@@ -646,14 +716,20 @@ const simulateCLMatchFull = (
     wentToExtraTime,
     goals: [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals],
     cards: allCards,
-    substitutions: [...homeSubs, ...awaySubs],
-    updatedHomePlayers: homeCardData.updatedPlayers,
-    updatedAwayPlayers: awayCardData.updatedPlayers,
+    substitutions: [
+      ...homeSubs,
+      ...awaySubs,
+      ...homeInjuryData.injurySubs.map(s => { const out = homePlayersAll.find(p => p.id === s.outId); const inP = homePlayersAll.find(p => p.id === s.inId); return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInId: s.inId, playerInName: inP ? `${inP.firstName} ${inP.lastName}` : '?', minute: s.min, teamId: homeClub.id }; }),
+      ...awayInjuryData.injurySubs.map(s => { const out = awayPlayersAll.find(p => p.id === s.outId); const inP = awayPlayersAll.find(p => p.id === s.inId); return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInId: s.inId, playerInName: inP ? `${inP.firstName} ${inP.lastName}` : '?', minute: s.min, teamId: awayClub.id }; }),
+    ],
+    updatedHomePlayers: homeInjuryData.updatedPlayers,
+    updatedAwayPlayers: awayInjuryData.updatedPlayers,
     participatingHomePlayerIds: homeSubData.allPlayedIds,
     participatingAwayPlayerIds: awaySubData.allPlayedIds,
     fatigueMap,
     fatigueDebtMap,
     injuryPenaltyMap,
+    injuries: [...homeInjuryData.injuries, ...awayInjuryData.injuries],
     ratings,
   };
 };
@@ -940,13 +1016,20 @@ export const BackgroundMatchProcessorCL = {
         awayScore: result.awayScore,
         homePenaltyScore: result.penaltyHome,
         awayPenaltyScore: result.penaltyAway,
+        isExtraTime: result.wentToExtraTime,
         goals: result.goals,
         cards: result.cards,
         substitutions: result.substitutions,
+        injuries: result.injuries,
         refereeName: `${referee.firstName} ${referee.lastName}`,
         attendance,
         venue: venueLabel,
         weather,
+        homeLineup: homeLineup.startingXI.filter((id): id is string => id !== null),
+        awayLineup: awayLineup.startingXI.filter((id): id is string => id !== null),
+        homeTacticId: homeLineup.tacticId,
+        awayTacticId: awayLineup.tacticId,
+        ratings: result.ratings,
       });
     });
 

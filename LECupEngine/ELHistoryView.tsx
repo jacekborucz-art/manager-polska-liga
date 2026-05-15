@@ -4,6 +4,7 @@ import { CompetitionType, MatchStatus, ViewState } from '../types';
 import { ChampionshipHistoryService } from '../data/championship_history';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../resources/static_db/clubs/EuropeLeagueTeams';
 import LigaEuropaBg from '../Graphic/themes/LigaEuropa.png';
+import { MatchReportModal } from '../components/modals/MatchReportModal';
 
 // ── Pary dwumeczowe ────────────────────────────────────────────────────────
 interface ELPair {
@@ -92,6 +93,7 @@ export const ELHistoryView: React.FC = () => {
   }, [elHistoryInitialRound]);
   const [selectedGroup, setSelectedGroup] = useState<number>(0);
   const [gsMatchdayTab, setGsMatchdayTab] = useState<number>(1);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   // ── Oblicz tabelę grupy ─────────────────────────────────────────────────
   const computeGroupTable = (groupTeams: string[]) => {
@@ -516,7 +518,7 @@ export const ELHistoryView: React.FC = () => {
                                   </span>
                                   <div className="mx-4 text-center shrink-0">
                                     {f.status === MatchStatus.FINISHED
-                                      ? <span className="text-[14px] font-black text-white tabular-nums">{f.homeScore} : {f.awayScore}</span>
+                                      ? <span className="text-[14px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(f.id)}>{f.homeScore} : {f.awayScore}</span>
                                       : <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">vs</span>}
                                   </div>
                                   <span className={`text-[12px] font-black uppercase italic flex-1 text-left truncate ${f.awayTeamId === userTeamId ? 'text-amber-300' : 'text-slate-200'}`}>
@@ -568,14 +570,14 @@ export const ELHistoryView: React.FC = () => {
                             <div className="flex items-center gap-3 mb-1">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M1</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg1Done ? setSelectedMatchId(pair.pairId) : undefined}>{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
                             </div>
                             {/* M2: teamB gospodarz */}
                             <div className="flex items-center gap-3">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M2</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg2Done ? setSelectedMatchId(pair.pairId + '_RETURN') : undefined}>{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
                             </div>
                             {agg && (
@@ -628,13 +630,13 @@ export const ELHistoryView: React.FC = () => {
                             <div className="flex items-center gap-3 mb-1">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M1</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg1Done ? setSelectedMatchId(pair.pairId) : undefined}>{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M2</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg2Done ? setSelectedMatchId(pair.pairId + '_RETURN') : undefined}>{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
                             </div>
                             {agg && (
@@ -687,13 +689,13 @@ export const ELHistoryView: React.FC = () => {
                             <div className="flex items-center gap-3 mb-1">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M1</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg1Done ? setSelectedMatchId(pair.pairId) : undefined}>{leg1Done ? `${pair.leg1?.homeScore} : ${pair.leg1?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-[8px] text-slate-600 w-8 shrink-0">M2</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 text-right truncate ${pair.teamBId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubB?.name ?? pair.teamBId}</span>
-                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums">{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
+                              <span className="w-16 text-center text-[13px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => leg2Done ? setSelectedMatchId(pair.pairId + '_RETURN') : undefined}>{leg2Done ? `${pair.leg2?.homeScore} : ${pair.leg2?.awayScore}` : '– : –'}</span>
                               <span className={`text-[11px] font-black uppercase italic flex-1 truncate ${pair.teamAId === userTeamId ? 'text-orange-300' : 'text-slate-300'}`}>{clubA?.name ?? pair.teamAId}</span>
                             </div>
                             {agg && (
@@ -744,7 +746,7 @@ export const ELHistoryView: React.FC = () => {
                             </span>
                             <div className="w-24 text-center shrink-0">
                               {finalDoneFlag && finalFixture!.homeScore !== null
-                                ? <span className="text-[20px] font-black text-white tabular-nums">{finalFixture!.homeScore} : {finalFixture!.awayScore}</span>
+                                ? <span className="text-[20px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(finalFixture!.id)}>{finalFixture!.homeScore} : {finalFixture!.awayScore}</span>
                                 : <span className="text-[14px] font-black text-slate-600 uppercase tracking-widest">VS</span>
                               }
                               {finalDoneFlag && finalFixture!.homePenaltyScore != null && finalFixture!.awayPenaltyScore != null && (
@@ -855,7 +857,7 @@ export const ELHistoryView: React.FC = () => {
                                   {formatDate(pair.leg1!.date)}
                                 </span>
                                 {leg1Done ? (
-                                  <span className="text-[12px] font-black tabular-nums text-slate-300">
+                                  <span className="text-[12px] font-black tabular-nums text-slate-300 cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(pair.pairId)}>
                                     {pair.leg1!.homeScore} : {pair.leg1!.awayScore}
                                   </span>
                                 ) : (
@@ -873,7 +875,7 @@ export const ELHistoryView: React.FC = () => {
                                     {formatDate(pair.leg2.date)}
                                   </span>
                                   {leg2Done ? (
-                                    <div className="flex flex-col items-center">
+                                    <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setSelectedMatchId(pair.pairId + '_RETURN')}>
                                       <span className="text-[12px] font-black tabular-nums text-slate-300">
                                         {pair.leg2.awayScore} : {pair.leg2.homeScore}
                                       </span>
@@ -973,6 +975,9 @@ export const ELHistoryView: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+      {selectedMatchId && (
+        <MatchReportModal matchId={selectedMatchId} onClose={() => setSelectedMatchId(null)} />
       )}
     </div>
   );

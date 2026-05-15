@@ -4,6 +4,7 @@ import { CompetitionType, MatchStatus, ViewState } from '../types';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/static_db/clubs/ConferenceLeagueTeams';
 import { CONFDrawService } from './CONFDrawService';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { MatchReportModal } from '../components/modals/MatchReportModal';
 
 interface CONFPair {
   pairId: string;
@@ -83,6 +84,7 @@ export const CONFHistoryView: React.FC = () => {
   const [activeRound, setActiveRound] = useState<CONFRoundKey>((confHistoryInitialRound as CONFRoundKey) ?? 'R1Q');
   const [selectedGroup, setSelectedGroup] = useState<number>(0);
   const [gsMatchdayTab, setGsMatchdayTab] = useState<number>(1);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (confHistoryInitialRound) {
@@ -596,7 +598,7 @@ export const CONFHistoryView: React.FC = () => {
                                 </span>
                                 <div className="mx-4 text-center shrink-0">
                                   {f.status === MatchStatus.FINISHED
-                                    ? <span className="text-[14px] font-black text-white tabular-nums">{f.homeScore} : {f.awayScore}</span>
+                                    ? <span className="text-[14px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(f.id)}>{f.homeScore} : {f.awayScore}</span>
                                     : <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">vs</span>
                                   }
                                 </div>
@@ -659,14 +661,14 @@ export const CONFHistoryView: React.FC = () => {
                           <div className="w-40 flex flex-col items-center gap-0.5 shrink-0 mx-2">
                             <div className="flex items-center gap-2">
                               {leg1Done
-                                ? <span className="text-[12px] font-black tabular-nums text-slate-300">{pair.leg1!.homeScore} : {pair.leg1!.awayScore}</span>
+                                ? <span className="text-[12px] font-black tabular-nums text-slate-300 cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(pair.pairId)}>{pair.leg1!.homeScore} : {pair.leg1!.awayScore}</span>
                                 : <span className="text-[9px] font-black text-slate-700 uppercase">vs</span>}
                               <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">1M</span>
                             </div>
                             {pair.leg2 && (
                               <div className="flex items-center gap-2">
                                 {leg2Done ? (
-                                  <div className="flex flex-col items-center">
+                                  <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setSelectedMatchId(pair.pairId + '_RETURN')}>
                                     <span className="text-[12px] font-black tabular-nums text-slate-300">{pair.leg2.awayScore} : {pair.leg2.homeScore}</span>
                                     {pair.leg2.homePenaltyScore != null && pair.leg2.awayPenaltyScore != null && (
                                       <span className="text-[7px] font-black uppercase tracking-widest text-rose-500 -mt-0.5">
@@ -741,14 +743,14 @@ export const CONFHistoryView: React.FC = () => {
                           <div className="w-40 flex flex-col items-center gap-0.5 shrink-0 mx-2">
                             <div className="flex items-center gap-2">
                               {leg1Done
-                                ? <span className="text-[12px] font-black tabular-nums text-slate-300">{pair.leg1!.homeScore} : {pair.leg1!.awayScore}</span>
+                                ? <span className="text-[12px] font-black tabular-nums text-slate-300 cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(pair.pairId)}>{pair.leg1!.homeScore} : {pair.leg1!.awayScore}</span>
                                 : <span className="text-[9px] font-black text-slate-700 uppercase">vs</span>}
                               <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">1M</span>
                             </div>
                             {pair.leg2 && (
                               <div className="flex items-center gap-2">
                                 {leg2Done ? (
-                                  <div className="flex flex-col items-center">
+                                  <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setSelectedMatchId(pair.pairId + '_RETURN')}>
                                     <span className="text-[12px] font-black tabular-nums text-slate-300">{pair.leg2.awayScore} : {pair.leg2.homeScore}</span>
                                     {pair.leg2.homePenaltyScore != null && pair.leg2.awayPenaltyScore != null && (
                                       <span className="text-[7px] font-black uppercase tracking-widest text-rose-500 -mt-0.5">
@@ -818,7 +820,7 @@ export const CONFHistoryView: React.FC = () => {
                       </span>
                       <div className="w-24 text-center shrink-0">
                         {finalDoneFlag && finalFixture.homeScore !== null
-                          ? <span className="text-[20px] font-black text-white tabular-nums">{finalFixture.homeScore} : {finalFixture.awayScore}</span>
+                          ? <span className="text-[20px] font-black text-white tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(finalFixture.id)}>{finalFixture.homeScore} : {finalFixture.awayScore}</span>
                           : <span className="text-[14px] font-black text-slate-600 uppercase tracking-widest">VS</span>
                         }
                         {finalDoneFlag && finalFixture.homePenaltyScore != null && finalFixture.awayPenaltyScore != null && (
@@ -924,7 +926,7 @@ export const CONFHistoryView: React.FC = () => {
                               {pair.leg1 ? formatDate(pair.leg1.date) : ''}
                             </span>
                             {leg1Done ? (
-                              <span className="text-[12px] font-black tabular-nums text-slate-300">
+                              <span className="text-[12px] font-black tabular-nums text-slate-300 cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(pair.pairId)}>
                                 {pair.leg1!.homeScore} : {pair.leg1!.awayScore}
                               </span>
                             ) : (
@@ -942,7 +944,7 @@ export const CONFHistoryView: React.FC = () => {
                                 {formatDate(pair.leg2.date)}
                               </span>
                               {leg2Done ? (
-                                <div className="flex flex-col items-center">
+                                <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setSelectedMatchId(pair.pairId + '_RETURN')}>
                                   <span className="text-[12px] font-black tabular-nums text-slate-300">
                                     {pair.leg2.awayScore} : {pair.leg2.homeScore}
                                   </span>
@@ -1006,6 +1008,9 @@ export const CONFHistoryView: React.FC = () => {
           </div>
         </div>
       </div>
+      {selectedMatchId && (
+        <MatchReportModal matchId={selectedMatchId} onClose={() => setSelectedMatchId(null)} />
+      )}
     </div>
   );
 };

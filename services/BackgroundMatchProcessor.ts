@@ -357,7 +357,20 @@ if (todayFixtures.length === 0) {
             minute: s.minute,
             teamId: s.isHome ? home.id : away.id
           };
-        })
+        }),
+        injuries: result.injuries.map(inj => {
+          const allP = currentPlayers[home.id].concat(currentPlayers[away.id]);
+          const p = allP.find(x => x.id === inj.playerId);
+          return {
+            playerId: inj.playerId,
+            playerName: p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany',
+            minute: inj.minute,
+            teamId: p?.clubId ?? '?',
+            severity: inj.severity,
+            days: inj.days,
+            type: inj.type,
+          };
+        }),
       });
       currentFixtures = currentFixtures.map(f => f.id === fixture.id ? { 
         ...f, 

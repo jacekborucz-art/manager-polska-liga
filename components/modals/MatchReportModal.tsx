@@ -12,7 +12,7 @@ interface MatchReportModalProps {
   onClose: () => void;
 }
 
-const GLASS_PANEL = "bg-slate-900/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
+const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-sm border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
 const GOALKEEPER_KIT_POOL = [
   '#facc15', // żółty
@@ -47,6 +47,14 @@ const getContrastText = (bgHex: string, secondaryHex: string): string => {
   const secL = lum(parse(secondaryHex));
   if (Math.abs(bgL - secL) > 60) return secondaryHex;
   return bgL > 128 ? '#000000' : '#ffffff';
+};
+
+const isColorDark = (hex: string): boolean => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 80;
 };
 
 const getPitchSlotTop = (isHome: boolean, slotY: number): string =>
@@ -144,9 +152,9 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
   const kits = KitSelectionService.selectOptimalKits(homeClub, awayClub);
 
-  // Buduje chronologiczną listę zdarzeń dla drużyny (gole + kartki razem po minucie)
+  // Buduje chronologiczną listę zdarzeń dla drużyny (gole + czerwone kartki + niestrzelone karne)
   const buildEvents = (teamId: string) => {
-    const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean }[] = [];
+    const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean; isMiss?: boolean; isInjury?: boolean; injurySeverity?: string }[] = [];
 
     match.goals
       .filter(g => g.teamId === teamId && !g.isMiss)
@@ -158,12 +166,42 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
         varDisallowed: g.varDisallowed
       }));
 
+    match.goals
+      .filter(g => g.teamId === teamId && g.isMiss && g.isPenalty)
+      .forEach(g => events.push({
+        minute: g.minute,
+        icon: '⚽',
+        name: g.playerName,
+        extra: '(k)',
+        isMiss: true
+      }));
+
+    (match.missedPenalties ?? [])
+      .filter(g => g.teamId === teamId)
+      .forEach(g => events.push({
+        minute: g.minute,
+        icon: '⚽',
+        name: g.playerName,
+        extra: '(k)',
+        isMiss: true
+      }));
+
     match.cards
-      .filter(c => c.teamId === teamId)
+      .filter(c => c.teamId === teamId && (c.type === 'RED' || c.type === 'SECOND_YELLOW'))
       .forEach(c => events.push({
         minute: c.minute,
-        icon: c.type === 'YELLOW' ? '🟨' : '🟥',
+        icon: '🟥',
         name: c.playerName
+      }));
+
+    (match.injuries ?? [])
+      .filter(i => i.teamId === teamId)
+      .forEach(i => events.push({
+        minute: i.minute,
+        icon: '✚',
+        name: i.playerName,
+        isInjury: true,
+        injurySeverity: i.severity
       }));
 
     return events.sort((a, b) => a.minute - b.minute);
@@ -172,20 +210,36 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
   const homeEvents = buildEvents(homeClub.id);
   const awayEvents = buildEvents(awayClub.id);
 
+  const fmtName = (name: string) => name.includes(' ') ? name.charAt(0) + '. ' + name.split(' ').slice(1).join(' ') : name;
+
   const renderTeamEvents = (events: ReturnType<typeof buildEvents>, align: 'left' | 'right') => (
     <div className={`flex flex-wrap gap-x-4 gap-y-0.5 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
       {events.map((e, i) => e.varDisallowed ? (
         <span key={i} className="text-[10px] font-black text-slate-500 uppercase italic whitespace-nowrap flex items-center gap-1">
           {align === 'right'
-            ? <><s>{e.name}{e.extra ? ` ${e.extra}` : ''} {e.minute}'</s>&nbsp;⚽(VAR)</>
-            : <>⚽(VAR)&nbsp;<s>{e.minute}' {e.name}{e.extra ? ` ${e.extra}` : ''}</s></>
+            ? <><s>{fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''} {e.minute}'</s>&nbsp;⚽(VAR)</>
+            : <>⚽(VAR)&nbsp;<s>{e.minute}' {fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''}</s></>
+          }
+        </span>
+      ) : e.isMiss ? (
+        <span key={i} className="text-[10px] font-black text-slate-500 uppercase italic whitespace-nowrap flex items-center gap-1">
+          {align === 'right'
+            ? <><s>{fmtName(e.name)} {e.extra} {e.minute}'</s>&nbsp;⚽</>
+            : <>⚽&nbsp;<s>{e.minute}' {fmtName(e.name)} {e.extra}</s></>
+          }
+        </span>
+      ) : e.isInjury ? (
+        <span key={i} className={`text-[10px] font-black ${e.injurySeverity === 'SEVERE' ? 'text-red-500' : 'text-white'} uppercase italic whitespace-nowrap`}>
+          {align === 'right'
+            ? <>{fmtName(e.name)} {e.minute}' {e.icon}</>
+            : <>{e.icon} {e.minute}' {fmtName(e.name)}</>
           }
         </span>
       ) : (
         <span key={i} className="text-[10px] font-black text-white uppercase italic whitespace-nowrap">
           {align === 'right'
-            ? <>{e.name}{e.extra ? ` ${e.extra}` : ''} {e.minute}' {e.icon}</>
-            : <>{e.icon} {e.minute}' {e.name}{e.extra ? ` ${e.extra}` : ''}</>
+            ? <>{fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''} {e.minute}' {e.icon}</>
+            : <>{e.icon} {e.minute}' {fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''}</>
           }
         </span>
       ))}
@@ -258,17 +312,20 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
 
               <div className="flex items-center gap-0.5 shrink-0">
                 {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
-                {playerValidGoals.map((g, i) => (
-                  <span key={i} title={`Gol ${g.minute}'`} className="text-[9px]">⚽</span>
-                ))}
-                {playerVarGoals.map((g, i) => (
-                  <span key={i} title={`Gol nieuznany VAR ${g.minute}'`} className="text-[9px] opacity-40 line-through">⚽</span>
-                ))}
+                {playerValidGoals.length === 1 && (
+                  <span title={`Gol ${playerValidGoals[0].minute}'`} className="text-[9px]">⚽</span>
+                )}
+                {playerValidGoals.length > 1 && (
+                  <span title={playerValidGoals.map(g => `Gol ${g.minute}'`).join(', ')} className="text-[9px]">⚽({playerValidGoals.length})</span>
+                )}
+                {playerVarGoals.length > 0 && (
+                  <span title={playerVarGoals.map(g => `Gol nieuznany VAR ${g.minute}'`).join(', ')} className="text-[9px] opacity-40 line-through">⚽</span>
+                )}
                 {yellowCards.map((c, i) => (
                   <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
                 ))}
                 {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
-                {injury && <span title={`Kontuzja ${injury.minute}'`} className="text-[8px] font-black text-red-400">✚</span>}
+                {injury && <span title={`Kontuzja ${injury.severity === 'SEVERE' ? 'ciężka' : 'lekka'} ${injury.minute}'`} className={`text-[11px] font-black ${injury.severity === 'SEVERE' ? 'text-red-600' : 'text-white'}`}>✚</span>}
                 {subOut && <span title={`Zmiana wyj. ${subOut.minute}'`} className="text-[7px] text-slate-500">↓{subOut.minute}'</span>}
                 {subIn && <span title={`Wejście ${subIn.minute}'`} className="text-[7px] text-emerald-400">↑{subIn.minute}'</span>}
               </div>
@@ -287,28 +344,34 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
         })}
 
         {subs.length > 0 && (() => {
+          const allPlayers = Object.values(players).flat();
           const subPlayers = subs
-            .map(s => ({ sub: s, player: teamPlayers.find(p => p.id === s.playerInId) }))
-            .filter(({ player }) => !!player && !lineupIds.includes(player!.id));
+            .filter(s => !lineupIds.includes(s.playerInId ?? ''))
+            .map(s => ({
+              sub: s,
+              player: allPlayers.find(p => p.id === s.playerInId) ?? null
+            }));
           if (subPlayers.length === 0) return null;
           return (
             <>
               <div className="border-t border-white/5 my-1" />
               {subPlayers.map(({ sub, player }) => {
-                if (!player) return null;
-                const rating = match.ratings?.[player.id];
-                const isMOTM = motmId === player.id;
-                const playerGoals = match.goals.filter(g => g.playerId === player.id && !g.isMiss);
+                const playerId = player?.id ?? sub.playerInId ?? `sub-${sub.minute}`;
+                const rating = player ? match.ratings?.[player.id] : undefined;
+                const isMOTM = motmId === player?.id;
+                const playerGoals = player ? match.goals.filter(g => g.playerId === player.id && !g.isMiss) : [];
                 const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
                 const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
-                const yellowCards = match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW');
-                const redCard = match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
-                const injury = injuries.find(i => i.playerId === player.id);
+                const yellowCards = player ? match.cards.filter(c => c.playerId === player.id && c.type === 'YELLOW') : [];
+                const redCard = player ? match.cards.find(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW')) : undefined;
+                const injury = player ? injuries.find(i => i.playerId === player.id) : undefined;
                 const isRedCarded = !!redCard;
-                const displayName = `${player.firstName.charAt(0)}. ${player.lastName}`;
+                const displayName = player
+                  ? `${player.firstName.charAt(0)}. ${player.lastName}`
+                  : sub.playerInName;
                 return (
                   <div
-                    key={player.id}
+                    key={playerId}
                     className={`flex items-center gap-1.5 px-1.5 py-[4px] rounded-md transition-all ${
                       isMOTM
                         ? 'bg-amber-500/15 border border-amber-500/30'
@@ -318,12 +381,12 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
                     }`}
                   >
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black shrink-0 border ${
-                      player.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : player.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                      : player.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                      player?.position === PlayerPosition.GK ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : player?.position === PlayerPosition.DEF ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                      : player?.position === PlayerPosition.MID ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                       : 'bg-red-500/20 border-red-500/40 text-red-300'
                     }`}>
-                      {player.position}
+                      {player?.position ?? '?'}
                     </div>
                     <span className={`flex-1 text-[9px] font-bold uppercase truncate ${
                       isMOTM ? 'text-amber-300' : isRedCarded ? 'text-slate-500 line-through' : 'text-slate-400'
@@ -332,17 +395,20 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
                     </span>
                     <div className="flex items-center gap-0.5 shrink-0">
                       {isMOTM && <span className="text-amber-400 text-[9px]">⭐</span>}
-                      {playerValidGoals.map((g, i) => (
-                        <span key={i} title={`Gol ${g.minute}'`} className="text-[9px]">⚽</span>
-                      ))}
-                      {playerVarGoals.map((g, i) => (
-                        <span key={i} title={`Gol nieuznany VAR ${g.minute}'`} className="text-[9px] opacity-40 line-through">⚽</span>
-                      ))}
+                      {playerValidGoals.length === 1 && (
+                        <span title={`Gol ${playerValidGoals[0].minute}'`} className="text-[9px]">⚽</span>
+                      )}
+                      {playerValidGoals.length > 1 && (
+                        <span title={playerValidGoals.map(g => `Gol ${g.minute}'`).join(', ')} className="text-[9px]">⚽({playerValidGoals.length})</span>
+                      )}
+                      {playerVarGoals.length > 0 && (
+                        <span title={playerVarGoals.map(g => `Gol nieuznany VAR ${g.minute}'`).join(', ')} className="text-[9px] opacity-40 line-through">⚽</span>
+                      )}
                       {yellowCards.map((c, i) => (
                         <span key={i} title={`Żółta ${c.minute}'`} className="text-[9px]">🟨</span>
                       ))}
                       {redCard && <span title={`Czerwona ${redCard.minute}'`} className="text-[9px]">🟥</span>}
-                      {injury && <span title={`Kontuzja ${injury.minute}'`} className="text-[8px] font-black text-red-400">✚</span>}
+                      {injury && <span title={`Kontuzja ${injury.severity === 'SEVERE' ? 'ciężka' : 'lekka'} ${injury.minute}'`} className={`text-[11px] font-black ${injury.severity === 'SEVERE' ? 'text-red-600' : 'text-white'}`}>✚</span>}
                       <span title={`Wejście ${sub.minute}'`} className="text-[7px] text-emerald-400">↑{sub.minute}'</span>
                     </div>
                     {rating !== undefined ? (
@@ -458,16 +524,16 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     : '–';
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={onClose}>
       <div
-        className={`${GLASS_PANEL} w-full max-w-6xl max-h-[92vh] rounded-[40px] flex flex-col overflow-hidden`}
+        className={`${GLASS_PANEL} w-full max-w-6xl max-h-[96vh] rounded-[40px] flex flex-col overflow-hidden`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="bg-white/5 border-b border-white/5 px-8 py-4 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-black italic text-white uppercase tracking-tighter">Raport Meczowy</h2>
-            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">{getCompetitionName(match.competition)} · {match.date}</p>
+            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">{getCompetitionName(match.competition)} · {match.date.slice(0, 10)}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">×</button>
         </div>
@@ -500,19 +566,23 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
           <div className="px-8 pt-5 pb-3">
             {/* Row 1: kity + nazwy + wynik (zawsze wyrownane) */}
             <div className="flex items-center gap-4">
-              <div className="flex-1 flex items-center justify-end gap-3 min-w-0">
-                <span className="flex-1 min-w-0 text-2xl font-black italic text-white uppercase tracking-tighter text-right leading-none truncate pr-1">{homeClub.name}</span>
-                <div className="flex flex-col items-center shrink-0">
-                  <svg viewBox="0 0 24 24" className="w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">
-                    <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.primary} />
-                    <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.home.secondary} fillOpacity="0.9" />
-                    <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.secondary} fillOpacity="0.35" />
-                    <path d="M12 7.2v11.8" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1" strokeOpacity="0.8" />
-                  </svg>
-                  <svg viewBox="0 0 28 18" className="-mt-0.5 w-[14px] h-[8px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
-                    <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.home.secondary} stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1.2" strokeLinejoin="round" />
-                    <path d="M14 3v12" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
-                  </svg>
+              <div className="flex-1 flex items-center justify-end min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-col items-center shrink-0">
+                    <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(kits.home.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
+                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.primary} />
+                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.home.secondary} fillOpacity="0.9" />
+                      <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.secondary} fillOpacity="0.35" />
+                      <path d="M12 7.2v11.8" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1" strokeOpacity="0.8" />
+                    </svg>
+                    <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(kits.home.secondary) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
+                      <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.home.secondary} stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
+                      <path d="M14 3v12" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
+                    </svg>
+                  </div>
+                  <div className="flex flex-col items-end min-w-0">
+                    <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-right leading-none truncate pr-1">{homeClub.name}</span>
+                  </div>
                 </div>
               </div>
 
@@ -530,20 +600,24 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
                 )}
               </div>
 
-              <div className="flex-1 flex items-center justify-start gap-3 min-w-0">
-                <div className="flex flex-col items-center shrink-0">
-                  <svg viewBox="0 0 24 24" className="w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">
-                    <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.primary} />
-                    <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.away.secondary} fillOpacity="0.9" />
-                    <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.secondary} fillOpacity="0.35" />
-                    <path d="M12 7.2v11.8" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1" strokeOpacity="0.8" />
-                  </svg>
-                  <svg viewBox="0 0 28 18" className="-mt-0.5 w-[14px] h-[8px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
-                    <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.away.secondary} stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1.2" strokeLinejoin="round" />
-                    <path d="M14 3v12" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
-                  </svg>
+              <div className="flex-1 flex items-center justify-start min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex flex-col items-start overflow-hidden min-w-0">
+                    <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-left leading-none truncate w-full pr-2">{awayClub.name}</span>
+                  </div>
+                  <div className="flex flex-col items-center shrink-0">
+                    <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(kits.away.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
+                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.primary} />
+                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.away.secondary} fillOpacity="0.9" />
+                      <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.secondary} fillOpacity="0.35" />
+                      <path d="M12 7.2v11.8" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1" strokeOpacity="0.8" />
+                    </svg>
+                    <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(kits.away.secondary) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
+                      <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.away.secondary} stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
+                      <path d="M14 3v12" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
+                    </svg>
+                  </div>
                 </div>
-                <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-left leading-none truncate pr-1">{awayClub.name}</span>
               </div>
             </div>
 
@@ -560,7 +634,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
           </div>
 
           {/* Lineup + Pitch + Lineup */}
-          <div className="px-8 pb-6 grid gap-3" style={{ gridTemplateColumns: '200px 1fr 200px' }}>
+          <div className="px-8 pb-6 grid gap-3" style={{ gridTemplateColumns: '250px 1fr 250px' }}>
             <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
               <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
                 {homeClub.shortName}
@@ -568,7 +642,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
               {renderLineup('home')}
             </div>
 
-            <div className="rounded-xl overflow-hidden" style={{ minHeight: '420px' }}>
+            <div className="rounded-xl overflow-hidden opacity-[0.85]" style={{ minHeight: '420px' }}>
               {renderPitch()}
             </div>
 

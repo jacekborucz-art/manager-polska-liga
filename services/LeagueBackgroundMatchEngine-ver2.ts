@@ -109,8 +109,10 @@ const allPlayedIds = new Set<string>([
     const scorers: any[] = [];
     const cards: any[] = [];
     const injuries: any[] = [];
-    let homeRedImpact = 1.0;
-    let awayRedImpact = 1.0;
+    let homeRedPenalty = 1.0;
+    let awayRedPenalty = 1.0;
+    let homeRedCount = 0;
+    let awayRedCount = 0;
     const playerYellowCounts = new Map<string, number>();
     const expelledIds = new Set<string>();
 
@@ -255,8 +257,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * awayRedImpact * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * homeRedImpact * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {
@@ -323,10 +325,14 @@ const allPlayedIds = new Set<string>([
             cards.push({ playerId: pId, type: MatchEventType.RED_CARD, minute });
             expelledIds.add(pId);
             if (side === 'H') {
-              homeRedImpact += 0.15;
+              homeRedCount += 1;
+              const hReduction = homeRedCount === 1 ? (0.15 + seededRng(minute + 335) * 0.15) : 0.10;
+              homeRedPenalty *= (1 - hReduction);
               homeLineup.startingXI = homeLineup.startingXI.map(id => id === pId ? null : id);
             } else {
-              awayRedImpact += 0.15;
+              awayRedCount += 1;
+              const aReduction = awayRedCount === 1 ? (0.15 + seededRng(minute + 335) * 0.15) : 0.10;
+              awayRedPenalty *= (1 - aReduction);
               awayLineup.startingXI = awayLineup.startingXI.map(id => id === pId ? null : id);
             }
           } else {
@@ -362,10 +368,25 @@ const allPlayedIds = new Set<string>([
 
           injuries.push({ playerId: pId, severity, minute, days, type });
           
-          // Reakcja trenera: jeśli SEVERE, wymuś zmianę i usuń gracza z boiska
+          // Reakcja trenera: jeśli SEVERE, wymuś zmianę kontuzjowanego
           if (severity === InjurySeverity.SEVERE) {
-             performSub(lineup, pPool, side === 'H' ? homeFatigue : awayFatigue, side);
-             lineup.startingXI[pIdx] = null; 
+            const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
+            const canSub = usedCount < 5 && !(usedCount === 4 && minute < 88);
+            if (canSub) {
+              const roleNeeded = TacticRepository.getById(lineup.tacticId).slots[pIdx].role;
+              const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === roleNeeded && !lineup.startingXI.includes(id))
+                ?? lineup.bench.find(id => !lineup.startingXI.includes(id));
+              if (candidate) {
+                substitutions.push({ playerOutId: pId as string, playerInId: candidate, minute, isHome: side === 'H' });
+                lineup.startingXI[pIdx] = candidate;
+                allPlayedIds.add(candidate);
+                if (side === 'H') hSubsUsed++; else aSubsUsed++;
+              } else {
+                lineup.startingXI[pIdx] = null;
+              }
+            } else {
+              lineup.startingXI[pIdx] = null;
+            }
           }
         }
       }

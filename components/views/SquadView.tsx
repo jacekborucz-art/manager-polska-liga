@@ -297,6 +297,24 @@ export const SquadView: React.FC = () => {
             return;
          }
       }
+      // Walidacja klikniętego zawodnika z Rezerw wstawianego do XI/ławki (slot wybrany wcześniej)
+      if (loc === 'RES' && selectedSlot.loc !== 'RES') {
+         const clickedTarget = pId ? myPlayers.find(p => p.id === pId) : null;
+         if (clickedTarget) {
+            if ((clickedTarget.suspensionMatches || 0) > 0) {
+               setSelectedSlot(null);
+               return;
+            }
+            if (clickedTarget.health.status === HealthStatus.INJURED && (clickedTarget.health.injury?.severity === InjurySeverity.SEVERE || (clickedTarget.health.injury?.daysRemaining ?? 0) > 2)) {
+               setSelectedSlot(null);
+               return;
+            }
+            if (clickedTarget.condition < 60) {
+               setSelectedSlot(null);
+               return;
+            }
+         }
+      }
 
       // Wykonaj uniwersalną zamianę
       const newLineup = LineupService.swapPlayers(
@@ -379,10 +397,10 @@ export const SquadView: React.FC = () => {
   const renderPlayerRow = (pId: string | null, label: string, loc: 'START' | 'BENCH' | 'RES', index?: number) => {
     const player = pId ? getPlayerById(pId) : null;
     const isSelected = selectedSlot?.loc === loc && (loc === 'START' ? selectedSlot.index === index : selectedSlot.id === pId);
-    const selectedRole = selectedSlot?.loc === 'START' ? currentTactic.slots[selectedSlot.index]?.role : null;
+    const selectedRole = selectedSlot?.loc === 'START' && selectedSlot.index !== undefined ? currentTactic.slots[selectedSlot.index]?.role : null;
     const isHighlighted = !isSelected && selectedRole && (loc === 'BENCH' || loc === 'RES') && player
       && !(( player.suspensionMatches || 0) > 0)
-      && !(player.health.status === HealthStatus.INJURED && player.health.injury?.severity === InjurySeverity.SEVERE)
+      && !(player.health.status === HealthStatus.INJURED && (player.health.injury?.severity === InjurySeverity.SEVERE || (player.health.injury?.daysRemaining ?? 0) > 2))
       && !(player.condition < 60)
       && getPositionGroup(player.position) === getPositionGroup(selectedRole);
 

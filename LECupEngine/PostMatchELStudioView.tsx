@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
+import { MatchReportModal } from '../components/modals/MatchReportModal';
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -18,6 +19,7 @@ const EL_MATCH_LEAGUE_IDS = [
 
 export const PostMatchELStudioView: React.FC = () => {
   const { fixtures, clubs, currentDate, navigateTo, advanceDay } = useGame();
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   const results = useMemo(() => {
     const dateStr = currentDate.toDateString();
@@ -156,7 +158,7 @@ export const PostMatchELStudioView: React.FC = () => {
                         <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
                       </div>
                       <div className="w-28 flex flex-col items-center shrink-0">
-                        <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums">
+                        <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(fixture.id)}>
                           {fixture.homeScore} : {fixture.awayScore}
                         </span>
                         {hasPens && (
@@ -193,6 +195,9 @@ export const PostMatchELStudioView: React.FC = () => {
           </div>
         </div>
       </div>
+      {selectedMatchId && (
+        <MatchReportModal matchId={selectedMatchId} onClose={() => setSelectedMatchId(null)} />
+      )}
     </div>
   );
 };
