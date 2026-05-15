@@ -81,6 +81,16 @@ export const KitSelectionService = {
       if (score > maxScore) { maxScore = score; bestOption = opt; }
     }
 
+    if (maxScore < 80) {
+      const whiteDist = Math.min(
+        KitSelectionService.getColorDistance('#ffffff', hShirt),
+        KitSelectionService.getColorDistance('#ffffff', hShorts)
+      );
+      bestOption = whiteDist >= 80
+        ? { shirt: '#ffffff', shorts: '#ffffff', isPrimary: false }
+        : { shirt: '#111111', shorts: '#111111', isPrimary: false };
+    }
+
     return {
       home: {
         primary: hShirt,

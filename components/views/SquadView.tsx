@@ -1318,7 +1318,7 @@ export const SquadView: React.FC = () => {
            </div>
            
            {/* BENCH */}
-           <div className="shrink-0 bg-slate-900/40 rounded-[45px] border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col overflow-hidden relative">
+           <div className="shrink-0 bg-slate-800/60 rounded-[45px] border border-white/[0.07] backdrop-blur-3xl shadow-2xl flex flex-col overflow-hidden relative">
               <div className="px-6 py-4 border-b border-white/10 bg-black/20 flex justify-between items-center relative z-10">
                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Ławka</h3>
                  <div className="bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/30">

@@ -384,7 +384,7 @@ const simulateInjuriesPerMinute = (
   const entryMins = currentXI.map(() => 0);
   const currentBench = [...lineup.bench];
   let subsUsed = 0;
-  const injuryChance = 0.004 * refExpFactor;
+  const injuryChance = 0.00306 * refExpFactor;
   const injuries: MatchInjuryEntry[] = [];
   let updatedPlayers = [...players];
   const injuryPenaltyMap: Record<string, number> = {};
@@ -422,7 +422,7 @@ const simulateInjuriesPerMinute = (
     const p = players.find(x => x.id === pId);
     if (!p) continue;
 
-    const isSev = rng(offset + minute + 803) >= 0.84;
+    const isSev = rng(offset + minute + 803) >= 0.667;
     const severity = isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
     let injuryRollOffset = offset + minute + 808;
     const { days, type } = rollInjuryBySeverity(severity, () => rng(injuryRollOffset++));
