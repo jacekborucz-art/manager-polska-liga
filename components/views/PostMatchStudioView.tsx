@@ -6,7 +6,7 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
-import { MatchReportModal } from '../modals/MatchReportModal';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 // Zwiększona przezroczystość paneli dla lepszej widoczności tła
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
@@ -472,7 +472,7 @@ export const PostMatchStudioView: React.FC = () => {
         {pageIndex === 1 ? renderPage1() : renderPage2()}
       </div>
 
-      <MatchReportModal matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
 
       {/* EXPERT COMMENT MODAL */}
       {showExpertModal && (

@@ -274,9 +274,12 @@ if (todayFixtures.length === 0) {
       // STARY SILNIK V1:
       // const result = LeagueBackgroundMatchEngine.simulate(fixture, home, away, hPlayers, aPlayers, hLineup, aLineup, seed);
 
+      const hInitialXI = hLineup.startingXI.filter((id): id is string => id !== null);
+      const aInitialXI = aLineup.startingXI.filter((id): id is string => id !== null);
+
       // NOWY SILNIK V2.0:
       const result = LeagueBackgroundMatchEngineV2.simulate(
-        fixture, home, away, hPlayers, aPlayers, hLineup, aLineup, 
+        fixture, home, away, hPlayers, aPlayers, hLineup, aLineup,
         hCoach as any, aCoach as any, assignedRef, weather, seed, pressureContext
       );
 
@@ -340,8 +343,8 @@ if (todayFixtures.length === 0) {
         })(),
         venue: home.stadiumName,
         weather: weather,
-        homeLineup: hLineup.startingXI.filter((id): id is string => id !== null),
-        awayLineup: aLineup.startingXI.filter((id): id is string => id !== null),
+        homeLineup: hInitialXI,
+        awayLineup: aInitialXI,
         ratings: result.ratings,
         homeTacticId: hLineup.tacticId,
         awayTacticId: aLineup.tacticId,

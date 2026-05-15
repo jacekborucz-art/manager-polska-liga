@@ -176,10 +176,91 @@ const allPlayedIds = new Set<string>([
         }
       };
 
-      // Zmiany w przerwie (Losowe 1-2)
-      if (minute === 45 && seededRng(minute + 99) < 0.37) {
-        performSub(homeLineup, homePlayers, homeFatigue, 'H');
-        if (seededRng(minute + 101) < 0.5) performSub(homeLineup, homePlayers, homeFatigue, 'H');
+      // REAKCJA TRENERA NA CZERWONĄ KARTKĘ
+      const respondToRedCard = (expelledId: string, side: 'H' | 'A') => {
+        const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
+        if (usedCount >= 5) return;
+        const lineup = side === 'H' ? homeLineup : awayLineup;
+        const pPool = side === 'H' ? homePlayers : awayPlayers;
+        const fMap = side === 'H' ? homeFatigue : awayFatigue;
+        const coach = side === 'H' ? homeCoach : awayCoach;
+        const coachExp = coach.attributes.experience ?? 50;
+        const expelledPlayer = pPool.find(p => p.id === expelledId);
+        if (!expelledPlayer) return;
+        // Im bardziej doświadczony trener, tym większa szansa na szybką reakcję
+        const reactionProb = 0.40 + (coachExp / 100) * 0.55;
+        if (seededRng(minute + 336) > reactionProb) return;
+        const expelledPos = expelledPlayer.position;
+        let targetToSubOff: string | null = null;
+        if (coachExp >= 55) {
+          // Doświadczony trener: łata dziurę pozycyjną — ściąga napastnika/pomocnika, wpuszcza odpowiedni typ
+          if (expelledPos === PlayerPosition.DEF) {
+            targetToSubOff = lineup.startingXI.find(id => id && pPool.find(p => p.id === id)?.position === PlayerPosition.FWD && !substitutedInIds.has(id)) ?? null;
+          } else if (expelledPos === PlayerPosition.MID) {
+            targetToSubOff = lineup.startingXI.find(id => id && pPool.find(p => p.id === id)?.position === PlayerPosition.FWD && !substitutedInIds.has(id)) ?? null;
+          } else if (expelledPos === PlayerPosition.FWD) {
+            targetToSubOff = lineup.startingXI.find(id => id && pPool.find(p => p.id === id)?.position === PlayerPosition.MID && !substitutedInIds.has(id)) ?? null;
+          }
+        } else {
+          // Mało doświadczony trener: ściąga najbardziej zmęczonego
+          let minFatigue = Infinity;
+          lineup.startingXI.forEach(id => {
+            if (!id || substitutedInIds.has(id)) return;
+            const f = fMap[id] ?? 100;
+            if (f < minFatigue) { minFatigue = f; targetToSubOff = id; }
+          });
+        }
+        if (!targetToSubOff) return;
+        const candidate = lineup.bench.find(id => pPool.find(p => p.id === id)?.position === expelledPos && !lineup.startingXI.includes(id) && !substitutedOutIds.has(id))
+          ?? lineup.bench.find(id => !lineup.startingXI.includes(id) && !substitutedOutIds.has(id));
+        if (!candidate) return;
+        const outIdx = lineup.startingXI.indexOf(targetToSubOff);
+        if (outIdx === -1) return;
+        substitutions.push({ playerOutId: targetToSubOff, playerInId: candidate, minute, isHome: side === 'H' });
+        lineup.startingXI[outIdx] = candidate;
+        allPlayedIds.add(candidate);
+        substitutedInIds.add(candidate);
+        substitutedOutIds.add(targetToSubOff);
+        if (side === 'H') hSubsUsed++; else aSubsUsed++;
+      };
+
+      // Zmiany w przerwie (wynik-aware + doświadczenie trenera)
+      if (minute === 45) {
+        const performHalfTimeSubs = (side: 'H' | 'A') => {
+          const lineup = side === 'H' ? homeLineup : awayLineup;
+          const pPool = side === 'H' ? homePlayers : awayPlayers;
+          const fMap = side === 'H' ? homeFatigue : awayFatigue;
+          const coach = side === 'H' ? homeCoach : awayCoach;
+          const coachExp = coach.attributes.experience ?? 50;
+          const coachDec = coach.attributes.decisionMaking ?? 50;
+          const myScore = side === 'H' ? homeScore : awayScore;
+          const oppScore = side === 'H' ? awayScore : homeScore;
+          const goalDiff = myScore - oppScore;
+          let changeProb: number;
+          let maxChanges: number;
+          if (goalDiff <= -2) {
+            changeProb = 0.70 + (coachDec / 100) * 0.25;
+            maxChanges = 2;
+          } else if (goalDiff === -1) {
+            changeProb = 0.55 + (coachDec / 100) * 0.20;
+            maxChanges = 2;
+          } else if (goalDiff === 0) {
+            changeProb = 0.25 + (coachExp / 100) * 0.15;
+            maxChanges = 1;
+          } else {
+            changeProb = 0.10 + (coachExp / 100) * 0.10;
+            maxChanges = 1;
+          }
+          const seedOffset = side === 'H' ? 99 : 102;
+          if (seededRng(minute + seedOffset) < changeProb) {
+            performSub(lineup, pPool, fMap, side);
+            if (maxChanges >= 2 && seededRng(minute + seedOffset + 4) < 0.55) {
+              performSub(lineup, pPool, fMap, side);
+            }
+          }
+        };
+        performHalfTimeSubs('H');
+        performHalfTimeSubs('A');
       }
       
       // Główne okno zmian (70+)
@@ -340,6 +421,7 @@ const allPlayedIds = new Set<string>([
               awayRedPenalty *= (1 - aReduction);
               awayLineup.startingXI = awayLineup.startingXI.map(id => id === pId ? null : id);
             }
+            respondToRedCard(pId, side);
           } else {
             // ŻÓŁTA KARTKA
             playerYellowCounts.set(pId, currentYellows);
