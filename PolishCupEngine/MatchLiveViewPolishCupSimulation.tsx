@@ -4410,7 +4410,8 @@ if (activePlayerTempo === 'SLOW') {
       {!matchState.isFinished && (
         <button
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="px-4 py-1.5 bg-white/5 border border-white/15 text-slate-300 font-black italic uppercase tracking-widest text-[8px] rounded-sm hover:bg-white/10 hover:text-white transition-all shadow-xl text-center"
+          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           ⚙ TAKTYKA
         </button>

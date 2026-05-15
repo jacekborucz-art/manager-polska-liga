@@ -338,7 +338,7 @@ const isPausedForSevereInjury = useMemo(() => {
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         // KONIEC
         homeInjuries: {}, awayInjuries: {}, playerYellowCards: {},
-        sentOffIds: [], homeRiskMode: {}, awayRiskMode: {}, homeUpgradeProb: {}, awayUpgradeProb: {},
+        sentOffIds: [], homeRiskMode: {}, awayRiskMode: {}, homeUpgradeProb: {}, awayUpgradeProb: {}, lightInjuryPrompt: null,
         homeInjuryMin: {}, awayInjuryMin: {}, subsCountHome: 0, subsCountAway: 0,
         homeSubsHistory: [], awaySubsHistory: [], lastAiActionMinute: 0, aiTacticLocked: false,
         logs: [{ id: 'init', minute: 0, text: "Oczekiwanie na pierwszy gwizdek...", type: MatchEventType.GENERIC }],
@@ -776,6 +776,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let nextAwayInjuries = { ...prev.awayInjuries };
         let nextHomeRiskMode = { ...prev.homeRiskMode };
         let nextAwayRiskMode = { ...prev.awayRiskMode };
+        let nextLightInjuryPrompt: { playerId: string; playerName: string; minute: number } | null = prev.lightInjuryPrompt ?? null;
         let nextHomeUpgradeProb = { ...prev.homeUpgradeProb };
         let nextAwayUpgradeProb = { ...prev.awayUpgradeProb };
         let nextHomeInjuryMin = { ...prev.homeInjuryMin };
@@ -1492,6 +1493,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (severity === InjurySeverity.SEVERE) {
             priorityAiTrigger = true;
             nextIsPaused = true;
+          } else {
+            const isUserTeam = (isHomeInj && userSide === 'HOME') || (!isHomeInj && userSide === 'AWAY');
+            const playerObj = (isHomeInj ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId);
+            const mentality = playerObj?.attributes.mentality ?? 50;
+            const wantsOffProb = Math.max(0.05, (100 - mentality) / 100 * 0.75);
+            const wantsOff = seededRng(currentSeed, nextMinute, 9900) < wantsOffProb;
+            if (isUserTeam) {
+              if (wantsOff) {
+                nextLightInjuryPrompt = { playerId: pId, playerName: injury.text, minute: nextMinute };
+                nextIsPaused = true;
+              }
+            } else {
+              if (wantsOff) priorityAiTrigger = true;
+            }
           }
         };
 
@@ -2093,6 +2108,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             homeRiskMode: nextHomeRiskMode, awayRiskMode: nextAwayRiskMode,
             homeInjuryMin: nextHomeInjuryMin, awayInjuryMin: nextAwayInjuryMin,
             homeUpgradeProb: nextHomeUpgradeProb, awayUpgradeProb: nextAwayUpgradeProb,
+            lightInjuryPrompt: null,
             userInstructions: nextUserInstructions,
             activeTacticalBoost: 0, tacticalBoostExpiry: -1,
             aiActiveShout: nextAiActiveShout,
@@ -2130,10 +2146,11 @@ return {
            aiTacticLocked: nextAiTacticLocked,
            homeInjuries: nextHomeInjuries, 
            awayInjuries: nextAwayInjuries,
-           homeRiskMode: nextHomeRiskMode, 
+           homeRiskMode: nextHomeRiskMode,
            awayRiskMode: nextAwayRiskMode,
-           homeInjuryMin: nextHomeInjuryMin, 
+           homeInjuryMin: nextHomeInjuryMin,
            awayInjuryMin: nextAwayInjuryMin,
+           lightInjuryPrompt: nextLightInjuryPrompt,
            homeUpgradeProb: nextHomeUpgradeProb,
            awayUpgradeProb: nextAwayUpgradeProb,
            userInstructions: nextUserInstructions,
@@ -3821,6 +3838,38 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
                 <span className="text-2xl text-red-500 font-bold not-italic">KONTUZJA</span>
               </h2>
             </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Prośba o zmianę — lekka kontuzja */}
+    {matchState.lightInjuryPrompt && !isTacticsOpen && (
+      <div className="absolute inset-0 z-[999] flex items-center justify-center" style={{ transform: 'rotateX(-24deg)' }}>
+        <div className="bg-slate-950/95 backdrop-blur-2xl border-y-4 border-orange-500 px-12 py-8 rounded-[40px] shadow-[0_0_80px_rgba(249,115,22,0.4)] flex flex-col items-center gap-4">
+          <div className="text-5xl">🤕</div>
+          <span className="text-[10px] font-black text-orange-400 tracking-[0.5em] uppercase">Sygnał z boiska</span>
+          <h2 className="text-3xl font-black italic text-white uppercase tracking-tight text-center">
+            {matchState.lightInjuryPrompt.playerName}
+            <br />
+            <span className="text-xl text-orange-300 font-bold not-italic">prosi o zmianę</span>
+          </h2>
+          <p className="text-slate-400 text-[11px] text-center max-w-[260px]">
+            Lekka kontuzja. Możesz go zmienić lub pozwolić mu grać — ale jego skuteczność spadnie.
+          </p>
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={() => setMatchState(s => s ? { ...s, lightInjuryPrompt: null, isPaused: false } : s)}
+              className="px-6 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+            >
+              Graj dalej
+            </button>
+            <button
+              onClick={() => { setMatchState(s => s ? { ...s, lightInjuryPrompt: null } : s); setIsTacticsOpen(true); }}
+              className="px-6 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+            >
+              Dokonaj zmiany
+            </button>
           </div>
         </div>
       </div>

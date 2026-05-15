@@ -315,7 +315,7 @@ const isPausedForSevereInjury = useMemo(() => {
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         // KONIEC
         homeInjuries: {}, awayInjuries: {}, playerYellowCards: {},
-        sentOffIds: [], homeRiskMode: {}, awayRiskMode: {}, homeUpgradeProb: {}, awayUpgradeProb: {},
+        sentOffIds: [], homeRiskMode: {}, awayRiskMode: {}, homeUpgradeProb: {}, awayUpgradeProb: {}, lightInjuryPrompt: null,
         homeInjuryMin: {}, awayInjuryMin: {}, subsCountHome: 0, subsCountAway: 0,
         homeSubsHistory: [], awaySubsHistory: [], lastAiActionMinute: 0, aiTacticLocked: false,
         logs: [{ id: 'init', minute: 0, text: "Oczekiwanie na pierwszy gwizdek...", type: MatchEventType.GENERIC }],
@@ -792,6 +792,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let nextAwayInjuries = { ...prev.awayInjuries };
         let nextHomeRiskMode = { ...prev.homeRiskMode };
         let nextAwayRiskMode = { ...prev.awayRiskMode };
+        let nextLightInjuryPrompt: { playerId: string; playerName: string; minute: number } | null = prev.lightInjuryPrompt ?? null;
         let nextHomeUpgradeProb = { ...prev.homeUpgradeProb };
         let nextAwayUpgradeProb = { ...prev.awayUpgradeProb };
         let nextHomeInjuryMin = { ...prev.homeInjuryMin };
@@ -1237,6 +1238,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (severity === InjurySeverity.SEVERE) {
             priorityAiTrigger = true;
             nextIsPaused = true;
+          } else {
+            const isUserTeam = (isHomeInj && userSide === 'HOME') || (!isHomeInj && userSide === 'AWAY');
+            const playerObj = (isHomeInj ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId);
+            const mentality = playerObj?.attributes.mentality ?? 50;
+            const wantsOffProb = Math.max(0.05, (100 - mentality) / 100 * 0.75);
+            const wantsOff = seededRng(currentSeed, nextMinute, 9900) < wantsOffProb;
+            if (isUserTeam) {
+              if (wantsOff) {
+                nextLightInjuryPrompt = { playerId: pId, playerName: injury.text, minute: nextMinute };
+                nextIsPaused = true;
+              }
+            } else {
+              if (wantsOff) priorityAiTrigger = true;
+            }
           }
         };
 
@@ -1677,8 +1692,9 @@ return {
            awayInjuries: nextAwayInjuries,
            homeRiskMode: nextHomeRiskMode, 
            awayRiskMode: nextAwayRiskMode,
-           homeInjuryMin: nextHomeInjuryMin, 
+           homeInjuryMin: nextHomeInjuryMin,
            awayInjuryMin: nextAwayInjuryMin,
+           lightInjuryPrompt: nextLightInjuryPrompt,
            homeUpgradeProb: nextHomeUpgradeProb, 
            awayUpgradeProb: nextAwayUpgradeProb,
            userInstructions: nextUserInstructions
@@ -3001,7 +3017,8 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
 
         <button
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2"
+          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           ⚙ TAKTYKA
         </button>
@@ -3266,6 +3283,38 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
                 <span className="text-2xl text-red-500 font-bold not-italic">KONTUZJA</span>
               </h2>
             </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Prośba o zmianę — lekka kontuzja */}
+    {matchState.lightInjuryPrompt && !isTacticsOpen && (
+      <div className="absolute inset-0 z-[999] flex items-center justify-center" style={{ transform: 'rotateX(-24deg)' }}>
+        <div className="bg-slate-950/95 backdrop-blur-2xl border-y-4 border-orange-500 px-12 py-8 rounded-[40px] shadow-[0_0_80px_rgba(249,115,22,0.4)] flex flex-col items-center gap-4">
+          <div className="text-5xl">🤕</div>
+          <span className="text-[10px] font-black text-orange-400 tracking-[0.5em] uppercase">Sygnał z boiska</span>
+          <h2 className="text-3xl font-black italic text-white uppercase tracking-tight text-center">
+            {matchState.lightInjuryPrompt.playerName}
+            <br />
+            <span className="text-xl text-orange-300 font-bold not-italic">prosi o zmianę</span>
+          </h2>
+          <p className="text-slate-400 text-[11px] text-center max-w-[260px]">
+            Lekka kontuzja. Możesz go zmienić lub pozwolić mu grać — ale jego skuteczność spadnie.
+          </p>
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={() => setMatchState(s => s ? { ...s, lightInjuryPrompt: null, isPaused: false } : s)}
+              className="px-6 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+            >
+              Graj dalej
+            </button>
+            <button
+              onClick={() => { setMatchState(s => s ? { ...s, lightInjuryPrompt: null } : s); setIsTacticsOpen(true); }}
+              className="px-6 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+            >
+              Dokonaj zmiany
+            </button>
           </div>
         </div>
       </div>
