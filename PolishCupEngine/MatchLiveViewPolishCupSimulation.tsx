@@ -496,7 +496,7 @@ const toCupHistoryGoal = (goal: GoalTickerInfo, teamId: string) => ({
 
 export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const {
-    navigateTo, userTeamId, clubs, fixtures, players,
+    navigateTo, userTeamId, clubs, setClubs, fixtures, players,
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails, setMessages,
     activeMatchState: matchState, setActiveMatchState: setMatchState, coaches, seasonNumber,
     activePlayoffMatch, setActivePlayoffMatch,
@@ -896,13 +896,13 @@ useEffect(() => {
     return x - Math.floor(x);
   };
 
-  const handleTacticsClose = (newLineup: Lineup, subsCount: number, subsHistory: SubstitutionRecord[]) => {
+  const handleTacticsClose = (newLineup: Lineup, subsCount: number, subsHistory: SubstitutionRecord[], captainId: string | null, penaltyTakerId: string | null, freeKickTakerId: string | null) => {
     setMatchState(prev => {
       if (!prev) return prev;
       const isHome = userSide === 'HOME';
       return {
         ...prev,
-        isPaused: true, 
+        isPaused: true,
         homeLineup: isHome ? newLineup : prev.homeLineup,
         awayLineup: !isHome ? newLineup : prev.awayLineup,
         subsCountHome: isHome ? subsCount : prev.subsCountHome,
@@ -911,6 +911,9 @@ useEffect(() => {
         awaySubsHistory: !isHome ? subsHistory : prev.awaySubsHistory
       };
     });
+    if (userTeamId) {
+      setClubs(prev => prev.map(c => c.id !== userTeamId ? c : { ...c, captainId, penaltyTakerId, freeKickTakerId }));
+    }
     setIsTacticsOpen(false);
   };
 // TO JEST NOWA FUNKCJA DO PRZYCISKU (WKLEJ TUTAJ):
