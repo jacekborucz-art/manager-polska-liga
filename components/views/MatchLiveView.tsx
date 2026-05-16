@@ -1031,12 +1031,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const strikerBonus = topStriker
           ? Math.max(0, ((topStriker.attributes.finishing * PlayerMoraleService.getMatchMultiplier(topStriker)) - 55) / (77 - 55)) * 0.012
           : 0;
-        const activeMoraleAvg = attackingXI2.length > 0
-          ? attackingTeamPlayers2
-              .filter(p => attackingXI2.includes(p.id))
-              .reduce((sum, p) => sum + (p.morale ?? 50), 0) / attackingXI2.length
-          : 50;
-        const moraleShotModifier = Math.max(-0.006, Math.min(0.006, (activeMoraleAvg - 50) * 0.00024));
+        let moraleTeamPenalty = 0;
+        attackingXI2.forEach(id => {
+          const player = attackingTeamPlayers2.find(p => p.id === id);
+          if (!player) return;
+          const morale = (player as any).morale ?? 50;
+          const baseDebuff = morale <= 19 ? 0.097 : morale <= 39 ? 0.062 : 0;
+          if (baseDebuff === 0) return;
+          const mentalityResistance = (player.attributes.mentality ?? 50) / 100;
+          const effectivePenalty = baseDebuff * (1 - mentalityResistance * 0.6);
+          const randomNoise = 1 + (Math.random() * 0.10 - 0.05);
+          moraleTeamPenalty += effectivePenalty * randomNoise;
+        });
+        const moraleDebuffMultiplier = Math.max(0.15, 1 - moraleTeamPenalty);
         const activeFormImpact = activeSide === 'HOME' ? homeFormImpact : awayFormImpact;
         const defendingFormImpact = activeSide === 'HOME' ? awayFormImpact : homeFormImpact;
         const activeFormStacking = activeSide === 'HOME' ? homeFormStacking : awayFormStacking;
@@ -1110,7 +1117,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold
             - defBiasPenalty
             + strikerBonus
-            + moraleShotModifier
             + activeFatPenalty
             + activeFormImpact.shotModifier * activeFormStacking
             - defendingFormImpact.shotResistanceModifier * defendingFormStacking
@@ -1121,6 +1127,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - criticalFatPenalty
             - freshDefBonus
         );
+        shotThreshold = Math.max(0.04, shotThreshold * moraleDebuffMultiplier);
 
         const activeMidfieldControlDiff = activeSide === 'HOME'
           ? midfieldControlDiff

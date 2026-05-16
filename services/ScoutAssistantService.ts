@@ -648,11 +648,12 @@ function buildMailBody(params: {
   clubs: Club[];
   userClubId: string;
   opponentClubId: string;
+  isHome?: boolean;
 }): string {
   const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
     opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
     opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
-    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating } = params;
+    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome } = params;
 
   // ── STYLE TOKENS (matching game's design language) ─────────────────────
   const FONT = `'Inter', system-ui, sans-serif`;
@@ -991,6 +992,71 @@ function buildMailBody(params: {
          </div>`
       ).join('') + `</div>`;
 
+  // ── OCENA SZTABU ANALITYCZNEGO ────────────────────────────────────────────
+  const oppMoraleAvg = opponentPlayers.length > 0
+    ? opponentPlayers.reduce((sum, p) => sum + ((p as any).morale ?? 50), 0) / opponentPlayers.length
+    : 50;
+
+  let chanceScore = 0;
+  const chanceReasons: string[] = [];
+
+  const ratingGap = userAvgRating - opponentAvgRating;
+  if (ratingGap >= 5) { chanceScore += 2; chanceReasons.push(`nasza kadra jest wyraźnie silniejsza jakościowo (śr. OVR ${Math.round(userAvgRating)} vs ${Math.round(opponentAvgRating)})`); }
+  else if (ratingGap >= 2) { chanceScore += 1; chanceReasons.push(`nieznacznie przewyższamy rywala pod względem jakości kadry`); }
+  else if (ratingGap <= -5) { chanceScore -= 2; chanceReasons.push(`rywal dysponuje wyraźnie silniejszą kadrą (śr. OVR ${Math.round(opponentAvgRating)} vs ${Math.round(userAvgRating)})`); }
+  else if (ratingGap <= -2) { chanceScore -= 1; chanceReasons.push(`rywal ma nieznaczną przewagę kadrową`); }
+
+  const totalFormMatches = form.wins + form.draws + form.losses;
+  if (totalFormMatches >= 3) {
+    if (form.losses >= 3) { chanceScore += 2; chanceReasons.push(`${opponentName} jest w bardzo słabej formie (${form.losses} porażki z ostatnich ${totalFormMatches} meczów)`); }
+    else if (form.losses >= 2) { chanceScore += 1; chanceReasons.push(`rywal ma wyraźne problemy z formą`); }
+    else if (form.wins >= 4) { chanceScore -= 2; chanceReasons.push(`${opponentName} jest w znakomitej formie (${form.wins} wygrane z ostatnich ${totalFormMatches} meczów)`); }
+    else if (form.wins >= 3) { chanceScore -= 1; chanceReasons.push(`rywal prezentuje dobrą formę`); }
+  }
+
+  if (opponentLeaguePosition <= 3) { chanceScore -= 2; chanceReasons.push(`${opponentName} zajmuje czołową pozycję w tabeli (${opponentLeaguePosition}. miejsce)`); }
+  else if (opponentLeaguePosition >= 15) { chanceScore += 2; chanceReasons.push(`rywal plasuje się nisko w tabeli (${opponentLeaguePosition}. miejsce)`); }
+  else if (opponentLeaguePosition >= 12) { chanceScore += 1; chanceReasons.push(`${opponentName} zajmuje dolną część tabeli`); }
+  else if (opponentLeaguePosition <= 5) { chanceScore -= 1; chanceReasons.push(`rywal jest w górnej części tabeli`); }
+
+  if (oppMoraleAvg <= 35) { chanceScore += 2; chanceReasons.push(`morale drużyny przeciwnej jest bardzo niskie (średnia ${Math.round(oppMoraleAvg)}/100)`); }
+  else if (oppMoraleAvg <= 50) { chanceScore += 1; chanceReasons.push(`morale rywala jest poniżej normy (średnia ${Math.round(oppMoraleAvg)}/100)`); }
+  else if (oppMoraleAvg >= 80) { chanceScore -= 2; chanceReasons.push(`morale rywala jest bardzo wysokie (średnia ${Math.round(oppMoraleAvg)}/100)`); }
+  else if (oppMoraleAvg >= 65) { chanceScore -= 1; chanceReasons.push(`przeciwnik dysponuje wysokim morale`); }
+
+  if (tactic.hasCadreProblems) { chanceScore += 1; chanceReasons.push(`rywal ma poważne braki kadrowe`); }
+  if (isHome === true) { chanceScore += 1; chanceReasons.push(`gramy na własnym boisku`); }
+  else if (isHome === false) { chanceScore -= 1; chanceReasons.push(`gramy na wyjeździe`); }
+
+  let chanceLabel: string;
+  let chanceColor: string;
+  let chanceSubtitle: string;
+  if (chanceScore >= 3) { chanceLabel = 'WIELKIE SZANSE'; chanceColor = '#10b981'; chanceSubtitle = 'Wydaje się, że mamy duże szanse na zwycięstwo'; }
+  else if (chanceScore >= 1) { chanceLabel = 'ŚREDNIE SZANSE'; chanceColor = '#f59e0b'; chanceSubtitle = 'Mamy realne szanse, ale mecz nie będzie łatwy'; }
+  else if (chanceScore >= -1) { chanceLabel = 'WYRÓWNANA WALKA'; chanceColor = '#64748b'; chanceSubtitle = 'Czeka nas wyrównany pojedynek — wszystko jest możliwe'; }
+  else if (chanceScore >= -2) { chanceLabel = 'TRUDNY MECZ'; chanceColor = '#f97316'; chanceSubtitle = 'To będzie trudny mecz — jesteśmy nieznacznym outsiderem'; }
+  else { chanceLabel = 'FAWORYT RYWAL'; chanceColor = '#ef4444'; chanceSubtitle = 'Rywal jest wyraźnym faworytem — potrzebujemy dobrego dnia'; }
+
+  const topReasons = chanceReasons.slice(0, 3);
+  const reasonsText = topReasons.length > 0
+    ? topReasons.map((r, i) => `<span style="font-family:${FONT};display:block;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);color:#94a3b8;font-size:13px;font-weight:600;font-style:normal;text-transform:none;letter-spacing:0.01em;line-height:1.6;">${i + 1}. ${r.charAt(0).toUpperCase() + r.slice(1)}.</span>`).join('')
+    : `<span style="font-family:${FONT};color:#475569;font-size:13px;">Brak jednoznacznych czynników — analiza w toku.</span>`;
+
+  const assessmentCard = card(chanceColor, '🔍 OCENA SZTABU ANALITYCZNEGO',
+    `<div style="display:flex;gap:20px;align-items:flex-start;">
+       <div style="flex:none;text-align:center;min-width:160px;">
+         <div style="font-family:${FONT};font-size:11px;font-weight:900;font-style:italic;letter-spacing:0.25em;text-transform:uppercase;color:${chanceColor};margin-bottom:6px;">OCENA SZANS</div>
+         <div style="font-family:${FONT};font-size:22px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:-0.02em;color:${chanceColor};line-height:1.1;margin-bottom:8px;">${chanceLabel}</div>
+         <div style="font-family:${FONT};font-size:11px;font-weight:700;font-style:italic;text-transform:uppercase;letter-spacing:0.08em;color:#475569;">${isHome === true ? '🏠 MECZ U SIEBIE' : isHome === false ? '✈️ MECZ WYJAZDOWY' : ''}</div>
+       </div>
+       <div style="flex:1;border-left:1px solid rgba(255,255,255,0.06);padding-left:20px;">
+         <div style="font-family:${FONT};font-size:13px;font-weight:700;font-style:italic;text-transform:uppercase;letter-spacing:0.05em;color:#cbd5e1;margin-bottom:10px;">${chanceSubtitle}:</div>
+         ${reasonsText}
+       </div>
+     </div>`,
+    'width:100%;box-sizing:border-box;padding:22px 28px;margin-bottom:20px;'
+  );
+
   // ── OUTER WRAPPER ─────────────────────────────────────────────────────────
   return `<div style="font-family:${FONT};font-style:italic;text-transform:uppercase;letter-spacing:0.02em;color:#cbd5e1;line-height:1.5;position:relative;">
 
@@ -1006,6 +1072,9 @@ function buildMailBody(params: {
       <span style="${label('#3b82f6')}">RAPORT PRZEDMECZOWY · JUTRO</span>
       <div style="${bigTitle}font-size:28px;line-height:1.1;color:#3b82f6;">${opponentName}</div>
     </div>
+
+    <!-- OCENA SZTABU ANALITYCZNEGO -->
+    ${assessmentCard}
 
     <!-- ROW 1: Forma | Taktyka + Fairplay + Tabela (wyśrodkowane) -->
     <div style="display:flex;flex-direction:row;gap:20px;margin-bottom:20px;align-items:start;justify-content:center;">
@@ -1045,9 +1114,10 @@ export const ScoutAssistantService = {
     leagueName: string;
     analysisQuality?: number;
     userClubId: string;
+    isHome?: boolean;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome } = params;
     const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
@@ -1093,6 +1163,7 @@ export const ScoutAssistantService = {
       clubs,
       userClubId,
       opponentClubId: opponentClub.id,
+      isHome,
     });
 
     const mailId = `SCOUT_REPORT_${opponentClub.id}_${matchDate.toISOString().slice(0, 10)}`;

@@ -79,11 +79,11 @@ export const SquadView: React.FC = () => {
   };
 
   const getMoraleIcon = (morale: number = 50): string => {
-    if (morale <= 19) return '🔴';
-    if (morale <= 39) return '🟠';
-    if (morale <= 59) return '🟡';
-    if (morale <= 79) return '🟢';
-    return '🟢🟢';
+    if (morale <= 19) return '⭐';
+    if (morale <= 39) return '⭐⭐';
+    if (morale <= 59) return '⭐⭐⭐';
+    if (morale <= 79) return '⭐⭐⭐⭐';
+    return '⭐⭐⭐⭐⭐';
   };
 
   const getPositionBadgeClass = (position: string): string => {

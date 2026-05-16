@@ -102,6 +102,20 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
     const homePrepBoost = getAIFocusLambdaBoost(homeCoach, seed + 999, _homeClub, matchDateStr);
     const awayPrepBoost = getAIFocusLambdaBoost(awayCoach, seed + 1001, _awayClub, matchDateStr);
 
+    const calcMoraleDebuff = (players: Player[], lineup: Lineup): number => {
+      let debuff = 1.0;
+      lineup.startingXI.forEach(id => {
+        const player = players.find(p => p.id === id);
+        if (!player) return;
+        const morale = (player as any).morale ?? 50;
+        if (morale <= 19) debuff *= 0.93;
+        else if (morale <= 39) debuff *= 0.955;
+      });
+      return debuff;
+    };
+    const hMoraleDebuff = calcMoraleDebuff(homePlayers, homeLineup);
+    const aMoraleDebuff = calcMoraleDebuff(awayPlayers, awayLineup);
+
 const allPlayedIds = new Set<string>([
       ...homeLineup.startingXI.filter(id => id !== null),
       ...awayLineup.startingXI.filter(id => id !== null)
@@ -385,8 +399,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier * hMoraleDebuff;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier * aMoraleDebuff;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {

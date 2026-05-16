@@ -2621,7 +2621,7 @@ setMessages([welcomeMail, fanMail]);
           return prev.map(c => c.id === userTeamId ? {
             ...c,
             boardBudgetMonitorState: monitorResult.newState,
-          } : c);
+          } as Club : c);
         }
         const monitorDateKey = dateToProcess.toISOString().split('T')[0];
         const monitorMailKey = `BOARD_BUDGET_${userTeamId}_${monitorResult.action}_${monitorResult.newState}_${monitorDateKey}`;
@@ -2670,7 +2670,7 @@ setMessages([welcomeMail, fanMail]);
             },
             ...(c.financeHistory || [])
           ].slice(0, 50) : c.financeHistory,
-        } : c);
+        } as Club : c);
       });
     }
 
@@ -5515,6 +5515,7 @@ const finalResult: SimulationOutput = {
               );
             })();
             const analysisQuality = Math.round((assistantExp + analystQuality) / 2);
+            const isHome = tomorrowFixture.homeTeamId === userTeamId;
             const scoutMail = ScoutAssistantService.generatePreMatchReport({
               opponentClub,
               opponentPlayers,
@@ -5530,6 +5531,7 @@ const finalResult: SimulationOutput = {
               leagueName,
               analysisQuality,
               userClubId: userTeamId!,
+              isHome,
             });
             sentMailIdsRef.current.add(scoutMailKey);
             setMessages(prev => [scoutMail, ...prev]);
