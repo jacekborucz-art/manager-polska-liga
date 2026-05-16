@@ -212,10 +212,10 @@ export const PostMatchCupStudioView: React.FC = () => {
 
   const ThickStatBar = ({ label, h, a }: { label: string, h: number, a: number }) => {
     const total = h + a || 1;
-    const hPerc = (h / total) * 100;
+    const hPerc = (h === 0 && a === 0) ? 50 : (h / total) * 100;
     return (
       <div className="w-full relative group">
-        <div className="h-10 w-full bg-white/5 backdrop-blur-md rounded-2xl overflow-hidden flex border border-white/10 shadow-inner relative">
+        <div className="h-7 w-full bg-white/5 backdrop-blur-md rounded-2xl overflow-hidden flex border border-white/10 shadow-inner relative">
           {/* Home Bar */}
           <div 
             className="h-full transition-all duration-1000 flex items-center pl-4" 
@@ -337,12 +337,16 @@ export const PostMatchCupStudioView: React.FC = () => {
            </div>
 
            {/* Central Stats */}
-           <div className={`${GLASS_CARD} flex-1 p-12 flex flex-col justify-center gap-6`}>
+           <div className={`${GLASS_CARD} flex-1 p-12 flex flex-col justify-center gap-3`}>
               <div className={GLOSS_LAYER} />
               <ThickStatBar label="Posiadanie Piłki (%)" h={Math.round(homeStats.possession)} a={Math.round(awayStats.possession)} />
+              <ThickStatBar label="Strzały" h={homeStats.shots} a={awayStats.shots} />
               <ThickStatBar label="Strzały Celne" h={homeStats.shotsOnTarget} a={awayStats.shotsOnTarget} />
               <ThickStatBar label="Rzuty Rożne" h={homeStats.corners} a={awayStats.corners} />
               <ThickStatBar label="Przewinienia" h={homeStats.fouls} a={awayStats.fouls} />
+              <ThickStatBar label="Spalone" h={homeStats.offsides} a={awayStats.offsides} />
+              <ThickStatBar label="Żółte Kartki" h={homeStats.yellowCards} a={awayStats.yellowCards} />
+              <ThickStatBar label="Czerwone Kartki" h={homeStats.redCards} a={awayStats.redCards} />
            </div>
 
            {/* Right Events */}

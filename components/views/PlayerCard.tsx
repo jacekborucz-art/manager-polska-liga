@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
@@ -8,12 +8,18 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
   const [isTalkPanelOpen, setIsTalkPanelOpen] = useState(false);
   const [talkResult, setTalkResult] = useState<IndividualTalkResult | null>(null);
+  useEffect(() => {
+    if (pendingOpenTalk) {
+      setIsTalkPanelOpen(true);
+      setPendingOpenTalk(false);
+    }
+  }, [pendingOpenTalk]);
   const button3DStyle: React.CSSProperties = {
     boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
   };

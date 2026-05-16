@@ -297,6 +297,8 @@ interface GameContextType {
   toggleTransferList: (playerId: string, price?: number) => void;
   toggleUntouchable: (playerId: string) => void;
   setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
+  pendingOpenTalk: boolean;
+  setPendingOpenTalk: (v: boolean) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
   pendingFriendlyRequests: PendingFriendlyRequest[];
@@ -434,6 +436,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
 const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
+ const [pendingOpenTalk, setPendingOpenTalk] = useState(false);
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
@@ -9070,6 +9073,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
+    pendingOpenTalk, setPendingOpenTalk,
     applyWeeklyMotivation, conductIndividualTalk, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,

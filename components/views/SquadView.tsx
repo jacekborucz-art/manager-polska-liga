@@ -24,7 +24,8 @@ import { generatePlayerReport } from '../../services/TrainingAssistantService';
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
-          coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract } = useGame();
+          coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
+          toggleTransferList, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -38,6 +39,7 @@ export const SquadView: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
+  const [roleSubmenuOpen, setRoleSubmenuOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [isStaffMenuOpen, setIsStaffMenuOpen] = useState(false);
@@ -593,8 +595,27 @@ export const SquadView: React.FC = () => {
     );
   };
 
-  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick' | 'reserves') => {
+  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick' | 'reserves' | 'talk' | 'transferList' | 'untouchable' | 'roleNone' | 'roleStarter' | 'roleKey') => {
     if (!contextMenu || !userTeamId || !myClub) return;
+    if (action === 'talk') {
+      setPendingOpenTalk(true);
+      viewPlayerDetails(contextMenu.playerId);
+      setContextMenu(null);
+      return;
+    }
+    if (action === 'transferList') {
+      toggleTransferList(contextMenu.playerId);
+      setContextMenu(null);
+      return;
+    }
+    if (action === 'untouchable') {
+      toggleUntouchable(contextMenu.playerId);
+      setContextMenu(null);
+      return;
+    }
+    if (action === 'roleNone') { setSquadRole(contextMenu.playerId, null); setContextMenu(null); return; }
+    if (action === 'roleStarter') { setSquadRole(contextMenu.playerId, 'STARTER'); setContextMenu(null); return; }
+    if (action === 'roleKey') { setSquadRole(contextMenu.playerId, 'KEY_PLAYER'); setContextMenu(null); return; }
     if (action === 'reserves') {
       const player = myPlayers.find(p => p.id === contextMenu.playerId);
       if (player) moveToReserves(player);
@@ -1415,27 +1436,62 @@ export const SquadView: React.FC = () => {
         <div
           className="fixed z-[9999] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden py-1 min-w-[220px]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          onMouseLeave={() => setContextMenu(null)}
+          onMouseLeave={() => { setContextMenu(null); setRoleSubmenuOpen(false); }}
         >
+          <button onClick={() => handleContextAction('talk')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-emerald-300 hover:bg-emerald-500/10 transition-colors">
+            Rozmowa z zawodnikiem
+          </button>
+          <div className="my-1 border-t border-white/10" />
           {contextMenu.loc === 'START' && (
-            <button onClick={() => handleContextAction('captain')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors flex items-center gap-3">
-              <span className="w-5 h-5 rounded-full bg-blue-900 border border-blue-400 flex items-center justify-center text-[9px] font-black text-white shrink-0">C</span>
+            <button onClick={() => handleContextAction('captain')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors">
               Mianuj Kapitana
             </button>
           )}
-          <button onClick={() => handleContextAction('penalty')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors flex items-center gap-3">
-            <span className="text-base">⚽</span> Wyznacz do karnych
+          <button onClick={() => handleContextAction('penalty')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors">
+            Wyznacz do karnych
           </button>
-          <button onClick={() => handleContextAction('freekick')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-colors flex items-center gap-3">
-            <span className="text-base">🎯</span> Wyznacz do wolnych
-          </button>
-          <div className="my-1 border-t border-white/10" />
-          <button onClick={handleOpenAssistantReport} disabled={!hasAssistant} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed text-blue-300 hover:bg-blue-500/10 transition-colors flex items-center gap-3">
-            <span className="text-base">🧠</span> Raport Asystenta
+          <button onClick={() => handleContextAction('freekick')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors">
+            Wyznacz do wolnych
           </button>
           <div className="my-1 border-t border-white/10" />
-          <button onClick={() => handleContextAction('reserves')} className="w-full px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-widest text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-3">
-            <span className="text-base">↓</span> Przenieś do rezerw
+          <button onClick={handleOpenAssistantReport} disabled={!hasAssistant} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed text-blue-300 hover:bg-blue-500/10 transition-colors">
+            Raport Asystenta
+          </button>
+          <div className="my-1 border-t border-white/10" />
+          <div
+            onMouseEnter={() => setRoleSubmenuOpen(true)}
+            onMouseLeave={() => setRoleSubmenuOpen(false)}
+          >
+            <button className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors flex items-center justify-between">
+              Rola w zespole
+              <span className="text-[9px] text-slate-500">▶</span>
+            </button>
+            {roleSubmenuOpen && (
+              <div className="bg-slate-800/50">
+                <button onClick={() => handleContextAction('roleNone')} className="w-full pl-8 pr-4 py-2 text-left text-[10px] uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors">
+                  Brak
+                </button>
+                <button onClick={() => handleContextAction('roleStarter')} className="w-full pl-8 pr-4 py-2 text-left text-[10px] uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors">
+                  Podstawowa
+                </button>
+                <button onClick={() => handleContextAction('roleKey')} className="w-full pl-8 pr-4 py-2 text-left text-[10px] uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors">
+                  Kluczowy
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="my-1 border-t border-white/10" />
+          {(() => { const cp = myPlayers.find(p => p.id === contextMenu.playerId); return (
+          <button onClick={() => handleContextAction('transferList')} disabled={!!cp?.isUntouchable} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            {cp?.isOnTransferList ? 'Usuń z listy' : 'Wystaw na listę'}
+          </button>
+          ); })()}
+          <button onClick={() => handleContextAction('untouchable')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors">
+            Nie na sprzedaż
+          </button>
+          <div className="my-1 border-t border-white/10" />
+          <button onClick={() => handleContextAction('reserves')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10 transition-colors">
+            Przenieś do rezerw
           </button>
         </div>
       )}
