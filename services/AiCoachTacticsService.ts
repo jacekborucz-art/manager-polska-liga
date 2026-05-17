@@ -1,5 +1,6 @@
 import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
+import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
 
 type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack };
 
@@ -40,21 +41,33 @@ export const AiCoachTacticsService = {
     userClub: Club,
     userPlayers: Player[],
     userTacticId: string,
-    seed: number
+    seed: number,
+    opponentReport?: AiOpponentMatchReport
   ): AiInstructions => {
     const decisionMaking = ownCoach?.attributes.decisionMaking ?? 50;
     const experience = ownCoach?.attributes.experience ?? 50;
 
-    const userFwdAvg = getTopLineAvg(userPlayers, PlayerPosition.FWD, 3);
-    const userDefAvg = getTopLineAvg(userPlayers, PlayerPosition.DEF, 4);
-    const userTacticDefBias = TacticRepository.getById(userTacticId)?.defenseBias ?? 50;
+    const userFwdAvg = opponentReport?.perceivedLineStrengths.attack ?? getTopLineAvg(userPlayers, PlayerPosition.FWD, 3);
+    const userDefAvg = opponentReport?.perceivedLineStrengths.defense ?? getTopLineAvg(userPlayers, PlayerPosition.DEF, 4);
+    const userTacticDefBias = TacticRepository.getById(opponentReport?.predictedTacticId ?? userTacticId)?.defenseBias ?? 50;
     const repDiff = ownClub.reputation - userClub.reputation;
 
     // Suma sygnałów: dodatnia = sugeruje OFFENSIVE, ujemna = sugeruje DEFENSIVE
     let signalScore = 0;
 
     // Niedoświadczony trener patrzy tylko na reputację (1 sygnał)
-    if (experience < 40) {
+    if (opponentReport) {
+      if (opponentReport.recommendedApproach === 'PRESS') signalScore += 2;
+      if (opponentReport.recommendedApproach === 'DIRECT') signalScore += 1;
+      if (opponentReport.recommendedApproach === 'CONTROL') signalScore += 0.5;
+      if (opponentReport.recommendedApproach === 'COUNTER') signalScore -= 1.5;
+      if (opponentReport.recommendedApproach === 'LOW_BLOCK') signalScore -= 2;
+
+      if (opponentReport.predictedStyle === 'OFFENSIVE') signalScore -= 1;
+      if (opponentReport.predictedStyle === 'DEFENSIVE') signalScore += 1;
+      if (opponentReport.perceivedFatigueLevel === 'EXHAUSTED') signalScore += 1.5;
+      else if (opponentReport.perceivedFatigueLevel === 'TIRED') signalScore += 0.75;
+    } else if (experience < 40) {
       signalScore = repDiff >= 2 ? 1 : repDiff <= -2 ? -1 : 0;
     } else {
       // Słaba obrona gracza → atak
@@ -86,9 +99,12 @@ export const AiCoachTacticsService = {
     }
 
     // Słaby decisionMaking → losowe odchylenie od analizy
-    if (decisionMaking < 40) {
+    const decisionNoiseChance = opponentReport
+      ? Math.max(0.03, 0.32 - opponentReport.confidence * 0.25)
+      : (decisionMaking < 40 ? 0.35 : 0);
+    if (decisionNoiseChance > 0) {
       const rng1 = seededRng(seed, 0, 301);
-      if (rng1 < 0.35) {
+      if (rng1 < decisionNoiseChance) {
         const rng2 = seededRng(seed, 0, 302);
         const opts: InstructionMindset[] = ['DEFENSIVE', 'NEUTRAL', 'OFFENSIVE'];
         mindset = opts[Math.floor(rng2 * 3)];

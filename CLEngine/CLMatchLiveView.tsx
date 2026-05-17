@@ -60,6 +60,7 @@ import { DebugLoggerService } from '../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../services/InjuryUpgradeService';
 import { AttendanceService } from '../services/AttendanceService';
 import { LineupService } from '../services/LineupService';
+import { AiOpponentAnalysisService } from '../services/AiOpponentAnalysisService';
 import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { TalkEffect } from '../services/HalftimeTalkService';
@@ -163,7 +164,7 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { pri
 export const CLMatchLiveView = () => {
   const { 
     navigateTo, userTeamId, clubs, fixtures, players, 
-    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches,
+    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, sessionSeed,
     activeMatchState: matchState, setActiveMatchState: setMatchState
   } = useGame();
@@ -303,8 +304,40 @@ const isPausedForSevereInjury = useMemo(() => {
    if (ctx && (!matchState || matchState.fixtureId !== ctx.fixture.id)) {
       const sessionSeed = Math.abs(Math.floor(Date.now() * Math.random()));
       
-      const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
-      const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
+      const homeLineupBase = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
+      const awayLineupBase = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
+      const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
+      const aiClubInit = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
+      const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
+      const aiPlayersInit = ctx.homeClub.id === userTeamId ? ctx.awayPlayers : ctx.homePlayers;
+      const userLineupInit = lineups[userClubInit.id];
+      const aiLineupBase = aiClubInit.id === ctx.homeClub.id ? homeLineupBase : awayLineupBase;
+      const aiCoachInit = aiClubInit.coachId ? coaches[aiClubInit.coachId] : null;
+
+      const opponentReport = userLineupInit ? AiOpponentAnalysisService.generateReport({
+        aiClub: aiClubInit,
+        aiCoach: aiCoachInit,
+        aiStaffMembers: staffMembers,
+        opponentClub: userClubInit,
+        opponentPlayers: userPlayersInit,
+        opponentLineup: userLineupInit,
+        seed: sessionSeed,
+      }) : undefined;
+
+      const aiPreparedTacticId = opponentReport
+        ? AiOpponentAnalysisService.recommendStartingTactic(
+          aiLineupBase.tacticId,
+          opponentReport,
+          aiClubInit,
+          userClubInit,
+          aiPlayersInit
+        )
+        : aiLineupBase.tacticId;
+      const aiPreparedLineup = aiPreparedTacticId !== aiLineupBase.tacticId
+        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, null)
+        : aiLineupBase;
+      const homeLineupData = aiClubInit.id === ctx.homeClub.id ? aiPreparedLineup : homeLineupBase;
+      const awayLineupData = aiClubInit.id === ctx.awayClub.id ? aiPreparedLineup : awayLineupBase;
 
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
@@ -364,7 +397,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });

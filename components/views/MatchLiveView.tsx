@@ -86,12 +86,14 @@ import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
+import { LineupService } from '../../services/LineupService';
 import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
 import { applyFocusToFormImpact } from '../../services/MatchPrepFocusService';
 import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
+import { AiOpponentAnalysisService } from '../../services/AiOpponentAnalysisService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
@@ -123,7 +125,7 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { pri
 export const MatchLiveView = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
-    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches,
+    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, setClubs,
     activeMatchState: matchState, setActiveMatchState: setMatchState,
     pendingMatchKits
@@ -314,9 +316,35 @@ const isPausedForSevereInjury = useMemo(() => {
       const aiCoachInit = aiClubInit?.coachId ? coaches[aiClubInit.coachId] : null;
       const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
       const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
-      const userTacticIdInit = lineups[userTeamId ?? '']?.tacticId ?? '4-4-2';
+      const aiPlayersInit = ctx.homeClub.id === userTeamId ? ctx.awayPlayers : ctx.homePlayers;
+      const userLineupInit = lineups[userClubInit.id];
+      const userTacticIdInit = userLineupInit?.tacticId ?? '4-4-2';
+      const aiLineupBase = lineups[aiClubInit.id] ?? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, '4-4-2', aiCoachInit);
+      const opponentReport = userLineupInit
+        ? AiOpponentAnalysisService.generateReport({
+            aiClub: aiClubInit,
+            aiCoach: aiCoachInit,
+            aiStaffMembers: staffMembers,
+            opponentClub: userClubInit,
+            opponentPlayers: userPlayersInit,
+            opponentLineup: userLineupInit,
+            seed: sessionSeed,
+          })
+        : undefined;
+      const aiPreparedTacticId = opponentReport
+        ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit)
+        : aiLineupBase.tacticId;
+      const aiLineupPrepared = aiPreparedTacticId !== aiLineupBase.tacticId
+        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, null)
+        : aiLineupBase;
+      const homeLineupInit = aiClubInit.id === ctx.homeClub.id
+        ? aiLineupPrepared
+        : (lineups[ctx.homeClub.id] ?? LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers));
+      const awayLineupInit = aiClubInit.id === ctx.awayClub.id
+        ? aiLineupPrepared
+        : (lineups[ctx.awayClub.id] ?? LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers));
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed
+        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
       );
       const aiBriefingEffect = adjustBriefingEffectForPressure(
         calculateAiCoachBriefingEffect(
@@ -332,7 +360,7 @@ const isPausedForSevereInjury = useMemo(() => {
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
         isPausedForEvent: false, isHalfTime: false, isFinished: false, speed: 1, momentum: 0, momentumPulse: 0,
-        homeScore: 0, awayScore: 0, homeLineup: lineups[ctx.homeClub.id], awayLineup: lineups[ctx.awayClub.id],
+        homeScore: 0, awayScore: 0, homeLineup: homeLineupInit, awayLineup: awayLineupInit,
         // TUTAJ WSTAW TEN KOD
         homeFatigue: ctx.homePlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
@@ -397,7 +425,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, aiPressureProfile]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -386,13 +386,14 @@ export const TrainingService = {
   processReserveTrainingEffects: (
     reserves: Player[],
     trainingId: string | null,
+    playerFocuses: Record<string, string>,
     coachTrainingAttr: number,
     clubReputation: number,
     leagueTier: number,
     clubCountry?: string
   ): Player[] => {
     const cycle = TRAINING_CYCLES.find(c => c.id === trainingId) || TRAINING_CYCLES[0];
-    const coachMultiplier = 0.70 + (coachTrainingAttr / 100) * 0.50;
+    const coachScore = coachTrainingAttr / 100;
 
     return reserves.map(player => {
       if (player.health.status === HealthStatus.INJURED) {
@@ -438,19 +439,22 @@ export const TrainingService = {
         'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
       ];
 
+      const effectiveFocus = (player.trainingFocus || playerFocuses[player.id]) ?? null;
+
       attrKeys.forEach(key => {
         let pGrowth = 0.015;
 
         if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
         if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
-        if (player.trainingFocus === key) pGrowth += 0.06;
+        if (effectiveFocus === key) pGrowth += 0.06;
+        if (!effectiveFocus) pGrowth *= player.age < 24 ? 0.82 : 0.90;
 
-        if (player.age < 21) pGrowth *= 2.0;
+        if (player.age < 21) pGrowth *= 1.5;
         else if (player.age > 32) pGrowth *= 0.3;
 
-        const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
-        pGrowth *= talentMod;
-        pGrowth *= coachMultiplier;
+        const talentScore = player.attributes.talent / 100;
+        const growthMod = Math.max(0, (talentScore * coachScore - 0.10) * 4.0);
+        pGrowth *= growthMod;
         pGrowth *= moraleTrainingModifier.growth;
 
         if (Math.random() < pGrowth) {
@@ -481,6 +485,7 @@ export const TrainingService = {
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
         pRegress *= moraleTrainingModifier.regression;
+        pRegress *= (1.55 - coachScore * 0.90);
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;

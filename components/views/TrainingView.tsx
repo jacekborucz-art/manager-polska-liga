@@ -177,23 +177,26 @@ export const TrainingView: React.FC = () => {
          </div>
 
          <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+              className="px-8 py-4 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               &larr; Anuluj zmiany
             </button>
             <button
               onClick={handleAskAssistant}
               disabled={teamPlayers.length === 0 || !hasAssistant}
-              className="px-8 py-4 rounded-2xl bg-blue-600/85 hover:bg-blue-500 disabled:opacity-20 text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 shadow-[0_18px_40px_rgba(37,99,235,0.35)] border border-blue-300/20"
+              className="px-8 py-4 rounded-2xl bg-blue-600/85 hover:bg-blue-500 disabled:opacity-20 text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-300/60 border-x-blue-400/30 border-b-black/60"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(37,99,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
             >
               POPROS ASYSTENTA
             </button>
-            <button 
+            <button
               onClick={handleSave}
               disabled={!selectedId}
-              className="px-14 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-20 text-white font-black italic uppercase tracking-tighter text-lg transition-all hover:scale-105 active:scale-95 shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-b-4 border-emerald-900"
+              className="px-14 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-20 text-white font-black italic uppercase tracking-tighter text-lg transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-300/60 border-x-emerald-500/30 border-b-black/60"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 24px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.2)' }}
             >
               ZATWIERDŹ PROGRAM 🏁
             </button>
@@ -204,13 +207,15 @@ export const TrainingView: React.FC = () => {
       <div className="relative z-20 flex items-center gap-2 px-12 pt-4 border-b border-white/5 shrink-0">
         <button
           onClick={() => setActiveTab('training')}
-          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'training' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'training' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
+          style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}
         >
           Program Treningowy
         </button>
         <button
           onClick={() => setActiveTab('focus')}
-          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'focus' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'focus' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
+          style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}
         >
           Fokus Tygodniowy
           {myClub?.matchPrepFocusId && (
@@ -253,7 +258,7 @@ export const TrainingView: React.FC = () => {
                           <tr key={player.id} onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-context-menu ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
                             <td className={`py-2 px-3 sticky left-0 z-10 whitespace-nowrap ${stickyBg}`}>
                               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border mr-2 ${posColor}`}>{player.position}</span>
-                              <button onClick={() => viewPlayerDetails(player.id)} className="font-black text-white hover:text-emerald-400 transition-colors cursor-pointer">{player.firstName[0]}. {player.lastName}</button>
+                              <button onClick={() => viewPlayerDetails(player.id)} className="font-black text-white hover:text-emerald-400 transition-colors cursor-pointer active:translate-y-[2px]">{player.firstName[0]}. {player.lastName}</button>
                               <span className="ml-2 text-slate-500 font-bold">OVR {player.overallRating}</span>
                             </td>
                             {COLS.map(k => {
@@ -378,11 +383,12 @@ export const TrainingView: React.FC = () => {
                   <button
                     key={cycle.id}
                     onClick={() => setSelectedId(cycle.id)}
-                    className={`group relative p-3 rounded-2xl border transition-all duration-300 text-left overflow-hidden
+                    className={`group relative p-3 rounded-2xl transition-all duration-300 text-left overflow-hidden active:translate-y-[2px] border-t border-x border-b
                       ${isSelected
-                        ? 'bg-emerald-600/15 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
-                        : 'bg-slate-900/40 border-white/5 hover:border-white/20 hover:bg-slate-900/60'}
+                        ? 'bg-emerald-600/15 border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60'
+                        : 'bg-slate-900/40 border-t-white/10 border-x-white/5 border-b-black/40 hover:bg-slate-900/60'}
                     `}
+                    style={{ boxShadow: isSelected ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(16,185,129,0.15), inset 0 1px 0 rgba(255,255,255,0.08)' : '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}
                   >
                     {/* OPIS NA HOVER */}
                     <div className="absolute inset-0 rounded-2xl p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center z-20 pointer-events-none" style={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -418,14 +424,15 @@ export const TrainingView: React.FC = () => {
                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 block px-1">Intensywność</span>
                  <div className="flex gap-2">
                     {[
-                      { id: 'LIGHT', label: 'LEKKI', color: 'border-emerald-500/50 text-emerald-400', active: 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' },
-                      { id: 'NORMAL', label: 'NORMALNY', color: 'border-blue-500/50 text-blue-400', active: 'bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]' },
-                      { id: 'HEAVY', label: 'CIĘŻKI', color: 'border-rose-500/50 text-rose-400', active: 'bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]' }
+                      { id: 'LIGHT', label: 'LEKKI', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-emerald-400', active: 'bg-emerald-500 text-black border-t-emerald-300/70 border-x-emerald-400/40 border-b-black/60' },
+                      { id: 'NORMAL', label: 'NORMALNY', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-blue-400', active: 'bg-blue-500 text-white border-t-blue-300/70 border-x-blue-400/40 border-b-black/60' },
+                      { id: 'HEAVY', label: 'CIĘŻKI', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-rose-400', active: 'bg-rose-500 text-white border-t-rose-300/70 border-x-rose-400/40 border-b-black/60' }
                     ].map(btn => (
                        <button
                           key={btn.id}
                           onClick={() => setTrainingIntensity(btn.id as any)}
-                          className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all border ${activeIntensity === btn.id ? btn.active : `bg-white/5 ${btn.color} hover:bg-white/10`}`}
+                          className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all border-t border-x border-b active:translate-y-[2px] ${activeIntensity === btn.id ? btn.active : `bg-white/5 ${btn.color} hover:bg-white/10`}`}
+                          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                        >
                           {btn.label}
                        </button>
@@ -526,10 +533,11 @@ export const TrainingView: React.FC = () => {
                     <button
                       key={focus.id}
                       onClick={() => setSelectedFocusId(prev => prev === focus.id ? null : focus.id)}
-                      className={`group relative p-4 rounded-2xl border transition-all duration-300 text-left overflow-hidden
-                        ${isSelected ? 'bg-emerald-600/15 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
-                        : isCurrent ? 'bg-blue-600/10 border-blue-500/30'
-                        : 'bg-slate-900/40 border-white/5 hover:border-white/20 hover:bg-slate-900/60'}`}
+                      className={`group relative p-4 rounded-2xl transition-all duration-300 text-left overflow-hidden active:translate-y-[2px] border-t border-x border-b
+                        ${isSelected ? 'bg-emerald-600/15 border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60'
+                        : isCurrent ? 'bg-blue-600/10 border-t-blue-400/40 border-x-blue-500/20 border-b-black/60'
+                        : 'bg-slate-900/40 border-t-white/10 border-x-white/5 border-b-black/40 hover:bg-slate-900/60'}`}
+                      style={{ boxShadow: isSelected ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(16,185,129,0.15), inset 0 1px 0 rgba(255,255,255,0.08)' : isCurrent ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(29,78,216,0.15), inset 0 1px 0 rgba(255,255,255,0.06)' : '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}
                     >
                       <div className="flex items-center gap-3 mb-2">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-2xl shrink-0 transition-transform group-hover:scale-110
@@ -665,7 +673,8 @@ export const TrainingView: React.FC = () => {
 
                   <button
                     onClick={handleSaveFocus}
-                    className="mt-1 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black italic uppercase tracking-tighter text-sm transition-all hover:scale-105 active:scale-95 shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-b-4 border-emerald-900"
+                    className="mt-1 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black italic uppercase tracking-tighter text-sm transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-300/60 border-x-emerald-500/30 border-b-black/60"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 24px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.2)' }}
                   >
                     ZATWIERDŹ FOKUS 🎯
                   </button>
@@ -705,7 +714,7 @@ export const TrainingView: React.FC = () => {
           >
             <button
               onClick={() => { setReportPlayer(contextMenu.player); setModalPos({ x: Math.max(0, window.innerWidth / 2 - 610), y: Math.max(20, window.innerHeight / 2 - 320) }); setContextMenu(null); }}
-              className="flex items-center gap-3 px-5 py-3 w-full text-left hover:bg-white/10 transition-colors"
+              className="flex items-center gap-3 px-5 py-3 w-full text-left hover:bg-white/10 transition-colors active:translate-y-[2px]"
             >
               <span className="text-xl">🧠</span>
               <span className="text-[10px] font-black uppercase tracking-widest text-white">Raport Asystenta</span>
@@ -758,7 +767,7 @@ export const TrainingView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[10px] font-black text-blue-400/50 uppercase tracking-widest">Raport Indywidualny • Asystent</span>
-                  <button onClick={() => setReportPlayer(null)} className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-lg">✕</button>
+                  <button onClick={() => setReportPlayer(null)} className="w-11 h-11 rounded-full bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all font-black text-lg active:translate-y-[2px]" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)' }}>✕</button>
                 </div>
               </div>
 

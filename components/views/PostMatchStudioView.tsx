@@ -327,8 +327,8 @@ export const PostMatchStudioView: React.FC = () => {
           <div className="h-[30px] shrink-0" />
           {standings.length > 0 && (
             <div>
-              <p className="text-[11px] font-black italic uppercase tracking-tighter text-slate-200 text-center mb-1">Tabela</p>
-              <div className="h-px bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent mb-2" style={{ backgroundImage: 'linear-gradient(to right, transparent, #eab308aa, #ef4444aa, transparent)' }} />
+              <p className="text-[11px] font-black italic uppercase tracking-tighter text-slate-200 text-center mb-1 rounded-md py-[2px]" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef444420, #ffffff15, #ef444420, transparent)' }}>Tabela</p>
+              <div className="h-px mb-2" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef4444aa, #ffffffaa, #ef4444aa, transparent)' }} />
               <div className="flex text-[7px] font-black italic uppercase tracking-tighter text-white px-2 mb-1">
                 <span className="w-6 shrink-0 whitespace-nowrap">#</span>
                 <span className="flex-1 min-w-0">Drużyna</span>
@@ -341,21 +341,21 @@ export const PostMatchStudioView: React.FC = () => {
               {standings.map((club, idx) => {
                 let rowClass = 'text-slate-400';
                 if (leagueId === 'L_PL_1') {
-                  if (idx === 0) rowClass = 'bg-teal-500 text-black';
-                  else if (idx <= 2) rowClass = 'bg-slate-500 text-black';
-                  else if (idx <= 14) rowClass = 'bg-black text-slate-400';
-                  else rowClass = 'bg-red-600 text-white';
+                  if (idx === 0) rowClass = 'bg-teal-500/70 text-black';
+                  else if (idx <= 2) rowClass = 'bg-slate-500/70 text-black';
+                  else if (idx <= 14) rowClass = 'bg-black/50 text-slate-400';
+                  else rowClass = 'bg-red-600/70 text-white';
                 } else if (leagueId === 'L_PL_2') {
-                  if (idx <= 1) rowClass = 'bg-teal-500 text-black';
-                  else if (idx <= 5) rowClass = 'bg-slate-500 text-black';
-                  else if (idx <= 14) rowClass = 'bg-black text-slate-400';
-                  else rowClass = 'bg-red-600 text-white';
+                  if (idx <= 1) rowClass = 'bg-teal-500/70 text-black';
+                  else if (idx <= 5) rowClass = 'bg-slate-500/70 text-black';
+                  else if (idx <= 14) rowClass = 'bg-black/50 text-slate-400';
+                  else rowClass = 'bg-red-600/70 text-white';
                 } else if (leagueId === 'L_PL_3') {
-                  if (idx <= 1) rowClass = 'bg-teal-500 text-black';
-                  else if (idx <= 5) rowClass = 'bg-slate-500 text-black';
-                  else if (idx <= 11) rowClass = 'bg-black text-slate-400';
-                  else if (idx <= 13) rowClass = 'bg-orange-500 text-white';
-                  else rowClass = 'bg-red-600 text-white';
+                  if (idx <= 1) rowClass = 'bg-teal-500/70 text-black';
+                  else if (idx <= 5) rowClass = 'bg-slate-500/70 text-black';
+                  else if (idx <= 11) rowClass = 'bg-black/50 text-slate-400';
+                  else if (idx <= 13) rowClass = 'bg-orange-500/70 text-white';
+                  else rowClass = 'bg-red-600/70 text-white';
                 } else {
                   rowClass = club.id === userTeamId ? 'bg-white/5 text-white' : 'text-slate-400';
                 }

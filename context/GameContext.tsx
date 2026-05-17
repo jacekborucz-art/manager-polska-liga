@@ -606,6 +606,123 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     });
   }, [buildMailFingerprint]);
 
+  const buildContractStaffAlert = useCallback((
+    club: Club,
+    squad: Player[],
+    date: Date,
+    lineup?: Lineup
+  ): MailMessage | null => {
+    if (squad.length === 0) return null;
+
+    const daysLeft = (player: Player): number =>
+      Math.floor((new Date(player.contractEndDate).getTime() - date.getTime()) / 86_400_000);
+
+    const played = (player: Player): number =>
+      (player.stats?.matchesPlayed || 0) +
+      (player.cupStats?.matchesPlayed || 0) +
+      (player.euroStats?.matchesPlayed || 0);
+
+    const minutes = (player: Player): number =>
+      (player.stats?.minutesPlayed || 0) +
+      (player.cupStats?.minutesPlayed || 0) +
+      (player.euroStats?.minutesPlayed || 0);
+
+    const averageRating = (player: Player): number | null => {
+      const ratings = [
+        ...(player.stats?.ratingHistory || []),
+        ...(player.cupStats?.ratingHistory || []),
+        ...(player.euroStats?.ratingHistory || []),
+      ];
+      return ratings.length > 0
+        ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
+        : null;
+    };
+
+    const lineupIds = new Set<string>([
+      ...(lineup?.startingXI.filter(Boolean) as string[] || []),
+      ...(lineup?.bench || []),
+    ]);
+    const squadAverage = squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+    const samePositionAverage = (position: PlayerPosition): number => {
+      const group = squad.filter(player => player.position === position);
+      return group.length > 0
+        ? group.reduce((sum, player) => sum + player.overallRating, 0) / group.length
+        : squadAverage;
+    };
+
+    const expiring = squad
+      .map(player => {
+        const left = daysLeft(player);
+        if (left <= 0 || left > 365) return null;
+
+        const matchCount = played(player);
+        const minutesCount = minutes(player);
+        const rating = averageRating(player);
+        const positionAverage = samePositionAverage(player.position);
+        const importantByRole = player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER' || player.isUntouchable || lineupIds.has(player.id);
+        const strongForTeam = player.overallRating >= squadAverage + 3 || player.overallRating >= positionAverage + 4;
+        const tooGoodForClub = player.overallRating >= squadAverage + 7 && player.age >= 22 && player.age <= 31 && club.reputation < 78;
+        const wantsBetterMove = tooGoodForClub || (player.interestedClubs?.length || 0) >= 2 || player.isNegotiationPermanentBlocked;
+        const retirementRisk = player.age >= 36 || (player.age >= 34 && matchCount < 8 && minutesCount < 500);
+        const usefulVeteran = player.age >= 32 && player.overallRating >= squadAverage + 2 && matchCount >= 10;
+        const poorSeason = rating !== null ? rating < 6.3 : matchCount >= 10 && minutesCount < 700;
+        const fringe = !importantByRole && matchCount < 8 && minutesCount < 500;
+        const youngUpside = player.age <= 23 && player.attributes.talent >= player.overallRating + 8;
+
+        let recommendation = 'Porozmawiać o przedłużeniu kontraktu';
+        if (wantsBetterMove) recommendation = 'Nowy kontrakt albo sprzedaż, zanim stracimy kontrolę';
+        else if (retirementRisk) recommendation = 'Krótka rozmowa: rok kontraktu albo plan następcy';
+        else if (fringe && !youngUpside) recommendation = 'Rozważyć sprzedaż lub odejście po sezonie';
+        else if (youngUpside) recommendation = 'Przedłużyć i zabezpieczyć rozwój';
+        else if (poorSeason && !strongForTeam) recommendation = 'Nie spieszyć się z podwyżką, sprawdzić rynek';
+        else if (importantByRole || strongForTeam || usefulVeteran) recommendation = 'Przedłużyć możliwie szybko';
+
+        const reasons = [
+          left <= 90 ? `zostało tylko ${left} dni kontraktu` : `kontrakt kończy się za ${Math.ceil(left / 30)} mies.`,
+          player.squadRole === 'KEY_PLAYER' ? 'status: kluczowy zawodnik' : player.squadRole === 'STARTER' ? 'status: pierwszy skład' : importantByRole ? 'jest w planach meczowych' : 'rola w kadrze jest mniejsza',
+          `OVR ${player.overallRating}`,
+          matchCount > 0 ? `${matchCount} mecz(e), śr. ocena ${rating ?? 'brak'}` : 'brak większej próbki meczowej',
+          wantsBetterMove ? 'może chcieć mocniejszego projektu' : null,
+          retirementRisk ? 'ryzyko końca kariery lub spadku roli' : null,
+        ].filter(Boolean);
+
+        const urgency =
+          (left <= 90 ? 45 : left <= 180 ? 32 : 20) +
+          (importantByRole ? 18 : 0) +
+          (strongForTeam ? 14 : 0) +
+          (wantsBetterMove ? 18 : 0) +
+          (retirementRisk ? 10 : 0) +
+          (youngUpside ? 10 : 0) -
+          (fringe ? 8 : 0);
+
+        return { player, left, recommendation, reasons, urgency };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b!.urgency - a!.urgency) || (a!.left - b!.left))
+      .slice(0, 5);
+
+    if (expiring.length === 0) return null;
+
+    const dateKey = date.toISOString().split('T')[0];
+    const signature = expiring.map(entry => `${entry!.player.id}_${entry!.left <= 90 ? '90' : entry!.left <= 180 ? '180' : '365'}`).join('_');
+    const lines = expiring.map(entry => {
+      const item = entry!;
+      return `- ${item.player.firstName} ${item.player.lastName} (${item.player.position}, ${item.player.age} lat): ${item.recommendation}. Powody: ${item.reasons.join(', ')}.`;
+    });
+
+    return {
+      id: `STAFF_CONTRACT_ALERT_${club.id}_${dateKey}_${signature}`,
+      sender: 'Sztab trenera',
+      role: 'Asystent trenera',
+      subject: 'Przegląd kontraktów: decyzje przed końcem umów',
+      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 12 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo za chwilę możemy stracić wpływ na cenę albo samą decyzję zawodnika.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
+      date: new Date(date),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 88,
+    };
+  }, []);
+
   // Memoized allFixtures
   const allFixtures = useMemo(() => {
     const allLeagueFixtures = Object.values(leagueSchedules).flatMap(s => s.matchdays.flatMap(m => m.fixtures));
@@ -1724,10 +1841,17 @@ setMessages([welcomeMail, fanMail]);
       if (reserves.length > 0) {
         const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
         const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
-        const autoTrainingId = TrainingAssistantService.buildPlan(reserves).cycleId;
+        const coachExperience = reserveCoach?.attributes.experience ?? 50;
+        const coachDecision = reserveCoach?.attributes.decisionMaking ?? 50;
+        const individualWork = Math.round((coachExperience + coachDecision) / 10);
+        const weekSeed = Math.floor(currentDate.getTime() / (7 * 86400000));
+        let rngOffset = 1;
+        const weekRng = () => { const x = Math.sin(weekSeed * 9301 + rngOffset++ * 49297 + 233) * 1000; return x - Math.floor(x); };
+        const reservePlan = TrainingAssistantService.buildPlan(reserves, weekRng, individualWork);
         const updatedReserves = TrainingService.processReserveTrainingEffects(
           reserves,
-          autoTrainingId,
+          reservePlan.cycleId,
+          reservePlan.playerFocuses,
           coachTrainingAttr,
           userClub?.reputation || 5,
           tier,
@@ -5203,6 +5327,23 @@ const finalResult: SimulationOutput = {
     const nextDay = new Date(currentDate);
     nextDay.setDate(nextDay.getDate() + 1);
     const nextDayIso = nextDay.toISOString().split('T')[0];
+
+    // --- STAFF: miesięczny przegląd kończących się kontraktów ---
+    if (userTeamId && !isResigned && nextDay.getDate() === 1) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const userSquad = players[userTeamId] || [];
+      if (userClub) {
+        const contractMail = buildContractStaffAlert(userClub, userSquad, nextDay, lineups[userTeamId]);
+        if (contractMail && !sentMailIdsRef.current.has(contractMail.id)) {
+          sentMailIdsRef.current.add(contractMail.id);
+          setMessages(prev => {
+            if (prev.some(message => message.id === contractMail.id)) return prev;
+            return [contractMail, ...prev];
+          });
+        }
+      }
+    }
+    // --- END STAFF CONTRACT REVIEW ---
 
     // --- SPORTING DIRECTOR: active objective review ---
     if (userTeamId && !isResigned) {
