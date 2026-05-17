@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { FriendlySchedulerModal } from '../modals/FriendlySchedulerModal';
 
 export const CalendarDebugView: React.FC = () => {
-  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures, pendingFriendlyRequests, addFriendlyRequest, cancelFriendly } = useGame();
+  const { seasonTemplate, navigateTo, clubs, userTeamId, currentDate, leagueSchedules, fixtures, pendingFriendlyRequests, addFriendlyRequest, cancelFriendly, aiFriendlyPairs } = useGame();
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   
@@ -447,6 +447,7 @@ export const CalendarDebugView: React.FC = () => {
         pendingFriendlyRequests={pendingFriendlyRequests}
         confirmedFriendlyDates={confirmedFriendlyDates}
         onConfirmFriendly={addFriendlyRequest}
+        aiFriendlyPairs={aiFriendlyPairs}
       />
 
       <style>{`

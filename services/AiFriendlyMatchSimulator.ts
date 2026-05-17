@@ -1,9 +1,10 @@
-import { Player, AiFriendlyPair, AiFriendlyMatchReport, PlayerPosition, HealthStatus, InjurySeverity } from '../types';
+import { Player, Coach, AiFriendlyPair, AiFriendlyMatchReport, PlayerPosition, HealthStatus, InjurySeverity } from '../types';
 import { GoalAttributionService } from './GoalAttributionService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { TACTICS_DB } from '../resources/tactics_db';
 
 const MAX_SUBS = 9;
-const BASE_DRAIN = 0.22;
+const BASE_DRAIN = 0.12;
 const GOAL_LAMBDA_BASE = 0.018;
 
 interface SimLineup {
@@ -16,35 +17,84 @@ function seededRng(seed: number, offset: number): number {
   return x - Math.floor(x);
 }
 
-function buildLineup(players: Player[], seed: number): SimLineup {
+function pickByAggression(players: Player[], activeXI: string[], expelledIds: Set<string>, rng: () => number): string | null {
+  const candidates = players.filter(p => activeXI.includes(p.id) && !expelledIds.has(p.id));
+  if (candidates.length === 0) return null;
+  const weights = candidates.map(p => Math.max(1, p.attributes.aggression));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    if (r < weights[i]) return candidates[i].id;
+    r -= weights[i];
+  }
+  return candidates[candidates.length - 1].id;
+}
+
+function getPositionStrength(p: Player, role: PlayerPosition): number {
+  switch (role) {
+    case PlayerPosition.GK: return p.attributes.goalkeeping;
+    case PlayerPosition.DEF: return p.attributes.defending;
+    case PlayerPosition.MID: return (p.attributes.passing + p.attributes.defending) / 2;
+    case PlayerPosition.FWD: return (p.attributes.finishing + p.attributes.attacking) / 2;
+    default: return p.attributes.defending;
+  }
+}
+
+function pickTactic(coach: Coach | null, rngFn: () => number) {
+  const fallback = TACTICS_DB.find(t => t.id === '4-4-2') ?? TACTICS_DB[0];
+  if (!coach) return fallback;
+  const keys = ['offensive', 'neutral', 'defensive'] as const;
+  const key = keys[Math.floor(rngFn() * 3)];
+  const tacticId = coach.favoriteTactics[key];
+  return TACTICS_DB.find(t => t.id === tacticId) ?? fallback;
+}
+
+function buildLineupWithTactic(
+  players: Player[],
+  tactic: ReturnType<typeof pickTactic>,
+  coachExp: number,
+  rngFn: (offset: number) => number,
+  seed: number
+): SimLineup {
   const healthy = players.filter(p => p.health.status === HealthStatus.HEALTHY && p.suspensionMatches === 0);
-  const gks = healthy.filter(p => p.position === PlayerPosition.GK);
-  const outfield = healthy.filter(p => p.position !== PlayerPosition.GK);
+  const usedIds = new Set<string>();
+  const errorChance = 0.01 + (100 - coachExp) / 100 * 0.75;
+  const starters: (string | null)[] = [];
 
-  const shuffleArr = <T>(arr: T[], s: number): T[] => {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(seededRng(s, i * 77) * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
+  tactic.slots.forEach((slot, slotIdx) => {
+    const isError = rngFn(seed + slotIdx * 17 + 1000) < errorChance;
+    const available = healthy.filter(p => !usedIds.has(p.id));
+
+    if (available.length === 0) {
+      starters.push(null);
+      return;
     }
-    return a;
-  };
 
-  const shuffledGK = shuffleArr(gks, seed);
-  const shuffledOut = shuffleArr(outfield, seed + 1);
+    if (isError) {
+      const picked = available[Math.floor(rngFn(seed + slotIdx * 17 + 2000) * available.length)];
+      starters.push(picked.id);
+      usedIds.add(picked.id);
+    } else {
+      const candidates = available.filter(p => p.position === slot.role);
+      const pool = candidates.length > 0 ? candidates : available;
+      pool.sort((a, b) => getPositionStrength(b, slot.role) - getPositionStrength(a, slot.role));
+      starters.push(pool[0].id);
+      usedIds.add(pool[0].id);
+    }
+  });
 
-  const gk = shuffledGK[0] || shuffledOut[0];
-  const remaining = shuffledOut.filter(p => p.id !== gk?.id);
-
-  const starters: (string | null)[] = [
-    gk?.id ?? null,
-    ...remaining.slice(0, 10).map(p => p.id),
-  ];
   while (starters.length < 11) starters.push(null);
 
-  const bench = remaining.slice(10, 10 + MAX_SUBS).map(p => p.id);
-
+  const bench = healthy.filter(p => !usedIds.has(p.id)).slice(0, MAX_SUBS).map(p => p.id);
   return { starters, bench };
+}
+
+function getCoachBonus(coach: Coach | null): { atk: number; def: number } {
+  if (!coach) return { atk: 0, def: 0 };
+  return {
+    atk: coach.attributes.motivation * 0.15 + coach.attributes.experience * 0.1,
+    def: coach.attributes.decisionMaking * 0.2,
+  };
 }
 
 export const AiFriendlyMatchSimulator = {
@@ -52,13 +102,21 @@ export const AiFriendlyMatchSimulator = {
     pair: AiFriendlyPair,
     homePlayers: Player[],
     awayPlayers: Player[],
+    homeCoach: Coach | null,
+    awayCoach: Coach | null,
     seed: number
   ): AiFriendlyMatchReport {
 
     const rng = (offset: number): number => seededRng(seed, offset);
 
-    const hLineup = buildLineup(homePlayers, seed + 10);
-    const aLineup = buildLineup(awayPlayers, seed + 20);
+    const hTactic = pickTactic(homeCoach, () => rng(seed + 1));
+    const aTactic = pickTactic(awayCoach, () => rng(seed + 2));
+
+    const hCoachExp = homeCoach?.attributes.experience ?? 50;
+    const aCoachExp = awayCoach?.attributes.experience ?? 50;
+
+    const hLineup = buildLineupWithTactic(homePlayers, hTactic, hCoachExp, rng, seed + 10);
+    const aLineup = buildLineupWithTactic(awayPlayers, aTactic, aCoachExp, rng, seed + 20);
 
     const extraTime = Math.floor(rng(9999) * 10) + 1;
     const totalMinutes = 90 + extraTime;
@@ -141,6 +199,13 @@ export const AiFriendlyMatchSimulator = {
       return { atk: sum('attacking'), def: sum('defending'), fin: sum('finishing'), gk: sum('goalkeeping') };
     };
 
+    const hCoachBonus = getCoachBonus(homeCoach);
+    const aCoachBonus = getCoachBonus(awayCoach);
+    const hTacticAtkMult = hTactic.attackBias / 50;
+    const hTacticDefMult = hTactic.defenseBias / 50;
+    const aTacticAtkMult = aTactic.attackBias / 50;
+    const aTacticDefMult = aTactic.defenseBias / 50;
+
     // ── GLOWNA PETLA MINUTOWA ──────────────────────────────────────────────────
     for (let minute = 1; minute <= totalMinutes; minute++) {
 
@@ -174,8 +239,8 @@ export const AiFriendlyMatchSimulator = {
       const aSatiety = 1 / (1 + awayScore * 0.31);
       const homeBonus = 1.005;
 
-      const hLambda = ((hPwr.atk * 0.4 + hPwr.fin * 0.6) / Math.max(1, aPwr.def + aPwr.gk)) * GOAL_LAMBDA_BASE * hSatiety * homeBonus;
-      const aLambda = ((aPwr.atk * 0.4 + aPwr.fin * 0.6) / Math.max(1, hPwr.def + hPwr.gk)) * GOAL_LAMBDA_BASE * aSatiety;
+      const hLambda = (((hPwr.atk + hCoachBonus.atk) * hTacticAtkMult * 0.4 + hPwr.fin * 0.6) / Math.max(1, (aPwr.def + aCoachBonus.def) * aTacticDefMult + aPwr.gk)) * GOAL_LAMBDA_BASE * hSatiety * homeBonus;
+      const aLambda = (((aPwr.atk + aCoachBonus.atk) * aTacticAtkMult * 0.4 + aPwr.fin * 0.6) / Math.max(1, (hPwr.def + hCoachBonus.def) * hTacticDefMult + hPwr.gk)) * GOAL_LAMBDA_BASE * aSatiety;
 
       if (rng(minute + 100) < hLambda && hActiveXI.length > 0) {
         const scorer = GoalAttributionService.pickScorer(homePlayers, hActiveXI, false, () => rng(minute + 500));
@@ -208,74 +273,93 @@ export const AiFriendlyMatchSimulator = {
         }
       }
 
-      // KARTKI
-      const yellowProb = 0.0012;
-      const processCard = (side: 'H' | 'A', activeXI: string[], roll: number) => {
-        if (roll >= yellowProb || activeXI.length === 0) return;
-        const pId = activeXI[Math.floor(rng(minute + 333) * activeXI.length)];
-        if (!pId || expelledIds.has(pId)) return;
-
-        const yellows = (playerYellowCounts.get(pId) || 0) + 1;
-        const isDirectRed = rng(minute + 334) < 0.001;
+      // ZOLTA KARTKA — zdarzenie 0.1 per minuta, zawodnik wybierany wg aggression
+      if (rng(minute + 300) < 0.1) {
+        const side = rng(minute + 301) < 0.5 ? 'H' : 'A';
+        const activeXI = side === 'H' ? hActiveXI : aActiveXI;
+        const sPlayers = side === 'H' ? homePlayers : awayPlayers;
         const lineup = side === 'H' ? hLineup : aLineup;
+        const pId = pickByAggression(sPlayers, activeXI, expelledIds, () => rng(minute + 302));
+        if (pId) {
+          const yellows = (playerYellowCounts.get(pId) || 0) + 1;
+          if (yellows >= 2) {
+            cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'RED_CARD', minute });
+            expelledIds.add(pId);
+            lineup.starters = lineup.starters.map(id => id === pId ? null : id);
+          } else {
+            playerYellowCounts.set(pId, yellows);
+            cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'YELLOW_CARD', minute });
+          }
+        }
+      }
 
-        if (isDirectRed || yellows >= 2) {
+      // BEZPOSREDNIA CZERWONA — zdarzenie 0.05 per minuta, zawodnik wybierany wg aggression
+      if (rng(minute + 400) < 0.05) {
+        const side = rng(minute + 401) < 0.5 ? 'H' : 'A';
+        const activeXI = side === 'H' ? hActiveXI : aActiveXI;
+        const sPlayers = side === 'H' ? homePlayers : awayPlayers;
+        const lineup = side === 'H' ? hLineup : aLineup;
+        const pId = pickByAggression(sPlayers, activeXI, expelledIds, () => rng(minute + 402));
+        if (pId) {
           cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'RED_CARD', minute });
           expelledIds.add(pId);
           lineup.starters = lineup.starters.map(id => id === pId ? null : id);
-        } else {
-          playerYellowCounts.set(pId, yellows);
-          cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'YELLOW_CARD', minute });
         }
-      };
+      }
 
-      processCard('H', hActiveXI, rng(minute + 300));
-      processCard('A', aActiveXI, rng(minute + 400));
+      // KONTUZJE — per zawodnik per mecz: lekka 0.01, ciezka 0.001
+      const lightProbPerMin = 0.01 / totalMinutes;
+      const severeProbPerMin = 0.001 / totalMinutes;
+      const allOnPitch: { id: string; side: 'H' | 'A' }[] = [
+        ...hActiveXI.map(id => ({ id, side: 'H' as const })),
+        ...aActiveXI.map(id => ({ id, side: 'A' as const })),
+      ];
 
-      // KONTUZJE
-      if (rng(minute + 800) < 0.004) {
-        const side = rng(minute + 801) < 0.5 ? 'H' : 'A';
+      allOnPitch.forEach(({ id, side }, pIdx) => {
+        if (injuries.some(inj => inj.playerId === id)) return;
+        const fMap = side === 'H' ? homeFatigue : awayFatigue;
         const lineup = side === 'H' ? hLineup : aLineup;
         const sPlayers = side === 'H' ? homePlayers : awayPlayers;
-        const fMap = side === 'H' ? homeFatigue : awayFatigue;
-        const activeXI = side === 'H' ? hActiveXI : aActiveXI;
-        if (activeXI.length === 0) continue;
 
-        const pId = activeXI[Math.floor(rng(minute + 802) * activeXI.length)];
-        if (!pId) continue;
+        const rollSevere = rng(minute + 800 + pIdx * 13);
+        const rollLight = rng(minute + 900 + pIdx * 13);
 
-        const severity = rng(minute + 803) < 0.84 ? InjurySeverity.LIGHT : InjurySeverity.SEVERE;
-        let injOff = 808;
+        const severity = rollSevere < severeProbPerMin
+          ? InjurySeverity.SEVERE
+          : rollLight < lightProbPerMin
+            ? InjurySeverity.LIGHT
+            : null;
+
+        if (!severity) return;
+
+        let injOff = 950 + pIdx * 7;
         const { days, type } = rollInjuryBySeverity(severity, () => rng(minute + injOff++));
-
-        injuries.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), severity, minute, days, type });
-
-        const penalty = severity === InjurySeverity.SEVERE ? 55 : 20;
-        if (fMap[pId] !== undefined) fMap[pId] = Math.max(0, fMap[pId] - penalty);
+        injuries.push({ playerId: id, playerName: pName(id), teamId: sideTeamId(side), severity, minute, days, type });
+        fMap[id] = Math.max(0, (fMap[id] || 100) - (severity === InjurySeverity.SEVERE ? 55 : 20));
 
         if (severity === InjurySeverity.SEVERE) {
           const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
           if (usedCount < MAX_SUBS) {
-            const pIdx = lineup.starters.indexOf(pId);
-            if (pIdx !== -1) {
-              const pos = sPlayers.find(p => p.id === pId)?.position ?? PlayerPosition.MID;
+            const pIdxInLineup = lineup.starters.indexOf(id);
+            if (pIdxInLineup !== -1) {
+              const pos = sPlayers.find(p => p.id === id)?.position ?? PlayerPosition.MID;
               const candidate = findReplacement(lineup, sPlayers, pos);
               if (candidate) {
-                lineup.starters[pIdx] = candidate;
+                lineup.starters[pIdxInLineup] = candidate;
                 substitutedInIds.add(candidate);
-                substitutedOutIds.add(pId);
+                substitutedOutIds.add(id);
                 allPlayedIds.add(candidate);
-                substitutions.push({ playerOutId: pId, playerOutName: pName(pId), playerInId: candidate, playerInName: pName(candidate), teamId: sideTeamId(side), minute });
+                substitutions.push({ playerOutId: id, playerOutName: pName(id), playerInId: candidate, playerInName: pName(candidate), teamId: sideTeamId(side), minute });
                 if (side === 'H') hSubsUsed++; else aSubsUsed++;
               } else {
-                lineup.starters[pIdx] = null;
+                lineup.starters[pIdxInLineup] = null;
               }
             }
           }
         } else {
-          lightInjuredOnPitch.set(pId, 0.30);
+          lightInjuredOnPitch.set(id, 0.30);
         }
-      }
+      });
 
       // DRENAZ KONDYCJI
       hLineup.starters.forEach(id => {

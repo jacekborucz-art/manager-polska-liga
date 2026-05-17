@@ -99,6 +99,7 @@ import { AcademyView } from './components/views/AcademyView';
 import { PreMatchFriendlyStudioView } from './components/views/PreMatchFriendlyStudioView';
 import { FriendlyMatchLiveView } from './components/views/FriendlyMatchLiveView';
 import { PostMatchFriendlyStudioView } from './components/views/PostMatchFriendlyStudioView';
+import { FriendlyMatchesRaportView } from './components/views/FriendlyMatchesRaportView';
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -223,6 +224,8 @@ case ViewState.HOSPITAL_VIEW:
         return <FriendlyMatchLiveView />;
       case ViewState.POST_MATCH_FRIENDLY_STUDIO:
         return <PostMatchFriendlyStudioView />;
+      case ViewState.AI_FRIENDLY_REPORTS:
+        return <FriendlyMatchesRaportView />;
   return <PreMatchCLFinalView />;
 case ViewState.POST_MATCH_CL_FINAL:
   return <PostMatchCLFinalView />;

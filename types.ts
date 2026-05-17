@@ -120,6 +120,7 @@ export enum ViewState {
   WC_DRAW = 'WC_DRAW',
   WORLD_CUP = 'WORLD_CUP',
   STAFF_SEARCH = 'STAFF_SEARCH',
+  AI_FRIENDLY_REPORTS = 'AI_FRIENDLY_REPORTS',
 }
 
 // ── BARAŻE WCQ 2026 — typy ────────────────────────────────────────────────
@@ -414,6 +415,8 @@ export interface MailMessage {
     requestType: 'MINUTES' | 'ROLE' | 'TRANSFER_LIST';
     requestedRole?: 'STARTER' | 'KEY_PLAYER';
     responseDeadline: string;
+  } | {
+    type: 'AI_FRIENDLY_REPORT_LINK';
   };
 }
 

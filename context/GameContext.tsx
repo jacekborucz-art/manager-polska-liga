@@ -4409,10 +4409,37 @@ setMessages([welcomeMail, fanMail]);
           const homePlayers = getOrGenerateSquad(pair.homeTeamId);
           const awayPlayers = getOrGenerateSquad(pair.awayTeamId);
           if (homePlayers.length < 11 || awayPlayers.length < 11) return;
+          const homeClub = clubs.find(c => c.id === pair.homeTeamId);
+          const awayClub = clubs.find(c => c.id === pair.awayTeamId);
+          const homeCoach = homeClub?.coachId ? (coaches[homeClub.coachId] ?? null) : null;
+          const awayCoach = awayClub?.coachId ? (coaches[awayClub.coachId] ?? null) : null;
           const pairSeed = sessionSeed + pair.id.length + idx * 137;
-          newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, pairSeed));
+          newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, homeCoach, awayCoach, pairSeed));
         });
-        if (newReports.length > 0) setAiFriendlyReports(prev => [...prev, ...newReports]);
+        if (newReports.length > 0) {
+          setAiFriendlyReports(prev => [...prev, ...newReports]);
+          const dateLabel = `${dayDate} ${dayDate === 8 ? 'lipca' : 'lipca'}`;
+          const lines = newReports.map(r => {
+            const hClub = clubs.find(c => c.id === r.homeTeamId);
+            const aClub = clubs.find(c => c.id === r.awayTeamId);
+            const hName = hClub?.shortName ?? hClub?.name ?? r.homeTeamId;
+            const aName = aClub?.shortName ?? aClub?.name ?? r.awayTeamId;
+            return `${hName} ${r.homeScore}–${r.awayScore} ${aName}`;
+          });
+          const friendlyNewsMail: MailMessage = {
+            id: `MAIL_AI_FRIENDLY_${dayDate}_${dateToProcess.getFullYear()}`,
+            sender: 'Serwis Sportowy',
+            role: 'Redakcja',
+            subject: `Wyniki sparingów — ${dateLabel}`,
+            body: `Wyniki sparingów z dnia ${dateLabel}:\n\n${lines.join('\n')}`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.MEDIA,
+            priority: 20,
+            metadata: { type: 'AI_FRIENDLY_REPORT_LINK' },
+          };
+          prependUniqueMessages([friendlyNewsMail]);
+        }
       }
     }
 

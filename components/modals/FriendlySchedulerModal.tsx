@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { CalendarSlot, CompetitionType, Club, PendingFriendlyRequest } from '../../types';
+import { CalendarSlot, CompetitionType, Club, PendingFriendlyRequest, AiFriendlyPair } from '../../types';
 
 interface FriendlySchedulerModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface FriendlySchedulerModalProps {
   pendingFriendlyRequests: PendingFriendlyRequest[];
   confirmedFriendlyDates: Set<string>;
   onConfirmFriendly: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
+  aiFriendlyPairs: AiFriendlyPair[];
 }
 
 type Venue = 'HOME' | 'AWAY' | 'NEUTRAL';
@@ -91,6 +92,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   pendingFriendlyRequests,
   confirmedFriendlyDates,
   onConfirmFriendly,
+  aiFriendlyPairs,
 }) => {
   const today = useMemo(() => new Date(currentDate), [currentDate]);
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
@@ -183,6 +185,16 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
       return { club, venue, acceptChance: calcAcceptChance(userRep, club.reputation, venue) };
     });
   }, [clubs, userTeamId, userClub]);
+
+  const isClubBusyOnDate = (clubId: string, dateStr: string | null): boolean => {
+    if (!dateStr) return false;
+    return aiFriendlyPairs.some(p => {
+      if (p.homeTeamId !== clubId && p.awayTeamId !== clubId) return false;
+      const d = p.date instanceof Date ? p.date : new Date(p.date);
+      const pStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      return pStr === dateStr;
+    });
+  };
 
   // ---------- manual search results ----------
   const manualResults = useMemo(() => {
@@ -384,7 +396,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                 🎲 Sugerowane drużyny
               </div>
               <div className="space-y-2">
-                {suggestedList.map(({ club, venue, acceptChance }) => {
+                {suggestedList.filter(({ club }) => !isClubBusyOnDate(club.id, selectedDate)).map(({ club, venue, acceptChance }) => {
                   const vInfo = venueInfo[venue];
                   const selected = selectedOpponent?.club.id === club.id && selectedOpponent.venue === venue;
                   return (
@@ -462,14 +474,18 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                   const chance = manualChance(club);
                   const vInfo = venueInfo[manualVenue];
                   const selected = selectedOpponent?.club.id === club.id;
+                  const busy = isClubBusyOnDate(club.id, selectedDate);
                   return (
                     <button
                       key={`man-${club.id}`}
-                      onClick={() => setSelectedOpponent({ club, venue: manualVenue, chance })}
+                      onClick={() => { if (!busy) setSelectedOpponent({ club, venue: manualVenue, chance }); }}
+                      disabled={busy}
                       className={`w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border transition-all active:scale-[0.99] ${
-                        selected
-                          ? 'bg-white/10 border-white/30'
-                          : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/15'
+                        busy
+                          ? 'bg-black/10 border-white/5 opacity-50 cursor-not-allowed'
+                          : selected
+                            ? 'bg-white/10 border-white/30'
+                            : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/15'
                       }`}
                     >
                       <div className="w-7 h-7 rounded-xl overflow-hidden shrink-0 flex flex-col border border-white/10">
@@ -478,9 +494,12 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[10px] font-black text-white uppercase italic truncate">{club.name}</div>
-                        <span className={`text-[8px] font-black ${vInfo.color}`}>{vInfo.label}</span>
+                        {busy
+                          ? <span className="text-[8px] font-black text-amber-500">Zajęta — sparing AI</span>
+                          : <span className={`text-[8px] font-black ${vInfo.color}`}>{vInfo.label}</span>
+                        }
                       </div>
-                      {selected && <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />}
+                      {selected && !busy && <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />}
                     </button>
                   );
                 })}
