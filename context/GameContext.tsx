@@ -4450,6 +4450,63 @@ setMessages([welcomeMail, fanMail]);
         });
         if (newReports.length > 0) {
           setAiFriendlyReports(prev => [...prev, ...newReports]);
+          newReports.forEach(r => {
+            const cardTypeMap: Record<string, 'YELLOW' | 'RED' | 'SECOND_YELLOW'> = {
+              YELLOW_CARD: 'YELLOW',
+              RED_CARD: 'RED',
+              SECOND_YELLOW: 'SECOND_YELLOW',
+            };
+            MatchHistoryService.logMatch({
+              matchId: r.pairId,
+              date: (r.date instanceof Date ? r.date : new Date(r.date)).toISOString(),
+              season: seasonNumber,
+              competition: 'FRIENDLY',
+              homeTeamId: r.homeTeamId,
+              awayTeamId: r.awayTeamId,
+              homeScore: r.homeScore,
+              awayScore: r.awayScore,
+              addedTime: r.extraTime,
+              goals: r.scorers.map(s => ({
+                playerId: s.playerId,
+                playerName: s.playerName,
+                minute: s.minute,
+                teamId: s.teamId,
+                isPenalty: s.isPenalty,
+                assistantId: s.assistId,
+                assistantName: s.assistName,
+                isMiss: s.isMiss,
+              })),
+              cards: r.cards.map(c => ({
+                playerId: c.playerId,
+                playerName: c.playerName,
+                minute: c.minute,
+                teamId: c.teamId,
+                type: cardTypeMap[c.type] ?? 'YELLOW',
+              })),
+              substitutions: r.substitutions.map(s => ({
+                playerOutId: s.playerOutId,
+                playerOutName: s.playerOutName,
+                playerInId: s.playerInId,
+                playerInName: s.playerInName,
+                minute: s.minute,
+                teamId: s.teamId,
+              })),
+              injuries: r.injuries.map(i => ({
+                playerId: i.playerId,
+                playerName: i.playerName,
+                minute: i.minute,
+                teamId: i.teamId,
+                severity: i.severity as InjurySeverity,
+                days: i.days,
+                type: i.type,
+              })),
+              ratings: r.ratings,
+              homeTacticId: r.homeTacticId,
+              awayTacticId: r.awayTacticId,
+              homeLineup: r.homeStartingXI,
+              awayLineup: r.awayStartingXI,
+            });
+          });
           const dateLabel = `${dayDate} ${dayDate === 8 ? 'lipca' : 'lipca'}`;
           const lines = newReports.map(r => {
             const hClub = clubs.find(c => c.id === r.homeTeamId);
