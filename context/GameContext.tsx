@@ -4929,7 +4929,7 @@ const finalResult: SimulationOutput = {
     // 4d. Symulacja meczu rezerw w tle
     if (userTeamId && reserves.length > 0 && reserveCoachId) {
       const todayIso = dateToProcess.toISOString().split('T')[0];
-      const reserveFixture = reserveFixtures.find(f => !f.resultId && f.date.startsWith(todayIso));
+      const reserveFixture = reserveFixtures.find(f => !f.resultId && (typeof f.date === 'string' ? f.date : new Date(f.date).toISOString().split('T')[0]).startsWith(todayIso));
       if (reserveFixture) {
         const opponentClub = clubs.find(c => c.id === reserveFixture.opponentClubId);
         const oppReputation = opponentClub?.reputation ?? 5;
