@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { PlayerPosition, Player } from '../../types';
@@ -12,7 +12,7 @@ interface MatchReportModalProps {
   onClose: () => void;
 }
 
-const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-sm border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
+const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-[80px] border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
 const GOALKEEPER_KIT_POOL = [
   '#facc15', // żółty
@@ -175,6 +175,32 @@ const getCompetitionName = (comp: string) => {
 
 export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, onClose }) => {
   const { clubs, players } = useGame();
+
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const origX = pos ? pos.x : window.innerWidth / 2;
+    const origY = pos ? pos.y : window.innerHeight / 2;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX, origY };
+    e.preventDefault();
+  }, [pos]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      setPos({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
+    };
+    const onUp = () => { dragRef.current = null; };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   const match = useMemo(
     () => (matchId ? MatchHistoryService.getAll().find(m => m.matchId === matchId) ?? null : null),
@@ -577,13 +603,21 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
     : '–';
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[400] bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div
         className={`${GLASS_PANEL} w-full max-w-6xl max-h-[96vh] rounded-[40px] flex flex-col overflow-hidden`}
+        style={{
+          position: 'fixed',
+          left: pos ? pos.x : '50%',
+          top: pos ? pos.y : '50%',
+          transform: pos ? 'translate(-50%, -50%)' : 'translate(-50%, -50%)',
+          maxWidth: '72rem',
+          width: 'calc(100% - 2rem)',
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-white/5 border-b border-white/5 px-8 py-4 flex justify-between items-center shrink-0">
+        <div className="bg-white/5 border-b border-white/5 px-8 py-4 flex justify-between items-center shrink-0 cursor-grab active:cursor-grabbing select-none" onMouseDown={onMouseDown}>
           <div>
             <h2 className="text-lg font-black italic text-white uppercase tracking-tighter">Raport Meczowy</h2>
             <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">{getCompetitionName(match.competition)} · {match.date.slice(0, 10)}</p>
