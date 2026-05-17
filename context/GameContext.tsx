@@ -1462,7 +1462,11 @@ if (userTeamId) {
     setClubs(prev => prev.map(c => {
       const upd = staffRetirementResult.clubStaffUpdates[c.id];
       if (!upd) return c;
-      return { ...c, staffIds: upd.staffIds, coachId: upd.coachId !== undefined ? upd.coachId : c.coachId };
+      return {
+        ...c,
+        staffIds: upd.staffIds,
+        coachId: upd.coachId === null ? undefined : (upd.coachId ?? c.coachId),
+      };
     }));
     if (userTeamId && staffRetirementResult.retiredFromUserTeam.length > 0) {
       const staffRetireMail = MailService.generateStaffRetirementMail(staffRetirementResult.retiredFromUserTeam);
