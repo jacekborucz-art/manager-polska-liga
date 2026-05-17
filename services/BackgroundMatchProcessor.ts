@@ -163,7 +163,8 @@ export const BackgroundMatchProcessor = {
     const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches);
 if (todayFixtures.length === 0) {
       const contractUpdate = AiContractService.processClubsContracts(clubs, playersAfterEmergencyGoalkeepers, currentDate, userTeamId);
-      const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
+      const preContractUpdate = AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
+      const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate, userTeamId);
       const recruitmentUpdate = AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate, userTeamId);
       const resolvedUpdate = AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate, userTeamId);
       const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId);
@@ -174,6 +175,7 @@ if (todayFixtures.length === 0) {
       const aiTransferLogEntries: AiTransferLogEntry[] = [
         ...recruitmentUpdate.logEntries,
         ...resolvedUpdate.logEntries,
+        ...preContractUpdate.logEntries,
         ...transferSigningsUpdate.logEntries,
         ...interestedTargetingUpdate.logEntries,
         ...transferResolvedUpdate.logEntries,
@@ -647,7 +649,8 @@ if (todayFixtures.length === 0) {
 
     const contractResult = AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate, userTeamId);
 
-    const depthFinal = AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
+    const preContractFinal = AiContractService.processAiPreContractOpportunities(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
+    const depthFinal = AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, preContractFinal.updatedPlayers, currentDate, userTeamId);
     const finalUpdate = AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate, userTeamId);
     const resolvedFinal = AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate, userTeamId);
     const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId);
@@ -658,6 +661,7 @@ if (todayFixtures.length === 0) {
     const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [
       ...finalUpdate.logEntries,
       ...resolvedFinal.logEntries,
+      ...preContractFinal.logEntries,
       ...transferSigningsFinal.logEntries,
       ...interestedTargetingFinal.logEntries,
       ...transferResolvedFinal.logEntries,

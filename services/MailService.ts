@@ -512,6 +512,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     };
   },
 
+  generateStaffRetirementMail: (retired: { name: string; age: number; roleLabel: string }[]): MailMessage => {
+    const staffList = retired.map(r => `• ${r.name} (${r.age} lat) – ${r.roleLabel}`).join('\n');
+    return MailService.createFromTemplate('staff_retirement', { 'STAFF_LIST': staffList });
+  },
+
 /**
    * Generuje email-newsa po zakończeniu fazy grupowej kwalifikacji MŚ 2026 (17 listopada).
    * Format: artykuł z dziennika sportowego z listą awansujących i uczestników baraży.

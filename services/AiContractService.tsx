@@ -74,6 +74,17 @@ const _hasActiveTransferOfferBan = (player: Player, currentDate: Date): boolean 
   return !!player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil);
 };
 
+const _hashString = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  return Math.abs(hash);
+};
+
+const _seededRandom = (seed: string): number => {
+  const x = Math.sin(_hashString(seed) + 1) * 10000;
+  return x - Math.floor(x);
+};
+
 const _isGulfStarHunterClub = (club: Club): boolean =>
   GULF_STAR_HUNTER_COUNTRIES.has(club.country || '') && club.reputation >= 8;
 
@@ -136,6 +147,79 @@ const _hasCriticalDepthShortage = (squad: Player[]): boolean => {
   const counts = _countByPosition(squad);
   return (Object.keys(MIN_SQUAD_POSITION_COUNTS) as PlayerPosition[])
     .some(pos => counts[pos] < MIN_SQUAD_POSITION_COUNTS[pos]);
+};
+
+const _getAverageOverall = (squad: Player[]): number =>
+  squad.length > 0 ? squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length : 0;
+
+const _getPositionAverageOverall = (squad: Player[], position: PlayerPosition): number => {
+  const samePosition = squad.filter(player => player.position === position);
+  return samePosition.length > 0 ? _getAverageOverall(samePosition) : _getAverageOverall(squad);
+};
+
+const _getCombinedMatches = (player: Player): number =>
+  (player.stats?.matchesPlayed || 0) +
+  (player.cupStats?.matchesPlayed || 0) +
+  (player.euroStats?.matchesPlayed || 0);
+
+const _getCombinedMinutes = (player: Player): number =>
+  (player.stats?.minutesPlayed || 0) +
+  (player.cupStats?.minutesPlayed || 0) +
+  (player.euroStats?.minutesPlayed || 0);
+
+const _shouldAiTryRenewContract = (
+  player: Player,
+  squad: Player[],
+  club: Club,
+  currentDate: Date,
+  daysLeft: number
+): boolean => {
+  if (player.transferPendingClubId) return false;
+  if (player.isOnTransferList && !player.isUntouchable) return false;
+
+  const squadAverage = _getAverageOverall(squad);
+  const positionAverage = _getPositionAverageOverall(squad, player.position);
+  const matches = _getCombinedMatches(player);
+  const minutes = _getCombinedMinutes(player);
+  const isImportantRole = player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER' || player.isUntouchable;
+  const strongForSquad = player.overallRating >= squadAverage + 2 || player.overallRating >= positionAverage + 3;
+  const youngUpside = player.age <= 23 && player.attributes.talent >= player.overallRating + 8;
+  const usefulVeteran = player.age >= 32 && player.age <= 35 && player.overallRating >= squadAverage + 2 && matches >= 8;
+  const fadingVeteran = player.age >= 35 && player.overallRating < squadAverage + 2;
+  const unusedFringe = !isImportantRole && matches < 6 && minutes < 450 && player.overallRating < positionAverage;
+  const tooExpensiveForRole = player.annualSalary > FinanceLogic.getFairMarketSalary(Math.max(1, player.overallRating + 4)) && !strongForSquad;
+
+  if (fadingVeteran || unusedFringe || tooExpensiveForRole) return false;
+  if (isImportantRole || strongForSquad || youngUpside || usefulVeteran) return true;
+
+  const squadSize = squad.length;
+  const positionCount = squad.filter(candidate => candidate.position === player.position).length;
+  if (positionCount <= MIN_SQUAD_POSITION_COUNTS[player.position]) return true;
+
+  const monthKey = `${currentDate.getFullYear()}_${currentDate.getMonth()}`;
+  const conservativeClub = club.reputation <= 7 && squadSize < 25;
+  const depthChance = conservativeClub ? 0.55 : 0.25;
+  return daysLeft <= 365 && _seededRandom(`AI_RENEW_DEPTH_${club.id}_${player.id}_${monthKey}`) < depthChance;
+};
+
+const _buildAiPreContractOffer = (
+  player: Player,
+  sellerClub: Club,
+  buyerClub: Club,
+  currentDate: Date
+): { salary: number; bonus: number; years: number } => {
+  const repDelta = buyerClub.reputation - sellerClub.reputation;
+  const salaryMultiplier = repDelta >= 3 ? 1.24 : repDelta >= 1 ? 1.14 : repDelta === 0 ? 1.08 : 1.32;
+  const salary = Math.max(
+    FinanceLogic.getFairMarketSalary(player.overallRating),
+    Math.round((player.annualSalary || FinanceLogic.getFairMarketSalary(player.overallRating)) * salaryMultiplier / 10_000) * 10_000
+  );
+  const bonusBase = player.annualSalary || salary;
+  const bonusMultiplier = player.age < 24 ? 0.35 : player.age <= 30 ? 0.55 : player.age <= 34 ? 0.80 : 1.05;
+  const bonus = Math.round(bonusBase * bonusMultiplier / 10_000) * 10_000;
+  const years = player.age <= 27 ? 4 : player.age <= 31 ? 3 : player.age <= 34 ? 2 : 1;
+
+  return { salary, bonus, years };
 };
 
 const _findWeakestSurplusPlayer = (squad: Player[]): Player | null => {
@@ -408,7 +492,16 @@ export const AiContractService = {
         // 1. Sprawdzenie czy kontrakt wygasa (poniżej 365 dni)
         const daysLeft = Math.floor((new Date(p.contractEndDate).getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
         
-        if (daysLeft > 365) return p;
+        if (daysLeft <= 0 || daysLeft > 425) return p;
+        if (!_shouldAiTryRenewContract(p, squad, club, currentDate, daysLeft)) return p;
+
+        const forgetRoll = _seededRandom(`AI_CONTRACT_FORGET_${club.id}_${p.id}_${new Date(p.contractEndDate).getFullYear()}`);
+        if (forgetRoll < 0.001) {
+          return {
+            ...p,
+            negotiationLockoutUntil: p.contractEndDate,
+          };
+        }
 
         // 2. Blokady: Czy zawodnik chce w ogóle rozmawiać?
         const isLocked = p.negotiationLockoutUntil && currentDate < new Date(p.negotiationLockoutUntil);
@@ -1265,6 +1358,129 @@ processAiRecruitment: (
    *   - Rozlicza opłatę transferową między klubami
    *   - Czyści tagi TRSF
    */
+  processAiPreContractOpportunities: (
+    clubs: Club[],
+    playersMap: Record<string, Player[]>,
+    currentDate: Date,
+    userTeamId: string | null
+  ): { updatedPlayers: Record<string, Player[]>, logEntries: AiTransferLogEntry[] } => {
+    const updatedPlayersMap = { ...playersMap };
+    const logEntries: AiTransferLogEntry[] = [];
+    const todayKey = currentDate.toISOString().slice(0, 10);
+    const dayOfYear = Math.floor(
+      (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 86_400_000
+    );
+    const signedPlayerIds = new Set<string>();
+
+    for (const sellerClub of clubs) {
+      if (sellerClub.id === userTeamId || sellerClub.id === 'FREE_AGENTS') continue;
+      const sellerSquad = updatedPlayersMap[sellerClub.id] || [];
+      if (sellerSquad.length === 0) continue;
+
+      for (const player of sellerSquad) {
+        if (signedPlayerIds.has(player.id)) continue;
+        if (player.transferPendingClubId) continue;
+        if (_hasActiveTransferOfferBan(player, currentDate)) continue;
+
+        const daysLeft = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
+        if (daysLeft <= 0 || daysLeft > 365) continue;
+
+        const candidateBuyers = clubs
+          .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
+          .filter(buyer => {
+            const buyerSquad = updatedPlayersMap[buyer.id] || [];
+            if (buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
+            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % 9 !== 0) return false;
+
+            const needs = _assessClubNeeds(buyer, buyerSquad, currentDate);
+            const hasPosNeed = needs.some(need => need.position === player.position);
+            const isShortlisted = (player.interestedClubs || []).includes(buyer.id);
+            const buyerPositionAverage = _getPositionAverageOverall(buyerSquad, player.position);
+            const sportingUpgrade = player.overallRating >= buyerPositionAverage + 1;
+            const stepUp = buyer.reputation >= sellerClub.reputation + 1;
+
+            return (hasPosNeed || isShortlisted || stepUp) && sportingUpgrade;
+          })
+          .sort((a, b) => {
+            const aShortlisted = (player.interestedClubs || []).includes(a.id) ? 8 : 0;
+            const bShortlisted = (player.interestedClubs || []).includes(b.id) ? 8 : 0;
+            return (b.reputation + bShortlisted) - (a.reputation + aShortlisted);
+          });
+
+        for (const buyerClub of candidateBuyers) {
+          const buyerSquad = updatedPlayersMap[buyerClub.id] || [];
+          const seedBase = `AI_PRECONTRACT_${todayKey}_${sellerClub.id}_${buyerClub.id}_${player.id}`;
+          const isShortlisted = (player.interestedClubs || []).includes(buyerClub.id);
+          const repDelta = buyerClub.reputation - sellerClub.reputation;
+
+          let chance = daysLeft <= 90 ? 0.06 : daysLeft <= 180 ? 0.04 : 0.018;
+          if (isShortlisted) chance *= 2.4;
+          if (repDelta >= 3) chance *= 1.8;
+          else if (repDelta >= 1) chance *= 1.35;
+          else if (repDelta < 0) chance *= 0.45;
+          if (player.squadRole === 'KEY_PLAYER' || player.isUntouchable) chance *= 0.60;
+          if (player.isNegotiationPermanentBlocked) chance *= 2.2;
+          if (player.isOnTransferList) chance *= 1.35;
+
+          if (_seededRandom(`${seedBase}_ROLL`) >= Math.min(0.20, chance)) continue;
+
+          const offer = _buildAiPreContractOffer(player, sellerClub, buyerClub, currentDate);
+          if (buyerClub.budget < offer.bonus + offer.salary * offer.years) continue;
+
+          const decision = TransferPlayerDecisionService.evaluateMove(
+            { salary: offer.salary, bonus: offer.bonus, years: offer.years },
+            player,
+            sellerClub,
+            buyerClub,
+            sellerSquad,
+            buyerSquad,
+            currentDate
+          );
+          if (!decision.accepted) continue;
+
+          updatedPlayersMap[sellerClub.id] = (updatedPlayersMap[sellerClub.id] || []).map(p =>
+            p.id === player.id
+              ? {
+                  ...p,
+                  transferPendingClubId: buyerClub.id,
+                  transferReportDate: player.contractEndDate,
+                  transferPendingFee: 0,
+                  transferPendingSalary: offer.salary,
+                  transferPendingBonus: offer.bonus,
+                  transferPendingContractYears: offer.years,
+                  interestedClubs: [],
+                  isOnTransferList: false,
+                }
+              : p
+          );
+
+          signedPlayerIds.add(player.id);
+          logEntries.push({
+            id: `AI_PRECONTRACT_${player.id}_${buyerClub.id}_${currentDate.getTime()}`,
+            date: currentDate.toISOString(),
+            playerName: `${player.lastName} ${player.firstName}`,
+            playerOvr: player.overallRating,
+            playerPosition: player.position,
+            fromClub: sellerClub.name,
+            toClub: buyerClub.name,
+            status: 'OFFER_MADE',
+            reason: `Prekontrakt po wygaśnięciu umowy (${new Date(player.contractEndDate).toLocaleDateString('pl-PL')})`,
+            fee: 0,
+            playerId: player.id,
+            fromClubId: sellerClub.id,
+            toClubId: buyerClub.id,
+            salary: offer.salary,
+            bonus: offer.bonus,
+            contractYears: offer.years,
+          });
+          break;
+        }
+      }
+    }
+
+    return { updatedPlayers: updatedPlayersMap, logEntries };
+  },
+
   resolveAiTransferPending: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
@@ -1316,7 +1532,7 @@ processAiRecruitment: (
         if (buyerClub.budget < proposedBonus) {
           // Zwrot opłaty transferowej — kupujący zapłacił przy negocjacji, ale transfer odpada.
           // Bez zwrotu klub traci pieniądze i nie dostaje zawodnika.
-          const refundFee = TransferSellerLogicService.estimateAskingPrice(player, sellerClub, updatedPlayersMap[sellerClubId] || [], currentDate);
+          const refundFee = player.transferPendingFee ?? TransferSellerLogicService.estimateAskingPrice(player, sellerClub, updatedPlayersMap[sellerClubId] || [], currentDate);
           updatedClubs = updatedClubs.map(c => {
             if (c.id === buyerClubId) return { ...c, budget: c.budget + refundFee };
             if (c.id === sellerClubId) return { ...c, budget: c.budget - refundFee };

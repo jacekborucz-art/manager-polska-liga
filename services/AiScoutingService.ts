@@ -1,5 +1,6 @@
 import { Club, Player, Lineup, HealthStatus, InjurySeverity, PlayerPosition } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
+import { FinanceService } from './FinanceService';
 
 /**
  * Raport zwiadowczy AI — co trener AI MYŚLI o drużynie gracza przed meczem.
@@ -220,6 +221,17 @@ export const AiScoutingService = {
       //    Losowość: nie każdy klub odkryje go w danym miesiącu.
       const tier4Gems = AiScoutingService._tier4GemScouting(club, squad, allPlayers, tier4ClubIds, clubs, coachSeed, currentDate);
       candidates.push(...tier4Gems);
+
+      const contractOpportunities = AiScoutingService._contractOpportunityScouting(
+        club,
+        squad,
+        allPlayers,
+        clubs,
+        coachSeed,
+        currentDate,
+        needs
+      );
+      candidates.push(...contractOpportunities);
 
       // H) Sortuj kandydatów po score (malejąco), usuń duplikaty, ogranicz do maxInterests
       const seen = new Set<string>();
@@ -740,6 +752,103 @@ export const AiScoutingService = {
     return discovered
       .sort((a, b) => b.score - a.score)
       .slice(0, 2);
+  },
+
+  _contractOpportunityScouting: (
+    buyingClub: Club,
+    buyerSquad: Player[],
+    allPlayers: Player[],
+    allClubs: Club[],
+    coachSeed: number,
+    currentDate: Date,
+    needs: { position: PlayerPosition; urgency: number }[]
+  ): { player: Player; score: number }[] => {
+    if (buyingClub.budget < 300_000) return [];
+
+    const maxTargets = buyingClub.reputation >= 12 ? 2 : 1;
+    const needMap = new Map<PlayerPosition, number>(needs.map(need => [need.position, need.urgency]));
+    const squadAverage = AiScoutingService._getSquadAverageOverall(buyerSquad);
+    const monthKey = currentDate.getFullYear() * 100 + currentDate.getMonth() + 1;
+    const hasSquadRoom = buyerSquad.length < 30;
+
+    if (!hasSquadRoom && needMap.size === 0) return [];
+
+    const candidates: { player: Player; score: number }[] = [];
+
+    for (const player of allPlayers) {
+      if (player.clubId === buyingClub.id || player.clubId === 'FREE_AGENTS') continue;
+      if (player.transferPendingClubId) continue;
+      if (player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil)) continue;
+
+      const sellerClub = allClubs.find(club => club.id === player.clubId);
+      if (!sellerClub) continue;
+
+      const daysToExpiry = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
+      if (daysToExpiry <= 0 || daysToExpiry > 365) continue;
+
+      if (player.health.status === HealthStatus.INJURED && (player.health.injury?.daysRemaining || 0) > 60) continue;
+
+      const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
+      const positionAverage = samePosition.length > 0
+        ? AiScoutingService._getSquadAverageOverall(samePosition)
+        : squadAverage;
+      const positionalNeed = needMap.get(player.position) || 0;
+      const clearUpgrade = player.overallRating >= positionAverage + 2;
+      const usefulDepth = hasSquadRoom && player.overallRating >= squadAverage;
+
+      if (positionalNeed <= 0 && !clearUpgrade && !usefulDepth) continue;
+      if (!AiScoutingService._meetsSquadQualityFloor(player, buyerSquad, true)) continue;
+
+      const repGap = sellerClub.reputation - buyingClub.reputation;
+      const maxRepGap = player.isOnTransferList || player.isNegotiationPermanentBlocked ? 6 : 4;
+      if (repGap > maxRepGap) continue;
+
+      const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+      const expectedSalary = Math.max(
+        fairSalary,
+        Math.round(((player.annualSalary || fairSalary) * 1.08) / 10_000) * 10_000
+      );
+      const expectedBonus = Math.round((expectedSalary * (player.age <= 23 ? 0.35 : player.age <= 30 ? 0.55 : 0.8)) / 10_000) * 10_000;
+      const firstYearCost = expectedSalary + expectedBonus;
+
+      if (expectedSalary > buyingClub.budget * 0.22) continue;
+      if (firstYearCost > Math.max(buyingClub.transferBudget || 0, buyingClub.budget * 0.18)) continue;
+
+      const importantForSeller = player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER' || player.isUntouchable;
+      let discoveryChance = daysToExpiry <= 90 ? 0.10 : daysToExpiry <= 180 ? 0.075 : 0.045;
+      if (positionalNeed > 0) discoveryChance *= 1.35;
+      if (buyingClub.reputation <= 8) discoveryChance *= 1.15;
+      if (!hasSquadRoom && positionalNeed <= 0) discoveryChance *= 0.35;
+      if (importantForSeller && !player.isNegotiationPermanentBlocked) discoveryChance *= 0.55;
+
+      const discoverySeed = coachSeed + AiScoutingService._hashString(`${player.id}_contract_${monthKey}`);
+      if (AiScoutingService._seededRandom(discoverySeed) > Math.min(0.16, discoveryChance)) continue;
+
+      let score = 28;
+      if      (daysToExpiry <= 90)  score += 25;
+      else if (daysToExpiry <= 180) score += 18;
+      else if (daysToExpiry <= 270) score += 12;
+      else                          score += 7;
+
+      score += Math.min(20, positionalNeed * 8);
+      score += AiScoutingService._getSquadQualityScoreBonus(player, buyerSquad);
+      if (clearUpgrade) score += 10;
+      if (player.isNegotiationPermanentBlocked) score += 12;
+      if (player.isOnTransferList) score += 8;
+      if (player.age >= 22 && player.age <= 29) score += 8;
+      else if (player.age <= 21) score += 5;
+      else if (player.age > 33) score -= 4;
+
+      const affordabilityPenalty = firstYearCost > Math.max(1, buyingClub.budget * 0.12) ? 0.82 : 1.0;
+      score *= affordabilityPenalty;
+      score *= AiScoutingService._evaluatePlayerPerformance(player);
+
+      candidates.push({ player, score });
+    }
+
+    return candidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxTargets);
   },
 
   _getTransferListMarketOpportunityBonus: (

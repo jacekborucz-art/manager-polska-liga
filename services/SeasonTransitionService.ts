@@ -1,4 +1,4 @@
-import { Player, PlayerPosition, Club, HealthStatus, Region, RetirementInfo } from '../types';
+import { Player, PlayerPosition, Club, HealthStatus, Region, RetirementInfo, StaffMember, Coach, StaffRole } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
@@ -229,5 +229,60 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       freeAgentClubLockouts: {},
       isOnTransferList: false
     };
+  },
+
+  processStaffRetirement: (
+    staffMembers: Record<string, StaffMember>,
+    coaches: Record<string, Coach>,
+    clubs: Club[],
+    userTeamId: string | null
+  ): {
+    updatedStaff: Record<string, StaffMember>;
+    updatedCoaches: Record<string, Coach>;
+    retiredFromUserTeam: { name: string; age: number; roleLabel: string }[];
+    clubStaffUpdates: Record<string, { staffIds: string[]; coachId?: string | null }>;
+  } => {
+    const roleLabels: Record<string, string> = {
+      [StaffRole.ASSISTANT_COACH]: 'Asystent Trenera',
+      [StaffRole.GOALKEEPER_COACH]: 'Trener Bramkarzy',
+      [StaffRole.FITNESS_COACH]: 'Trener Przygotowania Fizycznego',
+      [StaffRole.VIDEO_ANALYST]: 'Analityk Video',
+      [StaffRole.PHYSIOTHERAPIST]: 'Fizjoterapeuta',
+      [StaffRole.CLUB_DOCTOR]: 'Lekarz Klubowy'
+    };
+    const updatedStaff: Record<string, StaffMember> = {};
+    const updatedCoaches: Record<string, Coach> = {};
+    const retiredFromUserTeam: { name: string; age: number; roleLabel: string }[] = [];
+    const clubStaffUpdates: Record<string, { staffIds: string[]; coachId?: string | null }> = {};
+    clubs.forEach(c => {
+      clubStaffUpdates[c.id] = { staffIds: [...(c.staffIds ?? [])], coachId: c.coachId };
+    });
+    for (const id in staffMembers) {
+      const member = staffMembers[id];
+      if (member.age >= 69 && Math.random() < 0.5) {
+        if (member.currentClubId === userTeamId && userTeamId) {
+          retiredFromUserTeam.push({ name: `${member.firstName} ${member.lastName}`, age: member.age, roleLabel: roleLabels[member.role] ?? member.role });
+        }
+        if (member.currentClubId && clubStaffUpdates[member.currentClubId]) {
+          clubStaffUpdates[member.currentClubId].staffIds = clubStaffUpdates[member.currentClubId].staffIds.filter(sid => sid !== id);
+        }
+      } else {
+        updatedStaff[id] = { ...member, age: member.age + 1 };
+      }
+    }
+    for (const id in coaches) {
+      const coach = coaches[id];
+      if (coach.age >= 69 && Math.random() < 0.5) {
+        if (coach.currentClubId === userTeamId && userTeamId) {
+          retiredFromUserTeam.push({ name: `${coach.firstName} ${coach.lastName}`, age: coach.age, roleLabel: 'Trener Główny' });
+        }
+        if (coach.currentClubId && clubStaffUpdates[coach.currentClubId]) {
+          clubStaffUpdates[coach.currentClubId].coachId = null;
+        }
+      } else {
+        updatedCoaches[id] = { ...coach, age: coach.age + 1 };
+      }
+    }
+    return { updatedStaff, updatedCoaches, retiredFromUserTeam, clubStaffUpdates };
   }
 };

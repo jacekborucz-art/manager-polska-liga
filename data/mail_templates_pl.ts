@@ -626,5 +626,13 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     role: 'Pierwszy Asystent',
     subject: 'Brak obozu letniego — informacja o konsekwencjach',
     body: 'Panie Trenerze,\n\nzgodnie z Pana decyzją drużyna {CLUB} nie wzięła udziału w letnim obozie przygotowawczym.\n\nMuszę uczciwie poinformować, że zawodnicy odczuwają ten brak. Wiele drużyn z naszej ligi wyjechało na zorganizowane przygotowania, co może dać im przewagę na starcie sezonu. Morale drużyny obniżyło się, a indywidualne przygotowanie poszczególnych zawodników w przerwie letniej jest bardzo zróżnicowane.\n\nZ poważaniem,\nAsystent Trenera'
+  },
+  {
+    id: 'staff_retirement',
+    type: MailType.STAFF,
+    sender: 'Dyrektor Sportowy',
+    role: 'Dyrektor Sportowy',
+    subject: 'Odejście na emeryturę – zmiany w sztabie szkoleniowym',
+    body: 'Szanowny Panie Managerze,\n\nInformuję, że następujący członkowie naszego sztabu szkoleniowego postanowili zakończyć karierę zawodową i przejść na zasłużoną emeryturę:\n\n{STAFF_LIST}\n\nSerdecznie dziękujemy im za wkład w rozwój klubu i życzymy wszystkiego najlepszego.\n\nZ poważaniem,\nDyrektor Sportowy'
   }
 ]; // <--- ZAMKNIĘCIE TABLICY

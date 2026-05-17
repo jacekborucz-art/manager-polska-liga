@@ -653,7 +653,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     const expiring = squad
       .map(player => {
         const left = daysLeft(player);
-        if (left <= 0 || left > 365) return null;
+        if (left <= 0 || left > 425 || player.transferPendingClubId) return null;
 
         const matchCount = played(player);
         const minutesCount = minutes(player);
@@ -678,7 +678,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
         else if (importantByRole || strongForTeam || usefulVeteran) recommendation = 'Przedłużyć możliwie szybko';
 
         const reasons = [
-          left <= 90 ? `zostało tylko ${left} dni kontraktu` : `kontrakt kończy się za ${Math.ceil(left / 30)} mies.`,
+          left <= 90 ? `zostało tylko ${left} dni kontraktu` : left <= 365 ? `kontrakt kończy się za ${Math.ceil(left / 30)} mies.` : `za około ${Math.ceil((left - 365) / 30)} mies. zacznie się ostatni rok kontraktu`,
           player.squadRole === 'KEY_PLAYER' ? 'status: kluczowy zawodnik' : player.squadRole === 'STARTER' ? 'status: pierwszy skład' : importantByRole ? 'jest w planach meczowych' : 'rola w kadrze jest mniejsza',
           `OVR ${player.overallRating}`,
           matchCount > 0 ? `${matchCount} mecz(e), śr. ocena ${rating ?? 'brak'}` : 'brak większej próbki meczowej',
@@ -715,7 +715,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       sender: 'Sztab trenera',
       role: 'Asystent trenera',
       subject: 'Przegląd kontraktów: decyzje przed końcem umów',
-      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 12 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo za chwilę możemy stracić wpływ na cenę albo samą decyzję zawodnika.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
+      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na 12 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
       date: new Date(date),
       isRead: false,
       type: MailType.STAFF,
@@ -1448,8 +1448,18 @@ if (userTeamId) {
       setMessages(prev => [retirementMail, ...prev]);
     }
 
-
-
+    const staffRetirementResult = SeasonTransitionService.processStaffRetirement(staffMembers, coaches, updatedClubs, userTeamId);
+    setStaffMembers(staffRetirementResult.updatedStaff);
+    setCoaches(staffRetirementResult.updatedCoaches);
+    setClubs(prev => prev.map(c => {
+      const upd = staffRetirementResult.clubStaffUpdates[c.id];
+      if (!upd) return c;
+      return { ...c, staffIds: upd.staffIds, coachId: upd.coachId !== undefined ? upd.coachId : c.coachId };
+    }));
+    if (userTeamId && staffRetirementResult.retiredFromUserTeam.length > 0) {
+      const staffRetireMail = MailService.generateStaffRetirementMail(staffRetirementResult.retiredFromUserTeam);
+      setMessages(prev => [staffRetireMail, ...prev]);
+    }
 
     // 6. Poczta
     if (userTeamId) {
@@ -5858,6 +5868,124 @@ const finalResult: SimulationOutput = {
           });
         });
 
+        // 3. Prekontrakty AI: ostatni rok umowy, bez zgody klubu sprzedającego.
+        // Klub AI może dogadać się bezpośrednio z zawodnikiem, a transfer wykona się w dniu końca kontraktu.
+        let aiPreContractSigned = false;
+        aiClubs.forEach(aiClub => {
+          if (aiPreContractSigned) return;
+          const buyerSquad = players[aiClub.id] || [];
+          offerCandidateSquad.forEach(p => {
+            if (aiPreContractSigned) return;
+            if (p.transferPendingClubId) return;
+            if (p.transferOfferBanUntil && nextDay < new Date(p.transferOfferBanUntil)) return;
+            if (!IncomingTransferService.isPlausibleBuyerForPlayer(p, aiClub, buyerSquad)) return;
+
+            const contractDaysLeft = Math.floor((new Date(p.contractEndDate).getTime() - nextDay.getTime()) / 86_400_000);
+            if (contractDaysLeft <= 0 || contractDaysLeft > 365) return;
+
+            const existingPreContract = transferOffers.some(offer =>
+              offer.playerId === p.id &&
+              offer.status === TransferOfferStatus.AGREED_PRECONTRACT
+            );
+            if (existingPreContract) return;
+
+            const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, `${p.id}_PRECONTRACT`);
+            const isShortlisted = !!p.interestedClubs?.includes(aiClub.id);
+            const repDelta = aiClub.reputation - userClub.reputation;
+            const samePosition = buyerSquad.filter(player => player.position === p.position);
+            const positionAverage = samePosition.length > 0
+              ? samePosition.reduce((sum, player) => sum + player.overallRating, 0) / samePosition.length
+              : IncomingTransferService.getSquadAverageOverall(buyerSquad);
+            const sportingFit = p.overallRating >= positionAverage + 1;
+            if (!sportingFit && !isShortlisted && repDelta < 2) return;
+
+            let chance = contractDaysLeft <= 90 ? 0.055 : contractDaysLeft <= 180 ? 0.035 : 0.018;
+            if (isShortlisted) chance *= 2.5;
+            if (repDelta >= 3) chance *= 1.8;
+            else if (repDelta >= 1) chance *= 1.35;
+            else if (repDelta < 0) chance *= 0.45;
+            if (p.squadRole === 'KEY_PLAYER' || p.isUntouchable) chance *= 0.55;
+            if (p.isNegotiationPermanentBlocked) chance *= 2.0;
+
+            if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(0.18, chance)) return;
+
+            const negotiation = IncomingTransferService.simulatePlayerNegotiation(p, aiClub, userClub, seed + 101, nextDay);
+            if (negotiation !== 'accepted') return;
+
+            const salary = Math.max(
+              FinanceService.getFairMarketSalary(p.overallRating),
+              Math.round(p.annualSalary * (repDelta >= 2 ? 1.20 : repDelta >= 0 ? 1.12 : 1.35) / 10000) * 10000
+            );
+            const bonus = Math.round(p.annualSalary * (p.age < 24 ? 0.35 : p.age <= 30 ? 0.55 : 0.75) / 10000) * 10000;
+            const years = p.age <= 27 ? 4 : p.age <= 31 ? 3 : p.age <= 34 ? 2 : 1;
+            if (aiClub.transferBudget < salary * years + bonus) return;
+
+            const preContractId = `AI_PRECONTRACT_${p.id}_${aiClub.id}_${dateStr}`;
+            const agreedOffer: TransferOffer = {
+              id: preContractId,
+              playerId: p.id,
+              sellerClubId: userTeamId,
+              buyerClubId: aiClub.id,
+              fee: 0,
+              timing: TransferTiming.CONTRACT_END,
+              salary,
+              bonus,
+              years,
+              createdAt: dateStr,
+              status: TransferOfferStatus.AGREED_PRECONTRACT,
+              effectiveDate: p.contractEndDate,
+              sellerReason: 'Zawodnik podpisał umowę obowiązującą od wygaśnięcia obecnego kontraktu.',
+              playerReason: 'Zawodnik uznał, że to korzystny następny krok w karierze.',
+              attemptNumber: 1,
+              maxAttempts: 1,
+            };
+
+            setTransferOffers(prev => {
+              if (prev.some(offer => offer.id === agreedOffer.id || (
+                offer.playerId === p.id &&
+                offer.status === TransferOfferStatus.AGREED_PRECONTRACT
+              ))) return prev;
+              return [agreedOffer, ...prev].slice(0, 100);
+            });
+
+            setPlayers(prev => ({
+              ...prev,
+              [userTeamId]: (prev[userTeamId] || []).map(player =>
+                player.id === p.id
+                  ? {
+                      ...player,
+                      transferPendingClubId: aiClub.id,
+                      transferReportDate: p.contractEndDate,
+                      transferPendingFee: 0,
+                      transferPendingSalary: salary,
+                      transferPendingBonus: bonus,
+                      transferPendingContractYears: years,
+                      interestedClubs: [],
+                    }
+                  : player
+              )
+            }));
+
+            const mailKey = `MAIL_AI_PRECONTRACT_${preContractId}`;
+            if (!sentMailIdsRef.current.has(mailKey)) {
+              sentMailIdsRef.current.add(mailKey);
+              newIncomingMails.push({
+                id: mailKey,
+                sender: `Agent gracza ${p.lastName}`,
+                role: 'Agencja menedżerska',
+                subject: `Prekontrakt podpisany: ${p.firstName} ${p.lastName}`,
+                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik dołączy do nich po wygaśnięciu obecnej umowy, czyli ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')}.\n\nTo konsekwencja wejścia w ostatni rok kontraktu. Jeśli chcemy unikać takich sytuacji, kluczowe rozmowy trzeba zaczynać zanim zostanie 12 miesięcy umowy.`,
+                date: new Date(nextDay),
+                isRead: false,
+                type: MailType.STAFF,
+                priority: 99,
+              });
+            }
+
+            aiPreContractSigned = true;
+          });
+        });
+
       setIncomingOffers([...newOffersToAdd, ...processed].slice(0, 200));
 
       if (newIncomingMails.length > 0) {
@@ -6308,7 +6436,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned, buildContractStaffAlert, transferOffers, lineups]);
 
 
    const confirmCLGroupDraw = () => {
@@ -8634,6 +8762,24 @@ const finalResult: SimulationOutput = {
         setClubs(clubsAfterDirectorApproval);
       }
       setTransferOffers(prev => prev.map(offer => offer.id === offerId ? agreedOffer : offer));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClub.id]: (prev[sellerClub.id] || []).map(player =>
+          player.id === targetPlayer.id
+            ? {
+                ...player,
+                transferPendingClubId: buyerClub.id,
+                transferReportDate: agreedOffer.effectiveDate || targetPlayer.contractEndDate,
+                transferPendingFee: finalFee,
+                transferPendingSalary: Math.round(contractInput.salary),
+                transferPendingBonus: Math.round(contractInput.bonus),
+                transferPendingContractYears: contractInput.years,
+                interestedClubs: [],
+                isOnTransferList: false,
+              }
+            : player
+        )
+      }));
       prependUniqueMessages([
         ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
         {
