@@ -805,6 +805,28 @@ export interface FriendlyMatchConditions {
   maxSubstitutions: 5 | 6 | 7 | 8 | 9;
 }
 
+export interface AiFriendlyPair {
+  id: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  date: Date;
+}
+
+export interface AiFriendlyMatchReport {
+  pairId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  date: Date;
+  homeScore: number;
+  awayScore: number;
+  scorers: { playerId: string; playerName: string; teamId: string; assistId?: string; assistName?: string; minute: number; isPenalty: boolean; isMiss?: boolean }[];
+  cards: { playerId: string; playerName: string; teamId: string; type: string; minute: number }[];
+  injuries: { playerId: string; playerName: string; teamId: string; severity: string; minute: number; days: number; type: string }[];
+  substitutions: { playerOutId: string; playerOutName: string; playerInId: string; playerInName: string; teamId: string; minute: number }[];
+  ratings: Record<string, number>;
+  extraTime: number;
+}
+
 export enum TransferOfferStatus {
   SELLER_REVIEW = 'SELLER_REVIEW',
   SELLER_REJECTED = 'SELLER_REJECTED',

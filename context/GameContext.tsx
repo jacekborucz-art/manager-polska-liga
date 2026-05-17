@@ -40,8 +40,12 @@ StadiumStand,
 StaffMember,
 StaffRole,
 BoardClubRequestType,
+AiFriendlyPair,
+AiFriendlyMatchReport,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
+import { AiFriendlyGeneratorService } from '../services/AiFriendlyGeneratorService';
+import { AiFriendlyMatchSimulator } from '../services/AiFriendlyMatchSimulator';
 import { KitSelection } from '../services/KitSelectionService';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
@@ -304,6 +308,8 @@ setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]
   pendingFriendlyRequests: PendingFriendlyRequest[];
   addFriendlyRequest: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
   cancelFriendly: (fixtureId: string) => void;
+  aiFriendlyPairs: AiFriendlyPair[];
+  aiFriendlyReports: AiFriendlyMatchReport[];
   activeFriendlyFixtureId: string | null;
   activeFriendlyConditions: FriendlyMatchConditions | null;
   setActiveFriendlyConditions: React.Dispatch<React.SetStateAction<FriendlyMatchConditions | null>>;
@@ -441,6 +447,8 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
  const [activeFriendlyConditions, setActiveFriendlyConditions] = useState<FriendlyMatchConditions | null>(null);
+ const [aiFriendlyPairs, setAiFriendlyPairs] = useState<AiFriendlyPair[]>([]);
+ const [aiFriendlyReports, setAiFriendlyReports] = useState<AiFriendlyMatchReport[]>([]);
  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
  const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
@@ -1592,6 +1600,8 @@ if (userTeamId) {
     summerCampInvitePending,
     summerCampProgramPending,
     lastNTMatchResults,
+    aiFriendlyPairs,
+    aiFriendlyReports,
   });
 
   const loadGameFromFile = (data: SaveState): void => {
@@ -1666,6 +1676,8 @@ if (userTeamId) {
     setSummerCampInvitePending(data.summerCampInvitePending ?? false);
     setSummerCampProgramPending(data.summerCampProgramPending ?? false);
     setLastNTMatchResults(data.lastNTMatchResults ?? null);
+    setAiFriendlyPairs(data.aiFriendlyPairs || []);
+    setAiFriendlyReports(data.aiFriendlyReports || []);
     MatchHistoryService.clear();
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
     ChampionshipHistoryService.clear();
@@ -4369,6 +4381,36 @@ setMessages([welcomeMail, fanMail]);
     }
     DebugLoggerService.log('GUARD', `advanceDay PRZECHODZI dla: ${dateKey}`);
     lastProcessedLeagueDateRef.current = dateKey;
+
+    // ── SPARINGI AI: GENEROWANIE PAR (3 lipca) ────────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && aiFriendlyPairs.length === 0) {
+      const pairs = AiFriendlyGeneratorService.generate(clubs, userTeamId, dateToProcess.getFullYear());
+      setAiFriendlyPairs(pairs);
+    }
+
+    // ── SPARINGI AI: SYMULACJA W TLE (8 i 9 lipca) ───────────────────────────
+    if (dateToProcess.getMonth() === 6 && (dateToProcess.getDate() === 8 || dateToProcess.getDate() === 9)) {
+      const dayDate = dateToProcess.getDate();
+      const alreadySimulated = aiFriendlyReports.some(r => {
+        const d = r.date instanceof Date ? r.date : new Date(r.date);
+        return d.getMonth() === 6 && d.getDate() === dayDate;
+      });
+      if (!alreadySimulated && aiFriendlyPairs.length > 0) {
+        const dayPairs = aiFriendlyPairs.filter(p => {
+          const d = p.date instanceof Date ? p.date : new Date(p.date);
+          return d.getDate() === dayDate;
+        });
+        const newReports: AiFriendlyMatchReport[] = [];
+        dayPairs.forEach((pair, idx) => {
+          const homePlayers = getOrGenerateSquad(pair.homeTeamId);
+          const awayPlayers = getOrGenerateSquad(pair.awayTeamId);
+          if (homePlayers.length < 11 || awayPlayers.length < 11) return;
+          const pairSeed = sessionSeed + pair.id.length + idx * 137;
+          newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, pairSeed));
+        });
+        if (newReports.length > 0) setAiFriendlyReports(prev => [...prev, ...newReports]);
+      }
+    }
 
     // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
     if (hasCompetitionToday(CompetitionType.WINTER_CAMP_INVITE) && userTeamId && !isResigned) {
@@ -9337,6 +9379,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       startNewGame, getSaveState, loadGameFromFile, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
+      aiFriendlyPairs, aiFriendlyReports,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,

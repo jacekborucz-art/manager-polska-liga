@@ -78,6 +78,8 @@ export interface SaveState {
   summerCampInvitePending: boolean;
   summerCampProgramPending: boolean;
   lastNTMatchResults: any;
+  aiFriendlyPairs: any[];
+  aiFriendlyReports: any[];
 }
 
 const DEFAULT_START_DATE = new Date('2025-07-01');
@@ -273,6 +275,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     summerCampInvitePending: data.summerCampInvitePending ?? false,
     summerCampProgramPending: data.summerCampProgramPending ?? false,
     lastNTMatchResults: data.lastNTMatchResults ?? null,
+    aiFriendlyPairs: asArray(data.aiFriendlyPairs),
+    aiFriendlyReports: asArray(data.aiFriendlyReports),
   };
 }
 
