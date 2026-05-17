@@ -65,6 +65,11 @@ export const ContractManagementView: React.FC = () => {
     ? clubs.find(c => c.id === player.transferPendingClubId)
     : null;
   const hasPendingTransfer = !!player.transferPendingClubId && !!player.transferReportDate;
+  const pendingTransferFeeLabel = player.transferPendingFee === 0
+    ? 'wolny transfer po wygaśnięciu kontraktu'
+    : player.transferPendingFee
+      ? `kwota transferu: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
+      : 'transfer uzgodniony';
   const directorRenewalAdvisory = useMemo(() => {
     if (!club.sportingDirector || managementMode !== 'NEGOTIATE') return [];
     return SportingDirectorService.getContractRenewalAdvisory({
@@ -417,6 +422,7 @@ export const ContractManagementView: React.FC = () => {
                             {player.firstName} {player.lastName} podpisał kontrakt z {pendingTransferClub?.name ?? player.transferPendingClubId}
                             {' '}i przechodzi do nich
                             {player.transferReportDate ? ` (${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}).` : '.'}
+                            {' '}Szczegóły: {pendingTransferFeeLabel}.
                          </p>
                          <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="mt-4 px-10 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all">Powrót do kadry</button>
                       </div>

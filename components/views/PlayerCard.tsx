@@ -71,6 +71,11 @@ export const PlayerCard: React.FC = () => {
     ? clubs.find(c => c.id === player.transferPendingClubId)
     : null;
   const hasPendingTransfer = !!player.transferPendingClubId && !!player.transferReportDate;
+  const pendingTransferFeeLabel = player.transferPendingFee === 0
+    ? 'Wolny transfer po wygaśnięciu kontraktu'
+    : player.transferPendingFee
+      ? `Kwota: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
+      : 'Transfer uzgodniony';
   const hasUserTransferAgreement = !!(userTeamId && transferOffers.find(offer =>
     offer.playerId === player.id &&
     offer.buyerClubId === userTeamId &&
@@ -573,7 +578,10 @@ export const PlayerCard: React.FC = () => {
                       {pendingTransferClub?.name ?? player.transferPendingClubId}
                     </span>
                     <p className="text-[8px] font-black text-amber-400 uppercase drop-shadow tracking-widest mt-1">
-                      {player.transferReportDate ? `Data przejscia: ${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}` : 'Transfer uzgodniony'}
+                      {player.transferReportDate ? `Data przejścia: ${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}` : 'Transfer uzgodniony'}
+                    </p>
+                    <p className="text-[8px] font-black text-emerald-300 uppercase drop-shadow tracking-widest mt-1">
+                      {pendingTransferFeeLabel}
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20 shadow-inner">

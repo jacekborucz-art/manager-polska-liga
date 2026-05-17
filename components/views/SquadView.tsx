@@ -433,6 +433,11 @@ export const SquadView: React.FC = () => {
       ? clubs.find(c => c.id === player.transferPendingClubId)
       : null;
     const hasPendingTransfer = !!player.transferPendingClubId && !!player.transferReportDate;
+    const pendingTransferFeeLabel = player.transferPendingFee === 0
+      ? 'Wolny transfer po wygaśnięciu kontraktu'
+      : player.transferPendingFee
+        ? `Kwota: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
+        : 'Transfer uzgodniony';
     const isSuspended = (player.suspensionMatches || 0) > 0;
     const isSevereInjured = player.health.status === HealthStatus.INJURED && player.health.injury?.severity === InjurySeverity.SEVERE;
     const isOverfatigued = player.condition < 60;
@@ -495,7 +500,7 @@ export const SquadView: React.FC = () => {
               )}
               {hasPendingTransfer && (
                 <span
-                  title={`Transfer do ${pendingTransferClub?.name ?? player.transferPendingClubId}${player.transferReportDate ? `\nData przejscia: ${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}` : ''}`}
+                  title={`Transfer do ${pendingTransferClub?.name ?? player.transferPendingClubId}${player.transferReportDate ? `\nData przejścia: ${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}` : ''}\n${pendingTransferFeeLabel}`}
                   className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-black rounded border border-emerald-500/30 shadow-sm shrink-0 leading-none cursor-help"
                 >
                   TRS
