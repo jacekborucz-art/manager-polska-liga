@@ -2205,8 +2205,31 @@ setMessages([welcomeMail, fanMail]);
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       });
 
-      // ── Sprawdź konflikt kalendarza rywala (okno ±2 dni od daty sparingu) ──
+      // ── Sprawdź czy rywal ma już zaplanowany sparing AI w tym dniu ──────────
       const matchDay = new Date(fy, fm - 1, fd); matchDay.setHours(0, 0, 0, 0);
+      const aiPairConflict = aiFriendlyPairs.some(p => {
+        if (p.homeTeamId !== req.opponentClubId && p.awayTeamId !== req.opponentClubId) return false;
+        const pDate = p.date instanceof Date ? p.date : new Date(p.date);
+        pDate.setHours(0, 0, 0, 0);
+        return pDate.getTime() === matchDay.getTime();
+      });
+      if (aiPairConflict) {
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_AI_CONFLICT_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odrzucony — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} niestety nie może rozegrać sparingu w zaproponowanym terminie.\n\nData sparingu: ${matchDateStr}\n\nPowód: Klub ma już zaplanowany mecz sparingowy w tym dniu.\n\nProponujemy wybranie innej daty lub innego rywala.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+        setPendingFriendlyRequests(prev => prev.filter(r => r.id !== req.id));
+        return;
+      }
+
+      // ── Sprawdź konflikt kalendarza rywala (okno ±2 dni od daty sparingu) ──
       const rangeStart = new Date(matchDay); rangeStart.setDate(rangeStart.getDate() - 2);
       const rangeEnd   = new Date(matchDay); rangeEnd.setDate(rangeEnd.getDate() + 2);
       const allFix = Object.values(leagueSchedules)
@@ -4388,7 +4411,16 @@ setMessages([welcomeMail, fanMail]);
 
     // ── SPARINGI AI: GENEROWANIE PAR (3 lipca) ────────────────────────────────
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && aiFriendlyPairs.length === 0) {
-      const pairs = AiFriendlyGeneratorService.generate(clubs, userTeamId, dateToProcess.getFullYear());
+      const busyClubIds = new Set<string>(
+        globalFixtures
+          .filter(f => {
+            if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+            const fDate = f.date instanceof Date ? f.date : new Date(f.date);
+            return fDate.getMonth() === 6 && (fDate.getDate() === 8 || fDate.getDate() === 9);
+          })
+          .flatMap(f => [f.homeTeamId, f.awayTeamId])
+      );
+      const pairs = AiFriendlyGeneratorService.generate(clubs, userTeamId, dateToProcess.getFullYear(), busyClubIds);
       setAiFriendlyPairs(pairs);
     }
 

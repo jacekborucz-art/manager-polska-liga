@@ -5,12 +5,12 @@ const EUROPEAN_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF'];
 const PAIRS_PER_DAY = 20;
 
 export class AiFriendlyGeneratorService {
-  static generate(clubs: Club[], userTeamId: string | null, year: number): AiFriendlyPair[] {
+  static generate(clubs: Club[], userTeamId: string | null, year: number, busyClubIds: Set<string> = new Set()): AiFriendlyPair[] {
     const polishClubs = clubs.filter(c =>
-      POLISH_LEAGUE_IDS.includes(c.leagueId) && c.id !== userTeamId
+      POLISH_LEAGUE_IDS.includes(c.leagueId) && c.id !== userTeamId && !busyClubIds.has(c.id)
     );
     const europeanClubs = clubs.filter(c =>
-      EUROPEAN_LEAGUE_IDS.includes(c.leagueId)
+      EUROPEAN_LEAGUE_IDS.includes(c.leagueId) && !busyClubIds.has(c.id)
     );
 
     const pairs: AiFriendlyPair[] = [];
