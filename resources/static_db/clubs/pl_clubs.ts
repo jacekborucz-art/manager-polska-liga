@@ -146,7 +146,7 @@ export const RAW_PL_CLUBS: RawClubData[] = [
   { name: "Olimpia Zambrów", tier: 4, colors: ['#FFFFFF', '#0000FF', '#FF0000'], stadium: "Stadion Miejski w Zambrowie", capacity: 2000, reputation: 2 },
   { name: "Stomil Olsztyn", tier: 4, colors: ['#1f68d6', '#FFFFFF', '#0c53bd'], stadium: "Stadion Miejski w Olsztynie", capacity: 4500, reputation: 5 },
   { name: "Gwardia Koszalin", tier: 4, colors: ['#FF0000', '#FFFFFF', '#0000FF'], stadium: "Stadion Miejski w Koszalinie", capacity: 2500, reputation: 2 },
-  { name: "Bałtyk Gdynia", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Gdyni (Bałtyk)", capacity: 2000, reputation: 3 },
+  { name: "Bałtyk Gdynia", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Gdyni (Bałtyk)", capacity: 2000, reputation: 3, logoFile: 'baltyk_gdynia.png' },
   { name: "Vineta Wolin", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FFFF00'], stadium: "Stadion Miejski w Wolinie", capacity: 1500, reputation: 2 },
   { name: "Chemik Police", tier: 4, colors: ['#008000', '#FFFFFF', '#000000'], stadium: "Stadion Miejski w Policach", capacity: 2000, reputation: 2 },
   { name: "Lechia Dzierżoniów", tier: 4, colors: ['#008000', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Dzierżoniowie", capacity: 2500, reputation: 2 },

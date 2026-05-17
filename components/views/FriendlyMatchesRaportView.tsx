@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AiFriendlyMatchReport, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import { AiFriendlyMatchDetailModal } from '../modals/AiFriendlyMatchDetailModal';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
 
 export const FriendlyMatchesRaportView: React.FC = () => {
   const { aiFriendlyReports, clubs, navigateTo } = useGame();
@@ -70,15 +71,19 @@ export const FriendlyMatchesRaportView: React.FC = () => {
                 return (
                   <div
                     key={report.pairId}
-                    className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all"
+                    className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-white/[0.06] hover:border-white/15 transition-all"
+                    style={{ background: `linear-gradient(to right, ${homeClub?.colorsHex[0] ?? '#1e293b'}22 0%, transparent 40%, transparent 60%, ${awayClub?.colorsHex[0] ?? '#1e293b'}22 100%)` }}
                   >
                     {/* Home team */}
                     <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
                       <span className="text-[11px] font-black uppercase italic text-white text-right truncate">{hName}</span>
-                      <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shrink-0 flex flex-col">
-                        <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[0] ?? '#555' }} />
-                        <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[1] ?? homeClub?.colorsHex[0] ?? '#333' }} />
-                      </div>
+                      {getClubLogo(homeClub?.id ?? '')
+                        ? <img src={getClubLogo(homeClub?.id ?? '')} alt="" className="w-9 h-9 object-contain shrink-0" />
+                        : <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                            <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[0] ?? '#555' }} />
+                            <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[1] ?? homeClub?.colorsHex[0] ?? '#333' }} />
+                          </div>
+                      }
                     </div>
 
                     {/* Score button */}
@@ -93,10 +98,13 @@ export const FriendlyMatchesRaportView: React.FC = () => {
 
                     {/* Away team */}
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shrink-0 flex flex-col">
-                        <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[0] ?? '#555' }} />
-                        <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[1] ?? awayClub?.colorsHex[0] ?? '#333' }} />
-                      </div>
+                      {getClubLogo(awayClub?.id ?? '')
+                        ? <img src={getClubLogo(awayClub?.id ?? '')} alt="" className="w-9 h-9 object-contain shrink-0" />
+                        : <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                            <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[0] ?? '#555' }} />
+                            <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[1] ?? awayClub?.colorsHex[0] ?? '#333' }} />
+                          </div>
+                      }
                       <span className="text-[11px] font-black uppercase italic text-white truncate">{aName}</span>
                     </div>
                   </div>

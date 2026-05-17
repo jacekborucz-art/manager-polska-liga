@@ -828,6 +828,10 @@ export interface AiFriendlyMatchReport {
   substitutions: { playerOutId: string; playerOutName: string; playerInId: string; playerInName: string; teamId: string; minute: number }[];
   ratings: Record<string, number>;
   extraTime: number;
+  homeTacticId: string;
+  awayTacticId: string;
+  homeStartingXI: string[];
+  awayStartingXI: string[];
 }
 
 export enum TransferOfferStatus {

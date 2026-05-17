@@ -4454,8 +4454,8 @@ setMessages([welcomeMail, fanMail]);
           const lines = newReports.map(r => {
             const hClub = clubs.find(c => c.id === r.homeTeamId);
             const aClub = clubs.find(c => c.id === r.awayTeamId);
-            const hName = hClub?.shortName ?? hClub?.name ?? r.homeTeamId;
-            const aName = aClub?.shortName ?? aClub?.name ?? r.awayTeamId;
+            const hName = hClub?.name ?? r.homeTeamId;
+            const aName = aClub?.name ?? r.awayTeamId;
             return `${hName} ${r.homeScore}–${r.awayScore} ${aName}`;
           });
           const friendlyNewsMail: MailMessage = {

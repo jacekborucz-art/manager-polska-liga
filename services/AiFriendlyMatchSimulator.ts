@@ -70,13 +70,18 @@ function buildLineupWithTactic(
       return;
     }
 
+    const isGKSlot = slot.role === PlayerPosition.GK;
+
     if (isError) {
-      const picked = available[Math.floor(rngFn(seed + slotIdx * 17 + 2000) * available.length)];
+      const errorPool = isGKSlot ? available : available.filter(p => p.position !== PlayerPosition.GK);
+      const src = errorPool.length > 0 ? errorPool : available;
+      const picked = src[Math.floor(rngFn(seed + slotIdx * 17 + 2000) * src.length)];
       starters.push(picked.id);
       usedIds.add(picked.id);
     } else {
       const candidates = available.filter(p => p.position === slot.role);
-      const pool = candidates.length > 0 ? candidates : available;
+      const fallbackPool = isGKSlot ? available : available.filter(p => p.position !== PlayerPosition.GK);
+      const pool = candidates.length > 0 ? candidates : (fallbackPool.length > 0 ? fallbackPool : available);
       pool.sort((a, b) => getPositionStrength(b, slot.role) - getPositionStrength(a, slot.role));
       starters.push(pool[0].id);
       usedIds.add(pool[0].id);
@@ -85,7 +90,35 @@ function buildLineupWithTactic(
 
   while (starters.length < 11) starters.push(null);
 
-  const bench = healthy.filter(p => !usedIds.has(p.id)).slice(0, MAX_SUBS).map(p => p.id);
+  const remaining = healthy.filter(p => !usedIds.has(p.id));
+  const bench: string[] = [];
+  const benchedIds = new Set<string>();
+
+  const addBench = (pos: PlayerPosition, count: number) => {
+    let added = 0;
+    for (const p of remaining) {
+      if (added >= count) break;
+      if (!benchedIds.has(p.id) && p.position === pos) {
+        bench.push(p.id);
+        benchedIds.add(p.id);
+        added++;
+      }
+    }
+  };
+
+  addBench(PlayerPosition.GK, 1);
+  addBench(PlayerPosition.DEF, 4);
+  addBench(PlayerPosition.MID, 2);
+  addBench(PlayerPosition.FWD, 2);
+
+  for (const p of remaining) {
+    if (bench.length >= MAX_SUBS) break;
+    if (!benchedIds.has(p.id)) {
+      bench.push(p.id);
+      benchedIds.add(p.id);
+    }
+  }
+
   return { starters, bench };
 }
 
@@ -117,6 +150,9 @@ export const AiFriendlyMatchSimulator = {
 
     const hLineup = buildLineupWithTactic(homePlayers, hTactic, hCoachExp, rng, seed + 10);
     const aLineup = buildLineupWithTactic(awayPlayers, aTactic, aCoachExp, rng, seed + 20);
+
+    const homeStartingXI = hLineup.starters.map(id => id ?? '');
+    const awayStartingXI = aLineup.starters.map(id => id ?? '');
 
     const extraTime = Math.floor(rng(9999) * 10) + 1;
     const totalMinutes = 90 + extraTime;
@@ -156,8 +192,26 @@ export const AiFriendlyMatchSimulator = {
 
     const findReplacement = (lineup: SimLineup, players: Player[], position: PlayerPosition): string | undefined => {
       const available = (id: string) => !substitutedOutIds.has(id) && !lineup.starters.includes(id);
-      return lineup.bench.find(id => available(id) && players.find(p => p.id === id)?.position === position)
-        ?? lineup.bench.find(id => available(id) && players.find(p => p.id === id)?.position !== PlayerPosition.GK);
+      const getPos = (id: string) => players.find(p => p.id === id)?.position;
+
+      const samePos = lineup.bench.find(id => available(id) && getPos(id) === position);
+      if (samePos) return samePos;
+
+      if (position === PlayerPosition.GK) {
+        const anyGKLeft = players.some(p => p.position === PlayerPosition.GK && !expelledIds.has(p.id) && !substitutedOutIds.has(p.id) && !lineup.starters.includes(p.id));
+        if (!anyGKLeft) return lineup.bench.find(id => available(id));
+        return undefined;
+      }
+      if (position === PlayerPosition.DEF) {
+        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID);
+      }
+      if (position === PlayerPosition.MID) {
+        return lineup.bench.find(id => available(id) && (getPos(id) === PlayerPosition.DEF || getPos(id) === PlayerPosition.FWD));
+      }
+      if (position === PlayerPosition.FWD) {
+        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID);
+      }
+      return undefined;
     };
 
     const performSub = (lineup: SimLineup, players: Player[], fMap: Record<string, number>, side: 'H' | 'A', minute: number) => {
@@ -274,7 +328,7 @@ export const AiFriendlyMatchSimulator = {
       }
 
       // ZOLTA KARTKA — zdarzenie 0.1 per minuta, zawodnik wybierany wg aggression
-      if (rng(minute + 300) < 0.1) {
+      if (rng(minute + 300) < 0.017) {
         const side = rng(minute + 301) < 0.5 ? 'H' : 'A';
         const activeXI = side === 'H' ? hActiveXI : aActiveXI;
         const sPlayers = side === 'H' ? homePlayers : awayPlayers;
@@ -294,7 +348,7 @@ export const AiFriendlyMatchSimulator = {
       }
 
       // BEZPOSREDNIA CZERWONA — zdarzenie 0.05 per minuta, zawodnik wybierany wg aggression
-      if (rng(minute + 400) < 0.05) {
+      if (rng(minute + 400) < 0.001) {
         const side = rng(minute + 401) < 0.5 ? 'H' : 'A';
         const activeXI = side === 'H' ? hActiveXI : aActiveXI;
         const sPlayers = side === 'H' ? homePlayers : awayPlayers;
@@ -413,6 +467,6 @@ export const AiFriendlyMatchSimulator = {
       ratings[pId] = parseFloat(Math.min(10, Math.max(1, score)).toFixed(1));
     });
 
-    return { pairId: pair.id, homeTeamId: pair.homeTeamId, awayTeamId: pair.awayTeamId, date: pair.date, homeScore, awayScore, scorers, cards, injuries, substitutions, ratings, extraTime };
+    return { pairId: pair.id, homeTeamId: pair.homeTeamId, awayTeamId: pair.awayTeamId, date: pair.date, homeScore, awayScore, scorers, cards, injuries, substitutions, ratings, extraTime, homeTacticId: hTactic.id, awayTacticId: aTactic.id, homeStartingXI, awayStartingXI };
   },
 };
