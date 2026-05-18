@@ -73,18 +73,26 @@ function buildLineupWithTactic(
     const isGKSlot = slot.role === PlayerPosition.GK;
 
     if (isError) {
-      const errorPool = isGKSlot ? available : available.filter(p => p.position !== PlayerPosition.GK);
+      const gkAvailable = available.filter(p => p.position === PlayerPosition.GK);
+      const errorPool = isGKSlot ? (gkAvailable.length > 0 ? gkAvailable : available) : available.filter(p => p.position !== PlayerPosition.GK);
       const src = errorPool.length > 0 ? errorPool : available;
       const picked = src[Math.floor(rngFn(seed + slotIdx * 17 + 2000) * src.length)];
       starters.push(picked.id);
       usedIds.add(picked.id);
     } else {
       const candidates = available.filter(p => p.position === slot.role);
-      const fallbackPool = isGKSlot ? available : available.filter(p => p.position !== PlayerPosition.GK);
-      const pool = candidates.length > 0 ? candidates : (fallbackPool.length > 0 ? fallbackPool : available);
-      pool.sort((a, b) => getPositionStrength(b, slot.role) - getPositionStrength(a, slot.role));
-      starters.push(pool[0].id);
-      usedIds.add(pool[0].id);
+      if (isGKSlot) {
+        if (candidates.length === 0) { starters.push(null); return; }
+        candidates.sort((a, b) => getPositionStrength(b, slot.role) - getPositionStrength(a, slot.role));
+        starters.push(candidates[0].id);
+        usedIds.add(candidates[0].id);
+      } else {
+        const fallbackPool = available.filter(p => p.position !== PlayerPosition.GK);
+        const pool = candidates.length > 0 ? candidates : (fallbackPool.length > 0 ? fallbackPool : available);
+        pool.sort((a, b) => getPositionStrength(b, slot.role) - getPositionStrength(a, slot.role));
+        starters.push(pool[0].id);
+        usedIds.add(pool[0].id);
+      }
     }
   });
 
@@ -338,8 +346,22 @@ export const AiFriendlyMatchSimulator = {
           const yellows = (playerYellowCounts.get(pId) || 0) + 1;
           if (yellows >= 2) {
             cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'RED_CARD', minute });
+            const expelledGKIdx = sPlayers.find(p => p.id === pId)?.position === PlayerPosition.GK ? lineup.starters.indexOf(pId) : -1;
             expelledIds.add(pId);
             lineup.starters = lineup.starters.map(id => id === pId ? null : id);
+            if (expelledGKIdx !== -1 && (side === 'H' ? hSubsUsed : aSubsUsed) < MAX_SUBS) {
+              const backupGK = lineup.bench.find(id => {
+                const p = sPlayers.find(x => x.id === id);
+                return p?.position === PlayerPosition.GK && !substitutedOutIds.has(id) && !lineup.starters.includes(id);
+              });
+              if (backupGK) {
+                lineup.starters[expelledGKIdx] = backupGK;
+                substitutedInIds.add(backupGK);
+                allPlayedIds.add(backupGK);
+                substitutions.push({ playerOutId: pId, playerOutName: pName(pId), playerInId: backupGK, playerInName: pName(backupGK), teamId: sideTeamId(side), minute });
+                if (side === 'H') hSubsUsed++; else aSubsUsed++;
+              }
+            }
           } else {
             playerYellowCounts.set(pId, yellows);
             cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'YELLOW_CARD', minute });
@@ -356,8 +378,22 @@ export const AiFriendlyMatchSimulator = {
         const pId = pickByAggression(sPlayers, activeXI, expelledIds, () => rng(minute + 402));
         if (pId) {
           cards.push({ playerId: pId, playerName: pName(pId), teamId: sideTeamId(side), type: 'RED_CARD', minute });
+          const expelledGKIdx = sPlayers.find(p => p.id === pId)?.position === PlayerPosition.GK ? lineup.starters.indexOf(pId) : -1;
           expelledIds.add(pId);
           lineup.starters = lineup.starters.map(id => id === pId ? null : id);
+          if (expelledGKIdx !== -1 && (side === 'H' ? hSubsUsed : aSubsUsed) < MAX_SUBS) {
+            const backupGK = lineup.bench.find(id => {
+              const p = sPlayers.find(x => x.id === id);
+              return p?.position === PlayerPosition.GK && !substitutedOutIds.has(id) && !lineup.starters.includes(id);
+            });
+            if (backupGK) {
+              lineup.starters[expelledGKIdx] = backupGK;
+              substitutedInIds.add(backupGK);
+              allPlayedIds.add(backupGK);
+              substitutions.push({ playerOutId: pId, playerOutName: pName(pId), playerInId: backupGK, playerInName: pName(backupGK), teamId: sideTeamId(side), minute });
+              if (side === 'H') hSubsUsed++; else aSubsUsed++;
+            }
+          }
         }
       }
 
