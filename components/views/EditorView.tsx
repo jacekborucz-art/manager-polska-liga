@@ -74,10 +74,10 @@ const POS_ORDER: Record<PlayerPosition, number> = {
 };
 
 const POS_COLOR: Record<PlayerPosition, string> = {
-  [PlayerPosition.GK]:  'text-yellow-400 border-yellow-500 bg-yellow-500/20',
-  [PlayerPosition.DEF]: 'text-blue-400   border-blue-500   bg-blue-500/20',
-  [PlayerPosition.MID]: 'text-green-400  border-green-500  bg-green-500/20',
-  [PlayerPosition.FWD]: 'text-red-400    border-red-500    bg-red-500/20',
+  [PlayerPosition.GK]:  'text-yellow-400 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 bg-yellow-500/20',
+  [PlayerPosition.DEF]: 'text-blue-400   border-t-blue-400/60   border-x-blue-500/30   border-b-black/60 bg-blue-500/20',
+  [PlayerPosition.MID]: 'text-green-400  border-t-green-400/60  border-x-green-500/30  border-b-black/60 bg-green-500/20',
+  [PlayerPosition.FWD]: 'text-red-400    border-t-red-400/60    border-x-red-500/30    border-b-black/60 bg-red-500/20',
 };
 
 const inputCls  = 'bg-black/40 border border-slate-700 rounded text-emerald-400 font-black italic uppercase tracking-tighter text-xs outline-none focus:border-yellow-500 transition-colors';
@@ -568,7 +568,7 @@ export const EditorView: React.FC = () => {
           <button
             key={tier}
             onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
-            className={`px-3 py-1 rounded text-xs transition-colors border ${selectedTier === tier ? 'bg-blue-600 border-blue-500 text-white' : 'bg-transparent border-slate-700 text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${selectedTier === tier ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
           >
             {tier === 'ALL' ? 'Wszystkie kluby' : `Liga ${tier}`}
           </button>
@@ -587,7 +587,7 @@ export const EditorView: React.FC = () => {
           )}
           <button
             onClick={startCreatePlayer}
-            className="px-4 py-1.5 bg-emerald-800 border border-emerald-600 rounded text-xs text-emerald-200 hover:text-white hover:border-emerald-400 transition-colors"
+            className="px-4 py-1.5 bg-emerald-800 rounded text-xs text-emerald-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
           >
             Stwórz zawodnika
           </button>
@@ -600,19 +600,19 @@ export const EditorView: React.FC = () => {
           />
           <button
             onClick={() => { setShowExportModal(true); setExportSelected(new Set()); }}
-            className="px-4 py-1.5 bg-slate-700 border border-slate-600 rounded text-xs text-slate-300 hover:text-white hover:border-slate-400 transition-colors"
+            className="px-4 py-1.5 bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
           >
             Eksportuj składy
           </button>
           <button
             onClick={() => { setImportMsg(''); fileInputRef.current?.click(); }}
-            className="px-4 py-1.5 bg-blue-900 border border-blue-700 rounded text-xs text-blue-300 hover:text-white hover:border-blue-500 transition-colors"
+            className="px-4 py-1.5 bg-blue-900 rounded text-xs text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
           >
             Importuj składy z pliku
           </button>
           <button
             onClick={() => navigateTo(ViewState.DASHBOARD)}
-            className="px-4 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+            className="px-4 py-1.5 bg-slate-800 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60"
           >
             Wyjdź
           </button>
@@ -693,7 +693,7 @@ export const EditorView: React.FC = () => {
                     <button
                       key={pos}
                       onClick={() => setPosition(pos)}
-                      className={`px-2 py-1 rounded border text-xs transition-colors ${position === pos ? POS_COLOR[pos] : 'text-slate-500 border-slate-700 bg-transparent hover:text-white'}`}
+                      className={`px-2 py-1 rounded border-t border-x border-b text-xs transition-all active:translate-y-[2px] ${position === pos ? POS_COLOR[pos] : 'text-slate-500 border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 hover:text-white'}`}
                     >
                       {pos}
                     </button>
@@ -770,19 +770,19 @@ export const EditorView: React.FC = () => {
             {/* PRZYCISKI */}
             <div className="pt-2 flex gap-3">
               <button onClick={handleSave}
-                className="px-6 py-2 bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded text-sm text-white transition-colors active:scale-95">
+                className="px-6 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-sm text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60">
                 {isCreatingPlayer ? 'Dodaj do klubu' : 'Zapisz zmiany'}
               </button>
               <button onClick={handleRandomProfile}
-                className="px-4 py-2 bg-blue-900 border border-blue-700 rounded text-sm text-blue-200 hover:text-white hover:border-blue-500 transition-colors">
+                className="px-4 py-2 bg-blue-900 rounded text-sm text-blue-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60">
                 Losuj zawodnika
               </button>
               <button onClick={handleRandom}
-                className="px-4 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-300 hover:text-white hover:border-slate-400 transition-colors">
+                className="px-4 py-2 bg-slate-800 rounded text-sm text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60">
                 Wartości losowe
               </button>
               <button onClick={() => applyAutoFinance()}
-                className="px-4 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-300 hover:text-white hover:border-slate-400 transition-colors">
+                className="px-4 py-2 bg-slate-800 rounded text-sm text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60">
                 Przelicz finanse
               </button>
             </div>
@@ -791,7 +791,7 @@ export const EditorView: React.FC = () => {
         </div>
 
         {/* PRAWA — LISTA ZAWODNIKÓW */}
-        <div className="w-72 border-l border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
+        <div className="w-96 border-l border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
           <div className="px-4 py-2 border-b border-slate-800 bg-slate-900 space-y-2">
             <span className="text-xs text-yellow-400">
               {playerSearch.trim() ? `Wyniki (${displayedPlayers.length})` : `Zawodnicy ${selectedClubId ? `(${clubPlayers.length})` : ''}`}
@@ -874,7 +874,7 @@ export const EditorView: React.FC = () => {
                       <span className="text-xs text-yellow-400">{TIER_LABELS[leagueId]}</span>
                       <button
                         onClick={() => toggleExportTier(leagueId)}
-                        className="text-[10px] px-2 py-0.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-400 hover:text-white transition-all active:translate-y-[2px]"
                       >
                         {allChecked ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
                       </button>
@@ -901,7 +901,7 @@ export const EditorView: React.FC = () => {
               <button
                 onClick={handleExportConfirm}
                 disabled={exportSelected.size === 0}
-                className="px-5 py-1.5 bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded text-xs text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-5 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Pobierz plik JSON
               </button>

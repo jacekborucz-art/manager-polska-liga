@@ -159,7 +159,7 @@ export const TransferSellerLogicService = {
     );
     const askingPrice = applyTransferCap(baseAskingPrice * getTimingPriceMultiplier(timing), sellerClub, player);
 
-    if (coachFavoriteIds && coachFavoriteIds.includes(player.id) && Math.random() >= 0.01) {
+    if (!player.isUntouchable && !player.isOnTransferList && coachFavoriteIds && coachFavoriteIds.includes(player.id) && Math.random() < 0.12) {
       return {
         allowTalks: false,
         askingPrice,
@@ -189,6 +189,34 @@ export const TransferSellerLogicService = {
 
     const blocksShortDelaySale =
       timing === TransferTiming.IMMEDIATE || timing === TransferTiming.IN_SIX_MONTHS;
+
+    const protectedByCorePlan = !!player.isUntouchable;
+    const coachSeesAsImportant = !!coachFavoriteIds?.includes(player.id);
+    if (
+      protectedByCorePlan &&
+      !player.isOnTransferList &&
+      !sellerNeedsCash &&
+      daysLeft > 365 &&
+      blocksShortDelaySale &&
+      reputationGap < 5
+    ) {
+      return {
+        allowTalks: false,
+        askingPrice,
+        reason: coachSeesAsImportant
+          ? `Zarzad odrzucil zapytanie. Trener i klub uznaja tego zawodnika za kluczowa postac skladu.`
+          : `Zarzad odrzucil zapytanie. Klub traktuje tego zawodnika jako czesc rdzenia skladu.`
+      };
+    }
+
+    if (protectedByCorePlan && !player.isOnTransferList && daysLeft > 365) {
+      const coreAskingPrice = applyTransferCap(askingPrice * (sellerNeedsCash ? 1.15 : 1.35), sellerClub, player);
+      return {
+        allowTalks: true,
+        askingPrice: coreAskingPrice,
+        reason: `Klub nie planuje sprzedazy kluczowego zawodnika, ale dopusci rozmowy tylko przy wyjatkowej ofercie. Cena wyjsciowa wynosi ${coreAskingPrice.toLocaleString()} PLN.`
+      };
+    }
 
     const protectedRivalSale =
       sameLeague &&

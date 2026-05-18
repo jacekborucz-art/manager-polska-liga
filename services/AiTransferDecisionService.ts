@@ -121,7 +121,13 @@ const _pickPlayerForSale = (
   favoriteIds: Set<string>
 ): Player | null => {
   const MIN_DEPTH: Record<PlayerPosition, number> = { GK: 2, DEF: 4, MID: 3, FWD: 2 };
-  const posGroup = squad.filter(p => p.position === position && !p.isOnTransferList && !favoriteIds.has(p.id));
+  const posGroup = squad.filter(p =>
+    p.position === position &&
+    !p.isOnTransferList &&
+    !p.isUntouchable &&
+    p.squadRole !== 'KEY_PLAYER' &&
+    !favoriteIds.has(p.id)
+  );
   if (posGroup.length <= MIN_DEPTH[position]) return null;
 
   const sorted = [...posGroup].sort((a, b) => {

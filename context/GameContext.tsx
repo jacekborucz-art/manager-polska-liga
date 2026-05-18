@@ -5110,7 +5110,8 @@ setMessages([welcomeMail, fanMail]);
     }
 
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 2) {
-      postReviewPlayers = AiContractService.updateClubStars(postReviewClubs, postReviewPlayers, userTeamId);
+      const updatedCoachesJuly = AiTransferDecisionService.updateCoachFavorites(postReviewClubs, postReviewPlayers, coaches, dateToProcess, sessionSeed, userTeamId);
+      postReviewPlayers = AiContractService.updateClubStars(postReviewClubs, postReviewPlayers, userTeamId, updatedCoachesJuly, dateToProcess, sessionSeed);
       const review = AiContractService.performSeasonSquadReview(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
       postReviewClubs = review.updatedClubs;
       postReviewPlayers = review.updatedPlayers;
@@ -5118,10 +5119,9 @@ setMessages([welcomeMail, fanMail]);
       postReviewClubs = weakReviewSummer.updatedClubs;
       postReviewPlayers = weakReviewSummer.updatedPlayers;
       postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
-      const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, coaches, dateToProcess, userTeamId);
+      const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, updatedCoachesJuly, dateToProcess, userTeamId);
       postReviewClubs = seasonDecision.updatedClubs;
       postReviewPlayers = seasonDecision.updatedPlayers;
-      const updatedCoachesJuly = AiTransferDecisionService.updateCoachFavorites(postReviewClubs, postReviewPlayers, coaches, dateToProcess, sessionSeed, userTeamId);
       setCoaches(updatedCoachesJuly);
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       
@@ -6512,6 +6512,7 @@ const finalResult: SimulationOutput = {
     if (nextDay.getDate() === 1) {
       const updatedCoachesMonthly = AiTransferDecisionService.updateCoachFavorites(clubs, players, coaches, nextDay, sessionSeed, userTeamId);
       setCoaches(updatedCoachesMonthly);
+      setPlayers(prev => AiContractService.updateClubStars(clubs, prev, userTeamId, updatedCoachesMonthly, nextDay, sessionSeed));
     }
 
     // ── KOSZTY OPERACYJNE: odliczenie miesięczne (1. dzień miesiąca) ─────────

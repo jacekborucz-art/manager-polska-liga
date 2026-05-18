@@ -165,6 +165,144 @@ const _getPositionAverageOverall = (squad: Player[], position: PlayerPosition): 
   return samePosition.length > 0 ? _getAverageOverall(samePosition) : _getAverageOverall(squad);
 };
 
+const _clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+
+const _hashToUnit = (seed: string): number => _seededRandom(seed);
+
+const _getCoachCoreAssessment = (coach: Coach | null): { experience: number; decisionMaking: number; quality: number } => {
+  const experience = coach?.attributes.experience ?? 50;
+  const decisionMaking = coach?.attributes.decisionMaking ?? 50;
+  return {
+    experience,
+    decisionMaking,
+    quality: _clamp((experience * 0.55 + decisionMaking * 0.45) / 100, 0.15, 0.98)
+  };
+};
+
+const _getCoreSquadSize = (club: Club, squadSize: number, seed: string): number => {
+  if (squadSize <= 0) return 0;
+
+  const reputationScore = _clamp((club.reputation - 1) / 17, 0, 1);
+  const expected = Math.round(3 + reputationScore * 8);
+  const variance = Math.floor(_hashToUnit(`${seed}_CORE_SIZE`) * 3) - 1;
+  const maxBySquadSize = Math.max(1, Math.floor(squadSize * 0.40));
+  const upperLimit = Math.min(11, Math.max(3, maxBySquadSize));
+
+  return _clamp(expected + variance, Math.min(3, upperLimit), upperLimit);
+};
+
+const _getAgeProfileBonus = (player: Player): number => {
+  if (player.age <= 20) return 2.0;
+  if (player.age <= 24) return 3.5;
+  if (player.age <= 29) return 4.0;
+  if (player.age <= 32) return 2.0;
+  if (player.age <= 35) return -1.5;
+  return -4.0;
+};
+
+const _getRecentFormBonus = (player: Player): number => {
+  const ratings = [
+    ...(player.stats?.ratingHistory || []),
+    ...(player.cupStats?.ratingHistory || []),
+    ...(player.euroStats?.ratingHistory || [])
+  ].slice(-6);
+  if (ratings.length === 0) return 0;
+  const average = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+  return _clamp((average - 6.7) * 2.0, -3.0, 4.0);
+};
+
+const _getCoreContractBonus = (player: Player, currentDate: Date): number => {
+  const daysLeft = player.contractEndDate
+    ? Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000)
+    : 0;
+
+  if (player.isNegotiationPermanentBlocked && daysLeft > 0 && daysLeft <= 365) return -8.0;
+  if (daysLeft > 730) return 2.0;
+  if (daysLeft > 365) return 0.8;
+  if (daysLeft > 180) return -1.0;
+  if (daysLeft > 0) return -3.0;
+  return -6.0;
+};
+
+const _getPositionScarcityBonus = (player: Player, squad: Player[]): number => {
+  const samePosition = squad
+    .filter(candidate => candidate.position === player.position && candidate.id !== player.id)
+    .sort((a, b) => b.overallRating - a.overallRating);
+  const minimumDepth = MIN_SQUAD_POSITION_COUNTS[player.position];
+
+  if (samePosition.length < minimumDepth) return 5.0;
+  const bestReplacement = samePosition[0];
+  if (!bestReplacement) return 5.0;
+  return _clamp((player.overallRating - bestReplacement.overallRating) * 0.45, -2.0, 5.5);
+};
+
+const _scoreCorePlayer = (
+  player: Player,
+  squad: Player[],
+  club: Club,
+  coach: Coach | null,
+  currentDate: Date,
+  seed: string
+): number => {
+  const coachAssessment = _getCoachCoreAssessment(coach);
+  const perceptionNoiseRange = 0.18 - coachAssessment.quality * 0.13;
+  const noise = (_hashToUnit(`${seed}_${player.id}_CORE_SCORE`) * 2 - 1) * perceptionNoiseRange;
+  const perceivedOverall = player.overallRating * (1 + noise);
+  const talentGap = Math.max(0, player.attributes.talent - player.overallRating);
+  const leadershipBonus = (player.attributes.leadership + player.attributes.mentality + player.attributes.workRate) / 100;
+  const salaryPressure = player.annualSalary > 0
+    ? player.annualSalary / Math.max(1, FinanceLogic.getFairMarketSalary(Math.max(1, player.overallRating)))
+    : 1;
+
+  const continuityBonus = player.isUntouchable ? 4.5 : player.squadRole === 'KEY_PLAYER' ? 2.5 : 0;
+  const starterBonus = player.squadRole === 'STARTER' ? 1.5 : 0;
+  const salaryPenalty = salaryPressure > 1.65 && player.overallRating < _getAverageOverall(squad) + 2
+    ? (salaryPressure - 1.65) * 3.0
+    : 0;
+
+  return (
+    perceivedOverall * 0.62 +
+    player.attributes.talent * 0.16 +
+    talentGap * 0.28 +
+    _getPositionScarcityBonus(player, squad) +
+    _getAgeProfileBonus(player) +
+    _getRecentFormBonus(player) +
+    _getCoreContractBonus(player, currentDate) +
+    leadershipBonus +
+    continuityBonus +
+    starterBonus -
+    salaryPenalty +
+    club.reputation * 0.08
+  );
+};
+
+const _selectCorePlayerIds = (
+  club: Club,
+  squad: Player[],
+  coach: Coach | null,
+  currentDate: Date,
+  sessionSeed: number
+): string[] => {
+  if (squad.length === 0) return [];
+
+  const seed = `${sessionSeed}_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}_${club.id}`;
+  const coreSize = _getCoreSquadSize(club, squad.length, seed);
+  const eligible = squad.filter(player =>
+    !player.transferPendingClubId &&
+    player.clubId !== 'FREE_AGENTS'
+  );
+
+  return eligible
+    .map(player => ({
+      player,
+      score: _scoreCorePlayer(player, squad, club, coach, currentDate, seed)
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, coreSize)
+    .map(entry => entry.player.id);
+};
+
 const _getCombinedMatches = (player: Player): number =>
   (player.stats?.matchesPlayed || 0) +
   (player.cupStats?.matchesPlayed || 0) +
@@ -1826,6 +1964,7 @@ performSeasonSquadReview: (
 
       for (const candidate of rankedSquad) {
         if (removedCount >= numToRemove) break;
+        if (candidate.isUntouchable || candidate.squadRole === 'KEY_PLAYER' || candidate.transferPendingClubId) continue;
 
         let canRemove = false;
         if (candidate.position === 'GK' && counts.GK > MIN_SQUAD_POSITION_COUNTS[PlayerPosition.GK]) canRemove = true;
@@ -1921,6 +2060,8 @@ performSeasonSquadReview: (
 
       const eligible = squad.filter(p =>
         !p.isOnTransferList &&
+        !p.isUntouchable &&
+        p.squadRole !== 'KEY_PLAYER' &&
         !p.transferPendingClubId &&
         !p.isNegotiationPermanentBlocked
       );
@@ -2009,30 +2150,26 @@ performSeasonSquadReview: (
   updateClubStars: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
-    userTeamId: string | null
+    userTeamId: string | null,
+    coachesMap: Record<string, Coach> = {},
+    currentDate: Date = new Date(),
+    sessionSeed: number = 0
   ): Record<string, Player[]> => {
     const updatedPlayersMap = { ...playersMap };
-
-    const getStarCount = (reputation: number): number => {
-      if (reputation >= 18) return 11;
-      if (reputation >= 15) return 7;
-      if (reputation >= 12) return 4;
-      if (reputation >= 6)  return 3;
-      return 2;
-    };
 
     for (const club of clubs) {
       if (club.id === userTeamId) continue;
       const squad = updatedPlayersMap[club.id];
       if (!squad || squad.length === 0) continue;
 
-      const starCount = getStarCount(club.reputation);
-      const sorted = [...squad].sort((a, b) => b.overallRating - a.overallRating);
-      const starIds = new Set(sorted.slice(0, starCount).map(p => p.id));
+      const coach = club.coachId ? (coachesMap[club.coachId] || null) : null;
+      const starIds = new Set(_selectCorePlayerIds(club, squad, coach, currentDate, sessionSeed));
 
       updatedPlayersMap[club.id] = squad.map(p => ({
         ...p,
-        isUntouchable: starIds.has(p.id)
+        isUntouchable: starIds.has(p.id),
+        isOnTransferList: starIds.has(p.id) ? false : p.isOnTransferList,
+        transferListPrice: starIds.has(p.id) ? undefined : p.transferListPrice
       }));
     }
 
