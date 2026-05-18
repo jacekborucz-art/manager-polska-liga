@@ -173,6 +173,51 @@ export const ContractManagementView: React.FC = () => {
 
       setIsOfferSent(true);
 
+      const freshMindflow = PlayerContractMindflowService.evaluate({
+        player,
+        currentClub: club,
+        currentSquad: squad,
+        currentDate,
+        interestedClubs: (player.interestedClubs || [])
+          .map(clubId => clubs.find(candidate => candidate.id === clubId))
+          .filter((candidate): candidate is typeof clubs[number] => !!candidate),
+      });
+      const mindflowDecision = PlayerContractMindflowService.evaluateRenewalOffer(freshMindflow, {
+        salary: offerSalary,
+        bonus: offerBonus,
+        years: offerYears,
+      });
+
+      if (!mindflowDecision.accepted) {
+        const nextStep = (player.negotiationStep || 0) + 1;
+        let lockoutDateStr: string | null = null;
+
+        if (!mindflowDecision.demands || nextStep >= 3) {
+          const d = new Date(currentDate);
+          d.setDate(d.getDate() + 14);
+          lockoutDateStr = d.toISOString();
+        }
+
+        setPlayers(prev => ({
+          ...prev,
+          [club.id]: prev[club.id].map(p => p.id === player.id ? {
+            ...p,
+            negotiationStep: nextStep,
+            negotiationLockoutUntil: lockoutDateStr,
+            isNegotiationPermanentBlocked: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2
+              ? true
+              : p.isNegotiationPermanentBlocked
+          } : p)
+        }));
+
+        setCounterOffer(nextStep >= 3 ? null : mindflowDecision.demands);
+        setNegotiationMessage(nextStep >= 3
+          ? "Chyba się jednak nie dogadamy. Próbowaliśmy kilka razy, ale Twoje oferty są nieakceptowalne. Do widzenia."
+          : mindflowDecision.reason);
+        setIsProcessing(false);
+        return;
+      }
+
       const playerDemand = FinanceService.calculatePlayerBonusDemand(player, offerSalary, club.reputation);
 
       if (FinanceService.isOfferInsulting(offerBonus, playerDemand)) {

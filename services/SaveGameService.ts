@@ -19,6 +19,8 @@ export interface SaveState {
   scoutPool: any[];
   scoutMarket: any[];
   scoutMarketRefreshDate: string;
+  scoutMarketManualRefreshCount: number;
+  scoutMarketPeriodStart: string;
   lineups: Record<string, any>;
   userTeamId: string | null;
   seasonTemplate: any;
@@ -215,6 +217,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     scoutPool: asArray(data.scoutPool),
     scoutMarket: asArray(data.scoutMarket),
     scoutMarketRefreshDate: data.scoutMarketRefreshDate ?? '',
+    scoutMarketManualRefreshCount: data.scoutMarketManualRefreshCount ?? 0,
+    scoutMarketPeriodStart: data.scoutMarketPeriodStart ?? '',
     lineups: asRecord(data.lineups),
     seasonTemplate: data.seasonTemplate ?? null,
     leagueSchedules: asRecord(data.leagueSchedules),

@@ -99,7 +99,7 @@ export const AcademyView: React.FC = () => {
     dismissYouthPlayer, setYouthFocus, startScoutMission,
     setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     navigateTo, userTeamId, clubs, currentDate,
-    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
+    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     showGameNotification,
   } = useGame();
 
@@ -204,9 +204,10 @@ export const AcademyView: React.FC = () => {
             </div>
             <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/5 border border-white/10 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' }}
             >
-              <span className="hover:-translate-x-1 transition-transform">←</span>
+              <span>←</span>
               <span>Powrót</span>
             </button>
           </div>
@@ -223,9 +224,10 @@ export const AcademyView: React.FC = () => {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-5 py-2 rounded-xl text-xs font-black italic uppercase tracking-widest transition-all ${
-                  tab === t.id ? 'bg-white/10 text-white shadow' : 'text-slate-500 hover:text-slate-300'
+                className={`px-5 py-2 rounded-xl text-xs font-black italic uppercase tracking-widest transition-all active:translate-y-[2px] ${
+                  tab === t.id ? 'bg-white/15 text-white border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                 }`}
+                style={tab === t.id ? { boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' } : {}}
               >
                 {t.label}
               </button>
@@ -847,8 +849,8 @@ export const AcademyView: React.FC = () => {
                 {/* Zatrudnieni skauci */}
                 <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Zatrudnieni Skauci</h3>
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
+                    <h3 className="text-[15px] font-black text-slate-300 uppercase italic tracking-tighter">Zatrudnieni Skauci</h3>
+                    <span className={`text-[13px] font-black px-2.5 py-1 rounded-lg border ${
                       employedScouts.length >= maxScouts
                         ? 'text-rose-400 border-rose-500/40 bg-rose-500/10'
                         : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10'
@@ -856,13 +858,13 @@ export const AcademyView: React.FC = () => {
                       {employedScouts.length} / {maxScouts}
                     </span>
                   </div>
-                  <p className="text-[10px] text-gold-500 mb-4">
+                  <p className="text-[13px] text-gold-500 font-black italic uppercase tracking-tighter mb-4">
                     Maks. skautów na tym poziomie:<span className="text-white font-black">{maxScouts}</span>
                     {academy.level < 5 && <span className="text-slate-600"> </span>}
                   </p>
 
                   {employedScouts.length === 0 ? (
-                    <p className="text-slate-600 text-xs text-center py-6">Brak zatrudnionych skautów.</p>
+                    <p className="text-slate-400 text-[15px] font-black italic uppercase tracking-tighter text-center py-6">Brak zatrudnionych skautów.</p>
                   ) : (
                     <div className="space-y-2">
                       {employedScouts.map(scout => {
@@ -872,13 +874,13 @@ export const AcademyView: React.FC = () => {
                           <div key={scout.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5">
                             <div className="flex items-start justify-between gap-2 mb-2">
                               <div>
-                                <p className="text-white font-black text-sm">{scout.firstName} {scout.lastName}</p>
-                                <p className="text-slate-500 text-[9px] uppercase tracking-wider">{scout.age} lat · {scout.nationality}</p>
+                                <p className="text-white font-black italic uppercase tracking-tighter text-[17px]">{scout.firstName} {scout.lastName}</p>
+                                <p className="text-slate-400 text-[12px] font-black italic uppercase tracking-tighter">{scout.age} lat · {scout.nationality}</p>
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                                <span className={`text-[12px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
                                 {scout.isOnMission && (
-                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border text-blue-300 border-blue-500/40 bg-blue-500/10 animate-pulse">W misji</span>
+                                  <span className="text-[12px] font-black px-1.5 py-0.5 rounded border text-blue-300 border-blue-500/40 bg-blue-500/10 animate-pulse">W misji</span>
                                 )}
                               </div>
                             </div>
@@ -890,23 +892,23 @@ export const AcademyView: React.FC = () => {
                                 { label: 'Doświad.', value: scout.experience },
                               ].map(stat => (
                                 <div key={stat.label} className="text-center p-1 bg-slate-700/30 rounded-lg">
-                                  <p className={`text-xs font-black ${stat.value >= 15 ? 'text-emerald-400' : stat.value >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{stat.value}</p>
-                                  <p className="text-[8px] text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                                  <p className={`text-[15px] font-black italic uppercase tracking-tighter ${stat.value >= 15 ? 'text-emerald-400' : stat.value >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{stat.value}</p>
+                                  <p className="text-[11px] text-slate-400 font-black italic uppercase tracking-tighter">{stat.label}</p>
                                 </div>
                               ))}
                             </div>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                                <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
                                 {scout.regionalSpecialty && (
-                                  <span className="text-[8px] text-slate-500">★ {scout.regionalSpecialty}</span>
+                                  <span className="text-[11px] text-slate-400 font-black italic uppercase tracking-tighter">★ {scout.regionalSpecialty}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-[9px] text-amber-400 font-black">{scout.weeklySalary.toLocaleString('pl-PL')} PLN/tydz</span>
+                                <span className="text-[12px] text-amber-400 font-black italic uppercase tracking-tighter">{scout.weeklySalary.toLocaleString('pl-PL')} PLN/tydz</span>
                                 <button
                                   onClick={() => setFireScoutConfirm({ id: scout.id, name: `${scout.firstName} ${scout.lastName}`, isOnMission: !!scout.isOnMission })}
-                                  className="px-2 py-1 text-[9px] font-black rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
+                                  className="px-2 py-1 text-[12px] font-black rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
                                 >
                                   Zwolnij
                                 </button>
@@ -922,60 +924,73 @@ export const AcademyView: React.FC = () => {
                 {/* Rynek pracy */}
                 <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Rynek Pracy</h3>
-                    <button
-                      onClick={refreshScoutMarket}
-                      className="px-3 py-1 text-[9px] font-black rounded-lg bg-slate-800 border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase tracking-wider"
-                    >
-                      🔄 Odśwież
-                    </button>
+                    <h3 className="text-[15px] font-black text-slate-300 uppercase italic tracking-tighter">Rynek Pracy</h3>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[11px] font-black italic uppercase tracking-tighter ${scoutMarketManualRefreshCount >= 3 ? 'text-rose-400' : 'text-slate-400'}`}>
+                        {3 - Math.min(scoutMarketManualRefreshCount, 3)}/3 odświeżeń
+                      </span>
+                      <button
+                        onClick={refreshScoutMarket}
+                        disabled={scoutMarketManualRefreshCount >= 3}
+                        className="px-3 py-1 text-[12px] font-black italic uppercase tracking-tighter rounded-lg bg-slate-800/60 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 hover:text-white hover:bg-white/10 transition-all active:translate-y-[2px] disabled:opacity-30 disabled:cursor-not-allowed disabled:active:translate-y-0"
+                        style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' }}
+                      >
+                        🔄 Odśwież
+                      </button>
+                    </div>
                   </div>
                   {scoutMarketRefreshDate && (
-                    <p className="text-[9px] text-slate-600 mb-3">Ostatnie odświeżenie: {scoutMarketRefreshDate} · auto co 45 dni</p>
+                    <p className="text-[12px] text-slate-400 font-black italic uppercase tracking-tighter mb-3">Ostatnie odświeżenie: {scoutMarketRefreshDate} · auto co 45 dni</p>
                   )}
 
                   {scoutMarket.length === 0 ? (
-                    <p className="text-slate-600 text-xs text-center py-6">Brak dostępnych skautów.</p>
+                    <p className="text-slate-400 text-[15px] font-black italic uppercase tracking-tighter text-center py-6">Brak dostępnych skautów.</p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs border-collapse">
+                      <table className="w-full text-[15px] border-collapse">
                         <thead>
-                          <tr className="bg-slate-800/80 text-slate-400 uppercase tracking-wider text-[9px]">
-                            <th className="px-2 py-2 text-left">Skaut</th>
-                            <th className="px-2 py-2 text-center">Tier</th>
-                            <th className="px-2 py-2 text-center" title="Dokładność oceny talentu">Ocena</th>
-                            <th className="px-2 py-2 text-center" title="Sieć kontaktów — zwiększa szansę znalezienia talentu i obniża koszt misji">Kontakty</th>
-                            <th className="px-2 py-2 text-center" title="Mobilność — skraca czas trwania misji">Mobilność</th>
-                            <th className="px-2 py-2 text-center" title="Doświadczenie — zmniejsza błąd w ocenie">Dośw.</th>
-                            <th className="px-2 py-2 text-center">Osobow.</th>
-                            <th className="px-2 py-2 text-right">PLN/tydz</th>
-                            <th className="px-2 py-2 text-center">Akcja</th>
+                          <tr className="bg-slate-800/80 text-slate-300 font-black italic uppercase tracking-tighter text-[9px]">
+                            <th className="px-2 py-2 text-left">Imię i Nazwisko</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50">Status</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50" title="Dokładność oceny talentu">
+                              <span className="block">Ocena</span>
+                              <span className="block text-[7px] opacity-60">Zawodnika</span>
+                            </th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50" title="Sieć kontaktów — zwiększa szansę znalezienia talentu i obniża koszt misji">Kontakty</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50" title="Mobilność — skraca czas trwania misji">Mobilność</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50" title="Doświadczenie — zmniejsza błąd w ocenie">Dośw.</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50">Osobowość</th>
+                            <th className="px-2 py-2 text-right border-l border-slate-700/50">
+                              <span className="block">Opłata</span>
+                              <span className="block text-[7px] opacity-60">Tygodniowa</span>
+                            </th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50">Akcja</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {scoutMarket.map(scout => {
+                          {scoutMarket.map((scout, index) => {
                             const tier = ScoutService.getScoutTier(scout);
                             const personality = ScoutService.getPersonalityLabel(scout.personality);
                             const canHire = employedScouts.length < maxScouts;
                             const clubTooSmall = (userClub?.reputation ?? 5) < scout.minClubReputation;
                             return (
-                              <tr key={scout.id} className={`border-t border-slate-700/30 transition-colors ${clubTooSmall ? 'opacity-40' : 'hover:bg-white/[0.03]'}`}>
+                              <tr key={scout.id} className={`border-t border-slate-700/30 transition-colors ${index % 2 === 0 ? 'bg-slate-700/20' : 'bg-transparent'} ${clubTooSmall ? 'opacity-40' : 'hover:bg-white/[0.05]'}`}>
                                 <td className="px-2 py-2">
-                                  <p className="font-black text-white text-[11px]">{scout.firstName} {scout.lastName}</p>
-                                  <p className="text-slate-500 text-[8px]">{scout.age} l. · {scout.nationality}{scout.regionalSpecialty ? ` · ★ ${scout.regionalSpecialty}` : ''}</p>
+                                  <p className="font-black italic uppercase tracking-tighter text-white text-[14px]">{scout.firstName} {scout.lastName}</p>
+                                  <p className="text-slate-400 text-[11px] font-black italic uppercase tracking-tighter">{scout.age} l. · {scout.nationality}{scout.regionalSpecialty && scout.regionalSpecialty !== scout.nationality ? ` · ★ ${scout.regionalSpecialty}` : ''}</p>
                                 </td>
-                                <td className="px-2 py-2 text-center">
-                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                                <td className="px-2 py-2 text-center border-l border-slate-700/30">
+                                  <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
                                 </td>
-                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.judgmentAccuracy >= 15 ? 'text-emerald-400' : scout.judgmentAccuracy >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.judgmentAccuracy}</td>
-                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.networkDepth >= 15 ? 'text-emerald-400' : scout.networkDepth >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.networkDepth}</td>
-                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.reportSpeed >= 15 ? 'text-emerald-400' : scout.reportSpeed >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.reportSpeed}</td>
-                                <td className={`px-2 py-2 text-center font-black text-xs ${scout.experience >= 15 ? 'text-emerald-400' : scout.experience >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.experience}</td>
-                                <td className="px-2 py-2 text-center">
-                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                                <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.judgmentAccuracy >= 15 ? 'text-emerald-400' : scout.judgmentAccuracy >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.judgmentAccuracy}</td>
+                                <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.networkDepth >= 15 ? 'text-emerald-400' : scout.networkDepth >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.networkDepth}</td>
+                                <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.reportSpeed >= 15 ? 'text-emerald-400' : scout.reportSpeed >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.reportSpeed}</td>
+                                <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.experience >= 15 ? 'text-emerald-400' : scout.experience >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.experience}</td>
+                                <td className="px-2 py-2 text-center border-l border-slate-700/30">
+                                  <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
                                 </td>
-                                <td className="px-2 py-2 text-right text-amber-400 font-black text-[10px] whitespace-nowrap">{scout.weeklySalary.toLocaleString('pl-PL')}</td>
-                                <td className="px-2 py-2 text-center">
+                                <td className="px-2 py-2 text-right text-amber-400 font-black italic uppercase tracking-tighter text-[13px] whitespace-nowrap border-l border-slate-700/30">{scout.weeklySalary.toLocaleString('pl-PL')}</td>
+                                <td className="px-2 py-2 text-center border-l border-slate-700/30">
                                   <button
                                     onClick={() => {
                                       if (clubTooSmall) {
@@ -996,7 +1011,8 @@ export const AcademyView: React.FC = () => {
                                       }
                                     }}
                                     disabled={!canHire || clubTooSmall}
-                                    className="px-2 py-1 text-[9px] font-black rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+                                    className="px-2 py-1 text-[12px] font-black italic uppercase tracking-tighter rounded bg-emerald-600/20 text-emerald-400 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 hover:bg-emerald-600/30 transition-all active:translate-y-[2px] disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+                                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' }}
                                   >
                                     {clubTooSmall ? 'Za niska rep.' : canHire ? 'Zatrudnij' : 'Limit'}
                                   </button>

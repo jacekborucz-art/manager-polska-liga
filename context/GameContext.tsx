@@ -379,6 +379,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   fireScout: (scoutId: string) => void;
   refreshScoutMarket: () => void;
   scoutMarketRefreshDate: string;
+  scoutMarketManualRefreshCount: number;
+  scoutMarketPeriodStart: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
   conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
   fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
@@ -418,6 +420,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [scoutPool, setScoutPool] = useState<Scout[]>([]);
   const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
   const [scoutMarketRefreshDate, setScoutMarketRefreshDate] = useState<string>('');
+  const [scoutMarketManualRefreshCount, setScoutMarketManualRefreshCount] = useState<number>(0);
+  const [scoutMarketPeriodStart, setScoutMarketPeriodStart] = useState<string>('');
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
@@ -1624,6 +1628,8 @@ if (userTeamId) {
     setScoutPool(data.scoutPool);
     setScoutMarket(data.scoutMarket);
     setScoutMarketRefreshDate(data.scoutMarketRefreshDate);
+    setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
+    setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
     setLineups(data.lineups);
     setUserTeamId(data.userTeamId);
     setSeasonTemplate(data.seasonTemplate);
@@ -2515,10 +2521,42 @@ setMessages([welcomeMail, fanMail]);
     if (!userTeamId) return;
     const userClub = clubs.find(c => c.id === userTeamId);
     if (!userClub) return;
+
+    const today = new Date(currentDate).toISOString().split('T')[0];
+    let currentCount = scoutMarketManualRefreshCount;
+    let periodStart = scoutMarketPeriodStart;
+
+    if (!periodStart) {
+      periodStart = today;
+      currentCount = 0;
+      setScoutMarketPeriodStart(today);
+      setScoutMarketManualRefreshCount(0);
+    } else {
+      const daysSince = Math.floor((new Date(today).getTime() - new Date(periodStart).getTime()) / 86400000);
+      if (daysSince >= 90) {
+        periodStart = today;
+        currentCount = 0;
+        setScoutMarketPeriodStart(today);
+        setScoutMarketManualRefreshCount(0);
+      }
+    }
+
+    if (currentCount >= 3) {
+      const resetDate = new Date(periodStart);
+      resetDate.setDate(resetDate.getDate() + 90);
+      showGameNotification({
+        title: 'Limit odświeżeń',
+        message: `Wykorzystano 3/3 odświeżeń w tym kwartale. Kolejne odświeżenie dostępne od ${resetDate.toISOString().split('T')[0]}.`,
+        tone: 'warning'
+      });
+      return;
+    }
+
     const market = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5, userClub.board?.kompetencja);
     setScoutMarket(market);
-    setScoutMarketRefreshDate(new Date(currentDate).toISOString().split('T')[0]);
-  }, [scoutPool, userTeamId, clubs, currentDate]);
+    setScoutMarketRefreshDate(today);
+    setScoutMarketManualRefreshCount(currentCount + 1);
+  }, [scoutPool, userTeamId, clubs, currentDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart, showGameNotification]);
 
   const hireScout = useCallback((scoutId: string): boolean => {
     if (!academy || !userTeamId) return false;
@@ -9623,7 +9661,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveFixtures, setReserveFixtures,
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
-    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate,
+    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     pendingOpenTalk, setPendingOpenTalk,
     applyWeeklyMotivation, conductIndividualTalk, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,

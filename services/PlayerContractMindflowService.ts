@@ -101,6 +101,13 @@ export interface PlayerContractMindflow {
   };
 }
 
+export interface RenewalOfferMindflowResult {
+  accepted: boolean;
+  reason: string;
+  demands: { salary: number; bonus: number } | null;
+  offerQuality: OfferQuality;
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
@@ -563,6 +570,124 @@ const getExternalOfferGate = (
   };
 };
 
+const evaluateRenewalOffer = (
+  mindflow: PlayerContractMindflow,
+  offer: { salary: number; bonus: number; years: number }
+): RenewalOfferMindflowResult => {
+  const expectations = mindflow.contractExpectations;
+  const priorities = expectations.priorities;
+  const prioritySum = Math.max(1, priorities.salary + priorities.bonus + priorities.years);
+
+  const salaryWeight = priorities.salary / prioritySum;
+  const bonusWeight = priorities.bonus / prioritySum;
+  const yearsWeight = priorities.years / prioritySum;
+
+  const salaryFit = offer.salary / Math.max(1, expectations.expectedSalary);
+  const bonusFit = expectations.expectedBonus > 0
+    ? offer.bonus / Math.max(1, expectations.expectedBonus)
+    : 1;
+  const yearsFit = offer.years / Math.max(1, expectations.preferredYears);
+
+  const bonusSurplus = Math.max(0, bonusFit - 1);
+  const salarySurplus = Math.max(0, salaryFit - 1);
+  const effectiveSalaryFit = salaryFit + bonusSurplus * 0.08;
+  const effectiveBonusFit = bonusFit + salarySurplus * (mindflow.profile.ageGroup === 'YOUNG' ? 0.75 : 1.15);
+
+  const offerScore =
+    clamp(effectiveSalaryFit, 0, 1.25) * salaryWeight +
+    clamp(effectiveBonusFit, 0, 1.25) * bonusWeight +
+    clamp(yearsFit, 0.55, 1.15) * yearsWeight;
+
+  let requiredScore =
+    mindflow.mindset.state === 'SUPER_HAPPY' ? 0.88 :
+    mindflow.mindset.state === 'HAPPY_TO_STAY' ? 0.91 :
+    mindflow.mindset.state === 'OPEN_TO_RENEWAL' ? 0.95 :
+    mindflow.mindset.state === 'EXPECTING_BETTER_TERMS' ? 0.99 :
+    mindflow.mindset.state === 'LOSING_PATIENCE' ? 1.02 :
+    mindflow.mindset.state === 'TESTING_MARKET' ? 1.05 :
+    mindflow.mindset.state === 'READY_TO_LEAVE' ? 1.08 :
+    1.12;
+
+  if (mindflow.marketSituation.marketConfidence >= 55) requiredScore += 0.03;
+  if (mindflow.currentClubSituation.totalStayComfort >= 82) requiredScore -= 0.04;
+  if (mindflow.negotiationMemory.rejectedOffers > 0) requiredScore += Math.min(0.06, mindflow.negotiationMemory.rejectedOffers * 0.02);
+  requiredScore = clamp(requiredScore, 0.86, 1.14);
+
+  const salaryFloor =
+    mindflow.mindset.state === 'TESTING_MARKET' ||
+    mindflow.mindset.state === 'READY_TO_LEAVE' ||
+    mindflow.mindset.state === 'PRECONTRACT_READY'
+      ? expectations.minimumSalary
+      : expectations.minimumSalary * 0.94;
+  const bonusFloor = expectations.minimumBonus * (
+    mindflow.profile.ageGroup === 'YOUNG' ? 0.45 :
+    mindflow.profile.ageGroup === 'PRIME' ? 0.55 :
+    0.68
+  );
+
+  const demandPressure =
+    mindflow.mindset.state === 'TESTING_MARKET' ||
+    mindflow.mindset.state === 'READY_TO_LEAVE' ||
+    mindflow.mindset.state === 'PRECONTRACT_READY' ||
+    mindflow.negotiationMemory.frustration >= 55;
+
+  const demandedSalary = demandPressure
+    ? Math.max(expectations.expectedSalary, Math.round(expectations.premiumSalary / 10_000) * 10_000)
+    : Math.max(expectations.minimumSalary, expectations.expectedSalary);
+  const demandedBonus = demandPressure
+    ? Math.max(expectations.expectedBonus, Math.round(expectations.minimumBonus * 1.15 / 5_000) * 5_000)
+    : expectations.expectedBonus;
+
+  const demands = {
+    salary: roundMoney(demandedSalary),
+    bonus: roundMoney(demandedBonus),
+  };
+
+  const isSalaryDisrespectful = offer.salary < salaryFloor;
+  const isBonusDisrespectful = offer.bonus < bonusFloor && offer.salary < expectations.expectedSalary * 1.12;
+  const isTooShort = offer.years < expectations.minimumYears;
+
+  if (offer.salary < expectations.minimumSalary * 0.72 || (offer.bonus < expectations.minimumBonus * 0.18 && offer.salary < expectations.minimumSalary)) {
+    return {
+      accepted: false,
+      reason: 'Mój klient uznał tę propozycję za niepoważną. Przy jego pozycji, wieku i perspektywach oczekujemy zupełnie innego poziomu oferty.',
+      demands,
+      offerQuality: 'INSULTING',
+    };
+  }
+
+  if (isSalaryDisrespectful || isBonusDisrespectful || isTooShort) {
+    const reasonParts = [
+      isSalaryDisrespectful ? 'pensja jest poniżej minimalnego poziomu, jaki zawodnik uważa za uczciwy' : null,
+      isBonusDisrespectful ? 'bonus za podpis nie rekompensuje ryzyka podpisania nowej umowy' : null,
+      isTooShort ? 'długość kontraktu nie daje mu oczekiwanej stabilizacji' : null,
+    ].filter(Boolean);
+
+    return {
+      accepted: false,
+      reason: `Nie podpiszemy tego kontraktu. ${reasonParts.join(', ')}. Jeśli klub naprawdę widzi w nim ważnego zawodnika, oczekujemy warunków bliższych jego obecnej wartości rynkowej.`,
+      demands,
+      offerQuality: 'WEAK',
+    };
+  }
+
+  if (offerScore >= requiredScore) {
+    return {
+      accepted: true,
+      reason: '',
+      demands: null,
+      offerQuality: offerScore >= requiredScore + 0.14 ? 'STRONG' : 'FAIR',
+    };
+  }
+
+  return {
+    accepted: false,
+    reason: 'Jesteśmy w stanie rozmawiać, ale ta oferta nadal nie odpowiada temu, jak zawodnik ocenia swoją pozycję w drużynie i możliwe opcje na rynku.',
+    demands,
+    offerQuality: offerScore >= requiredScore * 0.86 ? 'WEAK' : 'INSULTING',
+  };
+};
+
 export const PlayerContractMindflowService = {
   evaluate: (params: PlayerContractMindflowParams): PlayerContractMindflow => {
     const { player, currentClub, currentSquad, currentDate, interestedClubs, targetClub } = params;
@@ -615,4 +740,5 @@ export const PlayerContractMindflowService = {
       mindset,
     };
   },
+  evaluateRenewalOffer,
 };
