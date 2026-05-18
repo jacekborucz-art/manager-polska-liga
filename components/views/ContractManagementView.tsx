@@ -6,6 +6,18 @@ import { FinanceService } from '../../services/FinanceService';
 import { MailService } from '../../services/MailService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { SportingDirectorService } from '../../services/SportingDirectorService';
+import { PlayerContractMindflowService, ContractMindsetState } from '../../services/PlayerContractMindflowService';
+
+const MINDSET_LABELS: Record<ContractMindsetState, string> = {
+  SUPER_HAPPY: 'BARDZO SZCZĘŚLIWY',
+  HAPPY_TO_STAY: 'CHCE ZOSTAĆ',
+  OPEN_TO_RENEWAL: 'OTWARTY NA ROZMOWY',
+  EXPECTING_BETTER_TERMS: 'OCZEKUJE LEPSZYCH WARUNKÓW',
+  LOSING_PATIENCE: 'TRACI CIERPLIWOŚĆ',
+  TESTING_MARKET: 'SONDUJE RYNEK',
+  READY_TO_LEAVE: 'GOTÓW ODEJŚĆ',
+  PRECONTRACT_READY: 'GOTÓW NA PREKONTRAKT',
+};
 
 export const ContractManagementView: React.FC = () => {
   const { 
@@ -70,6 +82,19 @@ export const ContractManagementView: React.FC = () => {
     : player.transferPendingFee
       ? `kwota transferu: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
       : 'transfer uzgodniony';
+  const contractMindflow = useMemo(() => {
+    const interestedClubs = (player.interestedClubs || [])
+      .map(clubId => clubs.find(candidate => candidate.id === clubId))
+      .filter((candidate): candidate is typeof clubs[number] => !!candidate);
+
+    return PlayerContractMindflowService.evaluate({
+      player,
+      currentClub: club,
+      currentSquad: squad,
+      currentDate,
+      interestedClubs,
+    });
+  }, [player, club, squad, currentDate, clubs]);
   const directorRenewalAdvisory = useMemo(() => {
     if (!club.sportingDirector || managementMode !== 'NEGOTIATE') return [];
     return SportingDirectorService.getContractRenewalAdvisory({
@@ -168,7 +193,8 @@ export const ContractManagementView: React.FC = () => {
         offerBonus, 
         newEndDate, 
         currentDate, 
-        club.reputation
+        club.reputation,
+        FinanceService.getClubTier(club)
       );
 
       setCounterOffer(decision.demands);
@@ -443,6 +469,47 @@ export const ContractManagementView: React.FC = () => {
                       </div>
                    ) : (
                       <>
+                        <div className="rounded-[28px] border border-blue-500/20 bg-blue-500/5 p-5">
+                           <div className="flex items-center justify-between gap-3">
+                              <span className="text-[10px] font-black italic uppercase tracking-tighter text-blue-300">Mindflow zawodnika</span>
+                              <span className="text-[10px] font-black italic uppercase tracking-tighter text-white bg-blue-500/15 border border-blue-400/20 px-3 py-1 rounded-full">
+                                 {MINDSET_LABELS[contractMindflow.mindset.state]}
+                              </span>
+                           </div>
+                           <div className="mt-4 grid grid-cols-4 gap-3">
+                              {[
+                                 ['Komfort', contractMindflow.currentClubSituation.totalStayComfort],
+                                 ['Zaufanie', contractMindflow.mindset.clubTrust],
+                                 ['Rynek', contractMindflow.mindset.marketOpenness],
+                                 ['Prekontrakt', contractMindflow.mindset.preContractReadiness],
+                              ].map(([label, value]) => (
+                                 <div key={label} className="rounded-2xl bg-black/25 border border-white/5 px-3 py-2">
+                                    <span className="block text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{label}</span>
+                                    <span className="text-sm font-black text-white font-mono">{Math.round(Number(value))}/100</span>
+                                 </div>
+                              ))}
+                           </div>
+                           <div className="mt-4 grid grid-cols-2 gap-3 text-[10px] text-slate-300">
+                              <div className="rounded-2xl bg-black/20 border border-white/5 p-3">
+                                 <span className="block font-black italic uppercase tracking-tighter text-slate-500 mb-1">Widełki pensji</span>
+                                 <span className="font-black text-emerald-300 font-mono">
+                                    {contractMindflow.contractExpectations.minimumSalary.toLocaleString('pl-PL')} - {contractMindflow.contractExpectations.premiumSalary.toLocaleString('pl-PL')} PLN
+                                 </span>
+                              </div>
+                              <div className="rounded-2xl bg-black/20 border border-white/5 p-3">
+                                 <span className="block font-black italic uppercase tracking-tighter text-slate-500 mb-1">Oczekiwany kontrakt</span>
+                                 <span className="font-black text-white">
+                                    {contractMindflow.contractExpectations.preferredYears} lata, rola: {contractMindflow.contractExpectations.expectedRole}
+                                 </span>
+                              </div>
+                           </div>
+                           {contractMindflow.mindset.explanation.length > 0 && (
+                              <p className="mt-4 text-[11px] text-blue-100/80 italic leading-relaxed">
+                                 {contractMindflow.mindset.explanation.slice(0, 2).join(' ')}
+                              </p>
+                           )}
+                        </div>
+
                         {club.sportingDirector && directorRenewalAdvisory.length > 0 && (
                            <div className="rounded-[28px] border border-amber-500/20 bg-amber-500/5 p-5">
                               <div className="flex items-center justify-between gap-3">

@@ -53,7 +53,7 @@ export const SquadView: React.FC = () => {
   const [staffNegCounterYears, setStaffNegCounterYears] = useState(1);
   const [staffNegResultMsg, setStaffNegResultMsg] = useState('');
   const [staffNegResultOk, setStaffNegResultOk] = useState(false);
-  const [activeTab, setActiveTab] = useState<'SQUAD' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
+  const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
 
   const REGION_LABELS: Record<string, string> = {
     POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
@@ -80,12 +80,54 @@ export const SquadView: React.FC = () => {
     return 'bg-emerald-600 border-emerald-400 text-white';
   };
 
+  const getOverallBadgeClass = (overall: number): string => {
+    if (overall >= 75) return 'border-emerald-300 bg-emerald-500 text-slate-950 shadow-[0_0_14px_rgba(16,185,129,0.35)]';
+    if (overall >= 65) return 'border-yellow-300 bg-yellow-400 text-slate-950 shadow-[0_0_14px_rgba(250,204,21,0.32)]';
+    if (overall >= 55) return 'border-blue-300 bg-blue-600 text-white shadow-[0_0_14px_rgba(37,99,235,0.32)]';
+    return 'border-red-300 bg-red-600 text-white shadow-[0_0_14px_rgba(220,38,38,0.32)]';
+  };
+
   const getMoraleIcon = (morale: number = 50): string => {
     if (morale <= 19) return '⭐';
     if (morale <= 39) return '⭐⭐';
     if (morale <= 59) return '⭐⭐⭐';
     if (morale <= 79) return '⭐⭐⭐⭐';
     return '⭐⭐⭐⭐⭐';
+  };
+
+  const formatContractSalary = (salary?: number | null): string => {
+    if (!salary || salary <= 0) return '-';
+    return `${salary.toLocaleString('pl-PL')} PLN`;
+  };
+
+  const formatMarketValue = (value?: number | null): string => {
+    if (!value || value <= 0) return '-';
+    return `${value.toLocaleString('pl-PL')} PLN`;
+  };
+
+  const formatContractEnd = (contractEndDate?: string | null): string => {
+    if (!contractEndDate) return '-';
+    const date = new Date(contractEndDate);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const getContractRemainingInfo = (contractEndDate?: string | null): { label: string; className: string } => {
+    if (!contractEndDate) return { label: 'Brak danych', className: 'text-slate-500' };
+    const end = new Date(contractEndDate);
+    if (Number.isNaN(end.getTime())) return { label: 'Brak danych', className: 'text-slate-500' };
+    const today = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const daysLeft = Math.ceil((end.getTime() - today.getTime()) / 86_400_000);
+    if (daysLeft < 0) return { label: 'Wygasł', className: 'text-red-400' };
+    if (daysLeft <= 180) return { label: `${daysLeft} dni`, className: 'text-red-400' };
+    if (daysLeft <= 365) return { label: `${Math.ceil(daysLeft / 30)} mies.`, className: 'text-amber-400' };
+    return { label: `${Math.ceil(daysLeft / 365)} lata`, className: 'text-emerald-400' };
+  };
+
+  const getSquadRoleInfo = (role?: Player['squadRole']): { label: string; className: string } => {
+    if (role === 'KEY_PLAYER') return { label: 'Kluczowy', className: 'border-yellow-400/30 bg-yellow-500/10 text-yellow-300' };
+    if (role === 'STARTER') return { label: 'Podstawowa 11', className: 'border-blue-400/30 bg-blue-500/10 text-blue-300' };
+    return { label: 'Brak', className: 'border-slate-500/20 bg-slate-500/10 text-slate-500' };
   };
 
   const getPositionBadgeClass = (position: string): string => {
@@ -397,6 +439,7 @@ export const SquadView: React.FC = () => {
   };
 
   const renderPlayerRow = (pId: string | null, label: string, loc: 'START' | 'BENCH' | 'RES', index?: number) => {
+    const isContractTab = activeTab === 'CONTRACT';
     const player = pId ? getPlayerById(pId) : null;
     const isSelected = selectedSlot?.loc === loc && (loc === 'START' ? selectedSlot.index === index : selectedSlot.id === pId);
     const selectedRole = selectedSlot?.loc === 'START' && selectedSlot.index !== undefined ? currentTactic.slots[selectedSlot.index]?.role : null;
@@ -418,7 +461,7 @@ export const SquadView: React.FC = () => {
           <td className="w-6 text-center text-slate-700">
             <span className="inline-flex items-center justify-center text-[10px] font-black">→</span>
           </td>
-          <td colSpan={8} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
+          <td colSpan={isContractTab ? 9 : 8} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
             &gt; WSTAW ZAWODNIKA &lt;
           </td>
         </tr>
@@ -448,6 +491,8 @@ export const SquadView: React.FC = () => {
     const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
     const playerMoraleInfo = PlayerMoraleService.getInfo(moralePlayer.morale);
     const effectiveOverall = PlayerMoraleService.getEffectiveOverall(moralePlayer);
+    const contractRemaining = getContractRemainingInfo(player.contractEndDate);
+    const squadRoleInfo = getSquadRoleInfo(player.squadRole);
 
     return (
       <tr
@@ -525,6 +570,38 @@ export const SquadView: React.FC = () => {
               )}
            </div>
         </td>
+        {isContractTab ? (
+          <>
+            <td className="relative z-10 px-3 w-16 text-center">
+              <span className="text-[13px] font-black italic tracking-tighter text-slate-200 whitespace-nowrap">{player.age}</span>
+            </td>
+            <td className="relative z-10 px-4 w-44 text-center">
+              <span className="text-[13px] font-black italic tracking-tighter text-yellow-300 whitespace-nowrap">{formatContractSalary(player.annualSalary)}</span>
+            </td>
+            <td className="relative z-10 px-4 w-32 text-center">
+              <span className="text-[12px] font-black italic tracking-tighter text-slate-200 whitespace-nowrap">{formatContractEnd(player.contractEndDate)}</span>
+            </td>
+            <td className="relative z-10 px-4 w-32 text-center">
+              <span className={`inline-flex min-w-[80px] items-center justify-center rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[10px] font-black italic uppercase tracking-tighter ${contractRemaining.className}`}>
+                {contractRemaining.label}
+              </span>
+            </td>
+            <td className="relative z-10 px-4 w-36 text-center">
+              <span className={`inline-flex min-w-[108px] items-center justify-center rounded-md border px-2 py-1 text-[10px] font-black italic uppercase tracking-tighter ${squadRoleInfo.className}`}>
+                {squadRoleInfo.label}
+              </span>
+            </td>
+            <td className="relative z-10 px-4 w-36 text-center">
+              <span className="text-[13px] font-black italic tracking-tighter text-emerald-300 whitespace-nowrap">{formatMarketValue(player.marketValue)}</span>
+            </td>
+            <td className="relative z-10 pr-6 w-20 text-center">
+              <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full border-2 text-[13px] font-black italic tracking-tighter leading-none ${getOverallBadgeClass(player.overallRating)}`}>
+                {player.overallRating}
+              </span>
+            </td>
+          </>
+        ) : (
+          <>
         <td className="relative z-10 px-2 w-36">
           <div className="flex gap-[6px]">
             <div className="flex flex-col items-center w-[22px]">
@@ -595,6 +672,8 @@ export const SquadView: React.FC = () => {
              </div>
            </div>
         </td>
+          </>
+        )}
 
       </tr>
     );
@@ -862,6 +941,11 @@ export const SquadView: React.FC = () => {
               className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'SQUAD' ? 'bg-blue-500/20 border-t-blue-400/50 border-x-blue-500/25 border-b-black/60 text-blue-300' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >SKŁAD</button>
+            <button
+              onClick={() => setActiveTab('CONTRACT')}
+              className={`px-6 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'CONTRACT' ? 'bg-yellow-500/20 border-t-yellow-400/50 border-x-yellow-500/25 border-b-black/60 text-yellow-300' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            >STATUS KONTRAKTU</button>
             <button
               onClick={() => setActiveTab('MORALE')}
               className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border-t-white/30 border-x-white/15 border-b-black/60 ${getMoraleInfo(myClub.morale ?? 50).color}` : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
@@ -1291,7 +1375,7 @@ export const SquadView: React.FC = () => {
             );
           })()}
 
-          {activeTab === 'SQUAD' && <>
+          {(activeTab === 'SQUAD' || activeTab === 'CONTRACT') && <>
 
            {/* STARTING XI LIST */}
            <div className="shrink-0 bg-slate-900/40 rounded-[50px] border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col overflow-hidden relative">
@@ -1308,32 +1392,60 @@ export const SquadView: React.FC = () => {
                         <th className="w-52 py-2">
                           <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">Zawodnik</span>
                         </th>
-                        <th className="px-2 w-36 py-2">
-                          <div className="flex gap-[6px]">
-                            {([['M','text-slate-400'],['G','text-emerald-600'],['A','text-blue-600'],['ŻK','text-yellow-600'],['CK','text-red-700']] as [string,string][]).map(([lbl,cls]) => (
-                              <div key={lbl} className={`w-[22px] text-center text-[8px] font-black uppercase tracking-tighter ${cls}`}>{lbl}</div>
-                            ))}
-                          </div>
-                        </th>
-                        <th className="px-3 py-2">
-                          <div className="flex gap-[6px]">
-                            {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
-                              <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-400">{lbl}</div>
-                            ))}
-                          </div>
-                        </th>
-                        <th className="w-20 text-center py-2">
-                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Morale</span>
-                        </th>
-                        <th className="w-24 text-center py-2">
-                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Zdrowie</span>
-                        </th>
-                        <th className="w-16 text-center py-2">
-                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Ocena</span>
-                        </th>
-                        <th className="pr-6 w-32 py-2">
-                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Kondycja</span>
-                        </th>
+                        {activeTab === 'CONTRACT' ? (
+                          <>
+                            <th className="px-3 w-16 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Wiek</span>
+                            </th>
+                            <th className="px-4 w-44 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Wynagrodzenie</span>
+                            </th>
+                            <th className="px-4 w-32 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Kontrakt do</span>
+                            </th>
+                            <th className="px-4 w-32 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Pozostało</span>
+                            </th>
+                            <th className="px-4 w-36 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Rola w zespole</span>
+                            </th>
+                            <th className="px-4 w-36 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Cena rynkowa</span>
+                            </th>
+                            <th className="pr-6 w-20 py-2 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">OVR</span>
+                            </th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-2 w-36 py-2">
+                              <div className="flex gap-[6px]">
+                                {([['M','text-slate-400'],['G','text-emerald-600'],['A','text-blue-600'],['ŻK','text-yellow-600'],['CK','text-red-700']] as [string,string][]).map(([lbl,cls]) => (
+                                  <div key={lbl} className={`w-[22px] text-center text-[8px] font-black uppercase tracking-tighter ${cls}`}>{lbl}</div>
+                                ))}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2">
+                              <div className="flex gap-[6px]">
+                                {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
+                                  <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-400">{lbl}</div>
+                                ))}
+                              </div>
+                            </th>
+                            <th className="w-20 text-center py-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Morale</span>
+                            </th>
+                            <th className="w-24 text-center py-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Zdrowie</span>
+                            </th>
+                            <th className="w-16 text-center py-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Ocena</span>
+                            </th>
+                            <th className="pr-6 w-32 py-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Kondycja</span>
+                            </th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
@@ -1359,24 +1471,52 @@ export const SquadView: React.FC = () => {
                         <th className="w-6" />
                         <th className="w-14" />
                         <th className="w-52" />
-                        <th className="px-2 w-36" />
-                        <th className="px-3 py-1">
-                          <div className="flex gap-[6px]">
-                            {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
-                              <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-600">{lbl}</div>
-                            ))}
-                          </div>
-                        </th>
-                        <th className="w-20" />
-                        <th className="w-24" />
-                        <th className="w-16" />
-                        <th className="pr-6 w-32" />
+                        {activeTab === 'CONTRACT' ? (
+                          <>
+                            <th className="px-3 w-16 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Wiek</span>
+                            </th>
+                            <th className="px-4 w-44 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Wynagrodzenie</span>
+                            </th>
+                            <th className="px-4 w-32 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Kontrakt do</span>
+                            </th>
+                            <th className="px-4 w-32 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Pozostało</span>
+                            </th>
+                            <th className="px-4 w-36 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Rola w zespole</span>
+                            </th>
+                            <th className="px-4 w-36 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Cena rynkowa</span>
+                            </th>
+                            <th className="pr-6 w-20 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">OVR</span>
+                            </th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-2 w-36" />
+                            <th className="px-3 py-1">
+                              <div className="flex gap-[6px]">
+                                {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
+                                  <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-600">{lbl}</div>
+                                ))}
+                              </div>
+                            </th>
+                            <th className="w-20" />
+                            <th className="w-24" />
+                            <th className="w-16" />
+                            <th className="pr-6 w-32" />
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
                       {benchPlayers.map(pid => renderPlayerRow(pid, 'SUB', 'BENCH'))}
                       {benchPlayers.length === 0 && (
-                        <tr><td colSpan={10} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
+                        <tr><td colSpan={11} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
                       )}
                     </tbody>
                  </table>
@@ -1397,24 +1537,52 @@ export const SquadView: React.FC = () => {
                         <th className="w-6" />
                         <th className="w-14" />
                         <th className="w-52" />
-                        <th className="px-2 w-36" />
-                        <th className="px-3 py-1">
-                          <div className="flex gap-[6px]">
-                            {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
-                              <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-600">{lbl}</div>
-                            ))}
-                          </div>
-                        </th>
-                        <th className="w-20" />
-                        <th className="w-24" />
-                        <th className="w-16" />
-                        <th className="pr-6 w-32" />
+                        {activeTab === 'CONTRACT' ? (
+                          <>
+                            <th className="px-3 w-16 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Wiek</span>
+                            </th>
+                            <th className="px-4 w-44 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Wynagrodzenie</span>
+                            </th>
+                            <th className="px-4 w-32 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Kontrakt do</span>
+                            </th>
+                            <th className="px-4 w-32 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Pozostało</span>
+                            </th>
+                            <th className="px-4 w-36 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Rola w zespole</span>
+                            </th>
+                            <th className="px-4 w-36 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">Cena rynkowa</span>
+                            </th>
+                            <th className="pr-6 w-20 py-1 text-center">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">OVR</span>
+                            </th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-2 w-36" />
+                            <th className="px-3 py-1">
+                              <div className="flex gap-[6px]">
+                                {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
+                                  <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-600">{lbl}</div>
+                                ))}
+                              </div>
+                            </th>
+                            <th className="w-20" />
+                            <th className="w-24" />
+                            <th className="w-16" />
+                            <th className="pr-6 w-32" />
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
                       {reservePlayersSorted.map(pid => renderPlayerRow(pid, 'RES', 'RES'))}
                       {reservePlayersSorted.length === 0 && (
-                        <tr><td colSpan={10} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
+                        <tr><td colSpan={11} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
                       )}
                     </tbody>
                  </table>

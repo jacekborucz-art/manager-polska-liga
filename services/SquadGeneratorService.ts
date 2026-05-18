@@ -456,7 +456,11 @@ contractEndDate: new Date(new Date().getFullYear() + 1 + Math.floor(Math.random(
     // Przypisz finalną pensję każdemu graczowi proporcjonalnie do jego wagi (OVR + Wiek)
     const finalSquad = squadBase.map(p => ({
         ...p,
-        annualSalary: Math.floor((FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool),
+        annualSalary: FinanceService.normalizePolishLeagueAnnualSalary(
+          (FinanceService.calculateSalaryWeight(p.overallRating, p.age) / totalSquadWeight) * wagePool,
+          leagueTier,
+          clubRep
+        ),
 marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInfo?.country)
 
     })) as Player[];

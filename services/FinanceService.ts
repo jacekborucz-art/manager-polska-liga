@@ -859,6 +859,20 @@ export const FinanceService = {
     return totalBudget * 0.45;
   },
 
+  calculatePolishLeagueSalaryCeiling: (tier: number, reputation: number): number | null => {
+    if (tier !== 2) return null;
+
+    const reputationFactor = clamp((Math.max(1, Math.min(10, reputation)) - 4) / 6, 0, 1);
+    const ceiling = 120_000 + (240_000 * reputationFactor);
+    return Math.round(ceiling / 10_000) * 10_000;
+  },
+
+  normalizePolishLeagueAnnualSalary: (rawSalary: number, tier: number, reputation: number): number => {
+    const salary = Math.max(0, Math.floor(rawSalary));
+    const ceiling = FinanceService.calculatePolishLeagueSalaryCeiling(tier, reputation);
+    return ceiling ? Math.min(salary, ceiling) : salary;
+  },
+
   calculateTotalSalaries: (squad: Player[]): number => {
     return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
   },
@@ -1155,16 +1169,21 @@ export const FinanceService = {
     newBonus: number,
     newEndDate: string, 
     currentDate: Date,
-    clubReputation: number
+    clubReputation: number,
+    clubTier?: number
   ): { accepted: boolean, reason: string, demands: { salary: number, bonus: number } | null } => {
     const now = currentDate.getTime();
     const currentEnd = new Date(player.contractEndDate).getTime();
     const newEnd = new Date(newEndDate).getTime();
     
     // 1. Oczekiwania zawodnika (punkt odniesienia to obecna pensja)
-    const expectedSalary = player.annualSalary > 0 
+    const rawExpectedSalary = player.annualSalary > 0 
   ? player.annualSalary 
   : FinanceService.getFairMarketSalary(player.overallRating);
+    const salaryCeiling = clubTier
+      ? FinanceService.calculatePolishLeagueSalaryCeiling(clubTier, clubReputation)
+      : null;
+    const expectedSalary = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
     const expectedBonus = FinanceService.calculatePlayerBonusDemand(player, expectedSalary, clubReputation);
 
     // --- TUTAJ WSTAW LOGIKĘ: WARUNEK LOSOWY (1 SZANSA NA 10 PRZY MAX -15%) ---
@@ -1242,6 +1261,10 @@ export const FinanceService = {
     } else {
       demandSalary = expectedSalary;
       demandBonus = expectedBonus;
+    }
+
+    if (salaryCeiling) {
+      demandSalary = Math.min(demandSalary, salaryCeiling);
     }
 
     const demands = {

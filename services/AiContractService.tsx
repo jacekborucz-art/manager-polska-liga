@@ -4,6 +4,7 @@ import { TransferSellerLogicService } from './TransferSellerLogicService';
 import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
 import { FreeAgentNegotiationService } from './FreeAgentNegotiationService';
 import { PlayerCareerService } from './PlayerCareerService';
+import { PlayerContractMindflowService } from './PlayerContractMindflowService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -93,6 +94,13 @@ const _isVeteranStar = (player: Player): boolean =>
 
 const _getPreviousCareerClub = (player: Player) =>
   [...(player.history || [])].reverse().find(entry => entry.clubId !== 'FREE_AGENTS');
+
+const _getInterestedClubs = (player: Player, clubs: Club[]): Club[] => {
+  const clubMap = new Map(clubs.map(club => [club.id, club]));
+  return (player.interestedClubs || [])
+    .map(clubId => clubMap.get(clubId))
+    .filter((club): club is Club => !!club);
+};
 
 const _wasReleasedByBigClub = (player: Player, clubMap: Map<string, Club>): boolean => {
   const previousClub = _getPreviousCareerClub(player);
@@ -210,11 +218,16 @@ const _buildAiPreContractOffer = (
 ): { salary: number; bonus: number; years: number } => {
   const repDelta = buyerClub.reputation - sellerClub.reputation;
   const salaryMultiplier = repDelta >= 3 ? 1.24 : repDelta >= 1 ? 1.14 : repDelta === 0 ? 1.08 : 1.32;
-  const salary = Math.max(
+  const rawSalary = Math.max(
     FinanceLogic.getFairMarketSalary(player.overallRating),
     Math.round((player.annualSalary || FinanceLogic.getFairMarketSalary(player.overallRating)) * salaryMultiplier / 10_000) * 10_000
   );
-  const bonusBase = player.annualSalary || salary;
+  const salaryCeiling = FinanceLogic.calculatePolishLeagueSalaryCeiling(
+    FinanceLogic.getClubTier(buyerClub),
+    buyerClub.reputation
+  );
+  const salary = salaryCeiling ? Math.min(rawSalary, salaryCeiling) : rawSalary;
+  const bonusBase = salaryCeiling ? Math.min(player.annualSalary || salary, salary) : (player.annualSalary || salary);
   const bonusMultiplier = player.age < 24 ? 0.35 : player.age <= 30 ? 0.55 : player.age <= 34 ? 0.80 : 1.05;
   const bonus = Math.round(bonusBase * bonusMultiplier / 10_000) * 10_000;
   const years = player.age <= 27 ? 4 : player.age <= 31 ? 3 : player.age <= 34 ? 2 : 1;
@@ -504,24 +517,49 @@ export const AiContractService = {
         }
 
         // 2. Blokady: Czy zawodnik chce w ogóle rozmawiać?
+        const contractMindflow = PlayerContractMindflowService.evaluate({
+          player: p,
+          currentClub: club,
+          currentSquad: squad,
+          currentDate,
+          interestedClubs: _getInterestedClubs(p, updatedClubs),
+        });
+
+        if (
+          contractMindflow.mindset.state === 'READY_TO_LEAVE' ||
+          contractMindflow.mindset.state === 'PRECONTRACT_READY'
+        ) {
+          return { ...p, isOnTransferList: true };
+        }
+
         const isLocked = p.negotiationLockoutUntil && currentDate < new Date(p.negotiationLockoutUntil);
         if (isLocked || p.isNegotiationPermanentBlocked) return p;
 
-        // 3. Obliczanie oferty AI
-        // AI oferuje podwyżkę 10-25% zależnie od reputacji klubu
-        const salaryMultiplier = 1.10 + (club.reputation / 100);
-        const proposedSalary = Math.floor(p.annualSalary * salaryMultiplier);
+        // 3. Obliczanie oferty AI z jednego źródła oczekiwań zawodnika.
+        const expectations = contractMindflow.contractExpectations;
+        const salaryPressure =
+          contractMindflow.mindset.state === 'EXPECTING_BETTER_TERMS' ? 1.05 :
+          contractMindflow.mindset.state === 'LOSING_PATIENCE' ? 1.10 :
+          contractMindflow.mindset.state === 'TESTING_MARKET' ? 1.14 :
+          contractMindflow.currentClubSituation.totalStayComfort >= 82 ? 0.96 :
+          1.0;
+        const proposedSalary = Math.max(
+          expectations.minimumSalary,
+          Math.round((expectations.expectedSalary * salaryPressure) / 10_000) * 10_000
+        );
         
-        // Bonus za podpis - AI oferuje ok 50% tego co zawodnik chce, o ile klub ma kasę
-        const baseDemand = FinanceLogic.calculatePlayerBonusDemand(p, proposedSalary, club.reputation);
-        const proposedBonus = Math.floor(baseDemand * 0.75);
+        // Bonus za podpis oparty o widełki mindflow, bez drugiej losowej kalkulacji oczekiwań.
+        const proposedBonus = Math.max(
+          expectations.minimumBonus,
+          Math.round((expectations.expectedBonus * 0.88) / 10_000) * 10_000
+        );
 
         // Czy klub ma na to pieniądze w puli bonusowej?
         if (proposedBonus > currentClub.signingBonusPool) return p;
 
         // 4. Ewaluacja silnikiem gry
-        const newEndDate = new Date(currentDate.getFullYear() + 2, 5, 30).toISOString(); // Nowa umowa na +2 lata
-        const result = FinanceLogic.evaluateContractLogic(p, proposedSalary, proposedBonus, newEndDate, currentDate, club.reputation);
+        const newEndDate = new Date(currentDate.getFullYear() + expectations.preferredYears, 5, 30).toISOString();
+        const result = FinanceLogic.evaluateContractLogic(p, proposedSalary, proposedBonus, newEndDate, currentDate, club.reputation, FinanceLogic.getClubTier(club));
 
         if (result.accepted) {
           // SUKCES: Piłkarz zostaje
@@ -728,7 +766,7 @@ processAiRecruitment: (
         continue;
       }
 
-      const result = FinanceLogic.evaluateContractLogic(fa, proposedSalary, proposedBonus, newEndDate, currentDate, aiClub.reputation);
+      const result = FinanceLogic.evaluateContractLogic(fa, proposedSalary, proposedBonus, newEndDate, currentDate, aiClub.reputation, FinanceLogic.getClubTier(aiClub));
       const accepted = gulfVeteranStarOffer
         ? Math.random() < GULF_MEGA_OFFER_ACCEPTANCE_CHANCE
         : result.accepted;
@@ -1412,6 +1450,18 @@ processAiRecruitment: (
           const seedBase = `AI_PRECONTRACT_${todayKey}_${sellerClub.id}_${buyerClub.id}_${player.id}`;
           const isShortlisted = (player.interestedClubs || []).includes(buyerClub.id);
           const repDelta = buyerClub.reputation - sellerClub.reputation;
+          const contractMindflow = PlayerContractMindflowService.evaluate({
+            player,
+            currentClub: sellerClub,
+            currentSquad: sellerSquad,
+            currentDate,
+            interestedClubs: _getInterestedClubs(player, clubs),
+            targetClub: buyerClub,
+            targetSquad: buyerSquad,
+          });
+
+          if (!contractMindflow.externalOfferGate.willListen) continue;
+          if (!contractMindflow.externalOfferGate.canSignPreContract) continue;
 
           let chance = daysLeft <= 90 ? 0.06 : daysLeft <= 180 ? 0.04 : 0.018;
           if (isShortlisted) chance *= 2.4;
@@ -1421,6 +1471,7 @@ processAiRecruitment: (
           if (player.squadRole === 'KEY_PLAYER' || player.isUntouchable) chance *= 0.60;
           if (player.isNegotiationPermanentBlocked) chance *= 2.2;
           if (player.isOnTransferList) chance *= 1.35;
+          chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
 
           if (_seededRandom(`${seedBase}_ROLL`) >= Math.min(0.20, chance)) continue;
 

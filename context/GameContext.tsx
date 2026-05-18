@@ -110,6 +110,7 @@ import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
+import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
 import { SAVE_VERSION, SaveState } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
@@ -2061,7 +2062,7 @@ setMessages([welcomeMail, fanMail]);
       const decision = FinanceService.evaluateContractLogic(
         player, neg.salary, neg.bonus, 
         new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(), 
-        simDate, userClub.reputation
+        simDate, userClub.reputation, FinanceService.getClubTier(userClub)
       );
 
       const mail: MailMessage = {
@@ -2786,8 +2787,36 @@ setMessages([welcomeMail, fanMail]);
     processExpiredAcceptances(dateToProcess);
     processFriendlyRequests(dateToProcess);
 
+    let pendingBoardMonitorUpdate: {
+      action: 'REDUCE' | 'RESTORE' | 'RESERVE_SUPPORT' | 'NONE';
+      newBudget: number;
+      newTransferBudget: number;
+      newReserveBudget: number;
+      newState: 'NORMAL' | 'ALERT' | 'SURPLUS';
+      amountChanged: number;
+      dateKey: string;
+    } | null = null;
+
 // --- BOARD FINANCE MONITOR ---
     if (userTeamId && !isResigned) {
+      const currentUserClub = clubs.find(c => c.id === userTeamId);
+      if (currentUserClub) {
+        const monitorResult = BoardFinanceMonitorService.check(currentUserClub, dateToProcess);
+        if (
+          monitorResult.action !== 'NONE' ||
+          (currentUserClub.boardBudgetMonitorState ?? 'NORMAL') !== monitorResult.newState
+        ) {
+          pendingBoardMonitorUpdate = {
+            action: monitorResult.action,
+            newBudget: monitorResult.newBudget,
+            newTransferBudget: monitorResult.newTransferBudget,
+            newReserveBudget: monitorResult.newReserveBudget,
+            newState: monitorResult.newState,
+            amountChanged: monitorResult.amountChanged,
+            dateKey: dateToProcess.toISOString().split('T')[0],
+          };
+        }
+      }
       setClubs(prev => {
         const userClub = prev.find(c => c.id === userTeamId);
         if (!userClub) return prev;
@@ -5166,6 +5195,46 @@ setMessages([welcomeMail, fanMail]);
           c.id === userTeamId ? { ...c, nextSponsorCheckDate: pendingNoSponsorNextCheckDate! } : c
         );
       }
+
+      const boardMonitorUpdate = pendingBoardMonitorUpdate;
+      if (boardMonitorUpdate !== null) {
+        postReviewClubs = postReviewClubs.map(c => {
+          if (c.id !== userTeamId) return c;
+          if (boardMonitorUpdate.action === 'NONE') {
+            return {
+              ...c,
+              boardBudgetMonitorState: boardMonitorUpdate.newState,
+            };
+          }
+
+          const financeLogId = `BOARD_SHIFT_${boardMonitorUpdate.dateKey}_${boardMonitorUpdate.action}`;
+          const financeLog = {
+            id: financeLogId,
+            date: boardMonitorUpdate.dateKey,
+            amount: boardMonitorUpdate.action === 'RESTORE' ? -boardMonitorUpdate.amountChanged : boardMonitorUpdate.amountChanged,
+            type: boardMonitorUpdate.action === 'RESTORE' ? 'EXPENSE' as const : 'INCOME' as const,
+            description: boardMonitorUpdate.action === 'RESTORE'
+              ? 'Przesunięcie środków z rezerwy zarządu na budżet transferowy'
+              : boardMonitorUpdate.action === 'RESERVE_SUPPORT'
+                ? 'Awaryjne wsparcie salda z rezerwy zarządu'
+                : 'Awaryjne wsparcie salda z rezerwy zarządu i budżetu transferowego',
+            previousBalance: c.budget,
+          };
+
+          return {
+            ...c,
+            budget: boardMonitorUpdate.newBudget,
+            transferBudget: boardMonitorUpdate.newTransferBudget,
+            reserveBudget: boardMonitorUpdate.newReserveBudget,
+            boardBudgetMonitorState: boardMonitorUpdate.newState,
+            boardBudgetLastShiftDate: boardMonitorUpdate.dateKey,
+            boardBudgetLastShiftAction: boardMonitorUpdate.action,
+            financeHistory: boardMonitorUpdate.amountChanged > 0 && !(c.financeHistory || []).some(item => item.id === financeLogId)
+              ? [financeLog, ...(c.financeHistory || [])].slice(0, 50)
+              : c.financeHistory,
+          };
+        });
+      }
     }
 
 const finalResult: SimulationOutput = {
@@ -6032,7 +6101,14 @@ const finalResult: SimulationOutput = {
 
         // 3. Prekontrakty AI: ostatni rok umowy, bez zgody klubu sprzedającego.
         // Klub AI może dogadać się bezpośrednio z zawodnikiem, a transfer wykona się w dniu końca kontraktu.
-        let aiPreContractSigned = false;
+        const hasRecentAiPreContract = transferOffers.some(offer => {
+          if (!offer.id.startsWith('AI_PRECONTRACT_')) return false;
+          if (offer.status !== TransferOfferStatus.AGREED_PRECONTRACT) return false;
+          const createdAt = new Date(offer.createdAt);
+          const daysSince = Math.floor((nextDay.getTime() - createdAt.getTime()) / 86_400_000);
+          return daysSince >= 0 && daysSince < 21;
+        });
+        let aiPreContractSigned = hasRecentAiPreContract;
         aiClubs.forEach(aiClub => {
           if (aiPreContractSigned) return;
           const buyerSquad = players[aiClub.id] || [];
@@ -6061,6 +6137,22 @@ const finalResult: SimulationOutput = {
             const sportingFit = p.overallRating >= positionAverage + 1;
             if (!sportingFit && !isShortlisted && repDelta < 2) return;
 
+            const interestedClubsForMindflow = (p.interestedClubs || [])
+              .map(clubId => clubs.find(club => club.id === clubId))
+              .filter((club): club is Club => !!club);
+            const contractMindflow = PlayerContractMindflowService.evaluate({
+              player: p,
+              currentClub: userClub,
+              currentSquad: userSquad,
+              currentDate: nextDay,
+              interestedClubs: interestedClubsForMindflow,
+              targetClub: aiClub,
+              targetSquad: buyerSquad,
+            });
+
+            if (!contractMindflow.externalOfferGate.willListen) return;
+            if (!contractMindflow.externalOfferGate.canSignPreContract) return;
+
             let chance = contractDaysLeft <= 90 ? 0.055 : contractDaysLeft <= 180 ? 0.035 : 0.018;
             if (isShortlisted) chance *= 2.5;
             if (repDelta >= 3) chance *= 1.8;
@@ -6068,16 +6160,24 @@ const finalResult: SimulationOutput = {
             else if (repDelta < 0) chance *= 0.45;
             if (p.squadRole === 'KEY_PLAYER' || p.isUntouchable) chance *= 0.55;
             if (p.isNegotiationPermanentBlocked) chance *= 2.0;
+            chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
 
             if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(0.18, chance)) return;
 
             const negotiation = IncomingTransferService.simulatePlayerNegotiation(p, aiClub, userClub, seed + 101, nextDay);
             if (negotiation !== 'accepted') return;
 
-            const salary = Math.max(
+            const rawPreContractSalary = Math.max(
               FinanceService.getFairMarketSalary(p.overallRating),
               Math.round(p.annualSalary * (repDelta >= 2 ? 1.20 : repDelta >= 0 ? 1.12 : 1.35) / 10000) * 10000
             );
+            const preContractSalaryCeiling = FinanceService.calculatePolishLeagueSalaryCeiling(
+              FinanceService.getClubTier(aiClub),
+              aiClub.reputation
+            );
+            const salary = preContractSalaryCeiling
+              ? Math.min(rawPreContractSalary, preContractSalaryCeiling)
+              : rawPreContractSalary;
             const bonus = Math.round(p.annualSalary * (p.age < 24 ? 0.35 : p.age <= 30 ? 0.55 : 0.75) / 10000) * 10000;
             const years = p.age <= 27 ? 4 : p.age <= 31 ? 3 : p.age <= 34 ? 2 : 1;
             if (aiClub.transferBudget < salary * years + bonus) return;

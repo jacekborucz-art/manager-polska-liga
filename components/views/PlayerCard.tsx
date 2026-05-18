@@ -548,7 +548,7 @@ export const PlayerCard: React.FC = () => {
                 <div>
                   <span className="block text-[8px] font-black text-white uppercase tracking-widest mb-1 drop-shadow">Roczne Wynagrodzenie</span>
                   <span className="text-sm font-black text-emerald-400 font-mono italic drop-shadow">
-                    {player.annualSalary ? (() => { const s = player.annualSalary; const step = s >= 1_000_000 ? 100_000 : s >= 100_000 ? 10_000 : 5_000; return (Math.round(s / step) * step).toLocaleString('pl-PL'); })() : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span>
+                    {player.annualSalary ? player.annualSalary.toLocaleString('pl-PL') : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span>
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20 shadow-inner">💰</div>
