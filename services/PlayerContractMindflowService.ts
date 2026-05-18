@@ -116,6 +116,15 @@ const roundMoney = (value: number): number => {
   return Math.max(50_000, Math.round(value / step) * step);
 };
 
+const seededUnit = (seed: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+};
+
 const getContractDaysLeft = (player: Player, currentDate: Date): number => {
   if (!player.contractEndDate) return 9999;
   return Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
@@ -261,6 +270,91 @@ const getClubReputationFit = (player: Player, club: Club): number => {
   return 28;
 };
 
+const getSeasonPerformanceRaiseBonus = (player: Player): number => {
+  const matches = getCombinedMatches(player);
+  if (matches < 20) return 0;
+
+  let bonus = 0;
+  const averageRating = getAverageRating(player);
+  if (averageRating !== null) {
+    if (averageRating >= 7.35) bonus += 0.24;
+    else if (averageRating >= 7.10) bonus += 0.16;
+    else if (averageRating >= 6.90) bonus += 0.08;
+  }
+
+  const goalAssistRate = (getCombinedGoals(player) + getCombinedAssists(player)) / Math.max(1, matches);
+  if (player.position === PlayerPosition.FWD) {
+    if (goalAssistRate >= 0.75) bonus += 0.24;
+    else if (goalAssistRate >= 0.50) bonus += 0.15;
+    else if (goalAssistRate >= 0.32) bonus += 0.07;
+  } else if (player.position === PlayerPosition.MID) {
+    if (goalAssistRate >= 0.45) bonus += 0.20;
+    else if (goalAssistRate >= 0.30) bonus += 0.12;
+    else if (goalAssistRate >= 0.18) bonus += 0.06;
+  } else if (player.position === PlayerPosition.DEF || player.position === PlayerPosition.GK) {
+    if (averageRating !== null && averageRating >= 7.15) bonus += 0.14;
+    else if (averageRating !== null && averageRating >= 6.95) bonus += 0.07;
+  }
+
+  return clamp(bonus, 0, 0.38);
+};
+
+const getRenewalRaiseLimit = (
+  player: Player,
+  currentClub: Club,
+  profile: PlayerContractMindflow['profile'],
+  currentClubSituation: PlayerContractMindflow['currentClubSituation']
+): number | null => {
+  if (!player.annualSalary || player.annualSalary <= 0) return null;
+
+  let multiplier = 1.30;
+
+  if (player.overallRating >= 78) multiplier += 0.38;
+  else if (player.overallRating >= 74) multiplier += 0.28;
+  else if (player.overallRating >= 70) multiplier += 0.18;
+  else if (player.overallRating >= 66) multiplier += 0.10;
+
+  if (profile.qualityLevel === 'STAR_LEVEL') multiplier += 0.24;
+  else if (profile.qualityLevel === 'STARTER_LEVEL') multiplier += 0.12;
+
+  if (player.isUntouchable || player.squadRole === 'KEY_PLAYER') multiplier += 0.16;
+  else if (player.squadRole === 'STARTER') multiplier += 0.07;
+
+  if (profile.potentialStatus === 'ELITE_UPSIDE') multiplier += 0.16;
+  else if (profile.potentialStatus === 'HIGH_UPSIDE') multiplier += 0.07;
+
+  if (currentClubSituation.clubReputationFit < 48) multiplier += 0.12;
+  else if (currentClub.reputation >= 8) multiplier += 0.05;
+
+  if (currentClubSituation.financialRespectFit < 45) multiplier += 0.14;
+  if (currentClubSituation.totalStayComfort < 50) multiplier += 0.08;
+  if (profile.ageGroup === 'PRIME') multiplier += 0.06;
+  if (player.moralePersonality === 'AMBITIOUS' || player.moralePersonality === 'EGOIST') multiplier += 0.07;
+  const performanceRaiseBonus = getSeasonPerformanceRaiseBonus(player);
+  multiplier += performanceRaiseBonus;
+  multiplier = clamp(multiplier, 1.30, 2.50);
+
+  const rareRaiseCandidate =
+    profile.qualityLevel === 'STAR_LEVEL' ||
+    profile.potentialStatus === 'ELITE_UPSIDE' ||
+    player.isUntouchable ||
+    player.squadRole === 'KEY_PLAYER' ||
+    performanceRaiseBonus >= 0.24 ||
+    (profile.qualityLevel === 'STARTER_LEVEL' && currentClubSituation.financialRespectFit < 40);
+  const rareChance =
+    profile.qualityLevel === 'STAR_LEVEL' || profile.potentialStatus === 'ELITE_UPSIDE' ? 0.12 :
+    rareRaiseCandidate ? 0.07 :
+    0.02;
+  const rareRoll = seededUnit(`${player.id}_${player.contractEndDate}_renewal_raise`);
+
+  if (rareRoll < rareChance) {
+    const rareStrength = 0.35 + (1 - rareRoll / rareChance) * 0.55;
+    multiplier += rareRaiseCandidate ? rareStrength : rareStrength * 0.55;
+  }
+
+  return roundMoney(player.annualSalary * clamp(multiplier, 1.30, 3.05));
+};
+
 const buildExpectations = (
   player: Player,
   currentClub: Club,
@@ -285,10 +379,13 @@ const buildExpectations = (
     currentClub.reputation
   );
   const rawExpectedSalary = roundMoney(Math.max(fairSalary, currentSalary) * salaryMultiplier);
-  const expectedSalary = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
+  const renewalRaiseLimit = getRenewalRaiseLimit(player, currentClub, profile, currentClubSituation);
+  const cappedExpectedSalary = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
+  const expectedSalary = renewalRaiseLimit ? Math.min(cappedExpectedSalary, renewalRaiseLimit) : cappedExpectedSalary;
   const minimumSalary = roundMoney(expectedSalary * (currentClubSituation.totalStayComfort >= 78 ? 0.88 : 0.95));
   const rawPremiumSalary = roundMoney(expectedSalary * (currentClubSituation.totalStayComfort < 55 ? 1.28 : 1.18));
-  const premiumSalary = salaryCeiling ? Math.min(rawPremiumSalary, salaryCeiling) : rawPremiumSalary;
+  const cappedPremiumSalary = salaryCeiling ? Math.min(rawPremiumSalary, salaryCeiling) : rawPremiumSalary;
+  const premiumSalary = renewalRaiseLimit ? Math.min(cappedPremiumSalary, renewalRaiseLimit) : cappedPremiumSalary;
 
   const bonusMultiplier =
     profile.ageGroup === 'VETERAN' ? 0.92 :
