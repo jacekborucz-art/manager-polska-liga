@@ -31,17 +31,3 @@ body {
 *::-webkit-scrollbar {
   display: none;
 }
-
-/* Mobile view scaling */
-body.mobile-view {
-  align-items: flex-start;
-  justify-content: flex-start;
-  overflow: hidden;
-}
-body.mobile-view #root {
-  width: 1920px;
-  height: 1080px;
-  transform-origin: top left;
-  transform: scale(calc(100vw / 1920));
-  overflow: hidden;
-}

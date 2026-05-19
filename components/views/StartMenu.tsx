@@ -20,12 +20,6 @@ export const StartMenu: React.FC = () => {
     document.addEventListener('fullscreenchange', handleChange);
     return () => document.removeEventListener('fullscreenchange', handleChange);
   }, []);
-  const [isMobileView, setIsMobileView] = useState(false);
-  const toggleMobileView = () => {
-    const next = !isMobileView;
-    setIsMobileView(next);
-    document.body.classList.toggle('mobile-view', next);
-  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -184,18 +178,6 @@ export const StartMenu: React.FC = () => {
           <div className="relative z-10 flex items-center justify-center">
             <span className="text-[13px] font-black text-white/50 group-hover:text-white uppercase tracking-widest transition-colors">
               {isFullscreen ? 'WYŁĄCZ PEŁNY EKRAN' : 'WŁĄCZ PEŁNY EKRAN'}
-            </span>
-          </div>
-        </button>
-
-        <button
-          onClick={toggleMobileView}
-          className={`group relative mt-3 w-full max-w-sm h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${isMobileView ? 'bg-violet-600/20 border-violet-500/30 hover:bg-violet-600 hover:border-violet-400' : 'bg-slate-600/20 border-slate-500/20 hover:bg-slate-600 hover:border-slate-400'}`}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative z-10 flex items-center justify-center">
-            <span className="text-[13px] font-black text-white/50 group-hover:text-white uppercase tracking-widest transition-colors">
-              {isMobileView ? 'WYŁĄCZ MOBILE VERSION' : 'MOBILE VERSION'}
             </span>
           </div>
         </button>
