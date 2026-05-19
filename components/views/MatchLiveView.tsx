@@ -8,7 +8,8 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
-  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack
+  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack,
+  Referee
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
@@ -122,6 +123,23 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { pri
   </div>
 );
 
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const getRefereeDecisionQuality = (referee: Referee) =>
+  (referee.consistency * 0.6) + ((referee.experience ?? 50) * 0.4);
+
+const getPenaltyCallChance = (referee: Referee) => {
+  const decisionQuality = getRefereeDecisionQuality(referee);
+  return clampNumber(
+    0.78
+      + ((referee.strictness - 50) * 0.002)
+      - ((referee.advantageTendency - 50) * 0.0012)
+      + ((decisionQuality - 50) * 0.0008),
+    0.62,
+    0.92
+  );
+};
+
 export const MatchLiveView = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
@@ -149,6 +167,11 @@ export const MatchLiveView = () => {
     minute: number,
     phase: 'CHECKING' | 'VERDICT',
     verdict?: 'GOAL' | 'NO_GOAL'
+  } | null>(null);
+  const [activePenaltyNoCall, setActivePenaltyNoCall] = useState<{
+    side: 'HOME' | 'AWAY',
+    playerName: string,
+    minute: number
   } | null>(null);
   const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
@@ -541,6 +564,15 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
   }, [activePenalty?.phase, matchState, ctx, setMatchState]);
 
   useEffect(() => {
+    if (!activePenaltyNoCall) return;
+    const t = setTimeout(() => {
+      setActivePenaltyNoCall(null);
+      setMatchState(prev => prev ? { ...prev, isPausedForEvent: false } : null);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [activePenaltyNoCall, setMatchState]);
+
+  useEffect(() => {
     if (!activeVAR) return;
     if (activeVAR.phase === 'CHECKING') {
       const timer = setTimeout(() => {
@@ -667,7 +699,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
 
   useEffect(() => {
     if (!matchState || matchState.isPaused || matchState.isPausedForEvent ||
-        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activeVAR) return;
+        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activeVAR || activePenaltyNoCall) return;
 
     const tickInterval = matchState.speed === 5 ? 120 
   : matchState.speed === 3.5 ? 200 
@@ -1573,16 +1605,32 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
               if (!kicker || !keeper || !kicker.attributes || !keeper.attributes) return prev;
 
-              setActivePenalty({ side: attackingSide, kicker, keeper, phase: 'AWARDED' });
-              nextIsPausedForEvent = true;
-              immediateEventType = MatchEventType.PENALTY_AWARDED;
-              
-              const penPool = MATCH_COMMENTARY_DB[MatchEventType.PENALTY_AWARDED] || ["Rzut karny!"];
-              const penText = penPool[Math.floor(seededRng(currentSeed, nextMinute, 1900) * penPool.length)].replace("{Nazwisko}", kicker.lastName);
-              newLog = { id: `PEN_AWARD_${nextMinute}`, minute: nextMinute, text: `👉 ${penText}`, type: MatchEventType.PENALTY_AWARDED, teamSide: attackingSide, playerName: kicker.lastName };
+              const penaltyCallChance = getPenaltyCallChance(env.ref);
+              const refereeGivesPenalty = seededRng(currentSeed, nextMinute, 1710) < penaltyCallChance;
 
-              const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
-              if (injury) processInjury(injury);
+              nextIsPausedForEvent = true;
+              if (refereeGivesPenalty) {
+                setActivePenalty({ side: attackingSide, kicker, keeper, phase: 'AWARDED' });
+                immediateEventType = MatchEventType.PENALTY_AWARDED;
+                
+                const penPool = MATCH_COMMENTARY_DB[MatchEventType.PENALTY_AWARDED] || ["Rzut karny!"];
+                const penText = penPool[Math.floor(seededRng(currentSeed, nextMinute, 1900) * penPool.length)].replace("{Nazwisko}", kicker.lastName);
+                newLog = { id: `PEN_AWARD_${nextMinute}`, minute: nextMinute, text: `👉 ${penText}`, type: MatchEventType.PENALTY_AWARDED, teamSide: attackingSide, playerName: kicker.lastName };
+
+                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
+                if (injury) processInjury(injury);
+              } else {
+                immediateEventType = MatchEventType.FOUL;
+                setActivePenaltyNoCall({ side: attackingSide, playerName: kicker.lastName, minute: nextMinute });
+                newLog = {
+                  id: `PEN_NO_CALL_${nextMinute}`,
+                  minute: nextMinute,
+                  text: `Kontakt w polu karnym! ${kicker.lastName} pada na murawę, ale sędzia każe grać dalej.`,
+                  type: MatchEventType.GENERIC,
+                  teamSide: attackingSide,
+                  playerName: kicker.lastName
+                };
+              }
            } else {
               const card = DisciplineService.evaluateFoul(env.ref, player, nextPlayerYellowCards[pId] || 0, () => seededRng(currentSeed, nextMinute, 1600));
 
@@ -2199,7 +2247,7 @@ return {
       });
     }, tickInterval);
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activeVAR, hasMandatorySub, setMatchState]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activeVAR, activePenaltyNoCall, hasMandatorySub, setMatchState]);
 
  const handleFinishMatch = () => {
     if (!matchState || !ctx) return;
