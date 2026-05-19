@@ -103,12 +103,85 @@ function asDate(value: unknown, fallback: Date = DEFAULT_START_DATE): Date {
   return fallback;
 }
 
+function asDateString(value: unknown, fallback = ''): string {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === 'string') return value;
+  return fallback;
+}
+
+function asDateOnlyString(value: unknown, fallback = ''): string {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString().split('T')[0];
+  if (typeof value === 'string') return value.includes('T') ? value.split('T')[0] : value;
+  return fallback;
+}
+
 function reviveDate(_key: string, value: unknown): unknown {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
     const d = new Date(value);
     if (!isNaN(d.getTime())) return d;
   }
   return value;
+}
+
+function normalizeFixture(fixture: any): any {
+  if (!fixture || typeof fixture !== 'object') return fixture;
+  return {
+    ...fixture,
+    date: asDate(fixture.date),
+  };
+}
+
+function normalizeDraw(draw: any): any {
+  if (!draw || typeof draw !== 'object') return draw ?? null;
+  return {
+    ...draw,
+    date: asDate(draw.date),
+    pairs: Array.isArray(draw.pairs) ? draw.pairs.map(normalizeFixture) : draw.pairs,
+  };
+}
+
+function normalizeSeasonTemplate(template: any): any {
+  if (!template || typeof template !== 'object') return null;
+  return {
+    ...template,
+    careerStartDate: asDate(template.careerStartDate),
+    slots: asArray(template.slots).map((slot: any) => ({
+      ...slot,
+      start: asDate(slot.start),
+      end: asDate(slot.end),
+    })),
+  };
+}
+
+function normalizeLeagueSchedules(schedules: unknown): Record<any, any> {
+  return Object.fromEntries(
+    Object.entries(asRecord<any>(schedules)).map(([key, schedule]) => [
+      key,
+      {
+        ...schedule,
+        matchdays: asArray(schedule?.matchdays).map((matchday: any) => ({
+          ...matchday,
+          start: asDate(matchday.start),
+          end: asDate(matchday.end),
+          fixtures: asArray(matchday.fixtures).map(normalizeFixture),
+        })),
+      },
+    ])
+  );
+}
+
+function normalizeMessages(messages: unknown): any[] {
+  return asArray(messages).map((message: any) => ({
+    ...message,
+    date: asDate(message?.date),
+  }));
+}
+
+function normalizeMatchHistory(matchHistory: unknown): any[] {
+  return asArray(matchHistory).map((match: any) => ({
+    ...match,
+    date: asDateString(match?.date),
+  }));
 }
 
 function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHistory: any[]): Record<string, any[]> {
@@ -162,6 +235,7 @@ function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHisto
 }
 
 function normalizeSaveState(data: SaveState): SaveState {
+  const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
   const normalizedClubs = (data.clubs || []).map((club: any) => ({
     ...club,
     rosterIds: asArray<string>(club.rosterIds),
@@ -199,13 +273,13 @@ function normalizeSaveState(data: SaveState): SaveState {
   );
   const normalizedPlayers = reconcileCupStatsFromHistory(
     normalizedPlayersBase,
-    data.matchHistory || []
+    normalizedMatchHistory
   );
 
   return {
     ...data,
     version: SAVE_VERSION,
-    savedAt: data.savedAt || new Date().toISOString(),
+    savedAt: asDateString(data.savedAt, new Date().toISOString()),
     currentDate: asDate(data.currentDate),
     sessionSeed: Number.isFinite(data.sessionSeed) ? data.sessionSeed : Date.now(),
     clubs: normalizedClubs,
@@ -216,19 +290,19 @@ function normalizeSaveState(data: SaveState): SaveState {
     academy: data.academy ?? null,
     scoutPool: asArray(data.scoutPool),
     scoutMarket: asArray(data.scoutMarket),
-    scoutMarketRefreshDate: data.scoutMarketRefreshDate ?? '',
+    scoutMarketRefreshDate: asDateOnlyString(data.scoutMarketRefreshDate),
     scoutMarketManualRefreshCount: data.scoutMarketManualRefreshCount ?? 0,
-    scoutMarketPeriodStart: data.scoutMarketPeriodStart ?? '',
+    scoutMarketPeriodStart: asDateOnlyString(data.scoutMarketPeriodStart),
     lineups: asRecord(data.lineups),
-    seasonTemplate: data.seasonTemplate ?? null,
-    leagueSchedules: asRecord(data.leagueSchedules),
+    seasonTemplate: normalizeSeasonTemplate(data.seasonTemplate),
+    leagueSchedules: normalizeLeagueSchedules(data.leagueSchedules),
     lastRecoveryDate: asDate(data.lastRecoveryDate),
     coaches: asRecord(data.coaches),
     staffMembers: asRecord(data.staffMembers),
     roundResults: asRecord(data.roundResults),
     managerProfile: data.managerProfile ?? null,
     seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
-    messages: data.messages || [],
+    messages: normalizeMessages(data.messages),
     activeTrainingId: data.activeTrainingId ?? 'T_TACTICAL_PERIOD',
     activeIntensity: data.activeIntensity ?? 'NORMAL',
     trainingProgressHistory: asArray(data.trainingProgressHistory),
@@ -245,8 +319,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     wcqPlayoffState: data.wcqPlayoffState ?? null,
     wcState: data.wcState ?? null,
     cupParticipants: asArray(data.cupParticipants),
-    activeCupDraw: data.activeCupDraw ?? null,
-    activeGroupDraw: data.activeGroupDraw ?? null,
+    activeCupDraw: normalizeDraw(data.activeCupDraw),
+    activeGroupDraw: normalizeDraw(data.activeGroupDraw),
     activePlayoffDraw: data.activePlayoffDraw ?? null,
     relegationPlayoffFirstLegResults: data.relegationPlayoffFirstLegResults ?? null,
     relegationPlayoffFinalResult: data.relegationPlayoffFinalResult ?? null,
@@ -254,19 +328,19 @@ function normalizeSaveState(data: SaveState): SaveState {
     promotionPlayoffFinalResults: data.promotionPlayoffFinalResults ?? null,
     activePlayoffMatch: data.activePlayoffMatch ?? null,
     clGroups: data.clGroups ?? null,
-    activeELGroupDraw: data.activeELGroupDraw ?? null,
+    activeELGroupDraw: normalizeDraw(data.activeELGroupDraw),
     elGroups: data.elGroups ?? null,
-    activeConfGroupDraw: data.activeConfGroupDraw ?? null,
+    activeConfGroupDraw: normalizeDraw(data.activeConfGroupDraw),
     confGroups: data.confGroups ?? null,
     elHistoryInitialRound: data.elHistoryInitialRound ?? null,
     confHistoryInitialRound: data.confHistoryInitialRound ?? null,
     processedDrawIds: asArray(data.processedDrawIds),
-    globalFixtures: asArray(data.globalFixtures),
+    globalFixtures: asArray(data.globalFixtures).map(normalizeFixture),
     isResigned: data.isResigned ?? false,
     reserveFixtures: asArray(data.reserveFixtures),
     reserveMatchResults: asArray(data.reserveMatchResults),
     supercupWinners: asArray(data.supercupWinners),
-    matchHistory: asArray(data.matchHistory),
+    matchHistory: normalizedMatchHistory,
     championshipHistory: asArray(data.championshipHistory),
     confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA'],
     lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,

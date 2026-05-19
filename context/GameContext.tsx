@@ -1554,6 +1554,8 @@ if (userTeamId) {
     scoutPool,
     scoutMarket,
     scoutMarketRefreshDate,
+    scoutMarketManualRefreshCount,
+    scoutMarketPeriodStart,
     lineups,
     userTeamId,
     seasonTemplate,
