@@ -1,4 +1,4 @@
-﻿import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
+import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
@@ -26,6 +26,8 @@ interface CLMatchResult {
   injuryPenaltyMap: Record<string, number>;
   ratings: Record<string, number>;
 }
+
+type SimulatedExit = { min: number; outId: string };
 
 // ============================================================
 //  RNG â€” deterministyczny hash (sin-based jak LeagueBackgroundMatchEngine)
@@ -70,18 +72,24 @@ const getLineStrength = (players: Player[], lineupIds: (string | null)[]) => {
 const getWeightedLineStrength = (
   players: Player[],
   lineup: Lineup,
-  allSubs: { min: number; outId: string; inId: string }[]
+  allSubs: { min: number; outId: string; inId: string }[],
+  exits: SimulatedExit[] = []
 ): { att: number; def: number; gk: number } => {
   const TOTAL = 90;
   const minutesPlayed: Record<string, number> = {};
   const currentXI = lineup.startingXI.map(id => ({ id: id ?? null, entryMin: 0 }));
-  const sortedSubs = [...allSubs].sort((a, b) => a.min - b.min);
-  for (const sub of sortedSubs) {
-    const outIdx = currentXI.findIndex(p => p.id === sub.outId);
+  const timeline = [
+    ...allSubs.map(sub => ({ type: 'sub' as const, min: sub.min, outId: sub.outId, inId: sub.inId })),
+    ...exits.map(exit => ({ type: 'exit' as const, min: exit.min, outId: exit.outId })),
+  ].sort((a, b) => a.min - b.min || (a.type === 'exit' ? -1 : 1));
+  for (const event of timeline) {
+    const outIdx = currentXI.findIndex(p => p.id === event.outId);
     if (outIdx === -1) continue;
     const leaving = currentXI[outIdx];
-    if (leaving.id) minutesPlayed[leaving.id] = (minutesPlayed[leaving.id] ?? 0) + (sub.min - leaving.entryMin);
-    currentXI[outIdx] = { id: sub.inId, entryMin: sub.min };
+    if (leaving.id) minutesPlayed[leaving.id] = (minutesPlayed[leaving.id] ?? 0) + (event.min - leaving.entryMin);
+    currentXI[outIdx] = event.type === 'sub'
+      ? { id: event.inId, entryMin: event.min }
+      : { id: null, entryMin: event.min };
   }
   for (const slot of currentXI) {
     if (slot.id) minutesPlayed[slot.id] = (minutesPlayed[slot.id] ?? 0) + (TOTAL - slot.entryMin);
@@ -161,12 +169,17 @@ const simulateSubs = (
 const getActiveLineupAt = (
   min: number,
   originalXI: (string | null)[],
-  subs: { min: number; outId: string; inId: string }[]
+  subs: { min: number; outId: string; inId: string }[],
+  exits: SimulatedExit[] = []
 ): string[] => {
   const current = [...originalXI];
-  subs.filter(s => s.min <= min).forEach(s => {
-    const idx = current.indexOf(s.outId);
-    if (idx !== -1) current[idx] = s.inId;
+  const timeline = [
+    ...subs.map(sub => ({ type: 'sub' as const, min: sub.min, outId: sub.outId, inId: sub.inId })),
+    ...exits.map(exit => ({ type: 'exit' as const, min: exit.min, outId: exit.outId })),
+  ].filter(event => event.min <= min).sort((a, b) => a.min - b.min || (a.type === 'exit' ? -1 : 1));
+  timeline.forEach(event => {
+    const idx = current.indexOf(event.outId);
+    if (idx !== -1) current[idx] = event.type === 'sub' ? event.inId : null;
   });
   return current.filter((id): id is string => id !== null);
 };
@@ -301,6 +314,45 @@ const simulateCardsAndInjuries = (
   return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap };
 };
 
+const getRedCardExits = (
+  cards: { playerId: string; minute: number; type: 'YELLOW' | 'RED' | 'SECOND_YELLOW' }[]
+): SimulatedExit[] => {
+  const exitByPlayer = new Map<string, number>();
+
+  cards.forEach(card => {
+    if (card.type !== 'RED' && card.type !== 'SECOND_YELLOW') return;
+    const currentMinute = exitByPlayer.get(card.playerId);
+    if (currentMinute === undefined || card.minute < currentMinute) {
+      exitByPlayer.set(card.playerId, card.minute);
+    }
+  });
+
+  return Array.from(exitByPlayer.entries()).map(([outId, min]) => ({ outId, min }));
+};
+
+const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { attackMult: number; defenseLeakMult: number; winProbPenalty: number } => {
+  const redEquivalent = redExits.reduce((sum, exit) => {
+    const remaining = Math.max(0, maxMinute - Math.max(1, Math.min(maxMinute, exit.min)));
+    return sum + remaining / maxMinute;
+  }, 0);
+
+  return {
+    attackMult: Math.max(0.35, 1 - redEquivalent * 0.48),
+    defenseLeakMult: 1 + redEquivalent * 0.42,
+    winProbPenalty: redEquivalent * 0.18,
+  };
+};
+
+const adjustExtraTimeWinProbability = (
+  homeWinProb: number,
+  homeRedExits: SimulatedExit[],
+  awayRedExits: SimulatedExit[]
+): number => {
+  const homeImpact = getShortHandedImpact(homeRedExits);
+  const awayImpact = getShortHandedImpact(awayRedExits);
+  return Math.max(0.12, Math.min(0.88, homeWinProb - homeImpact.winProbPenalty + awayImpact.winProbPenalty));
+};
+
 // ============================================================
 //  DOGRYWKA + KARNE â€” poprawiona wersja
 // ============================================================
@@ -413,26 +465,19 @@ const simulateCLMatchFull = (
   const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
 
   // â”€â”€ Pre-roll czerwonych kartek (z sÄ™dziÄ…) â†’ korekta XG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const directRedProb = 0.0033 * (referee.strictness / 50) * refExpFactor;
-  const yellowProb    = 0.087  * (referee.strictness / 50) * refExpFactor;
-  let homeRedPre = 0;
-  let awayRedPre = 0;
-  homeLineup.startingXI.forEach((_, idx) => {
-    if (rng(10000 + idx + 1500) < directRedProb) homeRedPre++;
-    else if (rng(10000 + idx + 1000) < yellowProb && rng(10000 + idx + 1200) < 0.05) homeRedPre++;
-  });
-  awayLineup.startingXI.forEach((_, idx) => {
-    if (rng(20000 + idx + 1500) < directRedProb) awayRedPre++;
-    else if (rng(20000 + idx + 1000) < yellowProb && rng(20000 + idx + 1200) < 0.05) awayRedPre++;
-  });
-
   // ── Zmiany (przed obliczeniem xG) ─────────────────────────────────
   const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5000, rng);
   const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6000, rng);
+  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
+  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false, date);
+  const homeRedExits = getRedCardExits(homeCardData.cards);
+  const awayRedExits = getRedCardExits(awayCardData.cards);
+  const homeShortHanded = getShortHandedImpact(homeRedExits);
+  const awayShortHanded = getShortHandedImpact(awayRedExits);
 
   // ── Siła zawodników (ważona czasem gry) ──────────────────────────────
-  const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeSubData.matchSubs);
-  const aStr = getWeightedLineStrength(awayPlayersAll, awayLineup, awaySubData.matchSubs);
+  const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeSubData.matchSubs, homeRedExits);
+  const aStr = getWeightedLineStrength(awayPlayersAll, awayLineup, awaySubData.matchSubs, awayRedExits);
 
   // â”€â”€ XG z bonusami trenerÃ³w, taktyki i siÅ‚y zawodnikÃ³w â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const repDiff = homeClub.reputation - awayClub.reputation;
@@ -453,8 +498,8 @@ const simulateCLMatchFull = (
   if (xgAway > xgHome + 1.2) xgAway += 0.5;
 
   // Aplikacja modyfikatorÃ³w taktyki, trenerÃ³w, czerwonych kartek, pogody
-  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * (1 - homeRedPre * 0.25) * (1 + awayRedPre * 0.20) * weatherMod);
-  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * (1 - awayRedPre * 0.25) * (1 + homeRedPre * 0.20) * weatherMod);
+  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod);
+  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod);
 
   // â”€â”€ Generowanie goli 90 min (Poisson z nasyceniem) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
@@ -470,8 +515,10 @@ const simulateCLMatchFull = (
     const isScored = rng(rollOffset + 1) < 0.78;
     const teamPlayers = side === 'H' ? homePlayersAll : awayPlayersAll;
     const lineup     = side === 'H' ? homeLineup     : awayLineup;
+    const subs       = side === 'H' ? homeSubData.matchSubs : awaySubData.matchSubs;
+    const exits      = side === 'H' ? homeRedExits : awayRedExits;
     const penMin     = Math.floor(5 + rng(rollOffset + 2) * 85);
-    const activeXI   = getActiveLineupAt(penMin, lineup.startingXI, []);
+    const activeXI   = getActiveLineupAt(penMin, lineup.startingXI, subs, exits);
     const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
     if (!kicker) return;
     if (isScored) {
@@ -481,10 +528,6 @@ const simulateCLMatchFull = (
   };
   tryPenalty('H', 9100);
   tryPenalty('A', 9200);
-
-  // â”€â”€ Kartki i kontuzje z sÄ™dziÄ… (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, 10000, rng, referee, true, date);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, 20000, rng, referee, false, date);
 
   // â”€â”€ ZmÄ™czenie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fatigueMap: Record<string, number> = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
@@ -521,6 +564,7 @@ const simulateCLMatchFull = (
     teamPlayers: Player[],
     lineup: Lineup,
     subs: { min: number; outId: string; inId: string }[],
+    exits: SimulatedExit[],
     baseOffset: number
   ): { entries: typeof inMatchGoals; adjustedScore: number } => {
     const entries: typeof inMatchGoals = [];
@@ -530,7 +574,7 @@ const simulateCLMatchFull = (
       let minute = Math.floor(1 + rng(baseOffset + i) * 94);
       while (usedMinutes.has(minute)) { minute = minute >= 96 ? 1 : minute + 1; }
       usedMinutes.add(minute);
-      const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs);
+      const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs, exits);
       const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
       const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;
       const isVarDisallowed = rng(baseOffset + i + 502) < 0.04;
@@ -548,8 +592,8 @@ const simulateCLMatchFull = (
     return { entries, adjustedScore };
   };
 
-  const homeGoalData = attributeWithVAR(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeSubData.matchSubs, 400);
-  const awayGoalData = attributeWithVAR(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awaySubData.matchSubs, 450);
+  const homeGoalData = attributeWithVAR(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeSubData.matchSubs, homeRedExits, 400);
+  const awayGoalData = attributeWithVAR(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awaySubData.matchSubs, awayRedExits, 450);
 
   // Wynik po VAR
   let finalHomeScore90 = homeGoalData.adjustedScore + inMatchGoals.filter(g => g.teamId === homeClub.id).length;
@@ -574,7 +618,11 @@ const simulateCLMatchFull = (
   let penaltyAway: number | undefined;
   let wentToExtraTime = false;
 
-  const homeWinProb = homeClub.reputation / (homeClub.reputation + awayClub.reputation);
+  const homeWinProb = adjustExtraTimeWinProbability(
+    homeClub.reputation / (homeClub.reputation + awayClub.reputation),
+    homeRedExits,
+    awayRedExits
+  );
 
   if (leg1Diff !== undefined && finalHomeScore90 - finalAwayScore90 === leg1Diff) {
     const etResult = simulateExtraTimeAndPenalties(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1000, leg1Diff);
@@ -603,7 +651,7 @@ const simulateCLMatchFull = (
       let minute = Math.floor(91 + rng(2000 + i) * 30);
       while (usedETMin.has(minute)) { minute = minute >= 120 ? 91 : minute + 1; }
       usedETMin.add(minute);
-      const activeXI = getActiveLineupAt(minute, homeLineup.startingXI, homeSubData.matchSubs);
+      const activeXI = getActiveLineupAt(minute, homeLineup.startingXI, homeSubData.matchSubs, homeRedExits);
       const scorer = GoalAttributionService.pickScorer(homePlayersAll, activeXI, false, () => rng(2000 + i + 500));
       etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
     }
@@ -611,7 +659,7 @@ const simulateCLMatchFull = (
       let minute = Math.floor(91 + rng(2100 + i) * 30);
       while (usedETMin.has(minute)) { minute = minute >= 120 ? 91 : minute + 1; }
       usedETMin.add(minute);
-      const activeXI = getActiveLineupAt(minute, awayLineup.startingXI, awaySubData.matchSubs);
+      const activeXI = getActiveLineupAt(minute, awayLineup.startingXI, awaySubData.matchSubs, awayRedExits);
       const scorer = GoalAttributionService.pickScorer(awayPlayersAll, activeXI, false, () => rng(2100 + i + 500));
       etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
     }
@@ -843,4 +891,4 @@ export const BackgroundMatchUEFASuperCup = {
 
     return { updatedFixtures, updatedPlayers: updatedPlayersMap, matchHistoryEntries };
   }
-};
+};
