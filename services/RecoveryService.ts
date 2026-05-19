@@ -1,5 +1,29 @@
 import { Player, HealthStatus, TrainingIntensity, InjurySeverity } from '../types';
 
+const seededRange = (seed: string, min: number, max: number): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const normalized = (hash >>> 0) / 4294967295;
+  return min + (max - min) * normalized;
+};
+
+const getPlayerHealingDelayFactor = (player: Player): number => {
+  const strength = Math.max(1, Math.min(99, player.attributes.strength || 1));
+  const injurySeed = `${player.id}_${player.health.injury?.injuryDate ?? ''}_${player.health.injury?.type ?? ''}`;
+  const strengthRandomTolerance = seededRange(`${injurySeed}_strength`, 0.005, 0.01);
+  const strengthDeficitSteps = Math.max(0, (99 - strength) / 9);
+  const strengthDelay = Math.pow(strengthDeficitSteps, 1.22) * strengthRandomTolerance;
+
+  const ageRandomTolerance = seededRange(`${injurySeed}_age`, 0.006, 0.012);
+  const agePenaltySteps = Math.max(0, (player.age - 30) / 4);
+  const ageDelay = Math.pow(agePenaltySteps, 1.18) * ageRandomTolerance;
+
+  return 1 + strengthDelay + ageDelay;
+};
+
 export const RecoveryService = {
   /**
    * Wykonuje dobową regenerację dla wszystkich zawodników.
@@ -64,7 +88,8 @@ export const RecoveryService = {
           const injStart = new Date(updated.health.injury.injuryDate).setHours(0,0,0,0);
           const simDay   = new Date(currentDate).setHours(0,0,0,0);
           const daysPassed = Math.max(0, Math.floor((simDay - injStart) / (1000 * 60 * 60 * 24)));
-          const effTotalDays = Math.max(2, Math.round((updated.health.injury.totalDays || 1) / medicalSpeedFactor));
+          const healingDelayFactor = getPlayerHealingDelayFactor(updated);
+          const effTotalDays = Math.max(2, Math.round(((updated.health.injury.totalDays || 1) * healingDelayFactor) / medicalSpeedFactor));
           const targetCond = condAtInjury + (99 - condAtInjury) * (daysPassed / (effTotalDays - 1));
           updated.condition = Math.min(99, Math.max(condAtInjury, targetCond));
         } else {
@@ -83,7 +108,8 @@ export const RecoveryService = {
           
           // Pozostałe dni to pierwotna długość (totalDays) minus upływ czasu
           const rawTotalDays = updated.health.injury.totalDays || updated.health.injury.daysRemaining;
-          const effTotalDays2 = Math.max(1, Math.round(rawTotalDays / medicalSpeedFactor));
+          const healingDelayFactor = getPlayerHealingDelayFactor(updated);
+          const effTotalDays2 = Math.max(1, Math.round((rawTotalDays * healingDelayFactor) / medicalSpeedFactor));
           const actualRemaining = effTotalDays2 - totalDaysPassed;
 
           if (actualRemaining <= 0) {
