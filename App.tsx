@@ -100,6 +100,7 @@ import { PreMatchFriendlyStudioView } from './components/views/PreMatchFriendlyS
 import { FriendlyMatchLiveView } from './components/views/FriendlyMatchLiveView';
 import { PostMatchFriendlyStudioView } from './components/views/PostMatchFriendlyStudioView';
 import { FriendlyMatchesRaportView } from './components/views/FriendlyMatchesRaportView';
+import { Analytics } from "@vercel/analytics/react";
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -405,6 +406,7 @@ const App: React.FC = () => {
   return (
     <GameProvider>
       <AppContent />
+      <Analytics />
     </GameProvider>
   );
 };
