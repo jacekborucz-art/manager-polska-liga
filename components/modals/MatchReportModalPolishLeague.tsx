@@ -296,8 +296,8 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
     return events.sort((a, b) => a.minute - b.minute);
   };
 
-  const homeEvents = buildEvents(homeClub.id);
-  const awayEvents = buildEvents(awayClub.id);
+  const homeEvents = buildEvents(match.homeTeamId);
+  const awayEvents = buildEvents(match.awayTeamId);
 
   const fmtName = (name: string) => name.includes(' ') ? name.charAt(0) + '. ' + name.split(' ').slice(1).join(' ') : name;
 

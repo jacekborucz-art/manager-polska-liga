@@ -290,7 +290,7 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
           </div>
 
           {/* Pitch */}
-          <div className="w-[510px] shrink-0 relative overflow-hidden self-center aspect-[2/3]">
+          <div className="w-[510px] shrink-0 relative overflow-hidden self-center aspect-[25/36]">
             <img src={bojo2Pitch} alt="" className="absolute inset-0 w-full h-full object-fill" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/10 pointer-events-none" />
             <div className="absolute inset-0">
@@ -304,12 +304,12 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
                 const trim = getContrastText(primary, secondary);
                 const isRed = report.cards.some(c => c.playerId === id && c.type === 'RED_CARD');
                 const top = isGK
-                  ? `calc(${getPitchSlotTop(true, slot.y)} + 40px)`
+                  ? `calc(${getPitchSlotTop(true, slot.y)} + 55px)`
                   : slot.role === PlayerPosition.DEF
                     ? `calc(${getPitchSlotTop(true, slot.y)} + 25px)`
                     : slot.role === PlayerPosition.MID
                       ? `calc(${getPitchSlotTop(true, slot.y)} - 5px)`
-                      : `calc(${getPitchSlotTop(true, slot.y)} - 30px)`;
+                      : `calc(${getPitchSlotTop(true, slot.y)} - 45px)`;
                 return <PitchKit key={`h-${i}`} player={p} left={`${slot.x * 100}%`} top={top} primary={primary} secondary={secondary} trim={trim} isRedCarded={isRed} />;
               })}
               {awayTactic?.slots.map((slot, i) => {
@@ -322,12 +322,12 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
                 const trim = getContrastText(primary, secondary);
                 const isRed = report.cards.some(c => c.playerId === id && c.type === 'RED_CARD');
                 const top = isGK
-                  ? `calc(${getPitchSlotTop(false, slot.y)} - 40px)`
+                  ? `calc(${getPitchSlotTop(false, slot.y)} - 55px)`
                   : slot.role === PlayerPosition.DEF
                     ? `calc(${getPitchSlotTop(false, slot.y)} - 23px)`
                     : slot.role === PlayerPosition.MID
                       ? `calc(${getPitchSlotTop(false, slot.y)} + 5px)`
-                      : `calc(${getPitchSlotTop(false, slot.y)} + 30px)`;
+                      : `calc(${getPitchSlotTop(false, slot.y)} + 45px)`;
                 return <PitchKit key={`a-${i}`} player={p} left={`${slot.x * 100}%`} top={top} primary={primary} secondary={secondary} trim={trim} isRedCarded={isRed} />;
               })}
             </div>
