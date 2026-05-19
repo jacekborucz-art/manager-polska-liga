@@ -990,6 +990,24 @@ const boardConfidence = useMemo(() => {
              );
            })()}
 
+           {wcState && (
+             <button
+               onClick={() => navigateTo(wcState.groupStageComplete ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
+               disabled={isJumping}
+               className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-amber-400/30 bg-amber-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+             >
+               <span className="font-black italic uppercase tracking-tighter text-[9px] text-amber-200/80">
+                 Mistrzostwa Świata
+               </span>
+               <span className="font-black italic uppercase tracking-tighter text-2xl leading-none text-white drop-shadow-lg">
+                 Mundial
+               </span>
+               <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-amber-100/50">
+                 {wcState.groupStageComplete ? 'TURNIEJ' : 'LOSOWANIE'}
+               </span>
+             </button>
+           )}
+
            <div className="shrink-0 flex flex-col items-center gap-2">
               <button 
                 onClick={() => { setIsProcessing(true); setTimeout(actionConfig.action, 0); }}
@@ -1240,13 +1258,6 @@ const boardConfidence = useMemo(() => {
             className="relative group w-full overflow-hidden rounded-[24px] transition-all">
             <img src={instrukcjaButton} alt="INSTRUKCJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
           </button>
-          {wcState && (
-            <button
-              onClick={() => navigateTo(wcState.groupStageComplete ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
-              className="w-full py-4 rounded-[24px] bg-amber-700 border border-amber-500 hover:bg-amber-600 transition-all">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">🏆 MUNDIAL</span>
-            </button>
-          )}
           <button
             onClick={() => !isResigned && setShowResignConfirm(true)}
             disabled={isResigned}
