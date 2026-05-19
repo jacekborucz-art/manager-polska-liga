@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import bgImg from '../../Graphic/themes/main_theme.png';
@@ -7,6 +7,19 @@ import { importSaveFromFile } from '../../services/SaveGameService';
 export const StartMenu: React.FC = () => {
   const { startNewGame, navigateTo, loadGameFromFile, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -26,7 +39,15 @@ export const StartMenu: React.FC = () => {
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-end bg-slate-950 overflow-hidden relative">
-      
+
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-4 right-4 z-[60] w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 hover:border-white/30 transition-all duration-300 text-lg"
+        title={isFullscreen ? 'Wyjdź z pełnego ekranu' : 'Pełny ekran'}
+      >
+        {isFullscreen ? '⊠' : '⛶'}
+      </button>
+
       {/* DISCLAIMER POPUP */}
       {showDisclaimer && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -145,6 +166,22 @@ export const StartMenu: React.FC = () => {
 
         </div>
 
+        <p className="mt-8 text-[15px] font-black text-slate-400 uppercase tracking-widest text-center">
+          GRA DZIAŁA NAJLEPIEJ W TRYBIE PEŁNOEKRANOWYM i w rozdzielczości co najmniej 1920x1080
+        </p>
+
+        <button
+          onClick={toggleFullscreen}
+          className={`group relative mt-3 w-full max-w-sm h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${isFullscreen ? 'bg-red-600/20 border-red-500/30 hover:bg-red-600 hover:border-red-400 hover:shadow-[0_20px_40px_-10px_rgba(220,38,38,0.5)]' : 'bg-emerald-600/20 border-emerald-500/30 hover:bg-emerald-600 hover:border-emerald-400 hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.5)] animate-fullscreen-pulse'}`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative z-10 flex items-center justify-center">
+            <span className="text-[13px] font-black text-white/50 group-hover:text-white uppercase tracking-widest transition-colors">
+              {isFullscreen ? 'WYŁĄCZ PEŁNY EKRAN' : 'WŁĄCZ PEŁNY EKRAN'}
+            </span>
+          </div>
+        </button>
+
         {/* Footer info */}
         <div className="mt-20 flex flex-col items-center gap-2">
            <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.5em]">VERSION 1.5</p>
@@ -164,6 +201,12 @@ export const StartMenu: React.FC = () => {
           to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in { animation: fade-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes fullscreen-pulse {
+          0%, 100% { box-shadow: 0 0 8px rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.3); }
+          50% { box-shadow: 0 0 30px rgba(16,185,129,0.7), 0 0 60px rgba(16,185,129,0.3); border-color: rgba(16,185,129,0.8); }
+        }
+        .animate-fullscreen-pulse { animation: fullscreen-pulse 2.5s ease-in-out infinite; }
       `}</style>
     </div>
   );
