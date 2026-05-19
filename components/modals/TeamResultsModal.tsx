@@ -10,10 +10,18 @@ interface TeamResultsModalProps {
 }
 
 export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onClose, club }) => {
-  if (!isOpen) return null;
-
   const { clubs } = useGame();
   const results = useMemo(() => MatchHistoryService.getTeamHistory(club.id).reverse(), [club.id]);
+
+  if (!isOpen) return null;
+
+  const formatMatchDate = (date: string | Date): string => {
+    const matchDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(matchDate.getTime())) return String(date);
+
+    return matchDate
+      .toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   const getCompetitionName = (comp: string) => {
     if (comp.includes('L_PL_1')) return 'Ekstraklasa';
@@ -42,7 +50,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
               {results.map((m, idx) => (
                 <div key={idx} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/5 hover:bg-white/[0.05] transition-all group">
                   <div className="w-20 shrink-0">
-                    <span className="text-[9px] font-mono text-slate-500">{m.date}</span>
+                    <span className="text-[9px] font-mono text-slate-500">{formatMatchDate(m.date)}</span>
                   </div>
                   <div className="flex-1 px-4 text-center flex items-center justify-center gap-3">
                     <span className={`text-[10px] font-black uppercase italic truncate max-w-[140px] ${m.homeTeamId === club.id ? 'text-white' : 'text-slate-500'}`}>

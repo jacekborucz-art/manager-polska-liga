@@ -84,7 +84,7 @@ export const ClubDetails: React.FC = () => {
       .replace('.', '');
   };
 
-  const renderPlayerRow = (player: Player, label: string) => {
+  const renderPlayerRow = (player: Player, label: string, rowIndex: number) => {
     const healthInfo = PlayerPresentationService.getHealthDisplay(player);
     const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
 
@@ -94,7 +94,7 @@ export const ClubDetails: React.FC = () => {
     
     return (
       <tr 
-        key={player.id} 
+        key={`${label}-${player.id}-${rowIndex}`} 
         onClick={() => viewPlayerDetails(player.id)}
         className="group relative h-14 border-b border-white/5 transition-all cursor-pointer hover:bg-white/[0.03]"
       >
@@ -364,11 +364,11 @@ export const ClubDetails: React.FC = () => {
                        </tr>
                     </thead>
                     <tbody>
-                       {startingXI.map(p => renderPlayerRow(p, 'START'))}
+                       {startingXI.map((p, index) => renderPlayerRow(p, 'START', index))}
                        <tr className="bg-black/20"><td colSpan={13} className="py-2 px-6 text-[8px] font-black text-blue-500 uppercase tracking-[0.3em]">Ławka rezerwowych</td></tr>
-                       {bench.map(p => renderPlayerRow(p, 'SUB'))}
+                       {bench.map((p, index) => renderPlayerRow(p, 'SUB', index))}
                        <tr className="bg-black/20"><td colSpan={13} className="py-2 px-6 text-[8px] font-black text-slate-600 uppercase tracking-[0.3em]">Pozostali zawodnicy</td></tr>
-                       {reserves.map(p => renderPlayerRow(p, 'RES'))}
+                       {reserves.map((p, index) => renderPlayerRow(p, 'RES', index))}
                     </tbody>
                  </table>
               </div>

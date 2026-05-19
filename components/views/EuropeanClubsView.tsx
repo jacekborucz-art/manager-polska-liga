@@ -838,7 +838,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
           <span className="text-right">OVL</span>
         </div>
         {/* Wiersze zawodników */}
-        {sorted.map(p => {
+        {sorted.map((p, index) => {
           const injured = p.health.status === 'INJURED';
           const clubColors = clubColorsById[p.clubId] || [];
           const clubPrimary = clubColors[0] || '#020617';
@@ -847,7 +847,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
           const clubName = p.clubId === 'FREE_AGENTS' ? 'Wolny agent' : (clubById[p.clubId] || '—');
           return (
             <button
-              key={p.id}
+              key={`${p.clubId}-${p.id}-${index}`}
               onClick={() => onPlayerClick(p.id)}
               className={`group w-full grid text-left px-4 py-2.5 transition-all duration-100 border-b border-amber-400/15 hover:bg-white/[0.07] ${POS_ROW_BG[p.position]} ${injured ? 'opacity-50' : ''} relative`}
               style={{ gridTemplateColumns: GRID }}
@@ -1060,7 +1060,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               const clubName = player.clubId === 'FREE_AGENTS' ? 'Wolny agent' : (clubById[player.clubId] || '—');
               return (
                 <button
-                  key={player.id}
+                  key={`${player.clubId}-${player.id}-${index}`}
                   onClick={() => onPlayerClick(player.id)}
                   className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-left transition-all hover:bg-white/[0.06] hover:border-white/[0.12]"
                 >

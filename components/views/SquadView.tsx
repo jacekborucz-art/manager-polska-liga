@@ -496,7 +496,7 @@ export const SquadView: React.FC = () => {
 
     return (
       <tr
-        key={player.id}
+        key={`${loc}-${player.id}-${index ?? 0}`}
         onClick={() => handlePlayerClick(player.id, loc, index)}
         onDoubleClick={() => handlePlayerDoubleClick(player.id)}
         onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, playerId: player.id, loc }); }}
@@ -1514,7 +1514,7 @@ export const SquadView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
-                      {benchPlayers.map(pid => renderPlayerRow(pid, 'SUB', 'BENCH'))}
+                      {benchPlayers.map((pid, index) => renderPlayerRow(pid, 'SUB', 'BENCH', index))}
                       {benchPlayers.length === 0 && (
                         <tr><td colSpan={11} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Pusta Ławka</td></tr>
                       )}
@@ -1580,7 +1580,7 @@ export const SquadView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
-                      {reservePlayersSorted.map(pid => renderPlayerRow(pid, 'RES', 'RES'))}
+                      {reservePlayersSorted.map((pid, index) => renderPlayerRow(pid, 'RES', 'RES', index))}
                       {reservePlayersSorted.length === 0 && (
                         <tr><td colSpan={11} className="py-10 text-center opacity-10 font-black uppercase italic text-xs tracking-widest">Brak zawodników</td></tr>
                       )}

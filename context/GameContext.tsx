@@ -440,6 +440,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
   const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
+  const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
   const [activeTrainingId, setActiveTrainingId] = useState<string | null>('T_TACTICAL_PERIOD');
@@ -744,61 +745,64 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
 
 const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (players[clubId]) return players[clubId];
+    if (generatedSquadCacheRef.current[clubId]) return generatedSquadCacheRef.current[clubId];
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
+    const queueGeneratedSquad = (squad: Player[]) => {
+        generatedSquadCacheRef.current[clubId] = squad;
+        queueMicrotask(() => {
+            setPlayers(prev => {
+                if (prev[clubId]) return prev;
+                return { ...prev, [clubId]: squad };
+            });
+        });
+        return squad;
+    };
 
     // Sprawdź czy to klub europejski (CL)
     const rawCL = RAW_CHAMPIONS_LEAGUE_CLUBS.find(c => generateEuropeanClubId(c.name) === clubId);
     if (rawCL) {
         const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCL.tier, rawCL.reputation, rawCL.country));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawEL = RAW_EUROPA_LEAGUE_CLUBS.find(c => generateELClubId(c.name) === clubId);
     if (rawEL) {
         const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawEL.tier, rawEL.reputation, rawEL.country));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawCONF = RAW_CONFERENCE_LEAGUE_CLUBS.find(c => generateCONFClubId(c.name) === clubId);
     if (rawCONF) {
         const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCONF.tier, rawCONF.reputation, rawCONF.country));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawSA = CLUBS_SOUTH_AMERICA.find(c => generateSAClubId(c.name) === clubId);
     if (rawSA) {
         const newSquad = withMoraleState(SquadGeneratorService.generateSouthAmericanSquad(clubId, rawSA.tier, rawSA.reputation, rawSA.country));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawAsian = CLUBS_ASIAN.find(c => generateAsianClubId(c.name) === clubId);
     if (rawAsian) {
         const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAsian.tier, rawAsian.reputation, rawAsian.country, 'Asia'));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawAfrican = CLUBS_AFRICAN.find(c => generateAfricanClubId(c.name) === clubId);
     if (rawAfrican) {
         const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAfrican.tier, rawAfrican.reputation, rawAfrican.country, 'Africa'));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const rawNorthAmerica = CLUBS_NORTH_AMERICA.find(c => generateNorthAmericaClubId(c.name) === clubId);
     if (rawNorthAmerica) {
         const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawNorthAmerica.tier, rawNorthAmerica.reputation, rawNorthAmerica.country, 'North America'));
-        setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-        return newSquad;
+        return queueGeneratedSquad(newSquad);
     }
 
     const newSquad = withMoraleState(SquadGeneratorService.generateSquadForClub(clubId));
-    setPlayers(prev => ({ ...prev, [clubId]: newSquad }));
-    return newSquad;
+    return queueGeneratedSquad(newSquad);
 }, [players]);
 
   const navigateTo = useCallback((view: ViewState) => {
@@ -8104,6 +8108,7 @@ const finalResult: SimulationOutput = {
     const newPlayersChunk: Record<string, Player[]> = {};
     const newLineupsChunk: Record<string, Lineup> = {};
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const importBatchId = `${now.getTime()}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
     entries.forEach(({ clubId, players: imported }) => {
       const squad: Player[] = imported.map((p, idx) => {
         const nat = p.nationality ?? Region.POLAND;
@@ -8116,7 +8121,7 @@ const finalResult: SimulationOutput = {
           : new Date(now.getFullYear() + contractYears, now.getMonth(), now.getDate()).toISOString();
         const salary = p.annualSalary ?? Math.round(overall * 800);
         const mval = p.marketValue ?? Math.round(overall * 3000);
-        const id = `IMPORT_${clubId}_${idx}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const id = `IMPORT_${clubId}_${idx}_${importBatchId}`;
         return PlayerMoraleService.ensurePlayerState({
           id, firstName: p.firstName, lastName: p.lastName, age: p.age,
           clubId, nationality: nat, nationalityCountry: country,

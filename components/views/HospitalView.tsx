@@ -267,9 +267,6 @@ export const HospitalView: React.FC = () => {
 
           {injuredPlayers.length === 0 ? (
             <div className="bg-slate-900/40 border border-white/5 rounded-[28px] p-12 text-center">
-              <div className="mx-auto mb-4 w-16 h-16 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 flex items-center justify-center text-3xl font-black italic uppercase tracking-tighter text-emerald-300">
-                OK
-              </div>
               <p className="text-slate-400 font-black italic uppercase tracking-tighter text-xl">
                 Brak kontuzjowanych zawodników
               </p>
