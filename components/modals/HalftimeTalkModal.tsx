@@ -222,7 +222,7 @@ export const HalftimeTalkModal = ({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 animate-fade-in">
-      <div className="w-full max-w-4xl mx-4 border border-white/10 rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" style={{ background: `linear-gradient(135deg, ${homeKitPrimary}cc 0%, rgba(15,23,42,0.75) 45%, rgba(15,23,42,0.75) 55%, ${awayKitPrimary}cc 100%)` }}>
+      <div className="w-full max-w-[1250px] mx-4 border border-white/10 rounded-[57px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" style={{ background: `linear-gradient(135deg, ${homeKitPrimary}cc 0%, rgba(15,23,42,0.75) 45%, rgba(15,23,42,0.75) 55%, ${awayKitPrimary}cc 100%)` }}>
 
         {/* ── GRADIENT BAR GÓRNY ── */}
         <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent ${getContextAccent()} to-transparent`} />
@@ -231,53 +231,53 @@ export const HalftimeTalkModal = ({
         <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 0%, ${getContextGlow()} 0%, transparent 60%)` }} />
 
         {/* ── SCOREBOARD ── */}
-        <div className="relative flex items-center justify-between px-10 pt-8 pb-6 border-b border-white/5">
+        <div className="relative flex items-center justify-between px-[46px] pt-[37px] pb-[28px] border-b border-white/20">
 
-          <div className="flex-1 flex items-center gap-3">
-            <JerseyIcon primary={leftKitPrimary} secondary={leftKitSecondary} size="w-20 h-20" />
-            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">{leftClubName}</h2>
+          <div className="flex-1 flex items-center gap-[14px]">
+            <JerseyIcon primary={leftKitPrimary} secondary={leftKitSecondary} size="w-[92px] h-[92px]" />
+            <h2 className="text-[2.2rem] font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap">{leftClubName}</h2>
           </div>
 
-          <div className="flex flex-col items-center gap-2 px-10">
-            <div className="text-7xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
+          <div className="flex flex-col items-center gap-[10px] px-[46px]">
+            <div className="text-[5.2rem] font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
               {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
             </div>
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">PRZERWA</span>
+            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-[0.4em]">PRZERWA</span>
           </div>
 
           <div className="flex-1 flex items-center justify-end gap-3">
-            <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none text-right">{rightClubName}</h2>
-            <JerseyIcon primary={rightKitPrimary} secondary={rightKitSecondary} size="w-20 h-20" />
+            <h2 className="text-[2.2rem] font-black italic uppercase tracking-tighter text-white leading-none text-right whitespace-nowrap">{rightClubName}</h2>
+            <JerseyIcon primary={rightKitPrimary} secondary={rightKitSecondary} size="w-[92px] h-[92px]" />
           </div>
 
         </div>
 
         {/* ── STATYSTYKI I POŁOWY ── */}
-        <div className="relative px-10 py-5 border-b border-white/5">
-          <div className="flex flex-col items-center gap-3 mb-4">
-            <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">STATYSTYKI I POŁOWY</span>
+        <div className="relative px-[46px] py-[23px] border-b border-white/5">
+          <div className="flex flex-col items-center gap-[14px] mb-[18px]">
+            <span className="text-base font-black italic uppercase tracking-tighter text-cyan-400">STATYSTYKI I POŁOWY</span>
             <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
           </div>
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             {statsRows.map((row, idx) => {
               const leftBarColor  = idx % 2 === 0 ? homeKitPrimary  : homeKitSecondary;
               const rightBarColor = idx % 2 === 0 ? awayKitPrimary  : awayKitSecondary;
               return (
-                <div key={row.label} className="flex items-center gap-3">
-                  <span className="w-12 text-right text-xl font-black italic leading-none text-white">
+                <div key={row.label} className="flex items-center gap-[14px]">
+                  <span className="w-[55px] text-right text-[1.44rem] font-black italic leading-none text-white">
                     {row.uVal}
                   </span>
-                  <div className="flex-1 flex items-center h-4 overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
+                  <div className="flex-1 flex items-center h-[18px] overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
                     <div className="h-full rounded-l-full transition-all" style={{ width: `${row.u}%`, backgroundColor: leftBarColor }} />
                   </div>
-                  <span className="text-[8px] font-black text-white/70 uppercase tracking-widest shrink-0 w-24 text-center">
+                  <span className="text-[9.5px] font-black text-white/70 uppercase tracking-widest shrink-0 w-[110px] text-center">
                     {row.label}
                   </span>
-                  <div className="flex-1 h-4 overflow-hidden rounded-r-full bg-white/[0.04]">
+                  <div className="flex-1 h-[18px] overflow-hidden rounded-r-full bg-white/[0.04]">
                     <div className="h-full rounded-r-full transition-all" style={{ width: `${row.o}%`, backgroundColor: rightBarColor }} />
                   </div>
-                  <span className="w-12 text-left text-xl font-black italic leading-none text-white">
+                  <span className="w-[55px] text-left text-[1.44rem] font-black italic leading-none text-white">
                     {row.oVal}
                   </span>
                 </div>
@@ -285,8 +285,8 @@ export const HalftimeTalkModal = ({
             })}
 
             {/* ── NASTRÓJ ── */}
-            <div className="flex items-center justify-center gap-3 mt-1 pt-3 border-t border-white/5">
-              <span className={`text-sm font-black italic ${getMoodColor()}`}>{getMoodLabel()}</span>
+            <div className="min-h-[76px] flex items-center justify-center gap-[14px] mt-[5px] py-[20px] -mx-[46px] px-[46px] bg-white/[0.08] animate-pulse text-center">
+              <span className={`block w-full text-center text-[27px] leading-none font-black italic uppercase tracking-tighter ${getMoodColor()}`}>{getMoodLabel()}</span>
             </div>
           </div>
         </div>
@@ -294,17 +294,17 @@ export const HalftimeTalkModal = ({
         {/* ── FAZA WYBORU ── */}
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
-            <div className="px-10 pt-5 pb-3 flex justify-center">
-              <span className="text-lg font-black italic uppercase tracking-tighter text-yellow-400">
+            <div className="min-h-[72px] -mx-[28px] px-[46px] py-[18px] flex items-center justify-center text-center bg-white/[0.08] border-y border-white/10">
+              <span className="block w-full text-center text-lg leading-none font-black italic uppercase tracking-tighter text-yellow-400">
                 ROZMOWA MOTYWACYJNA
               </span>
             </div>
-            <div className="px-6 pb-6 grid grid-cols-2 gap-1.5 max-h-[340px] overflow-y-auto custom-scrollbar">
+            <div className="px-[28px] pb-[28px] grid grid-cols-2 gap-[7px] max-h-[391px] overflow-y-auto custom-scrollbar">
               {talks.map((opt, idx) => (
                 <button
                   key={opt.id}
                   onClick={() => handleSelect(opt, idx)}
-                  className="w-full text-left px-3.5 py-2 rounded-xl bg-white/[0.04] border border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-xs font-medium leading-snug hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:scale-[0.99] active:translate-y-[2px]"
+                  className="w-full text-left px-4 py-[9px] rounded-xl bg-slate-800 border border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-sm font-medium leading-snug hover:bg-yellow-500/30 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:scale-[0.99] active:translate-y-[2px]"
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
                   {opt.text}
@@ -316,14 +316,14 @@ export const HalftimeTalkModal = ({
 
         {/* ── FAZA REAKCJI ── */}
         {phase === 'REACTING' && (
-          <div className="relative flex flex-col items-center gap-8 px-10 py-12">
-            <div className="text-5xl drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] animate-bounce">💬</div>
-            <p className="text-center text-lg font-bold text-white italic leading-relaxed drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+          <div className="relative flex flex-col items-center gap-9 px-[46px] py-[55px]">
+            <div className="text-[3.45rem] drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] animate-bounce">💬</div>
+            <p className="text-center text-xl font-bold text-white italic leading-relaxed drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
               {reactionText}
             </p>
             <button
               onClick={handleContinue}
-              className="mt-2 min-w-[220px] py-3.5 px-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(59,130,246,0.15)] hover:bg-blue-600/30 hover:shadow-[0_0_50px_rgba(59,130,246,0.25)] flex items-center justify-center gap-3 group"
+              className="mt-2 min-w-[253px] py-4 px-[46px] rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 font-black italic uppercase tracking-tighter text-[1.15rem] transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(59,130,246,0.15)] hover:bg-blue-600/30 hover:shadow-[0_0_50px_rgba(59,130,246,0.25)] flex items-center justify-center gap-3 group"
             >
               <span>II POŁOWA</span>
               <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
