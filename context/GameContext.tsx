@@ -121,6 +121,7 @@ import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types
 import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
+import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -455,6 +456,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
  const [activeFriendlyConditions, setActiveFriendlyConditions] = useState<FriendlyMatchConditions | null>(null);
  const [aiFriendlyPairs, setAiFriendlyPairs] = useState<AiFriendlyPair[]>([]);
  const [aiFriendlyReports, setAiFriendlyReports] = useState<AiFriendlyMatchReport[]>([]);
+ const [pzpnDisciplinaryEvents, setPzpnDisciplinaryEvents] = useState<PzpnDisciplinaryEvent[]>([]);
  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
  const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
@@ -940,6 +942,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
+    setPzpnDisciplinaryEvents([]);
     setProcessedDrawIds([]);
     const initialSuperCup = SuperCupService.generateFixture(2025, STATIC_CLUBS);
     const initialUEFASuperCup = UEFASuperCupService.generateFixture(2025, STATIC_CLUBS);
@@ -1617,6 +1620,7 @@ if (userTeamId) {
     lastNTMatchResults,
     aiFriendlyPairs,
     aiFriendlyReports,
+    pzpnDisciplinaryEvents,
     sentMailIds: Array.from(sentMailIdsRef.current),
     lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
   });
@@ -1697,6 +1701,7 @@ if (userTeamId) {
     setLastNTMatchResults(data.lastNTMatchResults ?? null);
     setAiFriendlyPairs(data.aiFriendlyPairs || []);
     setAiFriendlyReports(data.aiFriendlyReports || []);
+    setPzpnDisciplinaryEvents((data.pzpnDisciplinaryEvents || []) as PzpnDisciplinaryEvent[]);
     const restoredSentMailIds = data.sentMailIds && data.sentMailIds.length > 0
       ? data.sentMailIds
       : (data.messages || []).map((message: any) => message?.id).filter(Boolean);
@@ -1954,6 +1959,45 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    const currentDateKey = currentDate.toISOString().split('T')[0];
+    const pzpnCandidates = simulation.updatedFixtures.filter(fixture => {
+      const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+      return PzpnDisciplinaryService.isEligibleFixture(fixture)
+        && !Number.isNaN(fixtureDate.getTime())
+        && fixtureDate.toISOString().split('T')[0] === currentDateKey;
+    });
+
+    if (pzpnCandidates.length > 0) {
+      const newPzpnEvents: PzpnDisciplinaryEvent[] = [];
+      let clubsWithPzpnPenalties = finalClubs;
+
+      pzpnCandidates.forEach(fixture => {
+        const homeClub = clubsWithPzpnPenalties.find(club => club.id === fixture.homeTeamId);
+        const awayClub = clubsWithPzpnPenalties.find(club => club.id === fixture.awayTeamId);
+        if (!homeClub || !awayClub) return;
+
+        const event = PzpnDisciplinaryService.evaluateAfterMatch({
+          fixture,
+          homeClub,
+          awayClub,
+          seasonNumber,
+          currentDate,
+          sessionSeed,
+          existingEvents: [...pzpnDisciplinaryEvents, ...newPzpnEvents],
+        });
+        if (!event) return;
+
+        newPzpnEvents.push(event);
+        clubsWithPzpnPenalties = PzpnDisciplinaryService.applyEventToClubs(clubsWithPzpnPenalties, event);
+      });
+
+      if (newPzpnEvents.length > 0) {
+        finalClubs = clubsWithPzpnPenalties;
+        setPzpnDisciplinaryEvents(prev => PzpnDisciplinaryService.mergeEvents(prev, newPzpnEvents));
+        prependUniqueMessages(newPzpnEvents.map(event => PzpnDisciplinaryService.createMail(event, currentDate, userTeamId)));
+      }
+    }
+
     setClubs(finalClubs);
 
     finalPlayers = Object.fromEntries(
@@ -2028,7 +2072,7 @@ setMessages([welcomeMail, fanMail]);
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument

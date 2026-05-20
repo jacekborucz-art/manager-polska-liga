@@ -1,7 +1,7 @@
 
 import { FinanceService } from './FinanceService';
 
-export const SAVE_VERSION = '1.9';
+export const SAVE_VERSION = '2.0';
 
 export interface SaveState {
   version: string;
@@ -82,6 +82,7 @@ export interface SaveState {
   lastNTMatchResults: any;
   aiFriendlyPairs: any[];
   aiFriendlyReports: any[];
+  pzpnDisciplinaryEvents?: any[];
   sentMailIds?: string[];
   lastProcessedLeagueDate?: string | null;
 }
@@ -357,6 +358,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     lastNTMatchResults: data.lastNTMatchResults ?? null,
     aiFriendlyPairs: asArray(data.aiFriendlyPairs),
     aiFriendlyReports: asArray(data.aiFriendlyReports),
+    pzpnDisciplinaryEvents: asArray(data.pzpnDisciplinaryEvents),
     sentMailIds: asArray(data.sentMailIds),
     lastProcessedLeagueDate: data.lastProcessedLeagueDate ?? null,
   };
