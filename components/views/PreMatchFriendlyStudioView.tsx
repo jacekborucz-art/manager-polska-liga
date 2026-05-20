@@ -588,13 +588,18 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
             </div>
 
             {/* START */}
-            <div className="flex items-center shrink-0">
+            <div className="flex flex-col items-center gap-2 shrink-0">
               <button onClick={handleStart}
                 className="group relative px-10 py-5 rounded-[30px] bg-white text-slate-950 font-black italic text-lg uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(255,255,255,0.2)] border-b-8 border-slate-300 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-tr from-green-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10 flex items-center gap-3">
                   ZAGRAJ SPARING <span className="text-xl group-hover:rotate-12 transition-transform">⚽</span>
                 </span>
+              </button>
+              <button
+                onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
+                className="px-8 py-3 rounded-[20px] bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 font-black italic text-sm uppercase tracking-tighter transition-all hover:scale-105 active:scale-95">
+                ✏️ ZMIEŃ SKŁAD
               </button>
             </div>
 

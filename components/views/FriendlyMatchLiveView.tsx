@@ -3066,6 +3066,26 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         const oYellows = oXI.filter((id): id is string => id !== null).filter(id => (matchState.playerYellowCards[id] || 0) >= 1).length;
         const avgMomentum = matchState.momentumTicks > 0 ? matchState.momentumSum / matchState.momentumTicks : 0;
         const userPossession = Math.round(Math.max(20, Math.min(80, 50 + avgMomentum * 0.3)));
+        const uScore = isHome ? matchState.homeScore : matchState.awayScore;
+        const oScore = isHome ? matchState.awayScore : matchState.homeScore;
+        const htSeed = matchState.sessionSeed;
+        const htRng = (off: number) => seededRng(htSeed, 45, off);
+        const htShots = (base: number, goals: number, off: number) =>
+          base + goals * (2 + Math.floor(htRng(off) * 3)) + Math.floor(htRng(off + 1) * 3) + 1;
+        const htShotsOT = (shots: number, goals: number, off: number) =>
+          Math.max(goals, Math.floor(shots * (0.40 + htRng(off) * 0.30)));
+        const htCorners = (base: number, off: number) =>
+          base < 3 ? base + Math.floor(htRng(off) * 4) + 1 : base;
+        const htFouls = (base: number, cards: number, off: number) =>
+          Math.max(3, base + cards * (2 + Math.floor(htRng(off) * 3)));
+        const calibUShots   = htShots(uStats.shots, uScore, 200);
+        const calibOShots   = htShots(oStats.shots, oScore, 300);
+        const calibUSOT     = htShotsOT(calibUShots, uScore, 410);
+        const calibOSOT     = htShotsOT(calibOShots, oScore, 510);
+        const calibUCorners = htCorners(uStats.corners, 600);
+        const calibOCorners = htCorners(oStats.corners, 700);
+        const calibUFouls   = htFouls(uStats.fouls, uYellows, 800);
+        const calibOFouls   = htFouls(oStats.fouls, oYellows, 900);
         return (
           <HalftimeTalkModal
             isOpen={isHalftimeTalkOpen}
@@ -3075,15 +3095,21 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             userSide={userSide}
             homeClubName={ctx.homeClub.name}
             awayClubName={ctx.awayClub.name}
-            userShots={uStats.shots}
-            userShotsOnTarget={uStats.shotsOnTarget}
-            userCorners={uStats.corners}
-            userFouls={uStats.fouls}
+            homeClubColors={ctx.homeClub.colorsHex}
+            awayClubColors={ctx.awayClub.colorsHex}
+            homeKitPrimary={kitColors.home.primary}
+            homeKitSecondary={kitColors.home.secondary}
+            awayKitPrimary={kitColors.away.primary}
+            awayKitSecondary={kitColors.away.secondary}
+            userShots={calibUShots}
+            userShotsOnTarget={calibUSOT}
+            userCorners={calibUCorners}
+            userFouls={calibUFouls}
             userYellowCards={uYellows}
-            oppShots={oStats.shots}
-            oppShotsOnTarget={oStats.shotsOnTarget}
-            oppCorners={oStats.corners}
-            oppFouls={oStats.fouls}
+            oppShots={calibOShots}
+            oppShotsOnTarget={calibOSOT}
+            oppCorners={calibOCorners}
+            oppFouls={calibOFouls}
             oppYellowCards={oYellows}
             userPossession={userPossession}
             momentumEndOf1st={matchState.momentum}

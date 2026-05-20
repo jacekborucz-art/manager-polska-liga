@@ -39,7 +39,7 @@ export const FriendlyMatchesRaportView: React.FC = () => {
         <div>
           <div className="text-[9px] font-black uppercase tracking-[0.4em] text-green-400">Centrum sparingowe</div>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter text-white leading-none">
-            Raporty Sparingów AI
+            Wyniki sparingów 
           </h1>
         </div>
       </div>

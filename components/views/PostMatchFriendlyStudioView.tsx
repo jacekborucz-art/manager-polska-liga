@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, MatchEventType, PlayerPerformance } from '../../types';
 import { KitSelectionService } from '../../services/KitSelectionService';
@@ -8,7 +8,8 @@ import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchComment
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
 export const PostMatchFriendlyStudioView: React.FC = () => {
-  const { lastMatchSummary, navigateTo, advanceDay, players } = useGame();
+  const { lastMatchSummary, navigateTo, advanceDay, players, coaches, managerProfile, userTeamId } = useGame();
+  const [showExpertModal, setShowExpertModal] = useState(false);
 
   if (!lastMatchSummary) return null;
 
@@ -26,6 +27,8 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
   const isExtraTime = timeline.some(e => e.minute > 90);
 
   const motm = useMemo(() => PostMatchCommentSelector.calculateMOTM(lastMatchSummary), [lastMatchSummary]);
+  const expertComment = useMemo(() => PostMatchCommentSelector.selectComment(lastMatchSummary), [lastMatchSummary]);
+  const kitSelection = useMemo(() => KitSelectionService.selectOptimalKits(homeClub, awayClub), [homeClub, awayClub]);
 
   const sortedData = useMemo(() => {
     const priority: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
@@ -56,31 +59,51 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
     return original ? `${original.firstName.charAt(0)}. ${playerName}` : playerName;
   };
 
-  // ── Stat bar with club-coloured fills ──────────────────────────────────────
-  const StatBar = ({
-    label, homeVal, awayVal, isPercent = false,
-  }: { label: string; homeVal: number; awayVal: number; isPercent?: boolean }) => {
-    const total = homeVal + awayVal || 1;
-    const hPerc = (homeVal / total) * 100;
-    const hColor = homeClub.colorsHex[0];
-    const aColorRaw = awayClub.colorsHex[0];
-    const colorDist = KitSelectionService.getColorDistance(hColor, aColorRaw);
-    const aColor = colorDist < 150 ? (awayClub.colorsHex[1] || '#475569') : aColorRaw;
+  const getContrastText = (bgHex: string, secondaryHex: string): string => {
+    const parse = (hex: string) => { const h = hex.replace('#', ''); return { r: parseInt(h.substring(0, 2), 16), g: parseInt(h.substring(2, 4), 16), b: parseInt(h.substring(4, 6), 16) }; };
+    const lum = ({ r, g, b }: { r: number; g: number; b: number }) => 0.299 * r + 0.587 * g + 0.114 * b;
+    const bgL = lum(parse(bgHex)); const secL = lum(parse(secondaryHex));
+    if (Math.abs(bgL - secL) > 60) return secondaryHex;
+    return bgL > 128 ? '#000000' : '#ffffff';
+  };
+  const isColorDark = (hex: string): boolean => { const h = hex.replace('#', ''); return (0.299 * parseInt(h.substring(0, 2), 16) + 0.587 * parseInt(h.substring(2, 4), 16) + 0.114 * parseInt(h.substring(4, 6), 16)) < 80; };
+
+  const KitIcon = ({ shirt, shorts }: { shirt: string; shorts: string }) => (
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(shirt) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
+        <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={shirt} />
+        <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={shorts} fillOpacity="0.9" />
+        <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={shorts} fillOpacity="0.35" />
+        <path d="M12 7.2v11.8" stroke={getContrastText(shirt, shorts)} strokeWidth="1" strokeOpacity="0.8" />
+      </svg>
+      <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(shorts) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
+        <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={shorts} stroke={getContrastText(shirt, shorts)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
+        <path d="M14 3v12" stroke={getContrastText(shirt, shorts)} strokeWidth="0.8" strokeOpacity="0.7" />
+      </svg>
+    </div>
+  );
+
+  const StatBar = ({ label, homeVal, awayVal, hColor, aColor, isPercent = false }: { label: string; homeVal: number; awayVal: number; hColor: string; aColor: string; isPercent?: boolean }) => {
+    const total = homeVal + awayVal;
+    const hPerc = total === 0 ? 50 : (homeVal / total) * 100;
+    const aPerc = 100 - hPerc;
+    const colorDistance = KitSelectionService.getColorDistance(hColor, aColor);
+    const finalAColor = colorDistance < 150 ? (awayClub.colorsHex[1] || '#475569') : aColor;
     return (
-      <div className="w-full">
-        <div className="h-12 w-full flex rounded-2xl overflow-hidden border border-white/10 bg-black/20 relative">
+      <div className="w-full space-y-1">
+        <div className="h-8 w-full flex rounded-2xl overflow-hidden border border-white/10 bg-black/20 relative">
           <div style={{ width: `${hPerc}%`, backgroundColor: hColor, opacity: 0.6 }}
                className="h-full transition-all duration-1000 flex items-center pl-4">
-            <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center border border-white/20 shadow-lg z-10">
+            <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center border border-white/20 shadow-lg z-10">
               <span className="text-[10px] font-black text-white">{homeVal}{isPercent ? '%' : ''}</span>
             </div>
           </div>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{label}</span>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)] opacity-100">{label}</span>
           </div>
-          <div style={{ width: `${100 - hPerc}%`, backgroundColor: aColor, opacity: 0.6 }}
+          <div style={{ width: `${aPerc}%`, backgroundColor: finalAColor, opacity: 0.6 }}
                className="h-full transition-all duration-1000 flex items-center justify-end pr-4">
-            <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center border border-white/20 shadow-lg z-10">
+            <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center border border-white/20 shadow-lg z-10">
               <span className="text-[10px] font-black text-white">{awayVal}{isPercent ? '%' : ''}</span>
             </div>
           </div>
@@ -89,37 +112,29 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
     );
   };
 
-  // ── Player row with rating badge ────────────────────────────────────────────
-  const renderPlayerRow = (p: PlayerPerformance, side: 'LEFT' | 'RIGHT', isSub = false) => {
+  const renderPlayerRow = (p: PlayerPerformance, side: 'LEFT' | 'RIGHT', isSub: boolean = false) => {
     const isMOTM = motm?.playerId === p.playerId;
-    const rating = p.rating ?? 6.0;
+    const rating = p.rating || 6.0;
     return (
-      <div key={p.playerId}
-           className={`flex items-center gap-3 p-2 mb-1 transition-all rounded-lg
-             ${isMOTM ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5 border border-transparent'}
-             ${isSub ? 'opacity-40 grayscale-[0.6] bg-white/[0.01]' : ''}`}>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border shrink-0
-          ${PlayerPresentationService.getPositionBadgeClass(p.position)}`}>
+      <div key={p.playerId} className={`flex items-center gap-3 py-0 px-2 mb-0 transition-all rounded-lg ${isMOTM ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5 border border-transparent'} ${isSub ? 'opacity-60 bg-white/[0.01]' : ''}`}>
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black border shrink-0 ${PlayerPresentationService.getPositionBadgeClass(p.position)}`}>
           {p.position}
         </div>
         <div className={`flex-1 min-w-0 ${side === 'RIGHT' ? 'text-right' : 'text-left'}`}>
-          <span className={`block text-xs font-bold uppercase truncate
-            ${isMOTM ? 'text-amber-400' : isSub ? 'text-slate-400' : 'text-slate-200'}`}>
+          <span className={`block text-xs font-bold uppercase truncate ${isMOTM ? 'text-amber-400' : (isSub ? 'text-slate-400' : 'text-slate-200')}`}>
             {getFormattedName(p)}
           </span>
         </div>
         <div className="w-6 flex items-center justify-center">
           {isMOTM && <span className="text-amber-400 text-sm animate-pulse">⭐</span>}
         </div>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0
-          ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${isMOTM ? 'bg-amber-500 text-black' : 'bg-black/40 text-white border border-white/10'}`}>
           {rating.toFixed(1)}
         </div>
       </div>
     );
   };
 
-  // ── Side event ticker ───────────────────────────────────────────────────────
   const renderSideEvents = (side: 'HOME' | 'AWAY') => {
     const events = timeline.filter(e => e.teamSide === side);
     if (events.length === 0) return null;
@@ -174,54 +189,47 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
 
         {/* ── SCORE HEADER ────────────────────────────────────────────────────── */}
         <div className={`${GLASS_PANEL} rounded-[40px] p-10 flex flex-col items-center justify-center shrink-0`}>
-          <div className="flex items-center gap-8 w-full">
+           <div className="flex flex-col gap-3 w-full">
+              {/* Row 2: Names + Score aligned */}
+              <div className="flex items-center gap-8 w-full">
+                <div className="flex-1 flex items-center justify-end gap-6 min-w-0">
+                  <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-right break-words leading-none flex-1">
+                    {homeClub.name}
+                  </h2>
+                  <KitIcon shirt={kitSelection.home.primary} shorts={kitSelection.home.secondary} />
+                </div>
 
-            {/* Home side */}
-            <div className="flex-1 flex flex-col items-end gap-3 min-w-0">
-              <div className="flex items-center gap-6 justify-end w-full">
-                <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-right break-words leading-none flex-1">
-                  {homeClub.name}
-                </h2>
-                <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform -rotate-3">
-                  <div style={{ backgroundColor: homeClub.colorsHex[0] }} className="flex-1" />
-                  <div style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} className="flex-1" />
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <div className="text-8xl font-black text-white">
+                    {homeScore} <span className="text-slate-700">:</span> {awayScore}
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    {isExtraTime && (
+                      <span className="px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-[11px] font-black text-amber-400 uppercase tracking-widest">
+                        {isPenalties ? `KARNE ${homePenaltyScore}:${awayPenaltyScore}` : 'PO DOGRYWCE'}
+                      </span>
+                    )}
+                    {attendance > 0 && (
+                      <p className="text-[13px] font-black italic uppercase tracking-tighter text-teal-400">Widzów: {attendance.toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex items-center justify-start gap-6 min-w-0">
+                  <KitIcon shirt={kitSelection.away.primary} shorts={kitSelection.away.secondary} />
+                  <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-left break-words leading-none flex-1">
+                    {awayClub.name}
+                  </h2>
                 </div>
               </div>
-              {renderSideEvents('HOME')}
-            </div>
 
-            {/* Score centre */}
-            <div className="flex flex-col items-center gap-2 shrink-0">
-              <div className="bg-black/40 px-12 py-5 rounded-[35px] border border-white/10 text-8xl font-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
-                {homeScore} <span className="text-slate-700">:</span> {awayScore}
+              {/* Row 3: Events tickers */}
+              <div className="flex gap-8 w-full">
+                <div className="flex-1 flex justify-end">{renderSideEvents('HOME')}</div>
+                <div className="shrink-0" style={{ width: 'fit-content', minWidth: '120px' }} />
+                <div className="flex-1 flex justify-start">{renderSideEvents('AWAY')}</div>
               </div>
-              <div className="flex flex-col items-center gap-1">
-                {isExtraTime && (
-                  <span className="px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-[11px] font-black text-amber-400 uppercase tracking-widest">
-                    {isPenalties ? `KARNE ${homePenaltyScore}:${awayPenaltyScore}` : 'PO DOGRYWCE'}
-                  </span>
-                )}
-                <div className="bg-green-500/10 px-4 py-1 rounded-full border border-green-500/20">
-                  <span className="text-[13px] font-black text-green-400 tracking-[0.3em] uppercase">SPARING • KONIEC</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Away side */}
-            <div className="flex-1 flex flex-col items-start gap-3 min-w-0">
-              <div className="flex items-center gap-6 justify-start w-full">
-                <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform rotate-3">
-                  <div style={{ backgroundColor: awayClub.colorsHex[0] }} className="flex-1" />
-                  <div style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} className="flex-1" />
-                </div>
-                <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-left break-words leading-none flex-1">
-                  {awayClub.name}
-                </h2>
-              </div>
-              {renderSideEvents('AWAY')}
-            </div>
-
-          </div>
+           </div>
         </div>
 
         {/* ── MAIN WORKSPACE ─────────────────────────────────────────────────── */}
@@ -229,58 +237,81 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
 
           {/* Home players */}
           <div className={`${GLASS_PANEL} w-80 rounded-[45px] p-6 flex flex-col shrink-0`}>
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 text-center">
-              RAPORT: {homeClub.shortName}
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-4 text-center">
+              {homeClub.id === userTeamId
+                ? `${managerProfile?.firstName ?? ''} ${managerProfile?.lastName ?? ''}`
+                : (() => { const c = coaches[homeClub.coachId ?? '']; return c ? `${c.firstName} ${c.lastName}` : homeClub.shortName; })()}
             </h3>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-              <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-2">Pierwszy Skład</span>
-              {sortedData.homeStarters.map(p => renderPlayerRow(p, 'LEFT'))}
-              {sortedData.homeSubs.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/5">
-                  <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-2">Zmiennicy</span>
-                  {sortedData.homeSubs.map(p => renderPlayerRow(p, 'LEFT', true))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Centre: stats */}
-          <div className="flex-1 flex flex-col gap-6 min-w-0">
-            <div className={`${GLASS_PANEL} p-10 rounded-[55px] flex flex-col justify-center space-y-4`}>
-              <div className="flex justify-between items-center mb-2 px-4">
-                <div className="text-center">
-                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Stadion</p>
-                  <p className="text-sm font-black text-white uppercase italic">{homeClub.stadiumName}</p>
-                </div>
-                {attendance > 0 && (
-                  <div className="text-center">
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Widzów</p>
-                    <p className="text-sm font-black text-green-400 tabular-nums">{attendance.toLocaleString()}</p>
+              <div className="space-y-0">
+                <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-2">Pierwszy Skład</span>
+                {sortedData.homeStarters.map(p => renderPlayerRow(p, 'LEFT'))}
+                {sortedData.homeSubs.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/[0.03]">
+                    <span className="block text-[8px] font-black text-amber-500/70 uppercase tracking-widest text-center mb-1">Zmiany</span>
+                    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent mb-2" />
+                    {sortedData.homeSubs.map(p => renderPlayerRow(p, 'LEFT', true))}
                   </div>
                 )}
               </div>
-              <StatBar label="Posiadanie Piłki" homeVal={Math.round(homeStats.possession)} awayVal={Math.round(awayStats.possession)} isPercent />
-              <StatBar label="Strzały ogółem"  homeVal={homeStats.shots}          awayVal={awayStats.shots} />
-              <StatBar label="Strzały celne"   homeVal={homeStats.shotsOnTarget}  awayVal={awayStats.shotsOnTarget} />
-              <StatBar label="Rzuty rożne"     homeVal={homeStats.corners}        awayVal={awayStats.corners} />
-              <StatBar label="Przewinienia"    homeVal={homeStats.fouls}          awayVal={awayStats.fouls} />
+            </div>
+          </div>
+
+          {/* Centre: stats + expert comment */}
+          <div className="flex-1 flex flex-col gap-6 min-w-0">
+            <div className={`${GLASS_PANEL} p-10 rounded-[55px] flex flex-col justify-center space-y-4 shrink-0`}>
+               <h3 className="text-[13px] font-black text-slate-300 uppercase tracking-[0.4em] text-center mb-2">STATYSTYKI MECZU</h3>
+               <StatBar label="Posiadanie Piłki" homeVal={Math.round(homeStats.possession)} awayVal={Math.round(awayStats.possession)} hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} isPercent />
+               <StatBar label="Strzały ogółem"   homeVal={homeStats.shots}          awayVal={awayStats.shots}         hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+               <StatBar label="Strzały celne"    homeVal={homeStats.shotsOnTarget}  awayVal={awayStats.shotsOnTarget} hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+               <StatBar label="Rzuty rożne"      homeVal={homeStats.corners}        awayVal={awayStats.corners}       hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+               <StatBar label="Przewinienia"     homeVal={homeStats.fouls}          awayVal={awayStats.fouls}         hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+               <StatBar label="Żółte kartki"     homeVal={homeStats.yellowCards}    awayVal={awayStats.yellowCards}   hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+               <StatBar label="Czerwone kartki"  homeVal={homeStats.redCards}       awayVal={awayStats.redCards}      hColor={kitSelection.home.primary} aColor={kitSelection.away.primary} />
+            </div>
+
+            {/* Commentary Panel */}
+            <div className={`${GLASS_PANEL} flex-1 rounded-[55px] p-10 relative overflow-hidden group`}>
+               <div className="absolute right-[-20px] bottom-[-20px] text-9xl font-black italic text-white/[0.03] select-none pointer-events-none">STUDIO</div>
+               <div className="flex items-center gap-6 mb-8">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-900 border-2 border-emerald-400 flex items-center justify-center font-black text-2xl text-white italic shadow-lg">H</div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">ANALIZA EKSPERCKA</h4>
+                    <p className="text-xs font-black text-white italic">Tomasz Hajto</p>
+                  </div>
+                  <button
+                    onClick={() => setShowExpertModal(true)}
+                    className="ml-auto px-4 py-2 rounded-xl bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/30 border-x-emerald-500/20 border-b-black/60 text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] hover:bg-emerald-500/30 transition-all active:translate-y-[2px]"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
+                  >czytaj więcej ↗</button>
+               </div>
+               <p className="text-xl text-slate-300 italic leading-relaxed font-medium relative max-w-3xl line-clamp-4">
+                 <span className="text-emerald-500/50 text-6xl font-serif absolute -left-10 -top-4">"</span>
+                 {expertComment}
+                 <span className="text-emerald-500/50 text-6xl font-serif absolute -right-6 bottom-[-20px]">"</span>
+               </p>
             </div>
           </div>
 
           {/* Away players */}
           <div className={`${GLASS_PANEL} w-80 rounded-[45px] p-6 flex flex-col shrink-0`}>
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 text-center">
-              RAPORT: {awayClub.shortName}
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-4 text-center">
+              {awayClub.id === userTeamId
+                ? `${managerProfile?.firstName ?? ''} ${managerProfile?.lastName ?? ''}`
+                : (() => { const c = coaches[awayClub.coachId ?? '']; return c ? `${c.firstName} ${c.lastName}` : awayClub.shortName; })()}
             </h3>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-              <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mr-2 text-right">Pierwszy Skład</span>
-              {sortedData.awayStarters.map(p => renderPlayerRow(p, 'RIGHT'))}
-              {sortedData.awaySubs.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/5">
-                  <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mr-2 text-right">Zmiennicy</span>
-                  {sortedData.awaySubs.map(p => renderPlayerRow(p, 'RIGHT', true))}
-                </div>
-              )}
+              <div className="space-y-0">
+                <span className="block text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mr-2 text-right">Pierwszy Skład</span>
+                {sortedData.awayStarters.map(p => renderPlayerRow(p, 'RIGHT'))}
+                {sortedData.awaySubs.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/[0.03]">
+                    <span className="block text-[8px] font-black text-amber-500/70 uppercase tracking-widest text-center mb-1">Zmiany</span>
+                    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent mb-2" />
+                    {sortedData.awaySubs.map(p => renderPlayerRow(p, 'RIGHT', true))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -298,6 +329,38 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
         </div>
 
       </div>
+
+      {/* EXPERT COMMENT MODAL */}
+      {showExpertModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-8 animate-fade-in"
+          onClick={() => setShowExpertModal(false)}
+        >
+          <div
+            className={`${GLASS_PANEL} relative rounded-[40px] p-12 max-w-2xl w-full`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-5 mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-900 border-2 border-emerald-400 flex items-center justify-center font-black text-2xl text-white italic shadow-lg">H</div>
+              <div>
+                <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">ANALIZA EKSPERCKA</h4>
+                <p className="text-xs font-black text-white italic">Tomasz Hajto</p>
+              </div>
+              <button
+                onClick={() => setShowExpertModal(false)}
+                className="ml-auto w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-all text-2xl font-light text-slate-400"
+              >&times;</button>
+            </div>
+            <div className="overflow-y-auto custom-scrollbar max-h-[60vh] pr-2">
+              <p className="text-lg text-slate-200 italic leading-relaxed font-medium">
+                <span className="text-emerald-500/50 text-5xl font-serif not-italic align-bottom leading-none mr-1">"</span>
+                {expertComment}
+                <span className="text-emerald-500/50 text-5xl font-serif not-italic align-bottom leading-none ml-1">"</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
