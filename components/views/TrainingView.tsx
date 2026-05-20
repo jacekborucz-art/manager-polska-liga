@@ -34,6 +34,7 @@ export const TrainingView: React.FC = () => {
   const [dragging, setDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'training' | 'focus'>('training');
   const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
+  const [hasIndividualFocusChange, setHasIndividualFocusChange] = useState(false);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
   const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
   const cachedReport = useMemo(() => reportPlayer ? generatePlayerReport(reportPlayer, teamPlayers, allLeaguePlayers) : null, [reportPlayer]);
@@ -123,6 +124,7 @@ export const TrainingView: React.FC = () => {
       message: `Program "${focusName}" aktywowany. Efekt zadziala po 5 dniach bez przerwy.`,
       tone: 'info',
     });
+    setActiveTab('training');
     setSelectedFocusId(null);
   };
 
@@ -192,14 +194,23 @@ export const TrainingView: React.FC = () => {
             >
               POPROS ASYSTENTA
             </button>
-            <button
-              onClick={handleSave}
-              disabled={!selectedId}
-              className="px-14 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-20 text-white font-black italic uppercase tracking-tighter text-lg transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-300/60 border-x-emerald-500/30 border-b-black/60"
-              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 24px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.2)' }}
-            >
-              ZATWIERDŹ PROGRAM 🏁
-            </button>
+            {selectedId && (selectedId !== activeTrainingId || hasIndividualFocusChange) ? (
+              <button
+                onClick={handleSave}
+                className="px-14 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black italic uppercase tracking-tighter text-lg transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-300/60 border-x-emerald-500/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 24px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.2)' }}
+              >
+                ZATWIERDŹ PROGRAM 🏁
+              </button>
+            ) : (
+              <button
+                onClick={() => navigateTo(ViewState.DASHBOARD)}
+                className="px-14 py-5 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all active:translate-y-[2px]"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                WYJDŹ
+              </button>
+            )}
          </div>
       </header>
 
@@ -281,7 +292,7 @@ export const TrainingView: React.FC = () => {
                             <td className={`py-2 px-2 sticky right-0 z-10 ${stickyBg}`}>
                               <select
                                 value={player.trainingFocus || ''}
-                                onChange={e => updatePlayer(userTeamId!, player.id, { trainingFocus: (e.target.value as any) || null })}
+                                onChange={e => { updatePlayer(userTeamId!, player.id, { trainingFocus: (e.target.value as any) || null }); setHasIndividualFocusChange(true); }}
                                 className="bg-slate-800 border border-white/10 text-white text-[9px] font-black rounded-lg px-2 py-1 outline-none cursor-pointer hover:border-emerald-500/40 transition-all"
                               >
                                 <option value="">— Brak —</option>

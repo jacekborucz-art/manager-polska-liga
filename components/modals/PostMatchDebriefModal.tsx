@@ -79,27 +79,9 @@ export const PostMatchDebriefModal = ({
         <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent.glow} 0%, transparent 60%)` }} />
 
         {/* ── NAGŁÓWEK ── */}
-        <div className="relative flex flex-col items-center gap-3 px-10 pt-7 pb-5 border-b border-white/5">
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">ODPRAWA POMECZOWA</span>
-
-          {/* Wynik */}
-          <div className="flex items-center gap-6 w-full">
-            <h2 className="flex-1 text-xl font-black italic uppercase tracking-tighter text-white leading-none">{leftClubName}</h2>
-            <div className="flex flex-col items-center gap-1.5 shrink-0">
-              <div className="text-6xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.12)]">
-                {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
-              </div>
-              {hasPenaltyScore && (
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                  karne {userPenaltyScore}<span className="text-white/20 mx-1">:</span>{oppPenaltyScore}
-                </span>
-              )}
-              <span className={`text-[8px] font-black uppercase tracking-[0.3em] border px-3 py-0.5 rounded-full ${accent.badge}`}>
-                {contextLabel}
-              </span>
-            </div>
-            <h2 className="flex-1 text-xl font-black italic uppercase tracking-tighter text-white leading-none text-right">{rightClubName}</h2>
-          </div>
+        <div className="relative flex flex-col items-center gap-2 px-10 pt-7 pb-5 border-b border-white/5">
+          <span className="text-4xl font-black text-white uppercase tracking-[0.3em]">ODPRAWA POMECZOWA</span>
+          <span className="text-sm font-black text-slate-400 uppercase tracking-[0.3em]">PRZEMÓW DO DRUŻYNY</span>
         </div>
 
         {/* ── FAZA WYBORU ── */}

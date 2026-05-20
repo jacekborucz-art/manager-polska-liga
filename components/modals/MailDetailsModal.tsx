@@ -108,6 +108,37 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           <div className="prose prose-invert max-w-none">
             {mail.type === MailType.SCOUT ? (
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
+            ) : mail.subject?.toLowerCase().includes('sparing') ? (
+              (() => {
+                const matchRegex = /^(.+)\s(\d+[–-]\d+)\s(.+)$/;
+                const lines = mail.body.split('\n');
+                const headerLine = lines.find(l => l.trim() !== '' && !matchRegex.test(l));
+                const matchLines = lines.filter(l => matchRegex.test(l));
+                return (
+                  <div>
+                    {headerLine && (
+                      <p className="mb-5 text-sm font-medium text-slate-400">{headerLine}</p>
+                    )}
+                    <div className="flex flex-col">
+                      {matchLines.map((line, idx) => {
+                        const m = line.match(matchRegex);
+                        if (!m) return null;
+                        const [, home, score, away] = m;
+                        return (
+                          <div key={idx}>
+                            {idx > 0 && <div className="border-t border-white/10 mx-1" />}
+                            <div className="flex items-center gap-3 py-2">
+                              <span className="flex-1 text-right text-sm font-medium text-slate-300">{home}</span>
+                              <span className="w-14 shrink-0 text-center text-sm font-black text-white">{score}</span>
+                              <span className="flex-1 text-left text-sm font-medium text-slate-300">{away}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <p className="whitespace-pre-wrap text-base font-medium leading-relaxed text-slate-300 opacity-90">
                 {mail.body}
@@ -124,7 +155,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
             </span>
           </div>
 
-          <div className="flex items-center">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             {mail.metadata?.type === 'WINTER_CAMP_INVITE' && (() => {
               const expiryDate = new Date(mail.metadata.expiryDate);
               expiryDate.setHours(23, 59, 59, 999);

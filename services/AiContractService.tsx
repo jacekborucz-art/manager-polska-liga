@@ -89,6 +89,11 @@ const _seededRandom = (seed: string): number => {
 const _isGulfStarHunterClub = (club: Club): boolean =>
   GULF_STAR_HUNTER_COUNTRIES.has(club.country || '') && club.reputation >= 8;
 
+const _getGulfOwnerShortfallCover = (club: Club, requiredCash: number): number => {
+  if (!_isGulfStarHunterClub(club)) return 0;
+  return Math.max(0, Math.ceil(requiredCash - club.budget));
+};
+
 const _isVeteranStar = (player: Player): boolean =>
   player.age >= VETERAN_STAR_MIN_AGE && player.overallRating >= VETERAN_STAR_MIN_OVR;
 
@@ -896,7 +901,17 @@ processAiRecruitment: (
       const proposedBonus = gulfVeteranStarOffer?.proposedBonus ?? Math.floor(proposedSalary * 0.4);
       const newEndDate = gulfVeteranStarOffer?.newEndDate ?? new Date(currentDate.getFullYear() + 2, 5, 30).toISOString();
 
-      if (aiClub.budget < proposedBonus + proposedSalary) {
+      const gulfOwnerShortfallCover = _getGulfOwnerShortfallCover(aiClub, proposedBonus + proposedSalary);
+
+      if (gulfOwnerShortfallCover > 0) {
+        updatedClubs = updatedClubs.map(c =>
+          c.id === aiClub.id
+            ? { ...c, budget: c.budget + gulfOwnerShortfallCover }
+            : c
+        );
+      }
+
+      if (aiClub.budget + gulfOwnerShortfallCover < proposedBonus + proposedSalary) {
         // Brak środków — wyczyść flagę
         updatedPlayersMap['FREE_AGENTS'] = (updatedPlayersMap['FREE_AGENTS'] || []).map(p =>
           p.id === fa.id ? { ...p, aiNegotiationClubId: undefined, aiNegotiationResponseDate: undefined } : p
@@ -1718,7 +1733,17 @@ processAiRecruitment: (
 
         // Opłata transferowa została już pobrana przy podpisaniu umowy (processAiTransferListSignings / processAiInterestedPlayerTargeting)
         // Weryfikacja: czy kupujący ma środki na bonus dla zawodnika przy meldunku
-        if (buyerClub.budget < proposedBonus) {
+        const gulfOwnerShortfallCover = _getGulfOwnerShortfallCover(buyerClub, proposedBonus);
+
+        if (gulfOwnerShortfallCover > 0) {
+          updatedClubs = updatedClubs.map(c =>
+            c.id === buyerClubId
+              ? { ...c, budget: c.budget + gulfOwnerShortfallCover }
+              : c
+          );
+        }
+
+        if (buyerClub.budget + gulfOwnerShortfallCover < proposedBonus) {
           // Zwrot opłaty transferowej — kupujący zapłacił przy negocjacji, ale transfer odpada.
           // Bez zwrotu klub traci pieniądze i nie dostaje zawodnika.
           const refundFee = player.transferPendingFee ?? TransferSellerLogicService.estimateAskingPrice(player, sellerClub, updatedPlayersMap[sellerClubId] || [], currentDate);
