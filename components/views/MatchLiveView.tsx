@@ -557,7 +557,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     else if (activePenalty.phase === 'RESULT') {
       const t = setTimeout(() => {
         setActivePenalty(null);
-        setMatchState(prev => prev ? { ...prev, isPausedForEvent: false } : null);
+        setMatchState(prev => prev ? { ...prev, isPaused: false, isPausedForEvent: false } : null);
       }, 3000);
       return () => clearTimeout(t);
     }
@@ -567,7 +567,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     if (!activePenaltyNoCall) return;
     const t = setTimeout(() => {
       setActivePenaltyNoCall(null);
-      setMatchState(prev => prev ? { ...prev, isPausedForEvent: false } : null);
+      setMatchState(prev => prev ? { ...prev, isPaused: false, isPausedForEvent: false } : null);
     }, 2500);
     return () => clearTimeout(t);
   }, [activePenaltyNoCall, setMatchState]);
@@ -606,7 +606,10 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         }
         return { ...prev, logs: [varLog, ...prev.logs] };
       });
-      const closeTimer = setTimeout(() => setActiveVAR(null), 3000);
+      const closeTimer = setTimeout(() => {
+        setActiveVAR(null);
+        setMatchState(prev => prev ? { ...prev, isPaused: false, isPausedForEvent: false } : null);
+      }, 3000);
       return () => clearTimeout(closeTimer);
     }
   }, [activeVAR?.phase, activeVAR?.verdict, setMatchState]);
@@ -3040,6 +3043,19 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <p className="text-lg font-bold text-slate-300 uppercase tracking-widest">VAR: Bramka nieuznana</p>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {activePenaltyNoCall && (
+        <div className="fixed inset-0 z-[550] bg-black/75 backdrop-blur-xl flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-900/85 border border-yellow-500/30 rounded-[40px] p-12 flex flex-col items-center gap-6 shadow-[0_50px_100px_rgba(0,0,0,0.8)] max-w-2xl text-center">
+            <div className="text-7xl animate-bounce">📺</div>
+            <span className="text-[10px] text-yellow-400 font-black italic uppercase tracking-tighter">Analiza sędziego</span>
+            <h2 className="text-6xl text-white font-black italic uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(250,204,21,0.35)]">Nie ma karnego</h2>
+            <p className="text-lg text-slate-300 font-black italic uppercase tracking-tighter">
+              {activePenaltyNoCall.playerName} pada w polu karnym, ale arbiter każe grać dalej.
+            </p>
           </div>
         </div>
       )}

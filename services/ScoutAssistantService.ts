@@ -634,6 +634,7 @@ function buildMailBody(params: {
   approach: ReturnType<typeof recommendTacticStyle>;
   rotation: ReturnType<typeof suggestRotation>;
   opponentLeaguePosition: number;
+  opponentLeaguePlayed?: number;
   opponentLeaguePoints: number;
   opponentLeagueGoalDiff: number;
   leagueName: string;
@@ -651,7 +652,7 @@ function buildMailBody(params: {
   isHome?: boolean;
 }): string {
   const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
-    opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
+    opponentLeaguePosition, opponentLeaguePlayed = 0, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
     opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome } = params;
 
@@ -1014,10 +1015,13 @@ function buildMailBody(params: {
     else if (form.wins >= 3) { chanceScore -= 1; chanceReasons.push(`rywal prezentuje dobrą formę`); }
   }
 
-  if (opponentLeaguePosition <= 3) { chanceScore -= 2; chanceReasons.push(`${opponentName} zajmuje czołową pozycję w tabeli (${opponentLeaguePosition}. miejsce)`); }
-  else if (opponentLeaguePosition >= 15) { chanceScore += 2; chanceReasons.push(`rywal plasuje się nisko w tabeli (${opponentLeaguePosition}. miejsce)`); }
-  else if (opponentLeaguePosition >= 12) { chanceScore += 1; chanceReasons.push(`${opponentName} zajmuje dolną część tabeli`); }
-  else if (opponentLeaguePosition <= 5) { chanceScore -= 1; chanceReasons.push(`rywal jest w górnej części tabeli`); }
+  const hasReliableLeagueTable = opponentLeaguePlayed >= 4;
+  if (hasReliableLeagueTable) {
+    if (opponentLeaguePosition <= 3) { chanceScore -= 2; chanceReasons.push(`${opponentName} zajmuje czołową pozycję w tabeli (${opponentLeaguePosition}. miejsce)`); }
+    else if (opponentLeaguePosition >= 15) { chanceScore += 2; chanceReasons.push(`rywal plasuje się nisko w tabeli (${opponentLeaguePosition}. miejsce)`); }
+    else if (opponentLeaguePosition >= 12) { chanceScore += 1; chanceReasons.push(`${opponentName} zajmuje dolną część tabeli`); }
+    else if (opponentLeaguePosition <= 5) { chanceScore -= 1; chanceReasons.push(`rywal jest w górnej części tabeli`); }
+  }
 
   if (oppMoraleAvg <= 35) { chanceScore += 2; chanceReasons.push(`morale drużyny przeciwnej jest bardzo niskie (średnia ${Math.round(oppMoraleAvg)}/100)`); }
   else if (oppMoraleAvg <= 50) { chanceScore += 1; chanceReasons.push(`morale rywala jest poniżej normy (średnia ${Math.round(oppMoraleAvg)}/100)`); }
@@ -1109,6 +1113,7 @@ export const ScoutAssistantService = {
     managerName: string;
     clubs: Club[];
     opponentLeaguePosition: number;
+    opponentLeaguePlayed?: number;
     opponentLeaguePoints: number;
     opponentLeagueGoalDiff: number;
     leagueName: string;
@@ -1117,7 +1122,7 @@ export const ScoutAssistantService = {
     isHome?: boolean;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePlayed, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome } = params;
     const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
@@ -1149,6 +1154,7 @@ export const ScoutAssistantService = {
       approach,
       rotation,
       opponentLeaguePosition,
+      opponentLeaguePlayed,
       opponentLeaguePoints,
       opponentLeagueGoalDiff,
       leagueName,

@@ -6006,6 +6006,7 @@ const finalResult: SimulationOutput = {
               managerName: managerProfile?.firstName || 'Managerze',
               clubs,
               opponentLeaguePosition,
+              opponentLeaguePlayed: opponentClub.stats.played,
               opponentLeaguePoints: opponentClub.stats.points,
               opponentLeagueGoalDiff: opponentClub.stats.goalDifference,
               leagueName,
