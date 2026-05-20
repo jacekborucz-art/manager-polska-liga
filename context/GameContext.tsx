@@ -6332,7 +6332,7 @@ const finalResult: SimulationOutput = {
                 sender: `Agent gracza ${p.lastName}`,
                 role: 'Agencja menedżerska',
                 subject: `Prekontrakt podpisany: ${p.firstName} ${p.lastName}`,
-                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik dołączy do nich po wygaśnięciu obecnej umowy, czyli ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')}.\n\nTo konsekwencja wejścia w ostatni rok kontraktu. Jeśli chcemy unikać takich sytuacji, kluczowe rozmowy trzeba zaczynać zanim zostanie 12 miesięcy umowy.`,
+                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik dołączy do nich po wygaśnięciu obecnej umowy, czyli ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')}.\n\n`,
                 date: new Date(nextDay),
                 isRead: false,
                 type: MailType.STAFF,
