@@ -1617,6 +1617,8 @@ if (userTeamId) {
     lastNTMatchResults,
     aiFriendlyPairs,
     aiFriendlyReports,
+    sentMailIds: Array.from(sentMailIdsRef.current),
+    lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
   });
 
   const loadGameFromFile = (data: SaveState): void => {
@@ -1695,6 +1697,11 @@ if (userTeamId) {
     setLastNTMatchResults(data.lastNTMatchResults ?? null);
     setAiFriendlyPairs(data.aiFriendlyPairs || []);
     setAiFriendlyReports(data.aiFriendlyReports || []);
+    const restoredSentMailIds = data.sentMailIds && data.sentMailIds.length > 0
+      ? data.sentMailIds
+      : (data.messages || []).map((message: any) => message?.id).filter(Boolean);
+    sentMailIdsRef.current = new Set(restoredSentMailIds);
+    lastProcessedLeagueDateRef.current = data.lastProcessedLeagueDate ?? null;
     MatchHistoryService.clear();
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
     ChampionshipHistoryService.clear();

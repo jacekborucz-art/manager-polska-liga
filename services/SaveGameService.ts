@@ -1,7 +1,7 @@
 
 import { FinanceService } from './FinanceService';
 
-export const SAVE_VERSION = '1.8';
+export const SAVE_VERSION = '1.9';
 
 export interface SaveState {
   version: string;
@@ -82,6 +82,8 @@ export interface SaveState {
   lastNTMatchResults: any;
   aiFriendlyPairs: any[];
   aiFriendlyReports: any[];
+  sentMailIds?: string[];
+  lastProcessedLeagueDate?: string | null;
 }
 
 const DEFAULT_START_DATE = new Date('2025-07-01');
@@ -355,6 +357,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     lastNTMatchResults: data.lastNTMatchResults ?? null,
     aiFriendlyPairs: asArray(data.aiFriendlyPairs),
     aiFriendlyReports: asArray(data.aiFriendlyReports),
+    sentMailIds: asArray(data.sentMailIds),
+    lastProcessedLeagueDate: data.lastProcessedLeagueDate ?? null,
   };
 }
 
@@ -376,7 +380,6 @@ export async function importSaveFromFile(file: File): Promise<SaveState> {
   if (
     !data ||
     typeof data !== 'object' ||
-    !data.version ||
     !Array.isArray(data.clubs) ||
     !data.players ||
     data.userTeamId === undefined
