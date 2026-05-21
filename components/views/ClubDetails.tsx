@@ -84,6 +84,13 @@ export const ClubDetails: React.FC = () => {
       .replace('.', '');
   };
 
+  const formatLoanEnd = (player: Player): string => {
+    if (!player.loan) return '-';
+    const date = new Date(player.loan.endDate);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
   const renderPlayerRow = (player: Player, label: string, rowIndex: number) => {
     const healthInfo = PlayerPresentationService.getHealthDisplay(player);
     const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
@@ -116,6 +123,14 @@ export const ClubDetails: React.FC = () => {
         </span>
       )}
       {/* Badge zainteresowania — widoczny również w kadrach innych klubów */}
+      {player.loan && (
+        <span
+          title={`Wypożyczony z ${player.loan.parentClubName} do ${player.loan.destinationClubName}\nDo: ${formatLoanEnd(player)}`}
+          className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 text-[7px] font-black italic uppercase tracking-tighter rounded-sm border border-cyan-500/30 shadow-sm cursor-help"
+        >
+          WYP
+        </span>
+      )}
       {player.interestedClubs && player.interestedClubs.filter(id => id !== player.clubId).length > 0 && (
         <span
           title={`Zainteresowane kluby:\n${player.interestedClubs.filter(id => id !== player.clubId).map(id => clubs.find(c => c.id === id)?.name ?? id).join('\n')}`}

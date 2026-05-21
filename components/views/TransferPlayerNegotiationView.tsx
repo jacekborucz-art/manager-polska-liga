@@ -199,9 +199,14 @@ export const TransferPlayerNegotiationView: React.FC = () => {
   const isCompleted = feedback?.status === TransferOfferStatus.COMPLETED || offer.status === TransferOfferStatus.COMPLETED;
   const isRejected = feedback?.status === TransferOfferStatus.PLAYER_REJECTED || offer.status === TransferOfferStatus.PLAYER_REJECTED;
   const isPreContractAgreed = feedback?.status === TransferOfferStatus.AGREED_PRECONTRACT || offer.status === TransferOfferStatus.AGREED_PRECONTRACT;
+  const loanEndDate = player.loan ? new Date(player.loan.endDate) : null;
+  const loanEndLabel = loanEndDate && !Number.isNaN(loanEndDate.getTime())
+    ? loanEndDate.toLocaleDateString('pl-PL')
+    : '-';
   const canSubmit =
     offer.status === TransferOfferStatus.PLAYER_NEGOTIATION &&
     !isCompleted &&
+    !player.loan &&
     !!negotiationPlan?.willingToTalk;
 
   return (
@@ -432,6 +437,15 @@ export const TransferPlayerNegotiationView: React.FC = () => {
               </div>
             )}
 
+            {player.loan && (
+              <div className="rounded-[24px] border border-cyan-500/30 bg-cyan-500/10 p-5">
+                <p className="text-sm font-black italic uppercase tracking-tighter text-cyan-300">Negocjacje zablokowane</p>
+                <p className="text-sm text-slate-200 mt-3">
+                  Ten zawodnik jest wypożyczony do {player.loan.destinationClubName} do {loanEndLabel}. Kontrakt transferowy można negocjować po zakończeniu wypożyczenia.
+                </p>
+              </div>
+            )}
+
             {(feedback || offer.playerReason) && (
               <div
                 className={`rounded-[24px] border p-5 ${
@@ -480,6 +494,8 @@ export const TransferPlayerNegotiationView: React.FC = () => {
                   ? 'Umowa od przyszlej daty podpisana'
                 : isRejected
                   ? 'Negocjacje zakonczone'
+                  : player.loan
+                    ? 'Zawodnik wypożyczony'
                   : !negotiationPlan?.willingToTalk
                     ? 'ZERWANIE ROZMÓW'
                     : 'PRZEDSTAW OFERTĘ'}

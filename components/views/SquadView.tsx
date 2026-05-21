@@ -25,7 +25,7 @@ export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
+          toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -53,7 +53,7 @@ export const SquadView: React.FC = () => {
   const [staffNegCounterYears, setStaffNegCounterYears] = useState(1);
   const [staffNegResultMsg, setStaffNegResultMsg] = useState('');
   const [staffNegResultOk, setStaffNegResultOk] = useState(false);
-  const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE'>('SQUAD');
+  const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE' | 'LOANS'>('SQUAD');
 
   const REGION_LABELS: Record<string, string> = {
     POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
@@ -110,6 +110,42 @@ export const SquadView: React.FC = () => {
     const date = new Date(contractEndDate);
     if (Number.isNaN(date.getTime())) return '-';
     return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatLoanEnd = (player: Player): string => {
+    if (!player.loan) return '-';
+    const date = new Date(player.loan.endDate);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatLoanDate = (isoDate?: string): string => {
+    if (!isoDate) return '-';
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const getLoanDaysLeft = (isoDate?: string): number | null => {
+    if (!isoDate) return null;
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) return null;
+    return Math.max(0, Math.ceil((date.getTime() - currentDate.getTime()) / 86_400_000));
+  };
+
+  const getLoanMatches = (player: Player): number => {
+    return Math.max(0, (player.stats.matchesPlayed ?? 0) - (player.loan?.reportBaselineMatches ?? player.stats.matchesPlayed ?? 0));
+  };
+
+  const getLoanMinutes = (player: Player): number => {
+    return Math.max(0, (player.stats.minutesPlayed ?? 0) - (player.loan?.reportBaselineMinutes ?? player.stats.minutesPlayed ?? 0));
+  };
+
+  const getLoanAverageRating = (player: Player): string => {
+    const baseline = player.loan?.reportBaselineRatingCount ?? (player.stats.ratingHistory?.length ?? 0);
+    const ratings = (player.stats.ratingHistory || []).slice(baseline);
+    if (ratings.length === 0) return '-';
+    return (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(2);
   };
 
   const getContractRemainingInfo = (contractEndDate?: string | null): { label: string; className: string } => {
@@ -543,6 +579,14 @@ export const SquadView: React.FC = () => {
                      LISTA
                 </span>
               )}
+              {player.isAvailableForLoan && !player.loan && (
+                <span
+                  title="Dostępny do wypożyczenia"
+                  className="px-2 py-0.5 bg-cyan-500/20 text-cyan-300 text-[8px] font-black italic uppercase tracking-tighter rounded border border-cyan-500/30 shadow-sm shrink-0 leading-none cursor-help"
+                >
+                  LOAN
+                </span>
+              )}
               {hasPendingTransfer && (
                 <span
                   title={`Transfer do ${pendingTransferClub?.name ?? player.transferPendingClubId}${player.transferReportDate ? `\nData przejścia: ${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}` : ''}\n${pendingTransferFeeLabel}`}
@@ -552,6 +596,14 @@ export const SquadView: React.FC = () => {
                 </span>
               )}
               {/* Badge zainteresowania transferowego — pojawia się gdy ≥1 klub AI obserwuje zawodnika */}
+              {player.loan && (
+                <span
+                  title={`Wypożyczony z ${player.loan.parentClubName} do ${player.loan.destinationClubName}\nDo: ${formatLoanEnd(player)}`}
+                  className="px-2 py-0.5 bg-cyan-500/20 text-cyan-300 text-[8px] font-black italic uppercase tracking-tighter rounded border border-cyan-500/30 shadow-sm shrink-0 leading-none cursor-help"
+                >
+                  WYP
+                </span>
+              )}
               {player.interestedClubs && player.interestedClubs.filter(id => id !== player.clubId).length > 0 && (
                 <span
                   title={`Zainteresowane kluby:\n${player.interestedClubs.filter(id => id !== player.clubId).map(id => clubs.find(c => c.id === id)?.name ?? id).join('\n')}`}
@@ -679,7 +731,7 @@ export const SquadView: React.FC = () => {
     );
   };
 
-  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick' | 'reserves' | 'talk' | 'transferList' | 'untouchable' | 'roleNone' | 'roleStarter' | 'roleKey') => {
+  const handleContextAction = (action: 'captain' | 'penalty' | 'freekick' | 'reserves' | 'talk' | 'transferList' | 'loanAvailable' | 'untouchable' | 'roleNone' | 'roleStarter' | 'roleKey') => {
     if (!contextMenu || !userTeamId || !myClub) return;
     if (action === 'talk') {
       setPendingOpenTalk(true);
@@ -689,6 +741,11 @@ export const SquadView: React.FC = () => {
     }
     if (action === 'transferList') {
       toggleTransferList(contextMenu.playerId);
+      setContextMenu(null);
+      return;
+    }
+    if (action === 'loanAvailable') {
+      toggleLoanAvailability(contextMenu.playerId);
       setContextMenu(null);
       return;
     }
@@ -961,6 +1018,11 @@ export const SquadView: React.FC = () => {
               className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'TABLE' ? 'bg-white/15 border-t-white/40 border-x-white/20 border-b-black/60 text-white' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >TABELA</button>
+            <button
+              onClick={() => setActiveTab('LOANS')}
+              className={`px-6 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'LOANS' ? 'bg-cyan-500/20 border-t-cyan-400/50 border-x-cyan-500/25 border-b-black/60 text-cyan-300' : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            >WYPOŻYCZENIA</button>
           </div>
 
           {activeTab === 'MORALE' && (() => {
@@ -1269,6 +1331,132 @@ export const SquadView: React.FC = () => {
                   )}
                   <span className="flex items-center gap-2 text-[8px] font-black italic uppercase tracking-tighter text-red-400"><span className="w-2 h-2 rounded-full bg-red-400" />Spadek</span>
                 </div>
+              </div>
+            );
+          })()}
+
+          {activeTab === 'LOANS' && (() => {
+            const loanedOutPlayers = allLeaguePlayers
+              .filter(player => player.loan?.parentClubId === userTeamId)
+              .sort((a, b) => {
+                const aDays = getLoanDaysLeft(a.loan?.endDate) ?? 9999;
+                const bDays = getLoanDaysLeft(b.loan?.endDate) ?? 9999;
+                return aDays - bDays || b.overallRating - a.overallRating || a.lastName.localeCompare(b.lastName);
+              });
+
+            return (
+              <div className="shrink-0 bg-slate-900/40 rounded-[40px] border border-white/10 backdrop-blur-3xl shadow-2xl overflow-hidden">
+                <div className="px-6 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <span className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Wypożyczeni zawodnicy</span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-md border text-[9px] font-black italic uppercase tracking-tighter text-cyan-200 bg-cyan-500/10 border-cyan-500/30">
+                    {loanedOutPlayers.length}
+                  </span>
+                </div>
+
+                {loanedOutPlayers.length === 0 ? (
+                  <div className="min-h-[260px] flex items-center justify-center">
+                    <span className="text-[13px] font-black italic uppercase tracking-tighter text-slate-500">
+                      BRAK ZAWODNIKÓW NA WYPOŻYCZENIU.
+                    </span>
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.02]">
+                        <th className="px-5 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Zawodnik</th>
+                        <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Poz.</th>
+                        <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">OVR</th>
+                        <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">M</th>
+                        <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Min</th>
+                        <th className="px-3 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Śr.</th>
+                        <th className="px-5 py-3 text-left text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Klub</th>
+                        <th className="px-4 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Od</th>
+                        <th className="px-4 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Do</th>
+                        <th className="px-4 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Dni</th>
+                        <th className="px-4 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Pensja</th>
+                        <th className="px-5 py-3 text-right text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Opłata</th>
+                        <th className="px-5 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loanedOutPlayers.map(player => {
+                        const destinationClub = clubs.find(club => club.id === player.loan?.destinationClubId);
+                        const destinationLogo = destinationClub ? getClubLogo(destinationClub.id) : null;
+                        const daysLeft = getLoanDaysLeft(player.loan?.endDate);
+                        const isReturningSoon = daysLeft !== null && daysLeft <= 30;
+                        const loanFee = player.loan?.loanFee ?? 0;
+                        const loanMatches = getLoanMatches(player);
+                        const loanMinutes = getLoanMinutes(player);
+                        const loanAverageRating = getLoanAverageRating(player);
+                        return (
+                          <tr
+                            key={player.id}
+                            onClick={() => viewPlayerDetails(player.id)}
+                            className="group cursor-pointer border-b border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.05] transition-colors"
+                          >
+                            <td className="px-5 py-3">
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-black italic uppercase tracking-tighter text-white group-hover:text-cyan-300">{player.lastName}</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">{player.firstName}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-flex min-w-[34px] justify-center rounded-md border px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter ${getPositionBadgeClass(player.position)}`}>{player.position}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-flex min-w-[34px] justify-center rounded-md border px-2 py-1 text-[10px] font-black italic uppercase tracking-tighter ${getOverallBadgeClass(player.overallRating)}`}>{player.overallRating}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className="text-[10px] font-black italic tracking-tighter text-slate-300">{loanMatches}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`text-[10px] font-black italic tracking-tighter ${loanMinutes < 90 ? 'text-orange-300' : 'text-cyan-300'}`}>{loanMinutes}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className="text-[10px] font-black italic tracking-tighter text-slate-300">{loanAverageRating}</span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                {destinationLogo ? (
+                                  <img src={destinationLogo} alt={destinationClub?.name ?? player.loan?.destinationClubName ?? ''} className="w-6 h-6 object-contain shrink-0" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full border border-cyan-500/30 bg-cyan-500/10 shrink-0" />
+                                )}
+                                <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-200">{player.loan?.destinationClubName ?? destinationClub?.name ?? '-'}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-[10px] font-black italic tracking-tighter text-slate-300">{formatLoanDate(player.loan?.startDate)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-[10px] font-black italic tracking-tighter text-slate-300">{formatLoanDate(player.loan?.endDate)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`text-[11px] font-black italic tracking-tighter ${isReturningSoon ? 'text-amber-300' : 'text-cyan-300'}`}>{daysLeft ?? '-'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-[10px] font-black italic tracking-tighter text-slate-300">{player.loan?.wageCoveragePercent ?? 0}%</span>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <span className="text-[10px] font-black italic tracking-tighter text-emerald-300">{loanFee.toLocaleString('pl-PL')} PLN</span>
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              <span className={`inline-flex rounded-md border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${
+                                player.loan?.forcedByClub
+                                  ? 'border-orange-400/40 bg-orange-500/15 text-orange-200'
+                                  : isReturningSoon
+                                    ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
+                                    : 'border-cyan-400/40 bg-cyan-500/15 text-cyan-200'
+                              }`}>
+                                {player.loan?.forcedByClub ? 'Wymuszone' : isReturningSoon ? 'Wraca wkrótce' : 'Aktywne'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             );
           })()}
@@ -1655,9 +1843,14 @@ export const SquadView: React.FC = () => {
           </div>
           <div className="my-1 border-t border-white/10" />
           {(() => { const cp = myPlayers.find(p => p.id === contextMenu.playerId); return (
-          <button onClick={() => handleContextAction('transferList')} disabled={!!cp?.isUntouchable} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+          <>
+          <button onClick={() => handleContextAction('transferList')} disabled={!!cp?.isUntouchable || !!cp?.loan || !!cp?.transferPendingClubId} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
             {cp?.isOnTransferList ? 'Usuń z listy' : 'Wystaw na listę'}
           </button>
+          <button onClick={() => handleContextAction('loanAvailable')} disabled={!!cp?.isUntouchable || !!cp?.loan || !!cp?.transferPendingClubId} className="w-full px-4 py-2.5 text-left text-[11px] font-black italic uppercase tracking-tighter text-cyan-300 hover:bg-cyan-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            {cp?.isAvailableForLoan ? 'Zdejmij z wypożyczeń' : 'Dostępny do wypożyczenia'}
+          </button>
+          </>
           ); })()}
           <button onClick={() => handleContextAction('untouchable')} className="w-full px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-white hover:bg-white/10 transition-colors">
             Nie na sprzedaż

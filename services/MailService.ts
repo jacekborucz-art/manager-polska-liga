@@ -1060,6 +1060,54 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     };
   },
 
+  generateIncomingLoanOfferMail(
+    player: Player,
+    buyerClubName: string,
+    buyerLeagueName: string,
+    loanFee: number,
+    loanDuration: string,
+    wageCoveragePercent: number,
+    sellerClubName: string,
+    currentDate: Date,
+    offerId: string
+  ): MailMessage {
+    const playerName = `${player.firstName} ${player.lastName}`;
+    const responseDeadline = new Date(currentDate);
+    responseDeadline.setDate(responseDeadline.getDate() + 5);
+    const deadlineLabel = responseDeadline.toLocaleDateString('pl-PL');
+
+    return {
+      id: `incoming_loan_offer_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      sender: 'Dział Transferowy',
+      role: 'Kierownik ds. Wypożyczeń',
+      subject: `Oferta wypożyczenia - ${playerName}`,
+      body: [
+        'Szanowny Trenerze,',
+        '',
+        `Do klubu wpłynęła oficjalna oferta wypożyczenia zawodnika ${playerName}. Zainteresowany klub to ${buyerClubName} (${buyerLeagueName}).`,
+        '',
+        'Klub argumentuje, że zawodnik byłby realnym wzmocnieniem ich kadry i deklaruje gotowość do przejęcia części kosztów kontraktu.',
+        '',
+        'Warunki propozycji:',
+        `Okres: ${loanDuration}`,
+        `Pokrycie kontraktu: ${wageCoveragePercent}%`,
+        `Opłata za wypożyczenie: ${loanFee.toLocaleString('pl-PL')} PLN`,
+        '',
+        `Termin rozpatrzenia: do dnia ${deadlineLabel}.`,
+        '',
+        'Decyzję można podjąć bez oczekiwania na kolejną turę negocjacji.',
+        '',
+        'Z poważaniem,',
+        `Dział Transferowy ${sellerClubName}`,
+      ].join('\n'),
+      date: currentDate,
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 1,
+      metadata: { type: 'INCOMING_TRANSFER_OFFER', offerId },
+    };
+  },
+
   generateIncomingOfferReminderMail(
     player: Player,
     buyerClubName: string,

@@ -68,7 +68,10 @@ export const IncomingOfferView: React.FC = () => {
 
   const { player, sellerClub, buyerClub, buyerLeague, marketValue } = data;
 
-  const timingLabel = IncomingTransferService.getTimingLabel(offer.timing);
+  const isLoanOffer = offer.kind === 'LOAN';
+  const timingLabel = isLoanOffer
+    ? IncomingTransferService.getLoanDurationLabel(offer.loanDuration)
+    : IncomingTransferService.getTimingLabel(offer.timing);
   const repLabel = REPUTATION_LABELS[Math.round(buyerClub.reputation)] ?? '★☆☆☆☆';
 
   const isPendingResponse =
@@ -82,8 +85,17 @@ export const IncomingOfferView: React.FC = () => {
   const isAwaiting = offer.status === IncomingOfferStatus.AWAITING_CONFIRMATION;
 
   const isCounterPending = offer.status === IncomingOfferStatus.COUNTER_PENDING_AI;
+  const isLoanedPlayer = !!player.loan;
+  const loanEndDate = player.loan ? new Date(player.loan.endDate) : null;
+  const loanEndLabel = loanEndDate && !Number.isNaN(loanEndDate.getTime())
+    ? loanEndDate.toLocaleDateString('pl-PL')
+    : '-';
+  const loanBlockMessage = player.loan
+    ? `${player.firstName} ${player.lastName} jest wypożyczony do ${player.loan.destinationClubName} do ${loanEndLabel}. Sprzedaż będzie możliwa dopiero po zakończeniu wypożyczenia.`
+    : '';
 
   const handleAccept = () => {
+    if (isLoanedPlayer) return;
     respondToIncomingOffer(offer.id, 'accept');
   };
 
@@ -92,11 +104,13 @@ export const IncomingOfferView: React.FC = () => {
   };
 
   const handleSubmitCounter = () => {
+    if (isLoanedPlayer) return;
     respondToIncomingOffer(offer.id, 'counter', counterFee);
     setShowCounter(false);
   };
 
   const handleConfirm = () => {
+    if (isLoanedPlayer) return;
     confirmIncomingTransfer(offer.id, true);
   };
 
@@ -104,9 +118,12 @@ export const IncomingOfferView: React.FC = () => {
     confirmIncomingTransfer(offer.id, false);
   };
 
-  const currentDisplayFee = isAICountered ? (offer.aiCounterFee ?? offer.fee) : offer.fee;
+  const currentDisplayFee = isLoanOffer
+    ? (offer.loanFee ?? offer.fee)
+    : isAICountered ? (offer.aiCounterFee ?? offer.fee) : offer.fee;
+  const loanEndDateLabel = offer.loanEndDate ? new Date(offer.loanEndDate).toLocaleDateString('pl-PL') : '-';
   const buyerCountryLabel = buyerClub.country ?? buyerLeague?.name ?? buyerClub.leagueId;
-  const directorAdvisory = sellerClub.sportingDirector
+  const directorAdvisory = !isLoanOffer && sellerClub.sportingDirector
     ? SportingDirectorService.getIncomingSaleAdvisory({
         club: sellerClub,
         player,
@@ -131,7 +148,9 @@ export const IncomingOfferView: React.FC = () => {
         {/* Header */}
         <div className="p-8 border-b border-white/10 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-400">Oferta Transferowa</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-400">
+              {isLoanOffer ? 'Oferta Wypożyczenia' : 'Oferta Transferowa'}
+            </span>
             <h1 className="text-3xl font-black italic uppercase tracking-tight mt-2">
               {player.firstName} {player.lastName}
             </h1>
@@ -167,7 +186,9 @@ export const IncomingOfferView: React.FC = () => {
 
             {/* Kupujący klub */}
             <div className="rounded-[28px] border border-white/10 bg-black/10 p-5">
-              <p className="text-[9px] font-black uppercase tracking-[0.35em] text-slate-500 mb-4">Kupujący Klub</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.35em] text-slate-500 mb-4">
+                {isLoanOffer ? 'Klub wypożyczający' : 'Kupujący Klub'}
+              </p>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-400">Klub</span>
@@ -218,7 +239,7 @@ export const IncomingOfferView: React.FC = () => {
               <p className="text-[9px] font-black uppercase tracking-[0.35em] text-slate-500 mb-4">Oferta</p>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-400">Proponowana kwota</span>
+                  <span className="text-slate-400">{isLoanOffer ? 'Opłata za wypożyczenie' : 'Proponowana kwota'}</span>
                   <span className="font-black text-2xl text-amber-400 text-right">
                     {currentDisplayFee.toLocaleString('pl-PL')} PLN
                   </span>
@@ -230,10 +251,26 @@ export const IncomingOfferView: React.FC = () => {
                   </div>
                 )}
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-400">Termin przejścia</span>
+                  <span className="text-slate-400">{isLoanOffer ? 'Okres' : 'Termin przejścia'}</span>
                   <span className="font-black text-white text-right">{timingLabel}</span>
                 </div>
-                {offer.negotiationRound > 0 && (
+                {isLoanOffer && (
+                  <>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Koniec wypożyczenia</span>
+                      <span className="font-black text-white text-right">{loanEndDateLabel}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Pokrycie kontraktu</span>
+                      <span className="font-black text-white text-right">{offer.wageCoveragePercent ?? 0}%</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Szacowany koszt AI</span>
+                      <span className="font-black text-slate-200 text-right">{(offer.loanTotalCost ?? currentDisplayFee).toLocaleString('pl-PL')} PLN</span>
+                    </div>
+                  </>
+                )}
+                {!isLoanOffer && offer.negotiationRound > 0 && (
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-400">Runda negocjacji</span>
                     <span className="font-black text-slate-300 text-right">{offer.negotiationRound} / 3</span>
@@ -253,6 +290,13 @@ export const IncomingOfferView: React.FC = () => {
               </div>
             )}
 
+            {isLoanedPlayer && (
+              <div className="rounded-[20px] border border-cyan-500/35 bg-cyan-500/10 p-4">
+                <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300 mb-2">Oferta zablokowana</p>
+                <p className="text-xs text-cyan-100 leading-relaxed">{loanBlockMessage}</p>
+              </div>
+            )}
+
             {/* Stany terminalne */}
             {offer.status === IncomingOfferStatus.EXPIRED && (
               <div className="rounded-[20px] border border-slate-500/40 bg-slate-500/10 p-4 text-center">
@@ -265,13 +309,26 @@ export const IncomingOfferView: React.FC = () => {
               </div>
             )}
             {offer.status === IncomingOfferStatus.PLAYER_REFUSED && (
-              <div className="rounded-[20px] border border-orange-500/30 bg-orange-500/10 p-4 text-center">
-                <p className="text-xs text-orange-300">Zawodnik odmówił rozmów z {buyerClub.name}.</p>
+              <div className="rounded-[20px] border border-orange-500/30 bg-orange-500/10 p-4 text-center space-y-3">
+                <p className="text-xs text-orange-300">
+                  {isLoanOffer
+                    ? `Zawodnik nie chce wypożyczenia do ${buyerClub.name}.`
+                    : `Zawodnik odmówił rozmów z ${buyerClub.name}.`}
+                </p>
+                {isLoanOffer && offer.loanPlayerCanBeForced && (
+                  <button
+                    onClick={handleConfirm}
+                    disabled={isLoanedPlayer}
+                    className="w-full py-3 rounded-2xl bg-orange-500 text-white font-black uppercase tracking-widest text-xs hover:bg-orange-400 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    Wyślij mimo odmowy
+                  </button>
+                )}
               </div>
             )}
             {offer.status === IncomingOfferStatus.COMPLETED && (
               <div className="rounded-[20px] border border-emerald-500/40 bg-emerald-500/10 p-4 text-center">
-                <p className="text-xs text-emerald-400 font-black">Transfer zakończony pomyślnie.</p>
+                <p className="text-xs text-emerald-400 font-black">{isLoanOffer ? 'Wypożyczenie zakończone pomyślnie.' : 'Transfer zakończony pomyślnie.'}</p>
               </div>
             )}
             {offer.status === IncomingOfferStatus.REJECTED_AT_CONFIRM && (
@@ -305,15 +362,18 @@ export const IncomingOfferView: React.FC = () => {
                 <p className="text-[9px] font-black uppercase tracking-[0.3em] text-emerald-400">Zawodnik się zgodził</p>
                 <p className="text-xs text-emerald-200 leading-relaxed">
                   {player.firstName} {player.lastName} zaakceptował warunki {buyerClub.name}.
-                  Kwota transferu: <span className="font-black">{offer.fee.toLocaleString('pl-PL')} PLN</span>.
-                  Czy zatwierdza Pan ten transfer?
+                  {isLoanOffer
+                    ? `Warunki wypożyczenia zostały zaakceptowane. Koniec: ${loanEndDateLabel}.`
+                    : `Kwota transferu: ${offer.fee.toLocaleString('pl-PL')} PLN.`}
+                  {' '}Czy zatwierdza Pan tę decyzję?
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={handleConfirm}
-                    className="flex-1 py-3 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest text-xs hover:bg-emerald-400 transition-colors"
+                    disabled={isLoanedPlayer}
+                    className="flex-1 py-3 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest text-xs hover:bg-emerald-400 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
-                    Zatwierdź transfer
+                    {isLoanOffer ? 'Zatwierdź wypożyczenie' : 'Zatwierdź transfer'}
                   </button>
                   <button
                     onClick={handleRejectConfirm}
@@ -330,17 +390,19 @@ export const IncomingOfferView: React.FC = () => {
               <div className="space-y-3">
                 <button
                   onClick={handleAccept}
-                  className="w-full py-4 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest text-xs hover:bg-emerald-400 transition-colors"
+                  disabled={isLoanedPlayer}
+                  className="w-full py-4 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest text-xs hover:bg-emerald-400 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                 >
-                  Akceptuj ofertę
+                  {isLoanedPlayer ? 'Zawodnik wypożyczony' : isLoanOffer ? 'Akceptuj wypożyczenie' : 'Akceptuj ofertę'}
                 </button>
-                {offer.negotiationRound < 3 && (
+                {!isLoanOffer && offer.negotiationRound < 3 && (
                   <button
                     onClick={() => {
                       setCounterFee(currentDisplayFee);
                       setShowCounter(true);
                     }}
-                    className="w-full py-4 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black uppercase tracking-widest text-xs hover:bg-amber-500/30 transition-colors"
+                    disabled={isLoanedPlayer}
+                    className="w-full py-4 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black uppercase tracking-widest text-xs hover:bg-amber-500/30 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     Podbij cenę ({offer.negotiationRound + 1}/3)
                   </button>
@@ -402,7 +464,8 @@ export const IncomingOfferView: React.FC = () => {
                 <div className="flex gap-3">
                   <button
                     onClick={handleSubmitCounter}
-                    className="flex-1 py-3 rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest text-xs hover:bg-amber-400 transition-colors"
+                    disabled={isLoanedPlayer}
+                    className="flex-1 py-3 rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest text-xs hover:bg-amber-400 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     Wyślij kontrofertę
                   </button>

@@ -8,7 +8,7 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -73,11 +73,20 @@ export const PlayerCard: React.FC = () => {
     ? clubs.find(c => c.id === player.transferPendingClubId)
     : null;
   const hasPendingTransfer = !!player.transferPendingClubId && !!player.transferReportDate;
+  const isLoanedPlayer = !!player.loan;
   const pendingTransferFeeLabel = player.transferPendingFee === 0
     ? 'Wolny transfer po wygaśnięciu kontraktu'
     : player.transferPendingFee
       ? `Kwota: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
       : 'Transfer uzgodniony';
+  const loanStartDate = player.loan ? new Date(player.loan.startDate) : null;
+  const loanEndDate = player.loan ? new Date(player.loan.endDate) : null;
+  const loanStartLabel = loanStartDate && !Number.isNaN(loanStartDate.getTime())
+    ? loanStartDate.toLocaleDateString('pl-PL')
+    : '-';
+  const loanEndLabel = loanEndDate && !Number.isNaN(loanEndDate.getTime())
+    ? loanEndDate.toLocaleDateString('pl-PL')
+    : '-';
   const hasUserTransferAgreement = !!(userTeamId && transferOffers.find(offer =>
     offer.playerId === player.id &&
     offer.buyerClubId === userTeamId &&
@@ -169,10 +178,13 @@ export const PlayerCard: React.FC = () => {
     }
     return baseHistory
       .map((entry, index) => {
+        const isLoanEntry = entry.isLoan === true;
         const isCurrentClubEntry = entry.toYear === null && entry.clubId === player.clubId;
         const isReserveEntry = entry.clubName.endsWith(' II');
         const statsSnapshot: PlayerCareerStatsSnapshot | null = isCurrentClubEntry
-          ? (isReserveEntry && player.reserveStats
+          ? (isLoanEntry && player.loan
+              ? PlayerCareerService.buildLoanStatsSnapshot(player)
+              : isReserveEntry && player.reserveStats
               ? {
                   matchesPlayed: player.reserveStats.matches,
                   goals: player.reserveStats.goals,
@@ -189,6 +201,7 @@ export const PlayerCard: React.FC = () => {
         return {
           key: `${entry.clubId}-${entry.fromYear}-${entry.fromMonth}-${index}`,
           entry,
+          isLoanEntry,
           isCurrentClubEntry,
           periodLabel: `${formatCareerDate(entry.fromMonth, entry.fromYear)} - ${formatCareerDate(entry.toMonth, entry.toYear)}`,
           statsSnapshot
@@ -236,6 +249,13 @@ export const PlayerCard: React.FC = () => {
                    </span>
                 </div>
               )}
+              {player.isAvailableForLoan && !player.loan && (
+                <div className="mb-4">
+                   <span className="bg-cyan-500/20 text-cyan-300 text-[10px] font-black italic uppercase tracking-tighter px-4 py-1 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
+                     DOSTĘPNY DO WYPOŻYCZENIA
+                   </span>
+                </div>
+              )}
               {player.isUntouchable && !player.isOnTransferList && (
                 <div className="mb-4">
                    <span className="bg-rose-600 text-white text-[10px] font-black italic uppercase tracking-tighter px-4 py-1 rounded-full shadow-[0_0_20px_rgba(225,29,72,0.45)]">
@@ -260,6 +280,12 @@ export const PlayerCard: React.FC = () => {
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 mb-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-red-300">Kadra Narodowa</span>
                   <span className="text-[10px] font-black text-white font-mono">{player.nationalStats!.matchesPlayed}/{player.nationalStats!.goals}</span>
+                </div>
+              )}
+              {player.loan && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-900/30 border border-cyan-500/30 mb-1">
+                  <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300">Wypożyczenie</span>
+                  <span className="text-[10px] font-black text-white font-mono">{loanEndLabel}</span>
                 </div>
               )}
 
@@ -352,6 +378,23 @@ export const PlayerCard: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {player.loan && (
+                <div className="p-3 bg-cyan-500/10 rounded-[20px] border border-cyan-500/25">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="block text-[8px] font-black italic uppercase tracking-tighter text-cyan-300">Status wypożyczenia</span>
+                      <span className="text-xs font-black italic uppercase tracking-tighter text-white">
+                        {player.loan.parentClubName} → {player.loan.destinationClubName}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[7px] font-black italic uppercase tracking-tighter text-cyan-300">Okres</span>
+                      <span className="text-[10px] font-black text-white font-mono">{loanStartLabel} - {loanEndLabel}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
            </div>
         </div>
@@ -507,8 +550,8 @@ export const PlayerCard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {careerRows.slice(0, 6).map(({ key, entry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
-                        <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? 'rgba(96,165,250,0.15)' : 'transparent' }}>
+                      {careerRows.slice(0, 6).map(({ key, entry, isLoanEntry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
+                        <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? (isLoanEntry ? 'rgba(34,211,238,0.14)' : 'rgba(96,165,250,0.15)') : 'transparent' }}>
                           <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             {periodLabel}
                           </td>
@@ -516,6 +559,11 @@ export const PlayerCard: React.FC = () => {
                             <span className="block max-w-[92px] truncate">
                               {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : (isReserve && isCurrentClubEntry && !entry.clubName.endsWith(' II')) ? `${entry.clubName} II` : entry.clubName}
                             </span>
+                            {isLoanEntry && (
+                              <span className="mt-0.5 inline-block rounded bg-cyan-500/15 px-1 py-[1px] text-[5px] font-black italic uppercase tracking-tighter text-cyan-300">
+                                Wypożyczenie
+                              </span>
+                            )}
                           </td>
                           <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>
                           <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
@@ -594,6 +642,25 @@ export const PlayerCard: React.FC = () => {
                   </div>
                 </div>
               )}
+              {player.loan && (
+                <div className="bg-transparent p-3 rounded-[20px] border border-cyan-500/20 flex items-center justify-between group hover:border-cyan-500/40 transition-colors">
+                  <div>
+                    <span className="block text-[8px] font-black italic uppercase tracking-tighter text-cyan-300 mb-1 drop-shadow">Wypożyczenie</span>
+                    <span className="text-sm font-black text-white italic uppercase drop-shadow">
+                      {player.loan.destinationClubName}
+                    </span>
+                    <p className="text-[8px] font-black text-slate-300 uppercase drop-shadow tracking-widest mt-1">
+                      Klub macierzysty: {player.loan.parentClubName}
+                    </p>
+                    <p className="text-[8px] font-black text-cyan-300 uppercase drop-shadow tracking-widest mt-1">
+                      {loanStartLabel} - {loanEndLabel}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-300 border border-cyan-500/20 shadow-inner">
+                    WYP
+                  </div>
+                </div>
+              )}
               <div className="bg-transparent p-3 rounded-[20px] border border-emerald-500/20 flex items-center justify-between group hover:border-emerald-500/40 transition-all shadow-lg">
                 <div>
                   <span className="block text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 drop-shadow">Cena Rynkowa</span>
@@ -668,7 +735,11 @@ export const PlayerCard: React.FC = () => {
                   <div>
                     <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-300">Status transferowy</p>
                     <p className={`text-[8px] font-black italic uppercase tracking-tighter ${player.isUntouchable ? 'text-rose-300' : 'text-slate-500'}`}>
-                      {player.isUntouchable ? 'Tylko oferty wyjątkowe' : 'Standardowe zapytania'}
+                      {player.isUntouchable
+                        ? 'Tylko oferty wyjątkowe'
+                        : player.isAvailableForLoan
+                          ? 'Dostępny do wypożyczenia'
+                          : 'Standardowe zapytania'}
                     </p>
                   </div>
                   <button
@@ -685,6 +756,19 @@ export const PlayerCard: React.FC = () => {
                     {player.isUntouchable ? 'Odblokuj oferty' : 'Nie na sprzedaż'}
                   </button>
                 </div>
+                <button
+                  disabled={hasPendingTransfer || isLoanedPlayer || player.isUntouchable}
+                  onClick={() => toggleLoanAvailability(player.id)}
+                  className={`w-full mt-2 py-2.5 px-3 rounded-[12px] font-black italic uppercase tracking-tighter text-[9px] border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px] drop-shadow
+                    ${hasPendingTransfer || isLoanedPlayer || player.isUntouchable
+                      ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
+                      : player.isAvailableForLoan
+                        ? 'bg-cyan-600/25 border-t-cyan-300/60 border-x-cyan-500/30 text-cyan-200 hover:bg-cyan-600/35'
+                        : 'bg-slate-800/45 border-t-slate-600/50 border-x-slate-700/40 text-slate-400 hover:bg-cyan-600/20 hover:text-cyan-200 hover:border-t-cyan-400/40 hover:border-x-cyan-500/20'}`}
+                  style={button3DStyle}
+                >
+                  {player.isAvailableForLoan ? 'Zdejmij z wypożyczeń' : 'Dostępny do wypożyczenia'}
+                </button>
               </div>
             )}
 
@@ -785,7 +869,7 @@ export const PlayerCard: React.FC = () => {
                   </div>
                 )}
                 <button
-                  disabled={hasPendingTransfer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)}
+                  disabled={hasPendingTransfer || isLoanedPlayer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)}
                   onClick={() => {
                     if (player.isOnTransferList) {
                       toggleTransferList(player.id);
@@ -795,9 +879,11 @@ export const PlayerCard: React.FC = () => {
                     }
                   }}
                   className={`w-full py-2.5 rounded-[18px] font-black italic uppercase tracking-widest text-[10px] transition-all border-t border-x border-b border-b-black/60 active:translate-y-[2px] drop-shadow
-                    ${hasPendingTransfer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)
+                    ${hasPendingTransfer || isLoanedPlayer || (player.squadRole === 'KEY_PLAYER' && !hasActiveTransferListDemand)
                       ? hasPendingTransfer
                         ? "relative bg-slate-800 border-t-slate-600 border-x-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-slate-300 after:content-['TRANSFER_UZGODNIONY']"
+                        : isLoanedPlayer
+                          ? "relative bg-slate-800 border-t-slate-600 border-x-slate-700 text-transparent opacity-60 cursor-not-allowed after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-cyan-300 after:content-['WYPOŻYCZONY']"
                         : 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-600 opacity-50 cursor-not-allowed'
                       : player.isOnTransferList
                       ? 'bg-slate-800 border-t-slate-500 border-x-slate-600 text-slate-400 hover:bg-slate-700'
@@ -829,16 +915,16 @@ export const PlayerCard: React.FC = () => {
                   </button>
                 ) : !isResigned ? (
                   <button
-                    disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer}
+                    disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer}
                     onClick={() => navigateWithoutHistory(ViewState.TRANSFER_OFFER)}
                     className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 ${
-                      (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer)
+                      (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer)
                         ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-500 text-white border-t-blue-300/60 border-x-blue-500/40 hover:scale-[1.02]'
                     }`}
                     style={button3DStyle}
                   >
-                    ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰
+                    {isLoanedPlayer ? `WYPOŻYCZONY DO ${loanEndLabel}` : 'ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰'}
                   </button>
                 ) : null}
               </div>

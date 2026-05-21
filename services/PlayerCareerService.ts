@@ -1,4 +1,4 @@
-import { Player, PlayerCareerStatsSnapshot, PlayerHistoryEntry } from '../types';
+import { Player, PlayerCareerStatsSnapshot, PlayerHistoryEntry, PlayerLoanInfo } from '../types';
 
 interface CareerEntryTarget {
   clubId: string | 'FREE_AGENTS';
@@ -18,6 +18,25 @@ export const PlayerCareerService = {
       assists: (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0),
       yellowCards: (player.stats?.yellowCards || 0) + (player.cupStats?.yellowCards || 0) + (player.euroStats?.yellowCards || 0),
       redCards: (player.stats?.redCards || 0) + (player.cupStats?.redCards || 0) + (player.euroStats?.redCards || 0),
+      averageRating
+    };
+  },
+
+  buildLoanStatsSnapshot(player: Player): PlayerCareerStatsSnapshot {
+    const loan = player.loan;
+    const ratingHistory = player.stats?.ratingHistory || [];
+    const baselineRatingCount = loan?.reportBaselineRatingCount ?? 0;
+    const loanRatings = ratingHistory.slice(baselineRatingCount);
+    const averageRating = loanRatings.length > 0
+      ? parseFloat((loanRatings.reduce((sum, rating) => sum + rating, 0) / loanRatings.length).toFixed(1))
+      : null;
+
+    return {
+      matchesPlayed: Math.max(0, (player.stats?.matchesPlayed || 0) - (loan?.reportBaselineMatches ?? 0)),
+      goals: Math.max(0, (player.stats?.goals || 0) - (loan?.reportBaselineGoals ?? 0)),
+      assists: Math.max(0, (player.stats?.assists || 0) - (loan?.reportBaselineAssists ?? 0)),
+      yellowCards: Math.max(0, (player.stats?.yellowCards || 0) - (loan?.reportBaselineYellowCards ?? 0)),
+      redCards: Math.max(0, (player.stats?.redCards || 0) - (loan?.reportBaselineRedCards ?? 0)),
       averageRating
     };
   },
@@ -62,6 +81,59 @@ export const PlayerCareerService = {
         ...(transferFee !== undefined && { transferFee })
       }
     ];
+  },
+
+  startLoanEntry(
+    history: PlayerHistoryEntry[],
+    loan: PlayerLoanInfo,
+    year: number,
+    month: number,
+    loanFee?: number
+  ): PlayerHistoryEntry[] {
+    return [
+      ...history,
+      {
+        clubName: loan.destinationClubName,
+        clubId: loan.destinationClubId,
+        fromYear: year,
+        fromMonth: month,
+        toYear: null,
+        toMonth: null,
+        isLoan: true,
+        parentClubId: loan.parentClubId,
+        parentClubName: loan.parentClubName,
+        loanEndDate: loan.endDate,
+        ...(loanFee !== undefined && { transferFee: loanFee })
+      }
+    ];
+  },
+
+  closeLoanEntry(
+    history: PlayerHistoryEntry[],
+    player: Player,
+    year: number,
+    month: number
+  ): PlayerHistoryEntry[] {
+    if (!player.loan) return history;
+    const loanIndex = [...history]
+      .reverse()
+      .findIndex(entry =>
+        entry.isLoan &&
+        entry.toYear === null &&
+        entry.clubId === player.loan?.destinationClubId &&
+        entry.parentClubId === player.loan?.parentClubId
+      );
+    if (loanIndex < 0) return history;
+
+    const actualIndex = history.length - 1 - loanIndex;
+    return history.map((entry, index) => index === actualIndex
+      ? {
+          ...entry,
+          toYear: year,
+          toMonth: month,
+          statsSnapshot: this.buildLoanStatsSnapshot(player)
+        }
+      : entry);
   },
 
   reopenOrCreateEntry(

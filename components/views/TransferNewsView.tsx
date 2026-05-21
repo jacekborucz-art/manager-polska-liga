@@ -243,6 +243,7 @@ export const TransferNewsView: React.FC = () => {
         (player.interestedClubs?.length || 0) > 0 &&
         !player.transferPendingClubId &&
         !player.isOnTransferList &&
+        !player.loan &&
         player.clubId &&
         player.clubId !== 'FREE_AGENTS'
       )
@@ -438,7 +439,7 @@ export const TransferNewsView: React.FC = () => {
       o.status !== 'COMPLETED' &&
       o.status !== 'REJECTED_BY_MANAGER' &&
       o.status !== 'REJECTED_AT_CONFIRM' &&
-      o.status !== 'PLAYER_REFUSED' &&
+      (o.kind === 'LOAN' || o.status !== 'PLAYER_REFUSED') &&
       o.status !== 'EXPIRED'
     ));
   }, [incomingOffers]);
@@ -446,7 +447,7 @@ export const TransferNewsView: React.FC = () => {
   const closedIncomingOffers = useMemo(() => {
     return mergeIncomingOffersByPair(incomingOffers.filter(o =>
       o.status === 'COMPLETED' ||
-      o.status === 'PLAYER_REFUSED' ||
+      (o.kind !== 'LOAN' && o.status === 'PLAYER_REFUSED') ||
       o.status === 'REJECTED_BY_MANAGER' ||
       o.status === 'REJECTED_AT_CONFIRM' ||
       o.status === 'EXPIRED'
@@ -872,9 +873,12 @@ export const TransferNewsView: React.FC = () => {
               }
               const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
               if (!player || !buyerClub) return null;
-              const displayedFee = offer.status === 'AI_COUNTERED'
-                ? (offer.aiCounterFee ?? offer.fee)
-                : offer.fee;
+              const isLoanOffer = offer.kind === 'LOAN';
+              const displayedFee = isLoanOffer
+                ? (offer.loanFee ?? offer.fee)
+                : offer.status === 'AI_COUNTERED'
+                  ? (offer.aiCounterFee ?? offer.fee)
+                  : offer.fee;
 
               const statusLabels: Record<string, { label: string; color: string }> = {
                 EMAIL_SENT: { label: 'Oczekuje na odpowiedź', color: 'text-amber-300' },
@@ -883,13 +887,15 @@ export const TransferNewsView: React.FC = () => {
                 AI_COUNTERED: { label: 'Przyszła odpowiedz, wymagana akcja', color: 'text-amber-400' },
                 NEGOTIATION_IN_PROGRESS: { label: 'Negocjacje z zawodnikiem w toku', color: 'text-blue-400' },
                 AWAITING_CONFIRMATION: { label: 'Wymagane zatwierdzenie', color: 'text-emerald-400' },
+                PLAYER_REFUSED: { label: isLoanOffer ? 'Zawodnik odmówił, możesz wymusić' : 'Zawodnik odmówił', color: 'text-orange-300' },
               };
               const st = statusLabels[offer.status] ?? { label: offer.status, color: 'text-slate-400' };
               const needsAction =
                 offer.status === 'EMAIL_SENT' ||
                 offer.status === 'REMINDER_SENT' ||
                 offer.status === 'AI_COUNTERED' ||
-                offer.status === 'AWAITING_CONFIRMATION';
+                offer.status === 'AWAITING_CONFIRMATION' ||
+                (isLoanOffer && offer.status === 'PLAYER_REFUSED');
 
               return (
                 <div
@@ -905,10 +911,17 @@ export const TransferNewsView: React.FC = () => {
                     <div className="min-w-0">
                       <p className="text-sm font-black text-white truncate">
                         {player.firstName} {player.lastName}
+                        {player.loan && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-[8px] text-cyan-300 font-black italic uppercase tracking-tighter">
+                            WYP
+                          </span>
+                        )}
                         <span className="ml-2 text-[10px] text-slate-400 font-normal">{player.position} · {player.overallRating} OVR</span>
                       </p>
                       <p className="text-[10px] text-slate-400 mt-0.5 truncate">
-                        {buyerClub.name} oferuje <span className="text-amber-300 font-black">{displayedFee.toLocaleString('pl-PL')} PLN</span>
+                        {buyerClub.name} {isLoanOffer ? 'chce wypożyczyć' : 'oferuje'} <span className="text-amber-300 font-black">{displayedFee.toLocaleString('pl-PL')} PLN</span>
+                        {isLoanOffer && <span className="ml-2 text-cyan-300 font-black">· {offer.wageCoveragePercent ?? 0}% pensji · {offer.loanEndDate ? new Date(offer.loanEndDate).toLocaleDateString('pl-PL') : 'koniec okresu'}</span>}
+                        {player.loan && <span className="ml-2 text-cyan-300 font-black">· wypożyczony do {player.loan.destinationClubName}</span>}
                         {offer.boardPressure && <span className="ml-2 text-red-400 font-black">· zarząd naciska</span>}
                       </p>
                       <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${st.color}`}>{st.label}</p>

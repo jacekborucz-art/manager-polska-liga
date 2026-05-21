@@ -255,6 +255,7 @@ export const AiScoutingService = {
         if (idx === -1) continue;
 
         // ZABEZPIECZENIE 1: klub nie może figurować jako zainteresowany własnym zawodnikiem
+        if (player.loan) continue;
         if (player.clubId === club.id) continue;
         if (!AiScoutingService._meetsSquadQualityFloor(player, squad, true)) continue;
         // ZABEZPIECZENIE 2: jeden zawodnik może być obserwowany maksymalnie przez 10 klubów.
@@ -411,6 +412,7 @@ export const AiScoutingService = {
     const maxAffordableValue = club.budget * 0.5;
 
     const candidates = allPlayers.filter(p => {
+      if (p.loan) return false;
       // Tylko zawodnicy na potrzebnej pozycji
       if (p.position !== position) return false;
       // Nie ze swojej własnej drużyny
@@ -522,6 +524,7 @@ export const AiScoutingService = {
     const maxOvr = idealOvr + 8;
 
     const pool = allPlayers.filter(p => {
+      if (p.loan) return false;
       if (p.clubId === club.id) return false;
       if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;
@@ -624,6 +627,7 @@ export const AiScoutingService = {
     const idealOvr = 30 + club.reputation * 4.5;
 
     const talents = allPlayers.filter(p => {
+      if (p.loan) return false;
       if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad, true)) return false;
       // Wyklucz własnych zawodników
       if (p.clubId === club.id) return false;
@@ -702,6 +706,7 @@ export const AiScoutingService = {
     const observingIdealOvr = 30 + observingClub.reputation * 4.5;
 
     const gems = allPlayers.filter(p => {
+      if (p.loan) return false;
       if (!tier4ClubIds.has(p.clubId || '')) return false;
       if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
@@ -776,6 +781,7 @@ export const AiScoutingService = {
     const candidates: { player: Player; score: number }[] = [];
 
     for (const player of allPlayers) {
+      if (player.loan) continue;
       if (player.clubId === buyingClub.id || player.clubId === 'FREE_AGENTS') continue;
       if (player.transferPendingClubId) continue;
       if (player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil)) continue;

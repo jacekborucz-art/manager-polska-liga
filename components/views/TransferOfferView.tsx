@@ -116,6 +116,12 @@ export const TransferOfferView: React.FC = () => {
         return 'Natychmiast';
     }
   }, [timing]);
+  const loanStatusMessage = useMemo(() => {
+    if (!player?.loan) return '';
+    const loanEnd = new Date(player.loan.endDate);
+    const endLabel = Number.isNaN(loanEnd.getTime()) ? '-' : loanEnd.toLocaleDateString('pl-PL');
+    return `Ten zawodnik jest wypożyczony do ${player.loan.destinationClubName} do ${endLabel}. Transfer będzie możliwy po zakończeniu wypożyczenia.`;
+  }, [player]);
 
   const marketValue = useMemo(() => {
     if (!player || !sellerClub) return 500_000;
@@ -157,6 +163,15 @@ export const TransferOfferView: React.FC = () => {
   }
 
   const handleSubmit = () => {
+    if (player.loan) {
+      setSubmissionFeedback({
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: loanStatusMessage || 'Ten zawodnik jest wypożyczony i nie można składać za niego oferty transferowej.'
+      });
+      return;
+    }
+
     const result = submitTransferOffer(player.id, {
       fee: timing === TransferTiming.CONTRACT_END ? 0 : fee,
       timing
@@ -191,7 +206,8 @@ export const TransferOfferView: React.FC = () => {
   const canOpenNegotiation = activeStatus === TransferOfferStatus.PLAYER_NEGOTIATION;
   const isTransferLocked = !!(player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil));
   const isTransferOfferBanned = !!(player.transferOfferBanUntil && new Date(currentDate) < new Date(player.transferOfferBanUntil));
-  const isUnavailable = player.clubId === userTeamId || player.clubId === 'FREE_AGENTS' || hasPendingTransfer;
+  const isLoanedPlayer = !!player.loan;
+  const isUnavailable = player.clubId === userTeamId || player.clubId === 'FREE_AGENTS' || hasPendingTransfer || isLoanedPlayer;
   const clubRefusesTalks = timing === TransferTiming.CONTRACT_END
     ? !canSignPreContract
     : sellerOpeningStance?.allowTalks === false;
@@ -336,6 +352,8 @@ export const TransferOfferView: React.FC = () => {
                 <p className="text-sm text-slate-300 mt-3">
                   {hasPendingTransfer
                     ? `Ten zawodnik ma juz uzgodniony transfer do ${clubs.find(c => c.id === player.transferPendingClubId)?.name || 'innego klubu'} i nie mozna skladac za niego nowej oferty.`
+                    : isLoanedPlayer && player.loan
+                      ? loanStatusMessage
                     : 'Transfery wolnych agentow i zawodnikow z twojego klubu pozostaja w osobnych przeplywach.'}
                 </p>
               </div>

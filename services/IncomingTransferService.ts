@@ -3,6 +3,7 @@ import {
   Player,
   IncomingTransferOffer,
   IncomingOfferStatus,
+  LoanOfferDuration,
   TransferTiming,
   PlayerPosition,
 } from '../types';
@@ -13,6 +14,11 @@ const TIMING_LABELS: Record<TransferTiming, string> = {
   [TransferTiming.IN_SIX_MONTHS]: 'Na kolejne okno transferowe',
   [TransferTiming.IN_TWELVE_MONTHS]: 'Od początku kolejnego sezonu',
   [TransferTiming.CONTRACT_END]: 'Po wygaśnięciu kontraktu',
+};
+
+const LOAN_DURATION_LABELS: Record<LoanOfferDuration, string> = {
+  ROUND: 'Do końca rundy',
+  SEASON: 'Do końca sezonu',
 };
 
 export const IncomingTransferService = {
@@ -29,6 +35,10 @@ export const IncomingTransferService = {
 
   getTimingLabel(timing: TransferTiming): string {
     return TIMING_LABELS[timing] ?? timing;
+  },
+
+  getLoanDurationLabel(duration?: LoanOfferDuration): string {
+    return duration ? LOAN_DURATION_LABELS[duration] : 'Wypożyczenie';
   },
 
   getClubTier(club: Club): number {
@@ -77,6 +87,205 @@ export const IncomingTransferService = {
     if (positionGap >= 4 || squadGap >= 5) return { fits: true, multiplier: 1.20 };
     if (positionGap >= 1 || squadGap >= 2) return { fits: true, multiplier: 1.05 };
     return { fits: true, multiplier: 0.85 };
+  },
+
+  getLoanSquadNeed(
+    player: Player,
+    buyerSquad?: Player[]
+  ): { fits: boolean; needScore: number; positionGap: number; squadGap: number } {
+    if (!buyerSquad || buyerSquad.length === 0) {
+      return { fits: true, needScore: 9, positionGap: 9, squadGap: 9 };
+    }
+
+    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
+    const positionAverage = samePosition.length > 0
+      ? IncomingTransferService.getSquadAverageOverall(samePosition)
+      : squadAverage - 3;
+    const bestInPosition = samePosition.length > 0
+      ? Math.max(...samePosition.map(squadPlayer => squadPlayer.overallRating))
+      : squadAverage - 4;
+    const positionGap = player.overallRating - positionAverage;
+    const bestGap = player.overallRating - bestInPosition;
+    const squadGap = player.overallRating - squadAverage;
+    const thinPositionBonus = samePosition.length <= 2 ? 2 : 0;
+    const needScore = Math.max(positionGap + thinPositionBonus, bestGap * 1.5, squadGap);
+
+    return {
+      fits: needScore >= 4 && player.overallRating >= squadAverage + 2,
+      needScore,
+      positionGap,
+      squadGap,
+    };
+  },
+
+  getLoanBuyerCategory(
+    buyerClub: Club,
+    sellerClub: Club
+  ): 'LOWER_LEAGUE' | 'SAME_LEAGUE' | 'FOREIGN_LOWER_REP' | null {
+    const buyerTier = IncomingTransferService.getClubTier(buyerClub);
+    const sellerTier = IncomingTransferService.getClubTier(sellerClub);
+    const repGap = sellerClub.reputation - buyerClub.reputation;
+    const foreignClub =
+      !!buyerClub.country &&
+      !!sellerClub.country &&
+      buyerClub.country !== sellerClub.country;
+
+    if (buyerTier > sellerTier) return 'LOWER_LEAGUE';
+    if (buyerClub.leagueId === sellerClub.leagueId) return 'SAME_LEAGUE';
+    if (foreignClub && repGap >= 2 && repGap <= 4) return 'FOREIGN_LOWER_REP';
+    return null;
+  },
+
+  resolveLoanEndDate(currentDate: Date | string, duration: LoanOfferDuration): string {
+    const current = new Date(currentDate);
+    const year = current.getFullYear();
+    const month = current.getMonth();
+    let endDate: Date;
+
+    if (duration === 'ROUND') {
+      endDate = month <= 0
+        ? new Date(year, 0, 31)
+        : new Date(year, 11, 31);
+    } else {
+      endDate = month >= 6
+        ? new Date(year + 1, 5, 30)
+        : new Date(year, 5, 30);
+    }
+
+    if (endDate <= current) {
+      endDate = new Date(current);
+      endDate.setMonth(endDate.getMonth() + (duration === 'ROUND' ? 5 : 10));
+    }
+
+    return endDate.toISOString().split('T')[0];
+  },
+
+  calculateLoanTotalCost(
+    player: Player,
+    loanFee: number,
+    wageCoveragePercent: number,
+    startDate: Date | string,
+    endDate: Date | string
+  ): number {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(30, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+    const wageCost = player.annualSalary * (wageCoveragePercent / 100) * (days / 365);
+    return Math.round((loanFee + wageCost) / 1000) * 1000;
+  },
+
+  shouldGenerateLoanOffer(
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    activeIncomingOffers: IncomingTransferOffer[],
+    seed: number,
+    currentDate: Date | string,
+    buyerPlayers?: Player[]
+  ): { shouldGenerate: boolean; category: 'LOWER_LEAGUE' | 'SAME_LEAGUE' | 'FOREIGN_LOWER_REP' | null } {
+    if (!player.isAvailableForLoan || player.loan || player.transferPendingClubId) {
+      return { shouldGenerate: false, category: null };
+    }
+    if (buyerClub.id === sellerClub.id || buyerClub.rosterIds.length >= 30) {
+      return { shouldGenerate: false, category: null };
+    }
+
+    const category = IncomingTransferService.getLoanBuyerCategory(buyerClub, sellerClub);
+    if (!category) return { shouldGenerate: false, category: null };
+
+    const hasActiveLoanOffer = activeIncomingOffers.some(offer =>
+      offer.kind === 'LOAN' &&
+      offer.playerId === player.id &&
+      offer.status !== IncomingOfferStatus.EXPIRED &&
+      offer.status !== IncomingOfferStatus.REJECTED_BY_MANAGER &&
+      offer.status !== IncomingOfferStatus.COMPLETED &&
+      offer.status !== IncomingOfferStatus.REJECTED_AT_CONFIRM &&
+      offer.status !== IncomingOfferStatus.PLAYER_REFUSED
+    );
+    if (hasActiveLoanOffer) return { shouldGenerate: false, category: null };
+
+    if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
+      return { shouldGenerate: false, category: null };
+    }
+
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerPlayers);
+    if (!need.fits) return { shouldGenerate: false, category: null };
+
+    const categoryWeight = category === 'LOWER_LEAGUE'
+      ? 0.85
+      : category === 'SAME_LEAGUE'
+        ? 0.125
+        : 0.075;
+    const repGap = sellerClub.reputation - buyerClub.reputation;
+    let chance = 0.045 * categoryWeight;
+
+    if (need.needScore >= 8) chance *= 2.2;
+    else if (need.needScore >= 6) chance *= 1.45;
+    if (category === 'SAME_LEAGUE') chance *= 0.75;
+    if (category === 'FOREIGN_LOWER_REP' && repGap > 3.5) chance *= 0.65;
+    if (player.age <= 23) chance *= 1.25;
+    if (player.annualSalary > buyerClub.transferBudget * 0.45) chance *= 0.35;
+
+    return {
+      shouldGenerate: IncomingTransferService.seededRandom(seed + 2201) < Math.min(0.12, chance),
+      category,
+    };
+  },
+
+  calculateLoanOffer(
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    currentDate: Date | string,
+    seed: number
+  ): Pick<IncomingTransferOffer, 'fee' | 'aiMaxFee' | 'aiUrgency' | 'timing' | 'loanDuration' | 'loanStartDate' | 'loanEndDate' | 'wageCoveragePercent' | 'loanFee' | 'loanTotalCost' | 'loanPlayerCanBeForced'> | null {
+    const rng1 = IncomingTransferService.seededRandom(seed + 3001);
+    const rng2 = IncomingTransferService.seededRandom(seed + 3002);
+    const rng3 = IncomingTransferService.seededRandom(seed + 3003);
+    const duration: LoanOfferDuration = rng1 < 0.42 ? 'ROUND' : 'SEASON';
+    const startDate = typeof currentDate === 'string'
+      ? currentDate
+      : currentDate.toISOString().split('T')[0];
+    const endDate = IncomingTransferService.resolveLoanEndDate(currentDate, duration);
+
+    const repGap = sellerClub.reputation - buyerClub.reputation;
+    const coverageOptions = repGap >= 4
+      ? [40, 50, 60]
+      : repGap >= 2
+        ? [50, 60, 75]
+        : [60, 75, 100];
+    const wageCoveragePercent = coverageOptions[Math.min(coverageOptions.length - 1, Math.floor(rng2 * coverageOptions.length))];
+
+    const marketValue = FinanceService.calculateMarketValue(
+      player,
+      sellerClub.reputation,
+      IncomingTransferService.getClubTier(sellerClub),
+      sellerClub.country
+    );
+    const wantsFee = rng3 > 0.55 || player.overallRating >= IncomingTransferService.getBuyerIdealOverall(buyerClub) + 4;
+    const rawLoanFee = wantsFee ? Math.max(player.annualSalary * (0.05 + rng3 * 0.10), marketValue * (0.002 + rng3 * 0.006)) : 0;
+    const loanFee = Math.round(rawLoanFee / 1000) * 1000;
+    const totalCost = IncomingTransferService.calculateLoanTotalCost(player, loanFee, wageCoveragePercent, startDate, endDate);
+    const budgetCeiling = Math.max(0, Math.min(buyerClub.transferBudget, buyerClub.budget * 0.35));
+
+    if (totalCost > budgetCeiling || loanFee > buyerClub.transferBudget) return null;
+
+    const urgency: 1 | 2 | 3 = rng1 < 0.25 ? 3 : rng1 < 0.70 ? 2 : 1;
+
+    return {
+      fee: loanFee,
+      aiMaxFee: Math.min(buyerClub.transferBudget, Math.round(Math.max(loanFee, loanFee * 1.2) / 1000) * 1000),
+      aiUrgency: urgency,
+      timing: TransferTiming.IMMEDIATE,
+      loanDuration: duration,
+      loanStartDate: startDate,
+      loanEndDate: endDate,
+      wageCoveragePercent,
+      loanFee,
+      loanTotalCost: totalCost,
+      loanPlayerCanBeForced: true,
+    };
   },
 
   isPlausibleBuyerForPlayer(player: Player, buyerClub: Club, buyerSquad?: Player[]): boolean {
@@ -233,6 +442,10 @@ export const IncomingTransferService = {
         o.status !== IncomingOfferStatus.PLAYER_REFUSED
     );
     if (hasActiveOffer) return { shouldGenerate: false, source: null };
+
+    if (player.loan) {
+      return { shouldGenerate: false, source: null };
+    }
 
     if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
       return { shouldGenerate: false, source: null };
@@ -488,6 +701,33 @@ export const IncomingTransferService = {
     if (daysLeft < 180) acceptChance += 0.10;
 
     acceptChance = Math.min(0.95, Math.max(0.05, acceptChance));
+    return rng < acceptChance ? 'accepted' : 'refused';
+  },
+
+  simulateLoanPlayerDecision(
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    buyerSquad: Player[] | undefined,
+    seed: number
+  ): 'accepted' | 'refused' {
+    const rng = IncomingTransferService.seededRandom(seed);
+    const repDelta = buyerClub.reputation - sellerClub.reputation;
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad);
+
+    let acceptChance = 0.48;
+    if (repDelta >= 0) acceptChance += 0.18;
+    else if (repDelta === -1) acceptChance += 0.04;
+    else if (repDelta === -2) acceptChance -= 0.10;
+    else acceptChance -= 0.22;
+
+    if (need.needScore >= 8) acceptChance += 0.18;
+    else if (need.needScore >= 6) acceptChance += 0.10;
+    if (player.age <= 23) acceptChance += 0.12;
+    if (player.stats.matchesPlayed <= 3 && player.stats.minutesPlayed < 300) acceptChance += 0.10;
+    if (player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER') acceptChance -= 0.20;
+
+    acceptChance = Math.min(0.92, Math.max(0.08, acceptChance));
     return rng < acceptChance ? 'accepted' : 'refused';
   },
 

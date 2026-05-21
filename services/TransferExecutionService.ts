@@ -38,6 +38,10 @@ export const TransferExecutionService = {
       return { updatedClubs: clubs, updatedPlayers: playersMap };
     }
 
+    if (player.loan) {
+      return { updatedClubs: clubs, updatedPlayers: playersMap };
+    }
+
     const newEndDate = new Date(currentDate.getFullYear() + offer.years, 5, 30).toISOString();
     const transferLockoutDate = new Date(currentDate);
     transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
@@ -68,6 +72,7 @@ export const TransferExecutionService = {
       history: updatedHistory,
       purchaseFee: offer.fee > 0 ? offer.fee : undefined,
       isOnTransferList: false,
+      isAvailableForLoan: false,
       interestedClubs: [],
       transferLockoutUntil: transferLockoutDate.toISOString(),
       transferOfferBanUntil: transferOfferBanDate.toISOString()

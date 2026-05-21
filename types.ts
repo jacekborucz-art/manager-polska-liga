@@ -770,6 +770,10 @@ export interface PlayerHistoryEntry {
   toMonth: number | null;
   statsSnapshot?: PlayerCareerStatsSnapshot;
   transferFee?: number;
+  isLoan?: boolean;
+  parentClubId?: string;
+  parentClubName?: string;
+  loanEndDate?: string;
 }
 
 export enum NegotiationStatus {
@@ -895,8 +899,12 @@ export enum IncomingOfferStatus {
   REJECTED_AT_CONFIRM = 'REJECTED_AT_CONFIRM',
 }
 
+export type IncomingOfferKind = 'TRANSFER' | 'LOAN';
+export type LoanOfferDuration = 'ROUND' | 'SEASON';
+
 export interface IncomingTransferOffer {
   id: string;
+  kind?: IncomingOfferKind;
   playerId: string;
   buyerClubId: string;
   fee: number;
@@ -914,6 +922,13 @@ export interface IncomingTransferOffer {
   playerNegotiationResolvesAt?: string;
   playerNegotiationResult?: 'accepted' | 'refused';
   boardPressure: boolean;
+  loanDuration?: LoanOfferDuration;
+  loanStartDate?: string;
+  loanEndDate?: string;
+  wageCoveragePercent?: number;
+  loanFee?: number;
+  loanTotalCost?: number;
+  loanPlayerCanBeForced?: boolean;
 }
 
 export type AiTransferLogStatus =
@@ -959,6 +974,31 @@ export interface TransferOfferSubmissionResult {
   offer?: TransferOffer;
 }
 
+export interface PlayerLoanInfo {
+  parentClubId: string;
+  parentClubName: string;
+  destinationClubId: string;
+  destinationClubName: string;
+  startDate: string; // ISO Date string
+  endDate: string;   // ISO Date string
+  wageCoveragePercent?: number;
+  loanFee?: number;
+  forcedByClub?: boolean;
+  reportBaselineMatches?: number;
+  reportBaselineMinutes?: number;
+  reportBaselineGoals?: number;
+  reportBaselineAssists?: number;
+  reportBaselineYellowCards?: number;
+  reportBaselineRedCards?: number;
+  reportBaselineRatingCount?: number;
+  lastReportDate?: string;
+  lastReportMatches?: number;
+  lastReportMinutes?: number;
+  lastReportGoals?: number;
+  lastReportAssists?: number;
+  lastReportRatingCount?: number;
+}
+
 export interface Player {
   id: string;
   firstName: string;
@@ -991,7 +1031,9 @@ export interface Player {
   cleanSheetBonus?: number;
   isOnTransferList?: boolean;
   transferListPrice?: number;
+  isAvailableForLoan?: boolean;
   marketValue?: number;
+  loan?: PlayerLoanInfo | null;
   purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
    history: PlayerHistoryEntry[];
     boardLockoutUntil: string | null; // Data ISO, do której nie można ponowić próby zwolnienia

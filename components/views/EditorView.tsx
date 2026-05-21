@@ -2,11 +2,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, HealthStatus } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
 import { FinanceService } from '../../services/FinanceService';
+import { LineupService } from '../../services/LineupService';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -114,8 +115,17 @@ const getTierFilterForClub = (leagueId: string): string => {
   return polishTier ?? 'ALL';
 };
 
+const toDateInputValue = (value?: string | null): string => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).substring(0, 10);
+  return date.toISOString().substring(0, 10);
+};
+
+const toIsoDate = (value: string): string => new Date(value).toISOString();
+
 export const EditorView: React.FC = () => {
-  const { clubs, players, currentDate, getOrGenerateSquad, updatePlayer, setPlayers, importSquad, navigateTo, showGameNotification } = useGame();
+  const { clubs, players, lineups, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -238,6 +248,8 @@ export const EditorView: React.FC = () => {
           annualSalary: p.annualSalary,
           marketValue: p.marketValue ?? 0,
           contractEndDate: p.contractEndDate,
+          loan: p.loan ?? null,
+          isAvailableForLoan: !!p.isAvailableForLoan,
           attributes: { ...p.attributes },
         })),
       };
@@ -269,6 +281,11 @@ export const EditorView: React.FC = () => {
   const [annualSalary,  setAnnualSalary]    = useState<number>(0);
   const [marketValue,   setMarketValue]     = useState<number>(0);
   const [contractEndDate, setContractEndDate] = useState<string>('');
+  const [isLoanedOut, setIsLoanedOut] = useState(false);
+  const [loanParentClubId, setLoanParentClubId] = useState<string>('');
+  const [loanDestinationClubId, setLoanDestinationClubId] = useState<string>('');
+  const [loanStartDate, setLoanStartDate] = useState<string>('');
+  const [loanEndDate, setLoanEndDate] = useState<string>('');
 
   const filteredClubs = useMemo(() => {
     const list = selectedTier === 'ALL'
@@ -283,6 +300,10 @@ export const EditorView: React.FC = () => {
   }, [selectedClubId, getOrGenerateSquad, players]);
 
   const selectedClub = useMemo(() => clubs.find(c => c.id === selectedClubId), [clubs, selectedClubId]);
+  const loanClubOptions = useMemo(() =>
+    [...clubs]
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+  [clubs]);
   const nationalityCountryOptions = useMemo(() => {
     const regionCountries = getCountriesForRegion(nationality);
     if (nationalityCountry && !regionCountries.some(country => country.name === nationalityCountry)) {
@@ -345,8 +366,44 @@ export const EditorView: React.FC = () => {
     setAttrs({ ...DEFAULT_ATTRS });
     setAnnualSalary(0);
     setMarketValue(0);
+    setIsLoanedOut(false);
+    setLoanParentClubId('');
+    setLoanDestinationClubId('');
+    setLoanStartDate('');
+    setLoanEndDate('');
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
     setContractEndDate(new Date(now.getFullYear() + 2, 5, 30).toISOString().substring(0, 10));
+  };
+
+  const buildLoanInfo = (): PlayerLoanInfo | null => {
+    if (!isLoanedOut) return null;
+    const parentClub = clubs.find(c => c.id === loanParentClubId);
+    const destinationClub = clubs.find(c => c.id === loanDestinationClubId);
+    if (!parentClub || !destinationClub || !loanStartDate || !loanEndDate) return null;
+    return {
+      parentClubId: parentClub.id,
+      parentClubName: parentClub.name,
+      destinationClubId: destinationClub.id,
+      destinationClubName: destinationClub.name,
+      startDate: toIsoDate(loanStartDate),
+      endDate: toIsoDate(loanEndDate),
+    };
+  };
+
+  const movePlayerBetweenClubs = (sourceClubId: string, targetClubId: string, player: Player) => {
+    const nextPlayers: Record<string, Player[]> = { ...players };
+    Object.entries(nextPlayers).forEach(([clubId, squad]) => {
+      nextPlayers[clubId] = squad.filter(p => p.id !== player.id);
+    });
+    nextPlayers[targetClubId] = [...(nextPlayers[targetClubId] ?? []), player];
+    setPlayers(nextPlayers);
+
+    if (lineups[sourceClubId]) {
+      updateLineup(sourceClubId, LineupService.repairLineup(lineups[sourceClubId], nextPlayers[sourceClubId] ?? []));
+    }
+    if (lineups[targetClubId]) {
+      updateLineup(targetClubId, LineupService.autoPickLineup(targetClubId, nextPlayers[targetClubId] ?? []));
+    }
   };
 
   const applyAutoFinance = (nextAttrs = attrs, nextPosition = position, nextAge = age) => {
@@ -391,6 +448,11 @@ export const EditorView: React.FC = () => {
         setAnnualSalary(p.annualSalary);
         setMarketValue(p.marketValue ?? 0);
         setContractEndDate(p.contractEndDate ? String(p.contractEndDate).substring(0, 10) : '');
+        setIsLoanedOut(!!p.loan);
+        setLoanParentClubId(p.loan?.parentClubId ?? (p.loan ? '' : selectedClubId));
+        setLoanDestinationClubId(p.loan?.destinationClubId ?? '');
+        setLoanStartDate(toDateInputValue(p.loan?.startDate));
+        setLoanEndDate(toDateInputValue(p.loan?.endDate));
       }
     } else {
       resetPlayerForm();
@@ -475,6 +537,32 @@ export const EditorView: React.FC = () => {
       return;
     }
     const newOvr = PlayerAttributesGenerator.calculateOverall(attrs, position);
+    const loan = buildLoanInfo();
+    if (isLoanedOut && !loan) {
+      showGameNotification({
+        title: 'Brak danych wypożyczenia',
+        message: 'Wybierz klub macierzysty, klub wypożyczenia oraz daty od i do.',
+        tone: 'warning'
+      });
+      return;
+    }
+    if (loan && loan.parentClubId === loan.destinationClubId) {
+      showGameNotification({
+        title: 'Błędne wypożyczenie',
+        message: 'Klub macierzysty i klub wypożyczenia muszą być różne.',
+        tone: 'warning'
+      });
+      return;
+    }
+    if (loan && new Date(loan.endDate).getTime() <= new Date(loan.startDate).getTime()) {
+      showGameNotification({
+        title: 'Błędne daty wypożyczenia',
+        message: 'Data końca wypożyczenia musi być późniejsza niż data początku.',
+        tone: 'warning'
+      });
+      return;
+    }
+    const targetClubId = loan?.destinationClubId ?? selectedClubId;
     if (isCreatingPlayer) {
       const club = clubs.find(c => c.id === selectedClubId);
       const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
@@ -486,7 +574,7 @@ export const EditorView: React.FC = () => {
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
         age,
-        clubId: selectedClubId,
+        clubId: targetClubId,
         nationality,
         nationalityCountry,
         position,
@@ -504,6 +592,8 @@ export const EditorView: React.FC = () => {
         nationalSuspensionMatches: 0,
         annualSalary,
         marketValue,
+        loan,
+        isAvailableForLoan: false,
         contractEndDate: contractDate,
         history: [{
           clubName: club?.name ?? selectedClubId,
@@ -526,8 +616,15 @@ export const EditorView: React.FC = () => {
       };
       setPlayers(prev => ({
         ...prev,
-        [selectedClubId]: [...(prev[selectedClubId] ?? []), newPlayer]
+        [targetClubId]: [...(prev[targetClubId] ?? []), newPlayer]
       }));
+      if (targetClubId !== selectedClubId) {
+        const targetSquad = [...(players[targetClubId] ?? []), newPlayer];
+        if (lineups[targetClubId]) {
+          updateLineup(targetClubId, LineupService.autoPickLineup(targetClubId, targetSquad));
+        }
+        setSelectedClubId(targetClubId);
+      }
       setSelectedPlayerId(newPlayer.id);
       setIsCreatingPlayer(false);
       showGameNotification({
@@ -538,11 +635,22 @@ export const EditorView: React.FC = () => {
       return;
     }
     if (!selectedPlayerId) return;
-    updatePlayer(selectedClubId, selectedPlayerId, {
+    const existingPlayer = clubPlayers.find(p => p.id === selectedPlayerId);
+    if (!existingPlayer) return;
+    const updatedPlayer: Player = {
+      ...existingPlayer,
       firstName, lastName, age, nationality, nationalityCountry, position,
       attributes: { ...attrs }, overallRating: newOvr,
-      annualSalary, marketValue, contractEndDate
-    });
+      annualSalary, marketValue, contractEndDate, loan, clubId: targetClubId,
+      isAvailableForLoan: loan ? false : existingPlayer.isAvailableForLoan
+    };
+    if (targetClubId !== selectedClubId) {
+      movePlayerBetweenClubs(selectedClubId, targetClubId, updatedPlayer);
+      setSelectedClubId(targetClubId);
+      setSelectedPlayerId(updatedPlayer.id);
+    } else {
+      updatePlayer(selectedClubId, selectedPlayerId, updatedPlayer);
+    }
     showGameNotification({
       title: 'Zapisano zawodnika',
       message: `${firstName} ${lastName} ma teraz OVR: ${newOvr}.`,
@@ -736,6 +844,71 @@ export const EditorView: React.FC = () => {
                   onChange={(e) => setContractEndDate(e.target.value)}
                   className={`${inputCls} px-2 py-1.5`} />
               </div>
+            </div>
+
+            {/* WYPOŻYCZENIE */}
+            <div className="mb-3 p-3 border border-slate-800 bg-black/20 rounded">
+              <label className="inline-flex items-center gap-2 cursor-pointer mb-3">
+                <input
+                  type="checkbox"
+                  checked={isLoanedOut}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsLoanedOut(checked);
+                    if (checked && !loanParentClubId) setLoanParentClubId(selectedClubId);
+                  }}
+                  className="accent-yellow-400"
+                />
+                <span className={`${labelCls}`}>Wypożyczony do innego klubu</span>
+              </label>
+              {isLoanedOut && (
+                <div className="flex gap-3 items-end">
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Klub macierzysty</div>
+                    <select
+                      value={loanParentClubId}
+                      onChange={(e) => setLoanParentClubId(e.target.value)}
+                      className={`${selectCls} px-2 py-1.5 w-64`}
+                    >
+                      <option value="">— wybierz klub —</option>
+                      {loanClubOptions.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Klub wypożyczenia</div>
+                    <select
+                      value={loanDestinationClubId}
+                      onChange={(e) => setLoanDestinationClubId(e.target.value)}
+                      className={`${selectCls} px-2 py-1.5 w-64`}
+                    >
+                      <option value="">— wybierz klub —</option>
+                      {loanClubOptions.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Od</div>
+                    <input
+                      type="date"
+                      value={loanStartDate}
+                      onChange={(e) => setLoanStartDate(e.target.value)}
+                      className={`${inputCls} px-2 py-1.5`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Do</div>
+                    <input
+                      type="date"
+                      value={loanEndDate}
+                      onChange={(e) => setLoanEndDate(e.target.value)}
+                      className={`${inputCls} px-2 py-1.5`}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ATRYBUTY */}

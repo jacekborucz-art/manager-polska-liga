@@ -325,6 +325,7 @@ const _shouldAiTryRenewContract = (
   currentDate: Date,
   daysLeft: number
 ): boolean => {
+  if (player.loan) return false;
   if (player.transferPendingClubId) return false;
   if (player.isOnTransferList && !player.isUntouchable) return false;
 
@@ -383,6 +384,7 @@ const _findWeakestSurplusPlayer = (squad: Player[]): Player | null => {
   return [...squad]
     .filter(p =>
       !p.isUntouchable &&
+      !p.loan &&
       !p.transferPendingClubId &&
       counts[p.position] > MIN_SQUAD_POSITION_COUNTS[p.position]
     )
@@ -1060,6 +1062,7 @@ processAiRecruitment: (
         .filter(p =>
           !p.isUntouchable &&
           !p.isOnTransferList &&
+          !p.loan &&
           !p.transferPendingClubId &&
           squad.filter(s => s.position === p.position).length > minCounts[p.position]
         )
@@ -1123,6 +1126,7 @@ processAiRecruitment: (
       .flatMap(([, squad]) => squad)
       .filter(p =>
         p.isOnTransferList &&
+        !p.loan &&
         !p.transferPendingClubId &&
         p.clubId !== userTeamId
       );
@@ -1158,6 +1162,7 @@ processAiRecruitment: (
 
       // Oceń kandydatów
       const candidates = available.filter(p => {
+        if (p.loan) return false;
         if (p.clubId === club.id) return false;
         if (_hasActiveTransferLockout(p, currentDate)) return false;
         if (_hasActiveTransferOfferBan(p, currentDate)) return false;
@@ -1399,6 +1404,7 @@ processAiRecruitment: (
         .filter(([cId]) => cId !== 'FREE_AGENTS' && cId !== club.id && cId !== userTeamId)
         .flatMap(([, sq]) => sq)
         .filter(p => {
+          if (p.loan) return false;
           if (_hasActiveTransferLockout(p, currentDate)) return false;
           if (_hasActiveTransferOfferBan(p, currentDate)) return false;
           if (p.isOnTransferList || p.transferPendingClubId) return false;
@@ -1570,6 +1576,7 @@ processAiRecruitment: (
 
       for (const player of sellerSquad) {
         if (signedPlayerIds.has(player.id)) continue;
+        if (player.loan) continue;
         if (player.transferPendingClubId) continue;
         if (_hasActiveTransferOfferBan(player, currentDate)) continue;
 
@@ -1897,6 +1904,7 @@ processAiRecruitment: (
       const updatedSquad = squad.map(player => {
         // Nie listujemy więcej niż 2 w miesiącu
         if (listedThisMonth >= 2) return player;
+        if (player.loan) return player;
 
         // Pomijamy zawodników już na liście, nietykalnych lub z uzgodnionym transferem
         if (player.isOnTransferList || player.isUntouchable || !!player.transferPendingClubId) return player;
@@ -1989,7 +1997,7 @@ performSeasonSquadReview: (
 
       for (const candidate of rankedSquad) {
         if (removedCount >= numToRemove) break;
-        if (candidate.isUntouchable || candidate.squadRole === 'KEY_PLAYER' || candidate.transferPendingClubId) continue;
+        if (candidate.loan || candidate.isUntouchable || candidate.squadRole === 'KEY_PLAYER' || candidate.transferPendingClubId) continue;
 
         let canRemove = false;
         if (candidate.position === 'GK' && counts.GK > MIN_SQUAD_POSITION_COUNTS[PlayerPosition.GK]) canRemove = true;
@@ -2086,6 +2094,7 @@ performSeasonSquadReview: (
       const eligible = squad.filter(p =>
         !p.isOnTransferList &&
         !p.isUntouchable &&
+        !p.loan &&
         p.squadRole !== 'KEY_PLAYER' &&
         !p.transferPendingClubId &&
         !p.isNegotiationPermanentBlocked
