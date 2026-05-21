@@ -138,6 +138,7 @@ export const TransferOfferView: React.FC = () => {
   }, [player, buyerClub, marketValue, spendableTransferBudget]);
 
   const [fee, setFee] = useState(() => Math.max(100_000, suggestedFee));
+  const [feeStep, setFeeStep] = useState(10_000);
   const [submissionFeedback, setSubmissionFeedback] = useState<TransferFeedback | null>(null);
 
   useEffect(() => {
@@ -389,20 +390,32 @@ export const TransferOfferView: React.FC = () => {
 
                 {timing !== TransferTiming.CONTRACT_END ? (
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Kwota odstepnego</span>
-                      <span className="text-xl font-black text-emerald-400 font-mono">{fee.toLocaleString()} PLN</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Kwota odstepnego</span>
+                    <div className="flex items-center gap-3 mt-2">
+                      <button
+                        onClick={() => setFee(f => Math.max(marketValue, f - feeStep))}
+                        disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                        className="w-16 h-16 rounded-[12px] bg-black/40 border border-white/10 text-3xl font-black text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                      >−</button>
+                      <span className="flex-1 text-center text-2xl font-black text-emerald-400 font-mono">{fee.toLocaleString()} PLN</span>
+                      <button
+                        onClick={() => setFee(f => Math.min(Math.max(100_000, maxFee), f + feeStep))}
+                        disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                        className="w-16 h-16 rounded-[12px] bg-black/40 border border-white/10 text-3xl font-black text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                      >+</button>
                     </div>
-                    <input
-                      type="range"
-                      min="100000"
-                      max={Math.max(100000, maxFee)}
-                      step="50000"
-                      value={fee}
-                      onChange={e => setFee(parseInt(e.target.value, 10))}
-                      disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
-                      className="w-full accent-emerald-500"
-                    />
+                    <div className="flex gap-2 mt-3">
+                      {[10_000, 50_000, 100_000, 250_000, 500_000].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setFeeStep(s)}
+                          disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                          className={`flex-1 py-2 rounded-[10px] text-[10px] font-black border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${feeStep === s ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-black/30 text-slate-300 border-white/10 hover:border-white/30'}`}
+                        >
+                          {s >= 1_000_000 ? `${s / 1_000_000}M` : `${s / 1_000}k`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-5">

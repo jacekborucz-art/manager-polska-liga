@@ -51,7 +51,7 @@ export const TacticalBrainService = {
   EVENT_RULES: [
     {
       id: 'E1', // Efekt skrzydeł po golu kontaktowym
-      trigger: (s: MatchLiveState, diff: number) => (s.minute - (s.lastGoalBoostMinute || 0) < 10) && diff === -1,
+      trigger: (s: MatchLiveState, diff: number) => (s.lastGoalBoostMinute ?? -1) >= 0 && (s.minute - s.lastGoalBoostMinute < 10) && diff === -1,
       action: { mindset: 'OFFENSIVE', tempo: 'FAST' },
       log: "AI: Bramka kontaktowa dodała rywalom skrzydeł! Atakują z furią!"
     },

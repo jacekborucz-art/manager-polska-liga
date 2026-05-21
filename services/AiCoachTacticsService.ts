@@ -4,6 +4,22 @@ import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
 
 type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack };
 
+type InMatchDecisionContext = {
+  aiAvgFatigue?: number;
+  aiLowestFatigue?: number;
+  aiShots?: number;
+  userShots?: number;
+  aiShotsOnTarget?: number;
+  userShotsOnTarget?: number;
+  aiSubsRemaining?: number;
+  aiStakes?: 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
+  userStakes?: 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
+  aiRank?: number;
+  userRank?: number;
+  isLateSeason?: boolean;
+  rivalryMultiplier?: number;
+};
+
 const seededRng = (seed: number, minute: number, offset: number = 0): number => {
   let s = seed + minute + offset;
   const x = Math.sin(s) * 10000;
@@ -28,6 +44,14 @@ const getTopLineAvg = (players: Player[], pos: PlayerPosition, topN: number): nu
     .slice(0, topN);
   if (line.length === 0) return 60;
   return line.reduce((s, p) => s + p.overallRating, 0) / line.length;
+};
+
+const getStakesWeight = (stakes?: InMatchDecisionContext['aiStakes']): number => {
+  if (stakes === 'TITLE_RACE') return 1.0;
+  if (stakes === 'RELEGATION_FIGHT') return 1.15;
+  if (stakes === 'EUROPE_RACE') return 0.78;
+  if (stakes === 'LOW_STAKES') return 0.16;
+  return 0.42;
 };
 
 export const AiCoachTacticsService = {
@@ -127,14 +151,54 @@ export const AiCoachTacticsService = {
     seed: number,
     userMindset: InstructionMindset,
     userTacticAttackBias: number,
-    aiTacticDefenseBias: number
+    aiTacticDefenseBias: number,
+    context?: InMatchDecisionContext
   ): AiInstructions | null => {
     const rng1 = seededRng(seed, minute, 401);
     const rng2 = seededRng(seed, minute, 402);
     const rng3 = seededRng(seed, minute, 403);
 
+    const isSecondHalfDecisionWindow = minute >= 46 && minute <= 75;
+    const aiAvgFatigue = context?.aiAvgFatigue ?? 100;
+    const aiLowestFatigue = context?.aiLowestFatigue ?? 100;
+    const aiShots = context?.aiShots ?? 0;
+    const userShots = context?.userShots ?? 0;
+    const aiShotsOnTarget = context?.aiShotsOnTarget ?? 0;
+    const userShotsOnTarget = context?.userShotsOnTarget ?? 0;
+    const aiSubsRemaining = context?.aiSubsRemaining ?? 5;
+    const aiStakes = context?.aiStakes ?? 'MID_TABLE';
+    const userStakes = context?.userStakes ?? 'MID_TABLE';
+    const aiRank = context?.aiRank ?? 10;
+    const userRank = context?.userRank ?? 10;
+    const isLateSeason = context?.isLateSeason ?? false;
+    const rivalryMultiplier = context?.rivalryMultiplier ?? 1;
+    const shotBalance = aiShots - userShots;
+    const sotBalance = aiShotsOnTarget - userShotsOnTarget;
+    const gameLooksGood = aiMomentum >= 16 || shotBalance >= 2 || sotBalance >= 1;
+    const gameLooksBad = aiMomentum <= -24 || shotBalance <= -3 || sotBalance <= -2;
+    const seriousFatigue = aiAvgFatigue < 67 || aiLowestFatigue < 46;
+    const isFinalPhase = minute >= 76;
+    const isLastStand = minute >= 84;
+    const aiStakesWeight = getStakesWeight(aiStakes);
+    const userStakesWeight = getStakesWeight(userStakes);
+    const pressureDrama = (isLateSeason ? aiStakesWeight : aiStakesWeight * 0.45) * rivalryMultiplier;
+    const tablePressure = aiRank <= 5 || aiRank >= 13 || userRank <= 5 || userRank >= 13;
+    const mustProtect = aiScoreDiff > 0 && (pressureDrama >= 0.70 || userStakesWeight >= 0.75 || tablePressure);
+    const mustChase = aiScoreDiff < 0 && (pressureDrama >= 0.70 || aiStakes !== 'LOW_STAKES');
+    const avoidCollapse = aiScoreDiff <= -2 && (pressureDrama >= 0.90 || aiStakes === 'RELEGATION_FIGHT');
+
     // Szansa braku reakcji — słaby trener często się waha
-    const noActionChance = decisionMaking < 40 ? 0.40 : decisionMaking < 60 ? 0.15 : 0.05;
+    let noActionChance = decisionMaking < 40 ? 0.40 : decisionMaking < 60 ? 0.15 : 0.05;
+    if (isSecondHalfDecisionWindow) {
+      if (gameLooksGood && aiScoreDiff >= 0 && !seriousFatigue) noActionChance += 0.16;
+      if (gameLooksBad || seriousFatigue || aiScoreDiff < 0) noActionChance -= 0.12;
+      noActionChance = Math.max(0.03, Math.min(0.58, noActionChance));
+    } else if (isFinalPhase) {
+      if (aiScoreDiff === 0 && aiStakes === 'LOW_STAKES' && !gameLooksBad) noActionChance += 0.18;
+      if (mustChase || mustProtect || seriousFatigue || gameLooksBad) noActionChance -= 0.16 + pressureDrama * 0.08;
+      if (isLastStand && mustChase) noActionChance -= 0.10;
+      noActionChance = Math.max(0.02, Math.min(0.55, noActionChance));
+    }
     if (rng1 < noActionChance) return null;
 
     // Doświadczony trener reaguje wcześniej na niekorzystny wynik
@@ -145,13 +209,85 @@ export const AiCoachTacticsService = {
     let intensity: InstructionIntensity = 'NORMAL';
 
     // Priorytet 1: Gol kontaktowy przy wyniku -1 → impuls
-    const recentContactGoal = (minute - lastGoalBoostMinute) < 10 && aiScoreDiff === -1;
+    const recentContactGoal = lastGoalBoostMinute >= 0 && (minute - lastGoalBoostMinute) < 10 && aiScoreDiff === -1;
     if (recentContactGoal) {
       return enforceConsistency('OFFENSIVE', 'FAST', 'NORMAL');
     }
 
+    // Priorytet 1b: zarządzanie drugą połową do około 75 minuty.
+    if (isSecondHalfDecisionWindow) {
+      if (aiScoreDiff < 0) {
+        if (gameLooksGood && !seriousFatigue) {
+          mindset = 'OFFENSIVE'; tempo = 'NORMAL'; intensity = 'NORMAL';
+        } else if (seriousFatigue && aiSubsRemaining > 0) {
+          mindset = 'OFFENSIVE'; tempo = 'NORMAL'; intensity = 'NORMAL';
+        } else {
+          mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = aiAvgFatigue > 70 ? 'AGGRESSIVE' : 'NORMAL';
+        }
+      } else if (aiScoreDiff > 0) {
+        if (seriousFatigue || gameLooksBad) {
+          mindset = 'DEFENSIVE'; tempo = 'SLOW'; intensity = 'CAUTIOUS';
+        } else if (gameLooksGood && aiMomentum >= 28 && decisionMaking < 58) {
+          mindset = 'NEUTRAL'; tempo = 'NORMAL'; intensity = 'NORMAL';
+        } else {
+          mindset = 'DEFENSIVE'; tempo = 'SLOW'; intensity = 'NORMAL';
+        }
+      } else {
+        if (gameLooksGood && !seriousFatigue) {
+          mindset = decisionMaking >= 62 ? 'NEUTRAL' : 'OFFENSIVE';
+          tempo = decisionMaking >= 62 ? 'NORMAL' : 'FAST';
+          intensity = 'NORMAL';
+        } else if (gameLooksBad) {
+          mindset = 'OFFENSIVE';
+          tempo = aiAvgFatigue > 68 ? 'FAST' : 'NORMAL';
+          intensity = aiAvgFatigue > 72 ? 'AGGRESSIVE' : 'NORMAL';
+        } else if (seriousFatigue) {
+          mindset = 'NEUTRAL'; tempo = 'SLOW'; intensity = 'CAUTIOUS';
+        } else {
+          return null;
+        }
+      }
+    // Priorytet 1c: dramaturgia końcówki po 75 minucie.
+    } else if (isFinalPhase) {
+      if (aiScoreDiff < 0) {
+        if (avoidCollapse && minute < 86 && gameLooksBad && aiAvgFatigue < 61) {
+          mindset = 'NEUTRAL'; tempo = 'NORMAL'; intensity = 'NORMAL';
+        } else if (isLastStand && mustChase && aiAvgFatigue >= 58) {
+          mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = 'AGGRESSIVE';
+        } else if (mustChase) {
+          mindset = 'OFFENSIVE';
+          tempo = seriousFatigue ? 'NORMAL' : 'FAST';
+          intensity = aiAvgFatigue > 66 ? 'AGGRESSIVE' : 'NORMAL';
+        } else if (aiStakes === 'LOW_STAKES' && aiScoreDiff <= -2 && gameLooksBad) {
+          mindset = 'NEUTRAL'; tempo = 'SLOW'; intensity = 'CAUTIOUS';
+        } else {
+          mindset = 'OFFENSIVE'; tempo = 'NORMAL'; intensity = 'NORMAL';
+        }
+      } else if (aiScoreDiff > 0) {
+        if (mustProtect || isLastStand) {
+          mindset = 'DEFENSIVE'; tempo = 'SLOW'; intensity = seriousFatigue ? 'CAUTIOUS' : 'NORMAL';
+        } else if (gameLooksGood && aiScoreDiff >= 2) {
+          mindset = 'NEUTRAL'; tempo = 'SLOW'; intensity = 'CAUTIOUS';
+        } else {
+          mindset = 'DEFENSIVE'; tempo = 'SLOW'; intensity = 'NORMAL';
+        }
+      } else {
+        if (aiStakes === 'LOW_STAKES' && !gameLooksBad) {
+          mindset = 'NEUTRAL'; tempo = 'SLOW'; intensity = 'CAUTIOUS';
+        } else if ((aiStakes === 'TITLE_RACE' || aiStakes === 'EUROPE_RACE') && gameLooksGood && !seriousFatigue) {
+          mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = minute >= 84 ? 'AGGRESSIVE' : 'NORMAL';
+        } else if (aiStakes === 'RELEGATION_FIGHT' && userStakes === 'RELEGATION_FIGHT') {
+          mindset = gameLooksBad ? 'DEFENSIVE' : 'NEUTRAL';
+          tempo = gameLooksBad ? 'SLOW' : 'NORMAL';
+          intensity = seriousFatigue ? 'CAUTIOUS' : 'NORMAL';
+        } else if (gameLooksBad && !seriousFatigue) {
+          mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = 'NORMAL';
+        } else {
+          return null;
+        }
+      }
     // Priorytet 2: Wynikowe
-    if (aiScoreDiff <= -2) {
+    } else if (aiScoreDiff <= -2) {
       mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = 'NORMAL';
     } else if (aiScoreDiff === -1 && minute >= lateThreshold) {
       mindset = 'OFFENSIVE'; tempo = 'FAST'; intensity = 'AGGRESSIVE';
@@ -211,7 +347,7 @@ export const AiCoachTacticsService = {
 
     // PRESSING: ofensywne nastawienie lub przewaga momentum + wyklucza się z kontrą
     if (counterAttack !== 'COUNTER') {
-      const pressingCondition = mindset === 'OFFENSIVE' || aiMomentum > 30;
+      const pressingCondition = (mindset === 'OFFENSIVE' && !seriousFatigue) || (aiMomentum > 30 && aiAvgFatigue > 66);
       if (pressingCondition) {
         let pressingChance: number;
         if (experience >= 70) pressingChance = 0.35;
@@ -224,6 +360,15 @@ export const AiCoachTacticsService = {
       }
     }
     // ────────────────────────────────────────────────────────────────────────
+
+    if ((isSecondHalfDecisionWindow || isFinalPhase) && seriousFatigue && aiScoreDiff >= 0) {
+      pressing = 'NORMAL';
+      counterAttack = aiScoreDiff > 0 && userIsOffensive ? 'COUNTER' : counterAttack;
+    }
+
+    if (isFinalPhase && mustChase && !seriousFatigue && counterAttack !== 'COUNTER' && aiAvgFatigue > 60) {
+      pressing = experience >= 55 || pressureDrama >= 0.75 ? 'PRESSING' : pressing;
+    }
 
     return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack };
   },

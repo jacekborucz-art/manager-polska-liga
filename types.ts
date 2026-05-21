@@ -1721,6 +1721,9 @@ export interface MatchLiveState {
   awaySubsHistory: SubstitutionRecord[];
   lastAiActionMinute: number;
   aiTacticLocked?: boolean;
+  lastAiSubMinute?: number;
+  lastAiFormationMinute?: number;
+  aiTacticLockUntilMinute?: number;
   logs: MatchLogEntry[];
   events: MatchEvent[];
   homeGoals: GoalTickerInfo[];
