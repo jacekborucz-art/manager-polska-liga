@@ -3104,12 +3104,16 @@ setMessages([welcomeMail, fanMail]);
             const penScore = cupFinalFixture.homePenaltyScore !== undefined
               ? `${hScore}:${aScore} (${cupFinalFixture.homePenaltyScore}:${cupFinalFixture.awayPenaltyScore} k.)`
               : `${hScore}:${aScore}`;
+            const homeClubName = clubs.find(c => c.id === cupFinalFixture.homeTeamId)?.name ?? cupFinalFixture.homeTeamId;
+            const awayClubName = clubs.find(c => c.id === cupFinalFixture.awayTeamId)?.name ?? cupFinalFixture.awayTeamId;
             const cupMail = MailService.generateCupFinalMail(
               cupFinalFixture.homeTeamId,
               cupFinalFixture.awayTeamId,
               penScore,
               userTeamId,
-              cupWinnerIdLocal
+              cupWinnerIdLocal,
+              homeClubName,
+              awayClubName
             );
             sentMailIdsRef.current.add(cupFinalMailKey);
             setMessages(prev => [cupMail, ...prev]);
@@ -5646,7 +5650,7 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, recoveredPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, lineups[userTeamId]);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, recoveredPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, lineups[userTeamId], allFixtures);
       if (newMails.length > 0) prependUniqueMessages(newMails);
 
       const directorCommunication = SportingDirectorService.generateCommunicationMails({

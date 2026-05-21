@@ -65,6 +65,8 @@ export const PlayerCard: React.FC = () => {
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
   const { player, club, isReserve } = data;
   const isContractLocked = player.contractLockoutUntil && new Date(currentDate) < new Date(player.contractLockoutUntil);
+  const PLN_TO_EUR = 4.25;
+  const isPolishClub = club.leagueId.startsWith('L_PL_');
   const isTransferLocked = player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil);
   const visibleInterestedClubs = (player.interestedClubs || []).filter(clubId => clubId !== player.clubId);
   const pendingTransferClub = player.transferPendingClubId
@@ -548,7 +550,10 @@ export const PlayerCard: React.FC = () => {
                 <div>
                   <span className="block text-[8px] font-black text-white uppercase tracking-widest mb-1 drop-shadow">Roczne Wynagrodzenie</span>
                   <span className="text-sm font-black text-emerald-400 font-mono italic drop-shadow">
-                    {player.annualSalary ? player.annualSalary.toLocaleString('pl-PL') : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span>
+                    {isPolishClub
+                      ? <>{player.annualSalary ? player.annualSalary.toLocaleString('pl-PL') : '0'} <span className="text-[10px] opacity-60 ml-1">PLN</span></>
+                      : <>{player.annualSalary ? Math.round(player.annualSalary / PLN_TO_EUR).toLocaleString('pl-PL') : '0'} <span className="opacity-60 ml-1">€</span></>
+                    }
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20 shadow-inner">💰</div>
@@ -593,7 +598,10 @@ export const PlayerCard: React.FC = () => {
                 <div>
                   <span className="block text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 drop-shadow">Cena Rynkowa</span>
                   <span className="text-lg font-black text-emerald-400 font-mono italic tabular-nums leading-none drop-shadow">
-                    {player.marketValue ? player.marketValue.toLocaleString('pl-PL') : '0'} <span className="text-xs opacity-60 ml-1">PLN</span>
+                    {isPolishClub
+                      ? <>{player.marketValue ? player.marketValue.toLocaleString('pl-PL') : '0'} <span className="text-xs opacity-60 ml-1">PLN</span></>
+                      : <>{player.marketValue ? Math.round(player.marketValue / PLN_TO_EUR).toLocaleString('pl-PL') : '0'} <span className="opacity-60 ml-1">€</span></>
+                    }
                   </span>
                   <p className="text-[7px] text-white uppercase mt-1 font-bold tracking-tighter drop-shadow"></p>
                 </div>

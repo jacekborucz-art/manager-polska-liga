@@ -346,6 +346,14 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     body: 'Oficjalnie: Zarząd klubu {CLUB} podjął decyzję o natychmiastowym rozwiązaniu kontraktu z trenerem {COACH}. Powodem dymisji jest rozczarowująca postawa zespołu i odległa pozycja w tabeli ({RANK}. miejsce). Media spekulują, że czara goryczy przelała się po ostatnich wynikach, które nie dawały nadziei na realizację celu.'
   },
   {
+    id: 'press_winless_streak',
+    type: MailType.MEDIA,
+    sender: 'Gazeta Sportowa',
+    role: 'Redakcja Sportowa',
+    subject: 'Sytuacja w {CLUB} staje się coraz bardziej niepokojąca',
+    body: 'Sytuacja w {CLUB} staje się coraz bardziej niepokojąca. Zespół pozostaje bez zwycięstwa od co najmniej pięciu spotkań, a rosnąca presja ze strony kibiców i ekspertów zaczyna odbijać się na atmosferze wokół drużyny.\n\nOstatnie tygodnie nie należą do udanych dla zespołu, który jeszcze niedawno uchodził za jednego z kandydatów do walki o czołowe lokaty w tabeli. Zamiast punktów i stabilnej formy, drużyna notuje kolejne rozczarowujące rezultaty, tracąc cenne punkty zarówno w meczach domowych, jak i wyjazdowych.\n\nNiepokój budzi przede wszystkim styl gry zespołu. Coraz częściej pojawiają się również pytania dotyczące decyzji sztabu szkoleniowego oraz przygotowania mentalnego zawodników.\n\nChoć przedstawiciele klubu publicznie apelują o spokój i podkreślają, że drużyna przechodzi jedynie trudniejszy moment sezonu, cierpliwość kibiców wydaje się coraz mniejsza. Po ostatnim spotkaniu na trybunach pojawiły się pierwsze oznaki frustracji, a w mediach społecznościowych nie brakuje głosów domagających się zmian.\n\nNajbliższe mecze mogą okazać się kluczowe dla przyszłości zespołu oraz pozycji sztabu szkoleniowego. Jeśli seria bez zwycięstwa będzie się wydłużać, presja wokół {CLUB} może osiągnąć poziom, który trudno będzie zignorować.'
+  },
+  {
     id: 'board_coach_warning',
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',

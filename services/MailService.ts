@@ -290,23 +290,23 @@ generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
     };
   },
 
-generateCupFinalMail: (homeName: string, awayName: string, score: string, userTeamId: string | null, winnerId: string): MailMessage => {
+generateCupFinalMail: (homeName: string, awayName: string, score: string, userTeamId: string | null, winnerId: string, homeDisplayName?: string, awayDisplayName?: string): MailMessage => {
     const isUserHome = homeName === userTeamId;
     const isUserWinner = winnerId === userTeamId;
     const isUserInFinal = homeName === userTeamId || awayName === userTeamId;
 
     let templateId = 'system_cup_news';
     let replacements: Record<string, string> = {
-      'WINNER': winnerId === homeName ? homeName : awayName,
-      'LOSER': winnerId === homeName ? awayName : homeName,
+      'WINNER': winnerId === homeName ? (homeDisplayName ?? homeName) : (awayDisplayName ?? awayName),
+      'LOSER': winnerId === homeName ? (awayDisplayName ?? awayName) : (homeDisplayName ?? homeName),
       'SCORE': score
     };
 
     if (isUserInFinal) {
       templateId = isUserWinner ? 'board_cup_victory' : 'board_cup_final_loss';
       replacements = {
-        'CLUB': userTeamId || '',
-        'OPPONENT': isUserHome ? awayName : homeName
+        'CLUB': isUserHome ? (homeDisplayName ?? userTeamId ?? '') : (awayDisplayName ?? userTeamId ?? ''),
+        'OPPONENT': isUserHome ? (awayDisplayName ?? awayName) : (homeDisplayName ?? homeName)
       };
     }
 
@@ -720,7 +720,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     recentFixture?: Fixture,
     nextFixture?: Fixture,
     existingMails: MailMessage[] = [],
-    userLineup?: Lineup
+    userLineup?: Lineup,
+    allFixtures?: Fixture[]
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -778,8 +779,9 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const month = currentDate.getMonth() + 1; // 1-based
     const day = currentDate.getDate();
     const isBeforeLastLeagueMatch = month < 5 || (month === 5 && day <= 23);
+    const isWinterBreak = (month === 12 && day >= 18) || month === 1;
 
-    if (played >= 3 && isBeforeLastLeagueMatch) {
+    if (played >= 3 && isBeforeLastLeagueMatch && !isWinterBreak) {
        // expectedRank: non-linear mapping so high-rep clubs (Legia, Lech) expect top 2,
        // mid-rep clubs expect top 5–9, low-rep clubs expect mid/low table
        const expectedRank = Math.max(1, Math.round(19 - userClub.reputation * 1.7));
@@ -826,6 +828,44 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         const winterMail = createMail(winterTemplateId, { 'CLUB': userClub.name });
         winterMail.id = `WINTER_FORM_${currentDate.getFullYear()}`;
         newMails.push(winterMail);
+      }
+    }
+
+    // --- PASSA BEZ WYGRANEJ: Gazeta Sportowa po 5 meczach bez wygranej ---
+    if (allFixtures && allFixtures.length > 0) {
+      const NON_COMPETITIVE = ['FRIENDLY', 'BREAK', 'OFF_SEASON', 'TRANSFER_WINDOW', 'BOARD'];
+      const competitiveFixtures = allFixtures
+        .filter(f =>
+          f.status === MatchStatus.FINISHED &&
+          (f.homeTeamId === userClub.id || f.awayTeamId === userClub.id) &&
+          !NON_COMPETITIVE.includes(f.leagueId as string) &&
+          !(f.leagueId as string).includes('DRAW')
+        )
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      if (competitiveFixtures.length >= 5) {
+        const last5 = competitiveFixtures.slice(-5);
+        const last6th = competitiveFixtures.length >= 6 ? competitiveFixtures[competitiveFixtures.length - 6] : null;
+
+        const isUserWin = (f: Fixture): boolean => {
+          const isHome = f.homeTeamId === userClub.id;
+          const userScore = isHome ? (f.homeScore ?? 0) : (f.awayScore ?? 0);
+          const oppScore = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
+          return userScore > oppScore;
+        };
+
+        const allLast5NonWin = last5.every(f => !isUserWin(f));
+        const prev6thWasWin = last6th === null || isUserWin(last6th);
+
+        if (allLast5NonWin && prev6thWasWin) {
+          const streakMailId = `PRESS_WINLESS_5_${new Date(last5[last5.length - 1].date).getTime()}`;
+          const alreadySent = existingMails.some(m => m.id === streakMailId);
+          if (!alreadySent) {
+            const streakMail = createMail('press_winless_streak', { 'CLUB': userClub.name });
+            streakMail.id = streakMailId;
+            newMails.push(streakMail);
+          }
+        }
       }
     }
 

@@ -204,9 +204,9 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
                     {homeScore} <span className="text-slate-700">:</span> {awayScore}
                   </div>
                   <div className="flex flex-col items-center gap-1">
-                    {isExtraTime && (
+                    {isPenalties && (
                       <span className="px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-[11px] font-black text-amber-400 uppercase tracking-widest">
-                        {isPenalties ? `KARNE ${homePenaltyScore}:${awayPenaltyScore}` : 'PO DOGRYWCE'}
+                        {`KARNE ${homePenaltyScore}:${awayPenaltyScore}`}
                       </span>
                     )}
                     {attendance > 0 && (
