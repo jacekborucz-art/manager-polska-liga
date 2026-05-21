@@ -48,10 +48,14 @@ export const RecoveryService = {
 // TUTAJ WSTAW TEN KOD
         // 1. MODYFIKATORY REGENERACJI (Age & Injury Factor)
         let ageModifier = 1.0;
-        if (player.age <= 24) ageModifier = 0.8;       // Młode organizmy (bonus)
-        else if (player.age <= 29) ageModifier = 0.6;  // Szczyt formy
-        else if (player.age <= 34) ageModifier = 0.17; // Powolny spadek
-        else ageModifier = 0.7;                        // Weterani (wolna regeneracja)
+        if (player.age <= 24) ageModifier = 0.8;
+        else if (player.age <= 29) ageModifier = 0.6;
+        else {
+          const normalizedCond = Math.max(0, Math.min(1, (player.condition - 50) / 49));
+          const normalizedStr = Math.max(0, Math.min(1, (player.attributes.strength - 50) / 49));
+          const physicalFactor = (normalizedCond + normalizedStr) / 2;
+          ageModifier = 0.3 + 0.3 * physicalFactor;
+        }
 
         const injuryModifier = player.health.status === HealthStatus.INJURED ? 0.5 : 1.0;
 

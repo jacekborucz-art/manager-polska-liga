@@ -391,7 +391,7 @@ const isPausedForSevereInjury = useMemo(() => {
         homeInjuries: {}, awayInjuries: {}, playerYellowCards: {},
         sentOffIds: [], homeRiskMode: {}, awayRiskMode: {}, homeUpgradeProb: {}, awayUpgradeProb: {}, lightInjuryPrompt: null,
         homeInjuryMin: {}, awayInjuryMin: {}, subsCountHome: 0, subsCountAway: 0,
-        homeSubsHistory: [], awaySubsHistory: [], lastAiActionMinute: 0, lastAiSubMinute: 0, lastAiFormationMinute: 0, aiTacticLocked: false, aiTacticLockUntilMinute: 0,
+        homeSubsHistory: [], awaySubsHistory: [], lastAiActionMinute: 0, lastAiSubMinute: 0, lastAiFormationMinute: 0, aiTacticLocked: false, aiTacticLockUntilMinute: 0, aiLateTacticChanges: 0,
         logs: [{ id: 'init', minute: 0, text: "Oczekiwanie na pierwszy gwizdek...", type: MatchEventType.GENERIC }],
         liveStats: {
     home: { shots: 0, shotsOnTarget: 0, corners: 0, fouls: 0, offsides: 0 },
@@ -772,6 +772,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            let nextLastAiFormationMinute = prev.lastAiFormationMinute ?? prev.lastAiActionMinute;
            let nextAiTacticLockUntilMinute = prev.aiTacticLockUntilMinute ?? 0;
            let nextAiTacticLocked = nextAiTacticLockUntilMinute > 45;
+           let nextAiLateTacticChanges = prev.aiLateTacticChanges ?? 0;
+           let nextAiLateTacticScoreDiffAtLastChange = prev.aiLateTacticScoreDiffAtLastChange;
            let updatedLogs = [newLog, ...prev.logs];
 
            // --- HALFTIME AI DECISIONS ---
@@ -802,6 +804,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
               if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
               if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
+              if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
+              if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
               nextAiTacticLocked = nextAiTacticLockUntilMinute > 45 || !!decision.aiTacticLocked;
               if (decision.logs) {
                  decision.logs.forEach(l => {
@@ -824,6 +828,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               lastAiSubMinute: nextLastAiSubMinute,
               lastAiFormationMinute: nextLastAiFormationMinute,
               aiTacticLockUntilMinute: nextAiTacticLockUntilMinute,
+              aiLateTacticChanges: nextAiLateTacticChanges,
+              aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange,
               aiTacticLocked: nextAiTacticLocked,
               isHalfTime: !isFT, isFinished: isFT, isPaused: true, addedTime: currentAddedTime, logs: updatedLogs
            };
@@ -850,6 +856,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let nextLastAiFormationMinute = prev.lastAiFormationMinute ?? prev.lastAiActionMinute;
         let nextAiTacticLockUntilMinute = prev.aiTacticLockUntilMinute ?? 0;
         let nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute;
+        let nextAiLateTacticChanges = prev.aiLateTacticChanges ?? 0;
+        let nextAiLateTacticScoreDiffAtLastChange = prev.aiLateTacticScoreDiffAtLastChange;
         let nextHomeInjuries = { ...prev.homeInjuries };
         let nextAwayInjuries = { ...prev.awayInjuries };
         let nextHomeRiskMode = { ...prev.homeRiskMode };
@@ -897,7 +905,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         if (nextMinute % 5 === 0 || immediateAiTrigger) {
            const decision = AiMatchDecisionService.makeDecisions(
-              { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory },
+              { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, aiLateTacticChanges: nextAiLateTacticChanges, aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory },
               ctx,
               aiSide,
               immediateAiTrigger,
@@ -925,6 +933,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
            if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
            if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
+           if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
+           if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
            nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute || !!decision.aiTacticLocked;
            if (decision.logs) {
               decision.logs.forEach(l => {
@@ -1633,7 +1643,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
 
           const injText = getCommentary(injury.type, injury.text);
-          updatedLogs = [{ id: `INJ_${nextMinute}_${pId}`, minute: nextMinute, text: injText, type: injury.type, teamSide: injury.teamSide, playerName: injury.text }, ...updatedLogs];
+          if (!updatedLogs.some(l => l.id === `INJ_${nextMinute}_${pId}`)) updatedLogs = [{ id: `INJ_${nextMinute}_${pId}`, minute: nextMinute, text: injText, type: injury.type, teamSide: injury.teamSide, playerName: injury.text }, ...updatedLogs];
           
           if (severity === InjurySeverity.SEVERE) {
             priorityAiTrigger = true;
@@ -1721,7 +1731,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (card === MatchEventType.YELLOW_CARD) {
                  nextPlayerYellowCards[pId] = (nextPlayerYellowCards[pId] || 0) + 1;
                  immediateEventType = MatchEventType.YELLOW_CARD;
-                 if (nextPlayerYellowCards[pId] === 2) {
+                 if (nextPlayerYellowCards[pId] === 2 && !prev.sentOffIds.includes(pId)) {
                     nextSentOffIds.push(pId);
                     if (activeSide === 'HOME') nextHomeLineup.startingXI = nextHomeLineup.startingXI.map(id => id === pId ? null : id);
                     else nextAwayLineup.startingXI = nextAwayLineup.startingXI.map(id => id === pId ? null : id);
@@ -1729,10 +1739,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                     priorityAiTrigger = true;
                     immediateEventType = MatchEventType.RED_CARD;
                     if (activeSide === userSide) nextIsPaused = true;
-                 } else {
+                 } else if (nextPlayerYellowCards[pId] !== 2) {
                     newLog = { id: `YEL_${nextMinute}`, minute: nextMinute, text: `🟨 Żółta kartka: ${player.lastName}`, type: MatchEventType.YELLOW_CARD, teamSide: activeSide, playerName: player.lastName };
                  }
-              } else if (card === MatchEventType.RED_CARD) {
+              } else if (card === MatchEventType.RED_CARD && !prev.sentOffIds.includes(pId)) {
                  nextSentOffIds.push(pId);
                  immediateEventType = MatchEventType.RED_CARD;
                  if (activeSide === 'HOME') nextHomeLineup.startingXI = nextHomeLineup.startingXI.map(id => id === pId ? null : id);
@@ -2168,7 +2178,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            let aiDecisionIterations = 0;
 
            while (aiDecisionIterations < 5) {
-           const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway }, ctx, aiSide, true, false, aiLateMatchContext);
+           const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, aiLateTacticChanges: nextAiLateTacticChanges, aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway }, ctx, aiSide, true, false, aiLateMatchContext);
            
            // TUTAJ WSTAW TEN KOD - Obsługa wewnętrznych przesunięć (np. gracz z pola na bramkę)
            if (decision.newLineup) {
@@ -2203,6 +2213,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
            if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
            if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
+           if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
+           if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
            nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute || !!decision.aiTacticLocked;
            if (decision.logs) {
               decision.logs.forEach(l => {
@@ -2273,7 +2285,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         Object.keys(nextHomeInjuries).forEach(id => { if (nextHomeInjuries[id] === InjurySeverity.SEVERE) fatigue.home[id] = 0; });
         Object.keys(nextAwayInjuries).forEach(id => { if (nextAwayInjuries[id] === InjurySeverity.SEVERE) fatigue.away[id] = 0; });
 
-        if (newLog) updatedLogs = [newLog, ...updatedLogs];
+        if (newLog && !updatedLogs.some(l => l.id === newLog!.id)) updatedLogs = [newLog, ...updatedLogs];
 
         // WALKOWER: drużyna z ≤7 zawodnikami i bez dostępnych zmian przegrywa 3-0
         const homeOnPitch = nextHomeLineup.startingXI.filter(id => id !== null).length;
@@ -2308,6 +2320,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             lastAiSubMinute: nextLastAiSubMinute,
             lastAiFormationMinute: nextLastAiFormationMinute,
             aiTacticLockUntilMinute: nextAiTacticLockUntilMinute,
+            aiLateTacticChanges: nextAiLateTacticChanges,
+            aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange,
             aiTacticLocked: nextAiTacticLocked,
             homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries,
             homeRiskMode: nextHomeRiskMode, awayRiskMode: nextAwayRiskMode,
@@ -2351,6 +2365,8 @@ return {
            lastAiSubMinute: nextLastAiSubMinute,
            lastAiFormationMinute: nextLastAiFormationMinute,
            aiTacticLockUntilMinute: nextAiTacticLockUntilMinute,
+           aiLateTacticChanges: nextAiLateTacticChanges,
+           aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange,
            aiTacticLocked: nextAiTacticLocked,
            homeInjuries: nextHomeInjuries, 
            awayInjuries: nextAwayInjuries,

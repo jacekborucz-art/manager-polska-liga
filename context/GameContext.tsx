@@ -2011,7 +2011,7 @@ setMessages([welcomeMail, fanMail]);
       const userClub = finalClubs.find(c => c.id === userTeamId);
       const userSquad = finalPlayers[userTeamId] || [];
       if (userClub && userSquad.length > 0) {
-        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages);
+        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages, allFixtures);
         finalPlayers = {
           ...finalPlayers,
           [userTeamId]: demandResult.players,

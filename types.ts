@@ -1724,6 +1724,8 @@ export interface MatchLiveState {
   lastAiSubMinute?: number;
   lastAiFormationMinute?: number;
   aiTacticLockUntilMinute?: number;
+  aiLateTacticChanges?: number;
+  aiLateTacticScoreDiffAtLastChange?: number;
   logs: MatchLogEntry[];
   events: MatchEvent[];
   homeGoals: GoalTickerInfo[];

@@ -1,4 +1,4 @@
-import { Club, HealthStatus, IndividualTalkType, MailMessage, MailType, Player, PlayerMoralePersonality, TrainingIntensity } from '../types';
+import { Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMoralePersonality, TrainingIntensity } from '../types';
 
 export interface PlayerMoraleInfo {
   label: string;
@@ -423,7 +423,8 @@ export const PlayerMoraleService = {
     club: Club,
     squad: Player[],
     currentDate: Date,
-    existingMessages: MailMessage[] = []
+    existingMessages: MailMessage[] = [],
+    fixtures?: Fixture[]
   ): MoraleDemandProcessResult => {
     if (squad.length === 0 || club.stats.played < 4 || currentDate.getDay() !== 1) {
       return { players: squad.map(PlayerMoraleService.ensurePlayerState), mails: [] };
@@ -451,6 +452,13 @@ export const PlayerMoraleService = {
         mail.metadata.requestType === requestType &&
         new Date(mail.date).getTime() >= currentDate.getTime() - 21 * DAY_MS
       );
+
+    const hasUpcomingLeagueFixtures = (fixtures ?? []).some(f =>
+      f.status === MatchStatus.SCHEDULED &&
+      f.leagueId === club.leagueId &&
+      (f.homeTeamId === club.id || f.awayTeamId === club.id) &&
+      f.date.getTime() >= currentDate.getTime()
+    );
 
     const createdMails: MailMessage[] = [];
     const nextPlayers = squad.map(player => {
@@ -481,6 +489,8 @@ export const PlayerMoraleService = {
         hasSportingArgument &&
         isHealthyEnough &&
         !demandCooldown &&
+        !withMorale.transferPendingClubId &&
+        hasUpcomingLeagueFixtures &&
         !hasRecentMail(withMorale, 'ROLE') &&
         (withMorale.morale ?? 50) <= (ignoresStatusNoise ? 34 : 48 + pressureBonus * 6);
 
@@ -495,6 +505,8 @@ export const PlayerMoraleService = {
         hasSportingArgument &&
         isHealthyEnough &&
         !demandCooldown &&
+        !withMorale.transferPendingClubId &&
+        hasUpcomingLeagueFixtures &&
         !withMorale.minutesDemandUntil &&
         !hasRecentMail(withMorale, 'MINUTES') &&
         minutesShare < expectedShare &&

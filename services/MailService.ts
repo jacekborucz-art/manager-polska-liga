@@ -799,9 +799,15 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
           }
        }
 
-       if (boardConfidence < 35 && rng < 0.2) {
+       const form = userClub.stats.form;
+       let currentWinStreak = 0;
+       for (let i = form.length - 1; i >= 0 && form[i] === 'W'; i--) currentWinStreak++;
+       let currentLossStreak = 0;
+       for (let i = form.length - 1; i >= 0 && form[i] === 'P'; i--) currentLossStreak++;
+
+       if (boardConfidence < 35 && rng < 0.2 && currentLossStreak >= 3) {
           newMails.push(createMail('board_losing_streak', { 'CLUB': userClub.name }));
-       } else if (boardConfidence > 85 && rng < 0.1) {
+       } else if (boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3) {
           newMails.push(createMail('board_winning_streak', { 'CLUB': userClub.name }));
        }
     }

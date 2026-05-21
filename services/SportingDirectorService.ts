@@ -474,7 +474,7 @@ const calibrateObjectiveToSchedule = (params: {
   const { club, date, fixtures, type, title, description, target, dueDays, contextTag } = params;
   const fallbackDueAt = addDaysIso(date, dueDays);
 
-  if (type !== 'POINTS_RUN' && type !== 'DEFENSIVE_RUN' && type !== 'WIN_NEXT_MATCH' && type !== 'AVOID_DEFEAT' && type !== 'HOLD_TOP_SPOT' && type !== 'STAY_IN_TOP_THREE') {
+  if (type !== 'POINTS_RUN' && type !== 'DEFENSIVE_RUN' && type !== 'WIN_NEXT_MATCH' && type !== 'AVOID_DEFEAT' && type !== 'HOLD_TOP_SPOT' && type !== 'STAY_IN_TOP_THREE' && type !== 'PLAYER_MINUTES' && type !== 'YOUTH_DEVELOPMENT') {
     return { title, description, target, dueAt: fallbackDueAt, contextTag };
   }
 
@@ -483,8 +483,13 @@ const calibrateObjectiveToSchedule = (params: {
       ? contextTag === 'ULTIMATUM' ? 5 : 3
       : type === 'DEFENSIVE_RUN'
         ? 3
-        : 1;
-  const block = getUpcomingLeagueFixturesBlock(club, fixtures, date, desiredMatches, dueDays);
+        : type === 'PLAYER_MINUTES'
+          ? (target >= 270 ? 5 : 3)
+          : type === 'YOUTH_DEVELOPMENT'
+            ? (target >= 360 ? 5 : 4)
+            : 1;
+  const searchDays = (type === 'PLAYER_MINUTES' || type === 'YOUTH_DEVELOPMENT') ? 90 : dueDays;
+  const block = getUpcomingLeagueFixturesBlock(club, fixtures, date, desiredMatches, searchDays);
 
   if (block.length === 0) {
     return { title, description, target, dueAt: fallbackDueAt, contextTag };
@@ -534,6 +539,10 @@ const calibrateObjectiveToSchedule = (params: {
       dueAt,
       contextTag,
     };
+  }
+
+  if (type === 'PLAYER_MINUTES' || type === 'YOUTH_DEVELOPMENT') {
+    return { title, description, target, dueAt, contextTag };
   }
 
   const calibratedDescription = block.length === 1
@@ -1406,6 +1415,18 @@ export const SportingDirectorService = {
     }
 
     const type = chooseObjectiveType(club, players, director, leagueClubs);
+
+    const upcomingMatchCount = (fixtures ?? []).filter(f =>
+      f.status === MatchStatus.SCHEDULED &&
+      f.leagueId === club.leagueId &&
+      (f.homeTeamId === club.id || f.awayTeamId === club.id) &&
+      f.date.getTime() >= date.getTime() &&
+      f.date.getTime() <= addDays(date, 35).getTime()
+    ).length;
+    if (type !== 'WAGE_DISCIPLINE' && upcomingMatchCount < 2) {
+      return { updatedClub: club, mail: null };
+    }
+
     const focusPlayer = type === 'PLAYER_MINUTES' ? getDevelopmentTarget(players, club) : null;
     const details = buildObjectiveDetails(type, director, club, focusPlayer, players, leagueClubs);
     const issuedAt = date.toISOString().slice(0, 10);

@@ -27,6 +27,8 @@ type AiDecisionResult = {
   lastAiFormationMinute?: number;
   aiTacticLocked?: boolean;
   aiTacticLockUntilMinute?: number;
+  aiLateTacticChanges?: number;
+  aiLateTacticScoreDiffAtLastChange?: number;
   logs: string[];
 };
 
@@ -637,7 +639,20 @@ export const AiMatchDecisionService = {
     let updatedActionMinute: number | undefined;
     let updatedSubMinute: number | undefined;
     let updatedFormationMinute: number | undefined;
+    let updatedLateTacticChanges: number | undefined;
+    let updatedLateTacticScoreDiff: number | undefined;
     let tacticLockUntilMinute: number | undefined = state.aiTacticLockUntilMinute;
+    const lateTacticChanges = state.aiLateTacticChanges ?? 0;
+    const lastLateTacticScoreDiff = state.aiLateTacticScoreDiffAtLastChange;
+    const isExtremeLateTacticNeed =
+      isFinalPhase &&
+      lateTacticChanges < 2 &&
+      state.minute >= 84 &&
+      lateSeasonDrama >= 0.85 &&
+      scoreDiff !== 0 &&
+      lastLateTacticScoreDiff !== undefined &&
+      Math.sign(scoreDiff) !== Math.sign(lastLateTacticScoreDiff);
+    const canUsePlannedLateTactic = !isFinalPhase || lateTacticChanges === 0 || isExtremeLateTacticNeed;
     const markSubAction = () => {
       updatedActionMinute = state.minute;
       updatedSubMinute = state.minute;
@@ -650,6 +665,13 @@ export const AiMatchDecisionService = {
         aiTacticLockResult = true;
       }
     };
+    const markPlannedFormationAction = (lockMinutes: number = 0) => {
+      markFormationAction(lockMinutes);
+      if (isFinalPhase) {
+        updatedLateTacticChanges = lateTacticChanges + 1;
+        updatedLateTacticScoreDiff = scoreDiff;
+      }
+    };
     const buildResult = (): AiDecisionResult => ({
       newLineup,
       newSubsCount,
@@ -660,6 +682,8 @@ export const AiMatchDecisionService = {
       lastAiFormationMinute: updatedFormationMinute,
       aiTacticLocked: aiTacticLockResult,
       aiTacticLockUntilMinute: tacticLockUntilMinute,
+      aiLateTacticChanges: updatedLateTacticChanges,
+      aiLateTacticScoreDiffAtLastChange: updatedLateTacticScoreDiff,
       logs
     });
 
@@ -1010,13 +1034,13 @@ export const AiMatchDecisionService = {
     }
 
     if (!subRecord && shouldReactToScore(scoreDiff, state.minute, coachQuality, isHalftime)) {
-      const plannedTactic = !newTacticId && canChangeTacticNow
+      const plannedTactic = !newTacticId && canChangeTacticNow && canUsePlannedLateTactic
         ? chooseScoreTacticResponse(newLineup, myPlayers, scoreDiff, coachQuality)
         : null;
 
       if (plannedTactic) {
         newTacticId = plannedTactic;
-        markFormationAction();
+        markPlannedFormationAction(isFinalPhase ? 18 : 0);
         const direction = scoreDiff < 0 ? 'odważniej' : 'bezpieczniej';
         logs.push(`${state.minute}' Trener reaguje na wynik i ustawia zespół ${direction}: ${plannedTactic}.`);
       }
@@ -1106,7 +1130,7 @@ export const AiMatchDecisionService = {
         }
       }
 
-      if (!newTacticId && canChangeTacticNow) {
+      if (!newTacticId && canChangeTacticNow && canUsePlannedLateTactic) {
         const lateTacticPool = mustChaseLate && !avoidCollapseLate
           ? OFFENSIVE_TACTICS
           : (mustProtectLate || avoidCollapseLate)
@@ -1115,7 +1139,7 @@ export const AiMatchDecisionService = {
         const lateTactic = lateTacticPool.find(t => t !== newLineup.tacticId);
         if (lateTactic) {
           newTacticId = lateTactic;
-          markFormationAction();
+          markPlannedFormationAction(isExtremeLateTacticNeed ? 12 : 18);
           const direction = mustChaseLate && !avoidCollapseLate ? 'rzuca zespół do ataku' : 'zamyka końcówkę bezpieczniej';
           logs.push(`${state.minute}' Trener ${direction}: ${lateTactic}.`);
         }
@@ -1194,19 +1218,19 @@ export const AiMatchDecisionService = {
       }
     }
 
-    if (state.minute > 20 && !newTacticId && canChangeTactic) {
+    if (state.minute > 20 && !newTacticId && canChangeTactic && canUsePlannedLateTactic) {
       if (scoreDiff < -1 && state.minute > 45) {
         const candidates = OFFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
           newTacticId = candidates[0];
-          markFormationAction();
+          markPlannedFormationAction(isFinalPhase ? 18 : 0);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       } else if (scoreDiff > 0 && state.minute > 75 && mySentOffCount === 0) {
         const candidates = DEFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
           newTacticId = candidates[0];
-          markFormationAction();
+          markPlannedFormationAction(18);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       }

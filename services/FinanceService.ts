@@ -1135,22 +1135,42 @@ export const FinanceService = {
    * Oblicza ile zawodnik żąda za sam podpis (25-100% pensji)
    */
   calculatePlayerBonusDemand: (player: Player, proposedSalary: number, clubReputation: number): number => {
-    // Losowa baza 25-100%
-    let basePercent = 0.25 + (Math.random() * 0.75);
-    
-    // Modyfikator Reputacji: Jeśli klub > 8, zawodnik rząda min. 60%
-    if (clubReputation > 8) {
-      basePercent = Math.max(0.60, basePercent);
-    }
+    const salaryBase = player.annualSalary > 0 ? player.annualSalary : proposedSalary;
+    const ovr = player.overallRating;
 
-    let demand = proposedSalary * basePercent;
+    let baseMultiplier: number;
+    if (ovr >= 90) baseMultiplier = 2.1;
+    else if (ovr >= 85) baseMultiplier = 1.7;
+    else if (ovr >= 80) baseMultiplier = 1.4;
+    else if (ovr >= 75) baseMultiplier = 1.15;
+    else if (ovr >= 70) baseMultiplier = 0.95;
+    else if (ovr >= 65) baseMultiplier = 0.80;
+    else baseMultiplier = 0.60;
 
-    // Modyfikator Overall: Gwiazdy (>75) rzadają o 15% więcej
-    if (player.overallRating > 75) {
-      demand *= 1.15;
-    }
+    const age = player.age;
+    let ageModifier: number;
+    if (age >= 34) ageModifier = 1.35;
+    else if (age >= 30) ageModifier = 1.15;
+    else if (age <= 22) ageModifier = 0.75;
+    else ageModifier = 1.0;
 
-    return Math.floor(demand);
+    const personality = player.moralePersonality;
+    let personalityModifier = 1.0;
+    if (personality === 'EGOIST') personalityModifier = 1.35;
+    else if (personality === 'AMBITIOUS') personalityModifier = 1.20;
+    else if (personality === 'CONFIDENT') personalityModifier = 1.10;
+    else if (personality === 'LOYAL') personalityModifier = 0.70;
+    else if (personality === 'PROFESSIONAL') personalityModifier = 0.85;
+    else if (personality === 'CALM') personalityModifier = 0.90;
+
+    const repModifier = clubReputation > 8 ? 1.15 : clubReputation < 5 ? 0.90 : 1.0;
+
+    const variation = 0.85 + Math.random() * 0.30;
+
+    const demand = salaryBase * baseMultiplier * ageModifier * personalityModifier * repModifier * variation;
+
+    const step = demand >= 500_000 ? 25_000 : demand >= 100_000 ? 10_000 : demand >= 20_000 ? 5_000 : 1_000;
+    return Math.round(demand / step) * step;
   },
 
   /**
