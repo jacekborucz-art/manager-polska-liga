@@ -37,7 +37,7 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
   { name: "Standard Liège", country: "BEL", tier: 2, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Stade Maurice Dufrasne", capacity: 30023, reputation: 13 },
   { name: "Anderlecht Bruksela", country: "BEL", tier: 2, colors: ['#FFFFFF', '#0033A0', '#FF0000'], stadium: "Lotto Park", capacity: 21000, reputation: 15 },
   { name: "KRC Genk", country: "BEL", tier: 2, colors: ['#0033A0', '#FFFFFF', '#FF0000'], stadium: "Luminus Arena", capacity: 24956, reputation: 12 },
-  { name: "Club Brugge", country: "BEL", tier: 2, colors: ['#0000FF', '#FFFFFF', '#000000'], stadium: "Jan Breydel Stadium", capacity: 29000, reputation: 15 },
+  
  
   // Białoruś (BLR)
   { name: "Dinamo Mińsk", country: "BLR", tier: 3, colors: ['#FFFFFF', '#0033A0', '#FF0000'], stadium: "Dinamo Stadium", capacity: 22346, reputation: 7 },

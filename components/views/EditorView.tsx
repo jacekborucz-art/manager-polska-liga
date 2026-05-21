@@ -390,7 +390,7 @@ export const EditorView: React.FC = () => {
         setAttrs({ ...p.attributes });
         setAnnualSalary(p.annualSalary);
         setMarketValue(p.marketValue ?? 0);
-        setContractEndDate(p.contractEndDate);
+        setContractEndDate(p.contractEndDate ? String(p.contractEndDate).substring(0, 10) : '');
       }
     } else {
       resetPlayerForm();
