@@ -990,7 +990,7 @@ const boardConfidence = useMemo(() => {
              );
            })()}
 
-           {wcState && (
+           {wcState && !wcState.knockoutComplete && (
              <button
                onClick={() => navigateTo(wcState.groupStageComplete ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
                disabled={isJumping}

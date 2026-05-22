@@ -398,7 +398,7 @@ export const WorldCupService = {
 
     const newGroups = groups.map(g => ({ ...g, matches: [...g.matches] }));
     const matchDate = new Date(year, month - 1, day);
-    const dateStr = matchDate.toISOString().split('T')[0];
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     for (const { groupLabel, round } of schedule) {
       const groupIdx = newGroups.findIndex(g => g.label === groupLabel);
@@ -507,7 +507,7 @@ export const WorldCupService = {
     coaches?: Record<string, Coach>
   ): WCKnockoutMatch[] {
     const matchDate = new Date(year, month - 1, day);
-    const dateStr = matchDate.toISOString().split('T')[0];
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const getTeamRep = (name: string | null) =>
       name ? (teams.find(t => t.name === name)?.reputation ?? 8) : 8;
 
@@ -519,7 +519,7 @@ export const WorldCupService = {
 
       if (nationalTeams && players && coaches) {
         const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, players, coaches);
-        const wentToET = full.homeGoalsAET !== undefined;
+        const wentToET = full.homeGoals === full.awayGoals;
         const wentToPenalties = full.penaltyWinner !== undefined;
         const winner = full.penaltyWinner
           ?? (wentToET

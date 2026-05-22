@@ -50,7 +50,7 @@ function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
           <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.5em] whitespace-nowrap">Grupy</span>
           <div className="h-px bg-white/10 flex-1" />
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-5">
           {wcState.groups.map(group => {
             const standings = computeGroupStandings(group);
             return (
@@ -93,9 +93,9 @@ function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
                 <div className="space-y-2">
                   {group.matches.length > 0 ? group.matches.map((match, idx) => (
                     <div key={`${group.label}-${idx}`} className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-2xl bg-black/25 border border-white/5 px-4 py-3">
-                      <span className="text-right text-xs font-black uppercase text-slate-300 truncate">{match.home}</span>
+                      <span className="text-right text-[10px] font-black uppercase text-slate-300 truncate">{match.home}</span>
                       <span className="min-w-[72px] text-center font-mono text-sm font-black text-emerald-300">{match.homeGoals}:{match.awayGoals}</span>
-                      <span className="text-left text-xs font-black uppercase text-slate-300 truncate">{match.away}</span>
+                      <span className="text-left text-[10px] font-black uppercase text-slate-300 truncate">{match.away}</span>
                       <span className="col-span-3 text-center text-[9px] font-bold uppercase tracking-widest text-white/25">{match.date}</span>
                     </div>
                   )) : (
@@ -123,15 +123,15 @@ function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
               return (
                 <div key={round} className="bg-slate-900/30 rounded-3xl border border-white/10 p-5">
                   <h3 className="text-lg font-black italic uppercase tracking-tight text-white mb-4">{WC_ROUND_LABEL[round]}</h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     {matches.map(match => (
                       <div key={match.id} className="rounded-2xl bg-black/25 border border-white/5 px-4 py-4">
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-                          <span className={`text-right text-xs font-black uppercase truncate ${match.winner === match.home ? 'text-white' : 'text-slate-500'}`}>{match.home ?? 'TBD'}</span>
+                          <span className={`text-right text-[10px] font-black uppercase truncate ${match.winner === match.home ? 'text-white' : 'text-slate-500'}`}>{match.home ?? 'TBD'}</span>
                           <span className="min-w-[92px] text-center font-mono text-sm font-black text-emerald-300">
                             {match.winner ? `${match.homeGoals ?? 0}:${match.awayGoals ?? 0}` : '-:-'}
                           </span>
-                          <span className={`text-left text-xs font-black uppercase truncate ${match.winner === match.away ? 'text-white' : 'text-slate-500'}`}>{match.away ?? 'TBD'}</span>
+                          <span className={`text-left text-[10px] font-black uppercase truncate ${match.winner === match.away ? 'text-white' : 'text-slate-500'}`}>{match.away ?? 'TBD'}</span>
                         </div>
                         {(match.wentToET || match.wentToPenalties || match.winner) && (
                           <div className="mt-2 text-center text-[9px] font-bold uppercase tracking-widest text-white/35">

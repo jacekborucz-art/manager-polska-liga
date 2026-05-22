@@ -69,7 +69,7 @@ export const ClubDetails: React.FC = () => {
       navigateTo(ViewState.MATCH_HISTORY_BROWSER);
     } else if (club.leagueId === 'L_PL_4') {
       navigateTo(ViewState.HIDDEN_LEAGUE);
-    } else if (club.leagueId === 'L_SA' || previousViewState === ViewState.EUROPEAN_CLUBS) {
+    } else if (club.leagueId === 'L_SA' || club.leagueId === 'L_CL' || club.leagueId === 'L_EL' || club.leagueId === 'L_CONF' || club.leagueId === 'L_AFRICA' || club.leagueId === 'L_ASIA' || club.leagueId === 'L_NA' || previousViewState === ViewState.EUROPEAN_CLUBS) {
       navigateTo(ViewState.EUROPEAN_CLUBS);
     } else {
       navigateTo(ViewState.LEAGUE_TABLES);
