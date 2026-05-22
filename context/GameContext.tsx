@@ -1580,6 +1580,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
           const nextBudget = club.budget + boostedInjection - achievementBonusCost;
           return FinanceService.calculateInitialTransferBudget(nextBudget, newReputation);
         })(),
+        signingBonusPool: FinanceService.calculateInitialSigningPool(
+          club.budget + nextSeasonInjection - achievementBonusCost,
+          newReputation
+        ),
         boardBudgetRequestsThisSeason: 0,
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
         stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
@@ -10764,8 +10768,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       id: `MAIL_ARRIVAL_${p.id}`,
       sender: 'Sekretariat klubu',
       role: 'Administracja',
-      subject: `Zawodnik zameldowal sie: ${p.firstName} ${p.lastName}`,
-      body: `${p.firstName} ${p.lastName} zameldowal sie w klubie i jest gotowy do treningow. Znajdziesz go na liscie rezerwowych w widoku Skladu.`,
+      subject: `Zawodnik zameldował się: ${p.firstName} ${p.lastName}`,
+      body: `${p.firstName} ${p.lastName} zameldował się w klubie i jest gotowy do treningów. Znajdziesz go na liście rezerwowych w widoku Składu.`,
       date: new Date(currentDate),
       isRead: false,
       type: MailType.SYSTEM,
@@ -10774,11 +10778,11 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     setMessages(prev => [...arrivalMails, ...prev]);
     if (arriving.length > 0) {
       showGameNotification({
-        title: 'Zawodnik zameldowal sie',
-        message: `${arriving[0].firstName} ${arriving[0].lastName} zameldowal sie w klubie i trafil na liste rezerwowych.`,
+        title: 'Zawodnik zameldował się',
+        message: `${arriving[0].firstName} ${arriving[0].lastName} zameldował się w klubie i trafił na listę rezerwowych.`,
         tone: 'success',
         onAction: () => navigateTo(ViewState.SQUAD_VIEW),
-        actionLabel: 'Przejdz do skladu →'
+        actionLabel: 'Przejdź do składu →'
       });
     }
   }, [currentDate, userTeamId, players, lineups, showGameNotification, navigateTo]);

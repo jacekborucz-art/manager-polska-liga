@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus } from '../../types';
 
@@ -30,6 +30,8 @@ const _persisted = {
   playerNationalityFilter: 'ALL' as string,
   filters: { ...initialFilters } as typeof initialFilters,
   priceFilter: { min: 0, max: 200000000 } as { min: number; max: number },
+  scrollTopPlayers: 0 as number,
+  scrollTopTransfer: 0 as number,
 };
 
 export const JobMarketView: React.FC = () => {
@@ -49,6 +51,9 @@ export const JobMarketView: React.FC = () => {
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
+
+  const scrollRefPlayers = useRef<HTMLDivElement>(null);
+  const scrollRefTransfer = useRef<HTMLDivElement>(null);
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId) ?? null, [clubs, userTeamId]);
 
@@ -95,6 +100,15 @@ export const JobMarketView: React.FC = () => {
   useEffect(() => { _persisted.playerNationalityFilter = playerNationalityFilter; }, [playerNationalityFilter]);
   useEffect(() => { _persisted.filters = filters; }, [filters]);
   useEffect(() => { _persisted.priceFilter = priceFilter; }, [priceFilter]);
+
+  useEffect(() => {
+    if (scrollRefPlayers.current) scrollRefPlayers.current.scrollTop = _persisted.scrollTopPlayers;
+    if (scrollRefTransfer.current) scrollRefTransfer.current.scrollTop = _persisted.scrollTopTransfer;
+    return () => {
+      if (scrollRefPlayers.current) _persisted.scrollTopPlayers = scrollRefPlayers.current.scrollTop;
+      if (scrollRefTransfer.current) _persisted.scrollTopTransfer = scrollRefTransfer.current.scrollTop;
+    };
+  }, []);
 
   // SKASOWANO KOD: const [searchTermCoaches, setSearchTermCoaches] = useState('');
 
@@ -497,7 +511,7 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+            <div ref={scrollRefPlayers} className="flex-1 overflow-y-auto p-2 custom-scrollbar">
               {filteredPlayerResults.map((player, index) => {
                 const theme = getPosTheme(player.position);
                 return (
@@ -594,7 +608,7 @@ export const JobMarketView: React.FC = () => {
             </div>
 
             {/* TUTAJ WSTAW TEN KOD - DYNAMICZNA LISTA TRANSFEROWA */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+            <div ref={scrollRefTransfer} className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {transferListedPlayers.length > 0 ? (
                 transferListedPlayers
                   .map((player, index) => {

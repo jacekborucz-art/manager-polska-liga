@@ -125,7 +125,7 @@ const toDateInputValue = (value?: string | null): string => {
 const toIsoDate = (value: string): string => new Date(value).toISOString();
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, lineups, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification } = useGame();
+  const { clubs, players, lineups, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -266,6 +266,10 @@ export const EditorView: React.FC = () => {
     setShowExportModal(false);
     setExportSelected(new Set());
   };
+
+  const [activeSection, setActiveSection] = useState<'GRACZE' | 'KLUBY'>('GRACZE');
+  const [clubsLeagueFilter, setClubsLeagueFilter] = useState<string>('L_PL_1');
+  const [editingSigningPool, setEditingSigningPool] = useState<Record<string, string>>({});
 
   const [selectedTier, setSelectedTier]     = useState<string>('1');
   const [selectedClubId, setSelectedClubId] = useState<string>('');
@@ -670,25 +674,52 @@ export const EditorView: React.FC = () => {
 
       {/* HEADER */}
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
-        <span className="text-sm text-white mr-2">Edytor Piłkarzy</span>
+        <span className="text-sm text-white mr-2">Edytor</span>
         <span className="w-px h-4 bg-slate-700" />
-        {['1', '2', '3', '4', 'ALL'].map(tier => (
+        {(['GRACZE', 'KLUBY'] as const).map(sec => (
           <button
-            key={tier}
-            onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
-            className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${selectedTier === tier ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+            key={sec}
+            onClick={() => setActiveSection(sec)}
+            className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${activeSection === sec ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
           >
-            {tier === 'ALL' ? 'Wszystkie kluby' : `Liga ${tier}`}
+            {sec}
           </button>
         ))}
-        <select
-          value={selectedClubId}
-          onChange={(e) => { setSelectedClubId(e.target.value); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
-          className={`${selectCls} px-2 py-1 min-w-[200px]`}
-        >
-          <option value="">— wybierz klub —</option>
-          {filteredClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <span className="w-px h-4 bg-slate-700" />
+        {activeSection === 'GRACZE' && (
+          <>
+            {['1', '2', '3', '4', 'ALL'].map(tier => (
+              <button
+                key={tier}
+                onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
+                className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${selectedTier === tier ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              >
+                {tier === 'ALL' ? 'Wszystkie kluby' : `Liga ${tier}`}
+              </button>
+            ))}
+            <select
+              value={selectedClubId}
+              onChange={(e) => { setSelectedClubId(e.target.value); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
+              className={`${selectCls} px-2 py-1 min-w-[200px]`}
+            >
+              <option value="">— wybierz klub —</option>
+              {filteredClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </>
+        )}
+        {activeSection === 'KLUBY' && (
+          <>
+            {[{id: 'L_PL_1', label: 'Ekstraklasa'}, {id: 'L_PL_2', label: 'Liga 1'}, {id: 'L_PL_3', label: 'Liga 2'}, {id: 'L_PL_4', label: 'Liga 3'}].map(lg => (
+              <button
+                key={lg.id}
+                onClick={() => setClubsLeagueFilter(lg.id)}
+                className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${clubsLeagueFilter === lg.id ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              >
+                {lg.label}
+              </button>
+            ))}
+          </>
+        )}
         <div className="ml-auto flex items-center gap-3">
           {importMsg && (
             <span className="text-xs text-emerald-400 max-w-xs truncate">{importMsg}</span>
@@ -727,7 +758,78 @@ export const EditorView: React.FC = () => {
         </div>
       </div>
 
+      {/* SEKCJA KLUBY */}
+      {activeSection === 'KLUBY' && (
+        <div className="flex-1 overflow-y-auto px-6 py-4 editor-scroll">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-2 pr-4 text-slate-400 font-black uppercase tracking-tighter">Klub</th>
+                <th className="text-right py-2 px-3 text-slate-400 font-black uppercase tracking-tighter">Budżet</th>
+                <th className="text-right py-2 px-3 text-slate-400 font-black uppercase tracking-tighter">Transferowy</th>
+                <th className="text-right py-2 px-3 text-yellow-400 font-black uppercase tracking-tighter">Pula podpisów</th>
+                <th className="text-right py-2 pl-3 text-slate-400 font-black uppercase tracking-tighter">Rezerwa</th>
+                <th className="py-2 pl-4 text-slate-400 font-black uppercase tracking-tighter">Ustaw pulę</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clubs
+                .filter(c => c.leagueId === clubsLeagueFilter)
+                .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
+                .map(club => (
+                  <tr key={club.id} className="border-b border-slate-800 hover:bg-white/5 transition-colors">
+                    <td className="py-2 pr-4 text-white font-black">{club.name}</td>
+                    <td className="py-2 px-3 text-right text-slate-300 tabular-nums">{club.budget.toLocaleString('pl-PL')} zł</td>
+                    <td className="py-2 px-3 text-right text-emerald-400 tabular-nums">{club.transferBudget.toLocaleString('pl-PL')} zł</td>
+                    <td className="py-2 px-3 text-right tabular-nums">
+                      <span className={club.signingBonusPool === 0 ? 'text-red-400 font-black' : 'text-yellow-400'}>
+                        {club.signingBonusPool.toLocaleString('pl-PL')} zł
+                      </span>
+                    </td>
+                    <td className="py-2 pl-3 text-right text-slate-400 tabular-nums">{(club.reserveBudget ?? 0).toLocaleString('pl-PL')} zł</td>
+                    <td className="py-2 pl-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step={100000}
+                          value={editingSigningPool[club.id] ?? ''}
+                          placeholder={String(FinanceService.calculateInitialSigningPool(club.budget, club.reputation))}
+                          onChange={e => setEditingSigningPool(prev => ({ ...prev, [club.id]: e.target.value }))}
+                          className={`${inputCls} px-2 py-1 w-32 tabular-nums`}
+                        />
+                        <button
+                          onClick={() => {
+                            const val = parseInt(editingSigningPool[club.id] ?? '', 10);
+                            if (isNaN(val) || val < 0) return;
+                            setClubs(prev => prev.map(c => c.id === club.id ? { ...c, signingBonusPool: val } : c));
+                            setEditingSigningPool(prev => { const next = { ...prev }; delete next[club.id]; return next; });
+                          }}
+                          className="px-3 py-1 rounded text-xs bg-yellow-700 hover:bg-yellow-600 text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-400/60 border-x-yellow-600/30 border-b-black/60 whitespace-nowrap"
+                        >
+                          Ustaw
+                        </button>
+                        <button
+                          onClick={() => {
+                            const recommended = FinanceService.calculateInitialSigningPool(club.budget, club.reputation);
+                            setClubs(prev => prev.map(c => c.id === club.id ? { ...c, signingBonusPool: recommended } : c));
+                            setEditingSigningPool(prev => { const next = { ...prev }; delete next[club.id]; return next; });
+                          }}
+                          className="px-3 py-1 rounded text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60 whitespace-nowrap"
+                        >
+                          Auto
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* MAIN CONTENT */}
+      {activeSection === 'GRACZE' && (
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEWA — FORMULARZ */}
@@ -1022,6 +1124,7 @@ export const EditorView: React.FC = () => {
         </div>
 
       </div>
+      )}
 
       <style>{`
         .editor-scroll::-webkit-scrollbar { width: 4px; }
