@@ -780,6 +780,15 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const day = currentDate.getDate();
     const isBeforeLastLeagueMatch = month < 5 || (month === 5 && day <= 23);
     const isWinterBreak = (month === 12 && day >= 18) || month === 1;
+    const remainingUserLeagueMatches = allFixtures
+      ? allFixtures.filter(f =>
+          f.status === MatchStatus.SCHEDULED &&
+          f.leagueId === userClub.leagueId &&
+          (f.homeTeamId === userClub.id || f.awayTeamId === userClub.id) &&
+          startOfDay(f.date) >= startOfDay(currentDate)
+        ).length
+      : Number.POSITIVE_INFINITY;
+    const canSendLateSeasonBoardPressure = remainingUserLeagueMatches >= 3;
 
     if (played >= 3 && isBeforeLastLeagueMatch && !isWinterBreak) {
        // expectedRank: non-linear mapping so high-rep clubs (Legia, Lech) expect top 2,
@@ -871,7 +880,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
     // Obliczenie gap wg tej samej logiki co CoachService.evaluatePerformance
-    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0) {
+    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && canSendLateSeasonBoardPressure) {
       const board = userClub.board;
       if (board) {
         const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {
