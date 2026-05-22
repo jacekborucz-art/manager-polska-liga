@@ -59,6 +59,11 @@ const startOfDay = (date: Date): number => {
 const getDayDifference = (from: Date, to: Date): number =>
   Math.round((startOfDay(to) - startOfDay(from)) / 86400000);
 
+const isBeforeLeagueSeasonEnd = (date: Date): boolean => {
+  const seasonEndYear = date.getMonth() >= 7 ? date.getFullYear() + 1 : date.getFullYear();
+  return startOfDay(date) <= new Date(seasonEndYear, 4, 23).getTime();
+};
+
 const buildRivalryWarningMail = (
   currentDate: Date,
   userClub: Club,
@@ -778,7 +783,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     const month = currentDate.getMonth() + 1; // 1-based
     const day = currentDate.getDate();
-    const isBeforeLastLeagueMatch = month < 5 || (month === 5 && day <= 23);
+    const isBeforeLastLeagueMatch = isBeforeLeagueSeasonEnd(currentDate);
     const isWinterBreak = (month === 12 && day >= 18) || month === 1;
     const remainingUserLeagueMatches = allFixtures
       ? allFixtures.filter(f =>
@@ -880,7 +885,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
     // Obliczenie gap wg tej samej logiki co CoachService.evaluatePerformance
-    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && canSendLateSeasonBoardPressure) {
+    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure) {
       const board = userClub.board;
       if (board) {
         const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {

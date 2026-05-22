@@ -6488,7 +6488,23 @@ const finalResult: SimulationOutput = {
     if (userTeamId) {
       const userClub = clubs.find(c => c.id === userTeamId);
       if (userClub) {
-        const neglectStatus = WeeklyMotivationService.getNeglectStatus(userClub, nextDay);
+        const nextDayStart = new Date(nextDay).setHours(0, 0, 0, 0);
+        const seasonEndYear = nextDay.getMonth() >= 7 ? nextDay.getFullYear() + 1 : nextDay.getFullYear();
+        const isBeforeLeagueSeasonEnd = nextDayStart <= new Date(seasonEndYear, 4, 23).getTime();
+        const hasUpcomingUserLeagueMatch = allFixtures.some(f =>
+          f.status === MatchStatus.SCHEDULED &&
+          f.leagueId === userClub.leagueId &&
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= nextDayStart
+        );
+        const isMotivationTalkSeasonActive =
+          userClub.leagueId !== 'NONE' &&
+          userClub.stats.played > 0 &&
+          isBeforeLeagueSeasonEnd &&
+          hasUpcomingUserLeagueMatch;
+
+        if (isMotivationTalkSeasonActive) {
+          const neglectStatus = WeeklyMotivationService.getNeglectStatus(userClub, nextDay);
 
         if (!userClub.lastMotivationDate && !userClub.motivationMonitoringStartDate) {
           setClubs(prev => prev.map(c => c.id === userTeamId ? {
@@ -6531,6 +6547,7 @@ const finalResult: SimulationOutput = {
               priority: 58,
             }, ...prev]);
           }
+        }
         }
       }
     }
