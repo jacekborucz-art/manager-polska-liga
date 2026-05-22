@@ -8988,6 +8988,111 @@ const finalResult: SimulationOutput = {
     }
 
     const isMakingAvailable = !player.isAvailableForLoan;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    let boardOverrideApplied = false;
+    let boardOverrideConfidence: number | null = null;
+
+    if (isMakingAvailable && userClub) {
+      // VETO ZARZĄDU PRZY WYPOŻYCZENIU WAŻNEGO ZAWODNIKA:
+      // Ta kontrola odpala się tylko wtedy, gdy gracz próbuje dodać zawodnika do listy wypożyczeń.
+      // Zdejmowanie statusu z listy zawsze działa od razu, bo to jest decyzja zgodna z ochroną kadry.
+      const sortedByOverall = [...squad].sort((a, b) => b.overallRating - a.overallRating);
+      const playerRank = sortedByOverall.findIndex(p => p.id === player.id) + 1;
+      const squadAverage = squad.length > 0
+        ? squad.reduce((sum, p) => sum + p.overallRating, 0) / squad.length
+        : player.overallRating;
+      const seasonMinutes = player.stats?.minutesPlayed ?? 0;
+      const boardStrictness = userClub.boardStrictness ?? 5;
+      const boardConfidence = userClub.boardConfidence ?? 75;
+
+      // Im wyższy wynik, tym mocniej zarząd uważa zawodnika za zbyt ważnego,
+      // żeby bez walki pozwolić go wypożyczyć.
+      let vetoScore = 0;
+      if (playerRank > 0 && playerRank <= 3) vetoScore += 28;
+      if (playerRank > 0 && playerRank <= 6) vetoScore += 14;
+      if (player.overallRating >= squadAverage + 8) vetoScore += 22;
+      if (player.overallRating >= squadAverage + 5) vetoScore += 12;
+      if (player.squadRole === 'KEY_PLAYER') vetoScore += 28;
+      if (player.squadRole === 'STARTER') vetoScore += 18;
+      if (player.isUntouchable) vetoScore += 22;
+      if (player.age <= 21) vetoScore -= 10;
+      if (seasonMinutes < 450) vetoScore -= 10;
+      if (!player.squadRole) vetoScore -= 7;
+
+      const vetoThreshold = Math.max(34, 56 - boardStrictness * 2 + Math.max(0, boardConfidence - 72) * 0.15);
+      const boardWouldVeto = vetoScore >= vetoThreshold;
+
+      if (boardWouldVeto) {
+        // Zawodnik może przepchnąć wypożyczenie, jeśli ma sportowy argument:
+        // jest młody, nie gra regularnie albo nie ma formalnej roli w hierarchii.
+        // Wtedy ruch przechodzi, ale zarząd traci zaufanie do decyzji menedżera.
+        let playerPushChance = 0.12;
+        if (player.age <= 23) playerPushChance += 0.24;
+        if (seasonMinutes < 450) playerPushChance += 0.22;
+        if (!player.squadRole) playerPushChance += 0.14;
+        if (player.moralePersonality === 'AMBITIOUS' || player.moralePersonality === 'EGOIST') playerPushChance += 0.10;
+        if (player.moralePersonality === 'LOYAL') playerPushChance -= 0.10;
+        if (player.squadRole === 'KEY_PLAYER' || player.isUntouchable) playerPushChance -= 0.18;
+        if (boardConfidence >= 82) playerPushChance -= 0.08;
+
+        const seed = IncomingTransferService.buildOfferSeed(currentDate, userClub.id, `${player.id}_BOARD_LOAN_VETO_${sessionSeed}`);
+        const playerPushesThrough = IncomingTransferService.seededRandom(seed + 77) < Math.max(0.04, Math.min(0.68, playerPushChance));
+
+        if (!playerPushesThrough) {
+          const mail: MailMessage = {
+            id: `BOARD_LOAN_VETO_${player.id}_${Date.now()}`,
+            sender: 'Zarząd Klubu',
+            role: 'Decyzja kadrowa',
+            subject: `Veto zarządu: ${player.firstName} ${player.lastName}`,
+            body: `Panie Managerze,\n\nZarząd nie wyraża zgody na wystawienie zawodnika ${player.firstName} ${player.lastName} na listę wypożyczeń.\n\nNasza ocena jest jednoznaczna: zawodnik ma zbyt duże znaczenie sportowe dla pierwszej drużyny, aby klub ryzykował jego odejście nawet czasowe. Taki ruch może osłabić kadrę i negatywnie wpłynąć na realizację celów sezonu.\n\nJeśli sytuacja zawodnika w hierarchii zespołu zmieni się w kolejnych miesiącach, temat może zostać oceniony ponownie.\n\nZ poważaniem,\nZarząd ${userClub.name}`,
+            date: new Date(currentDate),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 9,
+          };
+
+          prependUniqueMessages([mail], true);
+          showGameNotification({
+            title: 'Veto zarządu',
+            message: `Zarząd blokuje wypożyczenie: ${player.firstName} ${player.lastName} jest oceniany jako zbyt ważny dla kadry.`,
+            tone: 'warning',
+          });
+          return;
+        }
+
+        const relationPenalty = player.squadRole === 'KEY_PLAYER' || player.isUntouchable ? -9 : -6;
+        const nextBoardConfidence = Math.max(0, Math.min(100, boardConfidence + relationPenalty));
+        boardOverrideApplied = true;
+        boardOverrideConfidence = nextBoardConfidence;
+        const nextDirectorRelation = userClub.sportingDirector
+          ? Math.max(0, Math.min(100, userClub.sportingDirector.relationshipWithManager - 3))
+          : undefined;
+        const overrideMail: MailMessage = {
+          id: `BOARD_LOAN_VETO_OVERRIDDEN_${player.id}_${Date.now()}`,
+          sender: 'Zarząd Klubu',
+          role: 'Decyzja kadrowa',
+          subject: `Wypożyczenie mimo sprzeciwu: ${player.firstName} ${player.lastName}`,
+          body: `Panie Managerze,\n\nOdnotowujemy, że mimo naszych zastrzeżeń zawodnik ${player.firstName} ${player.lastName} został wystawiony na listę wypożyczeń.\n\nZawodnik wyraził silną wolę szukania minut poza klubem, dlatego nie blokujemy formalnie tej decyzji. Jednocześnie zarząd traktuje ten ruch jako sportowe ryzyko i obniża ocenę zaufania do obecnego zarządzania kadrą.\n\nAktualne zaufanie zarządu: ${nextBoardConfidence}/100.\n\nZ poważaniem,\nZarząd ${userClub.name}`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 8,
+        };
+
+        setClubs(prev => prev.map(c => {
+          if (c.id !== userTeamId) return c;
+          return {
+            ...c,
+            boardConfidence: nextBoardConfidence,
+            sportingDirector: c.sportingDirector && nextDirectorRelation !== undefined
+              ? { ...c.sportingDirector, relationshipWithManager: nextDirectorRelation }
+              : c.sportingDirector,
+          };
+        }));
+        prependUniqueMessages([overrideMail], true);
+      }
+    }
+
     updatePlayer(userTeamId, playerId, {
       isAvailableForLoan: isMakingAvailable,
       isUntouchable: isMakingAvailable ? false : player.isUntouchable,
@@ -8995,11 +9100,15 @@ const finalResult: SimulationOutput = {
     });
 
     showGameNotification({
-      title: isMakingAvailable ? 'Dostępny do wypożyczenia' : 'Status wypożyczenia zdjęty',
-      message: isMakingAvailable
+      title: boardOverrideApplied
+        ? 'Wypożyczenie przepchnięte'
+        : isMakingAvailable ? 'Dostępny do wypożyczenia' : 'Status wypożyczenia zdjęty',
+      message: boardOverrideApplied
+        ? `${player.firstName} ${player.lastName} został wystawiony mimo sprzeciwu zarządu. Zaufanie zarządu spada do ${boardOverrideConfidence}/100.`
+        : isMakingAvailable
         ? `${player.firstName} ${player.lastName} został oznaczony jako dostępny do wypożyczenia.`
         : `${player.firstName} ${player.lastName} nie jest już dostępny do wypożyczenia.`,
-      tone: isMakingAvailable ? 'info' : 'success',
+      tone: boardOverrideApplied ? 'warning' : isMakingAvailable ? 'info' : 'success',
     });
   };
 

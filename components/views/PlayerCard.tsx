@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, PlayerPosition } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
@@ -111,6 +111,16 @@ export const PlayerCard: React.FC = () => {
     !hasUserTransferAgreement;
   const estimatedMonthlyLoanWageCost = Math.round((((player.annualSalary || 0) / 12) * loanWageCoverage) / 100);
   const estimatedLoanTotalCost = estimatedMonthlyLoanWageCost + loanOfferFee;
+  const roundedEstimatedLoanTotalCost = Math.ceil(estimatedLoanTotalCost / 5000) * 5000;
+  const playerPositionLabel: Record<PlayerPosition, string> = {
+    [PlayerPosition.GK]: 'Bramkarz',
+    [PlayerPosition.DEF]: 'Obrońca',
+    [PlayerPosition.MID]: 'Pomocnik',
+    [PlayerPosition.FWD]: 'Napastnik',
+  };
+  const clubLogoUrl = club.logoFile
+    ? new URL(`../../Graphic/logo/${club.logoFile}`, import.meta.url).href
+    : null;
   const blockedReturnViews = new Set<ViewState>([
     ViewState.PLAYER_CARD,
     ViewState.TRANSFER_OFFER,
@@ -967,130 +977,17 @@ export const PlayerCard: React.FC = () => {
                             limit kadry gracza, budżet, oczekiwania klubu AI oraz zgoda zawodnika. */}
                         <button
                           onClick={() => {
-                            setShowLoanOfferPanel(prev => !prev);
+                            setShowLoanOfferPanel(true);
                             setLoanFeedback(null);
                           }}
                           className="w-full py-3 rounded-[20px] font-black italic uppercase tracking-tighter text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 bg-cyan-600/20 border-t-cyan-300/50 border-x-cyan-500/30 text-cyan-200 hover:bg-cyan-500/30 hover:text-white hover:scale-[1.02] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
                           style={button3DStyle}
                         >
-                          {showLoanOfferPanel ? 'ZAMKNIJ OFERTĘ WYPOŻYCZENIA' : 'ZŁÓŻ OFERTĘ WYPOŻYCZENIA'}
+                          ZŁÓŻ OFERTĘ WYPOŻYCZENIA
                         </button>
-
-                        {showLoanOfferPanel && (
-                          <div
-                            className="rounded-[22px] border border-cyan-400/25 bg-slate-950/70 p-4 backdrop-blur-md shadow-[0_18px_45px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)]"
-                            style={button3DStyle}
-                          >
-                            {/* DŁUGOŚĆ WYPOŻYCZENIA
-                                ROUND oznacza krótszy ruch do końca rundy,
-                                SEASON oznacza klasyczne wypożyczenie do końca sezonu.
-                                GameContext zamienia tę wartość na realną datę zakończenia. */}
-                            <div className="mb-3">
-                              <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300 mb-2">Długość wypożyczenia</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {([
-                                  { value: 'ROUND', label: 'Do końca rundy' },
-                                  { value: 'SEASON', label: 'Do końca sezonu' },
-                                ] as const).map(option => (
-                                  <button
-                                    key={option.value}
-                                    onClick={() => setLoanDuration(option.value)}
-                                    className={`py-2.5 rounded-[14px] border-t border-x border-b border-b-black/60 text-[9px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] ${
-                                      loanDuration === option.value
-                                        ? 'bg-cyan-500 text-white border-t-cyan-200 border-x-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.28)]'
-                                        : 'bg-white/[0.04] text-slate-400 border-t-white/15 border-x-white/10 hover:text-cyan-200 hover:bg-cyan-500/10'
-                                    }`}
-                                    style={button3DStyle}
-                                  >
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* PROCENT PENSJI
-                                To jest część pensji zawodnika, którą klub gracza deklaruje pokrywać
-                                podczas wypożyczenia. Wyższy procent zwiększa szansę akceptacji klubu AI,
-                                ale obciąża budżet gracza. */}
-                            <div className="mb-3">
-                              <div className="flex items-end justify-between gap-3 mb-2">
-                                <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300">Pokrycie pensji</p>
-                                <p className="text-[16px] font-black italic uppercase tracking-tighter text-white leading-none">{loanWageCoverage}%</p>
-                              </div>
-                              <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={loanWageCoverage}
-                                onChange={e => setLoanWageCoverage(Number(e.target.value))}
-                                className="w-full accent-cyan-400"
-                              />
-                              <p className="mt-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
-                                Miesięcznie: {estimatedMonthlyLoanWageCost.toLocaleString('pl-PL')} PLN
-                              </p>
-                            </div>
-
-                            {/* OPŁATA ZA WYPOŻYCZENIE
-                                Jednorazowa kwota płacona klubowi AI. W praktyce pomaga przepchnąć
-                                ofertę, jeśli zawodnik jest dla nich wartościowy albo chcemy złożyć
-                                mocniejszą propozycję bez kupowania zawodnika. */}
-                            <div className="mb-4">
-                              <div className="flex items-end justify-between gap-3 mb-2">
-                                <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300">Opłata dla klubu</p>
-                                <p className="text-[16px] font-black italic uppercase tracking-tighter text-white leading-none">{loanOfferFee.toLocaleString('pl-PL')} PLN</p>
-                              </div>
-                              <div className="grid grid-cols-[44px_1fr_44px] gap-2">
-                                <button
-                                  onClick={() => setLoanOfferFee(value => Math.max(0, value - 50000))}
-                                  className="h-11 rounded-[14px] bg-red-900/35 border-t border-x border-b border-t-red-400/35 border-x-red-500/20 border-b-black/60 text-red-300 text-xl font-black italic uppercase tracking-tighter active:translate-y-[2px]"
-                                  style={button3DStyle}
-                                >
-                                  −
-                                </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={loanOfferFee}
-                                  onChange={e => setLoanOfferFee(Math.max(0, Number(e.target.value)))}
-                                  className="h-11 rounded-[14px] bg-slate-900/80 border border-white/10 px-3 text-right text-white text-[11px] font-black italic uppercase tracking-tighter outline-none focus:border-cyan-400/50"
-                                />
-                                <button
-                                  onClick={() => setLoanOfferFee(value => value + 50000)}
-                                  className="h-11 rounded-[14px] bg-emerald-900/35 border-t border-x border-b border-t-emerald-400/35 border-x-emerald-500/20 border-b-black/60 text-emerald-300 text-xl font-black italic uppercase tracking-tighter active:translate-y-[2px]"
-                                  style={button3DStyle}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-3 rounded-[16px] bg-black/25 border border-white/10 px-3 py-2 mb-3">
-                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Koszt startowy</span>
-                              <span className="text-[12px] font-black italic uppercase tracking-tighter text-cyan-200">{estimatedLoanTotalCost.toLocaleString('pl-PL')} PLN</span>
-                            </div>
-
-                            <button
-                              onClick={handleSubmitLoanOffer}
-                              className="w-full py-3 rounded-[18px] bg-cyan-500 text-slate-950 border-t border-x border-b border-t-cyan-100 border-x-cyan-300 border-b-black/70 text-[11px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] hover:bg-cyan-300 shadow-[0_0_26px_rgba(34,211,238,0.28)]"
-                              style={lightButton3DStyle}
-                            >
-                              Wyślij ofertę wypożyczenia
-                            </button>
-                          </div>
-                        )}
                       </>
                     )}
 
-                    {loanFeedback && (
-                      <div className={`rounded-[16px] border px-4 py-3 text-[10px] font-black italic uppercase tracking-tighter leading-snug ${
-                        loanFeedback.ok
-                          ? 'bg-emerald-500/12 border-emerald-400/35 text-emerald-200'
-                          : 'bg-red-500/12 border-red-400/35 text-red-200'
-                      }`}>
-                        {loanFeedback.message}
-                      </div>
-                    )}
                   </div>
                 ) : null}
               </div>
@@ -1099,6 +996,236 @@ export const PlayerCard: React.FC = () => {
 
         </div>
       </div>
+
+      {showLoanOfferPanel && canSubmitLoanOffer && (
+        <div
+          className="fixed inset-0 z-[255] flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+          onClick={() => setShowLoanOfferPanel(false)}
+        >
+          {/* MODAL NEGOCJACJI WYPOŻYCZENIA
+              Ten formularz jest celowo poza główną kartą zawodnika. Karta ma już gęsty układ
+              ze statystykami, historią kariery i akcjami, więc duży formularz w środku rozpychał
+              widok i psuł proporcje. Modal pozwala prowadzić negocjacje nad kartą, bez wpływu
+              na jej szerokość, wysokość oraz przewijanie.
+
+              Logika nadal korzysta z tych samych stanów:
+              - loanDuration określa długość wypożyczenia,
+              - loanWageCoverage określa procent pensji pokrywany przez klub gracza,
+              - loanOfferFee określa jednorazową opłatę dla klubu AI,
+              - handleSubmitLoanOffer wysyła komplet warunków do GameContext.
+
+              Dzięki temu zmieniamy tylko prezentację UI, a nie mechanikę akceptacji oferty. */}
+          <div
+            className="relative w-[680px] max-w-[94vw] max-h-[88vh] overflow-y-auto custom-scrollbar rounded-[34px] border border-cyan-300/30 bg-slate-950/80 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.10)]"
+            style={{
+              ...button3DStyle,
+              backgroundImage: "linear-gradient(145deg, rgba(8,47,73,0.84), rgba(2,6,23,0.97)), url('../Graphic/themes/playercard.png')",
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute inset-0 rounded-[34px] bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.24),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.18),transparent_38%)] pointer-events-none" />
+
+            <div className="relative z-10 flex items-start justify-between gap-5 mb-6">
+              <div className="flex min-w-0 items-center gap-4">
+                {clubLogoUrl && (
+                  <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center p-1">
+                    <img
+                      src={clubLogoUrl}
+                      alt={club.name}
+                      className="max-h-full max-w-full object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.45)]"
+                    />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black italic uppercase tracking-tighter text-cyan-200 leading-none mb-2">
+                    Biuro wypożyczeń
+                  </p>
+                  <h3 className="text-[30px] sm:text-[38px] font-black italic uppercase tracking-tighter text-white leading-none drop-shadow">
+                    {player.firstName} {player.lastName}
+                  </h3>
+                  <p className="mt-3 text-[14px] sm:text-[16px] font-black italic uppercase tracking-tighter text-cyan-50 leading-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+                    {club.name} <span className="text-slate-400">•</span> <span className="text-red-300">{playerPositionLabel[player.position]}</span> <span className="text-slate-400">•</span> <span className="text-amber-300">OVR {player.overallRating}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLoanOfferPanel(false)}
+                className="h-12 w-12 shrink-0 rounded-[18px] border-t border-x border-b border-t-white/25 border-x-white/10 border-b-black/70 bg-white/5 text-white text-2xl font-black italic uppercase tracking-tighter transition-all hover:bg-white/12 active:translate-y-[2px]"
+                style={button3DStyle}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="relative z-10 grid gap-5">
+              {/* DŁUGOŚĆ WYPOŻYCZENIA
+                  ROUND oznacza krótszy ruch do końca rundy, a SEASON klasyczne wypożyczenie
+                  do końca sezonu. GameContext zamienia ten wybór na konkretną datę końcową,
+                  dlatego UI nie wpisuje dat ręcznie i nie rozjeżdża kalendarza gry. */}
+              <section className="rounded-[24px] border border-white/10 bg-black/28 p-4">
+                <p className="mb-3 text-[12px] font-black italic uppercase tracking-tighter text-cyan-300">
+                  Długość wypożyczenia
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { value: 'ROUND', label: 'Do końca rundy' },
+                    { value: 'SEASON', label: 'Do końca sezonu' },
+                  ] as const).map(option => (
+                    <button
+                      key={option.value}
+                      onClick={() => setLoanDuration(option.value)}
+                      className={`min-h-[54px] rounded-[20px] border-t border-x border-b border-b-black/70 px-3 text-[12px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] ${
+                        loanDuration === option.value
+                          ? 'bg-cyan-400 text-slate-950 border-t-cyan-100 border-x-cyan-200 shadow-[0_0_28px_rgba(34,211,238,0.32)]'
+                          : 'bg-white/[0.05] text-slate-400 border-t-white/15 border-x-white/10 hover:bg-cyan-500/12 hover:text-cyan-100'
+                      }`}
+                      style={loanDuration === option.value ? lightButton3DStyle : button3DStyle}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* POKRYCIE PENSJI
+                  Suwak zapisuje procent pensji, który klub gracza deklaruje płacić podczas
+                  wypożyczenia. Wyższy procent poprawia siłę oferty, ale zwiększa miesięczny
+                  koszt po stronie gracza. */}
+              <section className="rounded-[24px] border border-white/10 bg-black/28 p-4">
+                <div className="mb-3 flex items-end justify-between gap-4">
+                  <p className="text-[12px] font-black italic uppercase tracking-tighter text-cyan-300">
+                    Pokrycie pensji
+                  </p>
+                  <p className="text-[28px] font-black italic uppercase tracking-tighter text-white leading-none">
+                    {loanWageCoverage}%
+                  </p>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={loanWageCoverage}
+                  onChange={e => setLoanWageCoverage(Number(e.target.value))}
+                  className="w-full accent-cyan-400"
+                />
+                <p className="mt-3 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">
+                  Miesięcznie: {estimatedMonthlyLoanWageCost.toLocaleString('pl-PL')} PLN
+                </p>
+              </section>
+
+              {/* OPŁATA DLA KLUBU
+                  To jednorazowa kwota płacona klubowi AI za samo wypożyczenie. Przyciski minus
+                  i plus dają szybki skok o 50 000 PLN, a pole liczbowe pozwala wpisać dokładną
+                  kwotę, gdy gracz chce złożyć bardziej precyzyjną propozycję. */}
+              <section className="rounded-[24px] border border-white/10 bg-black/28 p-4">
+                <div className="mb-3 flex items-end justify-between gap-4">
+                  <p className="text-[12px] font-black italic uppercase tracking-tighter text-cyan-300">
+                    Opłata dla klubu
+                  </p>
+                  <p className="text-[28px] font-black italic uppercase tracking-tighter text-white leading-none">
+                    {loanOfferFee.toLocaleString('pl-PL')} PLN
+                  </p>
+                </div>
+                <div className="grid grid-cols-[64px_1fr_64px] gap-3">
+                  <button
+                    onClick={() => setLoanOfferFee(value => Math.max(0, value - 50000))}
+                    className="h-14 rounded-[20px] bg-red-900/42 border-t border-x border-b border-t-red-300/35 border-x-red-500/25 border-b-black/70 text-red-200 text-3xl font-black italic uppercase tracking-tighter active:translate-y-[2px] hover:bg-red-800/55"
+                    style={button3DStyle}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    value={loanOfferFee}
+                    onChange={e => setLoanOfferFee(Math.max(0, Number(e.target.value)))}
+                    className="h-14 min-w-0 rounded-[20px] bg-slate-950/72 border border-white/12 px-5 text-right text-white text-[18px] font-black italic uppercase tracking-tighter outline-none focus:border-cyan-300/60"
+                  />
+                  <button
+                    onClick={() => setLoanOfferFee(value => value + 50000)}
+                    className="h-14 rounded-[20px] bg-emerald-900/42 border-t border-x border-b border-t-emerald-300/35 border-x-emerald-500/25 border-b-black/70 text-emerald-200 text-3xl font-black italic uppercase tracking-tighter active:translate-y-[2px] hover:bg-emerald-800/55"
+                    style={button3DStyle}
+                  >
+                    +
+                  </button>
+                </div>
+              </section>
+
+              <div className="flex items-center justify-between gap-4 rounded-[22px] border border-cyan-200/16 bg-slate-950/58 px-5 py-4">
+                <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400">
+                  Koszt startowy
+                </span>
+                <span className="text-[20px] font-black italic uppercase tracking-tighter text-cyan-200 leading-none">
+                  {roundedEstimatedLoanTotalCost.toLocaleString('pl-PL')} PLN
+                </span>
+              </div>
+
+              <button
+                onClick={handleSubmitLoanOffer}
+                className="min-h-[58px] rounded-[22px] bg-cyan-400 text-slate-950 border-t border-x border-b border-t-cyan-50 border-x-cyan-200 border-b-black/75 text-[14px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] hover:bg-cyan-200 shadow-[0_0_34px_rgba(34,211,238,0.32)]"
+                style={lightButton3DStyle}
+              >
+                Wyślij ofertę wypożyczenia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loanFeedback && (
+        <div
+          className="fixed inset-0 z-[320] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4"
+          onClick={() => setLoanFeedback(null)}
+        >
+          {/* POPUP ODPOWIEDZI NA OFERTĘ WYPOŻYCZENIA
+              Komunikat po wysłaniu oferty jest oddzielony od modala negocjacji, żeby informacja
+              o blokadzie zarządu, braku budżetu albo akceptacji nie wyglądała jak część formularza.
+              To okno ma wyższy z-index niż modal wypożyczenia, więc zawsze pojawia się na wierzchu
+              i wymaga świadomego zamknięcia przez gracza. */}
+          <div
+            className={`relative w-[560px] max-w-[92vw] rounded-[28px] border p-6 shadow-[0_24px_70px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.12)] ${
+              loanFeedback.ok
+                ? 'border-emerald-300/38 bg-emerald-950/82'
+                : 'border-red-300/38 bg-red-950/82'
+            }`}
+            style={{
+              ...button3DStyle,
+              backgroundImage: loanFeedback.ok
+                ? "linear-gradient(145deg, rgba(6,78,59,0.78), rgba(2,6,23,0.9)), url('../Graphic/themes/playercard.png')"
+                : "linear-gradient(145deg, rgba(127,29,29,0.78), rgba(2,6,23,0.9)), url('../Graphic/themes/playercard.png')",
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_34%)] pointer-events-none" />
+            <div className="relative z-10">
+              <p className={`mb-3 text-[12px] font-black italic uppercase tracking-tighter leading-none ${
+                loanFeedback.ok ? 'text-emerald-200' : 'text-red-200'
+              }`}>
+                {loanFeedback.ok ? 'Oferta wypożyczenia' : 'Oferta zablokowana'}
+              </p>
+              <p className="text-[18px] font-black italic uppercase tracking-tighter text-white leading-snug drop-shadow">
+                {loanFeedback.message}
+              </p>
+              <button
+                onClick={() => setLoanFeedback(null)}
+                className={`mt-6 min-h-[48px] w-full rounded-[18px] border-t border-x border-b border-b-black/70 text-[12px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] ${
+                  loanFeedback.ok
+                    ? 'bg-emerald-300 text-emerald-950 border-t-emerald-50 border-x-emerald-200 hover:bg-emerald-200'
+                    : 'bg-red-300 text-red-950 border-t-red-50 border-x-red-200 hover:bg-red-200'
+                }`}
+                style={lightButton3DStyle}
+              >
+                Rozumiem
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isTalkPanelOpen && (
         <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/75 backdrop-blur-sm p-6" onClick={() => setIsTalkPanelOpen(false)}>
