@@ -61,7 +61,7 @@ export const TransferExecutionService = {
     );
 
     const transferredPlayer: Player = {
-      ...player,
+      ...PlayerCareerService.resetClubStatsForNewEntry(player),
       clubId: buyerClub.id,
       annualSalary: offer.salary,
       goalBonus: offer.goalBonus ?? undefined,

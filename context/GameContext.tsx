@@ -5817,7 +5817,7 @@ setMessages([welcomeMail, fanMail]);
       postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
       const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, updatedCoachesJuly, dateToProcess, userTeamId);
       postReviewClubs = seasonDecision.updatedClubs;
-      postReviewPlayers = seasonDecision.updatedPlayers;
+      postReviewPlayers = AiContractService.enforceTransferListLimits(seasonDecision.updatedPlayers, dateToProcess, userTeamId);
       setCoaches(updatedCoachesJuly);
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       
@@ -11391,7 +11391,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     );
 
     const updatedPlayer = {
-      ...resolvedPlayer,
+      ...PlayerCareerService.resetClubStatsForNewEntry(resolvedPlayer),
       clubId: userTeamId,
       annualSalary: salary,
       goalBonus: goalBonus ?? undefined,

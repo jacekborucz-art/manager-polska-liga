@@ -328,7 +328,7 @@ export const ContractManagementView: React.FC = () => {
     );
 
     const releasedPlayer = { 
-      ...playerToRelease, 
+      ...PlayerCareerService.resetClubStatsForNewEntry(playerToRelease), 
       clubId: 'FREE_AGENTS', 
       annualSalary: 0, 
       contractEndDate: '', 

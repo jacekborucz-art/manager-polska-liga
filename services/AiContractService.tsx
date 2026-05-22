@@ -70,6 +70,8 @@ const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
   [PlayerPosition.FWD]: 4,
 };
 const AI_MAX_SQUAD_SIZE = 32;
+const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = 25;
+const TRANSFER_LIST_MAX_SHARE = 0.25;
 
 const _hasActiveTransferOfferBan = (player: Player, currentDate: Date): boolean => {
   return !!player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil);
@@ -96,6 +98,32 @@ const _getGulfOwnerShortfallCover = (club: Club, requiredCash: number): number =
 
 const _isVeteranStar = (player: Player): boolean =>
   player.age >= VETERAN_STAR_MIN_AGE && player.overallRating >= VETERAN_STAR_MIN_OVR;
+
+const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
+  if (!player.contractEndDate) return Number.POSITIVE_INFINITY;
+  const endDate = new Date(player.contractEndDate);
+  if (Number.isNaN(endDate.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.floor((endDate.getTime() - currentDate.getTime()) / 86_400_000);
+};
+
+const _getTransferListPriority = (player: Player, squad: Player[], currentDate: Date): number => {
+  const positionCount = squad.filter(p => p.position === player.position).length;
+  const positionSurplus = Math.max(0, positionCount - MIN_SQUAD_POSITION_COUNTS[player.position]);
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+
+  return (
+    (player.isNegotiationPermanentBlocked ? 140 : 0) +
+    (player.transferListDemandUntil ? 90 : 0) +
+    (daysLeft <= 365 ? 55 : daysLeft <= 730 ? 24 : 0) +
+    (positionSurplus * 9) +
+    (player.squadRole === 'KEY_PLAYER' ? -120 : 0) +
+    (player.isUntouchable ? -160 : 0) +
+    (player.loan ? -100 : 0) +
+    Math.max(0, 90 - player.overallRating) +
+    Math.max(0, player.age - 28) * 2 -
+    Math.max(0, (player.attributes?.talent ?? player.overallRating) - player.overallRating) * 2
+  );
+};
 
 const _getPreviousCareerClub = (player: Player) =>
   [...(player.history || [])].reverse().find(entry => entry.clubId !== 'FREE_AGENTS');
@@ -557,6 +585,40 @@ const _assessClubNeeds = (
 };
 
 export const AiContractService = {
+  enforceTransferListLimits: (
+    playersMap: Record<string, Player[]>,
+    currentDate: Date,
+    userTeamId: string | null
+  ): Record<string, Player[]> => {
+    const updatedPlayersMap = { ...playersMap };
+
+    Object.entries(updatedPlayersMap).forEach(([clubId, squad]) => {
+      if (clubId === userTeamId || clubId === 'FREE_AGENTS') return;
+      if (!squad || squad.length <= TRANSFER_LIST_CAP_MIN_SQUAD_SIZE) return;
+
+      const listed = squad.filter(player => player.isOnTransferList);
+      const maxListed = Math.floor(squad.length * TRANSFER_LIST_MAX_SHARE);
+      if (listed.length <= maxListed) return;
+
+      const keepIds = new Set(
+        [...listed]
+          .sort((a, b) =>
+            _getTransferListPriority(b, squad, currentDate) - _getTransferListPriority(a, squad, currentDate)
+          )
+          .slice(0, maxListed)
+          .map(player => player.id)
+      );
+
+      updatedPlayersMap[clubId] = squad.map(player =>
+        player.isOnTransferList && !keepIds.has(player.id)
+          ? { ...player, isOnTransferList: false, transferListPrice: undefined }
+          : player
+      );
+    });
+
+    return updatedPlayersMap;
+  },
+
   processAiPrioritySquadDepth: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
@@ -588,7 +650,7 @@ export const AiContractService = {
         );
 
         const releasedPlayer: Player = {
-          ...playerToRelease,
+          ...PlayerCareerService.resetClubStatsForNewEntry(playerToRelease),
           clubId: 'FREE_AGENTS',
           annualSalary: 0,
           contractEndDate: '',
@@ -940,7 +1002,7 @@ processAiRecruitment: (
         );
 
         const signedPlayer: Player = {
-          ...fa,
+          ...PlayerCareerService.resetClubStatsForNewEntry(fa),
           clubId: aiClub.id,
           annualSalary: proposedSalary,
           contractEndDate: newEndDate,
@@ -1798,7 +1860,7 @@ processAiRecruitment: (
         );
 
         const transferredPlayer: Player = {
-          ...player,
+          ...PlayerCareerService.resetClubStatsForNewEntry(player),
           clubId: buyerClubId,
           annualSalary: proposedSalary,
           contractEndDate: newEndDate,
@@ -2022,7 +2084,7 @@ performSeasonSquadReview: (
               );
 
               const releasedPlayer: Player = {
-                ...candidate,
+                ...PlayerCareerService.resetClubStatsForNewEntry(candidate),
                 clubId: 'FREE_AGENTS',
                 annualSalary: 0,
                 contractEndDate: '',
@@ -2145,7 +2207,7 @@ performSeasonSquadReview: (
                 { clubName: club.name, clubId: club.id }
               );
               const releasedPlayer: Player = {
-                ...player,
+                ...PlayerCareerService.resetClubStatsForNewEntry(player),
                 clubId: 'FREE_AGENTS',
                 annualSalary: 0,
                 contractEndDate: '',

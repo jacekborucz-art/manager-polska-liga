@@ -121,6 +121,14 @@ export const Dashboard: React.FC = () => {
   }, [summerCampProgramPending]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const isWorldCupTournamentOpen = Boolean(
+    wcState &&
+    currentDate.getFullYear() === wcState.year &&
+    (
+      currentDate.getMonth() > 5 ||
+      (currentDate.getMonth() === 5 && currentDate.getDate() >= 2)
+    )
+  );
 
   const seasonYearLabel = useMemo(() => {
     if (!seasonTemplate) return "2025/26";
@@ -992,7 +1000,7 @@ const boardConfidence = useMemo(() => {
 
            {wcState && !wcState.knockoutComplete && (
              <button
-               onClick={() => navigateTo(wcState.groupStageComplete ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
+               onClick={() => navigateTo(isWorldCupTournamentOpen ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
                disabled={isJumping}
                className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-amber-400/30 bg-amber-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
              >
@@ -1003,7 +1011,7 @@ const boardConfidence = useMemo(() => {
                  Mundial
                </span>
                <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-amber-100/50">
-                 {wcState.groupStageComplete ? 'TURNIEJ' : 'LOSOWANIE'}
+                 {isWorldCupTournamentOpen ? 'TURNIEJ' : 'LOSOWANIE'}
                </span>
              </button>
            )}

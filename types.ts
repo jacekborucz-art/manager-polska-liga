@@ -1791,6 +1791,11 @@ export interface MatchLiveState {
   awayRiskMode: Record<string, boolean>;
   homeUpgradeProb: Record<string, number>;
   awayUpgradeProb: Record<string, number>;
+  lightInjuryPrompt?: {
+    playerId: string;
+    playerName: string;
+    minute: number;
+  } | null;
   homeInjuryMin: Record<string, number>;
   awayInjuryMin: Record<string, number>;
   subsCountHome: number;

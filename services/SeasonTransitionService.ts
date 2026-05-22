@@ -36,7 +36,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
         const contractExpired = player.contractEndDate && new Date(player.contractEndDate) <= seasonEndDate;
         if (contractExpired && clubId !== userTeamId && nextSquad.length > 22) {
           const released = {
-            ...player,
+            ...PlayerCareerService.resetClubStatsForNewEntry(player),
             clubId: 'FREE_AGENTS',
             annualSalary: 0,
             history: PlayerCareerService.movePlayer(

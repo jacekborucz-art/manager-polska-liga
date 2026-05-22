@@ -206,6 +206,7 @@ if (todayFixtures.length === 0) {
         scoutedClubs = weakReviewWinter.updatedClubs;
         scoutedPlayers = weakReviewWinter.updatedPlayers;
       }
+      scoutedPlayers = AiContractService.enforceTransferListLimits(scoutedPlayers, currentDate, userTeamId);
 
       return {
         updatedFixtures: fixtures,
@@ -693,6 +694,7 @@ if (todayFixtures.length === 0) {
       currentClubs = weakReviewWinterMatch.updatedClubs;
       currentPlayers = weakReviewWinterMatch.updatedPlayers;
     }
+    currentPlayers = AiContractService.enforceTransferListLimits(currentPlayers, currentDate, userTeamId);
 
     return {
       updatedFixtures: currentFixtures,

@@ -1,4 +1,4 @@
-import { Player, PlayerCareerStatsSnapshot, PlayerHistoryEntry, PlayerLoanInfo } from '../types';
+import { Player, PlayerCareerStatsSnapshot, PlayerHistoryEntry, PlayerLoanInfo, PlayerStats } from '../types';
 
 interface CareerEntryTarget {
   clubId: string | 'FREE_AGENTS';
@@ -6,6 +6,30 @@ interface CareerEntryTarget {
 }
 
 export const PlayerCareerService = {
+  emptyStats(): PlayerStats {
+    return {
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+      cleanSheets: 0,
+      matchesPlayed: 0,
+      minutesPlayed: 0,
+      seasonalChanges: {},
+      ratingHistory: []
+    };
+  },
+
+  resetClubStatsForNewEntry(player: Player): Player {
+    return {
+      ...player,
+      stats: this.emptyStats(),
+      cupStats: this.emptyStats(),
+      euroStats: this.emptyStats(),
+      reserveStats: undefined
+    };
+  },
+
   buildStatsSnapshot(player: Player): PlayerCareerStatsSnapshot {
     const ratingHistory = player.stats?.ratingHistory || [];
     const averageRating = ratingHistory.length > 0

@@ -140,6 +140,10 @@ const getPenaltyCallChance = (referee: Referee) => {
   );
 };
 
+type PenaltyReviewReason = 'HAND_BALL' | 'FOUL';
+type PenaltyReviewPhase = 'INCIDENT' | 'CHECKING' | 'RETURNING' | 'VERDICT';
+type PenaltyReviewVerdict = 'PENALTY' | 'NO_PENALTY';
+
 export const MatchLiveView = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
@@ -159,6 +163,20 @@ export const MatchLiveView = () => {
     keeper: Player,
     phase: 'AWARDED' | 'EXECUTING' | 'RESULT',
     result?: MatchEventType
+  } | null>(null);
+  const [activePenaltyReview, setActivePenaltyReview] = useState<{
+    side: 'HOME' | 'AWAY',
+    defendingSide: 'HOME' | 'AWAY',
+    kicker: Player,
+    keeper: Player,
+    defender: Player,
+    minute: number,
+    reason: PenaltyReviewReason,
+    phase: PenaltyReviewPhase,
+    verdict: PenaltyReviewVerdict,
+    usesVar: boolean,
+    card?: MatchEventType,
+    processed?: boolean
   } | null>(null);
 
   const [activeVAR, setActiveVAR] = useState<{
@@ -473,6 +491,141 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
   };
 
   useEffect(() => {
+    if (!activePenaltyReview || !matchState || !ctx) return;
+
+    if (activePenaltyReview.phase === 'INCIDENT') {
+      const t = setTimeout(() => {
+        setActivePenaltyReview(prev => prev ? { ...prev, phase: prev.usesVar ? 'CHECKING' : 'VERDICT' } : null);
+      }, 2200);
+      return () => clearTimeout(t);
+    }
+
+    if (activePenaltyReview.phase === 'CHECKING') {
+      const t = setTimeout(() => {
+        setActivePenaltyReview(prev => prev ? { ...prev, phase: 'RETURNING' } : null);
+      }, 3300);
+      return () => clearTimeout(t);
+    }
+
+    if (activePenaltyReview.phase === 'RETURNING') {
+      const t = setTimeout(() => {
+        setActivePenaltyReview(prev => prev ? { ...prev, phase: 'VERDICT' } : null);
+      }, 1800);
+      return () => clearTimeout(t);
+    }
+
+    if (activePenaltyReview.phase === 'VERDICT' && !activePenaltyReview.processed) {
+      setMatchState(prev => {
+        if (!prev) return prev;
+
+        const reasonText = activePenaltyReview.reason === 'HAND_BALL' ? 'zagranie ręką' : `faul na ${activePenaltyReview.kicker.lastName}`;
+        const verdictLog: MatchLogEntry = activePenaltyReview.verdict === 'PENALTY'
+          ? {
+              id: `PEN_REVIEW_OK_${activePenaltyReview.minute}`,
+              minute: activePenaltyReview.minute,
+              text: `${activePenaltyReview.usesVar ? '📺 VAR: ' : '👉 '}${reasonText}. RZUT KARNY dla ${activePenaltyReview.side === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName}!`,
+              type: MatchEventType.PENALTY_AWARDED,
+              teamSide: activePenaltyReview.side,
+              playerName: activePenaltyReview.kicker.lastName
+            }
+          : {
+              id: `PEN_REVIEW_NO_${activePenaltyReview.minute}`,
+              minute: activePenaltyReview.minute,
+              text: `🚫 VAR: Nie ma karnego. ${activePenaltyReview.reason === 'HAND_BALL' ? 'Ręki' : 'Faulu'} nie było!`,
+              type: MatchEventType.GENERIC,
+              teamSide: activePenaltyReview.side,
+              playerName: activePenaltyReview.kicker.lastName
+            };
+
+        if (activePenaltyReview.verdict !== 'PENALTY' || !activePenaltyReview.card || activePenaltyReview.card === MatchEventType.FOUL) {
+          return { ...prev, logs: [verdictLog, ...prev.logs] };
+        }
+
+        const defenderId = activePenaltyReview.defender.id;
+        const nextPlayerYellowCards = { ...prev.playerYellowCards };
+        const nextSentOffIds = [...prev.sentOffIds];
+        let nextHomeLineup = prev.homeLineup;
+        let nextAwayLineup = prev.awayLineup;
+        let cardLog: MatchLogEntry | null = null;
+
+        if (activePenaltyReview.card === MatchEventType.YELLOW_CARD) {
+          nextPlayerYellowCards[defenderId] = (nextPlayerYellowCards[defenderId] || 0) + 1;
+          if (nextPlayerYellowCards[defenderId] >= 2 && !nextSentOffIds.includes(defenderId)) {
+            nextSentOffIds.push(defenderId);
+            nextHomeLineup = activePenaltyReview.defendingSide === 'HOME'
+              ? { ...prev.homeLineup, startingXI: prev.homeLineup.startingXI.map(id => id === defenderId ? null : id) }
+              : prev.homeLineup;
+            nextAwayLineup = activePenaltyReview.defendingSide === 'AWAY'
+              ? { ...prev.awayLineup, startingXI: prev.awayLineup.startingXI.map(id => id === defenderId ? null : id) }
+              : prev.awayLineup;
+            cardLog = {
+              id: `PEN_REVIEW_SECOND_YELLOW_${activePenaltyReview.minute}`,
+              minute: activePenaltyReview.minute,
+              text: `🟥 DRUGA ŻÓŁTA! ${activePenaltyReview.defender.lastName} wylatuje z boiska po interwencji w polu karnym!`,
+              type: MatchEventType.RED_CARD,
+              teamSide: activePenaltyReview.defendingSide,
+              playerName: activePenaltyReview.defender.lastName
+            };
+          } else {
+            cardLog = {
+              id: `PEN_REVIEW_YELLOW_${activePenaltyReview.minute}`,
+              minute: activePenaltyReview.minute,
+              text: `🟨 Żółta kartka: ${activePenaltyReview.defender.lastName} za interwencję w polu karnym.`,
+              type: MatchEventType.YELLOW_CARD,
+              teamSide: activePenaltyReview.defendingSide,
+              playerName: activePenaltyReview.defender.lastName
+            };
+          }
+        } else if (activePenaltyReview.card === MatchEventType.RED_CARD && !nextSentOffIds.includes(defenderId)) {
+          nextSentOffIds.push(defenderId);
+          nextHomeLineup = activePenaltyReview.defendingSide === 'HOME'
+            ? { ...prev.homeLineup, startingXI: prev.homeLineup.startingXI.map(id => id === defenderId ? null : id) }
+            : prev.homeLineup;
+          nextAwayLineup = activePenaltyReview.defendingSide === 'AWAY'
+            ? { ...prev.awayLineup, startingXI: prev.awayLineup.startingXI.map(id => id === defenderId ? null : id) }
+            : prev.awayLineup;
+          cardLog = {
+            id: `PEN_REVIEW_RED_${activePenaltyReview.minute}`,
+            minute: activePenaltyReview.minute,
+            text: `🟥 CZERWONA KARTKA! ${activePenaltyReview.defender.lastName} za faul w polu karnym!`,
+            type: MatchEventType.RED_CARD,
+            teamSide: activePenaltyReview.defendingSide,
+            playerName: activePenaltyReview.defender.lastName
+          };
+        }
+
+        return {
+          ...prev,
+          homeLineup: nextHomeLineup,
+          awayLineup: nextAwayLineup,
+          playerYellowCards: nextPlayerYellowCards,
+          sentOffIds: nextSentOffIds,
+          logs: cardLog ? [cardLog, verdictLog, ...prev.logs] : [verdictLog, ...prev.logs]
+        };
+      });
+      setActivePenaltyReview(prev => prev ? { ...prev, processed: true } : null);
+      return;
+    }
+
+    if (activePenaltyReview.phase === 'VERDICT' && activePenaltyReview.processed) {
+      const t = setTimeout(() => {
+        if (activePenaltyReview.verdict === 'PENALTY') {
+          setActivePenalty({
+            side: activePenaltyReview.side,
+            kicker: activePenaltyReview.kicker,
+            keeper: activePenaltyReview.keeper,
+            phase: 'AWARDED'
+          });
+        } else {
+          setMatchState(prev => prev ? { ...prev, isPaused: false, isPausedForEvent: false } : null);
+        }
+        setActivePenaltyReview(null);
+      }, 2300);
+      return () => clearTimeout(t);
+    }
+  }, [activePenaltyReview, matchState, ctx, setMatchState]);
+
+  useEffect(() => {
     if (!activePenalty || !matchState || !ctx) return;
 
     if (activePenalty.phase === 'AWARDED') {
@@ -702,7 +855,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
 
   useEffect(() => {
     if (!matchState || matchState.isPaused || matchState.isPausedForEvent ||
-        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activeVAR || activePenaltyNoCall) return;
+        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activePenaltyReview || activeVAR || activePenaltyNoCall) return;
 
     const tickInterval = matchState.speed === 5 ? 120 
   : matchState.speed === 3.5 ? 200 
@@ -1704,15 +1857,44 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
               nextIsPausedForEvent = true;
               if (refereeGivesPenalty) {
-                setActivePenalty({ side: attackingSide, kicker, keeper, phase: 'AWARDED' });
-                immediateEventType = MatchEventType.PENALTY_AWARDED;
-                
-                const penPool = MATCH_COMMENTARY_DB[MatchEventType.PENALTY_AWARDED] || ["Rzut karny!"];
-                const penText = penPool[Math.floor(seededRng(currentSeed, nextMinute, 1900) * penPool.length)].replace("{Nazwisko}", kicker.lastName);
-                newLog = { id: `PEN_AWARD_${nextMinute}`, minute: nextMinute, text: `👉 ${penText}`, type: MatchEventType.PENALTY_AWARDED, teamSide: attackingSide, playerName: kicker.lastName };
+                const reason: PenaltyReviewReason = seededRng(currentSeed, nextMinute, 1712) < 0.42 ? 'HAND_BALL' : 'FOUL';
+                const usesVar = seededRng(currentSeed, nextMinute, 1714) < 0.48;
+                const varOverturnChance = clampNumber(
+                  0.18 - ((getRefereeDecisionQuality(env.ref) - 50) * 0.0012),
+                  0.08,
+                  0.28
+                );
+                const verdict: PenaltyReviewVerdict = usesVar && seededRng(currentSeed, nextMinute, 1716) < varOverturnChance ? 'NO_PENALTY' : 'PENALTY';
+                const baseCard = reason === 'FOUL'
+                  ? DisciplineService.evaluateFoul(env.ref, player, nextPlayerYellowCards[pId] || 0, () => seededRng(currentSeed, nextMinute, 1718))
+                  : (seededRng(currentSeed, nextMinute, 1720) < 0.22 ? MatchEventType.YELLOW_CARD : MatchEventType.FOUL);
+                const card = verdict === 'PENALTY' ? baseCard : MatchEventType.FOUL;
 
-                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
-                if (injury) processInjury(injury);
+                setActivePenaltyReview({
+                  side: attackingSide,
+                  defendingSide,
+                  kicker,
+                  keeper,
+                  defender: player,
+                  minute: nextMinute,
+                  reason,
+                  phase: 'INCIDENT',
+                  verdict,
+                  usesVar,
+                  card
+                });
+                immediateEventType = verdict === 'PENALTY' ? MatchEventType.PENALTY_AWARDED : MatchEventType.FOUL;
+                
+                const attackingTeamName = attackingSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName;
+                const incidentText = reason === 'HAND_BALL'
+                  ? `${attackingTeamName} domaga się karnego za zagranie ręką! Sędzia wskazuje na 11 metr.`
+                  : `${kicker.lastName} faulowany w polu karnym! Sędzia wskazuje na 11 metr.`;
+                newLog = { id: `PEN_INCIDENT_${nextMinute}`, minute: nextMinute, text: `👉 ${incidentText}`, type: verdict === 'PENALTY' ? MatchEventType.PENALTY_AWARDED : MatchEventType.GENERIC, teamSide: attackingSide, playerName: kicker.lastName };
+
+                if (verdict === 'PENALTY') {
+                  const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
+                  if (injury) processInjury(injury);
+                }
               } else {
                 immediateEventType = MatchEventType.FOUL;
                 setActivePenaltyNoCall({ side: attackingSide, playerName: kicker.lastName, minute: nextMinute });
@@ -2389,7 +2571,7 @@ return {
       });
     }, tickInterval);
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activeVAR, activePenaltyNoCall, hasMandatorySub, setMatchState]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activePenaltyReview, activeVAR, activePenaltyNoCall, hasMandatorySub, setMatchState]);
 
  const handleFinishMatch = () => {
     if (!matchState || !ctx) return;
@@ -3100,6 +3282,81 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 </div>
    {/* CONTENT (WSZYSTKO NAD TŁEM) */}
     <div className="relative z-10 flex flex-col gap-6">
+
+      {activePenaltyReview && (
+        <div className="fixed inset-0 z-[560] bg-black/80 backdrop-blur-xl flex items-center justify-center p-10 animate-fade-in">
+          <div className="max-w-3xl w-full bg-slate-900/85 border border-yellow-500/30 rounded-[44px] shadow-[0_50px_100px_rgba(0,0,0,0.85)] overflow-hidden text-center">
+            <div className="h-2 bg-gradient-to-r from-transparent via-yellow-400 to-transparent" />
+            <div className="p-12 flex flex-col items-center gap-6">
+              {activePenaltyReview.phase === 'INCIDENT' && (
+                <>
+                  <div className="text-7xl animate-bounce">👉</div>
+                  <span className="text-[10px] text-yellow-400 font-black italic uppercase tracking-tighter">
+                    {activePenaltyReview.side === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName}
+                  </span>
+                  <h2 className="text-5xl text-white font-black italic uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(250,204,21,0.35)]">
+                    Sędzia wskazuje na 11 metr!
+                  </h2>
+                  <p className="text-lg text-slate-300 font-black italic uppercase tracking-tighter">
+                    {activePenaltyReview.reason === 'HAND_BALL'
+                      ? 'Zagranie ręką w polu karnym.'
+                      : `Faul na ${activePenaltyReview.kicker.lastName} w polu karnym.`}
+                  </p>
+                </>
+              )}
+              {activePenaltyReview.phase === 'CHECKING' && (
+                <>
+                  <div className="text-7xl animate-bounce">📺</div>
+                  <span className="text-[10px] text-yellow-400 font-black italic uppercase tracking-tighter">VAR</span>
+                  <h2 className="text-5xl text-white font-black italic uppercase tracking-tighter">Sędzia sprawdza sytuację</h2>
+                  <p className="text-lg text-slate-300 font-black italic uppercase tracking-tighter">
+                    Czy {activePenaltyReview.reason === 'HAND_BALL' ? 'była ręka?' : 'był faul?'}
+                  </p>
+                  <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mt-2" />
+                </>
+              )}
+              {activePenaltyReview.phase === 'RETURNING' && (
+                <>
+                  <div className="text-7xl animate-pulse">🏃</div>
+                  <span className="text-[10px] text-yellow-400 font-black italic uppercase tracking-tighter">Decyzja zapadła</span>
+                  <h2 className="text-5xl text-white font-black italic uppercase tracking-tighter">
+                    Sędzia wraca na boisko
+                  </h2>
+                  <p className="text-lg text-slate-300 font-black italic uppercase tracking-tighter">Cały stadion czeka na werdykt.</p>
+                </>
+              )}
+              {activePenaltyReview.phase === 'VERDICT' && activePenaltyReview.verdict === 'PENALTY' && (
+                <>
+                  <div className="text-8xl animate-bounce">✅</div>
+                  <span className="text-[10px] text-emerald-400 font-black italic uppercase tracking-tighter">
+                    {activePenaltyReview.usesVar ? 'Po analizie VAR' : 'Decyzja sędziego'}
+                  </span>
+                  <h2 className="text-6xl text-emerald-400 font-black italic uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(52,211,153,0.5)]">
+                    Rzut karny!
+                  </h2>
+                  {activePenaltyReview.card && activePenaltyReview.card !== MatchEventType.FOUL && (
+                    <p className="text-base text-slate-300 font-black italic uppercase tracking-tighter">
+                      {activePenaltyReview.card === MatchEventType.RED_CARD ? 'Czerwona kartka' : 'Żółta kartka'} dla {activePenaltyReview.defender.lastName}.
+                    </p>
+                  )}
+                </>
+              )}
+              {activePenaltyReview.phase === 'VERDICT' && activePenaltyReview.verdict === 'NO_PENALTY' && (
+                <>
+                  <div className="text-8xl animate-bounce">🚫</div>
+                  <span className="text-[10px] text-red-400 font-black italic uppercase tracking-tighter">Po analizie VAR</span>
+                  <h2 className="text-6xl text-red-500 font-black italic uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(239,68,68,0.55)]">
+                    Nie ma karnego!
+                  </h2>
+                  <p className="text-lg text-slate-300 font-black italic uppercase tracking-tighter">
+                    {activePenaltyReview.reason === 'HAND_BALL' ? 'Ręki nie było.' : 'Faulu nie było.'}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {activePenalty && (
         <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-xl flex items-center justify-center p-10 animate-fade-in">
