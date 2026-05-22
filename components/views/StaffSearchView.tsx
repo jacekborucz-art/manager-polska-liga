@@ -126,6 +126,7 @@ export const StaffSearchView: React.FC = () => {
   const [negPhase, setNegPhase] = useState<NegPhase>('proposal');
   const [negProposedSalary, setNegProposedSalary] = useState(0);
   const [negProposedYears, setNegProposedYears] = useState(2);
+  const [negSalaryStr, setNegSalaryStr] = useState('');
   const [staffCounterSalary, setStaffCounterSalary] = useState(0);
   const [staffCounterYears, setStaffCounterYears] = useState(2);
   const [agreedSalary, setAgreedSalary] = useState(0);
@@ -674,7 +675,14 @@ export const StaffSearchView: React.FC = () => {
                           <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Wynagrodzenie (PLN/rok)</span>
                           <div className="flex items-center gap-2">
                             <button onClick={() => setNegProposedSalary(v => Math.max(0, v - 10_000))} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">−</button>
-                            <span className="text-[16px] font-black italic tracking-tighter text-yellow-400 min-w-[150px] text-center">{negProposedSalary.toLocaleString('pl-PL')} PLN</span>
+                            <input
+                              type="text"
+                              value={negSalaryStr || negProposedSalary.toLocaleString('pl-PL') + ' PLN'}
+                              onFocus={() => setNegSalaryStr(String(negProposedSalary))}
+                              onChange={e => setNegSalaryStr(e.target.value.replace(/[^0-9]/g, ''))}
+                              onBlur={() => { const v = parseInt(negSalaryStr, 10); if (!isNaN(v)) setNegProposedSalary(v); setNegSalaryStr(''); }}
+                              className="text-[16px] font-black italic tracking-tighter text-yellow-400 min-w-[150px] text-center bg-transparent border-b border-yellow-700/60 outline-none"
+                            />
                             <button onClick={() => setNegProposedSalary(v => v + 10_000)} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">+</button>
                           </div>
                         </div>

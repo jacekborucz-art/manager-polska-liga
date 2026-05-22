@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import wcBgImg from '../../Graphic/themes/worldcup.png';
 import { useGame } from '../../context/GameContext';
 import { MatchCardEntry, MatchGoalEntry, NationalTeam, ViewState, WCGroup, WCGroupStanding, WCKnockoutMatch, WCState } from '../../types';
@@ -68,6 +68,8 @@ type Tab = 'grupy' | 'drabinka' | 'final' | 'statystyki';
 const ROUND_LABEL: Record<string, string> = {
   R32: '1/16 Finału', R16: '1/8 Finału', QF: 'Ćwierćfinał', SF: 'Półfinał', THIRD: 'O 3. miejsce', FINAL: 'FINAŁ',
 };
+
+const WC_KNOCKOUT_DAYS = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 29, 30];
 
 function getTeamGradient(wcState: WCState, home: string, away: string): string {
   const ht = wcState.teams.find(t => t.name === home);
@@ -681,6 +683,43 @@ const WorldCupView: React.FC = () => {
   ];
 
   const canSkip = !wcState.knockoutComplete;
+
+  useEffect(() => {
+    if (!wcState.groupStageComplete || wcState.knockoutComplete) return;
+
+    const currentDayKey = Number(`${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}${String(currentDate.getDate()).padStart(2, '0')}`);
+    let healedState = wcState;
+    let changed = false;
+
+    for (const koDay of WC_KNOCKOUT_DAYS) {
+      const koDayKey = Number(`${wcState.year}06${String(koDay).padStart(2, '0')}`);
+      if (koDayKey > currentDayKey) continue;
+
+      const date = `${wcState.year}-06-${String(koDay).padStart(2, '0')}`;
+      const hasUnplayedDueMatch = healedState.knockoutMatches.some(m => m.date === date && !m.winner && m.home && m.away);
+      if (!hasUnplayedDueMatch) continue;
+
+      healedState = {
+        ...healedState,
+        knockoutMatches: WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, sessionSeed, nationalTeams, players, coaches),
+      };
+      changed = true;
+    }
+
+    const finalMatch = healedState.knockoutMatches.find(m => m.round === 'FINAL' && m.winner);
+    if (finalMatch) {
+      const thirdMatch = healedState.knockoutMatches.find(m => m.round === 'THIRD');
+      healedState = {
+        ...healedState,
+        knockoutComplete: true,
+        champion: finalMatch.winner ?? undefined,
+        thirdPlace: thirdMatch?.winner ?? undefined,
+      };
+      changed = true;
+    }
+
+    if (changed) setWcState(healedState);
+  }, [coaches, currentDate, nationalTeams, players, sessionSeed, setWcState, wcState]);
 
   return (
     <div

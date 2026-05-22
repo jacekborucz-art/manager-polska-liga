@@ -53,6 +53,7 @@ export const SquadView: React.FC = () => {
   const [staffNegCounterYears, setStaffNegCounterYears] = useState(1);
   const [staffNegResultMsg, setStaffNegResultMsg] = useState('');
   const [staffNegResultOk, setStaffNegResultOk] = useState(false);
+  const [staffNegSalaryStr, setStaffNegSalaryStr] = useState('');
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE' | 'LOANS'>('SQUAD');
   const [loanDetailsPlayerId, setLoanDetailsPlayerId] = useState<string | null>(null);
   const loanDetailsPlayer = useMemo(
@@ -2347,7 +2348,14 @@ export const SquadView: React.FC = () => {
                                 <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Wynagrodzenie (PLN/rok)</span>
                                 <div className="flex items-center gap-2">
                                   <button onClick={() => setStaffNegCounterSalary(v => Math.max(0, v - 10_000))} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">−</button>
-                                  <span className="text-[16px] font-black italic tracking-tighter text-yellow-400 min-w-[150px] text-center">{staffNegCounterSalary.toLocaleString('pl-PL')} PLN</span>
+                                  <input
+                                    type="text"
+                                    value={staffNegSalaryStr || staffNegCounterSalary.toLocaleString('pl-PL') + ' PLN'}
+                                    onFocus={() => setStaffNegSalaryStr(String(staffNegCounterSalary))}
+                                    onChange={e => setStaffNegSalaryStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                    onBlur={() => { const v = parseInt(staffNegSalaryStr, 10); if (!isNaN(v)) setStaffNegCounterSalary(v); setStaffNegSalaryStr(''); }}
+                                    className="text-[16px] font-black italic tracking-tighter text-yellow-400 min-w-[150px] text-center bg-transparent border-b border-yellow-700/60 outline-none"
+                                  />
                                   <button onClick={() => setStaffNegCounterSalary(v => v + 10_000)} className="w-8 h-8 rounded-lg border border-white/15 bg-slate-800/80 text-white font-black text-lg hover:bg-slate-700/80 transition-colors flex items-center justify-center">+</button>
                                 </div>
                               </div>

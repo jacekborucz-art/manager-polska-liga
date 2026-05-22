@@ -3890,13 +3890,14 @@ setMessages([welcomeMail, fanMail]);
         }
       }
 
-      const isKODay = wcMonth === 6 && (
-        (wcDay >= 15 && wcDay <= 18) ||
-        (wcDay >= 19 && wcDay <= 22) ||
-        (wcDay >= 23 && wcDay <= 24) ||
-        (wcDay >= 26 && wcDay <= 27) ||
-        wcDay === 29 || wcDay === 30
-      );
+      const wcKnockoutDays = [
+        15, 16, 17, 18,
+        19, 20, 21, 22,
+        23, 24,
+        26, 27,
+        29, 30,
+      ];
+      const isKODay = wcMonth === 6 && wcKnockoutDays.includes(wcDay);
 
       if (isKODay && nextWcState) {
         const wcKODayKey = `WC_KO_${wcYear}_${wcDay}`;
@@ -3905,25 +3906,41 @@ setMessages([welcomeMail, fanMail]);
             const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches);
             nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
 
-            if (wcDay === 30) {
-              const finalMatch = updatedKO.find(m => m.round === 'FINAL');
-              const thirdMatch = updatedKO.find(m => m.round === 'THIRD');
-              nextWcState = {
-                ...nextWcState,
-                knockoutComplete: true,
-                champion: finalMatch?.winner ?? undefined,
-                thirdPlace: thirdMatch?.winner ?? undefined,
-              };
-              applyWorldCupEffectsAndMail(nextWcState, wcYear);
-            }
-
             wcChanged = true;
           }
           newProcessedIds.push(wcKODayKey);
         }
       }
 
-      if (wcMonth === 6 && wcDay === 30 && nextWcState?.knockoutComplete) {
+      if (nextWcState?.groupStageComplete && !nextWcState.knockoutComplete) {
+        const currentDayKey = Number(`${wcYear}${String(wcMonth).padStart(2, '0')}${String(wcDay).padStart(2, '0')}`);
+        for (const koDay of wcKnockoutDays) {
+          const koDayKey = Number(`${wcYear}06${String(koDay).padStart(2, '0')}`);
+          if (koDayKey > currentDayKey) continue;
+
+          const hasUnplayedDueMatch = nextWcState.knockoutMatches.some(m => m.date === `${wcYear}-06-${String(koDay).padStart(2, '0')}` && !m.winner && m.home && m.away);
+          if (!hasUnplayedDueMatch) continue;
+
+          const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches);
+          nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
+          wcChanged = true;
+        }
+      }
+
+      const completedFinalMatch = nextWcState?.knockoutMatches.find(m => m.round === 'FINAL' && m.winner);
+      if (nextWcState?.groupStageComplete && !nextWcState.knockoutComplete && completedFinalMatch) {
+        const thirdMatch = nextWcState.knockoutMatches.find(m => m.round === 'THIRD');
+        nextWcState = {
+          ...nextWcState,
+          knockoutComplete: true,
+          champion: completedFinalMatch.winner ?? undefined,
+          thirdPlace: thirdMatch?.winner ?? undefined,
+        };
+        applyWorldCupEffectsAndMail(nextWcState, wcYear);
+        wcChanged = true;
+      }
+
+      if (((wcMonth === 6 && wcDay >= 30) || wcMonth > 6) && nextWcState?.knockoutComplete) {
         applyWorldCupEffectsAndMail(nextWcState, wcYear);
       }
 
