@@ -10395,14 +10395,6 @@ const finalResult: SimulationOutput = {
       };
     }
 
-    if (!need.fits) {
-      return {
-        ok: false,
-        status: 'CLUB_REJECTED',
-        message: `${sellerClub.name} odrzuca propozycję. Klub nie widzi wystarczającej gwarancji minut i sportowego sensu wypożyczenia.`,
-      };
-    }
-
     const marketValue = FinanceService.calculateMarketValue(
       targetPlayer,
       sellerClub.reputation,
@@ -10412,13 +10404,39 @@ const finalResult: SimulationOutput = {
     const expectedLoanFee = Math.round(marketValue * 0.003 / 1000) * 1000;
     const repDelta = buyerClub.reputation - sellerClub.reputation;
     const requiredCoverage = repDelta >= 1 ? 40 : repDelta === 0 ? 50 : 65;
+    const loanOfferStart = new Date(dateStr);
+    const loanOfferEnd = new Date(loanEndDate);
+    const loanDays = Math.max(30, Math.ceil((loanOfferEnd.getTime() - loanOfferStart.getTime()) / 86_400_000));
+    const sellerWageSaving = Math.round((targetPlayer.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
+    const financialValueForSeller = loanFee + sellerWageSaving;
+    const expectedFinancialValue = expectedLoanFee + Math.round((targetPlayer.annualSalary || 0) * 0.5 * (loanDays / 365));
+
+    // FINANCIAL ESCAPE: klub wystawiający nie patrzy już tylko na minuty.
+    // Jeśli sportowo wypożyczenie jest słabsze, ale oferta daje realny zarobek
+    // albo znacząco amortyzuje pensję zawodnika, zarząd AI może mimo wszystko
+    // uznać ruch za opłacalny.
+    const isStrongFinancialLoan =
+      financialValueForSeller >= expectedFinancialValue * 1.25 ||
+      (wageCoveragePercent >= 85 && loanFee >= expectedLoanFee * 0.75) ||
+      (wageCoveragePercent === 100 && loanFee > 0);
+
+    if (!need.fits && !isStrongFinancialLoan) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} odrzuca propozycję. Klub nie widzi wystarczającej gwarancji minut i sportowego sensu wypożyczenia.`,
+      };
+    }
+
+    const sportNeedScore = Math.max(0, need.needScore);
     const sellerScore =
-      need.needScore * 7 +
+      sportNeedScore * 7 +
       Math.min(35, wageCoveragePercent * 0.35) +
       Math.min(25, expectedLoanFee > 0 ? (loanFee / expectedLoanFee) * 18 : loanFee > 0 ? 18 : 8) +
+      Math.min(18, expectedFinancialValue > 0 ? (financialValueForSeller / expectedFinancialValue) * 12 : 0) +
       (repDelta >= 1 ? 10 : repDelta === 0 ? 4 : -8);
 
-    if (wageCoveragePercent < requiredCoverage || sellerScore < 58) {
+    if ((wageCoveragePercent < requiredCoverage && !isStrongFinancialLoan) || sellerScore < 58) {
       return {
         ok: false,
         status: 'CLUB_REJECTED',

@@ -131,10 +131,40 @@ export const IncomingTransferService = {
     const bestGap = player.overallRating - bestInPosition;
     const squadGap = player.overallRating - squadAverage;
     const thinPositionBonus = samePosition.length <= 2 ? 2 : 0;
-    const needScore = Math.max(positionGap + thinPositionBonus, bestGap * 1.5, squadGap);
+
+    // LOAN FIT: wypożyczenie musi mieć sens na konkretnej pozycji, a nie tylko
+    // względem średniej całej kadry. Wcześniej mocny klub użytkownika prawie
+    // zawsze odpadał, bo zawodnik musiał być minimum +2 OVR ponad średnią całej
+    // drużyny. To blokowało sensowne ruchy rotacyjne, np. napastnika do klubu,
+    // który ma ogólnie mocną kadrę, ale potrzebuje głębi właśnie z przodu.
+    const positionSlots: Record<PlayerPosition, number> = {
+      [PlayerPosition.GK]: 1,
+      [PlayerPosition.DEF]: 4,
+      [PlayerPosition.MID]: 4,
+      [PlayerPosition.FWD]: 2,
+    };
+    const matchdayRotationLimit = positionSlots[player.position] + 3;
+    const strongerOrEqualInPosition = samePosition.filter(
+      squadPlayer => squadPlayer.overallRating >= player.overallRating
+    ).length;
+    const isInsidePositionRotation = strongerOrEqualInPosition < matchdayRotationLimit;
+    const isCloseToPositionLevel = player.overallRating >= positionAverage - 2;
+    const isThinPosition = samePosition.length <= positionSlots[player.position] + 1;
+    const isDevelopmentLoan =
+      player.age <= 23 &&
+      player.overallRating >= positionAverage - 4 &&
+      strongerOrEqualInPosition < matchdayRotationLimit + 2;
+    const rotationScore = isInsidePositionRotation
+      ? Math.max(3, matchdayRotationLimit - strongerOrEqualInPosition)
+      : 0;
+    const needScore = Math.max(positionGap + thinPositionBonus, bestGap * 1.5, squadGap, rotationScore);
 
     return {
-      fits: needScore >= 4 && player.overallRating >= squadAverage + 2,
+      fits:
+        needScore >= 4 ||
+        (isInsidePositionRotation && isCloseToPositionLevel) ||
+        isThinPosition ||
+        isDevelopmentLoan,
       needScore,
       positionGap,
       squadGap,
