@@ -9,6 +9,7 @@ HealthStatus, InjurySeverity,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
 IncomingTransferOffer, IncomingOfferStatus,
+LoanOfferSubmissionInput, LoanOfferSubmissionResult,
 ActivePlayoffDraw,
 RelegationPlayoffFirstLegResults,
 RelegationPlayoffFinalResult,
@@ -522,6 +523,7 @@ setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]
 finalizeFreeAgentContract: (mailId: string) => void;
   transferOffers: TransferOffer[];
   submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
+  submitLoanOffer: (playerId: string, offer: LoanOfferSubmissionInput) => LoanOfferSubmissionResult;
   finalizeTransferNegotiation: (offerId: string, contract: TransferContractInput, bypassBoardCheck?: boolean) => TransferOfferSubmissionResult;
   incomingOffers: IncomingTransferOffer[];
   viewedIncomingOfferId: string | null;
@@ -10181,6 +10183,324 @@ const finalResult: SimulationOutput = {
     };
   }, [userTeamId, clubs, players, currentDate, transferOffers]);
 
+  const submitLoanOffer = useCallback((playerId: string, offerInput: LoanOfferSubmissionInput): LoanOfferSubmissionResult => {
+    if (!userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz wybrać klub użytkownika.' };
+    }
+
+    const buyerClub = clubs.find(club => club.id === userTeamId);
+    if (!buyerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono danych twojego klubu.' };
+    }
+
+    let sellerClubId: string | null = null;
+    let targetPlayer: Player | null = null;
+    for (const clubId in players) {
+      const found = players[clubId].find(player => player.id === playerId);
+      if (found) {
+        sellerClubId = clubId;
+        targetPlayer = found;
+        break;
+      }
+    }
+
+    if (!sellerClubId || !targetPlayer) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono wskazanego zawodnika.' };
+    }
+
+    if (sellerClubId === userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie możesz wypożyczyć zawodnika z własnego klubu.' };
+    }
+
+    const sellerClub = clubs.find(club => club.id === sellerClubId);
+    if (!sellerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu macierzystego zawodnika.' };
+    }
+
+    if (!targetPlayer.isAvailableForLoan) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest dostępny do wypożyczenia.` };
+    }
+
+    if (targetPlayer.loan) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} jest już wypożyczony.` };
+    }
+
+    if (
+      targetPlayer.transferPendingClubId ||
+      hasActiveTransferConflict(targetPlayer.id, transferOffers) ||
+      hasActiveIncomingConflict(targetPlayer.id, incomingOffers)
+    ) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Ten zawodnik ma aktywną ścieżkę transferową albo inną ofertę. Wypożyczenie jest zablokowane, żeby uniknąć konfliktu interesów.',
+      };
+    }
+
+    const buyerSquad = players[userTeamId] || [];
+    const sellerSquad = players[sellerClubId] || [];
+    const need = IncomingTransferService.getLoanSquadNeed(targetPlayer, buyerSquad);
+    const samePositionPlayers = buyerSquad.filter(player => player.position === targetPlayer.position);
+    const samePositionAverage = samePositionPlayers.length > 0
+      ? samePositionPlayers.reduce((sum, player) => sum + player.overallRating, 0) / samePositionPlayers.length
+      : IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const isClearSquadUpgrade =
+      targetPlayer.overallRating >= samePositionAverage + 4 ||
+      need.needScore >= 8;
+    const postLoanSquadSize = buyerSquad.length + 1;
+
+    if (postLoanSquadSize > 30) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Zarząd blokuje wypożyczenie. Kadra po tym ruchu liczyłaby ${postLoanSquadSize} zawodników, a limit organizacyjny klubu to 30.`,
+      };
+    }
+
+    if (postLoanSquadSize > 28 && !isClearSquadUpgrade) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Zarząd blokuje wypożyczenie. Kadra liczyłaby ${postLoanSquadSize} zawodników, a sztab nie widzi w tym ruchu wyraźnego wzmocnienia pierwszej rotacji.`,
+      };
+    }
+
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const loanFee = Math.max(0, Math.round(offerInput.loanFee / 1000) * 1000);
+    const wageCoveragePercent = Math.max(0, Math.min(100, Math.round(offerInput.wageCoveragePercent)));
+    const loanDuration = offerInput.loanDuration;
+    const loanEndDate = IncomingTransferService.resolveLoanEndDate(currentDate, loanDuration);
+    const totalCost = IncomingTransferService.calculateLoanTotalCost(
+      targetPlayer,
+      loanFee,
+      wageCoveragePercent,
+      dateStr,
+      loanEndDate
+    );
+
+    if (loanFee > buyerClub.transferBudget || totalCost > buyerClub.transferBudget) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Łączny koszt wypożyczenia (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${buyerClub.transferBudget.toLocaleString('pl-PL')} PLN).`,
+      };
+    }
+
+    if (!need.fits) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} odrzuca propozycję. Klub nie widzi wystarczającej gwarancji minut i sportowego sensu wypożyczenia.`,
+      };
+    }
+
+    const marketValue = FinanceService.calculateMarketValue(
+      targetPlayer,
+      sellerClub.reputation,
+      IncomingTransferService.getClubTier(sellerClub),
+      sellerClub.country
+    );
+    const expectedLoanFee = Math.round(marketValue * 0.003 / 1000) * 1000;
+    const repDelta = buyerClub.reputation - sellerClub.reputation;
+    const requiredCoverage = repDelta >= 1 ? 40 : repDelta === 0 ? 50 : 65;
+    const sellerScore =
+      need.needScore * 7 +
+      Math.min(35, wageCoveragePercent * 0.35) +
+      Math.min(25, expectedLoanFee > 0 ? (loanFee / expectedLoanFee) * 18 : loanFee > 0 ? 18 : 8) +
+      (repDelta >= 1 ? 10 : repDelta === 0 ? 4 : -8);
+
+    if (wageCoveragePercent < requiredCoverage || sellerScore < 58) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} odrzuca ofertę. Oczekują mocniejszej gwarancji gry, wyższego pokrycia pensji albo lepszej opłaty za wypożyczenie.`,
+      };
+    }
+
+    const playerDecisionSeed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${targetPlayer.id}_USER_LOAN_DECISION_${sessionSeed}`);
+    const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+      targetPlayer,
+      buyerClub,
+      sellerClub,
+      buyerSquad,
+      playerDecisionSeed
+    );
+
+    if (playerDecision === 'refused') {
+      return {
+        ok: false,
+        status: 'PLAYER_REFUSED',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest przekonany do wypożyczenia do ${buyerClub.name}.`,
+      };
+    }
+
+    const baselineRatingCount = targetPlayer.stats.ratingHistory?.length ?? 0;
+    const loanInfo: PlayerLoanInfo = {
+      parentClubId: sellerClub.id,
+      parentClubName: sellerClub.name,
+      destinationClubId: buyerClub.id,
+      destinationClubName: buyerClub.name,
+      startDate: dateStr,
+      endDate: loanEndDate,
+      wageCoveragePercent,
+      loanFee,
+      forcedByClub: false,
+      reportBaselineMatches: targetPlayer.stats.matchesPlayed ?? 0,
+      reportBaselineMinutes: targetPlayer.stats.minutesPlayed ?? 0,
+      reportBaselineGoals: targetPlayer.stats.goals ?? 0,
+      reportBaselineAssists: targetPlayer.stats.assists ?? 0,
+      reportBaselineYellowCards: targetPlayer.stats.yellowCards ?? 0,
+      reportBaselineRedCards: targetPlayer.stats.redCards ?? 0,
+      reportBaselineRatingCount: baselineRatingCount,
+      lastReportDate: dateStr,
+      lastReportMatches: targetPlayer.stats.matchesPlayed ?? 0,
+      lastReportMinutes: targetPlayer.stats.minutesPlayed ?? 0,
+      lastReportGoals: targetPlayer.stats.goals ?? 0,
+      lastReportAssists: targetPlayer.stats.assists ?? 0,
+      lastReportRatingCount: baselineRatingCount,
+      monthlyReports: [],
+    };
+
+    const loanStart = new Date(loanInfo.startDate);
+    const loanStartYear = Number.isNaN(loanStart.getTime()) ? currentDate.getFullYear() : loanStart.getFullYear();
+    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? currentDate.getMonth() + 1 : loanStart.getMonth() + 1;
+    const baseHistory = targetPlayer.history && targetPlayer.history.length > 0
+      ? targetPlayer.history
+      : [{
+          clubName: sellerClub.name,
+          clubId: sellerClub.id,
+          fromYear: loanStartYear - 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null,
+        }];
+    const loanedPlayer: Player = {
+      ...targetPlayer,
+      clubId: buyerClub.id,
+      loan: loanInfo,
+      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
+      isAvailableForLoan: false,
+      isOnTransferList: false,
+      transferListPrice: undefined,
+      squadRole: null,
+      isUntouchable: false,
+      interestedClubs: [],
+    };
+
+    setPlayers(prev => ({
+      ...prev,
+      [sellerClub.id]: (prev[sellerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
+      [buyerClub.id]: [
+        ...(prev[buyerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
+        loanedPlayer,
+      ],
+    }));
+
+    setClubs(prev => prev.map(club => {
+      if (club.id === sellerClub.id) {
+        return {
+          ...club,
+          budget: club.budget + loanFee,
+          transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== targetPlayer!.id),
+        };
+      }
+      if (club.id === buyerClub.id) {
+        return {
+          ...club,
+          budget: Math.max(0, club.budget - loanFee),
+          transferBudget: Math.max(0, club.transferBudget - loanFee),
+          rosterIds: [...club.rosterIds.filter(id => id !== targetPlayer!.id), targetPlayer!.id],
+        };
+      }
+      return club;
+    }));
+
+    setLineups(prev => {
+      const next = { ...prev };
+      const nextSellerSquad = sellerSquad.filter(player => player.id !== targetPlayer!.id);
+      const nextBuyerSquad = [...buyerSquad.filter(player => player.id !== targetPlayer!.id), loanedPlayer];
+
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], nextSellerSquad);
+      }
+
+      if (next[buyerClub.id]) {
+        const buyerLineup = next[buyerClub.id];
+        const knownIds = new Set([
+          ...buyerLineup.bench,
+          ...buyerLineup.reserves,
+          ...(buyerLineup.startingXI.filter(Boolean) as string[]),
+        ]);
+        next[buyerClub.id] = knownIds.has(loanedPlayer.id)
+          ? buyerLineup
+          : {
+              ...buyerLineup,
+              reserves: [...buyerLineup.reserves, loanedPlayer.id],
+            };
+      } else {
+        const coach = buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null;
+        next[buyerClub.id] = LineupService.autoPickLineup(buyerClub.id, nextBuyerSquad, '4-4-2', coach);
+      }
+
+      return next;
+    });
+
+    setTransferOffers(prev => prev.map(transferOffer => {
+      // KONFLIKT INTERESÓW: po zaakceptowanym wypożyczeniu zamykamy aktywne
+      // rozmowy transferowe tego zawodnika. W praktyce oznacza to, że gracz nie
+      // może najpierw wypożyczyć zawodnika, a chwilę później sfinalizować jego kupna
+      // z wcześniej otwartej ścieżki negocjacji.
+      if (transferOffer.playerId !== targetPlayer!.id || !isActiveTransferOffer(transferOffer)) return transferOffer;
+      return {
+        ...transferOffer,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        sellerReason: 'Rozmowy zamknięte automatycznie, ponieważ zawodnik został wypożyczony.',
+      };
+    }));
+
+    setIncomingOffers(prev => prev.map(incomingOffer => {
+      if (
+        incomingOffer.playerId === targetPlayer!.id &&
+        IncomingTransferService.isActiveIncomingOfferStatus(incomingOffer.status)
+      ) {
+        return { ...incomingOffer, status: IncomingOfferStatus.EXPIRED };
+      }
+      return incomingOffer;
+    }));
+
+    setMessages(prev => [{
+      id: `MAIL_USER_LOAN_DONE_${targetPlayer!.id}_${Date.now()}`,
+      sender: 'Centrum wypożyczeń',
+      role: 'System rejestracji wypożyczeń',
+      subject: `Wypożyczenie potwierdzone: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      body: [
+        `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} na zasadzie wypożyczenia z klubu ${sellerClub.name}.`,
+        '',
+        `Okres: ${new Date(dateStr).toLocaleDateString('pl-PL')} - ${new Date(loanEndDate).toLocaleDateString('pl-PL')}`,
+        `Pokrycie pensji: ${wageCoveragePercent}%`,
+        `Opłata za wypożyczenie: ${loanFee.toLocaleString('pl-PL')} PLN`,
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 96,
+    }, ...prev]);
+
+    showGameNotification({
+      title: 'Wypożyczenie zaakceptowane',
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.`,
+      tone: 'success',
+    });
+
+    return {
+      ok: true,
+      status: 'ACCEPTED',
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} został wypożyczony do ${buyerClub.name}.`,
+      loan: loanInfo,
+    };
+  }, [userTeamId, clubs, players, currentDate, transferOffers, incomingOffers, lineups, coaches, sessionSeed]);
+
   const finalizeTransferNegotiation = useCallback((offerId: string, contractInput: TransferContractInput, bypassBoardCheck?: boolean): TransferOfferSubmissionResult => {
     if (!userTeamId) {
       return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz wybrac klub uzytkownika.' };
@@ -10998,7 +11318,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
-      setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
+      setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,

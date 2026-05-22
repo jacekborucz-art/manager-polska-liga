@@ -1,10 +1,16 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ekstraklasaBgImg from '../../Graphic/themes/ekstraklasa.png';
 import { useGame } from '../../context/GameContext';
 import { ViewState, LeagueLevel, Club } from '../../types';
 import { Button } from '../ui/Button';
 import InternationalView from './InternationalView';
+
+const _persisted = {
+  selectedLeagueId: 'L_PL_1' as string,
+  viewMode: 'TABLE' as 'TABLE' | 'SCHEDULE' | 'INTERNATIONAL',
+  selectedRound: 1 as number,
+};
 
 export const LeagueTables: React.FC = () => {
   const { leagues, clubs, leagueSchedules, navigateTo, viewClubDetails, userTeamId, seasonTemplate } = useGame();
@@ -12,13 +18,17 @@ export const LeagueTables: React.FC = () => {
   const myClub = clubs.find(c => c.id === userTeamId);
   const displayLeagues = leagues.filter(l => l.level !== LeagueLevel.TIER_4_HIDDEN && l.level !== LeagueLevel.EUROPEAN);
   
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string>(displayLeagues[0]?.id || 'L_PL_1');
-  const [viewMode, setViewMode] = useState<'TABLE' | 'SCHEDULE' | 'INTERNATIONAL'>('TABLE');
-  const [selectedRound, setSelectedRound] = useState<number>(1);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string>(_persisted.selectedLeagueId);
+  const [viewMode, setViewMode] = useState<'TABLE' | 'SCHEDULE' | 'INTERNATIONAL'>(_persisted.viewMode);
+  const [selectedRound, setSelectedRound] = useState<number>(_persisted.selectedRound);
 
   const selectedLeague = displayLeagues.find(l => l.id === selectedLeagueId);
   const getTier = (lid: string) => parseInt(lid.split('_')[2]);
   const currentSchedule = selectedLeague ? leagueSchedules[getTier(selectedLeague.id)] : null;
+
+  useEffect(() => { _persisted.selectedLeagueId = selectedLeagueId; }, [selectedLeagueId]);
+  useEffect(() => { _persisted.viewMode = viewMode; }, [viewMode]);
+  useEffect(() => { _persisted.selectedRound = selectedRound; }, [selectedRound]);
 
   const seasonYearLabel = useMemo(() => {
     if (!seasonTemplate) return "2025/26";
@@ -119,8 +129,8 @@ export const LeagueTables: React.FC = () => {
                     ${viewMode === 'TABLE' ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-slate-900' : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 text-slate-500 hover:text-slate-300'}`}
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                >
-                 Tabela
-               </button>
+                 Polska Liga
+</button>
                <button
                   onClick={() => setViewMode('SCHEDULE')}
                   className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px]

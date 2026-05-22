@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
@@ -8,12 +8,17 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk, submitLoanOffer } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
   const [isTalkPanelOpen, setIsTalkPanelOpen] = useState(false);
   const [talkResult, setTalkResult] = useState<IndividualTalkResult | null>(null);
+  const [showLoanOfferPanel, setShowLoanOfferPanel] = useState(false);
+  const [loanOfferFee, setLoanOfferFee] = useState(0);
+  const [loanWageCoverage, setLoanWageCoverage] = useState(60);
+  const [loanDuration, setLoanDuration] = useState<LoanOfferDuration>('SEASON');
+  const [loanFeedback, setLoanFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   useEffect(() => {
     if (pendingOpenTalk) {
       setIsTalkPanelOpen(true);
@@ -95,6 +100,17 @@ export const PlayerCard: React.FC = () => {
       offer.status === TransferOfferStatus.AGREED_PRECONTRACT
     )
   ));
+  const canSubmitLoanOffer = !!userTeamId &&
+    !isReserve &&
+    !isResigned &&
+    player.clubId !== userTeamId &&
+    player.clubId !== 'FREE_AGENTS' &&
+    player.isAvailableForLoan &&
+    !isLoanedPlayer &&
+    !hasPendingTransfer &&
+    !hasUserTransferAgreement;
+  const estimatedMonthlyLoanWageCost = Math.round((((player.annualSalary || 0) / 12) * loanWageCoverage) / 100);
+  const estimatedLoanTotalCost = estimatedMonthlyLoanWageCost + loanOfferFee;
   const blockedReturnViews = new Set<ViewState>([
     ViewState.PLAYER_CARD,
     ViewState.TRANSFER_OFFER,
@@ -161,6 +177,19 @@ export const PlayerCard: React.FC = () => {
     const result = conductIndividualTalk(player.id, talkType);
     if (result) {
       setTalkResult(result);
+    }
+  };
+  const handleSubmitLoanOffer = () => {
+    const result = submitLoanOffer(player.id, {
+      loanFee: loanOfferFee,
+      wageCoveragePercent: loanWageCoverage,
+      loanDuration,
+    });
+
+    setLoanFeedback({ ok: result.ok, message: result.message });
+
+    if (result.ok) {
+      setShowLoanOfferPanel(false);
     }
   };
   const careerRows = useMemo(() => {
@@ -914,18 +943,155 @@ export const PlayerCard: React.FC = () => {
                       : "OTWÓRZ BIURO NEGOCJACJI 🤝"}
                   </button>
                 ) : !isResigned ? (
-                  <button
-                    disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer}
-                    onClick={() => navigateWithoutHistory(ViewState.TRANSFER_OFFER)}
-                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 ${
-                      (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer)
-                        ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-500 text-white border-t-blue-300/60 border-x-blue-500/40 hover:scale-[1.02]'
-                    }`}
-                    style={button3DStyle}
-                  >
-                    {isLoanedPlayer ? `WYPOŻYCZONY DO ${loanEndLabel}` : 'ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰'}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer}
+                      onClick={() => navigateWithoutHistory(ViewState.TRANSFER_OFFER)}
+                      className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 ${
+                        (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer)
+                          ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white border-t-blue-300/60 border-x-blue-500/40 hover:scale-[1.02]'
+                      }`}
+                      style={button3DStyle}
+                    >
+                      {isLoanedPlayer ? `WYPOŻYCZONY DO ${loanEndLabel}` : 'ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰'}
+                    </button>
+
+                    {canSubmitLoanOffer && (
+                      <>
+                        {/* PANEL OFERTY WYPOŻYCZENIA OD KLUBU AI
+                            Ta sekcja jest widoczna tylko dla zawodników z klubów AI,
+                            którzy mają ustawiony status "Dostępny do wypożyczenia".
+                            Samo kliknięcie nie przenosi zawodnika od razu: formularz
+                            wysyła ofertę do logiki w GameContext, gdzie sprawdzane są:
+                            limit kadry gracza, budżet, oczekiwania klubu AI oraz zgoda zawodnika. */}
+                        <button
+                          onClick={() => {
+                            setShowLoanOfferPanel(prev => !prev);
+                            setLoanFeedback(null);
+                          }}
+                          className="w-full py-3 rounded-[20px] font-black italic uppercase tracking-tighter text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 bg-cyan-600/20 border-t-cyan-300/50 border-x-cyan-500/30 text-cyan-200 hover:bg-cyan-500/30 hover:text-white hover:scale-[1.02] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                          style={button3DStyle}
+                        >
+                          {showLoanOfferPanel ? 'ZAMKNIJ OFERTĘ WYPOŻYCZENIA' : 'ZŁÓŻ OFERTĘ WYPOŻYCZENIA'}
+                        </button>
+
+                        {showLoanOfferPanel && (
+                          <div
+                            className="rounded-[22px] border border-cyan-400/25 bg-slate-950/70 p-4 backdrop-blur-md shadow-[0_18px_45px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                            style={button3DStyle}
+                          >
+                            {/* DŁUGOŚĆ WYPOŻYCZENIA
+                                ROUND oznacza krótszy ruch do końca rundy,
+                                SEASON oznacza klasyczne wypożyczenie do końca sezonu.
+                                GameContext zamienia tę wartość na realną datę zakończenia. */}
+                            <div className="mb-3">
+                              <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300 mb-2">Długość wypożyczenia</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {([
+                                  { value: 'ROUND', label: 'Do końca rundy' },
+                                  { value: 'SEASON', label: 'Do końca sezonu' },
+                                ] as const).map(option => (
+                                  <button
+                                    key={option.value}
+                                    onClick={() => setLoanDuration(option.value)}
+                                    className={`py-2.5 rounded-[14px] border-t border-x border-b border-b-black/60 text-[9px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] ${
+                                      loanDuration === option.value
+                                        ? 'bg-cyan-500 text-white border-t-cyan-200 border-x-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.28)]'
+                                        : 'bg-white/[0.04] text-slate-400 border-t-white/15 border-x-white/10 hover:text-cyan-200 hover:bg-cyan-500/10'
+                                    }`}
+                                    style={button3DStyle}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* PROCENT PENSJI
+                                To jest część pensji zawodnika, którą klub gracza deklaruje pokrywać
+                                podczas wypożyczenia. Wyższy procent zwiększa szansę akceptacji klubu AI,
+                                ale obciąża budżet gracza. */}
+                            <div className="mb-3">
+                              <div className="flex items-end justify-between gap-3 mb-2">
+                                <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300">Pokrycie pensji</p>
+                                <p className="text-[16px] font-black italic uppercase tracking-tighter text-white leading-none">{loanWageCoverage}%</p>
+                              </div>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={loanWageCoverage}
+                                onChange={e => setLoanWageCoverage(Number(e.target.value))}
+                                className="w-full accent-cyan-400"
+                              />
+                              <p className="mt-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                                Miesięcznie: {estimatedMonthlyLoanWageCost.toLocaleString('pl-PL')} PLN
+                              </p>
+                            </div>
+
+                            {/* OPŁATA ZA WYPOŻYCZENIE
+                                Jednorazowa kwota płacona klubowi AI. W praktyce pomaga przepchnąć
+                                ofertę, jeśli zawodnik jest dla nich wartościowy albo chcemy złożyć
+                                mocniejszą propozycję bez kupowania zawodnika. */}
+                            <div className="mb-4">
+                              <div className="flex items-end justify-between gap-3 mb-2">
+                                <p className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300">Opłata dla klubu</p>
+                                <p className="text-[16px] font-black italic uppercase tracking-tighter text-white leading-none">{loanOfferFee.toLocaleString('pl-PL')} PLN</p>
+                              </div>
+                              <div className="grid grid-cols-[44px_1fr_44px] gap-2">
+                                <button
+                                  onClick={() => setLoanOfferFee(value => Math.max(0, value - 50000))}
+                                  className="h-11 rounded-[14px] bg-red-900/35 border-t border-x border-b border-t-red-400/35 border-x-red-500/20 border-b-black/60 text-red-300 text-xl font-black italic uppercase tracking-tighter active:translate-y-[2px]"
+                                  style={button3DStyle}
+                                >
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={loanOfferFee}
+                                  onChange={e => setLoanOfferFee(Math.max(0, Number(e.target.value)))}
+                                  className="h-11 rounded-[14px] bg-slate-900/80 border border-white/10 px-3 text-right text-white text-[11px] font-black italic uppercase tracking-tighter outline-none focus:border-cyan-400/50"
+                                />
+                                <button
+                                  onClick={() => setLoanOfferFee(value => value + 50000)}
+                                  className="h-11 rounded-[14px] bg-emerald-900/35 border-t border-x border-b border-t-emerald-400/35 border-x-emerald-500/20 border-b-black/60 text-emerald-300 text-xl font-black italic uppercase tracking-tighter active:translate-y-[2px]"
+                                  style={button3DStyle}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 rounded-[16px] bg-black/25 border border-white/10 px-3 py-2 mb-3">
+                              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Koszt startowy</span>
+                              <span className="text-[12px] font-black italic uppercase tracking-tighter text-cyan-200">{estimatedLoanTotalCost.toLocaleString('pl-PL')} PLN</span>
+                            </div>
+
+                            <button
+                              onClick={handleSubmitLoanOffer}
+                              className="w-full py-3 rounded-[18px] bg-cyan-500 text-slate-950 border-t border-x border-b border-t-cyan-100 border-x-cyan-300 border-b-black/70 text-[11px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] hover:bg-cyan-300 shadow-[0_0_26px_rgba(34,211,238,0.28)]"
+                              style={lightButton3DStyle}
+                            >
+                              Wyślij ofertę wypożyczenia
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {loanFeedback && (
+                      <div className={`rounded-[16px] border px-4 py-3 text-[10px] font-black italic uppercase tracking-tighter leading-snug ${
+                        loanFeedback.ok
+                          ? 'bg-emerald-500/12 border-emerald-400/35 text-emerald-200'
+                          : 'bg-red-500/12 border-red-400/35 text-red-200'
+                      }`}>
+                        {loanFeedback.message}
+                      </div>
+                    )}
+                  </div>
                 ) : null}
               </div>
             )}

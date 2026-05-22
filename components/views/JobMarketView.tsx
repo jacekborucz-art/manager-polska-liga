@@ -5,6 +5,7 @@ import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, 
 
 type ContractStatusFilter = 'ALL' | 'FREE_AGENT' | 'CONTRACT' | 'TRANSFER_LIST';
 type MarketOriginFilter = 'ALL' | 'LOCAL' | 'FOREIGN';
+type MarketPanelMode = 'TRANSFER' | 'LOAN';
 
 const initialFilters = {
   age: { min: 16, max: 43 },
@@ -30,6 +31,7 @@ const _persisted = {
   playerNationalityFilter: 'ALL' as string,
   filters: { ...initialFilters } as typeof initialFilters,
   priceFilter: { min: 0, max: 200000000 } as { min: number; max: number },
+  marketPanelMode: 'TRANSFER' as MarketPanelMode,
   scrollTopPlayers: 0 as number,
   scrollTopTransfer: 0 as number,
 };
@@ -48,6 +50,7 @@ export const JobMarketView: React.FC = () => {
   const [priceFilter, setPriceFilter] = useState(_persisted.priceFilter);
   const [priceStep, setPriceStep] = useState(100000);
   const [marketOriginFilter, setMarketOriginFilter] = useState<MarketOriginFilter>('ALL');
+  const [marketPanelMode, setMarketPanelMode] = useState<MarketPanelMode>(_persisted.marketPanelMode);
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
@@ -100,6 +103,7 @@ export const JobMarketView: React.FC = () => {
   useEffect(() => { _persisted.playerNationalityFilter = playerNationalityFilter; }, [playerNationalityFilter]);
   useEffect(() => { _persisted.filters = filters; }, [filters]);
   useEffect(() => { _persisted.priceFilter = priceFilter; }, [priceFilter]);
+  useEffect(() => { _persisted.marketPanelMode = marketPanelMode; }, [marketPanelMode]);
 
   useEffect(() => {
     if (scrollRefPlayers.current) scrollRefPlayers.current.scrollTop = _persisted.scrollTopPlayers;
@@ -179,6 +183,29 @@ export const JobMarketView: React.FC = () => {
     return list.sort((a,b) => b.overallRating - a.overallRating);
   }, [players, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
 
+  // RYNEK WYPOŻYCZEŃ DLA GRACZA:
+  // Ta lista pokazuje wyłącznie zawodników z klubów AI, którzy zostali oznaczeni przez AI
+  // albo edytor jako dostępni do wypożyczenia. Samo złożenie oferty odbywa się potem
+  // z karty zawodnika, bo tam gracz widzi pełny kontekst i może ustawić warunki.
+  const loanListedPlayers = useMemo(() => {
+    let list = Object.values(players).flat().filter(p =>
+      p.clubId !== 'FREE_AGENTS' &&
+      p.clubId !== userTeamId &&
+      p.isAvailableForLoan &&
+      !p.loan &&
+      !p.transferPendingClubId
+    );
+    list = list.filter(matchesCommonPlayerFilters);
+    const transferQuery = searchTermTransfer.trim().toLowerCase();
+    if (transferQuery) {
+      list = list.filter(p => p.lastName.toLowerCase().includes(transferQuery) || p.firstName.toLowerCase().includes(transferQuery));
+    }
+    list = list.filter(p => (p.marketValue || 0) >= priceFilter.min && (p.marketValue || 0) <= priceFilter.max);
+    if (marketOriginFilter === 'LOCAL') list = list.filter(p => clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
+    if (marketOriginFilter === 'FOREIGN') list = list.filter(p => !clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
+    return list.sort((a, b) => b.overallRating - a.overallRating);
+  }, [players, userTeamId, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
+
   const filteredPlayerResults = useMemo(() => {
     let list = allPlayersFlat;
     if (contractStatusFilter === 'FREE_AGENT') list = list.filter(p => p.clubId === 'FREE_AGENTS');
@@ -219,11 +246,14 @@ export const JobMarketView: React.FC = () => {
     return Math.abs(getLum(bgHex) - getLum(textHex)) > 0.3 ? textHex : getContrastColor(bgHex);
   };
 
+  const activeMarketPlayers = marketPanelMode === 'LOAN' ? loanListedPlayers : transferListedPlayers;
   const marketListTitle =
+    marketPanelMode === 'LOAN' ? 'Rynek Wypożyczeń' :
     contractStatusFilter === 'CONTRACT' ? 'Zawodnicy z Kontraktem' :
     contractStatusFilter === 'TRANSFER_LIST' ? 'Lista Transferowa' :
     'Rynek Klubowy';
   const marketEmptyLabel =
+    marketPanelMode === 'LOAN' ? 'Brak zawodników dostępnych do wypożyczenia' :
     contractStatusFilter === 'CONTRACT' ? 'Brak zawodników z kontraktem dla tych filtrów' :
     contractStatusFilter === 'FREE_AGENT' ? 'Wybierz status kontraktu albo listę transferową' :
     'Brak dostępnych ofert na liście transferowej';
@@ -511,7 +541,7 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
 
-            <div ref={scrollRefPlayers} className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+            <div ref={scrollRefPlayers} className="flex-1 overflow-y-auto p-2 custom-scrollbar" onScroll={(e) => { _persisted.scrollTopPlayers = (e.currentTarget as HTMLDivElement).scrollTop; }}>
               {filteredPlayerResults.map((player, index) => {
                 const theme = getPosTheme(player.position);
                 return (
@@ -549,7 +579,33 @@ export const JobMarketView: React.FC = () => {
             <div className="p-6 border-b border-white/10 flex flex-col gap-4 bg-white/[0.02]">
               <div className="flex justify-between items-center">
                  <h2 className="text-xs font-black text-white uppercase tracking-[0.3em] italic">{marketListTitle}</h2>
-                 <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">Rynek klubowy</span>
+                 <span className="text-[8px] font-black italic uppercase tracking-tighter text-blue-500">
+                   {marketPanelMode === 'LOAN' ? `${loanListedPlayers.length} dostępnych` : 'Rynek klubowy'}
+                 </span>
+              </div>
+              {/* PRZEŁĄCZNIK TRYBU RYNKU:
+                  TRANSFER pokazuje klasyczną listę transferową zgodną z dotychczasową logiką.
+                  WYPOŻYCZENIA pokazują tylko zawodników z klubów AI, których można próbować
+                  wypożyczyć do klubu gracza. Dzięki temu nie mieszamy kupna z krótkim ruchem kadrowym. */}
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/5 bg-black/35 p-1">
+                {([
+                  ['TRANSFER', 'Lista transferowa'],
+                  ['LOAN', 'Wypożyczenia']
+                ] as [MarketPanelMode, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setMarketPanelMode(value)}
+                    className={`py-2 rounded-xl text-[9px] font-black italic uppercase tracking-tighter transition-all ${
+                      marketPanelMode === value
+                        ? value === 'LOAN'
+                          ? 'bg-cyan-500 text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.28)]'
+                          : 'bg-amber-500 text-slate-950 shadow-[0_0_18px_rgba(245,158,11,0.25)]'
+                        : 'text-slate-500 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <div className="bg-black/40 p-4 rounded-2xl border border-white/10 flex flex-col gap-3">
                 <input
@@ -607,23 +663,29 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
 
-            {/* TUTAJ WSTAW TEN KOD - DYNAMICZNA LISTA TRANSFEROWA */}
-            <div ref={scrollRefTransfer} className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {transferListedPlayers.length > 0 ? (
-                transferListedPlayers
+            {/* DYNAMICZNA LISTA RYNKU:
+                Ten sam kontener obsługuje dwa tryby. W trybie TRANSFER działa jak wcześniej.
+                W trybie LOAN używa odfiltrowanej listy zawodników dostępnych do wypożyczenia,
+                a kliknięcie prowadzi do karty zawodnika, gdzie znajduje się formularz oferty. */}
+            <div ref={scrollRefTransfer} className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" onScroll={(e) => { _persisted.scrollTopTransfer = (e.currentTarget as HTMLDivElement).scrollTop; }}>
+              {activeMarketPlayers.length > 0 ? (
+                activeMarketPlayers
                   .map((player, index) => {
                     const theme = getPosTheme(player.position);
                     const club = clubById.get(player.clubId);
+                    const annualSalary = player.annualSalary || 0;
                     return (
                       <div 
                         key={player.id} 
                         onClick={() => viewPlayerDetails(player.id)}
-                        className="group relative p-4 bg-black/40 rounded-xl border border-white/5 hover:border-amber-500/30 transition-all cursor-pointer overflow-hidden shadow-lg"
+                        className={`group relative p-4 bg-black/40 rounded-xl border border-white/5 transition-all cursor-pointer overflow-hidden shadow-lg ${
+                          marketPanelMode === 'LOAN' ? 'hover:border-cyan-500/35' : 'hover:border-amber-500/30'
+                        }`}
                       >
                         {/* Identity Glow */}
                         <div
                           className="absolute inset-0 opacity-0 group-hover:opacity-5 pointer-events-none transition-opacity"
-                          style={{ background: `linear-gradient(90deg, #f59e0b, transparent)` }}
+                          style={{ background: `linear-gradient(90deg, ${marketPanelMode === 'LOAN' ? '#22d3ee' : '#f59e0b'}, transparent)` }}
                         />
                         {/* Club Colors Gradient */}
                         <div
@@ -632,14 +694,16 @@ export const JobMarketView: React.FC = () => {
                         />
                         {/* Background Watermark */}
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 text-6xl font-black italic text-white/[0.04] select-none uppercase pointer-events-none group-hover:text-white/[0.07] transition-colors">
-                          LISTA TRANSFEROWA
+                          {marketPanelMode === 'LOAN' ? 'WYPOŻYCZENIE' : 'LISTA TRANSFEROWA'}
                         </div>
 
                         <div className="relative z-10 flex items-center justify-between">
                            <div className="flex items-center gap-4">
                               <div className={`w-0.5 h-8 rounded-full ${theme.bg} ${theme.glow} shrink-0`} />
                               <div className="min-w-0">
-                                 <span className="block text-sm font-black text-white uppercase italic truncate max-w-[200px] group-hover:text-amber-400 transition-colors leading-tight">
+                                 <span className={`block text-sm font-black italic uppercase tracking-tighter text-white truncate max-w-[200px] transition-colors leading-tight ${
+                                   marketPanelMode === 'LOAN' ? 'group-hover:text-cyan-300' : 'group-hover:text-amber-400'
+                                 }`}>
                                    {player.lastName} {player.firstName}
                                  </span>
                                  <div className="flex items-center gap-2">
@@ -665,14 +729,26 @@ export const JobMarketView: React.FC = () => {
 
                                  <div className="mt-2 flex items-center gap-2">
                                     <span className="text-[12px] font-black text-slate-300 uppercase">{player.age} LAT</span>
+                                    {marketPanelMode === 'LOAN' && (
+                                      <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-300 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-400/20">
+                                        Dostępny do wypożyczenia
+                                      </span>
+                                    )}
                                  </div>
 
                               </div>
                            </div>
                            <div className="flex flex-col items-end gap-1">
-                              <span className="text-xs font-black text-emerald-400 font-mono tabular-nums">
-                                {player.marketValue ? player.marketValue.toLocaleString('pl-PL') : '0'} PLN
+                              <span className={`text-xs font-black font-mono tabular-nums ${marketPanelMode === 'LOAN' ? 'text-cyan-300' : 'text-emerald-400'}`}>
+                                {marketPanelMode === 'LOAN'
+                                  ? `${annualSalary.toLocaleString('pl-PL')} PLN / ROK`
+                                  : `${player.marketValue ? player.marketValue.toLocaleString('pl-PL') : '0'} PLN`}
                               </span>
+                              {marketPanelMode === 'LOAN' && (
+                                <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                                  Oferta na karcie zawodnika
+                                </span>
+                              )}
                            </div>
                         </div>
                       </div>
@@ -685,7 +761,7 @@ export const JobMarketView: React.FC = () => {
                 </div>
               )}
             </div>
-            {/* KONIEC WSTAWKI */}
+            {/* KONIEC DYNAMICZNEJ LISTY RYNKU */}
           </section>
 
           {/* COLUMN 4: FREE COACHES (USUNIĘTO WYSZUKIWARKĘ) */}

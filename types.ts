@@ -979,6 +979,19 @@ export interface TransferOfferSubmissionResult {
   offer?: TransferOffer;
 }
 
+export interface LoanOfferSubmissionInput {
+  loanFee: number;
+  wageCoveragePercent: number;
+  loanDuration: LoanOfferDuration;
+}
+
+export interface LoanOfferSubmissionResult {
+  ok: boolean;
+  status: 'ACCEPTED' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
+  message: string;
+  loan?: PlayerLoanInfo;
+}
+
 export interface PlayerLoanMonthlyReport {
   id: string;
   date: string;
