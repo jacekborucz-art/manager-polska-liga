@@ -373,6 +373,8 @@ interface GameNotificationState {
   title: string;
   message: string;
   tone: GameNotificationTone;
+  onAction?: () => void;
+  actionLabel?: string;
 }
 
 interface GameContextType {
@@ -553,7 +555,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   isResigned: boolean;
   resignFromClub: () => void;
   gameNotification: GameNotificationState | null;
-  showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone }) => void;
+  showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => void;
   clearGameNotification: () => void;
   respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
   requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
@@ -765,11 +767,13 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     ));
   }, [currentDate, clubs]);
 
-  const showGameNotification = useCallback((notification: { title: string; message: string; tone?: GameNotificationTone }) => {
+  const showGameNotification = useCallback((notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => {
     setGameNotification({
       title: notification.title,
       message: notification.message,
-      tone: notification.tone || 'info'
+      tone: notification.tone || 'info',
+      onAction: notification.onAction,
+      actionLabel: notification.actionLabel
     });
   }, []);
 
@@ -2332,6 +2336,38 @@ setMessages([welcomeMail, fanMail]);
       const userClub = clubs.find(c => c.id === userTeamId);
       
       if (!player || !userClub) return;
+
+      if (player.clubId !== 'FREE_AGENTS') {
+        const choseOtherMail: MailMessage = {
+          id: `MAIL_NEG_OTHER_${neg.id}`,
+          sender: `Agent gracza ${player.lastName}`,
+          role: 'Agencja Menadżerska',
+          subject: `Decyzja o kontrakcie: ${player.firstName} ${player.lastName}`,
+          body: `Szanowni Państwo,\n\nBardzo dziękuję za przedstawioną ofertę oraz zainteresowanie moją osobą. Doceniam czas poświęcony na rozmowy i możliwość poznania Państwa klubu.\n\nPo dokładnym rozważeniu wszystkich opcji zdecydowałem się jednak na kontynuowanie kariery w innym klubie. Decyzja nie była łatwa, dlatego chciałbym podkreślić, że z dużym szacunkiem podchodzę do Państwa propozycji.\n\nŻyczę klubowi wielu sukcesów w nadchodzącym sezonie i dziękuję za profesjonalne podejście.\n\nZ poważaniem,\n${player.firstName} ${player.lastName}`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 88,
+          metadata: {
+            type: 'CONTRACT_OFFER',
+            negotiationId: neg.id,
+            accepted: false,
+            salary: neg.salary,
+            years: neg.years,
+            bonus: neg.bonus,
+            goalBonus: neg.goalBonus,
+            assistBonus: neg.assistBonus,
+            cleanSheetBonus: neg.cleanSheetBonus,
+            responseDate: neg.responseDate,
+            status: NegotiationStatus.REJECTED,
+            isAiOffer: false,
+            playerId: player.id,
+            demands: null
+          }
+        };
+        setMessages(prev => [choseOtherMail, ...prev]);
+        return;
+      }
 
       const decision = FinanceService.evaluateContractLogic(
         player, neg.salary, neg.bonus, 
@@ -10372,30 +10408,26 @@ const finalResult: SimulationOutput = {
       currentDate
     );
 
+    const arrivalDate = new Date(currentDate);
+    arrivalDate.setDate(arrivalDate.getDate() + 1);
+    arrivalDate.setHours(0, 0, 0, 0);
+    const updatedBuyerSquad = (execution.updatedPlayers[buyerClub.id] || []).map(p =>
+      p.id === readyOffer.playerId
+        ? { ...p, transferReportDate: arrivalDate.toISOString() }
+        : p
+    );
+
     setClubs(execution.updatedClubs);
-    setPlayers(execution.updatedPlayers);
+    setPlayers({
+      ...execution.updatedPlayers,
+      [buyerClub.id]: updatedBuyerSquad
+    });
     setLineups(prev => {
       const next = { ...prev };
       const updatedSellerSquad = execution.updatedPlayers[sellerClub.id] || [];
 
       if (next[sellerClub.id]) {
         next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], updatedSellerSquad);
-      }
-
-      if (next[buyerClub.id]) {
-        const buyerLineup = next[buyerClub.id];
-        const allKnownIds = new Set([
-          ...buyerLineup.bench,
-          ...buyerLineup.reserves,
-          ...(buyerLineup.startingXI.filter(Boolean) as string[])
-        ]);
-
-        if (!allKnownIds.has(readyOffer.playerId)) {
-          next[buyerClub.id] = {
-            ...buyerLineup,
-            reserves: [...buyerLineup.reserves, readyOffer.playerId]
-          };
-        }
       }
 
       return next;
@@ -10559,6 +10591,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const newEndDate = new Date(currentDate.getFullYear() + years, 5, 30).toISOString();
     const transferLockoutDate = new Date(currentDate);
     transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
+    const faArrivalDate = new Date(currentDate);
+    faArrivalDate.setDate(faArrivalDate.getDate() + 1);
+    faArrivalDate.setHours(0, 0, 0, 0);
    // AKTUALIZACJA HISTORII - TUTAJ WSTAW TEN KOD
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
@@ -10584,7 +10619,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         userClub?.tier ?? 1,
         userClub?.country
       ),
-      history: updatedHistory // Podpinamy zaktualizowaną historię
+      history: updatedHistory, // Podpinamy zaktualizowaną historię
+      transferReportDate: faArrivalDate.toISOString()
     };
 
     // 3. Przenieś piłkarza: usuń z wolnych, dodaj do klubu
@@ -10600,8 +10636,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       prependUniqueMessages([directorFreeAgentDecision.mail], true);
     }
     return showGameNotification({
-      title: 'Transfer sfinalizowany',
-      message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} dolaczyl do kadry ${userClub?.name || ''}.`,
+      title: 'Kontrakt podpisany',
+      message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} dolaczy do klubu ${userClub?.name || ''} najpozniej jutro.`,
       tone: 'success'
     });
   }, [messages, players, userTeamId, currentDate, clubs, showGameNotification]);
@@ -10686,6 +10722,66 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     ));
     setMessages(prev => [...completionMessages, ...prev]);
   }, [currentDate, transferOffers, clubs, players, lineups]);
+
+  useEffect(() => {
+    if (!userTeamId) return;
+    const userSquad = players[userTeamId] || [];
+    const today = new Date(currentDate).setHours(0, 0, 0, 0);
+    const arriving = userSquad.filter(p =>
+      p.transferReportDate &&
+      !p.transferPendingClubId &&
+      new Date(p.transferReportDate).setHours(0, 0, 0, 0) <= today
+    );
+    if (arriving.length === 0) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(p =>
+        arriving.some(a => a.id === p.id)
+          ? { ...p, transferReportDate: undefined }
+          : p
+      )
+    }));
+    setLineups(prev => {
+      const next = { ...prev };
+      if (!next[userTeamId]) return next;
+      const lineup = next[userTeamId];
+      const allKnownIds = new Set([
+        ...lineup.bench,
+        ...lineup.reserves,
+        ...(lineup.startingXI.filter(Boolean) as string[])
+      ]);
+      const newReserves = [...lineup.reserves];
+      arriving.forEach(p => {
+        if (!allKnownIds.has(p.id)) {
+          newReserves.push(p.id);
+        }
+      });
+      next[userTeamId] = { ...lineup, reserves: newReserves };
+      return next;
+    });
+    const arrivalMails: MailMessage[] = arriving.map(p => ({
+      id: `MAIL_ARRIVAL_${p.id}`,
+      sender: 'Sekretariat klubu',
+      role: 'Administracja',
+      subject: `Zawodnik zameldowal sie: ${p.firstName} ${p.lastName}`,
+      body: `${p.firstName} ${p.lastName} zameldowal sie w klubie i jest gotowy do treningow. Znajdziesz go na liscie rezerwowych w widoku Skladu.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 90
+    }));
+    setMessages(prev => [...arrivalMails, ...prev]);
+    if (arriving.length > 0) {
+      showGameNotification({
+        title: 'Zawodnik zameldowal sie',
+        message: `${arriving[0].firstName} ${arriving[0].lastName} zameldowal sie w klubie i trafil na liste rezerwowych.`,
+        tone: 'success',
+        onAction: () => navigateTo(ViewState.SQUAD_VIEW),
+        actionLabel: 'Przejdz do skladu →'
+      });
+    }
+  }, [currentDate, userTeamId, players, lineups, showGameNotification, navigateTo]);
 
   useEffect(() => {
     if (targetJumpTime !== null && viewState !== ViewState.CUP_DRAW) {

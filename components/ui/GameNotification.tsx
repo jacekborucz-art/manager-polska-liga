@@ -59,6 +59,14 @@ export const GameNotification: React.FC = () => {
             <p className="mt-2 max-w-xl text-sm font-medium leading-relaxed text-slate-300 sm:text-[15px]">
               {gameNotification.message}
             </p>
+            {gameNotification.onAction && (
+              <button
+                onClick={() => { gameNotification.onAction!(); clearGameNotification(); }}
+                className="mt-3 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
+              >
+                {gameNotification.actionLabel ?? 'Przejdz do skladu →'}
+              </button>
+            )}
           </div>
 
           <button
