@@ -25,7 +25,7 @@ export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
+          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -54,6 +54,11 @@ export const SquadView: React.FC = () => {
   const [staffNegResultMsg, setStaffNegResultMsg] = useState('');
   const [staffNegResultOk, setStaffNegResultOk] = useState(false);
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE' | 'LOANS'>('SQUAD');
+  const [loanDetailsPlayerId, setLoanDetailsPlayerId] = useState<string | null>(null);
+  const loanDetailsPlayer = useMemo(
+    () => loanDetailsPlayerId ? allLeaguePlayers.find(player => player.id === loanDetailsPlayerId) ?? null : null,
+    [allLeaguePlayers, loanDetailsPlayerId]
+  );
 
   const REGION_LABELS: Record<string, string> = {
     POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
@@ -1376,6 +1381,7 @@ export const SquadView: React.FC = () => {
                         <th className="px-4 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Pensja</th>
                         <th className="px-5 py-3 text-right text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Opłata</th>
                         <th className="px-5 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Status</th>
+                        <th className="px-5 py-3 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Akcja</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1450,6 +1456,30 @@ export const SquadView: React.FC = () => {
                               }`}>
                                 {player.loan?.forcedByClub ? 'Wymuszone' : isReturningSoon ? 'Wraca wkrótce' : 'Aktywne'}
                               </span>
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setLoanDetailsPlayerId(player.id);
+                                  }}
+                                  className="rounded-md border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-cyan-200 transition-colors hover:bg-cyan-500/20 hover:text-cyan-100"
+                                >
+                                  Szczegóły
+                                </button>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (window.confirm(`Skrócić wypożyczenie zawodnika ${player.firstName} ${player.lastName}? Zawodnik wróci natychmiast do kadry.`)) {
+                                      terminateLoanEarly(player.id);
+                                    }
+                                  }}
+                                  className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-amber-200 transition-colors hover:bg-amber-500/20 hover:text-amber-100"
+                                >
+                                  Skróć
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2458,6 +2488,186 @@ export const SquadView: React.FC = () => {
           document.body
         );
       })()}
+
+      {/*
+        MODAL SZCZEGÓŁÓW WYPOŻYCZENIA
+        Ten panel jest celowo umieszczony w SquadView, bo zakładka WYPOŻYCZENIA jest miejscem,
+        w którym gracz zarządza wypożyczonymi zawodnikami. Wiersz tabeli daje szybki skrót,
+        ale modal pokazuje pełny kontekst jednej umowy: terminy, finanse, status oraz archiwum
+        miesięcznych raportów zapisanych w player.loan.monthlyReports.
+
+        Ważne założenie danych:
+        - raporty miesięczne są zapisywane w GameContext przy generowaniu maila sztabu,
+        - mail może zostać usunięty, ale historia w loan.monthlyReports zostaje,
+        - najnowszy raport jest zawsze pierwszy, więc poniżej nie sortujemy agresywnie danych,
+          tylko ufamy kolejności zapisu i pokazujemy ostatnie miesiące w naturalnej kolejności.
+      */}
+      {loanDetailsPlayer?.loan && createPortal(
+        (() => {
+          const player = loanDetailsPlayer;
+          const loan = player.loan!;
+          const destinationClub = clubs.find(club => club.id === loan.destinationClubId);
+          const destinationLogo = destinationClub ? getClubLogo(destinationClub.id) : null;
+          const daysLeft = getLoanDaysLeft(loan.endDate);
+          const reports = loan.monthlyReports ?? [];
+          const totalReportMinutes = reports.reduce((sum, report) => sum + report.minutes, 0);
+          const totalReportMatches = reports.reduce((sum, report) => sum + report.matches, 0);
+          const lastReport = reports[0] ?? null;
+          const ratedReports = reports.filter(report => report.averageRating !== null);
+          const detailAverageRating = ratedReports.length > 0
+            ? ratedReports.reduce((sum, report) => sum + (report.averageRating ?? 0), 0) / ratedReports.length
+            : null;
+
+          return (
+            <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/70 p-6">
+              <div className="absolute inset-0 bg-[url('https://i.ibb.co/JwgrBtvC/biuro2-1.png')] bg-cover bg-center opacity-10" />
+              <div className="relative w-full max-w-5xl max-h-[88vh] overflow-hidden rounded-[40px] border border-cyan-300/20 bg-slate-950/72 shadow-[0_45px_140px_rgba(0,0,0,0.85)] backdrop-blur-2xl">
+                <div className="border-b border-white/10 bg-white/[0.04] px-8 py-6 flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-5 min-w-0">
+                    {destinationLogo ? (
+                      <img src={destinationLogo} alt={loan.destinationClubName} className="h-16 w-16 object-contain shrink-0" />
+                    ) : (
+                      <div className="h-16 w-16 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-black italic uppercase tracking-tighter text-cyan-300 whitespace-nowrap">Szczegóły wypożyczenia</p>
+                      <h2 className="text-[32px] font-black italic uppercase tracking-tighter text-white truncate">
+                        {player.firstName} {player.lastName}
+                      </h2>
+                      <p className="text-[12px] font-black italic uppercase tracking-tighter text-slate-400 truncate">
+                        {loan.destinationClubName} / {player.position} / OVR {player.overallRating}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setLoanDetailsPlayerId(null)}
+                    className="h-11 w-11 rounded-2xl border border-white/15 bg-white/10 text-[16px] font-black italic uppercase tracking-tighter text-white transition-colors hover:bg-white/20"
+                  >
+                    X
+                  </button>
+                </div>
+
+                <div className="custom-scrollbar max-h-[calc(88vh-110px)] overflow-y-auto p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Od', value: formatLoanDate(loan.startDate), color: 'text-slate-100' },
+                      { label: 'Do', value: formatLoanDate(loan.endDate), color: 'text-slate-100' },
+                      { label: 'Dni', value: `${daysLeft ?? '-'}`, color: daysLeft !== null && daysLeft <= 30 ? 'text-amber-300' : 'text-cyan-300' },
+                      { label: 'Status', value: loan.forcedByClub ? 'Wymuszone' : 'Aktywne', color: loan.forcedByClub ? 'text-orange-300' : 'text-emerald-300' },
+                    ].map(item => (
+                      <div key={item.label} className="rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
+                        <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">{item.label}</p>
+                        <p className={`mt-1 text-[22px] font-black italic uppercase tracking-tighter ${item.color} whitespace-nowrap`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="rounded-[28px] border border-emerald-400/20 bg-emerald-500/10 p-5">
+                      <p className="mb-4 text-[12px] font-black italic uppercase tracking-tighter text-emerald-300 whitespace-nowrap">Warunki finansowe</p>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Pokrycie pensji</span>
+                          <span className="text-[16px] font-black italic uppercase tracking-tighter text-white whitespace-nowrap">{loan.wageCoveragePercent ?? 0}%</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Opłata</span>
+                          <span className="text-[16px] font-black italic uppercase tracking-tighter text-emerald-200 whitespace-nowrap">{(loan.loanFee ?? 0).toLocaleString('pl-PL')} PLN</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-cyan-400/20 bg-cyan-500/10 p-5">
+                      <p className="mb-4 text-[12px] font-black italic uppercase tracking-tighter text-cyan-300 whitespace-nowrap">Podsumowanie raportów</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">Raporty</p>
+                          <p className="text-[22px] font-black italic uppercase tracking-tighter text-white whitespace-nowrap">{reports.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">Mecze</p>
+                          <p className="text-[22px] font-black italic uppercase tracking-tighter text-white whitespace-nowrap">{totalReportMatches}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">Minuty</p>
+                          <p className="text-[22px] font-black italic uppercase tracking-tighter text-cyan-200 whitespace-nowrap">{totalReportMinutes}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {lastReport && (
+                    <div className="rounded-[28px] border border-amber-300/20 bg-amber-500/10 p-5">
+                      <p className="text-[12px] font-black italic uppercase tracking-tighter text-amber-300 whitespace-nowrap">Ostatni sygnał sztabu</p>
+                      <p className="mt-2 text-[16px] font-black italic uppercase tracking-tighter text-amber-100">
+                        {lastReport.monthLabel}: {lastReport.status}, {lastReport.minutes} min, rozwój: {lastReport.developmentNote}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="rounded-[30px] border border-white/10 bg-black/25 overflow-hidden">
+                    <div className="border-b border-white/10 px-5 py-4 flex items-center justify-between gap-4">
+                      <p className="text-[13px] font-black italic uppercase tracking-tighter text-white whitespace-nowrap">Historia miesięcznych raportów</p>
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">
+                        Śr. ocena: {detailAverageRating === null ? '-' : detailAverageRating.toFixed(2)}
+                      </p>
+                    </div>
+
+                    {reports.length === 0 ? (
+                      <div className="min-h-[170px] flex items-center justify-center px-6">
+                        <p className="text-[14px] font-black italic uppercase tracking-tighter text-slate-500 text-center">
+                          BRAK MIESIĘCZNYCH RAPORTÓW DLA TEGO WYPOŻYCZENIA.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-white/10">
+                        {reports.map(report => (
+                          <div key={report.id} className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_1.4fr] gap-4 px-5 py-4 items-center bg-white/[0.018]">
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-black italic uppercase tracking-tighter text-white truncate">{report.monthLabel}</p>
+                              <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap">{formatLoanDate(report.date)}</p>
+                            </div>
+                            <p className="text-[13px] font-black italic uppercase tracking-tighter text-slate-200 whitespace-nowrap">{report.matches} M</p>
+                            <p className={`text-[13px] font-black italic uppercase tracking-tighter whitespace-nowrap ${report.minutes < 90 ? 'text-orange-300' : 'text-cyan-300'}`}>{report.minutes} MIN</p>
+                            <p className="text-[13px] font-black italic uppercase tracking-tighter text-slate-200 whitespace-nowrap">{report.averageRating === null ? '-' : report.averageRating.toFixed(2)}</p>
+                            <div className="min-w-0">
+                              <p className={`text-[12px] font-black italic uppercase tracking-tighter truncate ${report.developmentChanged ? 'text-emerald-300' : 'text-slate-300'}`}>
+                                {report.developmentChanged ? `${report.previousOverall}→${report.nextOverall}` : 'OVR bez zmian'}
+                              </p>
+                              <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 truncate">{report.status} / {report.developmentNote}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => viewPlayerDetails(player.id)}
+                      className="rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-5 py-3 text-[12px] font-black italic uppercase tracking-tighter text-cyan-100 transition-colors hover:bg-cyan-500/20"
+                    >
+                      Karta zawodnika
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Skrócić wypożyczenie zawodnika ${player.firstName} ${player.lastName}? Zawodnik wróci natychmiast do kadry.`)) {
+                          terminateLoanEarly(player.id);
+                          setLoanDetailsPlayerId(null);
+                        }
+                      }}
+                      className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-5 py-3 text-[12px] font-black italic uppercase tracking-tighter text-amber-100 transition-colors hover:bg-amber-500/20"
+                    >
+                      Skróć wypożyczenie
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
+        document.body
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

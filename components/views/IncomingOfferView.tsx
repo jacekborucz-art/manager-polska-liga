@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { IncomingOfferStatus, TransferTiming, ViewState, Player } from '../../types';
+import { IncomingOfferStatus, LoanOfferDuration, TransferTiming, ViewState, Player } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { IncomingTransferService } from '../../services/IncomingTransferService';
 import { SportingDirectorService } from '../../services/SportingDirectorService';
@@ -63,6 +63,9 @@ export const IncomingOfferView: React.FC = () => {
   const [counterFee, setCounterFee] = useState<number>(() => offer?.fee ?? 0);
   const [counterStep, setCounterStep] = useState<number>(50_000);
   const [showCounter, setShowCounter] = useState(false);
+  const [loanCounterFee, setLoanCounterFee] = useState<number>(() => offer?.loanFee ?? offer?.fee ?? 0);
+  const [loanCounterCoverage, setLoanCounterCoverage] = useState<number>(() => offer?.wageCoveragePercent ?? 50);
+  const [loanCounterDuration, setLoanCounterDuration] = useState<LoanOfferDuration>(() => offer?.loanDuration ?? 'SEASON');
 
   if (!offer || !data) return null;
 
@@ -109,6 +112,16 @@ export const IncomingOfferView: React.FC = () => {
     setShowCounter(false);
   };
 
+  const handleSubmitLoanCounter = () => {
+    if (isLoanedPlayer || !isLoanOffer) return;
+    respondToIncomingOffer(offer.id, 'counter', loanCounterFee, {
+      loanFee: loanCounterFee,
+      wageCoveragePercent: loanCounterCoverage,
+      loanDuration: loanCounterDuration,
+    });
+    setShowCounter(false);
+  };
+
   const handleConfirm = () => {
     if (isLoanedPlayer) return;
     confirmIncomingTransfer(offer.id, true);
@@ -131,6 +144,14 @@ export const IncomingOfferView: React.FC = () => {
         fee: currentDisplayFee,
       })
     : [];
+  const loanCounterEndDate = IncomingTransferService.resolveLoanEndDate(currentDate, loanCounterDuration);
+  const loanCounterTotalCost = IncomingTransferService.calculateLoanTotalCost(
+    player,
+    loanCounterFee,
+    loanCounterCoverage,
+    offer.loanStartDate || currentDate,
+    loanCounterEndDate
+  );
 
   return (
     <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-6 relative overflow-hidden">
@@ -279,6 +300,13 @@ export const IncomingOfferView: React.FC = () => {
               </div>
             </div>
 
+            {isLoanOffer && offer.loanNegotiationNote && (
+              <div className="rounded-[24px] border border-cyan-400/30 bg-cyan-500/10 p-4 shadow-[0_20px_70px_rgba(6,182,212,0.10)]">
+                <p className="mb-2 text-[11px] font-black italic uppercase tracking-tighter text-cyan-300 whitespace-nowrap">Odpowiedź klubu</p>
+                <p className="text-[12px] font-black italic uppercase tracking-tighter leading-relaxed text-cyan-100">{offer.loanNegotiationNote}</p>
+              </div>
+            )}
+
             {sellerClub.sportingDirector && directorAdvisory.length > 0 && (
               <div className="rounded-[20px] border border-amber-500/30 bg-amber-500/10 p-4">
                 <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400 mb-2">Glos dyrektora sportowego</p>
@@ -333,7 +361,11 @@ export const IncomingOfferView: React.FC = () => {
             )}
             {offer.status === IncomingOfferStatus.REJECTED_AT_CONFIRM && (
               <div className="rounded-[20px] border border-slate-500/40 bg-slate-500/10 p-4 text-center">
-                <p className="text-xs text-slate-400">Transfer odrzucony na etapie zatwierdzenia.</p>
+                <p className="text-xs text-slate-400">
+                  {isLoanOffer && offer.loanNegotiationResult === 'AI_REJECTED_COUNTER'
+                    ? offer.loanNegotiationNote ?? 'Klub odrzucił kontrofertę wypożyczenia.'
+                    : 'Transfer odrzucony na etapie zatwierdzenia.'}
+                </p>
               </div>
             )}
 
@@ -395,6 +427,20 @@ export const IncomingOfferView: React.FC = () => {
                 >
                   {isLoanedPlayer ? 'Zawodnik wypożyczony' : isLoanOffer ? 'Akceptuj wypożyczenie' : 'Akceptuj ofertę'}
                 </button>
+                {isLoanOffer && offer.negotiationRound < 1 && (
+                  <button
+                    onClick={() => {
+                      setLoanCounterFee(currentDisplayFee);
+                      setLoanCounterCoverage(offer.wageCoveragePercent ?? 50);
+                      setLoanCounterDuration(offer.loanDuration ?? 'SEASON');
+                      setShowCounter(true);
+                    }}
+                    disabled={isLoanedPlayer}
+                    className="w-full whitespace-nowrap py-4 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-black italic uppercase tracking-tighter text-[13px] hover:bg-cyan-500/30 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    Negocjuj wypożyczenie
+                  </button>
+                )}
                 {!isLoanOffer && offer.negotiationRound < 3 && (
                   <button
                     onClick={() => {
@@ -416,8 +462,106 @@ export const IncomingOfferView: React.FC = () => {
               </div>
             )}
 
+            {/*
+              PANEL NEGOCJACJI WYPOŻYCZENIA
+              Ta sekcja jest osobna od klasycznej kontroferty transferowej, bo wypożyczenie ma trzy niezależne warunki:
+              1. opłatę za wypożyczenie, czyli jednorazową kwotę dla klubu macierzystego,
+              2. procent pokrycia pensji, który wpływa na realny koszt po stronie klubu AI,
+              3. długość wypożyczenia, która może obniżyć albo podnieść całkowite ryzyko finansowe.
+              Po wysłaniu kontroferty AI ocenia ją natychmiast w GameContext przez IncomingTransferService.evaluateLoanCounterOffer.
+              Wynik wraca do tej samej oferty jako finalne warunki do zaakceptowania albo jako odrzucenie negocjacji.
+            */}
+            {showCounter && isLoanOffer && (
+              <div className="relative overflow-hidden rounded-[30px] border border-cyan-400/30 bg-slate-950/55 p-5 shadow-[0_28px_90px_rgba(8,145,178,0.18)] backdrop-blur-xl space-y-5">
+                <div className="absolute inset-0 bg-[url('https://i.ibb.co/JwgrBtvC/biuro2-1.png')] bg-cover bg-center opacity-[0.07]" />
+                <div className="relative space-y-5">
+                  <div>
+                    <p className="text-[13px] font-black italic uppercase tracking-tighter text-cyan-200 whitespace-nowrap">Negocjacje wypożyczenia</p>
+                    <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">Zmień warunki i sprawdź natychmiastową reakcję klubu.</p>
+                  </div>
+
+                  <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Opłata</span>
+                      <span className="text-[18px] font-black italic uppercase tracking-tighter text-amber-300 whitespace-nowrap">{loanCounterFee.toLocaleString('pl-PL')} PLN</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[0, 10_000, 25_000, 50_000].map(step => (
+                        <button
+                          key={step}
+                          onClick={() => setLoanCounterFee(Math.max(0, (offer.loanFee ?? offer.fee ?? 0) + step))}
+                          className="whitespace-nowrap rounded-2xl bg-white/8 px-3 py-2 text-[10px] font-black italic uppercase tracking-tighter text-slate-200 transition-colors hover:bg-white/15"
+                        >
+                          {step === 0 ? 'Bazowa' : `+${(step / 1000).toFixed(0)}k`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Pokrycie pensji</span>
+                      <span className="text-[18px] font-black italic uppercase tracking-tighter text-emerald-300 whitespace-nowrap">{loanCounterCoverage}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={25}
+                      max={100}
+                      step={5}
+                      value={loanCounterCoverage}
+                      onChange={(e) => setLoanCounterCoverage(Number(e.target.value))}
+                      className="w-full accent-cyan-400"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { value: 'ROUND', label: 'Do końca rundy' },
+                      { value: 'SEASON', label: 'Do końca sezonu' },
+                    ] as Array<{ value: LoanOfferDuration; label: string }>).map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => setLoanCounterDuration(option.value)}
+                        className={`whitespace-nowrap rounded-2xl border px-3 py-3 text-[11px] font-black italic uppercase tracking-tighter transition-colors ${
+                          loanCounterDuration === option.value
+                            ? 'border-cyan-300/60 bg-cyan-400/20 text-cyan-100'
+                            : 'border-white/10 bg-white/8 text-slate-400 hover:bg-white/12'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-[22px] border border-amber-300/20 bg-amber-500/10 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-amber-200 whitespace-nowrap">Szacowany koszt AI</span>
+                      <span className="text-[17px] font-black italic uppercase tracking-tighter text-amber-300 whitespace-nowrap">{loanCounterTotalCost.toLocaleString('pl-PL')} PLN</span>
+                    </div>
+                    <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter text-amber-100/80">Koniec: {new Date(loanCounterEndDate).toLocaleDateString('pl-PL')}</p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleSubmitLoanCounter}
+                      disabled={isLoanedPlayer}
+                      className="flex-1 whitespace-nowrap rounded-2xl bg-cyan-500 px-5 py-3 text-[12px] font-black italic uppercase tracking-tighter text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      Wyślij kontrofertę
+                    </button>
+                    <button
+                      onClick={() => setShowCounter(false)}
+                      className="whitespace-nowrap rounded-2xl bg-white/10 px-5 py-3 text-[12px] font-black italic uppercase tracking-tighter text-slate-300 transition-colors hover:bg-white/15"
+                    >
+                      Wróć
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Panel podbijania ceny */}
-            {showCounter && (
+            {showCounter && !isLoanOffer && (
               <div className="rounded-[28px] border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
                 <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400">Twoja kontroferta</p>
 

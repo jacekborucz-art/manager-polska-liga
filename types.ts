@@ -410,6 +410,9 @@ export interface MailMessage {
   } | {
     type: 'LEAGUE_FINANCE_REPORT';
   } | {
+    type: 'LOAN_PLAYTIME_WARNING';
+    playerId: string;
+  } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
     requestType: 'MINUTES' | 'ROLE' | 'TRANSFER_LIST';
@@ -929,6 +932,8 @@ export interface IncomingTransferOffer {
   loanFee?: number;
   loanTotalCost?: number;
   loanPlayerCanBeForced?: boolean;
+  loanNegotiationNote?: string;
+  loanNegotiationResult?: 'AI_ACCEPTED_COUNTER' | 'AI_COUNTERED' | 'AI_REJECTED_COUNTER';
 }
 
 export type AiTransferLogStatus =
@@ -974,6 +979,23 @@ export interface TransferOfferSubmissionResult {
   offer?: TransferOffer;
 }
 
+export interface PlayerLoanMonthlyReport {
+  id: string;
+  date: string;
+  monthLabel: string;
+  matches: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  averageRating: number | null;
+  status: string;
+  daysLeft: number;
+  previousOverall: number;
+  nextOverall: number;
+  developmentNote: string;
+  developmentChanged: boolean;
+}
+
 export interface PlayerLoanInfo {
   parentClubId: string;
   parentClubName: string;
@@ -997,6 +1019,7 @@ export interface PlayerLoanInfo {
   lastReportGoals?: number;
   lastReportAssists?: number;
   lastReportRatingCount?: number;
+  monthlyReports?: PlayerLoanMonthlyReport[];
 }
 
 export interface Player {

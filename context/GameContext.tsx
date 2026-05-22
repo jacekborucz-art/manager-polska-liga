@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  ViewState, Club, League, Player, PlayerLoanInfo, Lineup, Fixture, FinanceLog,
+  ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
   SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity, IndividualTalkType,
@@ -110,6 +110,7 @@ import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
+import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
 import { SAVE_VERSION, SaveState } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
@@ -183,6 +184,14 @@ const sanitizeImportedLoan = (
     lastReportGoals: typeof loan.lastReportGoals === 'number' ? loan.lastReportGoals : undefined,
     lastReportAssists: typeof loan.lastReportAssists === 'number' ? loan.lastReportAssists : undefined,
     lastReportRatingCount: typeof loan.lastReportRatingCount === 'number' ? loan.lastReportRatingCount : undefined,
+    monthlyReports: Array.isArray(loan.monthlyReports)
+      ? loan.monthlyReports.filter(report =>
+          report &&
+          typeof report.id === 'string' &&
+          typeof report.date === 'string' &&
+          typeof report.monthLabel === 'string'
+        )
+      : undefined,
   };
 };
 
@@ -194,6 +203,154 @@ const generateRuntimeSeed = (): number => {
   }
 
   return Math.floor(Math.random() * 0x100000000) >>> 0;
+};
+
+const ACTIVE_TRANSFER_OFFER_STATUSES = new Set<TransferOfferStatus>([
+  TransferOfferStatus.SELLER_REVIEW,
+  TransferOfferStatus.SELLER_COUNTERED,
+  TransferOfferStatus.SELLER_ACCEPTED,
+  TransferOfferStatus.PLAYER_NEGOTIATION,
+  TransferOfferStatus.READY_TO_FINALIZE,
+  TransferOfferStatus.AGREED_PRECONTRACT,
+]);
+
+const isActiveTransferOffer = (offer: TransferOffer): boolean =>
+  ACTIVE_TRANSFER_OFFER_STATUSES.has(offer.status);
+
+const hasActiveTransferConflict = (playerId: string, transferOffers: TransferOffer[]): boolean =>
+  transferOffers.some(offer => offer.playerId === playerId && isActiveTransferOffer(offer));
+
+const hasActiveIncomingConflict = (
+  playerId: string,
+  incomingOffers: IncomingTransferOffer[],
+  kind?: 'TRANSFER' | 'LOAN'
+): boolean =>
+  incomingOffers.some(offer =>
+    offer.playerId === playerId &&
+    IncomingTransferService.isActiveIncomingOfferStatus(offer.status) &&
+    (!kind || (offer.kind ?? 'TRANSFER') === kind)
+  );
+
+const processAiMonthlyLoanListReview = (
+  clubs: Club[],
+  players: Record<string, Player[]>,
+  lineups: Record<string, Lineup>,
+  coaches: Record<string, Coach>,
+  currentDate: Date,
+  sessionSeed: number,
+  userTeamId: string | null,
+  incomingOffers: IncomingTransferOffer[],
+  transferOffers: TransferOffer[]
+): Record<string, Player[]> => {
+  const nextPlayers: Record<string, Player[]> = { ...players };
+  let changed = false;
+
+  clubs.forEach(club => {
+    if (club.id === userTeamId) return;
+
+    const squad = players[club.id] || [];
+    if (squad.length === 0) return;
+
+    const lineup = lineups[club.id];
+    const startingIds = new Set((lineup?.startingXI.filter(Boolean) as string[] | undefined) ?? []);
+    const benchIds = new Set(lineup?.bench ?? []);
+    const coachExperience = club.coachId ? coaches[club.coachId]?.attributes.experience ?? 50 : 50;
+    const maxLoanListed = squad.length >= 31 ? 3 : squad.length > 26 ? 2 : 0;
+
+    const positionRank = new Map<string, number>();
+    Object.values(PlayerPosition).forEach(position => {
+      squad
+        .filter(player => player.position === position)
+        .sort((a, b) => b.overallRating - a.overallRating)
+        .forEach((player, index) => positionRank.set(player.id, index + 1));
+    });
+
+    const selectedIds = new Set<string>();
+
+    if (maxLoanListed > 0) {
+      const candidates = squad
+        .map(player => {
+          const isStarter = startingIds.has(player.id);
+          const isBench = benchIds.has(player.id);
+          const rank = positionRank.get(player.id) ?? 99;
+          const activeTransferConflict =
+            !!player.transferPendingClubId ||
+            hasActiveTransferConflict(player.id, transferOffers) ||
+            hasActiveIncomingConflict(player.id, incomingOffers);
+
+          if (
+            player.loan ||
+            player.isOnTransferList ||
+            player.isUntouchable ||
+            activeTransferConflict ||
+            isStarter ||
+            isBench
+          ) {
+            return null;
+          }
+
+          const agePriority = player.age <= 21
+            ? 40
+            : player.age <= 23
+              ? 30
+              : player.age <= 25
+                ? 18
+                : Math.max(0, 12 - Math.max(0, player.age - 26));
+          const depthPriority = rank >= 6 ? 32 : rank === 5 ? 24 : rank === 4 ? 12 : 0;
+          const talentPriority = player.age <= 24 && player.attributes.talent >= player.overallRating + 6 ? 14 : 0;
+          const surplusPriority = Math.max(0, squad.length - 26) * 3;
+          const experienceNoise = Math.max(1, Math.round((70 - coachExperience) / 12) + 2);
+          const deterministicNoise = Math.floor(
+            IncomingTransferService.seededRandom(
+              IncomingTransferService.buildOfferSeed(currentDate, club.id, `${player.id}_AI_LOAN_LIST_${sessionSeed}`)
+            ) * experienceNoise
+          );
+          const score = agePriority + depthPriority + talentPriority + surplusPriority + deterministicNoise;
+
+          return {
+            player,
+            score,
+          };
+        })
+        .filter((candidate): candidate is { player: Player; score: number } => !!candidate)
+        .sort((a, b) => {
+          // MINDFLOW AI:
+          // Trener zaczyna od najmłodszych zawodników bez realnej roli meczowej,
+          // bo wypożyczenie ma przede wszystkim dawać minuty rozwojowe. Dopiero gdy
+          // takich graczy brakuje, sortowanie naturalnie idzie w górę wieku i wybiera
+          // starszych rezerwowych, którzy dalej są poza pierwszą jedenastką i ławką.
+          if (a.player.age !== b.player.age) return a.player.age - b.player.age;
+          if (b.score !== a.score) return b.score - a.score;
+          return a.player.overallRating - b.player.overallRating;
+        });
+
+      candidates
+        .filter(candidate => candidate.score >= (coachExperience >= 70 ? 38 : coachExperience >= 45 ? 34 : 30))
+        .slice(0, maxLoanListed)
+        .forEach(candidate => selectedIds.add(candidate.player.id));
+    }
+
+    const updatedSquad = squad.map(player => {
+      const shouldBeListed = selectedIds.has(player.id);
+      const shouldStayListedBecauseOfferExists =
+        player.isAvailableForLoan &&
+        hasActiveIncomingConflict(player.id, incomingOffers, 'LOAN');
+      const nextAvailableForLoan = shouldBeListed || shouldStayListedBecauseOfferExists;
+
+      if (player.isAvailableForLoan === nextAvailableForLoan) return player;
+
+      changed = true;
+      return {
+        ...player,
+        isAvailableForLoan: nextAvailableForLoan,
+        squadRole: nextAvailableForLoan ? null : player.squadRole,
+      };
+    });
+
+    nextPlayers[club.id] = updatedSquad;
+  });
+
+  return changed ? nextPlayers : players;
 };
 
 interface SimulationOutput {
@@ -345,6 +502,7 @@ interface GameContextType {
   importSquad: (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => void;
   toggleTransferList: (playerId: string, price?: number) => void;
   toggleLoanAvailability: (playerId: string) => void;
+  terminateLoanEarly: (playerId: string) => void;
   toggleUntouchable: (playerId: string) => void;
   setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
   pendingOpenTalk: boolean;
@@ -365,7 +523,16 @@ finalizeFreeAgentContract: (mailId: string) => void;
   finalizeTransferNegotiation: (offerId: string, contract: TransferContractInput, bypassBoardCheck?: boolean) => TransferOfferSubmissionResult;
   incomingOffers: IncomingTransferOffer[];
   viewedIncomingOfferId: string | null;
-  respondToIncomingOffer: (offerId: string, response: 'accept' | 'counter' | 'reject', counterFee?: number) => void;
+  respondToIncomingOffer: (
+    offerId: string,
+    response: 'accept' | 'counter' | 'reject',
+    counterFee?: number,
+    loanCounterTerms?: {
+      loanFee: number;
+      wageCoveragePercent: number;
+      loanDuration: LoanOfferDuration;
+    }
+  ) => void;
   confirmIncomingTransfer: (offerId: string, confirm: boolean) => void;
   navigateToIncomingOffer: (offerId: string) => void;
   transferNewsActiveTab: 'scouting' | 'released' | 'activity' | 'completed' | 'incoming';
@@ -5194,6 +5361,35 @@ setMessages([welcomeMail, fanMail]);
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu
     let postReviewPlayers = recoveredPlayers;
     let postReviewClubs = simulation.updatedClubs;
+
+    if (dateToProcess.getDate() === 1) {
+      // MIESIĘCZNA DECYZYJNOŚĆ KLUBÓW AI DLA LISTY WYPOŻYCZEŃ:
+      // Ten przegląd nie tworzy jeszcze żadnej oferty. On tylko ustawia albo zdejmuje
+      // flagę isAvailableForLoan u zawodników AI, czyli mówi rynkowi: "ten zawodnik
+      // może iść na wypożyczenie". Osobny generator ofert dalej decyduje, czy znajdzie
+      // się klub, który faktycznie potrzebuje takiego wzmocnienia i ma na nie pieniądze.
+      //
+      // Najważniejsze bezpieczniki:
+      // - klub AI analizuje kadrę tylko raz w miesiącu,
+      // - kadra musi mieć więcej niż 26 zawodników,
+      // - lista jest ograniczona do 2 zawodników, a przy bardzo szerokiej kadrze do 3,
+      // - zawodnik z listy transferowej, aktywną sprzedażą, prekontraktem albo aktywną
+      //   ofertą nie trafia na listę wypożyczeń,
+      // - jeśli przy zawodniku istnieje już aktywna oferta wypożyczenia, nie zdejmujemy
+      //   flagi w połowie rozmów, żeby nie psuć trwającego procesu.
+      postReviewPlayers = processAiMonthlyLoanListReview(
+        postReviewClubs,
+        postReviewPlayers,
+        lineups,
+        coaches,
+        dateToProcess,
+        sessionSeed,
+        userTeamId,
+        incomingOffers,
+        transferOffers
+      );
+    }
+
     // 20 lipca: przedsprzedaż karnetów sezonowych (przed Kolejką 1 — 24 lipca)
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 20) {
       const seasonYear = dateToProcess.getFullYear();
@@ -5430,7 +5626,16 @@ setMessages([welcomeMail, fanMail]);
               sender: 'Dział Kadr',
               role: 'Administracja sportowa',
               subject: `Koniec wypożyczenia: ${player.firstName} ${player.lastName}`,
-              body: `${player.firstName} ${player.lastName} zakończył wypożyczenie w klubie ${sourceClub?.name ?? currentClubId} i wrócił do ${parentClub.name}.`,
+              body: [
+                'Trenerze,',
+                '',
+                `Zawodnik: ${player.firstName} ${player.lastName}`,
+                `Poprzedni klub wypożyczenia: ${sourceClub?.name ?? currentClubId}`,
+                `Klub macierzysty: ${parentClub.name}`,
+                '',
+                'STATUS',
+                'Wypożyczenie dobiegło końca. Zawodnik wrócił do kadry klubu macierzystego i może zostać ponownie uwzględniony przy wyborze składu.',
+              ].join('\n'),
               date: new Date(dateToProcess),
               isRead: false,
               type: MailType.SYSTEM,
@@ -6950,6 +7155,21 @@ const finalResult: SimulationOutput = {
                 : 'rotacja';
           return { player, loan, matches, minutes, goals, assists, avgRating, daysLeft, status };
         });
+      const loanDevelopmentResults = new Map<string, LoanDevelopmentResult>();
+      reportRows.forEach(row => {
+        const destinationClub = clubs.find(club => club.id === row.loan.destinationClubId);
+        const destinationSquad = players[row.loan.destinationClubId] || [];
+        const result = LoanDevelopmentService.applyMonthlyDevelopment({
+          player: row.player,
+          destinationClub,
+          destinationSquad,
+          matches: row.matches,
+          minutes: row.minutes,
+          averageRating: row.avgRating,
+          reportDate: nextDay,
+        });
+        loanDevelopmentResults.set(row.player.id, result);
+      });
 
       if (reportRows.length > 0 && !sentMailIdsRef.current.has(reportKey)) {
         sentMailIdsRef.current.add(reportKey);
@@ -6959,24 +7179,95 @@ const finalResult: SimulationOutput = {
         const bodyLines = reportRows.map(row => {
           const ratingLabel = row.avgRating === null ? '-' : row.avgRating.toFixed(2);
           const returnNote = row.daysLeft <= 30 ? `, powrót za ${row.daysLeft} dni` : '';
-          return `- ${row.player.firstName} ${row.player.lastName} (${row.loan.destinationClubName}): ${row.matches} mecz., ${row.minutes} min, ${row.goals} goli, ${row.assists} asyst, śr. ocena ${ratingLabel}, status: ${row.status}${returnNote}.`;
+          const development = loanDevelopmentResults.get(row.player.id);
+          const developmentNote = development
+            ? `, rozwój: ${development.note}${development.changed && development.previousOverall !== development.nextOverall ? `, OVR ${development.previousOverall}→${development.nextOverall}` : ''}`
+            : '';
+          return [
+            `• ${row.player.firstName} ${row.player.lastName}`,
+            `  Klub: ${row.loan.destinationClubName}`,
+            `  Występy: ${row.matches} mecz. / ${row.minutes} min`,
+            `  Liczby: ${row.goals} goli / ${row.assists} asyst / śr. ocena ${ratingLabel}`,
+            `  Status: ${row.status}${returnNote}${developmentNote}.`,
+          ].join('\n');
         });
         const warningRows = reportRows.filter(row => row.matches === 0 || row.minutes < 90);
         const warningText = warningRows.length > 0
-          ? `\n\nDo obserwacji: ${warningRows.map(row => `${row.player.lastName} (${row.loan.destinationClubName})`).join(', ')}. Jeśli sytuacja z minutami się powtórzy, warto rozważyć skrócenie wypożyczenia w kolejnym etapie logiki.`
-          : '\n\nOgólnie wypożyczenia wyglądają stabilnie. Zawodnicy dostają minuty i sztab nie zgłasza pilnych zastrzeżeń.';
+          ? `\n\nDO OBSERWACJI\n${warningRows.map(row => `• ${row.player.firstName} ${row.player.lastName} - ${row.loan.destinationClubName}, ${row.minutes} min`).join('\n')}\n\nJeśli sytuacja z minutami się powtórzy, warto rozważyć skrócenie wypożyczenia.`
+          : '\n\nOCENA SZTABU\nOgólnie wypożyczenia wyglądają stabilnie. Zawodnicy dostają minuty i sztab nie zgłasza pilnych zastrzeżeń.';
+        const reportPeriodStart = new Date(nextDay.getFullYear(), nextDay.getMonth() - 1, 1);
+        const reportPeriodEnd = new Date(nextDay);
+        reportPeriodEnd.setHours(0, 0, 0, 0);
+        const playtimeWarningMails = warningRows.flatMap(row => {
+          const destinationClub = clubs.find(club => club.id === row.loan.destinationClubId);
+          const hadLeagueFixture = !!destinationClub && allFixtures.some(fixture => {
+            const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+            if (Number.isNaN(fixtureDate.getTime())) return false;
+            const involved = fixture.homeTeamId === row.loan.destinationClubId || fixture.awayTeamId === row.loan.destinationClubId;
+            return involved &&
+              fixture.leagueId === destinationClub.leagueId &&
+              fixtureDate >= reportPeriodStart &&
+              fixtureDate < reportPeriodEnd;
+          });
+          if (!hadLeagueFixture) return [];
+
+          const warningKey = `LOAN_PLAYTIME_WARNING_${row.player.id}_${dateStr}`;
+          if (sentMailIdsRef.current.has(warningKey)) return [];
+          sentMailIdsRef.current.add(warningKey);
+
+          const minutesText = row.matches === 0
+            ? 'nie zagrał ani jednego meczu'
+            : `zagrał tylko ${row.minutes} minut`;
+          return [{
+            id: warningKey,
+            sender: 'Sztab Szkoleniowy',
+            role: 'Kontrola wypożyczeń',
+            subject: `Problem z wypożyczeniem: ${row.player.firstName} ${row.player.lastName}`,
+            body: [
+              'Trenerze,',
+              '',
+              `Zawodnik: ${row.player.firstName} ${row.player.lastName}`,
+              `Klub wypożyczenia: ${row.loan.destinationClubName}`,
+              `Okres raportu: ostatni miesiąc`,
+              '',
+              'PROBLEM',
+              `${row.player.firstName} ${row.player.lastName} ${minutesText}. Klub rozgrywał w tym czasie mecze ligowe, więc brak minut może realnie hamować jego rozwój.`,
+              '',
+              'MOŻLIWE DECYZJE',
+              '• Skróć wypożyczenie - zawodnik wróci natychmiast do Twojego klubu.',
+              '• Ignoruj - dajesz klubowi kolejny miesiąc na zmianę sytuacji.',
+            ].join('\n'),
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 75,
+            metadata: { type: 'LOAN_PLAYTIME_WARNING' as const, playerId: row.player.id },
+          }];
+        });
         const reportMail: MailMessage = {
           id: reportKey,
           sender: 'Sztab Szkoleniowy',
           role: 'Raport wypożyczeń',
           subject: `Raport wypożyczeń — ${monthLabel}`,
-          body: `Trenerze,\n\nPoniżej miesięczny raport zawodników przebywających na wypożyczeniach. Liczymy tylko okres od poprzedniego raportu, żeby było widać realną aktywność zawodnika.\n\n${bodyLines.join('\n')}${warningText}\n\nSztab ${clubs.find(c => c.id === userTeamId)?.name ?? ''}`,
+          body: [
+            'Trenerze,',
+            '',
+            `Raport wypożyczeń za: ${monthLabel}`,
+            '',
+            'Liczymy tylko okres od poprzedniego raportu, żeby było widać realną aktywność zawodnika.',
+            '',
+            'ZAWODNICY',
+            bodyLines.join('\n\n'),
+            warningText,
+            '',
+            `Sztab ${clubs.find(c => c.id === userTeamId)?.name ?? ''}`,
+          ].join('\n'),
           date: new Date(nextDay),
           isRead: false,
           type: MailType.STAFF,
           priority: warningRows.length > 0 ? 65 : 35,
         };
-        setMessages(prev => [reportMail, ...prev]);
+        setMessages(prev => [...playtimeWarningMails, reportMail, ...prev]);
       }
 
       if (reportRows.length > 0) {
@@ -6987,17 +7278,48 @@ const finalResult: SimulationOutput = {
           Object.entries(prev).forEach(([clubId, squad]) => {
             nextPlayers[clubId] = squad.map(player => {
               if (!reportPlayerIds.has(player.id) || !player.loan) return player;
+              const developedPlayer = loanDevelopmentResults.get(player.id)?.player ?? player;
+              const development = loanDevelopmentResults.get(player.id);
+              const reportRow = reportRows.find(row => row.player.id === player.id);
+              // HISTORIA RAPORTÓW WYPOŻYCZENIA:
+              // Każdy miesięczny raport zapisujemy bezpośrednio w player.loan.monthlyReports,
+              // bo mail może zostać usunięty przez gracza, a ekran szczegółów wypożyczenia
+              // powinien nadal pokazywać archiwum minut, ocen i wpływu na rozwój zawodnika.
+              // Najnowszy raport trzymamy na początku tablicy i ograniczamy archiwum do 24 wpisów,
+              // żeby zapis gry nie rósł bez końca przy długich karierach.
+              const nextMonthlyReports = reportRow
+                ? [
+                    {
+                      id: `LOAN_REPORT_${player.id}_${dateStr}`,
+                      date: dateStr,
+                      monthLabel: new Date(nextDay.getFullYear(), nextDay.getMonth() - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' }),
+                      matches: reportRow.matches,
+                      minutes: reportRow.minutes,
+                      goals: reportRow.goals,
+                      assists: reportRow.assists,
+                      averageRating: reportRow.avgRating,
+                      status: reportRow.status,
+                      daysLeft: reportRow.daysLeft,
+                      previousOverall: development?.previousOverall ?? player.overallRating,
+                      nextOverall: development?.nextOverall ?? developedPlayer.overallRating,
+                      developmentNote: development?.note ?? 'bez zmian rozwojowych',
+                      developmentChanged: !!development?.changed,
+                    },
+                    ...(developedPlayer.loan?.monthlyReports ?? player.loan.monthlyReports ?? []),
+                  ].slice(0, 24)
+                : (developedPlayer.loan?.monthlyReports ?? player.loan.monthlyReports);
               changed = true;
               return {
-                ...player,
+                ...developedPlayer,
                 loan: {
-                  ...player.loan,
+                  ...developedPlayer.loan!,
                   lastReportDate: dateStr,
-                  lastReportMatches: player.stats.matchesPlayed ?? 0,
-                  lastReportMinutes: player.stats.minutesPlayed ?? 0,
-                  lastReportGoals: player.stats.goals ?? 0,
-                  lastReportAssists: player.stats.assists ?? 0,
-                  lastReportRatingCount: player.stats.ratingHistory?.length ?? 0,
+                  lastReportMatches: developedPlayer.stats.matchesPlayed ?? 0,
+                  lastReportMinutes: developedPlayer.stats.minutesPlayed ?? 0,
+                  lastReportGoals: developedPlayer.stats.goals ?? 0,
+                  lastReportAssists: developedPlayer.stats.assists ?? 0,
+                  lastReportRatingCount: developedPlayer.stats.ratingHistory?.length ?? 0,
+                  monthlyReports: nextMonthlyReports,
                 },
               };
             });
@@ -7019,10 +7341,10 @@ const finalResult: SimulationOutput = {
         isRead: false,
         type: MailType.SYSTEM,
         priority: 30,
-        metadata: { type: 'LEAGUE_FINANCE_REPORT' as const },
-      };
-      setMessages(prev => [reportMail, ...prev]);
-    }
+          metadata: { type: 'LEAGUE_FINANCE_REPORT' as const },
+        };
+        setMessages(prev => [reportMail, ...prev]);
+      }
 
     // ── ROZBUDOWA STADIONU: codzienna aktualizacja faz ───────────────────────
     if (userTeamId && !isResigned) {
@@ -8639,6 +8961,104 @@ const finalResult: SimulationOutput = {
     });
   };
 
+  const terminateLoanEarly = (playerId: string) => {
+    if (!userTeamId) return;
+
+    let loanedPlayer: Player | undefined;
+    let currentClubId: string | undefined;
+    Object.entries(players).some(([clubId, squad]) => {
+      const found = squad.find(player => player.id === playerId);
+      if (found) {
+        loanedPlayer = found;
+        currentClubId = clubId;
+        return true;
+      }
+      return false;
+    });
+
+    if (!loanedPlayer?.loan || loanedPlayer.loan.parentClubId !== userTeamId || !currentClubId) {
+      showGameNotification({
+        title: 'Nie można skrócić wypożyczenia',
+        message: 'Nie znaleziono aktywnego wypożyczenia tego zawodnika do Twojego klubu.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const parentClub = clubs.find(club => club.id === loanedPlayer!.loan?.parentClubId);
+    const sourceClub = clubs.find(club => club.id === currentClubId);
+    if (!parentClub) return;
+
+    const returnDate = new Date(currentDate);
+    const returnedPlayer: Player = {
+      ...loanedPlayer,
+      clubId: parentClub.id,
+      history: PlayerCareerService.closeLoanEntry(
+        loanedPlayer.history || [],
+        loanedPlayer,
+        returnDate.getFullYear(),
+        returnDate.getMonth() + 1
+      ),
+      loan: null,
+      isAvailableForLoan: false,
+    };
+
+    setPlayers(prev => {
+      const currentSquad = (prev[currentClubId!] || []).filter(player => player.id !== playerId);
+      const parentSquad = [
+        ...(prev[parentClub.id] || []).filter(player => player.id !== playerId),
+        returnedPlayer,
+      ];
+      return {
+        ...prev,
+        [currentClubId!]: currentSquad,
+        [parentClub.id]: parentSquad,
+      };
+    });
+
+    setClubs(prev => prev.map(club => {
+      if (club.id === currentClubId) {
+        return {
+          ...club,
+          rosterIds: club.rosterIds.filter(id => id !== playerId),
+        };
+      }
+      if (club.id === parentClub.id) {
+        return {
+          ...club,
+          rosterIds: [...club.rosterIds.filter(id => id !== playerId), playerId],
+        };
+      }
+      return club;
+    }));
+
+    setLineups(prev => {
+      const next = { ...prev };
+      const sourceSquad = (players[currentClubId!] || []).filter(player => player.id !== playerId);
+      const parentSquad = [
+        ...(players[parentClub.id] || []).filter(player => player.id !== playerId),
+        returnedPlayer,
+      ];
+
+      if (next[currentClubId!]) {
+        next[currentClubId!] = LineupService.repairLineup(next[currentClubId!], sourceSquad);
+      }
+      if (next[parentClub.id]) {
+        next[parentClub.id] = LineupService.repairLineup(next[parentClub.id], parentSquad);
+      } else {
+        const coach = parentClub.coachId ? coaches[parentClub.coachId] ?? null : null;
+        next[parentClub.id] = LineupService.autoPickLineup(parentClub.id, parentSquad, '4-4-2', coach);
+      }
+      return next;
+    });
+
+    showGameNotification({
+      title: 'Wypożyczenie skrócone',
+      message: `${loanedPlayer.firstName} ${loanedPlayer.lastName} wrócił z ${sourceClub?.name ?? loanedPlayer.loan.destinationClubName} do ${parentClub.name}.`,
+      tone: 'success',
+    });
+  };
+
   const toggleUntouchable = (playerId: string) => {
     if (!userTeamId) return;
     const squad = players[userTeamId] || [];
@@ -8671,6 +9091,25 @@ const finalResult: SimulationOutput = {
   const navigateToIncomingOffer = (offerId: string): void => {
     setViewedIncomingOfferId(offerId);
     navigateWithoutHistory(ViewState.INCOMING_OFFER);
+  };
+
+  const getForcedLoanMoralePenalty = (player: Player, buyerClub: Club, sellerClub: Club): number => {
+    const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+    const personality = moralePlayer.moralePersonality ?? 'CALM';
+    let penalty = -12;
+
+    if (personality === 'PROFESSIONAL') penalty = -8;
+    if (personality === 'CALM') penalty = -10;
+    if (personality === 'LOYAL') penalty = -15;
+    if (personality === 'CONFIDENT') penalty = -14;
+    if (personality === 'AMBITIOUS') penalty = -17;
+    if (personality === 'EGOIST') penalty = -19;
+
+    const reputationGap = (buyerClub.reputation ?? 1) - (sellerClub.reputation ?? 1);
+    if (reputationGap >= 1) penalty += 3;
+    if (reputationGap <= -1) penalty -= 4;
+
+    return Math.max(-24, Math.min(-5, penalty));
   };
 
   const completeIncomingLoanOffer = (
@@ -8708,11 +9147,22 @@ const finalResult: SimulationOutput = {
       lastReportAssists: player.stats.assists ?? 0,
       lastReportRatingCount: baselineRatingCount,
     };
+    const forcedLoanMoralePenalty = forced
+      ? getForcedLoanMoralePenalty(player, buyerClub, sellerClub)
+      : 0;
+    const loanSourcePlayer = forced
+      ? PlayerMoraleService.withMoraleChange(
+          player,
+          forcedLoanMoralePenalty,
+          `Wymuszone wypożyczenie do ${buyerClub.name}`,
+          new Date(currentDate)
+        )
+      : player;
     const loanStart = new Date(loanInfo.startDate);
     const loanStartYear = Number.isNaN(loanStart.getTime()) ? new Date(currentDate).getFullYear() : loanStart.getFullYear();
     const loanStartMonth = Number.isNaN(loanStart.getTime()) ? new Date(currentDate).getMonth() + 1 : loanStart.getMonth() + 1;
-    const baseHistory = player.history && player.history.length > 0
-      ? player.history
+    const baseHistory = loanSourcePlayer.history && loanSourcePlayer.history.length > 0
+      ? loanSourcePlayer.history
       : [{
           clubName: sellerClub.name,
           clubId: sellerClub.id,
@@ -8722,7 +9172,7 @@ const finalResult: SimulationOutput = {
           toMonth: null,
         }];
     const loanedPlayer: Player = {
-      ...player,
+      ...loanSourcePlayer,
       clubId: buyerClub.id,
       loan: loanInfo,
       history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
@@ -8804,9 +9254,22 @@ const finalResult: SimulationOutput = {
       return o;
     }));
 
+    setTransferOffers(prev => prev.map(transferOffer => {
+      // KONFLIKT INTERESÓW: wypożyczenie wygrywa w momencie finalizacji.
+      // Jeżeli ten sam zawodnik miał równolegle aktywną ścieżkę sprzedaży,
+      // zamykamy ją od razu, żeby nie dało się sprzedać zawodnika, który właśnie
+      // fizycznie przeszedł do innego klubu na wypożyczenie.
+      if (transferOffer.playerId !== offer.playerId || !isActiveTransferOffer(transferOffer)) return transferOffer;
+      return {
+        ...transferOffer,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        sellerReason: 'Rozmowy zamknięte automatycznie, ponieważ zawodnik został wypożyczony do innego klubu.',
+      };
+    }));
+
     showGameNotification({
       title: forced ? 'Zawodnik wysłany na wypożyczenie' : 'Wypożyczenie zaakceptowane',
-      message: `${player.firstName} ${player.lastName} przechodzi do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.`,
+      message: `${player.firstName} ${player.lastName} przechodzi do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.${forced ? ` Morale zawodnika spada o ${Math.abs(forcedLoanMoralePenalty)}.` : ''}`,
       tone: 'success',
     });
     navigateWithoutHistory(ViewState.DASHBOARD);
@@ -8815,7 +9278,12 @@ const finalResult: SimulationOutput = {
   const respondToIncomingOffer = (
     offerId: string,
     response: 'accept' | 'counter' | 'reject',
-    counterFee?: number
+    counterFee?: number,
+    loanCounterTerms?: {
+      loanFee: number;
+      wageCoveragePercent: number;
+      loanDuration: LoanOfferDuration;
+    }
   ): void => {
     if (!userTeamId) return;
 
@@ -8838,10 +9306,56 @@ const finalResult: SimulationOutput = {
       }
 
       if (response === 'counter') {
+        if (!loanCounterTerms) return;
+        const counterResult = IncomingTransferService.evaluateLoanCounterOffer(
+          loanPlayer,
+          buyerClub,
+          selectedOffer,
+          currentDate,
+          loanCounterTerms
+        );
+        if (counterResult.result === 'REJECT') {
+          setIncomingOffers(prev => prev.map(o =>
+            o.id === offerId
+              ? {
+                  ...o,
+                  status: IncomingOfferStatus.REJECTED_AT_CONFIRM,
+                  loanNegotiationResult: 'AI_REJECTED_COUNTER',
+                  loanNegotiationNote: counterResult.note,
+                }
+              : o
+          ));
+          showGameNotification({
+            title: 'Kontroferta odrzucona',
+            message: counterResult.note,
+            tone: 'warning',
+          });
+          return;
+        }
+
+        const acceptedCounter = counterResult.result === 'ACCEPT';
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId
+            ? {
+                ...o,
+                fee: counterResult.loanFee,
+                loanFee: counterResult.loanFee,
+                loanDuration: counterResult.loanDuration,
+                loanStartDate: counterResult.loanStartDate,
+                loanEndDate: counterResult.loanEndDate,
+                wageCoveragePercent: counterResult.wageCoveragePercent,
+                loanTotalCost: counterResult.loanTotalCost,
+                status: IncomingOfferStatus.AI_COUNTERED,
+                negotiationRound: o.negotiationRound + 1,
+                loanNegotiationResult: acceptedCounter ? 'AI_ACCEPTED_COUNTER' : 'AI_COUNTERED',
+                loanNegotiationNote: counterResult.note,
+              }
+            : o
+        ));
         showGameNotification({
-          title: 'Brak negocjacji',
-          message: 'Oferty wypożyczenia są rozpatrywane w jednym oknie decyzyjnym.',
-          tone: 'warning',
+          title: acceptedCounter ? 'Kontroferta zaakceptowana' : 'Klub proponuje kompromis',
+          message: counterResult.note,
+          tone: acceptedCounter ? 'success' : 'info',
         });
         return;
       }
@@ -8853,6 +9367,27 @@ const finalResult: SimulationOutput = {
         showGameNotification({
           title: 'Oferta odrzucona',
           message: `${loanPlayer.firstName} ${loanPlayer.lastName} jest już wypożyczony.`,
+          tone: 'warning',
+        });
+        return;
+      }
+
+      const hasSaleConflict =
+        !!loanPlayer.transferPendingClubId ||
+        hasActiveTransferConflict(loanPlayer.id, transferOffers) ||
+        incomingOffers.some(o =>
+          o.id !== offerId &&
+          o.playerId === loanPlayer!.id &&
+          (o.kind ?? 'TRANSFER') === 'TRANSFER' &&
+          IncomingTransferService.isActiveIncomingOfferStatus(o.status)
+        );
+      if (hasSaleConflict) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        showGameNotification({
+          title: 'Wypożyczenie zablokowane',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} ma aktywną ścieżkę sprzedaży. Najpierw zamknij transfer albo odrzuć ofertę kupna.`,
           tone: 'warning',
         });
         return;
@@ -8978,6 +9513,21 @@ const finalResult: SimulationOutput = {
           playerNegotiationStartedAt: dateStr,
           playerNegotiationResolvesAt: resolveDate,
         };
+
+        for (let i = 0; i < updated.length; i += 1) {
+          // KONFLIKT INTERESÓW: sprzedaż wchodzi w aktywną fazę negocjacji
+          // z zawodnikiem, więc wszystkie równoległe oferty wypożyczenia dla
+          // tego samego piłkarza zamykamy jako wygasłe. Dzięki temu gracz nie
+          // dostanie dwóch sprzecznych ścieżek decyzyjnych naraz.
+          if (
+            i !== idx &&
+            updated[i].playerId === offer.playerId &&
+            updated[i].kind === 'LOAN' &&
+            IncomingTransferService.isActiveIncomingOfferStatus(updated[i].status)
+          ) {
+            updated[i] = { ...updated[i], status: IncomingOfferStatus.EXPIRED };
+          }
+        }
       }
 
       return updated;
@@ -9007,6 +9557,26 @@ const finalResult: SimulationOutput = {
       const sellerClub = clubs.find(c => c.id === userTeamId);
       if (!loanPlayer || !buyerClub || !sellerClub) return;
       if (offer.status !== IncomingOfferStatus.PLAYER_REFUSED && offer.status !== IncomingOfferStatus.AWAITING_CONFIRMATION) return;
+      const hasSaleConflict =
+        !!loanPlayer.transferPendingClubId ||
+        hasActiveTransferConflict(loanPlayer.id, transferOffers) ||
+        incomingOffers.some(o =>
+          o.id !== offerId &&
+          o.playerId === loanPlayer!.id &&
+          (o.kind ?? 'TRANSFER') === 'TRANSFER' &&
+          IncomingTransferService.isActiveIncomingOfferStatus(o.status)
+        );
+      if (hasSaleConflict) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        showGameNotification({
+          title: 'Wypożyczenie zablokowane',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} ma aktywną ścieżkę sprzedaży. Wypożyczenie zostało zamknięte, żeby uniknąć konfliktu ofert.`,
+          tone: 'warning',
+        });
+        return;
+      }
       completeIncomingLoanOffer(offer, loanPlayer, buyerClub, sellerClub, true);
       return;
     }
@@ -9329,6 +9899,14 @@ const finalResult: SimulationOutput = {
       };
 
       setTransferOffers(prev => [preContractOffer, ...prev].slice(0, 100));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClubId]: (prev[sellerClubId] || []).map(player =>
+          player.id === targetPlayer.id
+            ? { ...player, isAvailableForLoan: false }
+            : player
+        )
+      }));
       setMessages(prev => [{
         id: `MAIL_TRANSFER_PRECONTRACT_${preContractOffer.id}`,
         sender: 'Dzial prawny',
@@ -9535,6 +10113,14 @@ const finalResult: SimulationOutput = {
     };
 
     setTransferOffers(prev => [acceptedOffer, ...prev].slice(0, 100));
+    setPlayers(prev => ({
+      ...prev,
+      [sellerClubId]: (prev[sellerClubId] || []).map(player =>
+        player.id === targetPlayer.id
+          ? { ...player, isAvailableForLoan: false }
+          : player
+      )
+    }));
     setMessages(prev => [{
       id: `MAIL_TRANSFER_ACCEPT_${acceptedOffer.id}`,
       sender: sellerClub.name,
@@ -10314,7 +10900,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,

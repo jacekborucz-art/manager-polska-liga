@@ -11,6 +11,8 @@ interface MailDetailsModalProps {
 export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClose }) => {
   const {
     finalizeFreeAgentContract,
+    terminateLoanEarly,
+    deleteMessage,
     navigateWithoutHistory,
     setTransferNewsActiveTab,
     currentDate,
@@ -262,6 +264,30 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                     {league.name}
                   </button>
                 ))}
+              </>
+            )}
+
+            {mail.metadata?.type === 'LOAN_PLAYTIME_WARNING' && (
+              <>
+                <button
+                  onClick={() => {
+                    terminateLoanEarly(mail.metadata!.playerId);
+                    deleteMessage(mail.id);
+                    onClose();
+                  }}
+                  className="mr-4 rounded-2xl bg-amber-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Skróć wypożyczenie
+                </button>
+                <button
+                  onClick={() => {
+                    deleteMessage(mail.id);
+                    onClose();
+                  }}
+                  className="mr-4 rounded-2xl bg-slate-700 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-slate-200 shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Ignoruj
+                </button>
               </>
             )}
 
