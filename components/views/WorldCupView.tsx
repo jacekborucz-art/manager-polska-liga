@@ -195,6 +195,57 @@ function WCMatchRow({ home, away, homeGoals, awayGoals, goals, cards, metaLabel,
   );
 }
 
+function WCGroupMatchResultRow({ home, away, homeGoals, awayGoals }: Pick<WCMatchRowProps, 'home' | 'away' | 'homeGoals' | 'awayGoals'>) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 border-b border-white/[0.06] px-1 py-2 last:border-b-0">
+      <div className="min-w-0 flex items-center gap-2">
+        <SmallFlag name={home} />
+        <span className="text-xs font-bold leading-tight text-white/85">{home}</span>
+      </div>
+
+      <div className="px-2 py-1 text-center text-sm font-black tabular-nums text-white">
+        {homeGoals} : {awayGoals}
+      </div>
+
+      <div className="min-w-0 flex items-center justify-end gap-2 text-right">
+        <span className="text-xs font-bold leading-tight text-white/85">{away}</span>
+        <SmallFlag name={away} />
+      </div>
+    </div>
+  );
+}
+
+function WCGroupResults({ group }: { group: WCGroup }) {
+  const matchesByDate = group.matches.reduce<Record<string, WCGroup['matches']>>((acc, match) => {
+    if (!acc[match.date]) acc[match.date] = [];
+    acc[match.date].push(match);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(matchesByDate).map(([date, matches]) => (
+        <div key={date}>
+          <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-amber-300/90">
+            {date}
+          </div>
+          <div className="space-y-1.5">
+            {matches.map((m, idx) => (
+              <WCGroupMatchResultRow
+                key={`${date}-${idx}`}
+                home={m.home}
+                away={m.away}
+                homeGoals={m.homeGoals}
+                awayGoals={m.awayGoals}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface WCKOMatchRowProps {
   m: WCKnockoutMatch;
   wcState: WCState;
@@ -359,12 +410,12 @@ function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState:
         </thead>
         <tbody>
           {standings.map((s, i) => (
-            <tr key={s.name} className={`border-t border-white/[0.04] ${i < 2 ? '' : 'opacity-60'}`}>
+            <tr key={s.name} className={`border-t border-white/[0.04] ${i < 2 ? 'bg-amber-400/15 shadow-[inset_3px_0_0_rgba(251,191,36,0.85)]' : 'opacity-60'}`}>
               <td className="py-0.5 pl-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <span className={`text-[10px] w-3 text-center font-bold ${i === 0 ? 'text-amber-400' : i === 1 ? 'text-slate-300' : 'text-white/30'}`}>{i + 1}</span>
                   <SmallFlag name={s.name} />
-                  <span className="truncate max-w-[90px]">{s.name}</span>
+                  <span className="min-w-0 text-[11px] leading-tight">{s.name}</span>
                 </div>
               </td>
               <td className="text-center">{s.M}</td>
@@ -382,6 +433,8 @@ function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState:
         <div className="mt-1">
           <div className="h-px bg-white/10 mb-3" />
           <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Wyniki</p>
+          <WCGroupResults group={group} />
+          {false && (
           <div>
             {group.matches.map((m, idx) => (
               <WCMatchRow
@@ -398,6 +451,7 @@ function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState:
               />
             ))}
           </div>
+          )}
         </div>
       )}
     </div>
@@ -646,7 +700,7 @@ const WorldCupView: React.FC = () => {
           <div className="flex items-center gap-3">
             {canSkip && (
               <button
-                className={`${BTN_FONT} text-xs px-5 py-2.5 rounded-2xl transition-all ${
+                className={`hidden ${BTN_FONT} text-xs px-5 py-2.5 rounded-2xl transition-all ${
                   skipConfirm
                     ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
                     : 'bg-white/10 text-amber-300 border border-amber-400/30 hover:bg-white/20'
