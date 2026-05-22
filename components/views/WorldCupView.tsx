@@ -20,17 +20,19 @@ const FLAG_CODE_MAP: Record<string, string> = {
   Norwegia: 'NO', Polska: 'PL', Portugalia: 'PT', Rosja: 'RU', Rumunia: 'RO',
   'San Marino': 'SM', Serbia: 'RS', Słowacja: 'SK', Słowenia: 'SI', Szwajcaria: 'CH',
   Szwecja: 'SE', Turcja: 'TR', Ukraina: 'UA', Węgry: 'HU', Włochy: 'IT', 'Wyspy Owcze': 'FO',
+  Szkocja: 'gb-sct', Anglia: 'gb-eng', 'Irlandia Północna': 'gb-nir',
   Algieria: 'DZ', Angola: 'AO', 'Burkina Faso': 'BF', Kamerun: 'CM', 'Côte d\'Ivoire': 'CI',
   Egipt: 'EG', Ghana: 'GH', Gwinea: 'GN', Maroko: 'MA', Mali: 'ML', Nigeria: 'NG',
   Senegal: 'SN', 'RPA': 'ZA', Tanzania: 'TZ', Tunezja: 'TN', Uganda: 'UG', Zambia: 'ZM',
+  'Wybrzeże Kości Słoniowej': 'CI', Gabon: 'GA', 'Demokratyczna Republika Konga': 'CD', 'Demokratyczna Republika Kongo': 'CD', Sudan: 'SD',
   Argentyna: 'AR', Boliwia: 'BO', Brazylia: 'BR', Chile: 'CL', Ekwador: 'EC',
   Kolumbia: 'CO', Peru: 'PE', Paragwaj: 'PY', Urugwaj: 'UY', Wenezuela: 'VE',
   Meksyk: 'MX', Kanada: 'CA', 'Stany Zjednoczone': 'US', Kostaryka: 'CR', Honduras: 'HN',
-  Jamajka: 'JM', Panama: 'PA', 'Trynidad i Tobago': 'TT', Kuba: 'CU',
+  Jamajka: 'JM', Panama: 'PA', 'Trynidad i Tobago': 'TT', Kuba: 'CU', Nikaragua: 'NI',
   Australia: 'AU', Chiny: 'CN', Indie: 'IN', Indonezja: 'ID', Iran: 'IR',
-  Irak: 'IQ', Japonia: 'JP', 'Korea Południowa': 'KR', 'Arabia Saudyjska': 'SA',
-  'Zjednoczone Emiraty Arabskie': 'AE', Uzbekistan: 'UZ', 'Wietnam': 'VN', Katar: 'QA',
-  'Nowa Zelandia': 'NZ', Fiji: 'FJ', Salwador: 'SV',
+  Irak: 'IQ', Japonia: 'JP', 'Korea Południowa': 'KR', 'Korea PŁD': 'KR', 'Arabia Saudyjska': 'SA',
+  'Zjednoczone Emiraty Arabskie': 'AE', Uzbekistan: 'UZ', 'Wietnam': 'VN', Katar: 'QA', Tajlandia: 'TH', Kuwejt: 'KW', Tadżykistan: 'TJ',
+  'Nowa Zelandia': 'NZ', Fiji: 'FJ', Fidżi: 'FJ', 'Nowa Kaledonia': 'NC', Salwador: 'SV',
 };
 
 function getFlagCode(name: string): string | null {
@@ -150,7 +152,7 @@ function WCMatchRow({ home, away, homeGoals, awayGoals, goals, cards, metaLabel,
             <div className="flex items-start">
               <div className="flex-1 flex flex-col items-end gap-0.5">
                 {homeGoalsList.map((g, i) => (
-                  <div key={i} className="text-sm text-slate-200 flex items-center justify-end gap-1.5">
+                  <div key={i} className="text-[12px] text-slate-300 flex items-center justify-end gap-1.5">
                     <span>{g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}</span>
                     <span className="text-emerald-300 text-[13px]">⚽</span>
                   </div>
@@ -159,7 +161,7 @@ function WCMatchRow({ home, away, homeGoals, awayGoals, goals, cards, metaLabel,
               <div className="min-w-[120px] mx-8 shrink-0" />
               <div className="flex-1 flex flex-col items-start gap-0.5">
                 {awayGoalsList.map((g, i) => (
-                  <div key={i} className="text-sm text-slate-200 flex items-center gap-1.5">
+                  <div key={i} className="text-[12px] text-slate-300 flex items-center gap-1.5">
                     <span className="text-emerald-300 text-[13px]">⚽</span>
                     <span>{g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}</span>
                   </div>
@@ -289,9 +291,9 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
   const homeWon = m.winner === m.home;
   const awayWon = m.winner === m.away;
 
-  let scoreLabel = `${m.homeGoals ?? 0} : ${m.awayGoals ?? 0}`;
-  if (m.wentToET) scoreLabel += `  (${m.homeGoalsAET ?? 0}:${m.awayGoalsAET ?? 0} d.)`;
-  if (m.wentToPenalties) scoreLabel += `  (${m.homePenalties ?? 0}:${m.awayPenalties ?? 0} k.)`;
+  const mainScore = `${m.homeGoals ?? 0} : ${m.awayGoals ?? 0}`;
+  const etScore = m.wentToET ? `(${m.homeGoalsAET ?? 0}:${m.awayGoalsAET ?? 0} d.)` : null;
+  const penScore = m.wentToPenalties ? `(${m.homePenalties ?? 0}:${m.awayPenalties ?? 0} k.)` : null;
 
   const roundLabel = ROUND_LABEL[m.round] ?? m.round;
   const gradient = getTeamGradient(wcState, m.home, m.away);
@@ -321,8 +323,13 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
         </div>
 
         <div className="flex flex-col items-center gap-1 mx-8 min-w-[140px] justify-center">
-          <span className="text-2xl font-black text-white tabular-nums">{scoreLabel}</span>
-          {m.winner && <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">Zwycięzca: {m.winner}</span>}
+          <span className="text-2xl font-black text-white tabular-nums">{mainScore}</span>
+          {(etScore || penScore) && (
+            <span className="text-xs font-bold tabular-nums flex gap-1">
+              {etScore && <span className="text-amber-400">{etScore}</span>}
+              {penScore && <span className="text-cyan-400">{penScore}</span>}
+            </span>
+          )}
         </div>
 
         <div className={`flex-1 text-left ${awayWon ? 'opacity-100' : 'opacity-50'}`}>
@@ -339,7 +346,7 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
             <div className="flex items-start">
               <div className="flex-1 flex flex-col items-end gap-0.5">
                 {homeGoalsList.map((g, i) => (
-                  <div key={i} className="text-sm text-slate-200 flex items-center justify-end gap-1.5">
+                  <div key={i} className="text-[12px] text-slate-300 flex items-center justify-end gap-1.5">
                     <span>{g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}</span>
                     <span className="text-emerald-300 text-[13px]">⚽</span>
                   </div>
@@ -348,7 +355,7 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
               <div className="min-w-[140px] mx-8 shrink-0" />
               <div className="flex-1 flex flex-col items-start gap-0.5">
                 {awayGoalsList.map((g, i) => (
-                  <div key={i} className="text-sm text-slate-200 flex items-center gap-1.5">
+                  <div key={i} className="text-[12px] text-slate-300 flex items-center gap-1.5">
                     <span className="text-emerald-300 text-[13px]">⚽</span>
                     <span>{g.minute}' {g.playerName}{g.isPenalty ? ' (k.)' : ''}</span>
                   </div>
