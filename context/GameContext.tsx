@@ -354,6 +354,304 @@ const processAiMonthlyLoanListReview = (
   return changed ? nextPlayers : players;
 };
 
+const isTransferWindowDate = (date: Date): boolean => {
+  const month = date.getMonth();
+  const day = date.getDate();
+  const isSummer = (month === 6 && day >= 1) || month === 7 || (month === 8 && day <= 8);
+  const isWinter = (month === 0 && day >= 12) || (month === 1 && day <= 13);
+  return isSummer || isWinter;
+};
+
+const processAiToAiLoanMoves = (
+  clubs: Club[],
+  players: Record<string, Player[]>,
+  lineups: Record<string, Lineup>,
+  coaches: Record<string, Coach>,
+  currentDate: Date,
+  sessionSeed: number,
+  userTeamId: string | null,
+  incomingOffers: IncomingTransferOffer[],
+  transferOffers: TransferOffer[]
+): {
+  updatedClubs: Club[];
+  updatedPlayers: Record<string, Player[]>;
+  updatedLineups: Record<string, Lineup>;
+  aiTransferLogEntries: AiTransferLogEntry[];
+} => {
+  if (!isTransferWindowDate(currentDate)) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  const dateStr = currentDate.toISOString().split('T')[0];
+  const dailyRoll = IncomingTransferService.seededRandom(currentDate.getTime() + sessionSeed + 3907);
+  const maxDailyLoans = dailyRoll < 0.05 ? 2 : dailyRoll < 0.32 ? 1 : 0;
+
+  if (maxDailyLoans === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  const aiClubs = clubs.filter(club => club.id !== userTeamId);
+  const clubById = new Map(clubs.map(club => [club.id, club]));
+  const loanCandidates: Array<{
+    player: Player;
+    sellerClub: Club;
+    buyerClub: Club;
+    offer: IncomingTransferOffer;
+    score: number;
+  }> = [];
+
+  aiClubs.forEach(sellerClub => {
+    const sellerSquad = players[sellerClub.id] || [];
+    sellerSquad
+      .filter(player =>
+        player.isAvailableForLoan &&
+        !player.loan &&
+        !player.transferPendingClubId &&
+        !hasActiveTransferConflict(player.id, transferOffers) &&
+        !hasActiveIncomingConflict(player.id, incomingOffers)
+      )
+      .forEach(player => {
+        aiClubs.forEach(buyerClub => {
+          if (buyerClub.id === sellerClub.id) return;
+          const buyerSquad = players[buyerClub.id] || [];
+          if (buyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
+          if ((buyerClub.rosterIds?.length ?? buyerSquad.length) >= 30) return;
+
+          const seed = IncomingTransferService.buildOfferSeed(
+            currentDate,
+            buyerClub.id,
+            `${player.id}_AI_AI_LOAN_${sessionSeed}`
+          );
+          const decision = IncomingTransferService.shouldGenerateLoanOffer(
+            player,
+            buyerClub,
+            sellerClub,
+            incomingOffers,
+            seed,
+            currentDate,
+            buyerSquad
+          );
+          if (!decision.shouldGenerate) return;
+
+          const loanTerms = IncomingTransferService.calculateLoanOffer(player, buyerClub, sellerClub, currentDate, seed);
+          if (!loanTerms) return;
+
+          const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+            player,
+            buyerClub,
+            sellerClub,
+            buyerSquad,
+            seed + 419
+          );
+          if (playerDecision === 'refused') return;
+
+          const loanFee = loanTerms.loanFee ?? 0;
+          const wageCoveragePercent = loanTerms.wageCoveragePercent ?? 0;
+          const loanEndDate = loanTerms.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, loanTerms.loanDuration || 'SEASON');
+          const loanStartDate = loanTerms.loanStartDate || dateStr;
+          const loanStart = new Date(loanStartDate);
+          const loanEnd = new Date(loanEndDate);
+          const loanDays = Math.max(30, Math.ceil((loanEnd.getTime() - loanStart.getTime()) / 86_400_000));
+          const wageSaving = Math.round((player.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
+          const financialScore = Math.min(60, (loanFee + wageSaving) / 5000);
+          const reputationScore = Math.max(0, buyerClub.reputation) * 6;
+          const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad);
+          const squadNeedScore = Math.max(0, need.needScore) * 7;
+          const sameCountryBonus = buyerClub.country === sellerClub.country ? 4 : 0;
+          const score = financialScore + reputationScore + squadNeedScore + sameCountryBonus;
+
+          loanCandidates.push({
+            player,
+            sellerClub,
+            buyerClub,
+            score,
+            offer: {
+              id: `ai_ai_loan_${dateStr}_${player.id}_${buyerClub.id}`,
+              kind: 'LOAN',
+              playerId: player.id,
+              buyerClubId: buyerClub.id,
+              fee: loanFee,
+              timing: TransferTiming.IMMEDIATE,
+              status: IncomingOfferStatus.COMPLETED,
+              createdAt: dateStr,
+              emailSentAt: dateStr,
+              aiMaxFee: loanTerms.aiMaxFee,
+              aiUrgency: loanTerms.aiUrgency,
+              negotiationRound: 0,
+              boardPressure: false,
+              loanDuration: loanTerms.loanDuration,
+              loanStartDate,
+              loanEndDate,
+              wageCoveragePercent,
+              loanFee,
+              loanTotalCost: loanTerms.loanTotalCost,
+              loanPlayerCanBeForced: loanTerms.loanPlayerCanBeForced,
+            },
+          });
+        });
+      });
+  });
+
+  const bestOfferByPlayer = new Map<string, typeof loanCandidates[number]>();
+  loanCandidates.forEach(candidate => {
+    const currentBest = bestOfferByPlayer.get(candidate.player.id);
+    if (!currentBest || candidate.score > currentBest.score) {
+      bestOfferByPlayer.set(candidate.player.id, candidate);
+    }
+  });
+
+  const selectedLoans = [...bestOfferByPlayer.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxDailyLoans);
+
+  if (selectedLoans.length === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  let nextPlayers: Record<string, Player[]> = { ...players };
+  let nextClubs = clubs;
+  let nextLineups = { ...lineups };
+  const completedPlayerIds = new Set<string>();
+  const logEntries: AiTransferLogEntry[] = [];
+
+  selectedLoans.forEach(({ player, sellerClub, buyerClub, offer }) => {
+    if (completedPlayerIds.has(player.id)) return;
+    const currentSellerSquad = nextPlayers[sellerClub.id] || [];
+    const currentBuyerSquad = nextPlayers[buyerClub.id] || [];
+    const currentPlayer = currentSellerSquad.find(squadPlayer => squadPlayer.id === player.id);
+    if (!currentPlayer || currentPlayer.loan) return;
+    if (currentBuyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
+
+    const loanFee = offer.loanFee ?? offer.fee ?? 0;
+    const baselineRatingCount = currentPlayer.stats.ratingHistory?.length ?? 0;
+    const loanInfo: PlayerLoanInfo = {
+      parentClubId: sellerClub.id,
+      parentClubName: sellerClub.name,
+      destinationClubId: buyerClub.id,
+      destinationClubName: buyerClub.name,
+      startDate: offer.loanStartDate || dateStr,
+      endDate: offer.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, offer.loanDuration || 'SEASON'),
+      wageCoveragePercent: offer.wageCoveragePercent,
+      loanFee,
+      forcedByClub: false,
+      reportBaselineMatches: currentPlayer.stats.matchesPlayed ?? 0,
+      reportBaselineMinutes: currentPlayer.stats.minutesPlayed ?? 0,
+      reportBaselineGoals: currentPlayer.stats.goals ?? 0,
+      reportBaselineAssists: currentPlayer.stats.assists ?? 0,
+      reportBaselineYellowCards: currentPlayer.stats.yellowCards ?? 0,
+      reportBaselineRedCards: currentPlayer.stats.redCards ?? 0,
+      reportBaselineRatingCount: baselineRatingCount,
+      lastReportDate: dateStr,
+      lastReportMatches: currentPlayer.stats.matchesPlayed ?? 0,
+      lastReportMinutes: currentPlayer.stats.minutesPlayed ?? 0,
+      lastReportGoals: currentPlayer.stats.goals ?? 0,
+      lastReportAssists: currentPlayer.stats.assists ?? 0,
+      lastReportRatingCount: baselineRatingCount,
+      monthlyReports: [],
+    };
+    const loanStart = new Date(loanInfo.startDate);
+    const loanStartYear = Number.isNaN(loanStart.getTime()) ? currentDate.getFullYear() : loanStart.getFullYear();
+    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? currentDate.getMonth() + 1 : loanStart.getMonth() + 1;
+    const baseHistory = currentPlayer.history && currentPlayer.history.length > 0
+      ? currentPlayer.history
+      : [{
+          clubName: sellerClub.name,
+          clubId: sellerClub.id,
+          fromYear: loanStartYear - 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null,
+        }];
+    const loanedPlayer: Player = {
+      ...currentPlayer,
+      clubId: buyerClub.id,
+      loan: loanInfo,
+      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
+      isAvailableForLoan: false,
+      isOnTransferList: false,
+      transferListPrice: undefined,
+      squadRole: null,
+      isUntouchable: false,
+      interestedClubs: [],
+    };
+
+    const sellerSquadAfterLoan = currentSellerSquad.filter(squadPlayer => squadPlayer.id !== currentPlayer.id);
+    const buyerSquadAfterLoan = [
+      ...currentBuyerSquad.filter(squadPlayer => squadPlayer.id !== currentPlayer.id),
+      loanedPlayer,
+    ];
+
+    nextPlayers = {
+      ...nextPlayers,
+      [sellerClub.id]: sellerSquadAfterLoan,
+      [buyerClub.id]: buyerSquadAfterLoan,
+    };
+
+    nextClubs = nextClubs.map(club => {
+      if (club.id === sellerClub.id) {
+        return {
+          ...club,
+          budget: club.budget + loanFee,
+          transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== currentPlayer.id),
+        };
+      }
+      if (club.id === buyerClub.id) {
+        return {
+          ...club,
+          budget: Math.max(0, club.budget - loanFee),
+          transferBudget: Math.max(0, club.transferBudget - loanFee),
+          rosterIds: [...club.rosterIds.filter(id => id !== currentPlayer.id), currentPlayer.id],
+        };
+      }
+      return club;
+    });
+
+    const sellerLineup = nextLineups[sellerClub.id];
+    const buyerLineup = nextLineups[buyerClub.id];
+    nextLineups = {
+      ...nextLineups,
+      ...(sellerLineup ? { [sellerClub.id]: LineupService.repairLineup(sellerLineup, sellerSquadAfterLoan) } : {}),
+      [buyerClub.id]: buyerLineup
+        ? LineupService.repairLineup(buyerLineup, buyerSquadAfterLoan)
+        : LineupService.autoPickLineup(
+            buyerClub.id,
+            buyerSquadAfterLoan,
+            '4-4-2',
+            buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null
+          ),
+    };
+
+    completedPlayerIds.add(currentPlayer.id);
+    logEntries.push({
+      id: `ai-ai-loan-${dateStr}-${currentPlayer.id}-${buyerClub.id}`,
+      date: dateStr,
+      playerName: `${currentPlayer.firstName} ${currentPlayer.lastName}`,
+      playerOvr: currentPlayer.overallRating,
+      playerPosition: currentPlayer.position,
+      fromClub: sellerClub.name,
+      toClub: buyerClub.name,
+      status: 'TRANSFER_SIGNED',
+      reason: `Wypożyczenie AI-AI: ${loanFee.toLocaleString('pl-PL')} PLN, ${offer.wageCoveragePercent ?? 0}% pensji`,
+      fee: loanFee,
+      playerId: currentPlayer.id,
+      fromClubId: sellerClub.id,
+      toClubId: buyerClub.id,
+    });
+  });
+
+  if (completedPlayerIds.size === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  return {
+    updatedClubs: nextClubs,
+    updatedPlayers: nextPlayers,
+    updatedLineups: nextLineups,
+    aiTransferLogEntries: logEntries,
+  };
+};
+
 interface SimulationOutput {
   updatedFixtures: Fixture[];
   updatedClubs: Club[];
@@ -5702,12 +6000,32 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    const aiAiLoanMoves = processAiToAiLoanMoves(
+      postReviewClubs,
+      postReviewPlayers,
+      postLoanLineups,
+      coaches,
+      dateToProcess,
+      sessionSeed,
+      userTeamId,
+      incomingOffers,
+      transferOffers
+    );
+    postReviewClubs = aiAiLoanMoves.updatedClubs;
+    postReviewPlayers = aiAiLoanMoves.updatedPlayers;
+    postLoanLineups = aiAiLoanMoves.updatedLineups;
+
 const finalResult: SimulationOutput = {
       ...simulation,
       updatedClubs: postReviewClubs,
       updatedPlayers: postReviewPlayers,
+      updatedLineups: postLoanLineups,
       // TUTAJ WSTAW TEN KOD
-      newOffers: simulation.newOffers || []
+      newOffers: simulation.newOffers || [],
+      aiTransferLogEntries: [
+        ...(simulation.aiTransferLogEntries || []),
+        ...aiAiLoanMoves.aiTransferLogEntries,
+      ],
       // KONIEC KODU
     };
     
