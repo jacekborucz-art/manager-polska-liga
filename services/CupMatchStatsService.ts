@@ -50,7 +50,7 @@ export const buildCupDisplayStats = (
     shots,
     Math.max(rawStats.shotsOnTarget, goals, goals > 0 ? Math.floor(shots * (0.32 + statRng(3) * 0.18)) : 0)
   );
-  const corners = Math.max(rawStats.corners, goals > 0 ? Math.floor(statRng(4) * 4) : 0);
+  const corners = Math.min(10, Math.max(rawStats.corners, goals > 0 ? Math.floor(statRng(4) * 2) : 0));
   const fouls = Math.max(rawStats.fouls, yellowCards * (2 + Math.floor(statRng(5) * 3)) + redCards * 3);
 
   return ensureCupGoalShotIntegrity({

@@ -56,6 +56,8 @@ export const PostMatchDebriefModal = ({
   const leftScore     = userSide === 'HOME' ? userScore    : oppScore;
   const rightScore    = userSide === 'HOME' ? oppScore     : userScore;
   const hasPenaltyScore = userPenaltyScore !== undefined && oppPenaltyScore !== undefined;
+  const leftPenaltyScore  = userSide === 'HOME' ? userPenaltyScore : oppPenaltyScore;
+  const rightPenaltyScore = userSide === 'HOME' ? oppPenaltyScore  : userPenaltyScore;
 
   const handleSelect = (option: DebriefComment, index: number) => {
     const effect = calculateDebriefEffect(option.hiddenType, context, sessionSeed, index);
@@ -69,62 +71,100 @@ export const PostMatchDebriefModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 animate-fade-in p-4">
-      <div className="w-full max-w-5xl max-h-[96vh] mx-4 bg-slate-900/65 border border-white/10 rounded-[44px] shadow-[0_50px_100px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col relative">
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 backdrop-blur-md">
+      <div className="w-full max-w-[1080px] mx-4 bg-slate-900/70 border border-white/10 rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
 
-        {/* ── GRADIENT BAR GÓRNY ── */}
+        {/* GRADIENT BAR */}
         <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent ${accent.via} to-transparent`} />
 
-        {/* ── TŁO GLOW ── */}
+        {/* TŁO GLOW */}
         <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent.glow} 0%, transparent 60%)` }} />
 
-        {/* ── NAGŁÓWEK ── */}
-        <div className="relative flex flex-col items-center gap-2 px-10 pt-7 pb-5 border-b border-white/5">
-          <span className="text-4xl font-black text-white uppercase tracking-[0.3em]">ODPRAWA POMECZOWA</span>
-          <span className="text-sm font-black text-slate-400 uppercase tracking-[0.3em]">PRZEMÓW DO DRUŻYNY</span>
+        {/* HEADER */}
+        <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex flex-col gap-3">
+          <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white leading-none text-center">
+            ODPRAWA<br />
+            <span className={accent.badge.split(' ')[0]}>POMECZOWA</span>
+          </h1>
+
+          {/* WYNIK */}
+          <div className="flex items-center gap-3 mt-1 px-4 py-3 rounded-2xl bg-white/[0.03]">
+            <div className="flex-1">
+              <div className="text-[37.5px] font-black italic uppercase tracking-tighter text-white leading-tight">{leftClubName}</div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-4xl font-black font-mono tracking-tight text-white">{leftScore}</span>
+              {hasPenaltyScore && (
+                <span className="text-lg font-black font-mono tracking-tight text-slate-500">({leftPenaltyScore})</span>
+              )}
+              <span className="text-2xl font-light text-slate-500">:</span>
+              {hasPenaltyScore && (
+                <span className="text-lg font-black font-mono tracking-tight text-slate-500">({rightPenaltyScore})</span>
+              )}
+              <span className="text-4xl font-black font-mono tracking-tight text-white">{rightScore}</span>
+            </div>
+            <div className="flex-1 text-right">
+              <div className="text-[37.5px] font-black italic uppercase tracking-tighter text-white leading-tight">{rightClubName}</div>
+            </div>
+          </div>
         </div>
 
-        {/* ── FAZA WYBORU ── */}
+        {/* FAZA WYBORU */}
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
-            <div className="px-10 pt-5 pb-3">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                KOMENTARZ DO SZATNI
+            <div className="flex flex-col items-center gap-3 px-8 pt-5 pb-2">
+              <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">
+                PRZEMÓW DO DRUŻYNY
               </span>
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
             </div>
-            <div className="px-6 pb-7 grid grid-cols-2 gap-2">
+
+            <div className="overflow-y-auto custom-scrollbar max-h-[420px] px-8 pb-7 grid grid-cols-1 gap-3 md:grid-cols-2">
               {comments.map((opt, idx) => (
                 <button
                   key={opt.id}
                   onClick={() => handleSelect(opt, idx)}
-                  className="w-full text-left px-5 py-3 rounded-2xl bg-white/[0.03] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-sm font-medium leading-snug hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:translate-y-[2px]"
+                  className="w-full rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/[0.03] px-5 py-3.5 text-left transition-all duration-150 group hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 active:translate-y-[2px]"
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
-                  {opt.text}
+                  <p className="text-sm font-normal italic uppercase tracking-tighter text-white group-hover:text-white leading-snug">
+                    {opt.text}
+                  </p>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* ── FAZA REAKCJI ── */}
+        {/* FAZA REAKCJI */}
         {phase === 'REACTING' && (
-          <div className="relative flex flex-col items-center gap-8 px-10 py-12">
-            <div className="text-5xl drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">💬</div>
-            <p className="text-center text-lg font-bold text-white italic leading-relaxed drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-              {reactionText}
-            </p>
+          <div className="relative flex flex-col items-center px-8 py-8 gap-6">
+            <div className="text-center">
+              <div className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">
+                REAKCJA SZATNI
+              </div>
+              <p className="text-xl font-black italic uppercase tracking-tighter text-white leading-snug">
+                {reactionText}
+              </p>
+            </div>
+
             <button
               onClick={handleContinue}
-              className="mt-2 min-w-[220px] py-3.5 px-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(16,185,129,0.12)] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
+              className="w-full py-4 rounded-2xl font-black italic uppercase tracking-tighter text-sm text-white transition-all duration-200 border-t border-x border-b border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60 bg-emerald-600/80 hover:bg-emerald-500 active:translate-y-[2px]"
+              style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
             >
-              <span>STUDIO POMECZOWE</span>
-              <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
+              STUDIO POMECZOWE
             </button>
           </div>
         )}
 
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+      `}</style>
     </div>
   );
 };

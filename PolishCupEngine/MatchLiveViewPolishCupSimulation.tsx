@@ -2740,11 +2740,11 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
             const noShotRoll = seededRng(currentSeed, nextMinute, 5555);
             const noShotEventType = noShotRoll < 0.25
                 ? MatchEventType.OFFSIDE
-                : noShotRoll < 0.45
+                : noShotRoll < 0.32
                 ? MatchEventType.CORNER
-                : noShotRoll < 0.65
+                : noShotRoll < 0.55
                 ? MatchEventType.WINGER_STOPPED
-                : noShotRoll < 0.80
+                : noShotRoll < 0.72
                 ? MatchEventType.DRIBBLING
                 : MatchEventType.PLAY_SIDE;
             const noShotPool = MATCH_COMMENTARY_DB[noShotEventType] || [];
@@ -3841,7 +3841,7 @@ if (activePlayerTempo === 'SLOW') {
                                  <span className="text-xl font-black italic uppercase tracking-tight text-white">{ctx.homeClub.name}</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Gospodarze</span>
                               </div>
-                              <div className="mx-auto flex max-h-[260px] min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
+                              <div className="mx-auto flex min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
                                  {(matchState.penaltySequence?.filter(s => s.side === 'HOME') || []).map((shot, i) => (
                                     <div
                                       key={`home_pen_${i}`}
@@ -3876,7 +3876,7 @@ if (activePlayerTempo === 'SLOW') {
                                  <span className="text-xl font-black italic uppercase tracking-tight text-white">{ctx.awayClub.name}</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Goście</span>
                               </div>
-                              <div className="mx-auto flex max-h-[260px] min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
+                              <div className="mx-auto flex min-h-[120px] w-full max-w-md flex-col gap-1.5 overflow-y-auto px-3 py-3 text-left custom-scrollbar">
                                  {(matchState.penaltySequence?.filter(s => s.side === 'AWAY') || []).map((shot, i) => (
                                     <div
                                       key={`away_pen_${i}`}
