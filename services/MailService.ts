@@ -155,6 +155,14 @@ export const MailService = {
       templateId = 'board_welcome_relegation';
     }
 
+    if (!isTopTier && (userClub.leagueId === 'L_PL_2' || userClub.leagueId === 'L_PL_3')) {
+      const oczekiwania = userClub.board?.oczekiwania;
+      if (oczekiwania === 'bardzo_wysoka') templateId = 'board_welcome_elite_promotion';
+      else if (oczekiwania === 'wysoka' || oczekiwania === 'przecietna') templateId = 'board_welcome_pro_promotion';
+      else if (oczekiwania === 'bardzo_niska') templateId = 'board_welcome_relegation';
+      else templateId = 'board_welcome_mid';
+    }
+
     const template = MAIL_TEMPLATES.find(t => t.id === templateId)!;
     
     return {
