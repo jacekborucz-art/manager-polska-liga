@@ -8,7 +8,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   // Gibraltar (GIB)
   { name: "Europa FC", country: "GIB", tier: 4, colors: ['#000000', '#FFFFFF', '#FFD700'], stadium: "Victoria Stadium", capacity: 5000, reputation: 2 },
   { name: "Bruno's Magpies", country: "GIB", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Victoria Stadium", capacity: 5000, reputation: 2 },
-  { name: "Manchester 62", country: "GIB", tier: 4, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Victoria Stadium", capacity: 5000, reputation: 2 },
+ 
 
   // Liechtenstein (LIE) – tylko puchar Liechtensteinu, kluby grają w szwajcarskiej lidze
   { name: "USV Eschen/Mauren", country: "LIE", tier: 4, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "Sportpark Eschen-Mauren", capacity: 2000, reputation: 3 },
