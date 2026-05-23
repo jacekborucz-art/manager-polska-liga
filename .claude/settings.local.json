@@ -16,7 +16,8 @@
       "Bash(grep -rli \"FREE_AGENT\\\\|freeAgent\\\\|JobMarket\\\\|JOB_MARKET\" 'c:/Users/Jack Cave/Documents/FM google studio/Last version' --include=*.tsx)",
       "Bash(grep -n \"startNewGame, saveManagerProfile\\\\|value={{\" \"c:/Users/Jack Cave/Documents/FM google studio/Last version/context/GameContext.tsx\")",
       "Bash(find 'c:/Users/Jack Cave/Documents/FM google studio/Last version' -iname *playoff* -not -iname *.old -not -iname *copy* -not -iname *reference*)",
-      "Bash(awk '/const released = \\\\{/,/^\\\\s*\\\\};/' \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\\\\context\\\\GameContext.tsx\")"
+      "Bash(awk '/const released = \\\\{/,/^\\\\s*\\\\};/' \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\\\\context\\\\GameContext.tsx\")",
+      "Bash(findstr \"EditorView\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Jack Cave\\Documents\\FM google studio\\SKLADY\\TOMEK"

@@ -85,6 +85,15 @@ const inputCls  = 'bg-black/40 border border-slate-700 rounded text-emerald-400 
 const selectCls = 'bg-black/40 border border-slate-700 rounded text-white   font-black italic uppercase tracking-tighter text-xs outline-none focus:border-yellow-500 transition-colors cursor-pointer';
 const labelCls  = 'text-yellow-400 text-xs font-black italic uppercase tracking-tighter';
 
+const STAFF_ROLE_LABELS: Record<string, string> = {
+  ASSISTANT_COACH: 'Asystent trenera',
+  GOALKEEPER_COACH: 'Trener bramkarzy',
+  FITNESS_COACH: 'Trener fitness',
+  VIDEO_ANALYST: 'Analityk video',
+  PHYSIOTHERAPIST: 'Fizjoterapeuta',
+  CLUB_DOCTOR: 'Lekarz klubowy',
+};
+
 const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
@@ -125,7 +134,7 @@ const toDateInputValue = (value?: string | null): string => {
 const toIsoDate = (value: string): string => new Date(value).toISOString();
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, lineups, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs } = useGame();
+  const { clubs, players, lineups, coaches, staffMembers, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -267,9 +276,15 @@ export const EditorView: React.FC = () => {
     setExportSelected(new Set());
   };
 
-  const [activeSection, setActiveSection] = useState<'GRACZE' | 'KLUBY'>('GRACZE');
+  const [activeSection, setActiveSection] = useState<'GRACZE' | 'KLUBY' | 'DRUŻYNA'>('GRACZE');
   const [clubsLeagueFilter, setClubsLeagueFilter] = useState<string>('L_PL_1');
   const [editingSigningPool, setEditingSigningPool] = useState<Record<string, string>>({});
+
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
+  const [teamSearchClubId, setTeamSearchClubId] = useState('');
+  const [editTeamBudget, setEditTeamBudget] = useState('');
+  const [editTeamTransferBudget, setEditTeamTransferBudget] = useState('');
+  const [editTeamReserveBudget, setEditTeamReserveBudget] = useState('');
 
   const [selectedTier, setSelectedTier]     = useState<string>('1');
   const [selectedClubId, setSelectedClubId] = useState<string>('');
@@ -290,6 +305,12 @@ export const EditorView: React.FC = () => {
   const [loanDestinationClubId, setLoanDestinationClubId] = useState<string>('');
   const [loanStartDate, setLoanStartDate] = useState<string>('');
   const [loanEndDate, setLoanEndDate] = useState<string>('');
+  const [playerTargetClubId, setPlayerTargetClubId] = useState<string>('');
+  const [isUntouchable, setIsUntouchable] = useState(false);
+  const [isOnTransferList, setIsOnTransferList] = useState(false);
+  const [isAvailableForLoan, setIsAvailableForLoan] = useState(false);
+  const [nationalMatchesPlayed, setNationalMatchesPlayed] = useState(0);
+  const [nationalGoals, setNationalGoals] = useState(0);
 
   const filteredClubs = useMemo(() => {
     const list = selectedTier === 'ALL'
@@ -360,6 +381,31 @@ export const EditorView: React.FC = () => {
     return `linear-gradient(150deg, ${c0}28 0%, ${c1}18 60%, transparent 100%)`;
   }, [selectedClub]);
 
+  const teamSearchResults = useMemo(() => {
+    const q = teamSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return clubs
+      .filter(c => c.name.toLowerCase().includes(q) || (c.shortName ?? '').toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
+      .slice(0, 30);
+  }, [teamSearchQuery, clubs]);
+
+  const selectedTeamClub = useMemo(() => clubs.find(c => c.id === teamSearchClubId), [clubs, teamSearchClubId]);
+  const selectedTeamSquad = useMemo(() => teamSearchClubId ? getOrGenerateSquad(teamSearchClubId) : [], [teamSearchClubId, getOrGenerateSquad, players]);
+  const selectedTeamCoach = useMemo(() => selectedTeamClub?.coachId ? coaches[selectedTeamClub.coachId] ?? null : null, [selectedTeamClub, coaches]);
+  const selectedTeamStaff = useMemo(() => {
+    if (!selectedTeamClub?.staffIds) return [];
+    return selectedTeamClub.staffIds.map(id => staffMembers[id]).filter(Boolean);
+  }, [selectedTeamClub, staffMembers]);
+
+  useEffect(() => {
+    if (selectedTeamClub) {
+      setEditTeamBudget(String(selectedTeamClub.budget));
+      setEditTeamTransferBudget(String(selectedTeamClub.transferBudget));
+      setEditTeamReserveBudget(String(selectedTeamClub.reserveBudget ?? 0));
+    }
+  }, [teamSearchClubId]);
+
   const resetPlayerForm = () => {
     setFirstName('');
     setLastName('');
@@ -375,6 +421,12 @@ export const EditorView: React.FC = () => {
     setLoanDestinationClubId('');
     setLoanStartDate('');
     setLoanEndDate('');
+    setPlayerTargetClubId(selectedClubId);
+    setIsUntouchable(false);
+    setIsOnTransferList(false);
+    setIsAvailableForLoan(false);
+    setNationalMatchesPlayed(0);
+    setNationalGoals(0);
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
     setContractEndDate(new Date(now.getFullYear() + 2, 5, 30).toISOString().substring(0, 10));
   };
@@ -457,6 +509,12 @@ export const EditorView: React.FC = () => {
         setLoanDestinationClubId(p.loan?.destinationClubId ?? '');
         setLoanStartDate(toDateInputValue(p.loan?.startDate));
         setLoanEndDate(toDateInputValue(p.loan?.endDate));
+        setPlayerTargetClubId(p.clubId ?? selectedClubId);
+        setIsUntouchable(p.isUntouchable ?? false);
+        setIsOnTransferList(p.isOnTransferList ?? false);
+        setIsAvailableForLoan(p.isAvailableForLoan ?? false);
+        setNationalMatchesPlayed(p.nationalStats?.matchesPlayed ?? 0);
+        setNationalGoals(p.nationalStats?.goals ?? 0);
       }
     } else {
       resetPlayerForm();
@@ -566,7 +624,7 @@ export const EditorView: React.FC = () => {
       });
       return;
     }
-    const targetClubId = loan?.destinationClubId ?? selectedClubId;
+    const targetClubId = loan?.destinationClubId ?? playerTargetClubId;
     if (isCreatingPlayer) {
       const club = clubs.find(c => c.id === selectedClubId);
       const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
@@ -587,7 +645,7 @@ export const EditorView: React.FC = () => {
         stats: emptyStats(),
         cupStats: emptyStats(),
         euroStats: emptyStats(),
-        nationalStats: emptyStats(),
+        nationalStats: { ...emptyStats(), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals },
         health: { status: HealthStatus.HEALTHY },
         condition: 100,
         suspensionMatches: 0,
@@ -597,7 +655,7 @@ export const EditorView: React.FC = () => {
         annualSalary,
         marketValue,
         loan,
-        isAvailableForLoan: false,
+        isAvailableForLoan: isAvailableForLoan,
         contractEndDate: contractDate,
         history: [{
           clubName: club?.name ?? selectedClubId,
@@ -608,7 +666,7 @@ export const EditorView: React.FC = () => {
           toMonth: null
         }],
         boardLockoutUntil: null,
-        isUntouchable: false,
+        isUntouchable: isUntouchable,
         negotiationStep: 0,
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
@@ -646,7 +704,10 @@ export const EditorView: React.FC = () => {
       firstName, lastName, age, nationality, nationalityCountry, position,
       attributes: { ...attrs }, overallRating: newOvr,
       annualSalary, marketValue, contractEndDate, loan, clubId: targetClubId,
-      isAvailableForLoan: loan ? false : existingPlayer.isAvailableForLoan
+      isUntouchable: isUntouchable,
+      isOnTransferList: isOnTransferList,
+      isAvailableForLoan: loan ? false : isAvailableForLoan,
+      nationalStats: { ...(existingPlayer.nationalStats ?? emptyStats()), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals }
     };
     if (targetClubId !== selectedClubId) {
       movePlayerBetweenClubs(selectedClubId, targetClubId, updatedPlayer);
@@ -676,7 +737,7 @@ export const EditorView: React.FC = () => {
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <span className="text-sm text-white mr-2">Edytor</span>
         <span className="w-px h-4 bg-slate-700" />
-        {(['GRACZE', 'KLUBY'] as const).map(sec => (
+        {(['GRACZE', 'KLUBY', 'DRUŻYNA'] as const).map(sec => (
           <button
             key={sec}
             onClick={() => setActiveSection(sec)}
@@ -828,6 +889,139 @@ export const EditorView: React.FC = () => {
         </div>
       )}
 
+      {/* SEKCJA DRUŻYNA */}
+      {activeSection === 'DRUŻYNA' && (
+        <div className="flex-1 overflow-y-auto px-6 py-4 editor-scroll">
+          <div className="mb-4 relative inline-block">
+            <input
+              type="text"
+              value={teamSearchQuery}
+              onChange={(e) => { setTeamSearchQuery(e.target.value); if (!e.target.value.trim()) setTeamSearchClubId(''); }}
+              className={`${inputCls} px-3 py-2 w-80`}
+              placeholder="szukaj drużyny..."
+            />
+            {teamSearchResults.length > 0 && teamSearchQuery.trim() && !teamSearchClubId && (
+              <div className="absolute top-full left-0 mt-1 w-80 bg-slate-900 border border-slate-700 rounded z-20 max-h-64 overflow-y-auto editor-scroll">
+                {teamSearchResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setTeamSearchClubId(c.id); setTeamSearchQuery(c.name); }}
+                    className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                  >
+                    <span className="font-black">{c.name}</span>
+                    <span className="text-slate-500 ml-2 text-[10px]">{c.leagueId}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selectedTeamClub && (
+            <div>
+              <div className="flex items-center gap-4 pb-3 mb-4 border-b border-slate-700">
+                {selectedTeamClub.logoFile && (
+                  <img src={new URL(`../../Graphic/logo/${selectedTeamClub.logoFile}`, import.meta.url).href} alt="" className="w-12 h-12 object-contain flex-shrink-0" />
+                )}
+                <div className="text-3xl text-white">{selectedTeamClub.name}</div>
+                <span className="text-xs text-slate-500 ml-2">{selectedTeamClub.leagueId} • Rep: {selectedTeamClub.reputation}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
+
+                {/* SKŁAD */}
+                <div>
+                  <div className="text-xs text-yellow-400 mb-2">Skład ({selectedTeamSquad.length})</div>
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-1 text-slate-400 font-black uppercase tracking-tighter">Poz.</th>
+                        <th className="text-left py-1 text-slate-400 font-black uppercase tracking-tighter">Zawodnik</th>
+                        <th className="text-right py-1 text-slate-400 font-black uppercase tracking-tighter">OVR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedTeamSquad]
+                        .sort((a, b) => POS_ORDER[a.position] - POS_ORDER[b.position] || b.overallRating - a.overallRating)
+                        .map(p => (
+                          <tr key={p.id} className="border-b border-slate-800/50">
+                            <td className="py-1">
+                              <span className={p.position === PlayerPosition.GK ? 'text-yellow-400' : p.position === PlayerPosition.DEF ? 'text-blue-400' : p.position === PlayerPosition.MID ? 'text-green-400' : 'text-red-400'}>
+                                {p.position}
+                              </span>
+                            </td>
+                            <td className="py-1 text-white">{p.lastName} {p.firstName}</td>
+                            <td className="py-1 text-right text-emerald-400 tabular-nums">{p.overallRating}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SZTAB */}
+                <div>
+                  <div className="text-xs text-yellow-400 mb-2">Sztab</div>
+                  {selectedTeamCoach && (
+                    <div className="mb-2 p-2 border border-slate-800 bg-black/20 rounded">
+                      <div className="text-[10px] text-slate-500 mb-0.5">Trener</div>
+                      <div className="text-xs text-white font-black">{selectedTeamCoach.firstName} {selectedTeamCoach.lastName}</div>
+                      <div className="text-[10px] text-slate-400">{selectedTeamCoach.nationality} • {selectedTeamCoach.age} lat</div>
+                    </div>
+                  )}
+                  {selectedTeamStaff.map(s => (
+                    <div key={s.id} className="mb-2 p-2 border border-slate-800 bg-black/20 rounded">
+                      <div className="text-[10px] text-slate-500 mb-0.5">{STAFF_ROLE_LABELS[s.role] ?? s.role}</div>
+                      <div className="text-xs text-white font-black">{s.firstName} {s.lastName}</div>
+                      <div className="text-[10px] text-slate-400">{s.nationality} • {s.age} lat</div>
+                    </div>
+                  ))}
+                  {!selectedTeamCoach && selectedTeamStaff.length === 0 && (
+                    <div className="text-xs text-slate-600">Brak danych sztabu</div>
+                  )}
+                </div>
+
+                {/* FINANSE */}
+                <div>
+                  <div className="text-xs text-yellow-400 mb-2">Finanse</div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Budżet główny (PLN)</div>
+                      <input type="number" min={0} value={editTeamBudget}
+                        onChange={(e) => setEditTeamBudget(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Budżet transferowy (PLN)</div>
+                      <input type="number" min={0} value={editTeamTransferBudget}
+                        onChange={(e) => setEditTeamTransferBudget(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Budżet rezerwowy (PLN)</div>
+                      <input type="number" min={0} value={editTeamReserveBudget}
+                        onChange={(e) => setEditTeamReserveBudget(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const b = parseInt(editTeamBudget) || 0;
+                        const tb = parseInt(editTeamTransferBudget) || 0;
+                        const rb = parseInt(editTeamReserveBudget) || 0;
+                        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, budget: b, transferBudget: tb, reserveBudget: rb } : c));
+                        showGameNotification({ title: 'Zapisano finanse', message: `Finanse ${selectedTeamClub.name} zostały zaktualizowane.`, tone: 'success' });
+                      }}
+                      className="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                    >
+                      Zapisz finanse
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MAIN CONTENT */}
       {activeSection === 'GRACZE' && (
       <div className="flex flex-1 overflow-hidden">
@@ -884,6 +1078,53 @@ export const EditorView: React.FC = () => {
                 <div className={`${labelCls} mb-1`}>Nazwisko</div>
                 <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
                   className={`${inputCls} w-40 px-2 py-1.5`} placeholder="nazwisko..." />
+              </div>
+            </div>
+
+            {/* KLUB / STATUS / REPREZENTACJA */}
+            <div className="flex gap-3 items-end mb-3">
+              <div>
+                <div className={`${labelCls} mb-1`}>Klub</div>
+                <select
+                  value={playerTargetClubId}
+                  onChange={(e) => setPlayerTargetClubId(e.target.value)}
+                  className={`${selectCls} px-2 py-1.5 w-56`}
+                >
+                  <option value="FREE_AGENTS">— Wolny agent —</option>
+                  {[...clubs].sort((a, b) => a.name.localeCompare(b.name, 'pl')).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Status</div>
+                <select
+                  value={isUntouchable ? 'UNTOUCHABLE' : isOnTransferList ? 'TRANSFER_LIST' : isAvailableForLoan ? 'AVAILABLE_LOAN' : 'NONE'}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setIsUntouchable(v === 'UNTOUCHABLE');
+                    setIsOnTransferList(v === 'TRANSFER_LIST');
+                    setIsAvailableForLoan(v === 'AVAILABLE_LOAN');
+                  }}
+                  className={`${selectCls} px-2 py-1.5 w-52`}
+                >
+                  <option value="NONE">Brak</option>
+                  <option value="UNTOUCHABLE">Nie na sprzedaż</option>
+                  <option value="TRANSFER_LIST">Na liście transferowej</option>
+                  <option value="AVAILABLE_LOAN">Dostępny na wypożyczenie</option>
+                </select>
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Reprez. mecze</div>
+                <input type="number" min={0} value={nationalMatchesPlayed}
+                  onChange={(e) => setNationalMatchesPlayed(parseInt(e.target.value) || 0)}
+                  className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Reprez. bramki</div>
+                <input type="number" min={0} value={nationalGoals}
+                  onChange={(e) => setNationalGoals(parseInt(e.target.value) || 0)}
+                  className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
               </div>
             </div>
 
