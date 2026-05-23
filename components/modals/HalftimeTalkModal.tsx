@@ -221,7 +221,7 @@ export const HalftimeTalkModal = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 animate-fade-in">
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/80 backdrop-blur-[3px] pointer-events-auto animate-fade-in">
       <div className="w-full max-w-[1250px] mx-4 border border-white/10 rounded-[57px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" style={{ background: `linear-gradient(135deg, ${homeKitPrimary}cc 0%, rgba(15,23,42,0.75) 45%, rgba(15,23,42,0.75) 55%, ${awayKitPrimary}cc 100%)` }}>
 
         {/* ── GRADIENT BAR GÓRNY ── */}

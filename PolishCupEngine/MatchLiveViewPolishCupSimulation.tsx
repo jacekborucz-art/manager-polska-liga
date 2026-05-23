@@ -40,6 +40,7 @@ import { TacticalBrainService } from '@/services/TacticalBrainService';
 import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
 import { RivalryService } from '../services/RivalryService';
+import { buildCupDisplayStats, isCupShotEvent, isCupShotOnTargetEvent } from '../services/CupMatchStatsService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -3125,15 +3126,18 @@ if (activePlayerTempo === 'SLOW') {
           home: { ...prev.liveStats.home },
           away: { ...prev.liveStats.away }
         };
-        if (eventType === MatchEventType.GOAL || eventType === MatchEventType.SHOT_ON_TARGET || eventType === MatchEventType.ONE_ON_ONE_SAVE) {
-          nextLiveStats[eventSide.toLowerCase() as 'home' | 'away'].shots += 1;
-          nextLiveStats[eventSide.toLowerCase() as 'home' | 'away'].shotsOnTarget += 1;
-        } else if (eventType === MatchEventType.SHOT_POST || eventType === MatchEventType.SHOT_BAR) {
-          nextLiveStats[eventSide.toLowerCase() as 'home' | 'away'].shots += 1;
+        const currentMinuteLogs = updatedLogs.filter(l => l.minute === nextMinute && l.teamSide);
+        const hasLoggedShotEvent = currentMinuteLogs.some(l => isCupShotEvent(l.type));
+        if (!hasLoggedShotEvent && eventType && isCupShotEvent(eventType)) {
+          const side = eventSide.toLowerCase() as 'home' | 'away';
+          nextLiveStats[side].shots += 1;
+          if (isCupShotOnTargetEvent(eventType)) nextLiveStats[side].shotsOnTarget += 1;
         }
-        updatedLogs.forEach(l => {
+        currentMinuteLogs.forEach(l => {
           if (l.minute === nextMinute && l.teamSide) {
             const side = l.teamSide.toLowerCase() as 'home' | 'away';
+            if (isCupShotEvent(l.type)) nextLiveStats[side].shots += 1;
+            if (isCupShotOnTargetEvent(l.type)) nextLiveStats[side].shotsOnTarget += 1;
             if (l.type === MatchEventType.CORNER)      nextLiveStats[side].corners  += 1;
             if (l.type === MatchEventType.FOUL)        nextLiveStats[side].fouls    += 1;
             if (l.type === MatchEventType.OFFSIDE)     nextLiveStats[side].offsides += 1;
@@ -3229,6 +3233,16 @@ if (activePlayerTempo === 'SLOW') {
       });
     };
 
+    const homeYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+    const awayYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+    const homeRedCards = matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+    const awayRedCards = matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+    const avgMomentum = matchState.momentumSum / (matchState.momentumTicks || 1);
+    const homePossession = Math.round(clamp(50 + avgMomentum * 0.3, 20, 80));
+    const awayPossession = 100 - homePossession;
+    const finalHomeStats = buildCupDisplayStats(matchState.liveStats.home, matchState.homeScore, homeYellowCards, homeRedCards, homePossession, matchState.sessionSeed, 1000);
+    const finalAwayStats = buildCupDisplayStats(matchState.liveStats.away, matchState.awayScore, awayYellowCards, awayRedCards, awayPossession, matchState.sessionSeed, 2000);
+
     const summary: MatchSummary = {
       matchId: ctx.fixture.id,
       userTeamId: userTeamId!,
@@ -3240,8 +3254,8 @@ if (activePlayerTempo === 'SLOW') {
       awayPenaltyScore: matchState.awayPenaltyScore,
       homeGoals: matchState.homeGoals,
       awayGoals: matchState.awayGoals,
-      homeStats: { ...matchState.liveStats.home, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length, possession: Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
-      awayStats: { ...matchState.liveStats.away, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length, possession: 100 - Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
+      homeStats: finalHomeStats,
+      awayStats: finalAwayStats,
       homePlayers: generatePerformance(ctx.homePlayers, matchState.awayScore),
       awayPlayers: generatePerformance(ctx.awayPlayers, matchState.homeScore),
       timeline: []
@@ -4013,6 +4027,16 @@ if (activePlayerTempo === 'SLOW') {
     const avgMomentum = matchState.momentumTicks > 0 ? matchState.momentumSum / matchState.momentumTicks : matchState.momentum;
     const homePossession = Math.round(clamp(50 + avgMomentum * 0.3, 20, 80));
     const userPossession = isHome ? homePossession : 100 - homePossession;
+    const uScore = isHome ? matchState.homeScore : matchState.awayScore;
+    const oScore = isHome ? matchState.awayScore : matchState.homeScore;
+    const uRedCards = (isHome
+      ? matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id))
+      : matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id))).length;
+    const oRedCards = (isHome
+      ? matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id))
+      : matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id))).length;
+    const calibratedUserStats = buildCupDisplayStats(uStats, uScore, uYellows, uRedCards, userPossession, matchState.sessionSeed, isHome ? 1000 : 2000);
+    const calibratedOppStats = buildCupDisplayStats(oStats, oScore, oYellows, oRedCards, 100 - userPossession, matchState.sessionSeed, isHome ? 2000 : 1000);
     return (
       <HalftimeTalkModal
         isOpen={isHalftimeTalkOpen}
@@ -4028,15 +4052,15 @@ if (activePlayerTempo === 'SLOW') {
         homeKitSecondary={kitColors.home.secondary}
         awayKitPrimary={kitColors.away.primary}
         awayKitSecondary={kitColors.away.secondary}
-        userShots={uStats.shots}
-        userShotsOnTarget={uStats.shotsOnTarget}
-        userCorners={uStats.corners}
-        userFouls={uStats.fouls}
+        userShots={calibratedUserStats.shots}
+        userShotsOnTarget={calibratedUserStats.shotsOnTarget}
+        userCorners={calibratedUserStats.corners}
+        userFouls={calibratedUserStats.fouls}
         userYellowCards={uYellows}
-        oppShots={oStats.shots}
-        oppShotsOnTarget={oStats.shotsOnTarget}
-        oppCorners={oStats.corners}
-        oppFouls={oStats.fouls}
+        oppShots={calibratedOppStats.shots}
+        oppShotsOnTarget={calibratedOppStats.shotsOnTarget}
+        oppCorners={calibratedOppStats.corners}
+        oppFouls={calibratedOppStats.fouls}
         oppYellowCards={oYellows}
         userPossession={userPossession}
         momentumEndOf1st={matchState.momentum}

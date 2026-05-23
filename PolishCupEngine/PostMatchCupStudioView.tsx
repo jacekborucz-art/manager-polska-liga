@@ -7,6 +7,7 @@ import { ChampionshipHistoryService } from '../data/championship_history';
 import { PostMatchCommentSelector } from './PostMatchCommentSelector';
 import PucharPolskiBg from '../Graphic/themes/PucharPolski.png';
 import { getClubLogo } from '../resources/ClubLogoAssets';
+import { ensureCupGoalShotIntegrity } from '../services/CupMatchStatsService';
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -41,6 +42,15 @@ export const PostMatchCupStudioView: React.FC = () => {
   const isPenalties = isDraw && homePenaltyScore !== undefined && (homePenaltyScore > 0 || awayPenaltyScore! > 0);
   const isExtraTime = timeline.some(e => e.minute > 90) || isDraw;
   // KONIEC ZMIANY
+
+  const displayHomeStats = useMemo(
+    () => ensureCupGoalShotIntegrity(homeStats, homeScore),
+    [homeStats, homeScore]
+  );
+  const displayAwayStats = useMemo(
+    () => ensureCupGoalShotIntegrity(awayStats, awayScore),
+    [awayStats, awayScore]
+  );
 
   // 1. Logika Rundy
   const roundLabel = useMemo(() => {
@@ -339,14 +349,14 @@ export const PostMatchCupStudioView: React.FC = () => {
            {/* Central Stats */}
            <div className={`${GLASS_CARD} flex-1 p-12 flex flex-col justify-center gap-3`}>
               <div className={GLOSS_LAYER} />
-              <ThickStatBar label="Posiadanie Piłki (%)" h={Math.round(homeStats.possession)} a={Math.round(awayStats.possession)} />
-              <ThickStatBar label="Strzały" h={homeStats.shots} a={awayStats.shots} />
-              <ThickStatBar label="Strzały Celne" h={homeStats.shotsOnTarget} a={awayStats.shotsOnTarget} />
-              <ThickStatBar label="Rzuty Rożne" h={homeStats.corners} a={awayStats.corners} />
-              <ThickStatBar label="Przewinienia" h={homeStats.fouls} a={awayStats.fouls} />
-              <ThickStatBar label="Spalone" h={homeStats.offsides} a={awayStats.offsides} />
-              <ThickStatBar label="Żółte Kartki" h={homeStats.yellowCards} a={awayStats.yellowCards} />
-              <ThickStatBar label="Czerwone Kartki" h={homeStats.redCards} a={awayStats.redCards} />
+              <ThickStatBar label="Posiadanie Piłki (%)" h={Math.round(displayHomeStats.possession)} a={Math.round(displayAwayStats.possession)} />
+              <ThickStatBar label="Strzały" h={displayHomeStats.shots} a={displayAwayStats.shots} />
+              <ThickStatBar label="Strzały Celne" h={displayHomeStats.shotsOnTarget} a={displayAwayStats.shotsOnTarget} />
+              <ThickStatBar label="Rzuty Rożne" h={displayHomeStats.corners} a={displayAwayStats.corners} />
+              <ThickStatBar label="Przewinienia" h={displayHomeStats.fouls} a={displayAwayStats.fouls} />
+              <ThickStatBar label="Spalone" h={displayHomeStats.offsides} a={displayAwayStats.offsides} />
+              <ThickStatBar label="Żółte Kartki" h={displayHomeStats.yellowCards} a={displayAwayStats.yellowCards} />
+              <ThickStatBar label="Czerwone Kartki" h={displayHomeStats.redCards} a={displayAwayStats.redCards} />
            </div>
 
            {/* Right Events */}
