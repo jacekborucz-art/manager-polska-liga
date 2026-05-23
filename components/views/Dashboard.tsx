@@ -777,19 +777,14 @@ const boardConfidence = useMemo(() => {
 
       <div className="flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl">
          <div className="flex items-center gap-5">
-            <div className="w-10 h-10 rounded-xl flex flex-col overflow-hidden border border-white/20 shadow-lg group cursor-pointer" onClick={() => viewClubDetails(myClub?.id || '')}>
-               <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[0] }} />
-               <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[1] }} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white italic leading-none">
-                 {managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : 'NOWY MANAGER'} {managerProfile?.nationalityFlag}
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-black italic uppercase tracking-tighter text-white leading-none">
+                 {managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : 'NOWY MANAGER'}
               </span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{myClub?.name} • Ekstraklasa</span>
-                <span className="w-1 h-1 rounded-full bg-blue-500/40" />
-                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">SEZON {seasonNumber} ({seasonYearLabel})</span>
-              </div>
+              <span className="text-sm font-black italic uppercase tracking-tighter bg-red-600 text-white px-2 py-0.5 rounded">
+                {myClub?.leagueId === 'L_PL_1' ? 'Ekstraklasa' : myClub?.leagueId === 'L_PL_2' ? 'I Liga' : myClub?.leagueId === 'L_PL_3' ? 'II Liga' : myClub?.leagueId === 'L_PL_4' ? 'III Liga' : 'Ekstraklasa'}
+              </span>
+              <span className="text-sm font-black italic uppercase tracking-tighter text-blue-400">SEZON {seasonNumber} ({seasonYearLabel})</span>
             </div>
          </div>
 

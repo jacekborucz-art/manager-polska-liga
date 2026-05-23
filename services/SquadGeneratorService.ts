@@ -946,5 +946,147 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
 
       return { ...p, annualSalary, marketValue };
     }) as Player[];
+  },
+
+  generateYouthPlayersForClub: (club: Club, currentSquad: Player[], seasonYear: number): Player[] => {
+    const needed = Math.max(0, 22 - currentSquad.length);
+    if (needed === 0) return [];
+
+    const currentGKs = currentSquad.filter(p => p.position === PlayerPosition.GK).length;
+    const gkNeeded = Math.max(0, 2 - currentGKs);
+    const fieldNeeded = needed - gkNeeded;
+
+    const defCount = Math.round(fieldNeeded * 0.35);
+    const midCount = Math.round(fieldNeeded * 0.35);
+    const fwdCount = fieldNeeded - defCount - midCount;
+
+    const positions: PlayerPosition[] = [
+      ...Array(gkNeeded).fill(PlayerPosition.GK),
+      ...Array(Math.max(0, defCount)).fill(PlayerPosition.DEF),
+      ...Array(Math.max(0, midCount)).fill(PlayerPosition.MID),
+      ...Array(Math.max(0, fwdCount)).fill(PlayerPosition.FWD),
+    ];
+
+    const isPolish = club.leagueId.startsWith('L_PL_');
+    const tier = club.tier ?? 4;
+    const reputation = club.reputation;
+
+    const avgSalary = currentSquad.length > 0
+      ? currentSquad.reduce((sum, p) => sum + (p.annualSalary || 0), 0) / currentSquad.length
+      : FinanceService.getWagePool(club.budget) / 22;
+
+    const youthCountryToRegion: Partial<Record<string, Region>> = {
+      'ENG': Region.ENGLAND, 'SCO': Region.ENGLAND, 'WAL': Region.ENGLAND, 'NIR': Region.ENGLAND, 'IRL': Region.ENGLAND,
+      'GER': Region.GERMANY, 'AUT': Region.GERMANY, 'SUI': Region.GERMANY, 'LUX': Region.FRANCE,
+      'ESP': Region.SPAIN, 'AND': Region.IBERIA, 'POR': Region.IBERIA, 'GIB': Region.IBERIA,
+      'FRA': Region.FRANCE, 'ITA': Region.ITALY, 'SMR': Region.ITALY,
+      'NOR': Region.SCANDINAVIA, 'DEN': Region.SCANDINAVIA, 'ISL': Region.SCANDINAVIA, 'FRO': Region.SCANDINAVIA,
+      'SWE': Region.SWEDEN, 'FIN': Region.FINLAND,
+      'NED': Region.BENELUX, 'BEL': Region.BENELUX,
+      'TUR': Region.TURKEY, 'CYP': Region.GREEK, 'GRE': Region.GREEK,
+      'GEO': Region.GEORGIA, 'ARM': Region.ARMENIA,
+      'ALB': Region.ALBANIA, 'KOS': Region.ALBANIA,
+      'ROU': Region.ROMANIA,
+      'SRB': Region.BALKANS, 'CRO': Region.BALKANS, 'BIH': Region.BALKANS, 'MKD': Region.BALKANS,
+      'MNE': Region.BALKANS, 'BUL': Region.BALKANS, 'SVN': Region.BALKANS,
+      'UKR': Region.EX_USSR, 'RUS': Region.EX_USSR, 'BLR': Region.EX_USSR, 'MDA': Region.EX_USSR,
+      'CZE': Region.CZ_SK, 'SVK': Region.CZ_SK,
+      'HUN': Region.HUNGARIAN,
+      'LTU': Region.BALTIC, 'LAT': Region.BALTIC, 'EST': Region.BALTIC,
+      'KAZ': Region.KAZAKH, 'AZE': Region.AZERBAIJANI,
+      'ISR': Region.ISRAELI, 'MLT': Region.MALTESE,
+      'ARG': Region.ARGENTINA, 'BRA': Region.BRAZIL,
+      'URU': Region.SOUTH_AMERICAN, 'COL': Region.SOUTH_AMERICAN, 'ECU': Region.SOUTH_AMERICAN,
+      'PAR': Region.SOUTH_AMERICAN, 'CHI': Region.SOUTH_AMERICAN, 'PER': Region.SOUTH_AMERICAN, 'BOL': Region.SOUTH_AMERICAN,
+      'KSA': Region.ARABIA, 'UAE': Region.ARABIA, 'QAT': Region.ARABIA, 'KUW': Region.ARABIA, 'IRN': Region.ARABIA,
+      'JPN': Region.JAPAN, 'KOR': Region.KOREA, 'CHN': Region.JAPAN,
+      'USA': Region.NORTH_AMERICA, 'CAN': Region.NORTH_AMERICA, 'MEX': Region.MEXICO,
+    };
+
+    const localRegion: Region = isPolish
+      ? Region.POLAND
+      : youthCountryToRegion[club.country ?? ''] ?? Region.SSA;
+
+    const europeanRegions: Region[] = [
+      Region.ENGLAND, Region.GERMANY, Region.FRANCE, Region.ITALY, Region.SPAIN,
+      Region.IBERIA, Region.BALKANS, Region.SCANDINAVIA, Region.EX_USSR, Region.CZ_SK,
+      Region.BENELUX, Region.TURKEY, Region.SWEDEN, Region.FINLAND, Region.GREEK,
+    ];
+
+    const saRegions: Region[] = [Region.ARGENTINA, Region.BRAZIL, Region.SOUTH_AMERICAN];
+
+    const getRegionForSlot = (): Region => {
+      const roll = Math.random();
+      if (roll < 0.80) return localRegion;
+      if (roll < 0.90) return europeanRegions[Math.floor(Math.random() * europeanRegions.length)];
+      return saRegions[Math.floor(Math.random() * saRegions.length)];
+    };
+
+    const usedNames = new Set<string>(currentSquad.map(p => `${p.firstName} ${p.lastName}`));
+
+    return positions.map((pos, i) => {
+      const region = getRegionForSlot();
+      let namePair;
+      let fullName;
+      let attempts = 0;
+      do {
+        namePair = NameGeneratorService.getRandomName(region);
+        fullName = `${namePair.firstName} ${namePair.lastName}`;
+        attempts++;
+      } while (usedNames.has(fullName) && attempts < 50);
+      usedNames.add(fullName);
+
+      const age = 18 + Math.floor(Math.random() * 6);
+      const genData = PlayerAttributesGenerator.generateAttributes(pos, tier, reputation, age, !isPolish);
+
+      const salaryFactor = 0.5 + Math.random() * 0.3;
+      const annualSalary = Math.floor(avgSalary * salaryFactor);
+      const contractEndYear = seasonYear + 2 + Math.floor(Math.random() * 2);
+
+      return {
+        id: `YOUTH_${club.id}_${seasonYear}_${i}_${Math.random().toString(36).substring(2, 6)}`,
+        firstName: namePair.firstName,
+        lastName: namePair.lastName,
+        clubId: club.id,
+        position: pos,
+        nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
+        age,
+        fatigueDebt: 0,
+        overallRating: genData.overall,
+        attributes: genData.attributes,
+        stats: {
+          matchesPlayed: 0, minutesPlayed: 0, goals: 0, assists: 0,
+          yellowCards: 0, redCards: 0, cleanSheets: 0,
+          seasonalChanges: {}, ratingHistory: []
+        },
+        health: { status: HealthStatus.HEALTHY },
+        condition: 100,
+        suspensionMatches: 0,
+        contractEndDate: new Date(contractEndYear, 5, 30).toISOString(),
+        annualSalary,
+        marketValue: FinanceService.calculateMarketValue(
+          { overallRating: genData.overall, age, clubId: club.id } as Player,
+          reputation, tier, club.country
+        ),
+        isUntouchable: false,
+        negotiationStep: 0,
+        negotiationLockoutUntil: null,
+        contractLockoutUntil: null,
+        boardLockoutUntil: null,
+        isNegotiationPermanentBlocked: false,
+        transferLockoutUntil: null,
+        freeAgentLockoutUntil: null,
+        freeAgentClubLockouts: {},
+        history: [{
+          clubName: club.name,
+          clubId: club.id,
+          fromYear: seasonYear + 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null
+        }]
+      } as Player;
+    });
   }
 };

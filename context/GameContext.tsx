@@ -1733,7 +1733,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         }
       }
 
-      const newTier = parseInt(newLeagueId.split('_')[2]) || 4;
+      const parsedTier = parseInt(newLeagueId.split('_')[2]);
+      const newTier = !isNaN(parsedTier) ? parsedTier : (club.tier ?? 4);
       
       // Obliczanie rankingu klubu w nowej lidze (po potencjalnym awansie/spadku)
       let leagueRanking = 10;
@@ -1753,7 +1754,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       
       const seasonalAwardRank = leagueRanking;
       const sponsorshipMult = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
-      let nextSeasonInjection = FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank, sponsorshipMult);
+      const isPolishClub = newLeagueId.startsWith('L_PL_');
+      let nextSeasonInjection = isPolishClub
+        ? FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank, sponsorshipMult)
+        : FinanceService.calculateEuropeanInitialBudget(newTier, newReputation, club.country ?? '', club.name, club.stadiumCapacity ?? 15000);
       
       // Bonusy ligowe (tylko dla Ekstraklasy - tier 1)
       let leagueBonusAmount = 0;
@@ -3683,6 +3687,7 @@ setMessages([welcomeMail, fanMail]);
     }
     // ── Koniec przeglądu kontuzji NT ─────────────────────────────────────────
 
+
         // ── Email o finale Pucharu Polski (wysyłany dzień po finale) ─────────────
     if (userTeamId) {
       const cupFinalFixture = allFixtures.find(f =>
@@ -5155,6 +5160,77 @@ setMessages([welcomeMail, fanMail]);
     DebugLoggerService.log('GUARD', `advanceDay PRZECHODZI dla: ${dateKey}`);
     lastProcessedLeagueDateRef.current = dateKey;
 
+    // ── YOUTH REFILL: EUROPA + POLSKA (3 lipca) ──────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3) {
+      const seasonYear = dateToProcess.getFullYear();
+      const europeanLeagueIds = new Set(['L_CL', 'L_EL', 'L_CONF', 'L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4']);
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && europeanLeagueIds.has(c.leagueId) && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AZJA (7 lipca) ─────────────────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 7) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_ASIA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AFRYKA (12 lipca) ──────────────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 12) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_AFRICA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AMERYKA POŁUDNIOWA (17 lipca) ───────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 17) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_SA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AMERYKA PÓŁNOCNA (19 lipca) ────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 19) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_NA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
     // ── SPARINGI AI: GENEROWANIE PAR (3 lipca) ────────────────────────────────
     if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && aiFriendlyPairs.length === 0) {
       const busyClubIds = new Set<string>(
@@ -6104,6 +6180,7 @@ setMessages([welcomeMail, fanMail]);
             ...PlayerCareerService.resetClubStatsForNewEntry(player),
             clubId: 'FREE_AGENTS' as const,
             annualSalary: 0,
+            isUntouchable: false,
             history: PlayerCareerService.movePlayer(
               player,
               { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
