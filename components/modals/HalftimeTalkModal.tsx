@@ -161,6 +161,21 @@ export const HalftimeTalkModal = ({
     return 'rgba(52,211,153,0.10)';
   };
 
+  const getContextBadge = (): string => {
+    if (context === 'LOSING_HIGH' || context === 'LOSING_ONE') return 'bg-red-600';
+    if (context === 'DRAW_LOW'    || context === 'DRAW_HIGH')  return 'bg-yellow-600';
+    return 'bg-emerald-600';
+  };
+
+  const getContextAccentColor = (): string => {
+    if (context === 'LOSING_HIGH') return 'text-red-400';
+    if (context === 'LOSING_ONE')  return 'text-orange-400';
+    if (context === 'DRAW_LOW')    return 'text-slate-400';
+    if (context === 'DRAW_HIGH')   return 'text-yellow-400';
+    if (context === 'WINNING_ONE') return 'text-emerald-400';
+    return 'text-emerald-400';
+  };
+
   const getMoodLabel = (): string => {
     if (context === 'LOSING_HIGH') {
       if (momentumEndOf1st > 15)  return 'Jesteśmy pod presją wyniku';
@@ -222,8 +237,8 @@ export const HalftimeTalkModal = ({
   ];
 
   return createPortal(
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/80 backdrop-blur-[3px] pointer-events-auto animate-fade-in">
-      <div className="w-full max-w-[1250px] mx-4 border border-white/10 rounded-[57px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" style={{ background: `linear-gradient(135deg, ${homeKitPrimary}cc 0%, rgba(15,23,42,0.75) 45%, rgba(15,23,42,0.75) 55%, ${awayKitPrimary}cc 100%)` }}>
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/85 backdrop-blur-md pointer-events-auto animate-fade-in">
+      <div className="w-full max-w-[1080px] mx-4 bg-slate-900/70 border border-white/10 rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
 
         {/* ── GRADIENT BAR GÓRNY ── */}
         <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent ${getContextAccent()} to-transparent`} />
@@ -231,84 +246,89 @@ export const HalftimeTalkModal = ({
         {/* ── TŁO GLOW ── */}
         <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 0%, ${getContextGlow()} 0%, transparent 60%)` }} />
 
-        {/* ── SCOREBOARD ── */}
-        <div className="relative flex items-center justify-between px-[46px] pt-[37px] pb-[28px] border-b border-white/20">
+        {/* ── HEADER ── */}
+        <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex flex-col gap-3">
 
-          <div className="flex-1 flex items-center gap-[14px]">
-            <JerseyIcon primary={leftKitPrimary} secondary={leftKitSecondary} size="w-[92px] h-[92px]" />
-            <h2 className="text-[2.2rem] font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap">{leftClubName}</h2>
-          </div>
-
-          <div className="flex flex-col items-center gap-[10px] px-[46px]">
-            <div className="text-[5.2rem] font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
-              {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
+          <div className="flex justify-center">
+            <div className={`inline-flex items-center rounded-full px-4 py-1 ${getContextBadge()}`}>
+              <span className="text-[9px] font-black italic uppercase tracking-[0.25em] text-white">PRZERWA</span>
             </div>
-            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-[0.4em]">PRZERWA</span>
           </div>
 
-          <div className="flex-1 flex items-center justify-end gap-3">
-            <h2 className="text-[2.2rem] font-black italic uppercase tracking-tighter text-white leading-none text-right whitespace-nowrap">{rightClubName}</h2>
-            <JerseyIcon primary={rightKitPrimary} secondary={rightKitSecondary} size="w-[92px] h-[92px]" />
+          <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white leading-none text-center whitespace-nowrap">
+            STATYSTYKI <span className={getContextAccentColor()}>I POŁOWY</span>
+          </h1>
+
+          <div className="flex items-center gap-3 mt-1 px-4 py-3 rounded-2xl" style={{ background: `linear-gradient(90deg, ${homeKitPrimary}40 0%, rgba(15,23,42,0.2) 50%, ${awayKitPrimary}40 100%)` }}>
+            <div className="flex-1 flex items-center gap-3">
+              <JerseyIcon primary={leftKitPrimary} secondary={leftKitSecondary} size="w-[52px] h-[52px]" />
+              <div className="text-[28px] font-black italic uppercase tracking-tighter text-white leading-tight">{leftClubName}</div>
+            </div>
+            <div className="flex flex-col items-center px-4 shrink-0">
+              <div className="text-[3.2rem] font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
+                {leftScore}<span className="text-white/20 mx-2">:</span>{rightScore}
+              </div>
+            </div>
+            <div className="flex-1 flex items-center justify-end gap-3">
+              <div className="text-[28px] font-black italic uppercase tracking-tighter text-white leading-tight text-right">{rightClubName}</div>
+              <JerseyIcon primary={rightKitPrimary} secondary={rightKitSecondary} size="w-[52px] h-[52px]" />
+            </div>
           </div>
 
         </div>
 
         {/* ── STATYSTYKI I POŁOWY ── */}
-        <div className="relative px-[46px] py-[23px] border-b border-white/5">
-          <div className="flex flex-col items-center gap-[14px] mb-[18px]">
-            <span className="text-base font-black italic uppercase tracking-tighter text-cyan-400">STATYSTYKI I POŁOWY</span>
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
-          </div>
-
+        <div className="relative px-8 py-5 border-b border-white/5">
           <div className="flex flex-col gap-3">
             {statsRows.map((row, idx) => {
               const leftBarColor  = idx % 2 === 0 ? homeKitPrimary  : homeKitSecondary;
               const rightBarColor = idx % 2 === 0 ? awayKitPrimary  : awayKitSecondary;
+              const leftVal  = userSide === 'HOME' ? row.uVal : row.oVal;
+              const rightVal = userSide === 'HOME' ? row.oVal : row.uVal;
+              const leftPct  = userSide === 'HOME' ? row.u    : row.o;
+              const rightPct = userSide === 'HOME' ? row.o    : row.u;
               return (
                 <div key={row.label} className="flex items-center gap-[14px]">
                   <span className="w-[55px] text-right text-[1.44rem] font-black italic leading-none text-white">
-                    {row.uVal}
+                    {leftVal}
                   </span>
                   <div className="flex-1 flex items-center h-[18px] overflow-hidden rounded-l-full bg-white/[0.04]" style={{ direction: 'rtl' }}>
-                    <div className="h-full rounded-l-full transition-all" style={{ width: `${row.u}%`, backgroundColor: leftBarColor }} />
+                    <div className="h-full rounded-l-full transition-all" style={{ width: `${leftPct}%`, backgroundColor: leftBarColor }} />
                   </div>
                   <span className="text-[9.5px] font-black text-white/70 uppercase tracking-widest shrink-0 w-[110px] text-center">
                     {row.label}
                   </span>
                   <div className="flex-1 h-[18px] overflow-hidden rounded-r-full bg-white/[0.04]">
-                    <div className="h-full rounded-r-full transition-all" style={{ width: `${row.o}%`, backgroundColor: rightBarColor }} />
+                    <div className="h-full rounded-r-full transition-all" style={{ width: `${rightPct}%`, backgroundColor: rightBarColor }} />
                   </div>
                   <span className="w-[55px] text-left text-[1.44rem] font-black italic leading-none text-white">
-                    {row.oVal}
+                    {rightVal}
                   </span>
                 </div>
               );
             })}
 
-            {/* ── NASTRÓJ ── */}
-            <div className="min-h-[76px] flex items-center justify-center gap-[14px] mt-[5px] py-[20px] -mx-[46px] px-[46px] bg-white/[0.08] animate-pulse text-center">
-              <span className={`block w-full text-center text-[27px] leading-none font-black italic uppercase tracking-tighter ${getMoodColor()}`}>{getMoodLabel()}</span>
-            </div>
           </div>
         </div>
 
         {/* ── FAZA WYBORU ── */}
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
-            <div className="min-h-[72px] -mx-[28px] px-[46px] py-[18px] flex items-center justify-center text-center bg-white/[0.08] border-y border-white/10">
-              <span className="block w-full text-center text-lg leading-none font-black italic uppercase tracking-tighter text-yellow-400">
-                ROZMOWA MOTYWACYJNA
-              </span>
+            <div className="flex flex-col items-center gap-3 px-8 pt-5 pb-2">
+              <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">ROZMOWA MOTYWACYJNA</span>
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
             </div>
-            <div className="px-[28px] pb-[28px] grid grid-cols-2 gap-[7px] max-h-[391px] overflow-y-auto custom-scrollbar">
+            <div className="px-8 pb-5 grid grid-cols-2 gap-3">
               {talks.map((opt, idx) => (
                 <button
                   key={opt.id}
                   onClick={() => handleSelect(opt, idx)}
-                  className="w-full text-left px-4 py-[9px] rounded-xl bg-slate-800 border border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 text-sm font-medium leading-snug hover:bg-yellow-500/30 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 hover:text-yellow-100 transition-all active:scale-[0.99] active:translate-y-[2px]"
+                  className="w-full text-left rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/[0.03] px-5 py-3.5 transition-all duration-150 hover:bg-yellow-500/15 hover:border-t-yellow-400/50 hover:border-x-yellow-400/30 hover:border-b-yellow-900/60 active:translate-y-[2px]"
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
-                  {opt.text}
+                  <p className="text-sm font-normal italic uppercase tracking-tighter text-white leading-snug">
+                    {opt.text}
+                  </p>
                 </button>
               ))}
             </div>
@@ -317,17 +337,27 @@ export const HalftimeTalkModal = ({
 
         {/* ── FAZA REAKCJI ── */}
         {phase === 'REACTING' && (
-          <div className="relative flex flex-col items-center gap-9 px-[46px] py-[55px]">
-            <div className="text-[3.45rem] drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] animate-bounce">💬</div>
-            <p className="text-center text-xl font-bold text-white italic leading-relaxed drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-              {reactionText}
-            </p>
+          <div className="relative flex flex-col items-center px-8 py-8 gap-6">
+            <div className="text-center">
+              <div className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500 mb-3">REAKCJA SZATNI</div>
+              <p className="text-xl font-black italic uppercase tracking-tighter text-white leading-snug">{reactionText}</p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2 border-t border-white/5 w-full">
+              <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-600">NASTRÓJ</span>
+              <span className={`text-sm font-black italic uppercase tracking-tighter ${getMoodColor()}`}>{getMoodLabel()}</span>
+            </div>
             <button
               onClick={handleContinue}
-              className="mt-2 min-w-[253px] py-4 px-[46px] rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 font-black italic uppercase tracking-tighter text-[1.15rem] transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(59,130,246,0.15)] hover:bg-blue-600/30 hover:shadow-[0_0_50px_rgba(59,130,246,0.25)] flex items-center justify-center gap-3 group"
+              className={`w-full py-4 rounded-2xl font-black italic uppercase tracking-tighter text-sm text-white transition-all duration-200 border-t border-x border-b active:translate-y-[2px]
+                ${context === 'LOSING_HIGH' || context === 'LOSING_ONE'
+                  ? 'bg-red-600/80 hover:bg-red-500 border-t-red-400/60 border-x-red-500/30 border-b-black/60'
+                  : context === 'WINNING_HIGH' || context === 'WINNING_ONE'
+                  ? 'bg-emerald-600/80 hover:bg-emerald-500 border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60'
+                  : 'bg-yellow-600/80 hover:bg-yellow-500 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60'
+                }`}
+              style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
             >
-              <span>II POŁOWA</span>
-              <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
+              II POŁOWA
             </button>
           </div>
         )}
@@ -336,3 +366,5 @@ export const HalftimeTalkModal = ({
     </div>
   , document.body);
 };
+
+

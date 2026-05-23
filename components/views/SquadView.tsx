@@ -793,7 +793,7 @@ export const SquadView: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-full flex flex-col p-6 animate-fade-in overflow-hidden relative font-sans text-slate-100">
+    <div className="h-screen w-full flex flex-col pt-9 px-6 pb-3 animate-fade-in overflow-hidden relative font-sans text-slate-100">
       
       {/* 1. KINETYCZNE TŁO (BEZ ZMIAN URL) */}
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
