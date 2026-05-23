@@ -34,7 +34,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
            currentSquad.forEach(player => {
         // NOWA LOGIKA: Wygasły kontrakt → wolny agent (tylko AI-kluby)
         const contractExpired = player.contractEndDate && new Date(player.contractEndDate) <= seasonEndDate;
-        if (contractExpired && clubId !== userTeamId && nextSquad.length > 22) {
+        if (contractExpired && clubId !== userTeamId && !player.transferPendingClubId) {
           const released = {
             ...PlayerCareerService.resetClubStatsForNewEntry(player),
             clubId: 'FREE_AGENTS',

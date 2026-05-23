@@ -1980,6 +1980,56 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       }));
     }
 
+    // Wygasłe kontrakty w drużynie gracza → wolni agenci
+    if (userTeamId) {
+      const userSquad = transitionResult.updatedPlayers[userTeamId] || [];
+      const expiredUserPlayers = userSquad.filter(p =>
+        p.contractEndDate &&
+        new Date(p.contractEndDate) <= seasonEndDate &&
+        !p.transferPendingClubId
+      );
+      if (expiredUserPlayers.length > 0) {
+        const userClub = updatedClubs.find(c => c.id === userTeamId);
+        const releasedFromUser = expiredUserPlayers.map(player => ({
+          ...PlayerCareerService.resetClubStatsForNewEntry(player),
+          clubId: 'FREE_AGENTS' as const,
+          annualSalary: 0,
+          history: PlayerCareerService.movePlayer(
+            player,
+            { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+            seasonEndDate.getFullYear(),
+            7,
+            { clubName: userClub?.name ?? userTeamId, clubId: userTeamId }
+          )
+        }));
+        setPlayers(prev => ({
+          ...prev,
+          [userTeamId]: (prev[userTeamId] || []).filter(p => !expiredUserPlayers.some(e => e.id === p.id)),
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...releasedFromUser]
+        }));
+        const expiryMail: MailMessage = {
+          id: `USER_CONTRACT_EXPIRY_${seasonEndDate.getFullYear()}_${userTeamId}`,
+          sender: 'Dział Kadr',
+          role: 'Administracja sportowa',
+          subject: `Wygasłe kontrakty – koniec sezonu`,
+          body: [
+            'Trenerze,',
+            '',
+            'Następujący zawodnicy opuścili klub po wygaśnięciu kontraktu:',
+            '',
+            ...expiredUserPlayers.map(p => `• ${p.firstName} ${p.lastName}`),
+            '',
+            'Zawodnicy stali się wolnymi agentami.',
+          ].join('\n'),
+          date: new Date(seasonEndDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 75,
+        };
+        setMessages(prev => [expiryMail, ...prev]);
+      }
+    }
+
 if (userTeamId) {
       const myRetirements = transitionResult.retirementLogs.filter(log => log.clubId === userTeamId);
       const userClub = updatedClubs.find(c => c.id === userTeamId);
@@ -6032,6 +6082,67 @@ setMessages([welcomeMail, fanMail]);
     postReviewPlayers = aiAiLoanMoves.updatedPlayers;
     postLoanLineups = aiAiLoanMoves.updatedLineups;
 
+    // Wygasłe kontrakty (mid-season) → wolni agenci, każdy klub
+    const contractExpiryMails: MailMessage[] = [];
+    {
+      let anyExpired = false;
+      const nextPlayersExp: Record<string, Player[]> = {};
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        nextPlayersExp[clubId] = [...squad];
+      });
+      if (!nextPlayersExp['FREE_AGENTS']) nextPlayersExp['FREE_AGENTS'] = [];
+
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        if (clubId === 'FREE_AGENTS') return;
+        squad.forEach(player => {
+          if (!player.contractEndDate || player.transferPendingClubId) return;
+          const contractEnd = new Date(player.contractEndDate);
+          if (contractEnd >= dateToProcess) return;
+
+          const club = postReviewClubs.find(c => c.id === clubId);
+          const released = {
+            ...PlayerCareerService.resetClubStatsForNewEntry(player),
+            clubId: 'FREE_AGENTS' as const,
+            annualSalary: 0,
+            history: PlayerCareerService.movePlayer(
+              player,
+              { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+              dateToProcess.getFullYear(),
+              dateToProcess.getMonth() + 1,
+              { clubName: club?.name ?? clubId, clubId }
+            )
+          };
+          nextPlayersExp[clubId] = (nextPlayersExp[clubId] ?? []).filter(p => p.id !== player.id);
+          nextPlayersExp['FREE_AGENTS'] = [...(nextPlayersExp['FREE_AGENTS'] ?? []), released];
+          anyExpired = true;
+
+          if (userTeamId && clubId === userTeamId) {
+            contractExpiryMails.push({
+              id: `CONTRACT_EXPIRY_${player.id}_${dateToProcess.toISOString().split('T')[0]}`,
+              sender: 'Dział Kadr',
+              role: 'Administracja sportowa',
+              subject: `Wygasł kontrakt: ${player.firstName} ${player.lastName}`,
+              body: [
+                'Trenerze,',
+                '',
+                `Kontrakt zawodnika ${player.firstName} ${player.lastName} wygasł ${contractEnd.toLocaleDateString('pl-PL')}.`,
+                '',
+                'Zawodnik stał się wolnym agentem i opuścił klub.',
+              ].join('\n'),
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 70,
+            });
+          }
+        });
+      });
+
+      if (anyExpired) {
+        postReviewPlayers = nextPlayersExp;
+      }
+    }
+
 const finalResult: SimulationOutput = {
       ...simulation,
       updatedClubs: postReviewClubs,
@@ -6052,6 +6163,10 @@ const finalResult: SimulationOutput = {
 
     if (loanReturnMails.length > 0) {
       prependUniqueMessages(loanReturnMails);
+    }
+
+    if (contractExpiryMails.length > 0) {
+      prependUniqueMessages(contractExpiryMails);
     }
 
     if (userTeamId) {

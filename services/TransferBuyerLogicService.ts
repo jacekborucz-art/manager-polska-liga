@@ -38,6 +38,21 @@ export const TransferBuyerLogicService = {
       return { approved: true, reason: '' };
     }
 
+    if (
+      (offer.timing === TransferTiming.IN_SIX_MONTHS || offer.timing === TransferTiming.IN_TWELVE_MONTHS)
+      && currentDate
+    ) {
+      const effectiveDate = new Date(currentDate);
+      effectiveDate.setMonth(effectiveDate.getMonth() + (offer.timing === TransferTiming.IN_SIX_MONTHS ? 6 : 12));
+      const contractEnd = new Date(player.contractEndDate);
+      if (contractEnd < effectiveDate) {
+        return {
+          approved: false,
+          reason: `Kontrakt zawodnika wygasa ${contractEnd.toLocaleDateString('pl-PL')}, przed planowaną datą transferu. Skorzystaj z opcji "Po wygaśnięciu kontraktu".`
+        };
+      }
+    }
+
     if (!Number.isFinite(offer.fee) || offer.fee <= 0) {
       return { approved: false, reason: 'Kwota odstępnego musi być większa od zera.' };
     }

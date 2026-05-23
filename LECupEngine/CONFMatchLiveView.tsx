@@ -293,6 +293,28 @@ const isPausedForSevereInjury = useMemo(() => {
     return x - Math.floor(x);
   };
 
+  const buildDisplayStats = (
+    rawStats: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number },
+    goals: number,
+    yellowCards: number,
+    redCards: number,
+    possession: number,
+    seed: number,
+    sideOffset: number
+  ) => {
+    const statRng = (offset: number) => seededRng(seed, 45, sideOffset + offset);
+    const syntheticShotFloor = goals * (2 + Math.floor(statRng(1) * 3)) + 4 + Math.floor(statRng(2) * 5);
+    const shots = Math.max(rawStats.shots, rawStats.shotsOnTarget, goals, syntheticShotFloor);
+    const shotsOnTarget = Math.min(
+      shots,
+      Math.max(rawStats.shotsOnTarget, goals, Math.floor(shots * (0.36 + statRng(3) * 0.18)))
+    );
+    const corners = Math.max(rawStats.corners, 1 + Math.floor(statRng(4) * 6));
+    const fouls = Math.max(rawStats.fouls, yellowCards * (2 + Math.floor(statRng(5) * 3)) + redCards * 3, 8 + Math.floor(statRng(6) * 8));
+
+    return { ...rawStats, shots, shotsOnTarget, corners, fouls, yellowCards, redCards, possession };
+  };
+
   const hasMandatorySub = useMemo(() => {
     if (!matchState) return false;
     const userLineup = userSide === 'HOME' ? matchState.homeLineup : matchState.awayLineup;
@@ -1939,29 +1961,14 @@ return {
       timeline.push({ minute: l.minute, type: l.type, playerName: l.playerName || '?', assistantName: l.type === MatchEventType.GOAL ? goalEntry?.assistantName : undefined, teamSide: l.teamSide!, varDisallowed: isVarDisallowed, scoreAtMoment: (l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed ? `${hCounter}-${aCounter}` : undefined });
     });
 
-   // --- WARSTWA KALIBRACJI STATYSTYK (STAGE 1 PRO) ---
-    const homeCardsCount = Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length + matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
-    const awayCardsCount = Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length + matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
-
-    // a) Przewinienia (Faule) + Kartki
-   let calibHomeFouls = matchState.liveStats.home.fouls;
-    for(let i=0; i<homeCardsCount; i++) calibHomeFouls += Math.floor(Math.random() * 4) + 2;
-    // Failsafe dla fauli: jeśli suma mniejsza niż 8, dodaj losowo 2-14
-    if (calibHomeFouls < 8) calibHomeFouls += Math.floor(Math.random() * 13) + 2;
-
-    let calibAwayFouls = matchState.liveStats.away.fouls;
-    for(let i=0; i<awayCardsCount; i++) calibAwayFouls += Math.floor(Math.random() * 4) + 2;
-    if (calibAwayFouls < 8) calibAwayFouls += Math.floor(Math.random() * 13) + 2;
-
-    // b) Strzały ogólne (Gole jako katalizator)
-    const calibHomeShots = matchState.liveStats.home.shots + (matchState.homeScore * (Math.floor(Math.random() * 3) + 2));
-    const calibAwayShots = matchState.liveStats.away.shots + (matchState.awayScore * (Math.floor(Math.random() * 3) + 2));
-
-    // c) Rzuty rożne (Safe-min 3)
-    let calibHomeCorners = matchState.liveStats.home.corners;
-    if (calibHomeCorners < 6) calibHomeCorners += Math.floor(Math.random() * 7) + 2;
-    let calibAwayCorners = matchState.liveStats.away.corners;
-    if (calibAwayCorners < 6) calibAwayCorners += Math.floor(Math.random() * 7) + 2;
+    const homeYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+    const awayYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+    const homeRedCards = matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+    const awayRedCards = matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+    const homePossession = Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4));
+    const awayPossession = 100 - homePossession;
+    const finalHomeStats = buildDisplayStats(matchState.liveStats.home, matchState.homeScore, homeYellowCards, homeRedCards, homePossession, matchState.sessionSeed, 1000);
+    const finalAwayStats = buildDisplayStats(matchState.liveStats.away, matchState.awayScore, awayYellowCards, awayRedCards, awayPossession, matchState.sessionSeed, 2000);
 
 const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, side: 'HOME' | 'AWAY', conceded: number, shotsAgainst: number) => {
       // 1. Inicjalizacja bazowa
@@ -2056,8 +2063,8 @@ const summary: MatchSummary = {
       matchId: ctx.fixture.id, userTeamId: userTeamId!, homeClub: ctx.homeClub, awayClub: ctx.awayClub, 
       homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeGoals: matchState.homeGoals.filter(g => !g.varDisallowed), awayGoals: matchState.awayGoals.filter(g => !g.varDisallowed),
       attendance: attendance,
-      homeStats: { ...matchState.liveStats.home, fouls: calibHomeFouls, shots: calibHomeShots, corners: calibHomeCorners, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length, possession: Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
-      awayStats: { ...matchState.liveStats.away, fouls: calibAwayFouls, shots: calibAwayShots, corners: calibAwayCorners, yellowCards: Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length, redCards: matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length, possession: 100 - Math.round(50 + ((matchState.momentumSum / (matchState.momentumTicks || 1)) * 0.4)) },
+      homeStats: finalHomeStats,
+      awayStats: finalAwayStats,
       homePlayers: calculateUnitRatings(ctx.homePlayers, playedIdsHome, 'HOME', matchState.awayScore, matchState.liveStats.away.shotsOnTarget),
       awayPlayers: calculateUnitRatings(ctx.awayPlayers, playedIdsAway, 'AWAY', matchState.homeScore, matchState.liveStats.home.shotsOnTarget),
       timeline
@@ -3178,6 +3185,12 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         const oYellows = oXI.filter((id): id is string => id !== null).filter(id => (matchState.playerYellowCards[id] || 0) >= 1).length;
         const avgMomentum = matchState.momentumTicks > 0 ? matchState.momentumSum / matchState.momentumTicks : 0;
         const userPossession = Math.round(Math.max(20, Math.min(80, 50 + avgMomentum * 0.3)));
+        const uScore = isHome ? matchState.homeScore : matchState.awayScore;
+        const oScore = isHome ? matchState.awayScore : matchState.homeScore;
+        const uRedCards = (isHome ? matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)) : matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id))).length;
+        const oRedCards = (isHome ? matchState.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)) : matchState.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id))).length;
+        const calibratedUserStats = buildDisplayStats(uStats, uScore, uYellows, uRedCards, userPossession, matchState.sessionSeed, isHome ? 1000 : 2000);
+        const calibratedOppStats = buildDisplayStats(oStats, oScore, oYellows, oRedCards, 100 - userPossession, matchState.sessionSeed, isHome ? 2000 : 1000);
         return (
           <HalftimeTalkModal
             isOpen={isHalftimeTalkOpen}
@@ -3193,15 +3206,15 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             awayKitSecondary={kitColors!.away.secondary}
             homeClubColors={[kitColors!.home.primary, kitColors!.home.secondary]}
             awayClubColors={[kitColors!.away.primary, kitColors!.away.secondary]}
-            userShots={uStats.shots}
-            userShotsOnTarget={uStats.shotsOnTarget}
-            userCorners={uStats.corners}
-            userFouls={uStats.fouls}
+            userShots={calibratedUserStats.shots}
+            userShotsOnTarget={calibratedUserStats.shotsOnTarget}
+            userCorners={calibratedUserStats.corners}
+            userFouls={calibratedUserStats.fouls}
             userYellowCards={uYellows}
-            oppShots={oStats.shots}
-            oppShotsOnTarget={oStats.shotsOnTarget}
-            oppCorners={oStats.corners}
-            oppFouls={oStats.fouls}
+            oppShots={calibratedOppStats.shots}
+            oppShotsOnTarget={calibratedOppStats.shotsOnTarget}
+            oppCorners={calibratedOppStats.corners}
+            oppFouls={calibratedOppStats.fouls}
             oppYellowCards={oYellows}
             userPossession={userPossession}
             momentumEndOf1st={matchState.momentum}
