@@ -101,6 +101,7 @@ import { FriendlyMatchLiveView } from './components/views/FriendlyMatchLiveView'
 import { PostMatchFriendlyStudioView } from './components/views/PostMatchFriendlyStudioView';
 import { FriendlyMatchesRaportView } from './components/views/FriendlyMatchesRaportView';
 import { Analytics } from "@vercel/analytics/react";
+import { GameScaler } from './components/GameScaler';
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -405,8 +406,10 @@ case ViewState.CL_GROUP_DRAW:
 const App: React.FC = () => {
   return (
     <GameProvider>
-      <AppContent />
-      <Analytics />
+      <GameScaler>
+        <AppContent />
+        <Analytics />
+      </GameScaler>
     </GameProvider>
   );
 };

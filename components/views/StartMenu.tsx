@@ -4,6 +4,7 @@ import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import bgImg from '../../Graphic/themes/main_theme.png';
 import { importSaveFromFile } from '../../services/SaveGameService';
+import { useGameScaler } from '../GameScaler';
 export const StartMenu: React.FC = () => {
   const { startNewGame, navigateTo, loadGameFromFile, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -20,6 +21,7 @@ export const StartMenu: React.FC = () => {
     document.addEventListener('fullscreenchange', handleChange);
     return () => document.removeEventListener('fullscreenchange', handleChange);
   }, []);
+  const { mobileMode, toggleMobile } = useGameScaler();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,6 +100,22 @@ export const StartMenu: React.FC = () => {
         
 
       
+
+        <button
+          onClick={toggleMobile}
+          className={`group relative mb-6 w-full max-w-sm h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${
+            mobileMode
+              ? 'bg-teal-600/40 border-teal-400/60 hover:bg-teal-700 hover:border-teal-300 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)]'
+              : 'bg-teal-600/20 border-teal-500/30 hover:bg-teal-600 hover:border-teal-400 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)] animate-mobile-pulse'
+          }`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative z-10 flex items-center justify-center">
+            <span className="text-[18px] font-black text-white/90 group-hover:text-white uppercase tracking-widest transition-colors">
+              {mobileMode ? 'WYŁĄCZ WERSJĘ MOBILNĄ' : 'WŁĄCZ WERSJĘ MOBILNĄ'}
+            </span>
+          </div>
+        </button>
 
         {/* Action Menu */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-5xl mx-auto">
@@ -206,6 +224,12 @@ export const StartMenu: React.FC = () => {
           50% { box-shadow: 0 0 30px rgba(16,185,129,0.7), 0 0 60px rgba(16,185,129,0.3); border-color: rgba(16,185,129,0.8); }
         }
         .animate-fullscreen-pulse { animation: fullscreen-pulse 2.5s ease-in-out infinite; }
+
+        @keyframes mobile-pulse {
+          0%, 100% { box-shadow: 0 0 8px rgba(20,184,166,0.2); border-color: rgba(20,184,166,0.3); }
+          50% { box-shadow: 0 0 30px rgba(20,184,166,0.7), 0 0 60px rgba(20,184,166,0.3); border-color: rgba(20,184,166,0.8); }
+        }
+        .animate-mobile-pulse { animation: mobile-pulse 2.5s ease-in-out infinite; }
       `}</style>
     </div>
   );

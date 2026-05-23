@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole } from '../../types';
 import { Button } from '../ui/Button';
@@ -1893,7 +1894,7 @@ export const SquadView: React.FC = () => {
         </div>
       )}
 
-      {reportPlayer && cachedReport && createPortal((() => {
+      {reportPlayer && cachedReport && createPortal(<PortalScaleWrapper>{(() => {
         const report = cachedReport;
         const posColor = reportPlayer.position === 'GK' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
           : reportPlayer.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
@@ -2050,7 +2051,7 @@ export const SquadView: React.FC = () => {
             </div>
           </div>
         );
-      })(), document.body)}
+      })()}</PortalScaleWrapper>, document.body)}
 
       {isAnalysisOpen && myClub && teamAnalysisReport && (
         <TeamAnalysisModal
@@ -2121,6 +2122,7 @@ export const SquadView: React.FC = () => {
         );
 
         return createPortal(
+          <PortalScaleWrapper>
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => { setIsStaffOpen(false); setSelectedStaffId(null); }}>
 
             {/* KARTA SZCZEGÓŁÓW */}
@@ -2492,7 +2494,8 @@ export const SquadView: React.FC = () => {
                 )}
               </div>
             )}
-          </div>,
+          </div>
+          </PortalScaleWrapper>,
           document.body
         );
       })()}
@@ -2511,7 +2514,8 @@ export const SquadView: React.FC = () => {
           tylko ufamy kolejności zapisu i pokazujemy ostatnie miesiące w naturalnej kolejności.
       */}
       {loanDetailsPlayer?.loan && createPortal(
-        (() => {
+        <PortalScaleWrapper>
+        {(() => {
           const player = loanDetailsPlayer;
           const loan = player.loan!;
           const destinationClub = clubs.find(club => club.id === loan.destinationClubId);
@@ -2673,7 +2677,8 @@ export const SquadView: React.FC = () => {
               </div>
             </div>
           );
-        })(),
+        })()}
+        </PortalScaleWrapper>,
         document.body
       )}
 

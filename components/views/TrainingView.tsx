@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
 import { ViewState, Player, StaffRole } from '../../types';
 import { TRAINING_CYCLES } from '../../data/training_definitions_pl';
@@ -717,6 +718,7 @@ export const TrainingView: React.FC = () => {
 
       {/* MENU KONTEKSTOWE */}
       {contextMenu && createPortal(
+        <PortalScaleWrapper>
         <>
           <div className="fixed inset-0 z-[140]" onClick={() => setContextMenu(null)} />
           <div
@@ -731,12 +733,13 @@ export const TrainingView: React.FC = () => {
               <span className="text-[10px] font-black uppercase tracking-widest text-white">Raport Asystenta</span>
             </button>
           </div>
-        </>,
+        </>
+        </PortalScaleWrapper>,
         document.body
       )}
 
       {/* MODAL RAPORTU INDYWIDUALNEGO */}
-      {reportPlayer && cachedReport && createPortal((() => {
+      {reportPlayer && cachedReport && createPortal(<PortalScaleWrapper>{(() => {
         const report = cachedReport;
         const posColor = reportPlayer.position === 'GK' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
           : reportPlayer.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
@@ -950,7 +953,7 @@ export const TrainingView: React.FC = () => {
             </div>
           </div>
         );
-      })(), document.body)}
+      })()}</PortalScaleWrapper>, document.body)}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
