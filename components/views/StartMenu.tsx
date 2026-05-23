@@ -9,6 +9,7 @@ export const StartMenu: React.FC = () => {
   const { startNewGame, navigateTo, loadGameFromFile, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -101,22 +102,6 @@ export const StartMenu: React.FC = () => {
 
       
 
-        <button
-          onClick={toggleMobile}
-          className={`group relative mb-6 w-full max-w-sm h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${
-            mobileMode
-              ? 'bg-teal-600/40 border-teal-400/60 hover:bg-teal-700 hover:border-teal-300 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)]'
-              : 'bg-teal-600/20 border-teal-500/30 hover:bg-teal-600 hover:border-teal-400 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)] animate-mobile-pulse'
-          }`}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative z-10 flex items-center justify-center">
-            <span className="text-[18px] font-black text-white/90 group-hover:text-white uppercase tracking-widest transition-colors">
-              {mobileMode ? 'WYŁĄCZ WERSJĘ MOBILNĄ' : 'WŁĄCZ WERSJĘ MOBILNĄ'}
-            </span>
-          </div>
-        </button>
-
         {/* Action Menu */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-5xl mx-auto">
                                                                       
@@ -164,12 +149,8 @@ export const StartMenu: React.FC = () => {
              </div>
           </button>
 
-          <button 
-            onClick={() => showGameNotification({
-              title: 'Opcje niedostępne',
-              message: 'Panel ustawień będzie dostępny w jednej z kolejnych wersji.',
-              tone: 'info'
-            })}
+          <button
+            onClick={() => setShowOptions(true)}
             className="group relative h-48 bg-slate-900/60 border border-white/5 rounded-[32px] p-6 transition-all duration-500 hover:bg-white/5 hover:border-white/20 hover:-translate-y-2 overflow-hidden shadow-xl"
           >
              <div className="relative z-10 flex flex-col h-full items-center justify-between">
@@ -183,21 +164,47 @@ export const StartMenu: React.FC = () => {
 
         </div>
 
-        <p className="mt-8 text-[15px] font-black text-slate-400 uppercase tracking-widest text-center">
-          GRA DZIAŁA NAJLEPIEJ W TRYBIE PEŁNOEKRANOWYM i w rozdzielczości co najmniej 1920x1080
-        </p>
+        {showOptions && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            onClick={() => setShowOptions(false)}
+          >
+            <div
+              className="relative flex flex-col items-center gap-4 p-8 bg-slate-950/95 border border-white/10 rounded-[32px] w-full max-w-sm mx-6 backdrop-blur-3xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowOptions(false)}
+                className="absolute top-4 right-4 text-2xl text-white/40 hover:text-white transition-colors leading-none"
+              >✕</button>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">OPCJE</p>
 
-        <button
-          onClick={toggleFullscreen}
-          className={`group relative mt-3 w-full max-w-sm h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${isFullscreen ? 'bg-red-600/20 border-red-500/30 hover:bg-red-600 hover:border-red-400 hover:shadow-[0_20px_40px_-10px_rgba(220,38,38,0.5)]' : 'bg-emerald-600/20 border-emerald-500/30 hover:bg-emerald-600 hover:border-emerald-400 hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.5)] animate-fullscreen-pulse'}`}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative z-10 flex items-center justify-center">
-            <span className="text-[13px] font-black text-white/50 group-hover:text-white uppercase tracking-widest transition-colors">
-              {isFullscreen ? 'WYŁĄCZ PEŁNY EKRAN' : 'WŁĄCZ PEŁNY EKRAN'}
-            </span>
+              <button
+                onClick={toggleFullscreen}
+                className={`group relative w-full h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${isFullscreen ? 'bg-red-600/20 border-red-500/30 hover:bg-red-600 hover:border-red-400 hover:shadow-[0_20px_40px_-10px_rgba(220,38,38,0.5)]' : 'bg-emerald-600/20 border-emerald-500/30 hover:bg-emerald-600 hover:border-emerald-400 hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.5)] animate-fullscreen-pulse'}`}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10 flex items-center justify-center">
+                  <span className="text-[13px] font-black text-white/50 group-hover:text-white uppercase tracking-widest transition-colors">
+                    {isFullscreen ? 'WYŁĄCZ PEŁNY EKRAN' : 'WŁĄCZ PEŁNY EKRAN'}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={toggleMobile}
+                className={`group relative w-full h-16 rounded-[32px] px-8 transition-all duration-500 hover:-translate-y-1 overflow-hidden border ${mobileMode ? 'bg-teal-600/40 border-teal-400/60 hover:bg-teal-700 hover:border-teal-300 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)]' : 'bg-teal-600/20 border-teal-500/30 hover:bg-teal-600 hover:border-teal-400 hover:shadow-[0_20px_40px_-10px_rgba(20,184,166,0.5)] animate-mobile-pulse'}`}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10 flex items-center justify-center">
+                  <span className="text-[18px] font-black text-white/90 group-hover:text-white uppercase tracking-widest transition-colors">
+                    {mobileMode ? 'WYŁĄCZ WERSJĘ MOBILNĄ' : 'WŁĄCZ WERSJĘ MOBILNĄ'}
+                  </span>
+                </div>
+              </button>
+            </div>
           </div>
-        </button>
+        )}
 
         {/* Footer info */}
         <div className="mt-20 flex flex-col items-center gap-2">
