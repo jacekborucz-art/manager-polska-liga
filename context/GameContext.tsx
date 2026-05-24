@@ -764,6 +764,8 @@ interface GameContextType {
   setPlayers: React.Dispatch<React.SetStateAction<Record<string, Player[]>>>;
   setLastMatchSummary: (summary: MatchSummary | null) => void;
    setClubs: React.Dispatch<React.SetStateAction<Club[]>>;
+  setCoaches: React.Dispatch<React.SetStateAction<Record<string, Coach>>>;
+  setStaffMembers: React.Dispatch<React.SetStateAction<Record<string, StaffMember>>>;
   addRoundResults: (results: LeagueRoundResults) => void;
   applySimulationResult: (result: SimulationOutput) => void;
   setActiveMatchState: React.Dispatch<React.SetStateAction<MatchLiveState | null>>;
@@ -11985,7 +11987,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
       startNewGame, getSaveState, loadGameFromFile, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
-      setPlayers, setClubs, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
+      setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,

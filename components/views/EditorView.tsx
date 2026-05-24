@@ -2,12 +2,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, ClubManagement } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
 import { FinanceService } from '../../services/FinanceService';
 import { LineupService } from '../../services/LineupService';
+import { SquadGeneratorService } from '../../services/SquadGeneratorService';
+import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -94,6 +96,42 @@ const STAFF_ROLE_LABELS: Record<string, string> = {
   CLUB_DOCTOR: 'Lekarz klubowy',
 };
 
+const COACH_ATTR_LABELS: { key: string; label: string }[] = [
+  { key: 'experience',     label: 'Doświadczenie' },
+  { key: 'decisionMaking', label: 'Podejmowanie decyzji' },
+  { key: 'motivation',     label: 'Motywacja' },
+  { key: 'training',       label: 'Trening' },
+];
+
+const MANAGEMENT_ROLE_LABELS: Record<string, string> = {
+  owner:             'Właściciel',
+  ceo:               'Prezes',
+  sportingDirector:  'Dyrektor sportowy',
+  cfo:               'Dyrektor finansowy',
+  coo:               'Dyrektor operacyjny',
+  marketingDirector: 'Dyrektor marketingu',
+  academyDirector:   'Dyrektor akademii',
+};
+
+const MANAGEMENT_KEYS: (keyof ClubManagement)[] = ['owner', 'ceo', 'sportingDirector', 'cfo', 'coo', 'marketingDirector', 'academyDirector'];
+
+const MANAGEMENT_ATTR_LABELS: Record<string, { key: string; label: string }[]> = {
+  owner:             [{ key: 'cierpliwosc', label: 'Cierpliwość' }, { key: 'ambicja', label: 'Ambicja' }, { key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }],
+  ceo:               [{ key: 'cierpliwosc', label: 'Cierpliwość' }, { key: 'ambicja', label: 'Ambicja' }, { key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }],
+  sportingDirector:  [{ key: 'patience', label: 'Cierpliwość' }, { key: 'control', label: 'Kontrola' }, { key: 'flexibility', label: 'Elastyczność' }, { key: 'ambition', label: 'Ambicja' }, { key: 'footballKnowledge', label: 'Wiedza piłkarska' }, { key: 'negotiation', label: 'Negocjacje' }, { key: 'developmentVision', label: 'Wizja rozwoju' }, { key: 'financialDiscipline', label: 'Dyscyplina finansowa' }],
+  cfo:               [{ key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'zdolnosciMarketingowe', label: 'Zdolności marketingowe' }, { key: 'dyscyplinaFinansowa', label: 'Dyscyplina finansowa' }],
+  coo:               [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'organizacja', label: 'Organizacja' }, { key: 'zarzadzanieInfrastruktura', label: 'Zarządzanie infrastrukturą' }, { key: 'efektywnoscKosztowa', label: 'Efektywność kosztowa' }, { key: 'logistykaIPlanowanie', label: 'Logistyka i planowanie' }],
+  marketingDirector: [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'zdolnosciMarketingowe', label: 'Zdolności marketingowe' }],
+  academyDirector:   [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'rozwojMlodziezy', label: 'Rozwój młodzieży' }, { key: 'zarzadzanie', label: 'Zarządzanie' }],
+};
+
+const LEAGUE_FILTER_BTNS = [
+  { label: 'Ekstraklasa', filter: 'L_PL_1' },
+  { label: '1 Liga',      filter: 'L_PL_2' },
+  { label: '2 Liga',      filter: 'L_PL_3' },
+  { label: '3 Liga',      filter: 'L_PL_4' },
+] as const;
+
 const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
@@ -134,10 +172,168 @@ const toDateInputValue = (value?: string | null): string => {
 const toIsoDate = (value: string): string => new Date(value).toISOString();
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, lineups, coaches, staffMembers, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs } = useGame();
+  const { clubs, players, lineups, coaches, staffMembers, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs, setCoaches, setStaffMembers, userTeamId } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
+
+  const clubImportRef = useRef<HTMLInputElement>(null);
+  const [clubImportMsg, setClubImportMsg] = useState('');
+
+  const sztabImportRef = useRef<HTMLInputElement>(null);
+  const [sztabImportMsg, setSztabImportMsg] = useState('');
+
+  const zarzadImportRef = useRef<HTMLInputElement>(null);
+  const [zarzadImportMsg, setZarzadImportMsg] = useState('');
+
+  const handleExportClubData = () => {
+    if (!selectedTeamClub) return;
+    const data = {
+      clubId: selectedTeamClub.id,
+      name: selectedTeamClub.name,
+      stadiumName: selectedTeamClub.stadiumName,
+      stadiumCapacity: selectedTeamClub.stadiumCapacity,
+      reputation: selectedTeamClub.reputation,
+      colorsHex: selectedTeamClub.colorsHex,
+      budget: selectedTeamClub.budget,
+      transferBudget: selectedTeamClub.transferBudget,
+      reserveBudget: selectedTeamClub.reserveBudget ?? 0,
+      signingBonusPool: selectedTeamClub.signingBonusPool,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dane_${selectedTeamClub.name.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClubData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        const entries = Array.isArray(raw) ? raw : [raw];
+        let updated = 0;
+        let errors = 0;
+        setClubs(prev => {
+          let next = [...prev];
+          entries.forEach((entry: Record<string, unknown>) => {
+            const idx = next.findIndex(c => c.id === entry.clubId || c.name === entry.name);
+            if (idx === -1) { errors++; return; }
+            const c = next[idx];
+            next[idx] = {
+              ...c,
+              name:             typeof entry.name === 'string'            ? entry.name            : c.name,
+              stadiumName:      typeof entry.stadiumName === 'string'      ? entry.stadiumName      : c.stadiumName,
+              stadiumCapacity:  typeof entry.stadiumCapacity === 'number'  ? entry.stadiumCapacity  : c.stadiumCapacity,
+              reputation:       typeof entry.reputation === 'number'       ? entry.reputation       : c.reputation,
+              colorsHex:        Array.isArray(entry.colorsHex)             ? entry.colorsHex        : c.colorsHex,
+              budget:           typeof entry.budget === 'number'           ? entry.budget           : c.budget,
+              transferBudget:   typeof entry.transferBudget === 'number'   ? entry.transferBudget   : c.transferBudget,
+              reserveBudget:    typeof entry.reserveBudget === 'number'    ? entry.reserveBudget    : c.reserveBudget,
+              signingBonusPool: typeof entry.signingBonusPool === 'number' ? entry.signingBonusPool : c.signingBonusPool,
+            };
+            updated++;
+          });
+          return next;
+        });
+        setClubImportMsg(
+          updated > 0
+            ? `Zaktualizowano ${updated} klub(ów).${errors > 0 ? ` (${errors} nieznanych)` : ''}`
+            : `Błąd: żaden klub nie pasuje (${errors} wpisów).`
+        );
+      } catch {
+        setClubImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (clubImportRef.current) clubImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportSztab = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        let updated = 0;
+        if (raw.coach && typeof raw.coach === 'object' && raw.coach.id) {
+          setCoaches(prev => ({ ...prev, [raw.coach.id]: { ...prev[raw.coach.id], ...raw.coach } }));
+          updated++;
+        }
+        if (Array.isArray(raw.staff)) {
+          raw.staff.forEach((s: any) => {
+            if (s && s.id) {
+              setStaffMembers(prev => ({ ...prev, [s.id]: { ...prev[s.id], ...s } }));
+              updated++;
+            }
+          });
+        }
+        setSztabImportMsg(updated > 0 ? `Zaimportowano ${updated} osób.` : 'Brak danych do importu.');
+      } catch {
+        setSztabImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (sztabImportRef.current) sztabImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportZarzad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        if (!raw.clubId || !raw.management) {
+          setZarzadImportMsg('Błąd: plik nie zawiera wymaganych danych.');
+          return;
+        }
+        let found = false;
+        setClubs(prev => prev.map(c => {
+          if (c.id !== raw.clubId) return c;
+          found = true;
+          return { ...c, management: { ...c.management, ...raw.management } as ClubManagement };
+        }));
+        setZarzadImportMsg(found ? `Zarząd klubu "${raw.clubName ?? raw.clubId}" zaktualizowany.` : `Błąd: klub o ID "${raw.clubId}" nie znaleziony.`);
+      } catch {
+        setZarzadImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (zarzadImportRef.current) zarzadImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportSztab = () => {
+    if (!sztabClub) return;
+    const coachObj = sztabClub.coachId ? coaches[sztabClub.coachId] ?? null : null;
+    const staffArr = (sztabClub.staffIds ?? []).map(id => staffMembers[id]).filter(Boolean);
+    const data = { clubId: sztabClub.id, clubName: sztabClub.name, coach: coachObj, staff: staffArr };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sztab_${sztabClub.name.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportZarzad = () => {
+    if (!zarzadClub) return;
+    const data = { clubId: zarzadClub.id, clubName: zarzadClub.name, management: zarzadClub.management ?? null };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zarzad_${zarzadClub.name.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -276,15 +472,44 @@ export const EditorView: React.FC = () => {
     setExportSelected(new Set());
   };
 
-  const [activeSection, setActiveSection] = useState<'GRACZE' | 'KLUBY' | 'DRUŻYNA'>('GRACZE');
+  const [activeSection, setActiveSection] = useState<'GRACZE' | 'FINANSE' | 'KLUBY' | 'SZTAB' | 'ZARZĄD'>('GRACZE');
   const [clubsLeagueFilter, setClubsLeagueFilter] = useState<string>('L_PL_1');
   const [editingSigningPool, setEditingSigningPool] = useState<Record<string, string>>({});
 
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [teamSearchClubId, setTeamSearchClubId] = useState('');
+  const [teamLeagueFilter, setTeamLeagueFilter] = useState('');
   const [editTeamBudget, setEditTeamBudget] = useState('');
   const [editTeamTransferBudget, setEditTeamTransferBudget] = useState('');
   const [editTeamReserveBudget, setEditTeamReserveBudget] = useState('');
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamStadiumName, setEditTeamStadiumName] = useState('');
+  const [editTeamStadiumCapacity, setEditTeamStadiumCapacity] = useState('');
+  const [editTeamReputation, setEditTeamReputation] = useState('');
+  const [editTeamColors, setEditTeamColors] = useState<string[]>([]);
+  const [editTeamSigningPool, setEditTeamSigningPool] = useState('');
+  const [showRepairPanel, setShowRepairPanel] = useState(false);
+
+  const [sztabLeagueFilter, setSztabLeagueFilter] = useState('');
+  const [sztabSearchQuery, setSztabSearchQuery] = useState('');
+  const [sztabClubId, setSztabClubId] = useState('');
+  const [sztabPersonId, setSztabPersonId] = useState('');
+  const [sztabPersonType, setSztabPersonType] = useState<'coach' | 'staff' | null>(null);
+  const [editSztabFirstName, setEditSztabFirstName] = useState('');
+  const [editSztabLastName, setEditSztabLastName] = useState('');
+  const [editSztabAge, setEditSztabAge] = useState('');
+  const [editSztabAttrs, setEditSztabAttrs] = useState<Record<string, number>>({});
+  const [editSztabSalary, setEditSztabSalary] = useState('');
+  const [editSztabContractEnd, setEditSztabContractEnd] = useState('');
+
+  const [zarzadLeagueFilter, setZarzadLeagueFilter] = useState('');
+  const [zarzadSearchQuery, setZarzadSearchQuery] = useState('');
+  const [zarzadClubId, setZarzadClubId] = useState('');
+  const [zarzadPersonKey, setZarzadPersonKey] = useState<string | null>(null);
+  const [editZarzadFirstName, setEditZarzadFirstName] = useState('');
+  const [editZarzadLastName, setEditZarzadLastName] = useState('');
+  const [editZarzadAge, setEditZarzadAge] = useState('');
+  const [editZarzadAttrs, setEditZarzadAttrs] = useState<Record<string, number>>({});
 
   const [selectedTier, setSelectedTier]     = useState<string>('1');
   const [selectedClubId, setSelectedClubId] = useState<string>('');
@@ -383,12 +608,20 @@ export const EditorView: React.FC = () => {
 
   const teamSearchResults = useMemo(() => {
     const q = teamSearchQuery.trim().toLowerCase();
+    if (teamLeagueFilter) {
+      const isPolish = teamLeagueFilter.startsWith('L_PL_');
+      return clubs
+        .filter(c => isPolish ? c.leagueId === teamLeagueFilter : c.country === teamLeagueFilter)
+        .filter(c => !q || c.name.toLowerCase().includes(q) || (c.shortName ?? '').toLowerCase().includes(q))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
+        .slice(0, 50);
+    }
     if (!q) return [];
     return clubs
       .filter(c => c.name.toLowerCase().includes(q) || (c.shortName ?? '').toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
       .slice(0, 30);
-  }, [teamSearchQuery, clubs]);
+  }, [teamSearchQuery, teamLeagueFilter, clubs]);
 
   const selectedTeamClub = useMemo(() => clubs.find(c => c.id === teamSearchClubId), [clubs, teamSearchClubId]);
   const selectedTeamSquad = useMemo(() => teamSearchClubId ? getOrGenerateSquad(teamSearchClubId) : [], [teamSearchClubId, getOrGenerateSquad, players]);
@@ -398,13 +631,217 @@ export const EditorView: React.FC = () => {
     return selectedTeamClub.staffIds.map(id => staffMembers[id]).filter(Boolean);
   }, [selectedTeamClub, staffMembers]);
 
+  const sztabSearchResults = useMemo(() => {
+    if (sztabLeagueFilter) {
+      const isPolish = sztabLeagueFilter.startsWith('L_PL_');
+      return clubs.filter(c => isPolish ? c.leagueId === sztabLeagueFilter : c.country === sztabLeagueFilter);
+    }
+    if (!sztabSearchQuery.trim()) return [];
+    const q = sztabSearchQuery.toLowerCase();
+    return clubs.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
+  }, [sztabSearchQuery, sztabLeagueFilter, clubs]);
+
+  const sztabClub = useMemo(() => clubs.find(c => c.id === sztabClubId) ?? null, [clubs, sztabClubId]);
+  const sztabClubPersons = useMemo(() => {
+    if (!sztabClub) return [];
+    const result: { id: string; type: 'coach' | 'staff'; label: string }[] = [];
+    if (sztabClub.coachId && sztabClub.coachId !== userTeamId) {
+      const coach = coaches[sztabClub.coachId];
+      if (coach && coach.currentClubId !== userTeamId) {
+        result.push({ id: coach.id, type: 'coach', label: `${coach.firstName} ${coach.lastName} — Trener` });
+      }
+    }
+    (sztabClub.staffIds ?? []).forEach(sid => {
+      const s = staffMembers[sid];
+      if (s) result.push({ id: s.id, type: 'staff', label: `${s.firstName} ${s.lastName} — ${s.role}` });
+    });
+    return result;
+  }, [sztabClub, coaches, staffMembers, userTeamId]);
+
+  const zarzadSearchResults = useMemo(() => {
+    if (zarzadLeagueFilter) {
+      const isPolish = zarzadLeagueFilter.startsWith('L_PL_');
+      return clubs.filter(c => isPolish ? c.leagueId === zarzadLeagueFilter : c.country === zarzadLeagueFilter);
+    }
+    if (!zarzadSearchQuery.trim()) return [];
+    const q = zarzadSearchQuery.toLowerCase();
+    return clubs.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
+  }, [zarzadSearchQuery, zarzadLeagueFilter, clubs]);
+
+  const zarzadClub = useMemo(() => clubs.find(c => c.id === zarzadClubId) ?? null, [clubs, zarzadClubId]);
+
   useEffect(() => {
     if (selectedTeamClub) {
       setEditTeamBudget(String(selectedTeamClub.budget));
       setEditTeamTransferBudget(String(selectedTeamClub.transferBudget));
       setEditTeamReserveBudget(String(selectedTeamClub.reserveBudget ?? 0));
+      setEditTeamName(selectedTeamClub.name);
+      setEditTeamStadiumName(selectedTeamClub.stadiumName);
+      setEditTeamStadiumCapacity(String(selectedTeamClub.stadiumCapacity));
+      setEditTeamReputation(String(selectedTeamClub.reputation));
+      setEditTeamColors([...selectedTeamClub.colorsHex]);
+      setEditTeamSigningPool(String(selectedTeamClub.signingBonusPool));
     }
   }, [teamSearchClubId]);
+
+
+  const handleRepairClubFinances = () => {
+    setClubs(prev => prev.map(club => {
+      const tier = FinanceService.getClubTier(club);
+      const isPolish = club.leagueId.startsWith('L_PL_');
+      const budget = isPolish
+        ? FinanceService.calculateInitialBudget(tier, club.reputation)
+        : FinanceService.calculateEuropeanInitialBudget(tier, club.reputation, club.country ?? '', club.name, club.stadiumCapacity);
+      const transferBudget = FinanceService.calculateInitialTransferBudget(budget, club.reputation);
+      const reserveBudget  = FinanceService.calculateInitialReserveBudget(budget, club.reputation);
+      const signingBonusPool = FinanceService.calculateInitialSigningPool(budget, club.reputation);
+      return { ...club, budget, transferBudget, reserveBudget, signingBonusPool };
+    }));
+    showGameNotification({
+      title: 'Finanse naprawione',
+      message: `Budżety wszystkich ${clubs.length} klubów zostały zresetowane do wartości początkowych.`,
+      tone: 'success'
+    });
+  };
+
+  const handleRepairFreeAgents = () => {
+    const freeAgents = players['FREE_AGENTS'] ?? [];
+    const problematic = freeAgents.filter(
+      p => p.isUntouchable || p.squadRole === 'STARTER' || p.squadRole === 'KEY_PLAYER'
+    );
+    if (problematic.length === 0) {
+      showGameNotification({
+        title: 'Brak problemów',
+        message: 'Żaden wolny agent nie posiada nieprawidłowych statusów.',
+        tone: 'success'
+      });
+      return;
+    }
+    const fixed = freeAgents.map(p =>
+      (p.isUntouchable || p.squadRole === 'STARTER' || p.squadRole === 'KEY_PLAYER')
+        ? { ...p, isUntouchable: false, squadRole: null as null }
+        : p
+    );
+    setPlayers(prev => ({ ...prev, FREE_AGENTS: fixed }));
+    const untouchableCount = problematic.filter(p => p.isUntouchable).length;
+    const roleCount = problematic.filter(p => p.squadRole === 'STARTER' || p.squadRole === 'KEY_PLAYER').length;
+    const parts: string[] = [];
+    if (untouchableCount > 0) parts.push(`${untouchableCount} × "Nie na sprzedaż"`);
+    if (roleCount > 0) parts.push(`${roleCount} × "Pierwsza 11 / Kluczowy"`);
+    showGameNotification({
+      title: `Naprawiono ${problematic.length} wolnych agentów`,
+      message: `Usunięte statusy: ${parts.join(', ')}.`,
+      tone: 'success'
+    });
+  };
+
+  const handleRepairSquads = () => {
+    const aiClubs = clubs.filter(c => c.id !== userTeamId);
+    let fixedClubs = 0;
+    let generatedPlayers = 0;
+    const nextPlayers: typeof players = { ...players };
+    const seasonYear = (currentDate instanceof Date ? currentDate : new Date(currentDate)).getFullYear();
+    aiClubs.forEach(club => {
+      const currentSquad = nextPlayers[club.id] ?? [];
+      if (currentSquad.length < 22) {
+        const newPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+        if (newPlayers.length > 0) {
+          nextPlayers[club.id] = [...currentSquad, ...newPlayers];
+          fixedClubs++;
+          generatedPlayers += newPlayers.length;
+        }
+      }
+    });
+    setPlayers(nextPlayers);
+    if (fixedClubs === 0) {
+      showGameNotification({ title: 'Brak problemów', message: 'Wszystkie kluby AI mają co najmniej 22 zawodników.', tone: 'success' });
+    } else {
+      showGameNotification({ title: `Naprawiono ${fixedClubs} składów`, message: `Wygenerowano ${generatedPlayers} zawodników dla ${fixedClubs} klubów AI.`, tone: 'success' });
+    }
+  };
+
+  const handleSztabPersonSelect = (id: string, type: 'coach' | 'staff') => {
+    setSztabPersonId(id);
+    setSztabPersonType(type);
+    if (type === 'coach') {
+      const c = coaches[id];
+      if (!c) return;
+      setEditSztabFirstName(c.firstName);
+      setEditSztabLastName(c.lastName);
+      setEditSztabAge(String(c.age));
+      setEditSztabAttrs({ ...c.attributes } as Record<string, number>);
+      setEditSztabSalary('');
+      setEditSztabContractEnd('');
+    } else {
+      const s = staffMembers[id];
+      if (!s) return;
+      setEditSztabFirstName(s.firstName);
+      setEditSztabLastName(s.lastName);
+      setEditSztabAge(String(s.age));
+      setEditSztabAttrs({ ...s.attributes });
+      setEditSztabSalary(String(s.salary ?? ''));
+      setEditSztabContractEnd(s.contractEndDate ? s.contractEndDate.substring(0, 10) : '');
+    }
+  };
+
+  const handleSztabSave = () => {
+    if (!sztabPersonId || !sztabPersonType) return;
+    const age = parseInt(editSztabAge, 10);
+    if (Number.isNaN(age)) return;
+    if (sztabPersonType === 'coach') {
+      setCoaches(prev => ({
+        ...prev,
+        [sztabPersonId]: {
+          ...prev[sztabPersonId],
+          firstName: editSztabFirstName,
+          lastName: editSztabLastName,
+          age,
+          attributes: editSztabAttrs as unknown as typeof prev[string]['attributes'],
+        },
+      }));
+    } else {
+      const salary = parseInt(editSztabSalary, 10);
+      setStaffMembers(prev => ({
+        ...prev,
+        [sztabPersonId]: {
+          ...prev[sztabPersonId],
+          firstName: editSztabFirstName,
+          lastName: editSztabLastName,
+          age,
+          attributes: editSztabAttrs,
+          ...(Number.isNaN(salary) ? {} : { salary }),
+          ...(editSztabContractEnd ? { contractEndDate: new Date(editSztabContractEnd).toISOString() } : {}),
+        },
+      }));
+    }
+    showGameNotification({ title: 'Zapisano', message: `${editSztabFirstName} ${editSztabLastName} — dane zaktualizowane.`, tone: 'success' });
+  };
+
+  const handleZarzadPersonSelect = (key: string) => {
+    const mgmt = zarzadClub?.management as Record<string, any> | undefined;
+    const person = mgmt?.[key];
+    if (!person) return;
+    setZarzadPersonKey(key);
+    setEditZarzadFirstName(person.firstName ?? '');
+    setEditZarzadLastName(person.lastName ?? '');
+    setEditZarzadAge(String(person.age ?? ''));
+    const attrKeys = MANAGEMENT_ATTR_LABELS[key]?.map((a: { key: string }) => a.key) ?? [];
+    const attrs: Record<string, number> = {};
+    attrKeys.forEach((k: string) => { if (typeof person[k] === 'number') attrs[k] = person[k]; });
+    setEditZarzadAttrs(attrs);
+  };
+
+  const handleZarzadSave = () => {
+    if (!zarzadClubId || !zarzadPersonKey) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== zarzadClubId) return c;
+      const mgmt = c.management as Record<string, any> | undefined;
+      const oldPerson = mgmt?.[zarzadPersonKey] ?? {};
+      const updatedPerson = { ...oldPerson, firstName: editZarzadFirstName, lastName: editZarzadLastName, age: parseInt(editZarzadAge, 10) || oldPerson.age, ...editZarzadAttrs };
+      return { ...c, management: { ...c.management, [zarzadPersonKey]: updatedPerson } as ClubManagement };
+    }));
+    showGameNotification({ title: 'Zapisano', message: `${editZarzadFirstName} ${editZarzadLastName} — dane zaktualizowane.`, tone: 'success' });
+  };
 
   const resetPlayerForm = () => {
     setFirstName('');
@@ -737,7 +1174,7 @@ export const EditorView: React.FC = () => {
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <span className="text-sm text-white mr-2">Edytor</span>
         <span className="w-px h-4 bg-slate-700" />
-        {(['GRACZE', 'KLUBY', 'DRUŻYNA'] as const).map(sec => (
+        {(['GRACZE', 'FINANSE', 'KLUBY', 'SZTAB', 'ZARZĄD'] as const).map(sec => (
           <button
             key={sec}
             onClick={() => setActiveSection(sec)}
@@ -766,9 +1203,15 @@ export const EditorView: React.FC = () => {
               <option value="">— wybierz klub —</option>
               {filteredClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            <button
+              onClick={() => setShowRepairPanel(p => !p)}
+              className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${showRepairPanel ? 'bg-orange-600 border-t-orange-400/60 border-x-orange-500/30 border-b-black/60 text-white' : 'bg-orange-900/60 border-t-orange-400/30 border-x-orange-700/20 border-b-black/60 text-orange-300 hover:text-white hover:bg-orange-800'}`}
+            >
+              Napraw problemy
+            </button>
           </>
         )}
-        {activeSection === 'KLUBY' && (
+        {activeSection === 'FINANSE' && (
           <>
             {[{id: 'L_PL_1', label: 'Ekstraklasa'}, {id: 'L_PL_2', label: 'Liga 1'}, {id: 'L_PL_3', label: 'Liga 2'}, {id: 'L_PL_4', label: 'Liga 3'}].map(lg => (
               <button
@@ -784,6 +1227,33 @@ export const EditorView: React.FC = () => {
         <div className="ml-auto flex items-center gap-3">
           {importMsg && (
             <span className="text-xs text-emerald-400 max-w-xs truncate">{importMsg}</span>
+          )}
+          {clubImportMsg && (
+            <span className="text-xs text-blue-400 max-w-xs truncate">{clubImportMsg}</span>
+          )}
+          {activeSection === 'KLUBY' && (
+            <>
+              <button
+                onClick={handleExportClubData}
+                disabled={!selectedTeamClub}
+                className="px-4 py-1.5 bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Eksportuj dane klubu
+              </button>
+              <button
+                onClick={() => { setClubImportMsg(''); clubImportRef.current?.click(); }}
+                className="px-4 py-1.5 bg-blue-900 rounded text-xs text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+              >
+                Importuj dane z pliku
+              </button>
+              <input
+                ref={clubImportRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportClubData}
+              />
+            </>
           )}
           <button
             onClick={startCreatePlayer}
@@ -819,8 +1289,8 @@ export const EditorView: React.FC = () => {
         </div>
       </div>
 
-      {/* SEKCJA KLUBY */}
-      {activeSection === 'KLUBY' && (
+      {/* SEKCJA FINANSE */}
+      {activeSection === 'FINANSE' && (
         <div className="flex-1 overflow-y-auto px-6 py-4 editor-scroll">
           <table className="w-full text-xs border-collapse">
             <thead>
@@ -889,31 +1359,110 @@ export const EditorView: React.FC = () => {
         </div>
       )}
 
-      {/* SEKCJA DRUŻYNA */}
-      {activeSection === 'DRUŻYNA' && (
+      {/* SEKCJA KLUBY */}
+      {activeSection === 'KLUBY' && (
         <div className="flex-1 overflow-y-auto px-6 py-4 editor-scroll">
-          <div className="mb-4 relative inline-block">
-            <input
-              type="text"
-              value={teamSearchQuery}
-              onChange={(e) => { setTeamSearchQuery(e.target.value); if (!e.target.value.trim()) setTeamSearchClubId(''); }}
-              className={`${inputCls} px-3 py-2 w-80`}
-              placeholder="szukaj drużyny..."
-            />
-            {teamSearchResults.length > 0 && teamSearchQuery.trim() && !teamSearchClubId && (
-              <div className="absolute top-full left-0 mt-1 w-80 bg-slate-900 border border-slate-700 rounded z-20 max-h-64 overflow-y-auto editor-scroll">
-                {teamSearchResults.map(c => (
+
+          {showRepairPanel && (
+            <div className="mb-5 p-4 border border-orange-700/40 bg-orange-950/30 rounded-lg">
+              <div className="text-xs text-orange-400 mb-3">Narzędzia naprawy</div>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw finanse klubów</div>
+                    <div className="text-[10px] text-slate-500">Resetuje budżet, transfery, rezerwę i pulę podpisów wszystkich klubów do wartości początkowych (na podstawie reputacji i tieru).</div>
+                  </div>
                   <button
-                    key={c.id}
-                    onClick={() => { setTeamSearchClubId(c.id); setTeamSearchQuery(c.name); }}
-                    className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                    onClick={handleRepairClubFinances}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
                   >
-                    <span className="font-black">{c.name}</span>
-                    <span className="text-slate-500 ml-2 text-[10px]">{c.leagueId}</span>
+                    Uruchom
                   </button>
-                ))}
+                </div>
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw wolnych agentów</div>
+                    <div className="text-[10px] text-slate-500">Skanuje listę wolnych agentów i usuwa statusy "Nie na sprzedaż" oraz "Pierwsza 11 / Kluczowy" — zawodnicy bez klubu nie powinni ich posiadać.</div>
+                  </div>
+                  <button
+                    onClick={handleRepairFreeAgents}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                  >
+                    Uruchom
+                  </button>
+                </div>
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw składy</div>
+                    <div className="text-[10px] text-slate-500">Skanuje wszystkie kluby AI — jeśli skład liczy mniej niż 22 zawodników, dogenerowuje brakujących (min. 2 bramkarzy, wiek 18–23, atrybuty wg reputacji).</div>
+                  </div>
+                  <button
+                    onClick={handleRepairSquads}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                  >
+                    Uruchom
+                  </button>
+                </div>
               </div>
-            )}
+            </div>
+          )}
+
+          <div className="mb-4 flex items-start gap-3 flex-wrap">
+            <div className="relative flex-shrink-0">
+              <input
+                type="text"
+                value={teamSearchQuery}
+                onChange={(e) => { setTeamSearchQuery(e.target.value); if (!e.target.value.trim()) setTeamSearchClubId(''); }}
+                className={`${inputCls} px-3 py-2 w-64`}
+                placeholder="szukaj drużyny..."
+              />
+              {teamSearchResults.length > 0 && (teamSearchQuery.trim() || teamLeagueFilter) && !teamSearchClubId && (
+                <div className="absolute top-full left-0 mt-1 w-64 bg-slate-900 border border-slate-700 rounded z-20 max-h-64 overflow-y-auto editor-scroll">
+                  {teamSearchResults.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setTeamSearchClubId(c.id); setTeamSearchQuery(c.name); setTeamLeagueFilter(''); }}
+                      className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                    >
+                      <span className="font-black">{c.name}</span>
+                      <span className="text-slate-500 ml-2 text-[10px]">{c.leagueId}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {([
+                { label: 'Ekstraklasa', filter: 'L_PL_1' },
+                { label: '1 Liga',      filter: 'L_PL_2' },
+                { label: '2 Liga',      filter: 'L_PL_3' },
+                { label: '3 Liga',      filter: 'L_PL_4' },
+                { label: 'Anglia',      filter: 'ENG' },
+                { label: 'Hiszpania',   filter: 'ESP' },
+                { label: 'Niemcy',      filter: 'GER' },
+                { label: 'Włochy',      filter: 'ITA' },
+                { label: 'Francja',     filter: 'FRA' },
+                { label: 'Portugalia',  filter: 'POR' },
+                { label: 'Belgia',      filter: 'BEL' },
+                { label: 'Holandia',    filter: 'NED' },
+              ] as { label: string; filter: string }[]).map(({ label, filter }) => (
+                <button
+                  key={filter}
+                  onClick={() => {
+                    if (teamLeagueFilter === filter) {
+                      setTeamLeagueFilter('');
+                    } else {
+                      setTeamLeagueFilter(filter);
+                      setTeamSearchClubId('');
+                      setTeamSearchQuery('');
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] transition-all active:translate-y-[2px] border-t border-x border-b ${teamLeagueFilter === filter ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {selectedTeamClub && (
@@ -924,9 +1473,15 @@ export const EditorView: React.FC = () => {
                 )}
                 <div className="text-3xl text-white">{selectedTeamClub.name}</div>
                 <span className="text-xs text-slate-500 ml-2">{selectedTeamClub.leagueId} • Rep: {selectedTeamClub.reputation}</span>
+                <div className="flex items-center gap-1 ml-2">
+                  {selectedTeamClub.colorsHex.map((c, i) => (
+                    <span key={i} className="w-4 h-4 rounded-full border border-white/30 flex-shrink-0" style={{ background: c }} title={c} />
+                  ))}
+                </div>
+                <span className="text-xs text-slate-500">{selectedTeamClub.stadiumName} • {selectedTeamClub.stadiumCapacity.toLocaleString('pl-PL')} miejsc</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-4 gap-6">
 
                 {/* SKŁAD */}
                 <div>
@@ -1001,17 +1556,118 @@ export const EditorView: React.FC = () => {
                         onChange={(e) => setEditTeamReserveBudget(e.target.value)}
                         className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
                     </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`} style={{ color: '#facc15' }}>Pula podpisów (PLN)</div>
+                      <input type="number" min={0} value={editTeamSigningPool}
+                        onChange={(e) => setEditTeamSigningPool(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
                     <button
                       onClick={() => {
                         const b = parseInt(editTeamBudget) || 0;
                         const tb = parseInt(editTeamTransferBudget) || 0;
                         const rb = parseInt(editTeamReserveBudget) || 0;
-                        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, budget: b, transferBudget: tb, reserveBudget: rb } : c));
+                        const sp = parseInt(editTeamSigningPool) || 0;
+                        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, budget: b, transferBudget: tb, reserveBudget: rb, signingBonusPool: sp } : c));
                         showGameNotification({ title: 'Zapisano finanse', message: `Finanse ${selectedTeamClub.name} zostały zaktualizowane.`, tone: 'success' });
                       }}
                       className="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
                     >
                       Zapisz finanse
+                    </button>
+                  </div>
+                </div>
+
+                {/* DANE KLUBU */}
+                <div>
+                  <div className="text-xs text-yellow-400 mb-2">Dane klubu</div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Nazwa zespołu</div>
+                      <input type="text" value={editTeamName}
+                        onChange={(e) => setEditTeamName(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Nazwa stadionu</div>
+                      <input type="text" value={editTeamStadiumName}
+                        onChange={(e) => setEditTeamStadiumName(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Pojemność</div>
+                      <input type="number" min={0} value={editTeamStadiumCapacity}
+                        onChange={(e) => setEditTeamStadiumCapacity(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-1`}>Reputacja (1–20)</div>
+                      <input type="number" min={1} max={20} value={editTeamReputation}
+                        onChange={(e) => setEditTeamReputation(e.target.value)}
+                        className={`${inputCls} w-full px-2 py-1.5 tabular-nums`} />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} mb-2`}>Kolory</div>
+                      <div className="flex items-start gap-2 flex-wrap">
+                        {editTeamColors.map((color, i) => (
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            <div className="text-[10px] text-slate-500">Kolor {i + 1}</div>
+                            <div className="relative w-10 h-10 rounded border border-slate-600 overflow-hidden cursor-pointer">
+                              <div className="w-full h-full" style={{ background: color }} />
+                              <input
+                                type="color"
+                                value={color}
+                                onChange={(e) => {
+                                  const next = [...editTeamColors];
+                                  next[i] = e.target.value;
+                                  setEditTeamColors(next);
+                                }}
+                                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                              />
+                            </div>
+                            <div className="text-[9px] text-slate-500 tabular-nums">{color}</div>
+                            {editTeamColors.length > 1 && (
+                              <button
+                                onClick={() => setEditTeamColors(prev => prev.filter((_, idx) => idx !== i))}
+                                className="text-[9px] text-red-500 hover:text-red-400 leading-none"
+                              >
+                                usuń
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {editTeamColors.length < 4 && (
+                          <div className="flex flex-col items-center gap-1 mt-5">
+                            <button
+                              onClick={() => setEditTeamColors(prev => [...prev, '#ffffff'])}
+                              className="w-10 h-10 rounded border border-dashed border-slate-600 text-slate-500 hover:text-white hover:border-slate-400 text-lg flex items-center justify-center transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const cap = parseInt(editTeamStadiumCapacity) || 0;
+                        const rep = Math.min(20, Math.max(1, parseInt(editTeamReputation) || 1));
+                        const trimmedName = editTeamName.trim();
+                        if (!trimmedName) return;
+                        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? {
+                          ...c,
+                          name: trimmedName,
+                          stadiumName: editTeamStadiumName.trim(),
+                          stadiumCapacity: cap,
+                          reputation: rep,
+                          colorsHex: editTeamColors.filter(Boolean)
+                        } : c));
+                        setTeamSearchQuery(trimmedName);
+                        showGameNotification({ title: 'Zapisano dane', message: `Dane ${trimmedName} zostały zaktualizowane.`, tone: 'success' });
+                      }}
+                      className="w-full px-4 py-2 bg-blue-800 hover:bg-blue-700 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                    >
+                      Zapisz dane
                     </button>
                   </div>
                 </div>
@@ -1033,6 +1689,51 @@ export const EditorView: React.FC = () => {
         >
           {/* Overlay ciemności aby formularz był czytelny */}
           <div className="absolute inset-0 bg-slate-950/70 pointer-events-none" />
+
+          {showRepairPanel && (
+            <div className="relative z-10 mb-4 p-4 border border-orange-700/40 bg-orange-950/30 rounded-lg">
+              <div className="text-xs text-orange-400 mb-3">Narzędzia naprawy</div>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw finanse klubów</div>
+                    <div className="text-[10px] text-slate-500">Resetuje budżet, transfery, rezerwę i pulę podpisów wszystkich klubów do wartości początkowych (na podstawie reputacji i tieru).</div>
+                  </div>
+                  <button
+                    onClick={handleRepairClubFinances}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                  >
+                    Uruchom
+                  </button>
+                </div>
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw wolnych agentów</div>
+                    <div className="text-[10px] text-slate-500">Skanuje listę wolnych agentów i usuwa statusy "Nie na sprzedaż" oraz "Pierwsza 11 / Kluczowy" — zawodnicy bez klubu nie powinni ich posiadać.</div>
+                  </div>
+                  <button
+                    onClick={handleRepairFreeAgents}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                  >
+                    Uruchom
+                  </button>
+                </div>
+                <div className="flex items-start gap-3 p-3 border border-slate-700 bg-black/30 rounded">
+                  <div className="flex-1">
+                    <div className="text-xs text-white mb-0.5">Napraw składy</div>
+                    <div className="text-[10px] text-slate-500">Skanuje wszystkie kluby AI — jeśli skład liczy mniej niż 22 zawodników, dogenerowuje brakujących (min. 2 bramkarzy, wiek 18–23, atrybuty wg reputacji).</div>
+                  </div>
+                  <button
+                    onClick={handleRepairSquads}
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                  >
+                    Uruchom
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className={`relative z-10 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}>
 
             {/* NAZWA DRUŻYNY — między headerem a formularzem */}
@@ -1426,6 +2127,361 @@ export const EditorView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* SEKCJA SZTAB */}
+      {activeSection === 'SZTAB' && (
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* LEWA — wyszukiwarka + lista osób */}
+          <div className="w-80 border-r border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
+            <div className="px-4 py-3 border-b border-slate-800 bg-slate-900 space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {LEAGUE_FILTER_BTNS.map(({ label, filter }) => (
+                  <button
+                    key={filter}
+                    onClick={() => {
+                      if (sztabLeagueFilter === filter) {
+                        setSztabLeagueFilter('');
+                      } else {
+                        setSztabLeagueFilter(filter);
+                        setSztabSearchQuery('');
+                        setSztabClubId('');
+                        setSztabPersonId('');
+                        setSztabPersonType(null);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] transition-all active:translate-y-[2px] border-t border-x border-b ${sztabLeagueFilter === filter ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={sztabSearchQuery}
+                  onChange={(e) => { setSztabSearchQuery(e.target.value); if (!e.target.value.trim()) setSztabClubId(''); setSztabLeagueFilter(''); }}
+                  className={`${inputCls} px-3 py-2 w-full`}
+                  placeholder="szukaj klubu..."
+                />
+                {sztabSearchResults.length > 0 && sztabSearchQuery.trim() && !sztabClubId && (
+                  <div className="absolute top-full left-0 mt-1 w-full bg-slate-900 border border-slate-700 rounded z-20 max-h-52 overflow-y-auto editor-scroll">
+                    {sztabSearchResults.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setSztabClubId(c.id); setSztabSearchQuery(c.name); setSztabPersonId(''); setSztabPersonType(null); }}
+                        className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                      >
+                        <span className="font-black">{c.name}</span>
+                        <span className="text-slate-500 ml-2 text-[10px]">{c.leagueId}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Lista klubów (filtr ligi) lub lista osób (wybrany klub) */}
+            <div className="flex-1 overflow-y-auto editor-scroll">
+              {!sztabClubId && sztabLeagueFilter && (
+                sztabSearchResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSztabClubId(c.id); setSztabSearchQuery(c.name); setSztabPersonId(''); setSztabPersonType(null); }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                  >
+                    <span className="font-black">{c.name}</span>
+                  </button>
+                ))
+              )}
+              {sztabClubId && (
+                <>
+                  <div className="px-4 py-2 text-[10px] text-yellow-400 border-b border-slate-800 flex items-center justify-between">
+                    <span>{sztabClub?.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleExportSztab}
+                        title="Eksportuj dane sztabu tego klubu (trener główny + cały personel pomocniczy) do pliku JSON. Plik można zachować jako kopię zapasową lub zaimportować w innej grze."
+                        className="px-2 py-0.5 rounded text-[10px] bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 hover:text-white transition-colors border border-cyan-800/40"
+                      >
+                        Eksportuj
+                      </button>
+                      <button
+                        onClick={() => sztabImportRef.current?.click()}
+                        title="Importuj dane sztabu z pliku JSON (format: sztab_*.json). Aktualizuje trenera i personel na podstawie ID — klub musi istnieć w grze."
+                        className="px-2 py-0.5 rounded text-[10px] bg-emerald-900/60 hover:bg-emerald-700 text-emerald-300 hover:text-white transition-colors border border-emerald-800/40"
+                      >
+                        Importuj
+                      </button>
+                      <input ref={sztabImportRef} type="file" accept=".json" className="hidden" onChange={handleImportSztab} />
+                    </div>
+                  </div>
+                  {sztabImportMsg && (
+                    <div className={`px-4 py-1.5 text-[10px] border-b border-slate-800/50 ${sztabImportMsg.startsWith('Błąd') ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {sztabImportMsg}
+                    </div>
+                  )}
+                  {sztabClubPersons.length === 0 && (
+                    <div className="px-4 py-3 text-[10px] text-slate-500">Brak przypisanego sztabu.</div>
+                  )}
+                  {sztabClubPersons.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleSztabPersonSelect(p.id, p.type)}
+                      className={`w-full text-left px-4 py-2.5 border-b border-slate-800/50 last:border-0 transition-colors ${sztabPersonId === p.id ? 'bg-yellow-600/20' : 'hover:bg-slate-800'}`}
+                    >
+                      <div className="text-xs text-white font-black">{p.type === 'coach' ? coaches[p.id]?.firstName : staffMembers[p.id]?.firstName} {p.type === 'coach' ? coaches[p.id]?.lastName : staffMembers[p.id]?.lastName}</div>
+                      <div className={`text-[10px] mt-0.5 ${p.type === 'coach' ? 'text-amber-400' : 'text-slate-400'}`}>
+                        {p.type === 'coach' ? 'Trener główny' : STAFF_ROLE_LABELS[staffMembers[p.id]?.role ?? ''] ?? staffMembers[p.id]?.role}
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* PRAWA — formularz edycji osoby */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 editor-scroll">
+            {!sztabPersonId ? (
+              <div className="text-slate-600 text-xs mt-8">Wybierz klub, a następnie osobę ze sztabu.</div>
+            ) : (
+              <div className="max-w-xl">
+                <div className="text-lg text-white mb-4">{editSztabFirstName} {editSztabLastName}</div>
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Imię</div>
+                    <input className={`${inputCls} px-2 py-1.5 w-full`} value={editSztabFirstName} onChange={e => setEditSztabFirstName(e.target.value)} />
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Nazwisko</div>
+                    <input className={`${inputCls} px-2 py-1.5 w-full`} value={editSztabLastName} onChange={e => setEditSztabLastName(e.target.value)} />
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Wiek</div>
+                    <input type="number" min={18} max={80} className={`${inputCls} px-2 py-1.5 w-full`} value={editSztabAge} onChange={e => setEditSztabAge(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="text-xs text-yellow-400 mb-3">Atrybuty</div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-6">
+                  {(sztabPersonType === 'coach' ? COACH_ATTR_LABELS : (STAFF_ROLE_ATTRS[staffMembers[sztabPersonId]?.role] ?? [])).map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-400 flex-1">{label}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        className={`${inputCls} px-2 py-0.5 w-16 text-center`}
+                        value={editSztabAttrs[key] ?? 1}
+                        onChange={e => setEditSztabAttrs(prev => ({ ...prev, [key]: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)) }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-xs text-yellow-400 mb-3">Kontrakt</div>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Wynagrodzenie (mies.)</div>
+                    {sztabPersonType === 'staff' ? (
+                      <input
+                        type="number"
+                        min={0}
+                        className={`${inputCls} px-2 py-1.5 w-full`}
+                        value={editSztabSalary}
+                        onChange={e => setEditSztabSalary(e.target.value)}
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-500 italic py-1.5">brak danych</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Koniec kontraktu</div>
+                    {sztabPersonType === 'staff' ? (
+                      <input
+                        type="date"
+                        className={`${inputCls} px-2 py-1.5 w-full`}
+                        value={editSztabContractEnd}
+                        onChange={e => setEditSztabContractEnd(e.target.value)}
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-500 italic py-1.5">brak danych</div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSztabSave}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                >
+                  Zapisz
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SEKCJA ZARZĄD */}
+      {activeSection === 'ZARZĄD' && (
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* LEWA — wyszukiwarka + lista członków */}
+          <div className="w-80 border-r border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
+            <div className="px-4 py-3 border-b border-slate-800 bg-slate-900 space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {LEAGUE_FILTER_BTNS.map(({ label, filter }) => (
+                  <button
+                    key={filter}
+                    onClick={() => {
+                      if (zarzadLeagueFilter === filter) {
+                        setZarzadLeagueFilter('');
+                      } else {
+                        setZarzadLeagueFilter(filter);
+                        setZarzadSearchQuery('');
+                        setZarzadClubId('');
+                        setZarzadPersonKey(null);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] transition-all active:translate-y-[2px] border-t border-x border-b ${zarzadLeagueFilter === filter ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={zarzadSearchQuery}
+                  onChange={(e) => { setZarzadSearchQuery(e.target.value); if (!e.target.value.trim()) { setZarzadClubId(''); setZarzadPersonKey(null); } setZarzadLeagueFilter(''); }}
+                  className={`${inputCls} px-3 py-2 w-full`}
+                  placeholder="szukaj klubu..."
+                />
+                {zarzadSearchResults.length > 0 && zarzadSearchQuery.trim() && !zarzadClubId && (
+                  <div className="absolute top-full left-0 mt-1 w-full bg-slate-900 border border-slate-700 rounded z-20 max-h-52 overflow-y-auto editor-scroll">
+                    {zarzadSearchResults.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setZarzadClubId(c.id); setZarzadSearchQuery(c.name); setZarzadPersonKey(null); }}
+                        className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
+                      >
+                        <span className="font-black">{c.name}</span>
+                        <span className="text-slate-500 ml-2 text-[10px]">{c.leagueId}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto editor-scroll">
+              {!zarzadClubId && zarzadLeagueFilter && (
+                zarzadSearchResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setZarzadClubId(c.id); setZarzadSearchQuery(c.name); setZarzadPersonKey(null); }}
+                    className={`w-full text-left px-4 py-2.5 text-xs border-b border-slate-800/50 last:border-0 transition-colors ${zarzadClubId === c.id ? 'bg-yellow-600/20 text-white' : 'text-white hover:bg-slate-800'}`}
+                  >
+                    <span className="font-black">{c.name}</span>
+                  </button>
+                ))
+              )}
+              {zarzadClubId && (
+                <>
+                  <div className="px-4 py-2 text-[10px] text-yellow-400 border-b border-slate-800 flex items-center justify-between">
+                    <span>{zarzadClub?.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleExportZarzad}
+                        title="Eksportuj dane zarządu tego klubu (właściciel, prezes, dyrektorzy) do pliku JSON. Plik można zachować jako kopię zapasową lub zaimportować w innej grze."
+                        className="px-2 py-0.5 rounded text-[10px] bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 hover:text-white transition-colors border border-cyan-800/40"
+                      >
+                        Eksportuj
+                      </button>
+                      <button
+                        onClick={() => zarzadImportRef.current?.click()}
+                        title="Importuj dane zarządu z pliku JSON (format: zarzad_*.json). Aktualizuje zarząd klubu na podstawie clubId zawartego w pliku — klub musi istnieć w grze."
+                        className="px-2 py-0.5 rounded text-[10px] bg-emerald-900/60 hover:bg-emerald-700 text-emerald-300 hover:text-white transition-colors border border-emerald-800/40"
+                      >
+                        Importuj
+                      </button>
+                      <input ref={zarzadImportRef} type="file" accept=".json" className="hidden" onChange={handleImportZarzad} />
+                    </div>
+                  </div>
+                  {zarzadImportMsg && (
+                    <div className={`px-4 py-1.5 text-[10px] border-b border-slate-800/50 ${zarzadImportMsg.startsWith('Błąd') ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {zarzadImportMsg}
+                    </div>
+                  )}
+                  {MANAGEMENT_KEYS.filter(k => !!(zarzadClub?.management as Record<string, any> | undefined)?.[k]).map(k => {
+                    const person = (zarzadClub?.management as Record<string, any>)[k];
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => handleZarzadPersonSelect(k)}
+                        className={`w-full text-left px-4 py-2.5 border-b border-slate-800/50 last:border-0 transition-colors ${zarzadPersonKey === k ? 'bg-yellow-600/20' : 'hover:bg-slate-800'}`}
+                      >
+                        <div className="text-[10px] text-slate-400 uppercase tracking-widest">{MANAGEMENT_ROLE_LABELS[k]}</div>
+                        <div className="text-xs text-white font-black mt-0.5">{person.firstName} {person.lastName}</div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* PRAWA — formularz edycji */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 editor-scroll">
+            {!zarzadPersonKey ? (
+              <div className="text-slate-600 text-xs mt-8">Wybierz klub, a następnie członka zarządu.</div>
+            ) : (
+              <div className="max-w-xl">
+                <div className="text-xs text-slate-400 mb-1">{MANAGEMENT_ROLE_LABELS[zarzadPersonKey]}</div>
+                <div className="text-lg text-white mb-4">{editZarzadFirstName} {editZarzadLastName}</div>
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Imię</div>
+                    <input className={`${inputCls} px-2 py-1.5 w-full`} value={editZarzadFirstName} onChange={e => setEditZarzadFirstName(e.target.value)} />
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Nazwisko</div>
+                    <input className={`${inputCls} px-2 py-1.5 w-full`} value={editZarzadLastName} onChange={e => setEditZarzadLastName(e.target.value)} />
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Wiek</div>
+                    <input type="number" min={18} max={90} className={`${inputCls} px-2 py-1.5 w-full`} value={editZarzadAge} onChange={e => setEditZarzadAge(e.target.value)} />
+                  </div>
+                </div>
+                <div className="text-xs text-yellow-400 mb-3">Atrybuty</div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-6">
+                  {(MANAGEMENT_ATTR_LABELS[zarzadPersonKey] ?? []).map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-400 flex-1">{label}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        className={`${inputCls} px-2 py-0.5 w-16 text-center`}
+                        value={editZarzadAttrs[key] ?? 1}
+                        onChange={e => setEditZarzadAttrs(prev => ({ ...prev, [key]: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)) }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleZarzadSave}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                >
+                  Zapisz
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
