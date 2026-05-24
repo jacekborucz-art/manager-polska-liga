@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, PlayerPosition } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, PlayerPosition, PlayerSeasonHistoryEntry } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
@@ -19,6 +19,7 @@ export const PlayerCard: React.FC = () => {
   const [loanWageCoverage, setLoanWageCoverage] = useState(60);
   const [loanDuration, setLoanDuration] = useState<LoanOfferDuration>('SEASON');
   const [loanFeedback, setLoanFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+  const [showAllCareer, setShowAllCareer] = useState(false);
   useEffect(() => {
     if (pendingOpenTalk) {
       setIsTalkPanelOpen(true);
@@ -215,7 +216,13 @@ export const PlayerCard: React.FC = () => {
         toMonth: null
       });
     }
-    return baseHistory
+    const seasonHistory: PlayerSeasonHistoryEntry[] = player.seasonHistory || [];
+    const clubsWithSeasonHistory = new Set(seasonHistory.map(s => s.clubId));
+    const historyRows = baseHistory
+      .filter(entry => {
+        if (entry.toYear === null && entry.clubId !== player.clubId && clubsWithSeasonHistory.has(entry.clubId)) return false;
+        return true;
+      })
       .map((entry, index) => {
         const isLoanEntry = entry.isLoan === true;
         const isCurrentClubEntry = entry.toYear === null && entry.clubId === player.clubId;
@@ -236,17 +243,37 @@ export const PlayerCard: React.FC = () => {
                 }
               : PlayerCareerService.buildStatsSnapshot(player))
           : entry.statsSnapshot || null;
-
         return {
           key: `${entry.clubId}-${entry.fromYear}-${entry.fromMonth}-${index}`,
-          entry,
+          clubId: entry.clubId,
+          clubName: entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : (isReserve && isCurrentClubEntry && !entry.clubName.endsWith(' II')) ? `${entry.clubName} II` : entry.clubName,
+          transferFee: entry.transferFee,
           isLoanEntry,
           isCurrentClubEntry,
           periodLabel: `${formatCareerDate(entry.fromMonth, entry.fromYear)} - ${formatCareerDate(entry.toMonth, entry.toYear)}`,
-          statsSnapshot
+          statsSnapshot,
+          sortKey: isCurrentClubEntry ? 9999999 : entry.fromYear * 12 + (entry.fromMonth || 1)
         };
-      })
-      .reverse();
+      });
+    const seasonRows = seasonHistory.map(s => ({
+      key: `season-${s.clubId}-${s.season}-${s.fromYear}-${s.fromMonth}`,
+      clubId: s.clubId,
+      clubName: s.clubName,
+      transferFee: undefined as number | undefined,
+      isLoanEntry: s.isLoan || false,
+      isCurrentClubEntry: false,
+      periodLabel: `${formatCareerDate(s.fromMonth, s.fromYear)} - ${formatCareerDate(s.toMonth, s.toYear)}`,
+      statsSnapshot: {
+        matchesPlayed: s.matchesPlayed,
+        goals: s.goals,
+        assists: s.assists,
+        yellowCards: s.yellowCards,
+        redCards: s.redCards,
+        averageRating: s.averageRating
+      } as PlayerCareerStatsSnapshot,
+      sortKey: s.fromYear * 12 + (s.fromMonth || 1)
+    }));
+    return [...historyRows, ...seasonRows].sort((a, b) => b.sortKey - a.sortKey);
   }, [clubs, player, club, currentDate, isReserve]);
 
 
@@ -573,6 +600,7 @@ export const PlayerCard: React.FC = () => {
                 </h3>
               </div>
               {careerRows.length > 0 ? (
+                <>
                 <div className="overflow-hidden rounded-[10px]" style={{ border: '1px solid rgba(180,140,60,0.5)' }}>
                   <table className="w-full text-left" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
@@ -589,14 +617,14 @@ export const PlayerCard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {careerRows.slice(0, 6).map(({ key, entry, isLoanEntry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
+                      {careerRows.slice(0, 3).map(({ key, clubName, transferFee, isLoanEntry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
                         <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? (isLoanEntry ? 'rgba(34,211,238,0.14)' : 'rgba(96,165,250,0.15)') : 'transparent' }}>
                           <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             {periodLabel}
                           </td>
                           <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
                             <span className="block max-w-[92px] truncate">
-                              {entry.clubId === 'FREE_AGENTS' ? 'Bez klubu' : (isReserve && isCurrentClubEntry && !entry.clubName.endsWith(' II')) ? `${entry.clubName} II` : entry.clubName}
+                              {clubName}
                             </span>
                             {isLoanEntry && (
                               <span className="mt-0.5 inline-block rounded bg-cyan-500/15 px-1 py-[1px] text-[5px] font-black italic uppercase tracking-tighter text-cyan-300">
@@ -604,7 +632,7 @@ export const PlayerCard: React.FC = () => {
                               </span>
                             )}
                           </td>
-                          <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(entry.transferFee)}</td>
+                          <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(transferFee)}</td>
                           <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
                           <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
                           <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>
@@ -620,12 +648,75 @@ export const PlayerCard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                {careerRows.length > 3 && (
+                  <button
+                    onClick={() => setShowAllCareer(true)}
+                    className="mt-1.5 w-full text-center text-[7px] font-semibold uppercase tracking-widest py-1 rounded-[8px] transition-colors"
+                    style={{ color: '#fbbf24', backgroundColor: 'rgba(180,140,60,0.10)', border: '1px solid rgba(180,140,60,0.35)' }}
+                  >
+                    Zobacz więcej ({careerRows.length - 3})
+                  </button>
+                )}
+                </>
               ) : (
                 <div className="rounded-[10px] border border-dashed border-white/30 px-2 py-4 text-center font-normal text-[7px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
                   Brak historii
                 </div>
               )}
             </div>
+            {showAllCareer && (
+              <div className="fixed inset-0 z-[350] flex items-center justify-center p-4" onClick={() => setShowAllCareer(false)}>
+                <div className="absolute inset-0 bg-black/80" />
+                <div className="relative rounded-[18px] border p-4 w-[520px] max-h-[75vh] overflow-y-auto custom-scrollbar" style={{ backgroundColor: 'rgba(15,23,42,0.98)', border: '1px solid rgba(180,140,60,0.5)' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="h-px w-5 bg-sky-400" />
+                      <h3 className="text-[9px] font-semibold uppercase tracking-[0.28em] text-sky-300">Pełna Historia Kariery</h3>
+                    </div>
+                    <button onClick={() => setShowAllCareer(false)} className="text-white/50 hover:text-white text-[12px] leading-none">✕</button>
+                  </div>
+                  <div className="overflow-hidden rounded-[10px]" style={{ border: '1px solid rgba(180,140,60,0.5)' }}>
+                    <table className="w-full text-left" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'rgba(180,140,60,0.22)' }}>
+                          <th className="px-2 py-1 font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Okres</th>
+                          <th className="px-2 py-1 font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>Klub</th>
+                          <th className="px-1.5 py-1 text-center font-medium uppercase tracking-wide text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>CENA</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>M</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{'⚽'}</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{'👟'}</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{'🟨'}</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.6)', borderRight: '1px solid rgba(180,140,60,0.6)' }}>{'🟥'}</th>
+                          <th className="px-1.5 py-1 text-center font-medium text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.6)' }}>{'📊'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {careerRows.map(({ key, clubName, transferFee, isLoanEntry, isCurrentClubEntry, periodLabel, statsSnapshot }) => (
+                          <tr key={key} style={{ backgroundColor: isCurrentClubEntry ? (isLoanEntry ? 'rgba(34,211,238,0.14)' : 'rgba(96,165,250,0.15)') : 'transparent' }}>
+                            <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#e2e8f0', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{periodLabel}</td>
+                            <td className="px-2 py-1 font-normal text-[7px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>
+                              <span className="block max-w-[92px] truncate">{clubName}</span>
+                              {isLoanEntry && (
+                                <span className="mt-0.5 inline-block rounded bg-cyan-500/15 px-1 py-[1px] text-[5px] font-black italic uppercase tracking-tighter text-cyan-300">Wypożyczenie</span>
+                              )}
+                            </td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[7px] drop-shadow" style={{ color: '#fbbf24', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{formatTransferFee(transferFee)}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.matchesPlayed : '—'}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#6ee7b7', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.goals : '—'}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.assists : '—'}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#fde047', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.yellowCards : '—'}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#f87171', borderBottom: '1px solid rgba(180,140,60,0.35)', borderRight: '1px solid rgba(180,140,60,0.35)' }}>{statsSnapshot ? statsSnapshot.redCards : '—'}</td>
+                            <td className="px-1.5 py-1 text-center font-normal text-[8px] drop-shadow" style={{ color: '#ffffff', borderBottom: '1px solid rgba(180,140,60,0.35)' }}>
+                              {statsSnapshot?.averageRating !== null && statsSnapshot?.averageRating !== undefined ? statsSnapshot.averageRating.toFixed(1) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-[0.4em] flex items-center gap-3 drop-shadow">

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { Club, CompetitionType, MatchStatus } from '../../types';
@@ -11,7 +11,7 @@ interface TeamResultsModalProps {
 }
 
 export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onClose, club }) => {
-  const { clubs, fixtures, currentDate, leagues } = useGame();
+  const { clubs, fixtures, currentDate, leagues, seasonNumber } = useGame();
 
   const neutralTypes: string[] = [
     CompetitionType.SUPER_CUP, CompetitionType.UEFA_SUPER_CUP,
@@ -56,6 +56,12 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
     'MŚ': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
   };
 
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen) setSelectedSeason(null);
+  }, [isOpen]);
+
   const allHistory = useMemo(() => MatchHistoryService.getAll(), []);
 
   type ScheduleItem = {
@@ -68,6 +74,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
     homeScore: number | null;
     awayScore: number | null;
     neutralVenue: boolean;
+    season: number;
   };
 
   const schedule = useMemo((): ScheduleItem[] => {
@@ -92,6 +99,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
           homeScore: isDisplayFinished ? (f.homeScore ?? histEntry?.homeScore ?? null) : null,
           awayScore: isDisplayFinished ? (f.awayScore ?? histEntry?.awayScore ?? null) : null,
           neutralVenue: f.neutralVenue ?? false,
+          season: seasonNumber,
         };
       });
 
@@ -112,11 +120,30 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
         homeScore: h.homeScore,
         awayScore: h.awayScore,
         neutralVenue: false,
+        season: h.season,
       }));
 
     return [...fixtureItems, ...historyItems]
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [fixtures, club.id, allHistory, currentDate]);
+  }, [fixtures, club.id, allHistory, currentDate, seasonNumber]);
+
+  const availableSeasons = useMemo(() => {
+    const seasonMap = new Map<number, number>();
+    schedule.forEach(item => {
+      if (item.season >= seasonNumber) return;
+      const year = item.date.getFullYear();
+      const existing = seasonMap.get(item.season);
+      if (existing === undefined || year < existing) seasonMap.set(item.season, year);
+    });
+    return [...seasonMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([season, minYear]) => ({ season, label: `${minYear}/${String(minYear + 1).slice(-2)}` }));
+  }, [schedule, seasonNumber]);
+
+  const filteredSchedule = useMemo(() => {
+    const targetSeason = selectedSeason ?? seasonNumber;
+    return schedule.filter(item => item.season === targetSeason);
+  }, [schedule, selectedSeason, seasonNumber]);
 
   if (!isOpen) return null;
 
@@ -131,8 +158,24 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
           <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">&times;</button>
         </div>
 
+        {availableSeasons.length > 0 && (
+          <div className="flex gap-2 px-6 py-3 border-b border-white/5 bg-white/[0.02]">
+            <button
+              onClick={() => setSelectedSeason(null)}
+              className={`text-[8px] font-black italic uppercase tracking-tighter px-3 py-1 rounded-md border transition-colors ${selectedSeason === null ? 'bg-red-600 border-red-600 text-white' : 'border-white/20 text-slate-400 hover:border-white/40'}`}
+            >BIEŻĄCY</button>
+            {availableSeasons.map(({ season, label }) => (
+              <button
+                key={season}
+                onClick={() => setSelectedSeason(season)}
+                className={`text-[8px] font-black italic uppercase tracking-tighter px-3 py-1 rounded-md border transition-colors ${selectedSeason === season ? 'bg-red-600 border-red-600 text-white' : 'border-white/20 text-slate-400 hover:border-white/40'}`}
+              >{label}</button>
+            ))}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[65vh]">
-          {schedule.length === 0 ? (
+          {filteredSchedule.length === 0 ? (
             <div className="py-20 text-center opacity-20">
               <span className="text-4xl block mb-4">🏜️</span>
               <p className="text-sm font-black uppercase tracking-widest italic">Brak meczów w terminarzu</p>
@@ -149,7 +192,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
                 </tr>
               </thead>
               <tbody>
-                {schedule.map((f) => {
+                {filteredSchedule.map((f) => {
                   const isHome = f.homeTeamId === club.id;
                   const opponentId = isHome ? f.awayTeamId : f.homeTeamId;
                   const opponent = clubs.find(c => c.id === opponentId);

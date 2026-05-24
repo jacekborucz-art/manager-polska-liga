@@ -1,4 +1,4 @@
-import { Player, PlayerPosition, Club, HealthStatus, Region, RetirementInfo, StaffMember, Coach, StaffRole } from '../types';
+import { Player, PlayerPosition, Club, HealthStatus, Region, RetirementInfo, StaffMember, Coach, StaffRole, PlayerSeasonHistoryEntry } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
@@ -76,6 +76,42 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
           });
         } else {
           // Zawodnik zostaje - starzeje się o rok i resetuje statystyki
+          const prevSeasonHistory = player.seasonHistory || [];
+          const prevForThisClub = prevSeasonHistory.filter(s => s.clubId === player.clubId);
+          const prevTotalMatches = prevForThisClub.reduce((s, e) => s + e.matchesPlayed, 0);
+          const prevTotalGoals = prevForThisClub.reduce((s, e) => s + e.goals, 0);
+          const prevTotalAssists = prevForThisClub.reduce((s, e) => s + e.assists, 0);
+          const prevTotalYellow = prevForThisClub.reduce((s, e) => s + e.yellowCards, 0);
+          const prevTotalRed = prevForThisClub.reduce((s, e) => s + e.redCards, 0);
+          const totalMatches = (player.stats?.matchesPlayed || 0) + (player.cupStats?.matchesPlayed || 0) + (player.euroStats?.matchesPlayed || 0);
+          const totalGoals = (player.stats?.goals || 0) + (player.cupStats?.goals || 0) + (player.euroStats?.goals || 0);
+          const totalAssists = (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0);
+          const totalYellow = (player.stats?.yellowCards || 0) + (player.cupStats?.yellowCards || 0) + (player.euroStats?.yellowCards || 0);
+          const totalRed = (player.stats?.redCards || 0) + (player.cupStats?.redCards || 0) + (player.euroStats?.redCards || 0);
+          const ratingHistory = player.stats?.ratingHistory || [];
+          const seasonAvgRating = ratingHistory.length > 0
+            ? parseFloat((ratingHistory.reduce((s: number, r: number) => s + r, 0) / ratingHistory.length).toFixed(1))
+            : null;
+          const lastHistEntry = [...(player.history || [])].reverse().find(h => h.clubId === player.clubId && h.toYear === null);
+          const seasonYear = seasonEndDate.getFullYear() - 1;
+          const isFirstSeasonAtClub = prevForThisClub.length === 0;
+          const fromYear = isFirstSeasonAtClub && lastHistEntry ? lastHistEntry.fromYear : seasonYear;
+          const fromMonth = isFirstSeasonAtClub && lastHistEntry ? lastHistEntry.fromMonth : 7;
+          const seasonEntry: PlayerSeasonHistoryEntry = {
+            season: seasonYear,
+            clubId: player.clubId,
+            clubName: club.name,
+            fromYear,
+            fromMonth,
+            toYear: seasonEndDate.getFullYear(),
+            toMonth: 6,
+            matchesPlayed: Math.max(0, totalMatches - prevTotalMatches),
+            goals: Math.max(0, totalGoals - prevTotalGoals),
+            assists: Math.max(0, totalAssists - prevTotalAssists),
+            yellowCards: Math.max(0, totalYellow - prevTotalYellow),
+            redCards: Math.max(0, totalRed - prevTotalRed),
+            averageRating: seasonAvgRating
+          };
           nextSquad.push({
             ...player,
             age: player.age + 1,
@@ -90,7 +126,8 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
               ratingHistory: []  // Reset limitu rozwoju treningowego
             },
             cupSuspensionMatches: 0,
-            euroSuspensionMatches: 0
+            euroSuspensionMatches: 0,
+            seasonHistory: [...prevSeasonHistory, seasonEntry]
           });
         }
       });

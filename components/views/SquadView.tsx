@@ -26,7 +26,7 @@ export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk } = useGame();
+          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -61,6 +61,7 @@ export const SquadView: React.FC = () => {
     () => loanDetailsPlayerId ? allLeaguePlayers.find(player => player.id === loanDetailsPlayerId) ?? null : null,
     [allLeaguePlayers, loanDetailsPlayerId]
   );
+  const [scheduleSeasonFilter, setScheduleSeasonFilter] = useState<number | null>(null);
 
   const REGION_LABELS: Record<string, string> = {
     POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
@@ -231,6 +232,23 @@ export const SquadView: React.FC = () => {
       )
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [fixtures, userTeamId]);
+
+  const allMatchHistory = useMemo(() => MatchHistoryService.getAll(), [seasonNumber]);
+
+  const pastScheduleSeasons = useMemo(() => {
+    if (!userTeamId) return [];
+    const seasonMap = new Map<number, number>();
+    allMatchHistory.forEach(m => {
+      if (m.season >= seasonNumber) return;
+      if (m.homeTeamId !== userTeamId && m.awayTeamId !== userTeamId) return;
+      const year = new Date(m.date).getFullYear();
+      const existing = seasonMap.get(m.season);
+      if (existing === undefined || year < existing) seasonMap.set(m.season, year);
+    });
+    return [...seasonMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([season, minYear]) => ({ season, label: `${minYear}/${String(minYear + 1).slice(-2)}` }));
+  }, [allMatchHistory, userTeamId, seasonNumber]);
 
   const getCompLabel = (leagueId: string): string => {
     if (leagueId === CompetitionType.POLISH_CUP) return 'PUCHAR POLSKI';
@@ -1507,8 +1525,28 @@ export const SquadView: React.FC = () => {
               'BARAŻE': 'text-purple-400 bg-purple-500/10 border-purple-500/30',
               'MŚ': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
             };
+            const pastMatches = scheduleSeasonFilter !== null
+              ? allMatchHistory
+                  .filter(m => m.season === scheduleSeasonFilter && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId))
+                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              : [];
             return (
               <div className="shrink-0 bg-slate-900/40 rounded-[40px] border border-white/10 backdrop-blur-3xl shadow-2xl overflow-hidden">
+                {pastScheduleSeasons.length > 0 && (
+                  <div className="flex gap-2 px-6 py-3 border-b border-white/10">
+                    <button
+                      onClick={() => setScheduleSeasonFilter(null)}
+                      className={`text-[8px] font-black italic uppercase tracking-tighter px-3 py-1 rounded-md border transition-colors ${scheduleSeasonFilter === null ? 'bg-red-600 border-red-600 text-white' : 'border-white/20 text-slate-400 hover:border-white/40'}`}
+                    >BIEŻĄCY</button>
+                    {pastScheduleSeasons.map(({ season, label }) => (
+                      <button
+                        key={season}
+                        onClick={() => setScheduleSeasonFilter(season)}
+                        className={`text-[8px] font-black italic uppercase tracking-tighter px-3 py-1 rounded-md border transition-colors ${scheduleSeasonFilter === season ? 'bg-red-600 border-red-600 text-white' : 'border-white/20 text-slate-400 hover:border-white/40'}`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                )}
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b border-white/10 bg-white/[0.02]">
@@ -1520,75 +1558,137 @@ export const SquadView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mySchedule.length === 0 && (
-                      <tr><td colSpan={5} className="py-12 text-center text-[10px] font-black italic uppercase tracking-tighter opacity-20">Brak meczów w terminarzu</td></tr>
-                    )}
-                    {mySchedule.map((f, i) => {
-                      const isHome = f.homeTeamId === userTeamId;
-                      const opponentId = isHome ? f.awayTeamId : f.homeTeamId;
-                      const opponent = clubs.find(c => c.id === opponentId);
-                      const venue = getVenueInfo(f);
-                      const compLabel = getCompLabel(f.leagueId as string);
-                      const isLeague = isLeagueBadge(compLabel);
-                      const compCls = isLeague
-                        ? 'text-white bg-red-600 border-red-600'
-                        : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
-                      const isFinished = f.status === MatchStatus.FINISHED;
-                      const isPast = new Date(f.date) < currentDate;
-                      const histEntry = !isFinished && isPast
-                        ? MatchHistoryService.getAll().find(e => e.matchId === f.id)
-                        : undefined;
-                      const isDisplayFinished = isFinished || !!histEntry;
-                      const myScore = isHome
-                        ? (f.homeScore ?? histEntry?.homeScore ?? null)
-                        : (f.awayScore ?? histEntry?.awayScore ?? null);
-                      const oppScore = isHome
-                        ? (f.awayScore ?? histEntry?.awayScore ?? null)
-                        : (f.homeScore ?? histEntry?.homeScore ?? null);
-                      const resultColor = isDisplayFinished
-                        ? myScore! > oppScore! ? 'text-emerald-400' : myScore! < oppScore! ? 'text-red-400' : 'text-slate-300'
-                        : 'text-slate-600';
-                      const logo = opponent ? getClubLogo(opponent.id) : null;
-                      const d = new Date(f.date);
-                      const dateStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-                      const isNext = !isPast && (i === 0 || new Date(mySchedule[i-1].date) < currentDate);
-                      return (
-                        <tr
-                          key={f.id}
-                          className={`border-b border-white/[0.04] transition-colors ${isNext ? 'bg-amber-500/[0.06] border-l-2 border-l-amber-500/50' : isPast ? 'opacity-50' : 'hover:bg-white/[0.02]'}`}
-                        >
-                          <td className="px-6 py-2.5 align-middle whitespace-nowrap">
-                            <span className="text-[11px] font-black italic uppercase tracking-tighter font-mono text-slate-300">{dateStr}</span>
-                          </td>
-                          <td className="px-4 py-2.5 align-middle">
-                            <span className={`text-[10px] font-black italic uppercase tracking-tighter ${venue.color}`}>{venue.label}</span>
-                          </td>
-                          <td className="px-4 py-2.5 align-middle">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[8px] font-black italic uppercase tracking-tighter ${compCls}`}>
-                              {compLabel}
-                            </span>
-                          </td>
-                          <td className="px-6 py-2.5 text-center align-middle">
-                            <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
-                              {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 align-middle">
-                            <div className="flex items-center gap-3">
-                              {logo ? (
-                                <img src={logo} alt={opponent?.name ?? ''} className="w-6 h-6 object-contain shrink-0" />
-                              ) : opponent ? (
-                                <div className="w-6 h-6 rounded-full overflow-hidden border border-white/10 shrink-0 flex flex-col">
-                                  <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[0] }} />
-                                  <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[1] || opponent.colorsHex[0] }} />
+                    {scheduleSeasonFilter === null ? (
+                      <>
+                        {mySchedule.length === 0 && (
+                          <tr><td colSpan={5} className="py-12 text-center text-[10px] font-black italic uppercase tracking-tighter opacity-20">Brak meczów w terminarzu</td></tr>
+                        )}
+                        {mySchedule.map((f, i) => {
+                          const isHome = f.homeTeamId === userTeamId;
+                          const opponentId = isHome ? f.awayTeamId : f.homeTeamId;
+                          const opponent = clubs.find(c => c.id === opponentId);
+                          const venue = getVenueInfo(f);
+                          const compLabel = getCompLabel(f.leagueId as string);
+                          const isLeague = isLeagueBadge(compLabel);
+                          const compCls = isLeague
+                            ? 'text-white bg-red-600 border-red-600'
+                            : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
+                          const isFinished = f.status === MatchStatus.FINISHED;
+                          const isPast = new Date(f.date) < currentDate;
+                          const histEntry = !isFinished && isPast
+                            ? MatchHistoryService.getAll().find(e => e.matchId === f.id)
+                            : undefined;
+                          const isDisplayFinished = isFinished || !!histEntry;
+                          const myScore = isHome
+                            ? (f.homeScore ?? histEntry?.homeScore ?? null)
+                            : (f.awayScore ?? histEntry?.awayScore ?? null);
+                          const oppScore = isHome
+                            ? (f.awayScore ?? histEntry?.awayScore ?? null)
+                            : (f.homeScore ?? histEntry?.homeScore ?? null);
+                          const resultColor = isDisplayFinished
+                            ? myScore! > oppScore! ? 'text-emerald-400' : myScore! < oppScore! ? 'text-red-400' : 'text-slate-300'
+                            : 'text-slate-600';
+                          const logo = opponent ? getClubLogo(opponent.id) : null;
+                          const d = new Date(f.date);
+                          const dateStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+                          const isNext = !isPast && (i === 0 || new Date(mySchedule[i-1].date) < currentDate);
+                          return (
+                            <tr
+                              key={f.id}
+                              className={`border-b border-white/[0.04] transition-colors ${isNext ? 'bg-amber-500/[0.06] border-l-2 border-l-amber-500/50' : isPast ? 'opacity-50' : 'hover:bg-white/[0.02]'}`}
+                            >
+                              <td className="px-6 py-2.5 align-middle whitespace-nowrap">
+                                <span className="text-[11px] font-black italic uppercase tracking-tighter font-mono text-slate-300">{dateStr}</span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <span className={`text-[10px] font-black italic uppercase tracking-tighter ${venue.color}`}>{venue.label}</span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[8px] font-black italic uppercase tracking-tighter ${compCls}`}>
+                                  {compLabel}
+                                </span>
+                              </td>
+                              <td className="px-6 py-2.5 text-center align-middle">
+                                <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                                  {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <div className="flex items-center gap-3">
+                                  {logo ? (
+                                    <img src={logo} alt={opponent?.name ?? ''} className="w-6 h-6 object-contain shrink-0" />
+                                  ) : opponent ? (
+                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                                      <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[0] }} />
+                                      <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[1] || opponent.colorsHex[0] }} />
+                                    </div>
+                                  ) : null}
+                                  <span className="text-[11px] font-black italic uppercase tracking-tighter text-white">{opponent?.name ?? opponentId}</span>
                                 </div>
-                              ) : null}
-                              <span className="text-[11px] font-black italic uppercase tracking-tighter text-white">{opponent?.name ?? opponentId}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <>
+                        {pastMatches.length === 0 && (
+                          <tr><td colSpan={5} className="py-12 text-center text-[10px] font-black italic uppercase tracking-tighter opacity-20">Brak meczów w historii</td></tr>
+                        )}
+                        {pastMatches.map((m) => {
+                          const isHome = m.homeTeamId === userTeamId;
+                          const opponentId = isHome ? m.awayTeamId : m.homeTeamId;
+                          const opponent = clubs.find(c => c.id === opponentId);
+                          const compLabel = getCompLabel(m.competition);
+                          const isLeague = isLeagueBadge(compLabel);
+                          const compCls = isLeague
+                            ? 'text-white bg-red-600 border-red-600'
+                            : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
+                          const myScore = isHome ? m.homeScore : m.awayScore;
+                          const oppScore = isHome ? m.awayScore : m.homeScore;
+                          const resultColor = myScore > oppScore ? 'text-emerald-400' : myScore < oppScore ? 'text-red-400' : 'text-slate-300';
+                          const isNeutral = neutralTypes.includes(m.competition);
+                          const venueLabel = isNeutral ? 'NEUTRALNY' : (isHome ? 'DOM' : 'WYJAZD');
+                          const venueColor = isNeutral ? 'text-amber-400' : (isHome ? 'text-emerald-400' : 'text-sky-400');
+                          const logo = opponent ? getClubLogo(opponent.id) : null;
+                          const d = new Date(m.date);
+                          const dateStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+                          return (
+                            <tr key={m.matchId} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                              <td className="px-6 py-2.5 align-middle whitespace-nowrap">
+                                <span className="text-[11px] font-black italic uppercase tracking-tighter font-mono text-slate-300">{dateStr}</span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <span className={`text-[10px] font-black italic uppercase tracking-tighter ${venueColor}`}>{venueLabel}</span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[8px] font-black italic uppercase tracking-tighter ${compCls}`}>
+                                  {compLabel}
+                                </span>
+                              </td>
+                              <td className="px-6 py-2.5 text-center align-middle">
+                                <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                                  {myScore}:{oppScore}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 align-middle">
+                                <div className="flex items-center gap-3">
+                                  {logo ? (
+                                    <img src={logo} alt={opponent?.name ?? ''} className="w-6 h-6 object-contain shrink-0" />
+                                  ) : opponent ? (
+                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-white/10 shrink-0 flex flex-col">
+                                      <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[0] }} />
+                                      <div className="flex-1" style={{ backgroundColor: opponent.colorsHex[1] || opponent.colorsHex[0] }} />
+                                    </div>
+                                  ) : null}
+                                  <span className="text-[11px] font-black italic uppercase tracking-tighter text-white">{opponent?.name ?? opponentId}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>

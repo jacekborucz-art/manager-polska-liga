@@ -764,6 +764,23 @@ export interface PlayerCareerStatsSnapshot {
   averageRating: number | null;
 }
 
+export interface PlayerSeasonHistoryEntry {
+  season: number;
+  clubId: string;
+  clubName: string;
+  fromYear: number;
+  fromMonth: number;
+  toYear: number;
+  toMonth: number;
+  matchesPlayed: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  averageRating: number | null;
+  isLoan?: boolean;
+}
+
 export interface PlayerHistoryEntry {
   clubName: string;
   clubId: string | 'FREE_AGENTS';
@@ -1072,6 +1089,7 @@ export interface Player {
   loan?: PlayerLoanInfo | null;
   purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
    history: PlayerHistoryEntry[];
+  seasonHistory?: PlayerSeasonHistoryEntry[];
     boardLockoutUntil: string | null; // Data ISO, do której nie można ponowić próby zwolnienia
   isUntouchable: boolean;           
   negotiationStep: number;           // Licznik prób (0-3)
