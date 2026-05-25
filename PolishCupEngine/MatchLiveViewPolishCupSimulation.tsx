@@ -1203,7 +1203,7 @@ useEffect(() => {
   }, [matchState?.isPenalties, ctx, isFinishing]);
 
   useEffect(() => {
-    if (!matchState || !env || matchState.isPaused || matchState.isPausedForEvent || matchState.isFinished || matchState.isHalfTime || matchState.isPenalties || isFinishing || isTacticsOpen) return;
+    if (!matchState || !env || matchState.isPaused || matchState.isPausedForEvent || matchState.isFinished || matchState.isHalfTime || matchState.isPenalties || isFinishing || isTacticsOpen || isCelebratingGoal) return;
 
     const interval = setInterval(() => {
       setMatchState(prev => {
@@ -2812,6 +2812,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                             };
                             if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); }
                             else { aScore++; updatedAwayGoals.push(goalData); }
+                            nextIsPaused = true;
                             nextLastGoalBoostMinute = nextMinute;
                             nextPostGoalSuppressionDuration = 4 + Math.floor(Math.random() * 5);
                             nextPostGoalPenaltyPct = 0.10 + (Math.random() * 0.10);
@@ -3188,7 +3189,7 @@ if (activePlayerTempo === 'SLOW') {
     }, matchState.speed === 5 ? 80 : matchState.speed === 2.5 ? 240 : 600);
 
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.isPenalties, matchState?.speed, ctx, env, setMatchState, isFinishing, isTacticsOpen, userSide]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.isPenalties, matchState?.speed, ctx, env, setMatchState, isFinishing, isTacticsOpen, isCelebratingGoal, userSide]);
 
   const handleFinish = () => {
     if (!matchState || !ctx) return;
