@@ -147,6 +147,9 @@ export interface ImportedSquadPlayer {
   transferPendingBonus?: number;
   transferPendingContractYears?: number;
   isAvailableForLoan?: boolean;
+  isOnTransferList?: boolean;
+  isUntouchable?: boolean;
+  squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   attributes: {
     strength: number; stamina: number; pace: number; defending: number;
     passing: number; attacking: number; finishing: number; technique: number;
