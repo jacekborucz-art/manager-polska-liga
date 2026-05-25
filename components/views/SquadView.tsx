@@ -582,14 +582,17 @@ export const SquadView: React.FC = () => {
           </span>
         </td>
         <td className="w-14 relative z-10">
-          <span className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-full border px-1.5 font-mono text-[9px] font-black leading-none tracking-tight ${getPositionBadgeClass(player.position)}`}>
+          <span
+            title={player.secondaryPosition && player.secondaryPosition !== player.position ? `Druga pozycja: ${player.secondaryPosition}` : undefined}
+            className={`relative inline-flex h-8 min-w-[32px] items-center justify-center rounded-full border px-1.5 font-mono text-[9px] font-black leading-none tracking-tight ${getPositionBadgeClass(player.position)}`}
+          >
             {player.position}
+            {player.secondaryPosition && player.secondaryPosition !== player.position && (
+              <span className={`absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full border px-0.5 text-[7px] font-black leading-none ${getPositionBadgeClass(player.secondaryPosition)}`}>
+                +1
+              </span>
+            )}
           </span>
-          {player.secondaryPosition && player.secondaryPosition !== player.position && (
-            <span className={`ml-1 inline-flex h-5 min-w-[24px] items-center justify-center rounded-full border px-1 font-mono text-[7px] font-black leading-none tracking-tight opacity-80 ${getPositionBadgeClass(player.secondaryPosition)}`}>
-              {player.secondaryPosition}
-            </span>
-          )}
         </td>
         <td className="relative z-10 w-52">
            <div className="flex items-center gap-3">
