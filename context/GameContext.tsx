@@ -121,6 +121,7 @@ import { ReserveOpponentGeneratorService } from '../services/ReserveOpponentGene
 import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
 import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
 import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
+import { PlayerDevelopmentService } from '../services/PlayerDevelopmentService';
 import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
@@ -5463,13 +5464,49 @@ setMessages([welcomeMail, fanMail]);
             const updatedSquad = (prev[userTeamId] || []).map(player => {
               const effect = effects.find(e => e.playerId === player.id);
               if (!effect) return player;
-              const newAttrs = { ...player.attributes, ...effect.attrChanges };
+              const seasonalChanges = { ...(player.stats?.seasonalChanges || {}) };
+              let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+                seasonalChanges,
+                player.stats?.seasonalGrowthPoints
+              );
+              const newAttrs = { ...player.attributes };
+              Object.entries(effect.attrChanges).forEach(([rawKey, rawValue]) => {
+                const key = rawKey as keyof import('../types').PlayerAttributes;
+                const nextValue = rawValue as number;
+                const currentValue = player.attributes[key];
+                if (nextValue > currentValue) {
+                  const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+                    clubReputation: userClub.reputation,
+                  });
+                  const attrRoom = Math.max(0, 2 - (seasonalChanges[key] || 0));
+                  const seasonRoom = Math.max(0, growthCap - seasonalGrowthPoints);
+                  const appliedDelta = Math.min(nextValue - currentValue, attrRoom, seasonRoom);
+                  if (appliedDelta <= 0) return;
+                  seasonalGrowthPoints += appliedDelta;
+                  seasonalChanges[key] = (seasonalChanges[key] || 0) + appliedDelta;
+                  newAttrs[key] = currentValue + appliedDelta;
+                  return;
+                }
+                newAttrs[key] = nextValue;
+              });
               const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
               const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
+              const newOverall = PlayerAttributesGenerator.calculateOverall(newAttrs, player.position);
+              const updatedMarketValue = FinanceService.calculateMarketValue(
+                { ...player, attributes: newAttrs, overallRating: newOverall },
+                userClub.reputation,
+                parseInt(userClub.leagueId?.split('_')[2] || '1') || 1,
+                userClub.country
+              );
+              const nextStats = {
+                ...player.stats,
+                seasonalChanges,
+                seasonalGrowthPoints,
+              };
               if (effect.injured) {
-                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+                return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
               }
-              return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition };
+              return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
             });
             return { ...prev, [userTeamId]: updatedSquad };
           });
@@ -5581,13 +5618,49 @@ setMessages([welcomeMail, fanMail]);
             const updatedSquad = (prev[userTeamId] || []).map(player => {
               const effect = effects.find(e => e.playerId === player.id);
               if (!effect) return player;
-              const newAttrs = { ...player.attributes, ...effect.attrChanges };
+              const seasonalChanges = { ...(player.stats?.seasonalChanges || {}) };
+              let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+                seasonalChanges,
+                player.stats?.seasonalGrowthPoints
+              );
+              const newAttrs = { ...player.attributes };
+              Object.entries(effect.attrChanges).forEach(([rawKey, rawValue]) => {
+                const key = rawKey as keyof import('../types').PlayerAttributes;
+                const nextValue = rawValue as number;
+                const currentValue = player.attributes[key];
+                if (nextValue > currentValue) {
+                  const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+                    clubReputation: userClub.reputation,
+                  });
+                  const attrRoom = Math.max(0, 2 - (seasonalChanges[key] || 0));
+                  const seasonRoom = Math.max(0, growthCap - seasonalGrowthPoints);
+                  const appliedDelta = Math.min(nextValue - currentValue, attrRoom, seasonRoom);
+                  if (appliedDelta <= 0) return;
+                  seasonalGrowthPoints += appliedDelta;
+                  seasonalChanges[key] = (seasonalChanges[key] || 0) + appliedDelta;
+                  newAttrs[key] = currentValue + appliedDelta;
+                  return;
+                }
+                newAttrs[key] = nextValue;
+              });
               const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
               const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
+              const newOverall = PlayerAttributesGenerator.calculateOverall(newAttrs, player.position);
+              const updatedMarketValue = FinanceService.calculateMarketValue(
+                { ...player, attributes: newAttrs, overallRating: newOverall },
+                userClub.reputation,
+                parseInt(userClub.leagueId?.split('_')[2] || '1') || 1,
+                userClub.country
+              );
+              const nextStats = {
+                ...player.stats,
+                seasonalChanges,
+                seasonalGrowthPoints,
+              };
               if (effect.injured) {
-                return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+                return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
               }
-              return { ...player, attributes: newAttrs, fatigueDebt: newDebt, condition: newCondition };
+              return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
             });
             return { ...prev, [userTeamId]: updatedSquad };
           });

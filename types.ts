@@ -659,6 +659,7 @@ export interface PlayerStats {
   matchesPlayed: number;
   minutesPlayed: number;
   seasonalChanges: Record<string, number>;
+  seasonalGrowthPoints?: number;
   ratingHistory: number[]; 
 }
 

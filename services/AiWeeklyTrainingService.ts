@@ -2,6 +2,8 @@ import { Club, Coach, Fixture, HealthStatus, MatchStatus, Player, PlayerAttribut
 import { TrainingAssistantService } from './TrainingAssistantService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
+import { PlayerDevelopmentService } from './PlayerDevelopmentService';
+import { TRAINING_CYCLES } from '../data/training_definitions_pl';
 
 const DAY_MS = 86_400_000;
 
@@ -158,6 +160,7 @@ export const AiWeeklyTrainingService = {
       const aiStaffQ = Math.max(1, Math.min(20, baseStaffQuality + noise));
 
       const plan = TrainingAssistantService.buildPlan(squad, rng);
+      const cycle = TRAINING_CYCLES.find(trainingCycle => trainingCycle.id === plan.cycleId) || TRAINING_CYCLES[0];
       const intensity = plan.cycleId === 'T_RECOVERY_YOGA'
         ? TrainingIntensity.LIGHT
         : pickIntensity(coach, squad, daysUntilNextMatch, rng);
@@ -213,10 +216,16 @@ export const AiWeeklyTrainingService = {
         const attributes = { ...player.attributes };
         const stats = { ...player.stats };
         const seasonalChanges = { ...(stats.seasonalChanges || {}) };
+        let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+          seasonalChanges,
+          stats.seasonalGrowthPoints
+        );
         const playerTalent = player.attributes.talent;
 
         aiAttrKeys.forEach(key => {
-          let pGrowth = 0.015;
+          let pGrowth = 0.004;
+          if (cycle.primaryAttributes.includes(key)) pGrowth += 0.035;
+          if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.018;
           if (player.age < 21) pGrowth *= 1.5;
           else if (player.age > 32) pGrowth *= 0.3;
           pGrowth *= (0.70 + (playerTalent / 100) * 0.60);
@@ -224,9 +233,14 @@ export const AiWeeklyTrainingService = {
 
           if (rng() < pGrowth) {
             const currentChange = seasonalChanges[key] || 0;
-            if (currentChange < 3 && attributes[key] < 99) {
+            const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+              clubReputation: club.reputation,
+              coachQuality: aiStaffQ
+            });
+            if (seasonalGrowthPoints < growthCap && currentChange < 2 && attributes[key] < 99) {
               attributes[key] += 1;
               seasonalChanges[key] = currentChange + 1;
+              seasonalGrowthPoints += 1;
             }
           }
 
@@ -267,7 +281,7 @@ export const AiWeeklyTrainingService = {
           fatigueDebt: Math.round(nextDebt),
           condition: Math.round(nextCondition),
           marketValue: updatedMarketValue,
-          stats: { ...player.stats, ratingHistory: player.stats.ratingHistory || [], seasonalChanges }
+          stats: { ...player.stats, ratingHistory: player.stats.ratingHistory || [], seasonalChanges, seasonalGrowthPoints }
         };
       });
 

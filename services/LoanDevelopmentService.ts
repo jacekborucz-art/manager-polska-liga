@@ -1,6 +1,7 @@
 import { Club, Player, PlayerAttributes, PlayerPosition } from '../types';
 import { FinanceService } from './FinanceService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
+import { PlayerDevelopmentService } from './PlayerDevelopmentService';
 
 export interface LoanDevelopmentInput {
   player: Player;
@@ -142,6 +143,10 @@ export const LoanDevelopmentService = {
     const growthRoll = seededUnit(`${player.id}_${reportKey}_loan_growth`);
     const regressionRoll = seededUnit(`${player.id}_${reportKey}_loan_regression`);
     const seasonalChanges = { ...(player.stats.seasonalChanges || {}) };
+    let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+      seasonalChanges,
+      player.stats.seasonalGrowthPoints
+    );
     const attributes = { ...player.attributes };
 
     let changedAttribute: keyof PlayerAttributes | null = null;
@@ -151,9 +156,14 @@ export const LoanDevelopmentService = {
       const attr = pickAttribute(player, 1, `${player.id}_${reportKey}_loan_attr_plus`);
       if (attr) {
         const currentChange = seasonalChanges[attr] || 0;
-        if (currentChange < 4 && attributes[attr] < 99) {
+        const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+          clubReputation: destinationClub?.reputation,
+          averageRating,
+        });
+        if (seasonalGrowthPoints < growthCap && currentChange < 2 && attributes[attr] < 99) {
           attributes[attr] += 1;
           seasonalChanges[attr] = currentChange + 1;
+          seasonalGrowthPoints += 1;
           changedAttribute = attr;
           delta = 1;
         }
@@ -190,6 +200,7 @@ export const LoanDevelopmentService = {
         ...player.stats,
         ratingHistory: player.stats.ratingHistory || [],
         seasonalChanges,
+        seasonalGrowthPoints,
       },
       marketValue: FinanceService.calculateMarketValue(
         { ...player, attributes, overallRating: nextOverall },

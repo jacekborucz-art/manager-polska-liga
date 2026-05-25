@@ -4,6 +4,7 @@ import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { PlayerDevelopmentService } from './PlayerDevelopmentService';
 
 const DAILY_TRAINING_INJURY_CHANCE = 0.005;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
@@ -147,6 +148,10 @@ export const TrainingService = {
       const updated = PlayerMoraleService.ensurePlayerState(player);
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
+      let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+        seasonalChanges,
+        stats.seasonalGrowthPoints
+      );
       const attributes = { ...updated.attributes };
       const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
@@ -256,12 +261,12 @@ export const TrainingService = {
       })();
 
       attrKeys.forEach(key => {
-        let pGrowth = 0.02;
+        let pGrowth = 0.005;
 
         pGrowth *= intensityMultiplier;
-        if (hasGeneralPlan && cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
-        if (hasGeneralPlan && cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
-        if (player.trainingFocus === key) pGrowth += 0.06;
+        if (hasGeneralPlan && cycle.primaryAttributes.includes(key)) pGrowth += 0.05;
+        if (hasGeneralPlan && cycle.secondaryAttributes.includes(key)) pGrowth += 0.025;
+        if (player.trainingFocus === key) pGrowth += 0.035;
         if (!hasGeneralPlan) pGrowth *= 0.72;
         if (!player.trainingFocus) pGrowth *= player.age < 24 ? 0.82 : 0.90;
 
@@ -291,9 +296,14 @@ export const TrainingService = {
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
           const seasonalCap = (isGkPlayer && GK_COACHED_ATTRS.includes(key)) ? gkAttrSeasonalCap : 3;
-          if (currentChange < seasonalCap && attributes[key] < 99) {
+          const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(updated, {
+            clubReputation,
+            coachQuality: Math.max(assistantCoachQuality ?? 10, fitnessCoachQuality ?? 10, gkCoachQuality ?? 10)
+          });
+          if (seasonalGrowthPoints < growthCap && currentChange < Math.min(2, seasonalCap) && attributes[key] < 99) {
             attributes[key] += 1;
             seasonalChanges[key] = currentChange + 1;
+            seasonalGrowthPoints += 1;
           }
         }
 
@@ -371,7 +381,8 @@ export const TrainingService = {
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],
-          seasonalChanges
+          seasonalChanges,
+          seasonalGrowthPoints
         },
         marketValue: updatedMarketValue
       };
@@ -430,6 +441,10 @@ export const TrainingService = {
       const updated = PlayerMoraleService.ensurePlayerState(player);
       const stats = { ...updated.stats };
       const seasonalChanges = { ...(stats.seasonalChanges || {}) };
+      let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+        seasonalChanges,
+        stats.seasonalGrowthPoints
+      );
       const attributes = { ...updated.attributes };
       const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
@@ -442,11 +457,11 @@ export const TrainingService = {
       const effectiveFocus = (player.trainingFocus || playerFocuses[player.id]) ?? null;
 
       attrKeys.forEach(key => {
-        let pGrowth = 0.015;
+        let pGrowth = 0.004;
 
-        if (cycle.primaryAttributes.includes(key)) pGrowth += 0.08;
-        if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.04;
-        if (effectiveFocus === key) pGrowth += 0.06;
+        if (cycle.primaryAttributes.includes(key)) pGrowth += 0.045;
+        if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.022;
+        if (effectiveFocus === key) pGrowth += 0.032;
         if (!effectiveFocus) pGrowth *= player.age < 24 ? 0.82 : 0.90;
 
         if (player.age < 21) pGrowth *= 1.5;
@@ -459,9 +474,14 @@ export const TrainingService = {
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
-          if (currentChange < 3 && attributes[key] < 99) {
+          const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(updated, {
+            clubReputation,
+            coachQuality: coachTrainingAttr
+          });
+          if (seasonalGrowthPoints < growthCap && currentChange < 2 && attributes[key] < 99) {
             attributes[key] += 1;
             seasonalChanges[key] = currentChange + 1;
+            seasonalGrowthPoints += 1;
           }
         }
 
@@ -512,7 +532,8 @@ export const TrainingService = {
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],
-          seasonalChanges
+          seasonalChanges,
+          seasonalGrowthPoints
         },
         marketValue: updatedMarketValue
       };

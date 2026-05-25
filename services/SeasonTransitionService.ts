@@ -123,6 +123,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             stats: {
               ...player.stats,
               seasonalChanges: {},
+              seasonalGrowthPoints: 0,
               ratingHistory: []  // Reset limitu rozwoju treningowego
             },
             cupSuspensionMatches: 0,
