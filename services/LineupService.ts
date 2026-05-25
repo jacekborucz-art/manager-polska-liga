@@ -1,6 +1,15 @@
 import { Lineup, Player, PlayerPosition, Tactic, InjurySeverity, HealthStatus, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { PlayerPositionFitService } from './PlayerPositionFitService';
+
+type AutoPickOptions = {
+  useSecondaryPositions?: boolean;
+};
+
+type FitScoreOptions = {
+  useSecondaryPositions?: boolean;
+};
 
 const FAVORITE_TACTIC_MAP: Record<string, string> = {
   '4-3-3 Atak':         '4-3-3',
@@ -59,7 +68,8 @@ export const LineupService = {
   /**
    * Deterministyczny wybór składu.
    */
-  autoPickLineup: (clubId: string, players: Player[], tacticId: string = '4-4-2', coach: Coach | null = null): Lineup => {
+  autoPickLineup: (clubId: string, players: Player[], tacticId: string = '4-4-2', coach: Coach | null = null, options: AutoPickOptions = {}): Lineup => {
+    const useSecondaryPositions = options.useSecondaryPositions ?? false;
     // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive)
     if (coach?.favoriteTactics) {
       const preferred = [
@@ -114,6 +124,9 @@ export const LineupService = {
         poolXI.find(p => !usedPlayerIds.has(p.id) && p.position === requiredRole) ??
         poolBench.find(p => !usedPlayerIds.has(p.id) && p.position === requiredRole) ??
         poolRest.find(p => !usedPlayerIds.has(p.id) && p.position === requiredRole) ??
+        (useSecondaryPositions ? poolXI.find(p => !usedPlayerIds.has(p.id) && PlayerPositionFitService.hasSecondaryPosition(p, requiredRole)) : undefined) ??
+        (useSecondaryPositions ? poolBench.find(p => !usedPlayerIds.has(p.id) && PlayerPositionFitService.hasSecondaryPosition(p, requiredRole)) : undefined) ??
+        (useSecondaryPositions ? poolRest.find(p => !usedPlayerIds.has(p.id) && PlayerPositionFitService.hasSecondaryPosition(p, requiredRole)) : undefined) ??
         poolXI.find(p => !usedPlayerIds.has(p.id)) ??
         poolBench.find(p => !usedPlayerIds.has(p.id)) ??
         poolRest.find(p => !usedPlayerIds.has(p.id));
@@ -130,7 +143,9 @@ export const LineupService = {
     const addToBench = (p: Player) => { bench.push(p.id); usedPlayerIds.add(p.id); };
     const findBench = (pos: PlayerPosition | null) =>
       benchEligible.find(p => !usedPlayerIds.has(p.id) && (pos === null || p.position === pos)) ??
-      poolRest.find(p => !usedPlayerIds.has(p.id) && (pos === null || p.position === pos));
+      poolRest.find(p => !usedPlayerIds.has(p.id) && (pos === null || p.position === pos)) ??
+      (useSecondaryPositions ? benchEligible.find(p => !usedPlayerIds.has(p.id) && pos !== null && PlayerPositionFitService.hasSecondaryPosition(p, pos)) : undefined) ??
+      (useSecondaryPositions ? poolRest.find(p => !usedPlayerIds.has(p.id) && pos !== null && PlayerPositionFitService.hasSecondaryPosition(p, pos)) : undefined);
 
     // Slot 1: Bramkarz (obowiązkowy)
     const bGK = findBench(PlayerPosition.GK);
@@ -170,11 +185,12 @@ export const LineupService = {
     return { clubId, tacticId: tactic.id, startingXI, bench, reserves };
   },
 
-  calculateFitScore: (player: Player, role: PlayerPosition): number => {
+  calculateFitScore: (player: Player, role: PlayerPosition, options: FitScoreOptions = {}): number => {
     const attr = player.attributes;
     const isGkPlayer = player.position === PlayerPosition.GK;
     const isGkRole = role === PlayerPosition.GK;
     const moraleFit = (PlayerMoraleService.getMatchMultiplier(PlayerMoraleService.ensurePlayerState(player)) - 1) * 8;
+    const positionFitBonus = PlayerPositionFitService.getFitScoreBonus(player, role, options.useSecondaryPositions ?? false);
 
     if ((isGkPlayer && !isGkRole) || (!isGkPlayer && isGkRole)) {
       return -2000 + getSelectionScore(player);
@@ -182,13 +198,13 @@ export const LineupService = {
 
     switch (role) {
       case PlayerPosition.GK:
-        return attr.goalkeeping * 2 + attr.positioning + moraleFit;
+        return attr.goalkeeping * 2 + attr.positioning + moraleFit + positionFitBonus;
       case PlayerPosition.DEF:
-        return attr.defending * 1.5 + attr.strength + attr.positioning + moraleFit;
+        return attr.defending * 1.5 + attr.strength + attr.positioning + moraleFit + positionFitBonus;
       case PlayerPosition.MID:
-        return attr.passing * 1.2 + attr.vision + attr.technique + moraleFit;
+        return attr.passing * 1.2 + attr.vision + attr.technique + moraleFit + positionFitBonus;
       case PlayerPosition.FWD:
-        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5 + moraleFit;
+        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5 + moraleFit + positionFitBonus;
       default:
         return getSelectionScore(player);
     }

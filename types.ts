@@ -1062,6 +1062,8 @@ export interface Player {
   nationality: Region;
   nationalityCountry?: string;
   position: PlayerPosition;
+  secondaryPosition?: PlayerPosition | null;
+  secondaryPositionRating?: number;
   overallRating: number;
   attributes: PlayerAttributes;
   stats: PlayerStats;

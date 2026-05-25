@@ -356,8 +356,15 @@ export const PlayerCard: React.FC = () => {
               )}
 
               <div className="flex items-center justify-center gap-4 mt-2">
-                 <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
-                    {player.position}
+                 <div className="flex items-center gap-2">
+                   <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
+                      {player.position}
+                   </div>
+                   {player.secondaryPosition && player.secondaryPosition !== player.position && (
+                     <div className={`px-3 py-1 rounded-lg border font-black italic uppercase tracking-tighter text-xs ${PlayerPresentationService.getPositionBadgeClass(player.secondaryPosition)}`}>
+                        2. {player.secondaryPosition}
+                     </div>
+                   )}
                  </div>
                  <div className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px]">
                     {player.age} lat • {player.nationalityCountry || REGION_NATIONALITY_LABEL[player.nationality] || player.nationality}

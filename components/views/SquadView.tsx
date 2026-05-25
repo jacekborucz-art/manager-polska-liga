@@ -21,6 +21,7 @@ import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { generatePlayerReport } from '../../services/TrainingAssistantService';
+import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
@@ -468,7 +469,7 @@ export const SquadView: React.FC = () => {
   const handleAutoPick = () => {
     if(!userTeamId) return;
     if (!hasAssistant) return;
-    const newLineup = { ...LineupService.autoPickLineup(userTeamId, myPlayers, currentTactic.id) };
+    const newLineup = { ...LineupService.autoPickLineup(userTeamId, myPlayers, currentTactic.id, null, { useSecondaryPositions: true }) };
     updateLineup(userTeamId, newLineup);
     fixSpecialRoles(newLineup.startingXI);
   };
@@ -508,7 +509,7 @@ export const SquadView: React.FC = () => {
       && !(( player.suspensionMatches || 0) > 0)
       && !(player.health.status === HealthStatus.INJURED && (player.health.injury?.severity === InjurySeverity.SEVERE || (player.health.injury?.daysRemaining ?? 0) > 2))
       && !(player.condition < 60)
-      && getPositionGroup(player.position) === getPositionGroup(selectedRole);
+      && PlayerPositionFitService.matchesRole(player, selectedRole, true);
 
     if (!player && loc === 'START') {
       return (
@@ -545,7 +546,10 @@ export const SquadView: React.FC = () => {
     const isSuspended = (player.suspensionMatches || 0) > 0;
     const isSevereInjured = player.health.status === HealthStatus.INJURED && player.health.injury?.severity === InjurySeverity.SEVERE;
     const isOverfatigued = player.condition < 60;
-    const isOutOfPosition = loc === 'START' && getPositionGroup(player.position) !== getPositionGroup(label);
+    const slotRole = loc === 'START' && index !== undefined ? currentTactic.slots[index]?.role : null;
+    const positionPenaltyFactor = player && slotRole ? PlayerPositionFitService.getPenaltyFactor(player, slotRole, true) : 0;
+    const isSecondaryPosition = !!player && !!slotRole && PlayerPositionFitService.hasSecondaryPosition(player, slotRole) && positionPenaltyFactor > 0;
+    const isOutOfPosition = !!player && !!slotRole && positionPenaltyFactor >= 1;
     const averageRating = player.stats?.ratingHistory?.length
       ? player.stats.ratingHistory.reduce((a, b) => a + b, 0) / player.stats.ratingHistory.length
       : null;
@@ -562,7 +566,7 @@ export const SquadView: React.FC = () => {
         onDoubleClick={() => handlePlayerDoubleClick(player.id)}
         onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, playerId: player.id, loc }); }}
         className={`group relative h-14 border-b border-white/5 transition-all cursor-pointer
-          ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : isHighlighted ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/60 shadow-[0_0_16px_rgba(52,211,153,0.15)]' : isOutOfPosition ? 'bg-red-950/30 ring-2 ring-inset ring-red-500 shadow-[0_0_18px_rgba(239,68,68,0.2)]' : getPositionRowTintClass(player.position)}
+          ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : isHighlighted ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/60 shadow-[0_0_16px_rgba(52,211,153,0.15)]' : isSecondaryPosition ? 'bg-amber-950/25 ring-1 ring-inset ring-amber-400/60 shadow-[0_0_14px_rgba(251,191,36,0.14)]' : isOutOfPosition ? 'bg-red-950/30 ring-2 ring-inset ring-red-500 shadow-[0_0_18px_rgba(239,68,68,0.2)]' : getPositionRowTintClass(player.position)}
           ${(isSuspended || isSevereInjured || isOverfatigued) ? 'opacity-30 grayscale' : ''}`}
       >
         <td className="w-12 relative z-10 overflow-hidden">
@@ -581,6 +585,11 @@ export const SquadView: React.FC = () => {
           <span className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-full border px-1.5 font-mono text-[9px] font-black leading-none tracking-tight ${getPositionBadgeClass(player.position)}`}>
             {player.position}
           </span>
+          {player.secondaryPosition && player.secondaryPosition !== player.position && (
+            <span className={`ml-1 inline-flex h-5 min-w-[24px] items-center justify-center rounded-full border px-1 font-mono text-[7px] font-black leading-none tracking-tight opacity-80 ${getPositionBadgeClass(player.secondaryPosition)}`}>
+              {player.secondaryPosition}
+            </span>
+          )}
         </td>
         <td className="relative z-10 w-52">
            <div className="flex items-center gap-3">
@@ -939,7 +948,9 @@ export const SquadView: React.FC = () => {
                 const playerId = myLineup.startingXI[idx];
                 const player = getPlayerById(playerId);
                 const isSelected = selectedSlot?.loc === 'START' && selectedSlot.index === idx;
-                const isOutOfPosition = player && player.position !== slot.role;
+                const positionPenaltyFactor = player ? PlayerPositionFitService.getPenaltyFactor(player, slot.role, true) : 0;
+                const isSecondaryPosition = !!player && PlayerPositionFitService.hasSecondaryPosition(player, slot.role) && positionPenaltyFactor > 0;
+                const isOutOfPosition = !!player && positionPenaltyFactor >= 1;
                 
                 return (
                   <div 
@@ -965,8 +976,8 @@ export const SquadView: React.FC = () => {
                     </div>
                     
                     {/* Position Warning Glow */}
-                    {isOutOfPosition && (
-                      <div className="absolute inset-0 w-24 h-24 rounded-full bg-amber-500/10 border-2 border-amber-500/30 blur-md animate-pulse -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2" />
+                    {(isOutOfPosition || isSecondaryPosition) && (
+                      <div className={`absolute inset-0 w-24 h-24 rounded-full border-2 blur-md animate-pulse -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 ${isSecondaryPosition ? 'bg-amber-400/10 border-amber-300/25' : 'bg-amber-500/10 border-amber-500/30'}`} />
                     )}
 
                     {/* Tactical Node */}
@@ -974,6 +985,7 @@ export const SquadView: React.FC = () => {
                        className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl border-[3px] transition-all duration-500 overflow-hidden
                          ${isSelected ? 'scale-110' : ''}
                          ${!player ? 'border-dashed border-rose-500/40 bg-rose-950/20' : ''}
+                         ${isSecondaryPosition && !isSelected ? 'border-amber-300/60 shadow-[0_0_18px_rgba(251,191,36,0.24)]' : ''}
                          ${isOutOfPosition && !isSelected ? 'border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.3)]' : ''}
                        `}
                        style={isSelected ? { background: '#ffffff', borderColor: '#ffffff' } : player ? { borderColor: myClub.colorsHex[1] || myClub.colorsHex[0] } : {}}

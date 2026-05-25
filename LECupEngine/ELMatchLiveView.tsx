@@ -68,6 +68,7 @@ import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModa
 import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
+import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.EL_R1Q, CompetitionType.EL_R1Q_RETURN,
@@ -1403,19 +1404,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkLiveFatigue     = gk ? (oppFatigueMap[gk.id] ?? 100) : 100;
 
            // Position Fit Modifier - kara za grę poza naturalną pozycją
-           const computePosFitMod = (naturalPos: PlayerPosition, slotRole: PlayerPosition): number => {
-             if (naturalPos === slotRole) return 1.0;
+           const computePosFitMod = (player: Player, slotRole: PlayerPosition, useSecondaryPosition: boolean): number => {
+             const penaltyFactor = PlayerPositionFitService.getPenaltyFactor(player, slotRole, useSecondaryPosition);
+             if (penaltyFactor === 0) return 1.0;
+             const naturalPos = player.position;
              const gkMismatch = naturalPos === PlayerPosition.GK || slotRole === PlayerPosition.GK;
              if (gkMismatch) return 0.45;
-             if ((naturalPos === PlayerPosition.DEF && slotRole === PlayerPosition.FWD) ||
-                 (naturalPos === PlayerPosition.FWD && slotRole === PlayerPosition.DEF)) return 0.75;
-             return 0.88;
+             const baseMod = ((naturalPos === PlayerPosition.DEF && slotRole === PlayerPosition.FWD) ||
+                 (naturalPos === PlayerPosition.FWD && slotRole === PlayerPosition.DEF)) ? 0.75 : 0.88;
+             return 1 - ((1 - baseMod) * penaltyFactor);
            };
            const attackingLineup = activeSide === 'HOME' ? nextHomeLineup : nextAwayLineup;
            const attackingTactic = TacticRepository.getById(attackingLineup.tacticId);
            const scorerSlotIdx   = attackingLineup.startingXI.indexOf(scorer.id);
            const scorerSlotRole  = scorerSlotIdx !== -1 ? attackingTactic.slots[scorerSlotIdx].role : scorer.position;
-           const scorerFitMod    = computePosFitMod(scorer.position, scorerSlotRole);
+           const scorerFitMod    = computePosFitMod(scorer, scorerSlotRole, activeSide === userSide);
            // Brak bramkarza (pusty slot 0): gkFitMod 0.01 = niemal pewny gol
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
            const scorerBriefingFatigue = activeSide === userSide

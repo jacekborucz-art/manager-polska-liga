@@ -521,6 +521,8 @@ export const EditorView: React.FC = () => {
   const [nationality, setNationality]       = useState<Region>(Region.POLAND);
   const [nationalityCountry, setNationalityCountry] = useState<string>('Polska');
   const [position,  setPosition]            = useState<PlayerPosition>(PlayerPosition.MID);
+  const [secondaryPosition, setSecondaryPosition] = useState<PlayerPosition | null>(null);
+  const [secondaryPositionRating, setSecondaryPositionRating] = useState<number>(50);
   const [attrs,     setAttrs]               = useState<PlayerAttributes>({ ...DEFAULT_ATTRS });
   const [annualSalary,  setAnnualSalary]    = useState<number>(0);
   const [marketValue,   setMarketValue]     = useState<number>(0);
@@ -596,6 +598,16 @@ export const EditorView: React.FC = () => {
   }, [playerSearch, players, clubs, clubPlayers, selectedClub, selectedClubId]);
 
   const liveOvr = useMemo(() => PlayerAttributesGenerator.calculateOverall(attrs, position), [attrs, position]);
+
+  const handlePrimaryPositionChange = (pos: PlayerPosition) => {
+    setPosition(pos);
+    setSecondaryPosition(prev => prev === pos ? null : prev);
+  };
+
+  const handleSecondaryRatingChange = (value: string) => {
+    const parsed = parseInt(value, 10);
+    setSecondaryPositionRating(Number.isNaN(parsed) ? 50 : Math.max(1, Math.min(99, parsed)));
+  };
 
   // Gradient tła z kolorów drużyny
   const bgGradient = useMemo(() => {
@@ -850,6 +862,8 @@ export const EditorView: React.FC = () => {
     setNationality(Region.POLAND);
     setNationalityCountry('Polska');
     setPosition(PlayerPosition.MID);
+    setSecondaryPosition(null);
+    setSecondaryPositionRating(50);
     setAttrs({ ...DEFAULT_ATTRS });
     setAnnualSalary(0);
     setMarketValue(0);
@@ -937,6 +951,8 @@ export const EditorView: React.FC = () => {
         setNationality(p.nationality);
         setNationalityCountry(p.nationalityCountry ?? pickNationalityForRegion(p.nationality));
         setPosition(p.position);
+        setSecondaryPosition(p.secondaryPosition && p.secondaryPosition !== p.position ? p.secondaryPosition : null);
+        setSecondaryPositionRating(Math.max(1, Math.min(99, p.secondaryPositionRating ?? 50)));
         setAttrs({ ...p.attributes });
         setAnnualSalary(p.annualSalary);
         setMarketValue(p.marketValue ?? 0);
@@ -1062,6 +1078,8 @@ export const EditorView: React.FC = () => {
       return;
     }
     const targetClubId = loan?.destinationClubId ?? playerTargetClubId;
+    const cleanSecondaryPosition = secondaryPosition && secondaryPosition !== position ? secondaryPosition : null;
+    const cleanSecondaryPositionRating = cleanSecondaryPosition ? secondaryPositionRating : undefined;
     if (isCreatingPlayer) {
       const club = clubs.find(c => c.id === selectedClubId);
       const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
@@ -1077,6 +1095,8 @@ export const EditorView: React.FC = () => {
         nationality,
         nationalityCountry,
         position,
+        secondaryPosition: cleanSecondaryPosition,
+        secondaryPositionRating: cleanSecondaryPositionRating,
         overallRating: newOvr,
         attributes: { ...attrs },
         stats: emptyStats(),
@@ -1139,6 +1159,8 @@ export const EditorView: React.FC = () => {
     const updatedPlayer: Player = {
       ...existingPlayer,
       firstName, lastName, age, nationality, nationalityCountry, position,
+      secondaryPosition: cleanSecondaryPosition,
+      secondaryPositionRating: cleanSecondaryPositionRating,
       attributes: { ...attrs }, overallRating: newOvr,
       annualSalary, marketValue, contractEndDate, loan, clubId: targetClubId,
       isUntouchable: isUntouchable,
@@ -1844,12 +1866,58 @@ export const EditorView: React.FC = () => {
                   {([PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD] as PlayerPosition[]).map(pos => (
                     <button
                       key={pos}
-                      onClick={() => setPosition(pos)}
+                      onClick={() => handlePrimaryPositionChange(pos)}
                       className={`px-2 py-1 rounded border-t border-x border-b text-xs transition-all active:translate-y-[2px] ${position === pos ? POS_COLOR[pos] : 'text-slate-500 border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 hover:text-white'}`}
                     >
                       {pos}
                     </button>
                   ))}
+                </div>
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>2. pozycja</div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      setSecondaryPosition(null);
+                      setSecondaryPositionRating(50);
+                    }}
+                    className={`px-2 py-1 rounded border-t border-x border-b text-xs transition-all active:translate-y-[2px] ${secondaryPosition === null ? 'text-white border-t-white/30 border-x-white/15 border-b-black/60 bg-slate-700' : 'text-slate-500 border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 hover:text-white'}`}
+                  >
+                    BRAK
+                  </button>
+                  {([PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD] as PlayerPosition[]).filter(pos => pos !== position).map(pos => (
+                    <button
+                      key={pos}
+                      onClick={() => setSecondaryPosition(pos)}
+                      className={`px-2 py-1 rounded border-t border-x border-b text-xs transition-all active:translate-y-[2px] ${secondaryPosition === pos ? POS_COLOR[pos] : 'text-slate-500 border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 hover:text-white'}`}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Ocena 2. poz.</div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={99}
+                    value={secondaryPositionRating}
+                    disabled={!secondaryPosition}
+                    onChange={(e) => handleSecondaryRatingChange(e.target.value)}
+                    className="w-24 accent-amber-400 disabled:opacity-30"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={secondaryPositionRating}
+                    disabled={!secondaryPosition}
+                    onChange={(e) => handleSecondaryRatingChange(e.target.value)}
+                    className={`${inputCls} w-14 px-2 py-1.5 text-center disabled:opacity-30`}
+                  />
                 </div>
               </div>
               <div>

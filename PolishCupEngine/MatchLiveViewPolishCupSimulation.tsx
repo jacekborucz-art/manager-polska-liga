@@ -41,6 +41,7 @@ import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
 import { RivalryService } from '../services/RivalryService';
 import { buildCupDisplayStats, isCupShotEvent, isCupShotOnTargetEvent } from '../services/CupMatchStatsService';
+import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -404,7 +405,8 @@ const POSITION_MISMATCH_PENALTY: Record<PlayerPosition, Record<PlayerPosition, n
 const getPositionalDisorder = (
   lineup: (string | null)[],
   players: Player[],
-  tacticId: string
+  tacticId: string,
+  useSecondaryPositions = false
 ): number => {
   const tactic = TacticRepository.getById(tacticId);
   if (!tactic || tactic.slots.length === 0) return 0;
@@ -420,7 +422,8 @@ const getPositionalDisorder = (
 
     const expectedRole = slot.role;
     const actualPos = player.position;
-    disorder += POSITION_MISMATCH_PENALTY[actualPos][expectedRole];
+    disorder += POSITION_MISMATCH_PENALTY[actualPos][expectedRole] *
+      PlayerPositionFitService.getPenaltyFactor(player, expectedRole, useSecondaryPositions);
   });
 
   // Normalizacja: max disorder = 11 zawodników × maks kara 0.25 = 2.75 → cappujemy do 0.70
@@ -1433,8 +1436,8 @@ useEffect(() => {
         let awayProgressionThreshold = 0.70;
 
         // === ZABURZENIA POZYCJI — dynamiczne progi progresji ===
-        const homeDisorder = getPositionalDisorder(nextHomeLineup.startingXI, ctx.homePlayers, nextHomeLineup.tacticId);
-        const awayDisorder = getPositionalDisorder(nextAwayLineup.startingXI, ctx.awayPlayers, nextAwayLineup.tacticId);
+        const homeDisorder = getPositionalDisorder(nextHomeLineup.startingXI, ctx.homePlayers, nextHomeLineup.tacticId, userSide === 'HOME');
+        const awayDisorder = getPositionalDisorder(nextAwayLineup.startingXI, ctx.awayPlayers, nextAwayLineup.tacticId, userSide === 'AWAY');
         // Zaburzony skład: rywalowi łatwiej atakować (−próg), własny atak trudniejszy (+próg)
         homeProgressionThreshold = Math.max(0.24, 0.57 + homeDisorder * 0.13 - awayDisorder * 0.22);
         awayProgressionThreshold = Math.max(0.24, 0.57 + awayDisorder * 0.13 - homeDisorder * 0.22);
