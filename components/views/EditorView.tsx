@@ -545,6 +545,8 @@ export const EditorView: React.FC = () => {
   const [transferPendingClubId, setTransferPendingClubId] = useState<string>('');
   const [transferReportDate, setTransferReportDate] = useState<string>('');
   const [transferPendingFee, setTransferPendingFee] = useState<number>(0);
+  const [transferPendingSalary, setTransferPendingSalary] = useState<number>(0);
+  const [transferPendingContractYears, setTransferPendingContractYears] = useState<number>(1);
   const [playerTargetClubId, setPlayerTargetClubId] = useState<string>('');
   const [isUntouchable, setIsUntouchable] = useState(false);
   const [isOnTransferList, setIsOnTransferList] = useState(false);
@@ -983,6 +985,8 @@ export const EditorView: React.FC = () => {
         setTransferPendingClubId(p.transferPendingClubId ?? '');
         setTransferReportDate(toDateInputValue(p.transferReportDate));
         setTransferPendingFee(p.transferPendingFee ?? 0);
+        setTransferPendingSalary(p.transferPendingSalary ?? 0);
+        setTransferPendingContractYears(p.transferPendingContractYears ?? 1);
         setPlayerTargetClubId(p.clubId ?? selectedClubId);
         setIsUntouchable(p.isUntouchable ?? false);
         setIsOnTransferList(p.isOnTransferList ?? false);
@@ -1120,6 +1124,8 @@ export const EditorView: React.FC = () => {
           transferPendingClubId,
           transferReportDate: toIsoDate(transferReportDate),
           transferPendingFee: transferPendingFee > 0 ? transferPendingFee : undefined,
+          transferPendingSalary: transferPendingSalary > 0 ? transferPendingSalary : undefined,
+          transferPendingContractYears: transferPendingContractYears > 0 ? transferPendingContractYears : undefined,
           interestedClubs: [] as string[],
           isOnTransferList: false,
           isAvailableForLoan: false,
@@ -2038,6 +2044,8 @@ export const EditorView: React.FC = () => {
                       setTransferPendingClubId('');
                       setTransferReportDate('');
                       setTransferPendingFee(0);
+                      setTransferPendingSalary(0);
+                      setTransferPendingContractYears(1);
                     }
                   }}
                   className="accent-yellow-400"
@@ -2076,6 +2084,27 @@ export const EditorView: React.FC = () => {
                       value={transferPendingFee}
                       onChange={(e) => setTransferPendingFee(parseInt(e.target.value, 10) || 0)}
                       className={`${inputCls} w-36 px-2 py-1.5 text-right`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Nowa pensja roczna (PLN)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={transferPendingSalary}
+                      onChange={(e) => setTransferPendingSalary(parseInt(e.target.value, 10) || 0)}
+                      className={`${inputCls} w-36 px-2 py-1.5 text-right`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Lata kontraktu</div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={transferPendingContractYears}
+                      onChange={(e) => setTransferPendingContractYears(parseInt(e.target.value, 10) || 1)}
+                      className={`${inputCls} w-20 px-2 py-1.5 text-center`}
                     />
                   </div>
                 </div>
