@@ -2868,6 +2868,13 @@ setMessages([welcomeMail, fanMail]);
       HOME: 'u siebie', AWAY: 'na wyjeździe', NEUTRAL: 'na terenie neutralnym',
     };
 
+    const uid = userTeamId ?? '';
+    let inProgressFriendlies: Fixture[] = globalFixtures.filter(
+      f => f.leagueId === CompetitionType.FRIENDLY &&
+           (f.homeTeamId === uid || f.awayTeamId === uid) &&
+           f.status === MatchStatus.SCHEDULED
+    );
+
     due.forEach(req => {
       const opponent = clubs.find(c => c.id === req.opponentClubId);
       if (!opponent) return;
@@ -2951,7 +2958,70 @@ setMessages([welcomeMail, fanMail]);
           awayScore: null,
           neutralVenue: isNeutral || undefined,
         };
-        setGlobalFixtures(prev => [...prev, fixture]);
+
+        // ── Reguła: max 2 sparingi pod rząd ──────────────────────────────────
+        const toDateStr = (d: Date): string => {
+          const dt = new Date(d); dt.setHours(0,0,0,0);
+          return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        };
+        const getVenueForUser = (f: Fixture): 'HOME' | 'AWAY' | 'NEUTRAL' => {
+          if (f.awayTeamId === uid) return 'AWAY';
+          if (f.neutralVenue) return 'NEUTRAL';
+          return 'HOME';
+        };
+        const cancelPriority: Record<'HOME' | 'AWAY' | 'NEUTRAL', number> = { AWAY: 0, NEUTRAL: 1, HOME: 2 };
+
+        const dateToFixture = new Map<string, Fixture>();
+        [...inProgressFriendlies, fixture].forEach(f => dateToFixture.set(toDateStr(f.date), f));
+        const sortedDates = [...dateToFixture.keys()].sort();
+
+        let cancelFixture: Fixture | null = null;
+        let runStart = 0;
+        let runLength = 1;
+        for (let i = 1; i < sortedDates.length; i++) {
+          const diff = Math.round(
+            (new Date(sortedDates[i]).getTime() - new Date(sortedDates[i-1]).getTime()) / 86400000
+          );
+          if (diff === 1) {
+            runLength++;
+            if (runLength >= 3) {
+              const runFixtures = sortedDates.slice(runStart, i + 1).map(ds => dateToFixture.get(ds)!);
+              cancelFixture = runFixtures.reduce((worst, f) =>
+                cancelPriority[getVenueForUser(f)] < cancelPriority[getVenueForUser(worst)] ? f : worst
+              );
+              break;
+            }
+          } else {
+            runStart = i;
+            runLength = 1;
+          }
+        }
+
+        if (cancelFixture) {
+          const cancelledIsNew = cancelFixture.id === fixture.id;
+          const cancelledOpponentId = cancelFixture.homeTeamId === uid ? cancelFixture.awayTeamId : cancelFixture.homeTeamId;
+          const cancelledOpponent = clubs.find(c => c.id === cancelledOpponentId);
+          const userClubName = clubs.find(c => c.id === uid)?.name ?? 'Twój klub';
+          const cf = cancelFixture;
+          if (!cancelledIsNew) {
+            setGlobalFixtures(prev => [...prev.filter(f => f.id !== cf.id), fixture]);
+            inProgressFriendlies = [...inProgressFriendlies.filter(f => f.id !== cf.id), fixture];
+          }
+          setMessages(prev => [{
+            id: `MAIL_FRIENDLY_CANCELLED_${cf.id}`,
+            sender: 'Sekretariat Sportowy',
+            role: 'Dział Organizacji Meczów',
+            subject: `📋 Sparing odwołany — ${userClubName} vs ${cancelledOpponent?.name ?? 'nieznany'}`,
+            body: `Szanowny Trenerze,\n\ninformujemy, że jeden z zaplanowanych meczów sparingowych "${userClubName} vs ${cancelledOpponent?.name ?? 'nieznany'}" musiał zostać odwołany.\n\nPowodem decyzji jest zbyt krótki odstęp czasowy pomiędzy terminami spotkań, który nie pozwala na prawidłową organizację oraz bezpieczne przeprowadzenie meczu.\n\nProsimy o uwzględnienie tej zmiany w planie przygotowań zespołu.\n\nZ poważaniem,\nSekretariat Sportowy\nDział Organizacji Meczów`,
+            date: new Date(simDate),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 85,
+          }, ...prev]);
+        } else {
+          setGlobalFixtures(prev => [...prev, fixture]);
+          inProgressFriendlies = [...inProgressFriendlies, fixture];
+        }
 
         setMessages(prev => [{
           id: `MAIL_FRIENDLY_OK_${req.id}`,
