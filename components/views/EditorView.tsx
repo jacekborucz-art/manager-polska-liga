@@ -464,6 +464,9 @@ export const EditorView: React.FC = () => {
           transferPendingBonus: p.transferPendingBonus ?? 0,
           transferPendingContractYears: p.transferPendingContractYears ?? 0,
           isAvailableForLoan: !!p.isAvailableForLoan,
+          isOnTransferList: !!p.isOnTransferList,
+          isUntouchable: !!p.isUntouchable,
+          squadRole: p.squadRole ?? null,
           attributes: { ...p.attributes },
         })),
       };
@@ -551,6 +554,7 @@ export const EditorView: React.FC = () => {
   const [isUntouchable, setIsUntouchable] = useState(false);
   const [isOnTransferList, setIsOnTransferList] = useState(false);
   const [isAvailableForLoan, setIsAvailableForLoan] = useState(false);
+  const [squadRole, setSquadRole] = useState<'STARTER' | 'KEY_PLAYER' | null>(null);
   const [nationalMatchesPlayed, setNationalMatchesPlayed] = useState(0);
   const [nationalGoals, setNationalGoals] = useState(0);
 
@@ -991,6 +995,7 @@ export const EditorView: React.FC = () => {
         setIsUntouchable(p.isUntouchable ?? false);
         setIsOnTransferList(p.isOnTransferList ?? false);
         setIsAvailableForLoan(p.isAvailableForLoan ?? false);
+        setSquadRole(p.squadRole ?? null);
         setNationalMatchesPlayed(p.nationalStats?.matchesPlayed ?? 0);
         setNationalGoals(p.nationalStats?.goals ?? 0);
       }
@@ -1185,6 +1190,7 @@ export const EditorView: React.FC = () => {
         }],
         boardLockoutUntil: null,
         isUntouchable: isUntouchable,
+        squadRole: squadRole,
         negotiationStep: 0,
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
@@ -1228,6 +1234,7 @@ export const EditorView: React.FC = () => {
       isUntouchable: isUntouchable,
       isOnTransferList: hasPendingTransfer ? false : isOnTransferList,
       isAvailableForLoan: loan || hasPendingTransfer ? false : isAvailableForLoan,
+      squadRole: squadRole,
       nationalStats: { ...(existingPlayer.nationalStats ?? emptyStats()), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals }
     };
     if (targetClubId !== selectedClubId) {
@@ -1895,12 +1902,13 @@ export const EditorView: React.FC = () => {
               <div>
                 <div className={`${labelCls} mb-1`}>Status</div>
                 <select
-                  value={isUntouchable ? 'UNTOUCHABLE' : isOnTransferList ? 'TRANSFER_LIST' : isAvailableForLoan ? 'AVAILABLE_LOAN' : 'NONE'}
+                  value={isUntouchable ? 'UNTOUCHABLE' : isOnTransferList ? 'TRANSFER_LIST' : isAvailableForLoan ? 'AVAILABLE_LOAN' : squadRole === 'STARTER' ? 'STARTER' : squadRole === 'KEY_PLAYER' ? 'KEY_PLAYER' : 'NONE'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setIsUntouchable(v === 'UNTOUCHABLE');
                     setIsOnTransferList(v === 'TRANSFER_LIST');
                     setIsAvailableForLoan(v === 'AVAILABLE_LOAN');
+                    setSquadRole(v === 'STARTER' ? 'STARTER' : v === 'KEY_PLAYER' ? 'KEY_PLAYER' : null);
                   }}
                   className={`${selectCls} px-2 py-1.5 w-52`}
                 >
@@ -1908,6 +1916,8 @@ export const EditorView: React.FC = () => {
                   <option value="UNTOUCHABLE">Nie na sprzedaż</option>
                   <option value="TRANSFER_LIST">Na liście transferowej</option>
                   <option value="AVAILABLE_LOAN">Dostępny na wypożyczenie</option>
+                  <option value="STARTER">Pierwsza 11</option>
+                  <option value="KEY_PLAYER">Kluczowy zawodnik</option>
                 </select>
               </div>
               <div>
