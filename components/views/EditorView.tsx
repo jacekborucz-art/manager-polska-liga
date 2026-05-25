@@ -1256,7 +1256,8 @@ export const EditorView: React.FC = () => {
           <button
             key={sec}
             onClick={() => setActiveSection(sec)}
-            className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${activeSection === sec ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+            className={`px-3 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeSection === sec ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             {sec}
           </button>
@@ -1268,7 +1269,8 @@ export const EditorView: React.FC = () => {
               <button
                 key={tier}
                 onClick={() => { setSelectedTier(tier); setSelectedClubId(''); setSelectedPlayerId(''); setIsCreatingPlayer(false); }}
-                className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${selectedTier === tier ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                className={`px-3 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${selectedTier === tier ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 {tier === 'ALL' ? 'Wszystkie kluby' : `Liga ${tier}`}
               </button>
@@ -1283,7 +1285,8 @@ export const EditorView: React.FC = () => {
             </select>
             <button
               onClick={() => setShowRepairPanel(p => !p)}
-              className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${showRepairPanel ? 'bg-orange-600 border-t-orange-400/60 border-x-orange-500/30 border-b-black/60 text-white' : 'bg-orange-900/60 border-t-orange-400/30 border-x-orange-700/20 border-b-black/60 text-orange-300 hover:text-white hover:bg-orange-800'}`}
+              className={`px-3 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${showRepairPanel ? 'bg-orange-600 border-t-orange-400/60 border-x-orange-500/30 border-b-black/60 text-white' : 'bg-orange-900/60 border-t-orange-400/30 border-x-orange-700/20 border-b-black/60 text-orange-300 hover:text-white hover:bg-orange-800'}`}
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >
               Napraw problemy
             </button>
@@ -1295,7 +1298,8 @@ export const EditorView: React.FC = () => {
               <button
                 key={lg.id}
                 onClick={() => setClubsLeagueFilter(lg.id)}
-                className={`px-3 py-1 rounded text-xs transition-all active:translate-y-[2px] border-t border-x border-b ${clubsLeagueFilter === lg.id ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                className={`px-3 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${clubsLeagueFilter === lg.id ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 {lg.label}
               </button>
@@ -1314,13 +1318,15 @@ export const EditorView: React.FC = () => {
               <button
                 onClick={handleExportClubData}
                 disabled={!selectedTeamClub}
-                className="px-4 py-1.5 bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 Eksportuj dane klubu
               </button>
               <button
                 onClick={() => { setClubImportMsg(''); clubImportRef.current?.click(); }}
-                className="px-4 py-1.5 bg-blue-900 rounded text-xs text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                className="px-4 py-1.5 bg-blue-900 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 Importuj dane z pliku
               </button>
@@ -1335,7 +1341,8 @@ export const EditorView: React.FC = () => {
           )}
           <button
             onClick={startCreatePlayer}
-            className="px-4 py-1.5 bg-emerald-800 rounded text-xs text-emerald-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+            className="px-4 py-1.5 bg-emerald-800 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-emerald-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             Stwórz zawodnika
           </button>
@@ -1348,19 +1355,22 @@ export const EditorView: React.FC = () => {
           />
           <button
             onClick={() => { setShowExportModal(true); setExportSelected(new Set()); }}
-            className="px-4 py-1.5 bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
+            className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             Eksportuj składy
           </button>
           <button
             onClick={() => { setImportMsg(''); fileInputRef.current?.click(); }}
-            className="px-4 py-1.5 bg-blue-900 rounded text-xs text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+            className="px-4 py-1.5 bg-blue-900 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             Importuj składy z pliku
           </button>
           <button
             onClick={() => navigateTo(ViewState.DASHBOARD)}
-            className="px-4 py-1.5 bg-slate-800 rounded text-xs text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60"
+            className="px-4 py-1.5 bg-slate-800 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             Wyjdź
           </button>
@@ -1414,7 +1424,8 @@ export const EditorView: React.FC = () => {
                             setClubs(prev => prev.map(c => c.id === club.id ? { ...c, signingBonusPool: val } : c));
                             setEditingSigningPool(prev => { const next = { ...prev }; delete next[club.id]; return next; });
                           }}
-                          className="px-3 py-1 rounded text-xs bg-yellow-700 hover:bg-yellow-600 text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-400/60 border-x-yellow-600/30 border-b-black/60 whitespace-nowrap"
+                          className="px-3 py-1 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest bg-yellow-700 hover:bg-yellow-600 text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-400/60 border-x-yellow-600/30 border-b-black/60 whitespace-nowrap"
+                          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                         >
                           Ustaw
                         </button>
@@ -1424,7 +1435,8 @@ export const EditorView: React.FC = () => {
                             setClubs(prev => prev.map(c => c.id === club.id ? { ...c, signingBonusPool: recommended } : c));
                             setEditingSigningPool(prev => { const next = { ...prev }; delete next[club.id]; return next; });
                           }}
-                          className="px-3 py-1 rounded text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60 whitespace-nowrap"
+                          className="px-3 py-1 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/60 whitespace-nowrap"
+                          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                         >
                           Auto
                         </button>
@@ -1452,7 +1464,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairClubFinances}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1464,7 +1477,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairFreeAgents}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1476,7 +1490,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairSquads}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1535,7 +1550,8 @@ export const EditorView: React.FC = () => {
                       setTeamSearchQuery('');
                     }
                   }}
-                  className={`px-2.5 py-1 rounded text-[11px] transition-all active:translate-y-[2px] border-t border-x border-b ${teamLeagueFilter === filter ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                  className={`px-2.5 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${teamLeagueFilter === filter ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
                   {label}
                 </button>
@@ -1649,7 +1665,8 @@ export const EditorView: React.FC = () => {
                         setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, budget: b, transferBudget: tb, reserveBudget: rb, signingBonusPool: sp } : c));
                         showGameNotification({ title: 'Zapisano finanse', message: `Finanse ${selectedTeamClub.name} zostały zaktualizowane.`, tone: 'success' });
                       }}
-                      className="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                      className="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                      style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                     >
                       Zapisz finanse
                     </button>
@@ -1743,7 +1760,8 @@ export const EditorView: React.FC = () => {
                         setTeamSearchQuery(trimmedName);
                         showGameNotification({ title: 'Zapisano dane', message: `Dane ${trimmedName} zostały zaktualizowane.`, tone: 'success' });
                       }}
-                      className="w-full px-4 py-2 bg-blue-800 hover:bg-blue-700 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                      className="w-full px-4 py-2 bg-blue-800 hover:bg-blue-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                      style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                     >
                       Zapisz dane
                     </button>
@@ -1779,7 +1797,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairClubFinances}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1791,7 +1810,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairFreeAgents}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1803,7 +1823,8 @@ export const EditorView: React.FC = () => {
                   </div>
                   <button
                     onClick={handleRepairSquads}
-                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded text-xs text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-1.5 bg-orange-700 hover:bg-orange-600 rounded-[16px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-orange-400/60 border-x-orange-600/30 border-b-black/60 whitespace-nowrap"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     Uruchom
                   </button>
@@ -1814,40 +1835,30 @@ export const EditorView: React.FC = () => {
 
           <div className={`relative z-10 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}>
 
-            {/* NAZWA DRUŻYNY — między headerem a formularzem */}
-            <div className="mb-3 pb-3 border-b border-white/10 flex items-center gap-4">
+            {/* IMIĘ NAZWISKO + OVR | Logo + NAZWA DRUŻYNY */}
+            <div className="mb-3 pb-3 border-b border-yellow-400/10 flex items-center gap-4 bg-yellow-400/[0.04] rounded-lg px-3 pt-2">
+              <div className="text-4xl text-white leading-none font-black italic">
+                {firstName || '—'} {lastName}
+              </div>
+              <div className="w-14 h-14 rounded-full border-2 border-white/30 bg-black/40 flex flex-col items-center justify-center flex-shrink-0">
+                <span className="text-[9px] text-yellow-400 leading-none mb-0.5">OVR</span>
+                <span className="text-3xl text-white tabular-nums leading-none">{liveOvr}</span>
+              </div>
+              <span className="w-px h-10 bg-white/15 mx-1" />
               {selectedClub?.logoFile && (
                 <img
                   src={new URL(`../../Graphic/logo/${selectedClub.logoFile}`, import.meta.url).href}
                   alt=""
-                  className="w-16 h-16 object-contain flex-shrink-0"
+                  className="w-10 h-10 object-contain flex-shrink-0"
                 />
               )}
-              <div className="text-5xl text-white leading-none">
+              <div className="text-2xl text-white leading-none">
                 {selectedClub?.name ?? '—'}
               </div>
             </div>
 
-            {/* OVR KOŁO + IMIĘ I NAZWISKO */}
-            <div className="flex items-center gap-5 mb-4 pb-3 border-b border-white/10">
-              {/* Kółko OVR */}
-              <div className="w-20 h-20 rounded-full border-2 border-white/30 bg-black/40 flex flex-col items-center justify-center flex-shrink-0">
-                <span className="text-[9px] text-yellow-400 leading-none mb-0.5">OVR</span>
-                <span className="text-4xl text-white tabular-nums leading-none">{liveOvr}</span>
-              </div>
-              {/* Imię i nazwisko — duże */}
-              <div>
-                <div className="text-3xl text-white leading-tight">
-                  {firstName || '—'}
-                </div>
-                <div className="text-3xl text-white leading-tight">
-                  {lastName}
-                </div>
-              </div>
-            </div>
-
             {/* IMIĘ / NAZWISKO pola */}
-            <div className="flex gap-3 mb-2">
+            <div className="flex gap-3 mb-2 bg-white/[0.03] rounded-lg px-3 py-2">
               <div>
                 <div className={`${labelCls} mb-1`}>Imię</div>
                 <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
@@ -1861,7 +1872,7 @@ export const EditorView: React.FC = () => {
             </div>
 
             {/* KLUB / STATUS / REPREZENTACJA */}
-            <div className="flex gap-3 items-end mb-3">
+            <div className="flex gap-3 items-end mb-3 bg-slate-900/50 rounded-lg px-3 py-2">
               <div>
                 <div className={`${labelCls} mb-1`}>Klub</div>
                 <select
@@ -1908,7 +1919,7 @@ export const EditorView: React.FC = () => {
             </div>
 
             {/* WIEK / POZYCJA / NARODOWOŚĆ */}
-            <div className="flex gap-3 items-end mb-3">
+            <div className="flex gap-3 items-end mb-3 bg-white/[0.03] rounded-lg px-3 py-2">
               <div>
                 <div className={`${labelCls} mb-1`}>Wiek</div>
                 <input type="number" min={15} max={45} value={age}
@@ -2137,23 +2148,24 @@ export const EditorView: React.FC = () => {
             </div>
 
             {/* ATRYBUTY */}
-            <div className="mb-3">
-              <div className="mb-2">
-                <span className="text-xs text-yellow-400">Atrybuty</span>
+            <div className="mb-3 bg-slate-900/60 rounded-lg px-3 pt-3 pb-1 border border-white/5">
+              <div className="mb-2 text-center">
+                <span className="text-[17px] text-yellow-400">Atrybuty</span>
+                <div className="mt-1.5 h-px bg-yellow-400/30" />
               </div>
               <table className="w-full border-collapse">
                 <tbody>
                   {Array.from({ length: Math.ceil(ATTR_KEYS.length / 3) }, (_, rowIdx) => (
-                    <tr key={rowIdx} className="border-b border-slate-800/50">
+                    <tr key={rowIdx} className={`border-b border-slate-800/50 ${rowIdx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
                       {ATTR_KEYS.slice(rowIdx * 3, rowIdx * 3 + 3).map(key => (
                         <td key={key} className="py-[2px] pr-6">
                           <div className="flex items-center gap-3">
-                            <span className="text-yellow-400 text-lg whitespace-nowrap w-44 flex-shrink-0">{ATTR_LABELS[key]}</span>
+                            <span className="text-yellow-400 text-[15px] whitespace-nowrap w-44 flex-shrink-0">{ATTR_LABELS[key]}</span>
                             <input
                               type="number" min={1} max={99} value={attrs[key]}
                               onChange={(e) => handleAttrChange(key, e.target.value)}
                               onBlur={(e) => handleAttrChange(key, e.target.value)}
-                              className={`${inputCls} w-[58px] h-[58px] p-0 text-center text-[28px] leading-none`}
+                              className={`${inputCls} w-[48px] h-[38px] p-0 text-center text-[18px] leading-none`}
                             />
                           </div>
                         </td>
