@@ -447,13 +447,22 @@ export const EditorView: React.FC = () => {
           firstName: p.firstName,
           lastName: p.lastName,
           age: p.age,
+          clubId: p.clubId,
           position: p.position,
+          secondaryPosition: p.secondaryPosition ?? null,
+          secondaryPositionRating: p.secondaryPositionRating ?? 0,
           nationality: p.nationality,
           nationalityCountry: p.nationalityCountry ?? '',
           annualSalary: p.annualSalary,
           marketValue: p.marketValue ?? 0,
           contractEndDate: p.contractEndDate,
           loan: p.loan ?? null,
+          transferPendingClubId: p.transferPendingClubId ?? '',
+          transferReportDate: p.transferReportDate ?? '',
+          transferPendingFee: p.transferPendingFee ?? 0,
+          transferPendingSalary: p.transferPendingSalary ?? 0,
+          transferPendingBonus: p.transferPendingBonus ?? 0,
+          transferPendingContractYears: p.transferPendingContractYears ?? 0,
           isAvailableForLoan: !!p.isAvailableForLoan,
           attributes: { ...p.attributes },
         })),
@@ -532,6 +541,10 @@ export const EditorView: React.FC = () => {
   const [loanDestinationClubId, setLoanDestinationClubId] = useState<string>('');
   const [loanStartDate, setLoanStartDate] = useState<string>('');
   const [loanEndDate, setLoanEndDate] = useState<string>('');
+  const [hasPendingTransfer, setHasPendingTransfer] = useState(false);
+  const [transferPendingClubId, setTransferPendingClubId] = useState<string>('');
+  const [transferReportDate, setTransferReportDate] = useState<string>('');
+  const [transferPendingFee, setTransferPendingFee] = useState<number>(0);
   const [playerTargetClubId, setPlayerTargetClubId] = useState<string>('');
   const [isUntouchable, setIsUntouchable] = useState(false);
   const [isOnTransferList, setIsOnTransferList] = useState(false);
@@ -872,6 +885,10 @@ export const EditorView: React.FC = () => {
     setLoanDestinationClubId('');
     setLoanStartDate('');
     setLoanEndDate('');
+    setHasPendingTransfer(false);
+    setTransferPendingClubId('');
+    setTransferReportDate('');
+    setTransferPendingFee(0);
     setPlayerTargetClubId(selectedClubId);
     setIsUntouchable(false);
     setIsOnTransferList(false);
@@ -962,6 +979,10 @@ export const EditorView: React.FC = () => {
         setLoanDestinationClubId(p.loan?.destinationClubId ?? '');
         setLoanStartDate(toDateInputValue(p.loan?.startDate));
         setLoanEndDate(toDateInputValue(p.loan?.endDate));
+        setHasPendingTransfer(!!p.transferPendingClubId);
+        setTransferPendingClubId(p.transferPendingClubId ?? '');
+        setTransferReportDate(toDateInputValue(p.transferReportDate));
+        setTransferPendingFee(p.transferPendingFee ?? 0);
         setPlayerTargetClubId(p.clubId ?? selectedClubId);
         setIsUntouchable(p.isUntouchable ?? false);
         setIsOnTransferList(p.isOnTransferList ?? false);
@@ -1078,6 +1099,39 @@ export const EditorView: React.FC = () => {
       return;
     }
     const targetClubId = loan?.destinationClubId ?? playerTargetClubId;
+    if (hasPendingTransfer && (!transferPendingClubId || !transferReportDate)) {
+      showGameNotification({
+        title: 'Brak danych transferu',
+        message: 'Wybierz nowy klub i datę przejścia zawodnika.',
+        tone: 'warning'
+      });
+      return;
+    }
+    if (hasPendingTransfer && transferPendingClubId === targetClubId) {
+      showGameNotification({
+        title: 'Błędny transfer',
+        message: 'Nowy klub w uzgodnionym transferze musi być inny niż obecny klub zawodnika.',
+        tone: 'warning'
+      });
+      return;
+    }
+    const pendingTransferFields = hasPendingTransfer
+      ? {
+          transferPendingClubId,
+          transferReportDate: toIsoDate(transferReportDate),
+          transferPendingFee: transferPendingFee > 0 ? transferPendingFee : undefined,
+          interestedClubs: [] as string[],
+          isOnTransferList: false,
+          isAvailableForLoan: false,
+        }
+      : {
+          transferPendingClubId: undefined,
+          transferReportDate: undefined,
+          transferPendingFee: undefined,
+          transferPendingSalary: undefined,
+          transferPendingBonus: undefined,
+          transferPendingContractYears: undefined,
+        };
     const cleanSecondaryPosition = secondaryPosition && secondaryPosition !== position ? secondaryPosition : null;
     const cleanSecondaryPositionRating = cleanSecondaryPosition ? secondaryPositionRating : undefined;
     if (isCreatingPlayer) {
@@ -1112,7 +1166,8 @@ export const EditorView: React.FC = () => {
         annualSalary,
         marketValue,
         loan,
-        isAvailableForLoan: isAvailableForLoan,
+        ...pendingTransferFields,
+        isAvailableForLoan: hasPendingTransfer ? false : isAvailableForLoan,
         contractEndDate: contractDate,
         history: [{
           clubName: club?.name ?? selectedClubId,
@@ -1163,9 +1218,10 @@ export const EditorView: React.FC = () => {
       secondaryPositionRating: cleanSecondaryPositionRating,
       attributes: { ...attrs }, overallRating: newOvr,
       annualSalary, marketValue, contractEndDate, loan, clubId: targetClubId,
+      ...pendingTransferFields,
       isUntouchable: isUntouchable,
-      isOnTransferList: isOnTransferList,
-      isAvailableForLoan: loan ? false : isAvailableForLoan,
+      isOnTransferList: hasPendingTransfer ? false : isOnTransferList,
+      isAvailableForLoan: loan || hasPendingTransfer ? false : isAvailableForLoan,
       nationalStats: { ...(existingPlayer.nationalStats ?? emptyStats()), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals }
     };
     if (targetClubId !== selectedClubId) {
@@ -1956,6 +2012,63 @@ export const EditorView: React.FC = () => {
                   onChange={(e) => setContractEndDate(e.target.value)}
                   className={`${inputCls} px-2 py-1.5`} />
               </div>
+            </div>
+
+            {/* UZGODNIONY TRANSFER */}
+            <div className="mb-3 p-3 border border-slate-800 bg-black/20 rounded">
+              <label className="inline-flex items-center gap-2 cursor-pointer mb-3">
+                <input
+                  type="checkbox"
+                  checked={hasPendingTransfer}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setHasPendingTransfer(checked);
+                    if (!checked) {
+                      setTransferPendingClubId('');
+                      setTransferReportDate('');
+                      setTransferPendingFee(0);
+                    }
+                  }}
+                  className="accent-yellow-400"
+                />
+                <span className={`${labelCls}`}>Uzgodniony transfer do nowego klubu</span>
+              </label>
+              {hasPendingTransfer && (
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Nowy klub</div>
+                    <select
+                      value={transferPendingClubId}
+                      onChange={(e) => setTransferPendingClubId(e.target.value)}
+                      className={`${selectCls} px-2 py-1.5 w-64`}
+                    >
+                      <option value="">— wybierz klub —</option>
+                      {loanClubOptions.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Data przejścia</div>
+                    <input
+                      type="date"
+                      value={transferReportDate}
+                      onChange={(e) => setTransferReportDate(e.target.value)}
+                      className={`${inputCls} px-2 py-1.5`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Kwota transferu (PLN)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={transferPendingFee}
+                      onChange={(e) => setTransferPendingFee(parseInt(e.target.value, 10) || 0)}
+                      className={`${inputCls} w-36 px-2 py-1.5 text-right`}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* WYPOŻYCZENIE */}

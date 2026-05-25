@@ -118,6 +118,16 @@ function asDateOnlyString(value: unknown, fallback = ''): string {
   return fallback;
 }
 
+function asPositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function asClampedRating(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(1, Math.min(99, value))
+    : undefined;
+}
+
 function reviveDate(_key: string, value: unknown): unknown {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
     const d = new Date(value);
@@ -258,20 +268,33 @@ function normalizeSaveState(data: SaveState): SaveState {
   const normalizedPlayersBase = Object.fromEntries(
     Object.entries(asRecord<any[]>(data.players)).map(([clubId, squad]) => [
       clubId,
-      asArray(squad).map((player: any) => ({
-        ...player,
-        history: asArray(player.history),
-        boardLockoutUntil: player.boardLockoutUntil ?? null,
-        isUntouchable: player.isUntouchable ?? false,
-        negotiationStep: player.negotiationStep ?? 0,
-        negotiationLockoutUntil: player.negotiationLockoutUntil ?? null,
-        contractLockoutUntil: player.contractLockoutUntil ?? null,
-        fatigueDebt: player.fatigueDebt ?? 0,
-        isNegotiationPermanentBlocked: player.isNegotiationPermanentBlocked ?? false,
-        transferLockoutUntil: player.transferLockoutUntil ?? null,
-        freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
-        freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
-      })),
+      asArray(squad).map((player: any) => {
+        const secondaryPosition = typeof player.secondaryPosition === 'string' && player.secondaryPosition !== player.position
+          ? player.secondaryPosition
+          : null;
+        const hasPendingTransfer = typeof player.transferPendingClubId === 'string' && player.transferPendingClubId.length > 0;
+
+        return {
+          ...player,
+          clubId: typeof player.clubId === 'string' && player.clubId.length > 0 ? player.clubId : clubId,
+          secondaryPosition,
+          secondaryPositionRating: secondaryPosition ? asClampedRating(player.secondaryPositionRating) : undefined,
+          history: asArray(player.history),
+          boardLockoutUntil: player.boardLockoutUntil ?? null,
+          isUntouchable: player.isUntouchable ?? false,
+          negotiationStep: player.negotiationStep ?? 0,
+          negotiationLockoutUntil: player.negotiationLockoutUntil ?? null,
+          contractLockoutUntil: player.contractLockoutUntil ?? null,
+          fatigueDebt: player.fatigueDebt ?? 0,
+          isNegotiationPermanentBlocked: player.isNegotiationPermanentBlocked ?? false,
+          transferLockoutUntil: player.transferLockoutUntil ?? null,
+          transferPendingSalary: hasPendingTransfer ? asPositiveNumber(player.transferPendingSalary) : undefined,
+          transferPendingBonus: hasPendingTransfer ? asPositiveNumber(player.transferPendingBonus) : undefined,
+          transferPendingContractYears: hasPendingTransfer ? asPositiveNumber(player.transferPendingContractYears) : undefined,
+          freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
+          freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
+        };
+      }),
     ])
   );
   const normalizedPlayers = reconcileCupStatsFromHistory(

@@ -130,13 +130,22 @@ export interface ImportedSquadPlayer {
   firstName: string;
   lastName: string;
   age: number;
+  clubId?: string;
   position: PlayerPosition;
+  secondaryPosition?: PlayerPosition | null;
+  secondaryPositionRating?: number;
   nationality?: Region;
   nationalityCountry?: string;
   annualSalary?: number;
   marketValue?: number;
   contractEndDate?: string;
   loan?: PlayerLoanInfo | null;
+  transferPendingClubId?: string;
+  transferReportDate?: string;
+  transferPendingFee?: number;
+  transferPendingSalary?: number;
+  transferPendingBonus?: number;
+  transferPendingContractYears?: number;
   isAvailableForLoan?: boolean;
   attributes: {
     strength: number; stamina: number; pace: number; defending: number;
@@ -9507,9 +9516,12 @@ const finalResult: SimulationOutput = {
     const newLineupsChunk: Record<string, Lineup> = {};
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
     const importBatchId = `${now.getTime()}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+    const importedClubIds = new Set(entries.map(entry => entry.clubId));
     entries.forEach(({ clubId, players: imported }) => {
       const sourceClubName = clubs.find(c => c.id === clubId)?.name ?? clubId;
-      const squad: Player[] = imported.map((p, idx) => {
+      if (!newPlayersChunk[clubId]) newPlayersChunk[clubId] = [];
+      imported.forEach((p, idx) => {
+        const targetClubId = typeof p.clubId === 'string' && importedClubIds.has(p.clubId) ? p.clubId : clubId;
         const nat = p.nationality ?? Region.POLAND;
         const country = p.nationalityCountry ?? pickNationalityForRegion(nat);
         const attrs = { ...p.attributes };
@@ -9520,25 +9532,50 @@ const finalResult: SimulationOutput = {
           : new Date(now.getFullYear() + contractYears, now.getMonth(), now.getDate()).toISOString();
         const salary = p.annualSalary ?? Math.round(overall * 800);
         const mval = p.marketValue ?? Math.round(overall * 3000);
-        const id = `IMPORT_${clubId}_${idx}_${importBatchId}`;
+        const id = `IMPORT_${targetClubId}_${idx}_${importBatchId}`;
         const loan = sanitizeImportedLoan(p.loan, clubId, sourceClubName);
-        return PlayerMoraleService.ensurePlayerState({
+        const pendingClubExists = !!p.transferPendingClubId && clubs.some(c => c.id === p.transferPendingClubId);
+        const hasImportedPendingTransfer = pendingClubExists && !!p.transferReportDate;
+        const pendingTransferFields = hasImportedPendingTransfer
+          ? {
+              transferPendingClubId: p.transferPendingClubId,
+              transferReportDate: p.transferReportDate,
+              transferPendingFee: typeof p.transferPendingFee === 'number' && p.transferPendingFee > 0 ? p.transferPendingFee : undefined,
+              transferPendingSalary: typeof p.transferPendingSalary === 'number' && p.transferPendingSalary > 0 ? p.transferPendingSalary : undefined,
+              transferPendingBonus: typeof p.transferPendingBonus === 'number' && p.transferPendingBonus > 0 ? p.transferPendingBonus : undefined,
+              transferPendingContractYears: typeof p.transferPendingContractYears === 'number' && p.transferPendingContractYears > 0 ? p.transferPendingContractYears : undefined,
+              isOnTransferList: false,
+              isAvailableForLoan: false,
+            }
+          : {};
+        const cleanSecondaryPosition = p.secondaryPosition && p.secondaryPosition !== p.position ? p.secondaryPosition : null;
+        const cleanSecondaryPositionRating = cleanSecondaryPosition && typeof p.secondaryPositionRating === 'number'
+          ? Math.max(1, Math.min(99, p.secondaryPositionRating))
+          : undefined;
+        const importedPlayer = PlayerMoraleService.ensurePlayerState({
           id, firstName: p.firstName, lastName: p.lastName, age: p.age,
-          clubId, nationality: nat, nationalityCountry: country,
-          position: p.position, overallRating: overall, attributes: attrs,
+          clubId: targetClubId, nationality: nat, nationalityCountry: country,
+          position: p.position,
+          secondaryPosition: cleanSecondaryPosition,
+          secondaryPositionRating: cleanSecondaryPositionRating,
+          overallRating: overall, attributes: attrs,
           stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
           health: { status: HealthStatus.HEALTHY },
           condition: 80, suspensionMatches: 0,
           cupSuspensionMatches: 0, euroSuspensionMatches: 0, nationalSuspensionMatches: 0,
           contractEndDate: contractEnd, annualSalary: salary, marketValue: mval, loan,
-          isAvailableForLoan: !!p.isAvailableForLoan && !loan,
+          ...pendingTransferFields,
+          isAvailableForLoan: !!p.isAvailableForLoan && !loan && !hasImportedPendingTransfer,
           history: [], boardLockoutUntil: null, isUntouchable: false,
           negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
           fatigueDebt: 0, isNegotiationPermanentBlocked: false,
           transferLockoutUntil: null, freeAgentLockoutUntil: null,
         } as Player);
+        if (!newPlayersChunk[targetClubId]) newPlayersChunk[targetClubId] = [];
+        newPlayersChunk[targetClubId].push(importedPlayer);
       });
-      newPlayersChunk[clubId] = squad;
+    });
+    Object.entries(newPlayersChunk).forEach(([clubId, squad]) => {
       const coach = Object.values(coaches).find(c => c.currentClubId === clubId) ?? null;
       newLineupsChunk[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
     });

@@ -1,11 +1,91 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, PlayerPosition, PlayerSeasonHistoryEntry } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, PlayerPosition, PlayerSeasonHistoryEntry, Region } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
+
+const COUNTRY_FLAG_CODES: Record<string, string> = {
+  Albania: 'AL', Andora: 'AD', Armenia: 'AM', Austria: 'AT', Azerbejdżan: 'AZ',
+  Belgia: 'BE', Białoruś: 'BY', 'Bośnia i Hercegowina': 'BA', Bułgaria: 'BG', Chorwacja: 'HR',
+  Cypr: 'CY', Czarnogóra: 'ME', Czechy: 'CZ', Dania: 'DK', Estonia: 'EE',
+  Finlandia: 'FI', Francja: 'FR', Grecja: 'GR', Gruzja: 'GE', Hiszpania: 'ES',
+  Holandia: 'NL', Irlandia: 'IE', Islandia: 'IS', Izrael: 'IL', Kazachstan: 'KZ',
+  Kosowo: 'XK', Kosovo: 'XK', Liechtenstein: 'LI', Litwa: 'LT', Luksemburg: 'LU',
+  Łotwa: 'LV', 'Macedonia Północna': 'MK', Malta: 'MT', Mołdawia: 'MD', Niemcy: 'DE',
+  Norwegia: 'NO', Polska: 'PL', Portugalia: 'PT', Rosja: 'RU', Rumunia: 'RO',
+  Serbia: 'RS', Słowacja: 'SK', Słowenia: 'SI', Szwajcaria: 'CH', Szwecja: 'SE',
+  Turcja: 'TR', Ukraina: 'UA', Węgry: 'HU', Włochy: 'IT',
+  Anglia: 'GB', Szkocja: 'GB', Walia: 'GB',
+  Algieria: 'DZ', Angola: 'AO', Egipt: 'EG', Ghana: 'GH', Kamerun: 'CM',
+  Maroko: 'MA', Nigeria: 'NG', Senegal: 'SN', Tunezja: 'TN',
+  Argentyna: 'AR', Brazylia: 'BR', Chile: 'CL', Kolumbia: 'CO', Paragwaj: 'PY',
+  Peru: 'PE', Urugwaj: 'UY', Wenezuela: 'VE',
+  'Stany Zjednoczone': 'US', USA: 'US', Kanada: 'CA', Meksyk: 'MX',
+  'Arabia Saudyjska': 'SA', Australia: 'AU', Chiny: 'CN', Japonia: 'JP',
+  'Korea Południowa': 'KR', Korea: 'KR', Indie: 'IN', Katar: 'QA',
+  'Nowa Zelandia': 'NZ',
+};
+
+const REGION_FLAG_CODES: Partial<Record<Region, string>> = {
+  [Region.POLAND]: 'PL',
+  [Region.GERMANY]: 'DE',
+  [Region.SPAIN]: 'ES',
+  [Region.ENGLAND]: 'GB',
+  [Region.ITALY]: 'IT',
+  [Region.FRANCE]: 'FR',
+  [Region.SWEDEN]: 'SE',
+  [Region.JAPAN]: 'JP',
+  [Region.KOREA]: 'KR',
+  [Region.ARGENTINA]: 'AR',
+  [Region.BRAZIL]: 'BR',
+  [Region.TURKEY]: 'TR',
+  [Region.FINLAND]: 'FI',
+  [Region.GEORGIA]: 'GE',
+  [Region.ARMENIA]: 'AM',
+  [Region.ALBANIA]: 'AL',
+  [Region.ROMANIA]: 'RO',
+  [Region.HUNGARIAN]: 'HU',
+  [Region.MALTESE]: 'MT',
+  [Region.ISRAELI]: 'IL',
+  [Region.GREEK]: 'GR',
+  [Region.AZERBAIJANI]: 'AZ',
+  [Region.KAZAKH]: 'KZ',
+  [Region.MEXICO]: 'MX',
+};
+
+const COUNTRY_CODE_LABELS: Record<string, string> = {
+  PL: 'Polska',
+  POL: 'Polska',
+};
+
+const normalizeCountryName = (country: string): string => {
+  const withoutTrailingDot = country.trim().replace(/[.]+$/, '');
+  const codeWithNameMatch = withoutTrailingDot.match(/^([A-Za-z]{2,3})\s+(.+)$/);
+  if (codeWithNameMatch && COUNTRY_CODE_LABELS[codeWithNameMatch[1].toUpperCase()]) {
+    return codeWithNameMatch[2].trim();
+  }
+  return COUNTRY_CODE_LABELS[withoutTrailingDot.toUpperCase()] ?? withoutTrailingDot;
+};
+
+const formatCountryName = (country: string): string => {
+  const trimmed = normalizeCountryName(country);
+  if (!trimmed) return '';
+  const lower = trimmed.toLocaleLowerCase('pl-PL');
+  return lower
+    .split(' ')
+    .map(word => `${word.charAt(0).toLocaleUpperCase('pl-PL')}${word.slice(1)}`)
+    .join(' ');
+};
+
+const getCountryFlagCode = (country: string, region: Region): string | null => {
+  const formatted = formatCountryName(country);
+  const directCode = country.trim().replace(/[.]+$/, '').split(/\s+/)[0]?.toUpperCase();
+  if (directCode && COUNTRY_CODE_LABELS[directCode]) return directCode === 'POL' ? 'PL' : directCode;
+  return COUNTRY_FLAG_CODES[formatted] ?? REGION_FLAG_CODES[region] ?? null;
+};
 
 export const PlayerCard: React.FC = () => {
  const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk, submitLoanOffer } = useGame();
@@ -70,6 +150,10 @@ export const PlayerCard: React.FC = () => {
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
   const { player, club, isReserve } = data;
+  const countrySource = player.nationalityCountry || REGION_NATIONALITY_LABEL[player.nationality] || player.nationality;
+  const countryName = formatCountryName(countrySource);
+  const countryNameDisplay = countryName.toLocaleUpperCase('pl-PL');
+  const countryFlagCode = getCountryFlagCode(countrySource, player.nationality);
   const isContractLocked = player.contractLockoutUntil && new Date(currentDate) < new Date(player.contractLockoutUntil);
   const PLN_TO_EUR = 4.25;
   const isPolishClub = club.leagueId.startsWith('L_PL_');
@@ -342,6 +426,28 @@ export const PlayerCard: React.FC = () => {
                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-400 to-slate-600">{player.lastName}</span>
               </h2>
 
+              <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold tracking-[0.2em] text-[10px] mb-2">
+                <span>{player.age} LAT, {countryNameDisplay}</span>
+                {countryFlagCode && (
+                  <img
+                    src={`https://flagcdn.com/w40/${countryFlagCode.toLowerCase()}.png`}
+                    alt={countryName}
+                    className="h-2.5 w-4 rounded-[1px] object-cover shadow-sm"
+                  />
+                )}
+              </div>
+
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
+                  {player.position}
+                </div>
+                {player.secondaryPosition && player.secondaryPosition !== player.position && (
+                  <div className={`px-3 py-1 rounded-lg border font-black italic uppercase tracking-tighter text-xs ${PlayerPresentationService.getPositionBadgeClass(player.secondaryPosition)}`}>
+                    {player.secondaryPosition}
+                  </div>
+                )}
+              </div>
+
               {(player.nationalStats?.matchesPlayed ?? 0) >= 1 && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 mb-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-red-300">Kadra Narodowa</span>
@@ -354,22 +460,6 @@ export const PlayerCard: React.FC = () => {
                   <span className="text-[10px] font-black text-white font-mono">{loanEndLabel}</span>
                 </div>
               )}
-
-              <div className="flex items-center justify-center gap-4 mt-2">
-                 <div className="flex items-center gap-2">
-                   <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
-                      {player.position}
-                   </div>
-                   {player.secondaryPosition && player.secondaryPosition !== player.position && (
-                     <div className={`px-3 py-1 rounded-lg border font-black italic uppercase tracking-tighter text-xs ${PlayerPresentationService.getPositionBadgeClass(player.secondaryPosition)}`}>
-                        2. {player.secondaryPosition}
-                     </div>
-                   )}
-                 </div>
-                 <div className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px]">
-                    {player.age} lat • {player.nationalityCountry || REGION_NATIONALITY_LABEL[player.nationality] || player.nationality}
-                 </div>
-              </div>
            </div>
 
            <div className="relative z-10 group mt-4 mb-4">
