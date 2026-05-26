@@ -433,6 +433,11 @@ const NT_FLAG_CODE_MAP_SAFE: Record<string, string> = {
   'Nowa Zelandia': 'NZ', 'Fidżi': 'FJ', 'Wyspy Salomona': 'SB', 'Papua-Nowa Gwinea': 'PG',
   'Tahiti': 'PF', 'Nowa Kaledonia': 'NC', 'Vanuatu': 'VU', 'Samoa': 'WS',
   'Samoa Amerykańskie': 'AS', 'Tonga': 'TO', 'Wyspy Cooka': 'CK',
+  'Brunei': 'BN', 'Chinese Taipei': 'TW', 'Guam': 'GU',
+  'Anguilla': 'AI', 'Bonaire': 'BQ', 'Brytyjskie Wyspy Dziewicze': 'VG',
+  'Francuska Gujana': 'GF', 'Gujana': 'GY', 'Gwadelupa': 'GP',
+  'Martynika': 'MQ', 'Portoryko': 'PR', 'Saint-Martin': 'MF',
+  'Sint Maarten': 'SX', 'Stany Zjednoczone Wyspy Dziewicze': 'VI',
 };
 
 const getNTFlagEmoji = (name: string): string =>
@@ -1170,7 +1175,7 @@ export const EuropeanClubsView: React.FC = () => {
 
   const clubColorsById = useMemo<Record<string, string[]>>(() => {
     const map: Record<string, string[]> = {};
-    clubs.forEach(c => { map[c.id] = c.colors ?? []; });
+    clubs.forEach(c => { map[c.id] = c.colorsHex ?? []; });
     return map;
   }, [clubs]);
 
@@ -1297,7 +1302,7 @@ export const EuropeanClubsView: React.FC = () => {
               <h1 className={`text-base text-white ${MANAGER_HEADING_FONT}`}>Reprezentacje Narodowe</h1>
             )}
             {false && activeTab === 'nt' && selectedNT && (
-              <h1 className={`text-base text-white ${MANAGER_HEADING_FONT}`}>{selectedNT.name} — Skład</h1>
+              <h1 className={`text-base text-white ${MANAGER_HEADING_FONT}`}>{selectedNT?.name} — Skład</h1>
             )}
           </div>
         </div>
