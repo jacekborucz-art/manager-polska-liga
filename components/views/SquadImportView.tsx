@@ -1,25 +1,58 @@
 import React, { useRef, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState } from '../../types';
+import { ClubKit, ClubManagement, Coach, StaffMember, ViewState } from '../../types';
+import { getClubKits } from '../../resources/ClubKits';
 
 interface FileResult {
   name: string;
   clubs: number;
   players: number;
+  kits: number;
+  staff: number;
+  management: number;
   errors: number;
 }
 
+interface PendingKitImport {
+  clubId: string;
+  kits: ClubKit[];
+}
+
+interface PendingStaffImport {
+  clubId: string;
+  coach?: Coach | null;
+  staff?: StaffMember[];
+}
+
+interface PendingManagementImport {
+  clubId: string;
+  management: ClubManagement;
+}
+
 export const SquadImportView: React.FC = () => {
-  const { clubs, importSquad, navigateTo } = useGame();
+  const { clubs, importSquad, navigateTo, setClubs, setCoaches, setStaffMembers } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
   const [pendingEntries, setPendingEntries] = useState<{ clubId: string; players: ImportedSquadPlayer[] }[]>([]);
+  const [pendingKits, setPendingKits] = useState<PendingKitImport[]>([]);
+  const [pendingStaff, setPendingStaff] = useState<PendingStaffImport[]>([]);
+  const [pendingManagement, setPendingManagement] = useState<PendingManagementImport[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  const findClubId = (entry: Record<string, unknown>): string | null => {
+    const clubId = typeof entry.clubId === 'string' ? entry.clubId : '';
+    const clubName = typeof entry.clubName === 'string' ? entry.clubName : typeof entry.name === 'string' ? entry.name : '';
+    const match = clubs.find(c => c.id === clubId || c.name === clubId || c.name === clubName);
+    return match?.id ?? null;
+  };
 
   const processFiles = (files: FileList) => {
     const collected: { clubId: string; players: ImportedSquadPlayer[] }[] = [];
+    const collectedKits: PendingKitImport[] = [];
+    const collectedStaff: PendingStaffImport[] = [];
+    const collectedManagement: PendingManagementImport[] = [];
     const results: FileResult[] = [];
     let processed = 0;
     const total = files.length;
@@ -29,31 +62,68 @@ export const SquadImportView: React.FC = () => {
       reader.onload = (ev) => {
         try {
           const raw = JSON.parse(ev.target?.result as string);
-          const entries: { clubId: string; players: ImportedSquadPlayer[] }[] = Array.isArray(raw) ? raw : [raw];
+          const rawEntries = Array.isArray(raw?.clubs) ? raw.clubs : Array.isArray(raw) ? raw : [raw];
           let validCount = 0;
           let errorCount = 0;
           let playerCount = 0;
+          let kitCount = 0;
+          let staffCount = 0;
+          let managementCount = 0;
 
-          entries.forEach(entry => {
-            const match = clubs.find(c => c.id === entry.clubId || c.name === entry.clubId);
-            if (!match || !Array.isArray(entry.players) || entry.players.length === 0) {
+          rawEntries.forEach((entry: Record<string, unknown>) => {
+            const clubId = findClubId(entry);
+            if (!clubId) {
               errorCount++;
               return;
             }
-            collected.push({ clubId: match.id, players: entry.players });
-            validCount++;
-            playerCount += entry.players.length;
+
+            if (Array.isArray(entry.players) && entry.players.length > 0) {
+              collected.push({ clubId, players: entry.players as ImportedSquadPlayer[] });
+              validCount++;
+              playerCount += entry.players.length;
+              return;
+            }
+
+            if (Array.isArray(entry.kits) && entry.kits.length > 0) {
+              collectedKits.push({ clubId, kits: entry.kits as ClubKit[] });
+              validCount++;
+              kitCount++;
+              return;
+            }
+
+            if (entry.management && typeof entry.management === 'object') {
+              collectedManagement.push({ clubId, management: entry.management as ClubManagement });
+              validCount++;
+              managementCount++;
+              return;
+            }
+
+            if ((entry.coach && typeof entry.coach === 'object') || Array.isArray(entry.staff)) {
+              collectedStaff.push({
+                clubId,
+                coach: entry.coach && typeof entry.coach === 'object' ? entry.coach as Coach : null,
+                staff: Array.isArray(entry.staff) ? entry.staff as StaffMember[] : [],
+              });
+              validCount++;
+              staffCount++;
+              return;
+            }
+
+            errorCount++;
           });
 
-          results.push({ name: file.name, clubs: validCount, players: playerCount, errors: errorCount });
+          results.push({ name: file.name, clubs: validCount, players: playerCount, kits: kitCount, staff: staffCount, management: managementCount, errors: errorCount });
         } catch {
-          results.push({ name: file.name, clubs: 0, players: 0, errors: 1 });
+          results.push({ name: file.name, clubs: 0, players: 0, kits: 0, staff: 0, management: 0, errors: 1 });
         }
 
         processed++;
         if (processed === total) {
           setFileResults(prev => [...prev, ...results]);
           setPendingEntries(prev => [...prev, ...collected]);
+          setPendingKits(prev => [...prev, ...collectedKits]);
+          setPendingStaff(prev => [...prev, ...collectedStaff]);
+          setPendingManagement(prev => [...prev, ...collectedManagement]);
         }
       };
       reader.readAsText(file);
@@ -73,6 +143,45 @@ export const SquadImportView: React.FC = () => {
 
   const handleConfirm = () => {
     if (pendingEntries.length > 0) importSquad(pendingEntries);
+    if (pendingKits.length > 0) {
+      setClubs(prev => prev.map(club => {
+        const entry = pendingKits.find(item => item.clubId === club.id);
+        return entry ? { ...club, kits: getClubKits({ ...club, kits: entry.kits }) } : club;
+      }));
+    }
+    if (pendingStaff.length > 0) {
+      setCoaches(prev => {
+        const next = { ...prev };
+        pendingStaff.forEach(entry => {
+          if (entry.coach?.id) next[entry.coach.id] = { ...next[entry.coach.id], ...entry.coach, currentClubId: entry.clubId };
+        });
+        return next;
+      });
+      setStaffMembers(prev => {
+        const next = { ...prev };
+        pendingStaff.forEach(entry => {
+          (entry.staff ?? []).forEach(staff => {
+            if (staff?.id) next[staff.id] = { ...next[staff.id], ...staff, currentClubId: entry.clubId };
+          });
+        });
+        return next;
+      });
+      setClubs(prev => prev.map(club => {
+        const entry = pendingStaff.find(item => item.clubId === club.id);
+        if (!entry) return club;
+        return {
+          ...club,
+          coachId: entry.coach?.id ?? club.coachId,
+          staffIds: entry.staff && entry.staff.length > 0 ? entry.staff.map(staff => staff.id) : club.staffIds,
+        };
+      }));
+    }
+    if (pendingManagement.length > 0) {
+      setClubs(prev => prev.map(club => {
+        const entry = pendingManagement.find(item => item.clubId === club.id);
+        return entry ? { ...club, management: { ...club.management, ...entry.management } as ClubManagement } : club;
+      }));
+    }
     navigateTo(ViewState.DASHBOARD);
   };
 
@@ -83,11 +192,18 @@ export const SquadImportView: React.FC = () => {
   const handleClear = () => {
     setFileResults([]);
     setPendingEntries([]);
+    setPendingKits([]);
+    setPendingStaff([]);
+    setPendingManagement([]);
   };
 
   const totalClubs = fileResults.reduce((s, r) => s + r.clubs, 0);
   const totalPlayers = fileResults.reduce((s, r) => s + r.players, 0);
+  const totalKits = fileResults.reduce((s, r) => s + r.kits, 0);
+  const totalStaff = fileResults.reduce((s, r) => s + r.staff, 0);
+  const totalManagement = fileResults.reduce((s, r) => s + r.management, 0);
   const totalErrors = fileResults.reduce((s, r) => s + r.errors, 0);
+  const hasPendingImports = pendingEntries.length > 0 || pendingKits.length > 0 || pendingStaff.length > 0 || pendingManagement.length > 0;
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center text-white font-black italic uppercase tracking-tighter">
@@ -98,8 +214,16 @@ export const SquadImportView: React.FC = () => {
         <div>
           <div className="text-2xl text-yellow-400 leading-tight">Wczytaj składy z pliku</div>
           <div className="text-xs text-slate-400 mt-1 normal-case not-italic tracking-normal font-normal">
-            Opcjonalnie. Pliki JSON w formacie identycznym z eksportem edytora. Możesz wgrać kilka plików naraz.
+            Opcjonalnie. Możesz wgrać składy, stroje ligi, sztab ligi i zarząd ligi z eksportów edytora.
           </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          {['Składy', 'Stroje', 'Sztab', 'Zarząd'].map(label => (
+            <div key={label} className="rounded border border-slate-800 bg-slate-900/40 px-3 py-2 text-center text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">
+              {label}
+            </div>
+          ))}
         </div>
 
         {/* DROP ZONE */}
@@ -142,7 +266,14 @@ export const SquadImportView: React.FC = () => {
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.clubs > 0 ? 'bg-emerald-400' : 'bg-red-500'}`} />
                   <span className="text-xs text-slate-300 flex-1 truncate normal-case not-italic tracking-normal font-normal">{r.name}</span>
                   {r.clubs > 0 && (
-                    <span className="text-xs text-emerald-400 whitespace-nowrap">{r.clubs} kl. / {r.players} zaw.</span>
+                    <span className="text-xs text-emerald-400 whitespace-nowrap">
+                      {[
+                        r.players > 0 ? `${r.players} zaw.` : '',
+                        r.kits > 0 ? `${r.kits} str.` : '',
+                        r.staff > 0 ? `${r.staff} szt.` : '',
+                        r.management > 0 ? `${r.management} zarz.` : '',
+                      ].filter(Boolean).join(' / ')}
+                    </span>
                   )}
                   {r.errors > 0 && (
                     <span className="text-xs text-red-400 whitespace-nowrap">{r.errors} błęd.</span>
@@ -153,7 +284,13 @@ export const SquadImportView: React.FC = () => {
             {fileResults.length > 1 && (
               <div className="px-4 py-2 border-t border-slate-800 flex items-center gap-2">
                 <span className="text-xs text-slate-500">Łącznie:</span>
-                <span className="text-xs text-emerald-400">{totalClubs} klubów / {totalPlayers} zawodników</span>
+                <span className="text-xs text-emerald-400">
+                  {totalClubs} klubów
+                  {totalPlayers > 0 ? ` / ${totalPlayers} zawodników` : ''}
+                  {totalKits > 0 ? ` / ${totalKits} strojów` : ''}
+                  {totalStaff > 0 ? ` / ${totalStaff} sztabów` : ''}
+                  {totalManagement > 0 ? ` / ${totalManagement} zarządów` : ''}
+                </span>
                 {totalErrors > 0 && <span className="text-xs text-red-400">/ {totalErrors} błędów</span>}
               </div>
             )}
@@ -164,7 +301,7 @@ export const SquadImportView: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleConfirm}
-            disabled={pendingEntries.length === 0}
+            disabled={!hasPendingImports}
             className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded text-sm text-white transition-colors active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Importuj i zacznij grę

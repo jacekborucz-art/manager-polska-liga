@@ -140,7 +140,7 @@ const LEAGUE_FILTER_BTNS = [
   { label: '3 Liga',      filter: 'L_PL_4' },
 ] as const;
 
-const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA'];
+const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SVK', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
 
@@ -188,7 +188,6 @@ export const EditorView: React.FC = () => {
   const clubImportRef = useRef<HTMLInputElement>(null);
   const [clubImportMsg, setClubImportMsg] = useState('');
 
-  const kitImportRef = useRef<HTMLInputElement>(null);
   const kitLeagueImportRef = useRef<HTMLInputElement>(null);
   const [kitImportMsg, setKitImportMsg] = useState('');
 
@@ -264,59 +263,6 @@ export const EditorView: React.FC = () => {
         setClubImportMsg('Błąd parsowania pliku JSON.');
       }
       if (clubImportRef.current) clubImportRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
-
-  const handleExportClubKits = () => {
-    if (!selectedTeamClub) return;
-    const kits = (editTeamKits.length === 4 ? editTeamKits : getClubKits(selectedTeamClub))
-      .map((kit, index) => ({ ...kit, isActive: index < 2 ? true : Boolean(kit.isActive) }));
-    const data = {
-      clubId: selectedTeamClub.id,
-      clubName: selectedTeamClub.name,
-      kits,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `stroje_${selectedTeamClub.name.replace(/\s+/g, '_')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportClubKits = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedTeamClub) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const raw = JSON.parse(ev.target?.result as string);
-        const rawEntries = Array.isArray(raw) && raw.every(item => item && typeof item === 'object' && 'shirt' in item)
-          ? [{ clubId: selectedTeamClub.id, kits: raw }]
-          : Array.isArray(raw)
-            ? raw
-            : [raw];
-        const match = rawEntries.find((entry: Record<string, unknown>) =>
-          Array.isArray(entry.kits) && (
-            entry.clubId === selectedTeamClub.id ||
-            entry.clubName === selectedTeamClub.name ||
-            typeof entry.clubId !== 'string'
-          )
-        ) as { kits?: ClubKit[]; clubName?: string } | undefined;
-        if (!match || !Array.isArray(match.kits)) {
-          setKitImportMsg('Błąd: plik nie zawiera strojów dla wybranego klubu.');
-          return;
-        }
-        const kits = getClubKits({ ...selectedTeamClub, kits: match.kits });
-        setEditTeamKits(kits);
-        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, kits } : c));
-        setKitImportMsg(`Zaimportowano stroje${match.clubName ? `: ${match.clubName}` : ''}.`);
-      } catch {
-        setKitImportMsg('Błąd parsowania pliku JSON.');
-      }
-      if (kitImportRef.current) kitImportRef.current.value = '';
     };
     reader.readAsText(file);
   };
@@ -475,6 +421,57 @@ export const EditorView: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportLeagueSztab = () => {
+    if (!sztabLeagueFilter) return;
+    const leagueName = TIER_LABELS[sztabLeagueFilter] ?? sztabLeagueFilter;
+    const leagueClubs = clubs
+      .filter(club => club.leagueId === sztabLeagueFilter)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    const data = {
+      type: 'staff_bundle',
+      scope: sztabLeagueFilter,
+      leagueName,
+      clubs: leagueClubs.map(club => ({
+        clubId: club.id,
+        clubName: club.name,
+        coach: club.coachId ? coaches[club.coachId] ?? null : null,
+        staff: (club.staffIds ?? []).map(id => staffMembers[id]).filter(Boolean),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sztab_${leagueName.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportLeagueZarzad = () => {
+    if (!zarzadLeagueFilter) return;
+    const leagueName = TIER_LABELS[zarzadLeagueFilter] ?? zarzadLeagueFilter;
+    const leagueClubs = clubs
+      .filter(club => club.leagueId === zarzadLeagueFilter)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    const data = {
+      type: 'management_bundle',
+      scope: zarzadLeagueFilter,
+      leagueName,
+      clubs: leagueClubs.map(club => ({
+        clubId: club.id,
+        clubName: club.name,
+        management: club.management ?? null,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zarzad_${leagueName.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -546,6 +543,7 @@ export const EditorView: React.FC = () => {
     'TUR': 'Turcja',
     'SUI': 'Szwajcaria',
     'CZE': 'Czechy',
+    'SVK': 'Słowacja',
     'SWE': 'Szwecja',
     'CRO': 'Chorwacja',
     'SRB': 'Serbia',
@@ -1513,29 +1511,6 @@ export const EditorView: React.FC = () => {
                 accept=".json"
                 className="hidden"
                 onChange={handleImportClubData}
-              />
-              <button
-                onClick={handleExportClubKits}
-                disabled={!selectedTeamClub}
-                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-              >
-                Eksportuj stroje
-              </button>
-              <button
-                onClick={() => { setKitImportMsg(''); kitImportRef.current?.click(); }}
-                disabled={!selectedTeamClub}
-                className="px-4 py-1.5 bg-yellow-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-yellow-100 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-300/60 border-x-yellow-600/30 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-              >
-                Importuj stroje
-              </button>
-              <input
-                ref={kitImportRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={handleImportClubKits}
               />
               <button
                 onClick={handleExportLeagueKits}
@@ -2693,6 +2668,15 @@ export const EditorView: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {sztabLeagueFilter && (
+                <button
+                  onClick={handleExportLeagueSztab}
+                  className="w-full px-3 py-1.5 rounded text-[10px] bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 hover:text-white transition-colors border border-cyan-800/40 font-black italic uppercase tracking-tighter"
+                  title="Eksportuj sztab wszystkich klubów z wybranej polskiej ligi do jednego pliku JSON."
+                >
+                  Eksportuj sztab ligi
+                </button>
+              )}
               <div className="relative">
                 <input
                   type="text"
@@ -2887,6 +2871,15 @@ export const EditorView: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {zarzadLeagueFilter && (
+                <button
+                  onClick={handleExportLeagueZarzad}
+                  className="w-full px-3 py-1.5 rounded text-[10px] bg-cyan-900/60 hover:bg-cyan-700 text-cyan-300 hover:text-white transition-colors border border-cyan-800/40 font-black italic uppercase tracking-tighter"
+                  title="Eksportuj zarząd wszystkich klubów z wybranej polskiej ligi do jednego pliku JSON."
+                >
+                  Eksportuj zarząd ligi
+                </button>
+              )}
               <div className="relative">
                 <input
                   type="text"
