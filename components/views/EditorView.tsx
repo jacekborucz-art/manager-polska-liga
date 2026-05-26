@@ -188,6 +188,10 @@ export const EditorView: React.FC = () => {
   const clubImportRef = useRef<HTMLInputElement>(null);
   const [clubImportMsg, setClubImportMsg] = useState('');
 
+  const kitImportRef = useRef<HTMLInputElement>(null);
+  const kitLeagueImportRef = useRef<HTMLInputElement>(null);
+  const [kitImportMsg, setKitImportMsg] = useState('');
+
   const sztabImportRef = useRef<HTMLInputElement>(null);
   const [sztabImportMsg, setSztabImportMsg] = useState('');
 
@@ -260,6 +264,132 @@ export const EditorView: React.FC = () => {
         setClubImportMsg('Błąd parsowania pliku JSON.');
       }
       if (clubImportRef.current) clubImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportClubKits = () => {
+    if (!selectedTeamClub) return;
+    const kits = (editTeamKits.length === 4 ? editTeamKits : getClubKits(selectedTeamClub))
+      .map((kit, index) => ({ ...kit, isActive: index < 2 ? true : Boolean(kit.isActive) }));
+    const data = {
+      clubId: selectedTeamClub.id,
+      clubName: selectedTeamClub.name,
+      kits,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stroje_${selectedTeamClub.name.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClubKits = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTeamClub) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        const rawEntries = Array.isArray(raw) && raw.every(item => item && typeof item === 'object' && 'shirt' in item)
+          ? [{ clubId: selectedTeamClub.id, kits: raw }]
+          : Array.isArray(raw)
+            ? raw
+            : [raw];
+        const match = rawEntries.find((entry: Record<string, unknown>) =>
+          Array.isArray(entry.kits) && (
+            entry.clubId === selectedTeamClub.id ||
+            entry.clubName === selectedTeamClub.name ||
+            typeof entry.clubId !== 'string'
+          )
+        ) as { kits?: ClubKit[]; clubName?: string } | undefined;
+        if (!match || !Array.isArray(match.kits)) {
+          setKitImportMsg('Błąd: plik nie zawiera strojów dla wybranego klubu.');
+          return;
+        }
+        const kits = getClubKits({ ...selectedTeamClub, kits: match.kits });
+        setEditTeamKits(kits);
+        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? { ...c, kits } : c));
+        setKitImportMsg(`Zaimportowano stroje${match.clubName ? `: ${match.clubName}` : ''}.`);
+      } catch {
+        setKitImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (kitImportRef.current) kitImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportLeagueKits = () => {
+    if (!teamLeagueFilter || teamLeagueKitClubs.length === 0) return;
+    const leagueName = TIER_LABELS[teamLeagueFilter] ?? teamLeagueFilter;
+    const data = {
+      type: 'club_kits_bundle',
+      scope: teamLeagueFilter,
+      leagueName,
+      clubs: teamLeagueKitClubs.map(club => ({
+        clubId: club.id,
+        clubName: club.name,
+        leagueId: club.leagueId,
+        country: club.country ?? '',
+        kits: getClubKits(club),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stroje_${leagueName.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportLeagueKits = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        const entries = Array.isArray(raw?.clubs)
+          ? raw.clubs
+          : Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw?.kits)
+              ? [raw]
+              : [];
+        if (entries.length === 0) {
+          setKitImportMsg('Błąd: plik nie zawiera listy strojów klubów.');
+          return;
+        }
+        let updated = 0;
+        let skipped = 0;
+        let selectedKits: ClubKit[] | null = null;
+        setClubs(prev => prev.map(club => {
+          const entry = entries.find((item: Record<string, unknown>) =>
+            Array.isArray(item.kits) && (
+              item.clubId === club.id ||
+              item.clubName === club.name ||
+              item.name === club.name
+            )
+          ) as { kits?: ClubKit[] } | undefined;
+          if (!entry?.kits) return club;
+          const kits = getClubKits({ ...club, kits: entry.kits });
+          updated++;
+          if (club.id === selectedTeamClub?.id) selectedKits = kits;
+          return { ...club, kits };
+        }));
+        skipped = entries.length - updated;
+        if (selectedKits) setEditTeamKits(selectedKits);
+        setKitImportMsg(updated > 0
+          ? `Zaimportowano stroje ${updated} klubów.${skipped > 0 ? ` (${skipped} pominięto)` : ''}`
+          : 'Błąd: żaden klub z pliku nie pasuje.'
+        );
+      } catch {
+        setKitImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (kitLeagueImportRef.current) kitLeagueImportRef.current.value = '';
     };
     reader.readAsText(file);
   };
@@ -664,6 +794,14 @@ export const EditorView: React.FC = () => {
       .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
       .slice(0, 30);
   }, [teamSearchQuery, teamLeagueFilter, clubs]);
+
+  const teamLeagueKitClubs = useMemo(() => {
+    if (!teamLeagueFilter) return [];
+    const isPolish = teamLeagueFilter.startsWith('L_PL_');
+    return clubs
+      .filter(c => isPolish ? c.leagueId === teamLeagueFilter : c.country === teamLeagueFilter)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  }, [clubs, teamLeagueFilter]);
 
   const selectedTeamClub = useMemo(() => clubs.find(c => c.id === teamSearchClubId), [clubs, teamSearchClubId]);
   const selectedTeamSquad = useMemo(() => teamSearchClubId ? getOrGenerateSquad(teamSearchClubId) : [], [teamSearchClubId, getOrGenerateSquad, players]);
@@ -1349,6 +1487,9 @@ export const EditorView: React.FC = () => {
           {clubImportMsg && (
             <span className="text-xs text-blue-400 max-w-xs truncate">{clubImportMsg}</span>
           )}
+          {kitImportMsg && (
+            <span className="text-xs text-yellow-300 max-w-xs truncate">{kitImportMsg}</span>
+          )}
           {activeSection === 'KLUBY' && (
             <>
               <button
@@ -1372,6 +1513,53 @@ export const EditorView: React.FC = () => {
                 accept=".json"
                 className="hidden"
                 onChange={handleImportClubData}
+              />
+              <button
+                onClick={handleExportClubKits}
+                disabled={!selectedTeamClub}
+                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                Eksportuj stroje
+              </button>
+              <button
+                onClick={() => { setKitImportMsg(''); kitImportRef.current?.click(); }}
+                disabled={!selectedTeamClub}
+                className="px-4 py-1.5 bg-yellow-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-yellow-100 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-300/60 border-x-yellow-600/30 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                Importuj stroje
+              </button>
+              <input
+                ref={kitImportRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportClubKits}
+              />
+              <button
+                onClick={handleExportLeagueKits}
+                disabled={!teamLeagueFilter || teamLeagueKitClubs.length === 0}
+                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                title="Eksportuje stroje wszystkich klubów z aktualnie wybranego filtra ligi."
+              >
+                Eksportuj stroje ligi
+              </button>
+              <button
+                onClick={() => { setKitImportMsg(''); kitLeagueImportRef.current?.click(); }}
+                className="px-4 py-1.5 bg-yellow-800 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-yellow-100 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-300/50 border-x-yellow-700/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                title="Importuje stroje wielu klubów z jednego pliku JSON."
+              >
+                Importuj stroje ligi
+              </button>
+              <input
+                ref={kitLeagueImportRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportLeagueKits}
               />
             </>
           )}
