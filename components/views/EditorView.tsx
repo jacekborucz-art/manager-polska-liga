@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, ClubManagement } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, ClubManagement, ClubKit } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
@@ -10,6 +10,8 @@ import { FinanceService } from '../../services/FinanceService';
 import { LineupService } from '../../services/LineupService';
 import { SquadGeneratorService } from '../../services/SquadGeneratorService';
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
+import { createDefaultClubKits, getClubKits } from '../../resources/ClubKits';
+import { KitPreview } from '../common/KitPreview';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
   'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
@@ -115,6 +117,12 @@ const MANAGEMENT_ROLE_LABELS: Record<string, string> = {
 
 const MANAGEMENT_KEYS: (keyof ClubManagement)[] = ['owner', 'ceo', 'sportingDirector', 'cfo', 'coo', 'marketingDirector', 'academyDirector'];
 
+const KIT_PATTERN_OPTIONS: { value: NonNullable<ClubKit['pattern']>; label: string }[] = [
+  { value: 'solid',              label: 'Zwykła' },
+  { value: 'horizontal_stripes', label: 'Pasy poziome' },
+  { value: 'vertical_stripes',   label: 'Pasy pionowe' },
+];
+
 const MANAGEMENT_ATTR_LABELS: Record<string, { key: string; label: string }[]> = {
   owner:             [{ key: 'cierpliwosc', label: 'Cierpliwość' }, { key: 'ambicja', label: 'Ambicja' }, { key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }],
   ceo:               [{ key: 'cierpliwosc', label: 'Cierpliwość' }, { key: 'ambicja', label: 'Ambicja' }, { key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }],
@@ -195,6 +203,7 @@ export const EditorView: React.FC = () => {
       stadiumCapacity: selectedTeamClub.stadiumCapacity,
       reputation: selectedTeamClub.reputation,
       colorsHex: selectedTeamClub.colorsHex,
+      kits: getClubKits(selectedTeamClub),
       budget: selectedTeamClub.budget,
       transferBudget: selectedTeamClub.transferBudget,
       reserveBudget: selectedTeamClub.reserveBudget ?? 0,
@@ -232,6 +241,7 @@ export const EditorView: React.FC = () => {
               stadiumCapacity:  typeof entry.stadiumCapacity === 'number'  ? entry.stadiumCapacity  : c.stadiumCapacity,
               reputation:       typeof entry.reputation === 'number'       ? entry.reputation       : c.reputation,
               colorsHex:        Array.isArray(entry.colorsHex)             ? entry.colorsHex        : c.colorsHex,
+              kits:             Array.isArray(entry.kits)                  ? entry.kits as ClubKit[] : c.kits,
               budget:           typeof entry.budget === 'number'           ? entry.budget           : c.budget,
               transferBudget:   typeof entry.transferBudget === 'number'   ? entry.transferBudget   : c.transferBudget,
               reserveBudget:    typeof entry.reserveBudget === 'number'    ? entry.reserveBudget    : c.reserveBudget,
@@ -499,6 +509,7 @@ export const EditorView: React.FC = () => {
   const [editTeamStadiumCapacity, setEditTeamStadiumCapacity] = useState('');
   const [editTeamReputation, setEditTeamReputation] = useState('');
   const [editTeamColors, setEditTeamColors] = useState<string[]>([]);
+  const [editTeamKits, setEditTeamKits] = useState<ClubKit[]>([]);
   const [editTeamSigningPool, setEditTeamSigningPool] = useState('');
   const [showRepairPanel, setShowRepairPanel] = useState(false);
 
@@ -711,6 +722,7 @@ export const EditorView: React.FC = () => {
       setEditTeamStadiumCapacity(String(selectedTeamClub.stadiumCapacity));
       setEditTeamReputation(String(selectedTeamClub.reputation));
       setEditTeamColors([...selectedTeamClub.colorsHex]);
+      setEditTeamKits(getClubKits(selectedTeamClub));
       setEditTeamSigningPool(String(selectedTeamClub.signingBonusPool));
     }
   }, [teamSearchClubId]);
@@ -789,6 +801,17 @@ export const EditorView: React.FC = () => {
     } else {
       showGameNotification({ title: `Naprawiono ${fixedClubs} składów`, message: `Wygenerowano ${generatedPlayers} zawodników dla ${fixedClubs} klubów AI.`, tone: 'success' });
     }
+  };
+
+  const updateEditTeamKit = (index: number, patch: Partial<ClubKit>) => {
+    setEditTeamKits(prev => {
+      const base = prev.length === 4 ? prev : createDefaultClubKits(editTeamColors);
+      return base.map((kit, idx) => idx === index ? { ...kit, ...patch } : kit);
+    });
+  };
+
+  const resetEditTeamKitsFromColors = () => {
+    setEditTeamKits(createDefaultClubKits(editTeamColors));
   };
 
   const handleSztabPersonSelect = (id: string, type: 'coach' | 'staff') => {
@@ -1641,6 +1664,7 @@ export const EditorView: React.FC = () => {
                   )}
                 </div>
 
+                <div className="col-span-2 grid grid-cols-2 gap-6 self-start">
                 {/* FINANSE */}
                 <div>
                   <div className="text-xs text-yellow-400 mb-2">Finanse</div>
@@ -1756,29 +1780,122 @@ export const EditorView: React.FC = () => {
                         )}
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="col-span-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className={labelCls}>Stroje meczowe</div>
                     <button
-                      onClick={() => {
-                        const cap = parseInt(editTeamStadiumCapacity) || 0;
-                        const rep = Math.min(20, Math.max(1, parseInt(editTeamReputation) || 1));
-                        const trimmedName = editTeamName.trim();
-                        if (!trimmedName) return;
-                        setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? {
-                          ...c,
-                          name: trimmedName,
-                          stadiumName: editTeamStadiumName.trim(),
-                          stadiumCapacity: cap,
-                          reputation: rep,
-                          colorsHex: editTeamColors.filter(Boolean)
-                        } : c));
-                        setTeamSearchQuery(trimmedName);
-                        showGameNotification({ title: 'Zapisano dane', message: `Dane ${trimmedName} zostały zaktualizowane.`, tone: 'success' });
-                      }}
-                      className="w-full px-4 py-2 bg-blue-800 hover:bg-blue-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
-                      style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                      onClick={resetEditTeamKitsFromColors}
+                      className="text-[9px] text-slate-400 hover:text-yellow-300 font-black italic uppercase tracking-tighter transition-colors"
                     >
-                      Zapisz dane
+                      z barw
                     </button>
                   </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {editTeamKits.map((kit, index) => (
+                      <div key={kit.id || index} className={`relative rounded-lg border p-2.5 ${index >= 2 && !kit.isActive ? 'border-slate-800 bg-black/10 opacity-55' : 'border-slate-700 bg-black/25'}`}>
+                        {index >= 2 && (
+                          <label className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded border border-slate-700 bg-slate-950/90 px-1.5 py-1 text-[8px] text-slate-400 font-black italic uppercase tracking-tighter">
+                            <input
+                              type="checkbox"
+                              checked={!!kit.isActive}
+                              onChange={(e) => updateEditTeamKit(index, { isActive: e.target.checked })}
+                              className="h-3 w-3 accent-yellow-500"
+                            />
+                            aktywny
+                          </label>
+                        )}
+                        <input
+                          type="text"
+                          value={kit.name}
+                          onChange={(e) => updateEditTeamKit(index, { name: e.target.value })}
+                          className={`${inputCls} mb-2 min-w-0 px-2 py-1 text-[10px]`}
+                        />
+                        <select
+                          value={kit.pattern ?? 'solid'}
+                          onChange={(e) => updateEditTeamKit(index, { pattern: e.target.value as NonNullable<ClubKit['pattern']> })}
+                          className={`${inputCls} mb-2 w-full px-2 py-1 text-[9px]`}
+                        >
+                          {KIT_PATTERN_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <div className="flex items-center justify-center">
+                          <KitPreview
+                            shirt={kit.shirt}
+                            shirtSecondary={kit.shirtSecondary}
+                            shorts={kit.shorts}
+                            socks={kit.socks}
+                            pattern={kit.pattern}
+                            className="h-20 w-20"
+                          />
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          {([
+                            'shirt',
+                            ...(kit.pattern && kit.pattern !== 'solid' ? ['shirtSecondary' as const] : []),
+                            'shorts',
+                            'socks'
+                          ] as const).map(part => (
+                            <div key={part} className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
+                                {part === 'shirt' ? 'kosz.' : part === 'shirtSecondary' ? 'pas' : part === 'shorts' ? 'spod.' : 'getry'}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {part !== 'shirt' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateEditTeamKit(index, { [part]: kit.shirt } as Partial<ClubKit>)}
+                                    className="rounded border border-slate-700 bg-white/5 px-1.5 py-1 text-[7px] text-slate-400 hover:border-yellow-400/60 hover:text-yellow-300 font-black italic uppercase tracking-tighter transition-colors"
+                                    title="Skopiuj kolor koszulki"
+                                  >
+                                    = kosz.
+                                  </button>
+                                )}
+                                <div className="relative h-6 w-10 overflow-hidden rounded border border-slate-600">
+                                  <div className="h-full w-full" style={{ background: kit[part] ?? kit.shorts }} />
+                                  <input
+                                    type="color"
+                                    value={kit[part] ?? kit.shorts}
+                                    onChange={(e) => updateEditTeamKit(index, { [part]: e.target.value } as Partial<ClubKit>)}
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const cap = parseInt(editTeamStadiumCapacity) || 0;
+                      const rep = Math.min(20, Math.max(1, parseInt(editTeamReputation) || 1));
+                      const trimmedName = editTeamName.trim();
+                      if (!trimmedName) return;
+                      const kits = (editTeamKits.length === 4 ? editTeamKits : createDefaultClubKits(editTeamColors))
+                        .map((kit, index) => ({ ...kit, isActive: index < 2 ? true : Boolean(kit.isActive) }));
+                      setClubs(prev => prev.map(c => c.id === selectedTeamClub.id ? {
+                        ...c,
+                        name: trimmedName,
+                        stadiumName: editTeamStadiumName.trim(),
+                        stadiumCapacity: cap,
+                        reputation: rep,
+                        colorsHex: editTeamColors.filter(Boolean),
+                        kits
+                      } : c));
+                      setTeamSearchQuery(trimmedName);
+                      showGameNotification({ title: 'Zapisano dane', message: `Dane ${trimmedName} zostały zaktualizowane.`, tone: 'success' });
+                    }}
+                    className="mt-4 w-full px-5 py-3 bg-blue-800 hover:bg-blue-700 rounded-[20px] text-[11px] font-black uppercase italic tracking-widest text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                    style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.55), 0 8px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                  >
+                    Zapisz dane
+                  </button>
+                </div>
                 </div>
 
               </div>

@@ -1396,6 +1396,7 @@ export interface Club {
   leagueId: string;
   tier?: number;
   colorsHex: string[];
+  kits?: ClubKit[];
   stadiumName: string;
   stadiumCapacity: number;
   reputation: number;
@@ -1455,6 +1456,19 @@ export interface Club {
   stadiumExpansionProjects?: StadiumExpansionProject[];
   management?: ClubManagement;
 }
+
+export interface ClubKit {
+  id: string;
+  name: string;
+  shirt: string;
+  shirtSecondary?: string;
+  shorts: string;
+  socks: string;
+  pattern?: ClubKitPattern;
+  isActive?: boolean;
+}
+
+export type ClubKitPattern = 'solid' | 'horizontal_stripes' | 'vertical_stripes';
 
 export type BoardClubRequestType =
   | 'CLUB_FUNDS'

@@ -1,15 +1,19 @@
-
-import { Club } from '../types';
+import { Club, ClubKitPattern } from '../types';
+import { getActiveClubKits } from '../resources/ClubKits';
 
 export interface KitSelection {
   home: {
     primary: string;
+    shirtSecondary?: string;
     secondary: string;
+    pattern?: ClubKitPattern;
     text: string;
   };
   away: {
     primary: string;
+    shirtSecondary?: string;
     secondary: string;
+    pattern?: ClubKitPattern;
     text: string;
   };
 }
@@ -32,8 +36,7 @@ export const KitSelectionService = {
     const r = r1 - r2;
     const g = g1 - g2;
     const b = b1 - b2;
-    
-    // Perceptual weighting formula
+
     return Math.sqrt((((512 + rmean) * r * r) >> 8) + 4 * g * g + (((767 - rmean) * b * b) >> 8));
   },
 
@@ -49,79 +52,70 @@ export const KitSelectionService = {
   },
 
   /**
-   * Selects the best possible combination of colors from 3-color palettes of both clubs.
+   * Selects the best possible combination from real club kit variants.
    */
   selectOptimalKits: (home: Club, away: Club): KitSelection => {
-    const homeColors = home.colorsHex;
-    const awayColors = away.colorsHex;
-
-    // Gospodarze zawsze w stroju podstawowym
-    const hShirt = homeColors[0] ?? '#1d4ed8';
-    const hShorts = homeColors[1] ?? homeColors[0] ?? '#93c5fd';
-
-    // Warianty strojów gości: mieszane (koszulka[i] + spodenki[i+1]) + jednolite (koszulka[i] + spodenki[i])
-    interface KitOption { shirt: string; shorts: string; isPrimary: boolean; }
-    const awayOptions: KitOption[] = [];
-    for (let i = 0; i < awayColors.length; i++) {
-      awayOptions.push({ shirt: awayColors[i], shorts: awayColors[(i + 1) % awayColors.length], isPrimary: i === 0 });
-      awayOptions.push({ shirt: awayColors[i], shorts: awayColors[i], isPrimary: false });
-    }
-
+    const homeOptions = getActiveClubKits(home);
+    const awayOptions = getActiveClubKits(away);
+    const hKit = homeOptions[0];
     let bestOption = awayOptions[0];
     let maxScore = -1;
 
     for (const opt of awayOptions) {
-      // Każdy kolor gości musi być różny od KAŻDEGO koloru gospodarzy
-      const d1 = KitSelectionService.getColorDistance(opt.shirt, hShirt);
-      const d2 = KitSelectionService.getColorDistance(opt.shirt, hShorts);
-      const d3 = KitSelectionService.getColorDistance(opt.shorts, hShirt);
-      const d4 = KitSelectionService.getColorDistance(opt.shorts, hShorts);
-      // Wynik to najgorszy przypadek (najblizszA para) — maksymalizujemy najslabsze ogniwo
-      const score = Math.min(d1, d2, d3, d4) + (opt.isPrimary ? 40 : 0);
-      if (score > maxScore) { maxScore = score; bestOption = opt; }
-    }
-
-    if (maxScore < 80) {
-      const whiteDist = Math.min(
-        KitSelectionService.getColorDistance('#ffffff', hShirt),
-        KitSelectionService.getColorDistance('#ffffff', hShorts)
-      );
-      bestOption = whiteDist >= 80
-        ? { shirt: '#ffffff', shorts: '#ffffff', isPrimary: false }
-        : { shirt: '#111111', shorts: '#111111', isPrimary: false };
+      const d1 = KitSelectionService.getColorDistance(opt.shirt, hKit.shirt);
+      const d2 = KitSelectionService.getColorDistance(opt.shirt, hKit.shorts);
+      const d3 = KitSelectionService.getColorDistance(opt.shorts, hKit.shirt);
+      const d4 = KitSelectionService.getColorDistance(opt.shorts, hKit.shorts);
+      const d5 = opt.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirtSecondary, hKit.shirt) : d1;
+      const d6 = hKit.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirt, hKit.shirtSecondary) : d1;
+      const score = Math.min(d1, d2, d3, d4, d5, d6) + (opt.id === 'away' ? 40 : 0) + (opt.id === 'third' ? 20 : 0);
+      if (score > maxScore) {
+        maxScore = score;
+        bestOption = opt;
+      }
     }
 
     return {
       home: {
-        primary: hShirt,
-        secondary: hShorts,
-        text: KitSelectionService.isColorLight(hShirt) ? '#000000' : '#ffffff'
+        primary: hKit.shirt,
+        shirtSecondary: hKit.shirtSecondary,
+        secondary: hKit.shorts,
+        pattern: hKit.pattern,
+        text: KitSelectionService.isColorLight(hKit.shirt) ? '#000000' : '#ffffff'
       },
       away: {
         primary: bestOption.shirt,
+        shirtSecondary: bestOption.shirtSecondary,
         secondary: bestOption.shorts,
+        pattern: bestOption.pattern,
         text: KitSelectionService.isColorLight(bestOption.shirt) ? '#000000' : '#ffffff'
       }
     };
   },
 
   /**
-   * Wybiera optymalną koszulkę przeciwnika na podstawie wybranego koloru gracza.
-   * Szuka koloru z największą odległością percepcyjną (brak kolizji).
+   * Selects the opponent kit that is furthest from the player's chosen shirt color.
    */
-  selectOpponentKit: (playerKitHex: string, opponent: Club): { primary: string; secondary: string; text: string } => {
-    const oppColors = opponent.colorsHex;
+  selectOpponentKit: (playerKitHex: string, opponent: Club): { primary: string; shirtSecondary?: string; secondary: string; pattern?: ClubKitPattern; text: string } => {
+    const oppKits = getActiveClubKits(opponent);
     let bestIdx = 0;
     let maxDist = -1;
-    for (let i = 0; i < oppColors.length; i++) {
-      const dist = KitSelectionService.getColorDistance(playerKitHex, oppColors[i]);
-      if (dist > maxDist) { maxDist = dist; bestIdx = i; }
+
+    for (let i = 0; i < oppKits.length; i++) {
+      const dist = KitSelectionService.getColorDistance(playerKitHex, oppKits[i].shirt);
+      if (dist > maxDist) {
+        maxDist = dist;
+        bestIdx = i;
+      }
     }
-    const primary = oppColors[bestIdx];
+
+    const kit = oppKits[bestIdx];
     return {
-      primary,
-      secondary: oppColors[(bestIdx + 1) % oppColors.length] || primary,
-      text: KitSelectionService.isColorLight(primary) ? '#000000' : '#ffffff'
+      primary: kit.shirt,
+      shirtSecondary: kit.shirtSecondary,
+      secondary: kit.shorts,
+      pattern: kit.pattern,
+      text: KitSelectionService.isColorLight(kit.shirt) ? '#000000' : '#ffffff'
     };
   }
 };

@@ -10,8 +10,9 @@ import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 
 // Import lokalnych zdjęć piłkarzy
-import { getPlayerCardImage, getClubKitVariants, KitVariant } from '../../resources/PlayerCardAssets';
+import { getPlayerCardImage, getClubKitVariantsForClub, KitVariant } from '../../resources/PlayerCardAssets';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
 // Import lokalnego tła
@@ -76,9 +77,11 @@ const PitchPlayerKit: React.FC<{
   left: string;
   top: string;
   primary: string;
+  shirtSecondary?: string;
   secondary: string;
+  pattern?: KitVariant['pattern'];
   trim: string;
-}> = ({ player, left, top, primary, secondary, trim }) => {
+}> = ({ player, left, top, primary, shirtSecondary, secondary, pattern, trim }) => {
   const shirtText = getContrastTextColor(primary, secondary);
 
   return (
@@ -87,19 +90,7 @@ const PitchPlayerKit: React.FC<{
       style={{ left, top, transform: 'translate(-50%, -50%)' }}
     >
       <div className="relative flex flex-col items-center">
-        <svg viewBox="0 0 24 24" className="w-[34px] h-[34px] drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]">
-          <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={primary} />
-          <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.9" />
-          <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={secondary} fillOpacity="0.35" />
-          <path d="M12 7.2v11.8" stroke={trim} strokeWidth="1.15" strokeOpacity="0.85" />
-          <text x="12" y="15.6" textAnchor="middle" fontSize="3.6" fontWeight="900" fontStyle="italic" fill={shirtText}>
-            {player?.overallRating ?? '??'}
-          </text>
-        </svg>
-        <svg viewBox="0 0 28 18" className="-mt-1 w-[18px] h-[10px] drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]">
-          <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={secondary} stroke={trim} strokeWidth="1.2" strokeLinejoin="round" />
-          <path d="M14 3v12" stroke={trim} strokeWidth="1" strokeOpacity="0.7" />
-        </svg>
+        <KitPreview shirt={primary} shirtSecondary={shirtSecondary} shorts={secondary} socks={secondary} pattern={pattern} className="h-[44px] w-[40px]" label={player?.overallRating ?? '??'} labelColor={shirtText} />
       </div>
       <div className="min-w-[82px] max-w-[96px] -mt-[4px] rounded-md border border-white/10 bg-black/85 px-2 py-1 text-center shadow-[0_6px_16px_rgba(0,0,0,0.45)]">
         <span className="block truncate text-[8px] font-black uppercase tracking-[0.14em] text-white">
@@ -112,25 +103,18 @@ const PitchPlayerKit: React.FC<{
 
 function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
   let minDist = KitSelectionService.getColorDistance(kA.hex, kB.hex);
+  if (kA.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.hex));
+  if (kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.shirtSecondaryHex));
+  if (kA.shirtSecondaryHex && kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.shirtSecondaryHex));
   if (kA.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.hex));
   if (kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.secondaryHex));
   if (kA.secondaryHex && kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.secondaryHex));
   return minDist;
 }
 
-function resolveShorts(candidates: string[], opponentPrimary: string, opponentShorts: string, THRESHOLD = 110): string {
-  for (const c of candidates) {
-    if (KitSelectionService.getColorDistance(c, opponentPrimary) >= THRESHOLD &&
-        KitSelectionService.getColorDistance(c, opponentShorts) >= THRESHOLD) {
-      return c;
-    }
-  }
-  return candidates[0];
-}
-
 function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
-  const homeVariants = getClubKitVariants(homeClub.id, homeClub.colorsHex);
-  const awayVariants = getClubKitVariants(awayClub.id, awayClub.colorsHex);
+  const homeVariants = getClubKitVariantsForClub(homeClub);
+  const awayVariants = getClubKitVariantsForClub(awayClub);
   const CLASH_THRESHOLD = 350;
   let bestHomeIdx = 0, bestAwayIdx = 0, maxScore = -1;
   for (let h = 0; h < homeVariants.length; h++) {
@@ -143,34 +127,20 @@ function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   }
   const hKit = homeVariants[bestHomeIdx];
   const aKit = awayVariants[bestAwayIdx];
-  const hNext = homeVariants[(bestHomeIdx + 1) % homeVariants.length];
-  const aNext = awayVariants[(bestAwayIdx + 1) % awayVariants.length];
-
-  const awayShortsCandidates = [
-    aKit.secondaryHex ?? aNext.hex,
-    aKit.hex,
-    '#FFFFFF',
-    '#000000',
-  ];
-  const awaySecondary = resolveShorts(awayShortsCandidates, hKit.hex, hKit.secondaryHex ?? hNext.hex);
-
-  const homeShortsCandidates = [
-    hKit.secondaryHex ?? hNext.hex,
-    hKit.hex,
-    '#FFFFFF',
-    '#000000',
-  ];
-  const homeSecondary = resolveShorts(homeShortsCandidates, aKit.hex, awaySecondary);
 
   return {
     home: {
       primary: hKit.hex,
-      secondary: homeSecondary,
+      shirtSecondary: hKit.shirtSecondaryHex,
+      secondary: hKit.secondaryHex ?? hKit.hex,
+      pattern: hKit.pattern,
       text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
     },
     away: {
       primary: aKit.hex,
-      secondary: awaySecondary,
+      shirtSecondary: aKit.shirtSecondaryHex,
+      secondary: aKit.secondaryHex ?? aKit.hex,
+      pattern: aKit.pattern,
       text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
     }
   };
@@ -254,10 +224,10 @@ export const PreMatchStudioView: React.FC = () => {
 
   const handleKitSelect = (selectedVariant: KitVariant) => {
     if (!matchKits) return;
-    const userVariants = getClubKitVariants(userClub.id, userClub.colorsHex);
-    const selectedIdx = userVariants.findIndex(v => v.hex === selectedVariant.hex);
+    const userVariants = getClubKitVariantsForClub(userClub);
+    const selectedIdx = userVariants.findIndex(v => (v.id ?? v.hex) === (selectedVariant.id ?? selectedVariant.hex));
     const nextUserVariant = userVariants[(selectedIdx + 1) % userVariants.length];
-    const opponentVariants = getClubKitVariants(opponentClub.id, opponentClub.colorsHex);
+    const opponentVariants = getClubKitVariantsForClub(opponentClub);
     let bestOppIdx = 0, maxDist = -1;
     for (let i = 0; i < opponentVariants.length; i++) {
       const dist = kitEffectiveDistance(selectedVariant, opponentVariants[i]);
@@ -267,12 +237,16 @@ export const PreMatchStudioView: React.FC = () => {
     const nextOppVariant = opponentVariants[(bestOppIdx + 1) % opponentVariants.length];
     const opponentKit = {
       primary: bestOppVariant.hex,
+      shirtSecondary: bestOppVariant.shirtSecondaryHex,
       secondary: bestOppVariant.secondaryHex ?? nextOppVariant.hex,
+      pattern: bestOppVariant.pattern,
       text: KitSelectionService.isColorLight(bestOppVariant.hex) ? '#000000' : '#ffffff'
     };
     const playerKit = {
       primary: selectedVariant.hex,
+      shirtSecondary: selectedVariant.shirtSecondaryHex,
       secondary: selectedVariant.secondaryHex ?? nextUserVariant.hex,
+      pattern: selectedVariant.pattern,
       text: KitSelectionService.isColorLight(selectedVariant.hex) ? '#000000' : '#ffffff'
     };
     if (isUserHome) {
@@ -482,7 +456,9 @@ export const PreMatchStudioView: React.FC = () => {
                   {homeTactic.slots.map((slot, i) => {
                     const player = homeXI[i];
                     const primary = slot.role === PlayerPosition.GK ? homeGoalkeeperColor : matchKits.home.primary;
+                    const shirtSecondary = slot.role === PlayerPosition.GK ? undefined : matchKits.home.shirtSecondary;
                     const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.home.secondary;
+                    const pattern = slot.role === PlayerPosition.GK ? 'solid' : matchKits.home.pattern;
                     const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.home.secondary);
                     return (
                       <PitchPlayerKit
@@ -501,7 +477,9 @@ export const PreMatchStudioView: React.FC = () => {
                               : getPitchSlotTop(true, slot.y)
                         }
                         primary={primary}
+                        shirtSecondary={shirtSecondary}
                         secondary={secondary}
+                        pattern={pattern}
                         trim={trim}
                       />
                     );
@@ -511,7 +489,9 @@ export const PreMatchStudioView: React.FC = () => {
                   {awayTactic.slots.map((slot, i) => {
                     const player = awayXI[i];
                     const primary = slot.role === PlayerPosition.GK ? awayGoalkeeperColor : matchKits.away.primary;
+                    const shirtSecondary = slot.role === PlayerPosition.GK ? undefined : matchKits.away.shirtSecondary;
                     const secondary = slot.role === PlayerPosition.GK ? '#111827' : matchKits.away.secondary;
+                    const pattern = slot.role === PlayerPosition.GK ? 'solid' : matchKits.away.pattern;
                     const trim = slot.role === PlayerPosition.GK ? getContrastTextColor(primary, '#111827') : getContrastTextColor(primary, matchKits.away.secondary);
                     return (
                       <PitchPlayerKit
@@ -530,7 +510,9 @@ export const PreMatchStudioView: React.FC = () => {
                               : getPitchSlotTop(false, slot.y)
                         }
                         primary={primary}
+                        shirtSecondary={shirtSecondary}
                         secondary={secondary}
+                        pattern={pattern}
                         trim={trim}
                       />
                     );
@@ -655,13 +637,14 @@ export const PreMatchStudioView: React.FC = () => {
             </div>
             <div className="p-12">
               <div className="grid grid-cols-4 gap-8">
-                {getClubKitVariants(userClub.id, userClub.colorsHex).map((variant, idx) => {
+                {getClubKitVariantsForClub(userClub).map((variant, idx) => {
                   const isSelected = matchKits
                     ? (isUserHome ? matchKits.home.primary : matchKits.away.primary) === variant.hex
+                      && (isUserHome ? matchKits.home.pattern : matchKits.away.pattern) === variant.pattern
                     : idx === 0;
                   return (
                     <button
-                      key={variant.hex}
+                      key={variant.id ?? `${variant.hex}-${variant.pattern ?? 'solid'}`}
                       onClick={() => handleKitSelect(variant)}
                       className={`flex flex-col items-center gap-5 p-8 rounded-3xl border-2 transition-all hover:scale-105 active:scale-95 ${
                         isSelected
@@ -669,7 +652,16 @@ export const PreMatchStudioView: React.FC = () => {
                           : 'border-white/10 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.07]'
                       }`}
                     >
-                      <img src={variant.image} alt={variant.hex} className="w-44 h-64 object-cover rounded-2xl" />
+                      <div className="flex h-64 w-44 items-center justify-center rounded-2xl bg-black/30">
+                        <KitPreview
+                          shirt={variant.hex}
+                          shirtSecondary={variant.shirtSecondaryHex}
+                          shorts={variant.secondaryHex ?? variant.hex}
+                          socks={variant.socksHex ?? variant.secondaryHex ?? variant.hex}
+                          pattern={variant.pattern}
+                          className="h-44 w-44"
+                        />
+                      </div>
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded-full border border-white/20" style={{ backgroundColor: variant.hex }} />
                         {isSelected && <span className="text-[11px] font-black text-white uppercase tracking-widest">✓</span>}

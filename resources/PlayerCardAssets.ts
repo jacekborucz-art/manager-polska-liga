@@ -1,4 +1,6 @@
 // Import kart generycznych (fallback)
+import { Club, ClubKitPattern } from '../types';
+import { getActiveClubKits } from './ClubKits';
 import genericWhite   from '../Graphic/players/other shirts/white_black_shirt.png';
 import genericBlack   from '../Graphic/players/other shirts/black_shirt.png';
 import genericRed     from '../Graphic/players/other shirts/red_shirt.png';
@@ -194,8 +196,14 @@ import gornikLecznaWhite      from '../Graphic/players/gornik_leczna_white.png';
 // ─────────────────────────────────────────────────
 
 export interface KitVariant {
+  id?: string;
+  name?: string;
   hex: string;
+  shirtSecondaryHex?: string;
   secondaryHex?: string;
+  shortsHex?: string;
+  socksHex?: string;
+  pattern?: ClubKitPattern;
   image: string;
 }
 
@@ -569,5 +577,22 @@ export function getClubKitVariants(clubId: string, colorsHex: string[]): KitVari
   return colorsHex.map(hex => ({
     hex,
     image: closestImage(GENERIC_KITS, hex)
+  }));
+}
+
+export function getClubKitVariantsForClub(club: Club): KitVariant[] {
+  const clubAssets = BRANDED_CLUB_CARDS.find(c => c.clubId === club.id);
+  const imageKits = clubAssets ? clubAssets.kits : GENERIC_KITS;
+
+  return getActiveClubKits(club).map(kit => ({
+    id: kit.id,
+    name: kit.name,
+    hex: kit.shirt,
+    shirtSecondaryHex: kit.shirtSecondary,
+    secondaryHex: kit.shorts,
+    shortsHex: kit.shorts,
+    socksHex: kit.socks,
+    pattern: kit.pattern,
+    image: closestImage(imageKits, kit.shirt)
   }));
 }

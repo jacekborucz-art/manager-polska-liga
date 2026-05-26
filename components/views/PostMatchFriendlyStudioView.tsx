@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, MatchEventType, PlayerPerformance } from '../../types';
+import { ViewState, MatchEventType, PlayerPerformance, ClubKitPattern } from '../../types';
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
+import { KitPreview } from '../common/KitPreview';
 
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
@@ -68,18 +69,9 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
   };
   const isColorDark = (hex: string): boolean => { const h = hex.replace('#', ''); return (0.299 * parseInt(h.substring(0, 2), 16) + 0.587 * parseInt(h.substring(2, 4), 16) + 0.114 * parseInt(h.substring(4, 6), 16)) < 80; };
 
-  const KitIcon = ({ shirt, shorts }: { shirt: string; shorts: string }) => (
+  const KitIcon = ({ shirt, shirtSecondary, shorts, pattern }: { shirt: string; shirtSecondary?: string; shorts: string; pattern?: ClubKitPattern }) => (
     <div className="flex flex-col items-center">
-      <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(shirt) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
-        <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={shirt} />
-        <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={shorts} fillOpacity="0.9" />
-        <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={shorts} fillOpacity="0.35" />
-        <path d="M12 7.2v11.8" stroke={getContrastText(shirt, shorts)} strokeWidth="1" strokeOpacity="0.8" />
-      </svg>
-      <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(shorts) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
-        <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={shorts} stroke={getContrastText(shirt, shorts)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
-        <path d="M14 3v12" stroke={getContrastText(shirt, shorts)} strokeWidth="0.8" strokeOpacity="0.7" />
-      </svg>
+      <KitPreview shirt={shirt} shirtSecondary={shirtSecondary} shorts={shorts} socks={shorts} pattern={pattern} className={`h-[68px] w-[58px] ${isColorDark(shirt) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`} />
     </div>
   );
 
@@ -196,7 +188,7 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
                   <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-right break-words leading-none flex-1">
                     {homeClub.name}
                   </h2>
-                  <KitIcon shirt={kitSelection.home.primary} shorts={kitSelection.home.secondary} />
+                  <KitIcon shirt={kitSelection.home.primary} shirtSecondary={kitSelection.home.shirtSecondary} shorts={kitSelection.home.secondary} pattern={kitSelection.home.pattern} />
                 </div>
 
                 <div className="flex flex-col items-center gap-2 shrink-0">
@@ -216,7 +208,7 @@ export const PostMatchFriendlyStudioView: React.FC = () => {
                 </div>
 
                 <div className="flex-1 flex items-center justify-start gap-6 min-w-0">
-                  <KitIcon shirt={kitSelection.away.primary} shorts={kitSelection.away.secondary} />
+                  <KitIcon shirt={kitSelection.away.primary} shirtSecondary={kitSelection.away.shirtSecondary} shorts={kitSelection.away.secondary} pattern={kitSelection.away.pattern} />
                   <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-left break-words leading-none flex-1">
                     {awayClub.name}
                   </h2>
