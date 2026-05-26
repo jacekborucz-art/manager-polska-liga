@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
+import type { Player } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { MailService } from '../../services/MailService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
@@ -21,8 +22,8 @@ const MINDSET_LABELS: Record<ContractMindsetState, string> = {
 
 export const ContractManagementView: React.FC = () => {
   const { 
-    viewedPlayerId, players, clubs, navigateTo, 
-    currentDate, setPlayers, setClubs, lineups, updateLineup, setMessages, addFinanceLog, contractManagementInitialMode
+    viewedPlayerId, players, reserves, clubs, navigateTo, 
+    currentDate, setPlayers, setReserves, setClubs, lineups, updateLineup, setMessages, addFinanceLog, contractManagementInitialMode
   } = useGame();
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,10 +45,15 @@ export const ContractManagementView: React.FC = () => {
     if (!viewedPlayerId) return null;
     for (const clubId in players) {
       const player = players[clubId].find(p => p.id === viewedPlayerId);
-      if (player) return { player, club: clubs.find(c => c.id === clubId)! };
+      if (player) return { player, club: clubs.find(c => c.id === clubId)!, isReserve: false };
+    }
+    const reservePlayer = reserves.find(p => p.id === viewedPlayerId);
+    if (reservePlayer) {
+      const club = clubs.find(c => c.id === reservePlayer.clubId);
+      if (club) return { player: reservePlayer, club, isReserve: true };
     }
     return null;
-  }, [viewedPlayerId, players, clubs]);
+  }, [viewedPlayerId, players, reserves, clubs]);
 
   // FIX: Dependency changed to viewedPlayerId to prevent reset on state update
   React.useEffect(() => {
@@ -65,11 +71,24 @@ export const ContractManagementView: React.FC = () => {
   }, [viewedPlayerId, contractManagementInitialMode]);
 
   if (!data) return null;
-  const { player, club } = data;
+  const { player, club, isReserve } = data;
+  const returnTarget = isReserve ? ViewState.RESERVES_VIEW : ViewState.SQUAD_VIEW;
 
-  const squad = players[club.id] || [];
+  const squad = isReserve ? reserves : (players[club.id] || []);
   const penaltyAmount = Math.floor(player.annualSalary * 0.4);
   const isSquadTooSmall = squad.length <= 24;
+
+  const updateContractPlayer = (updater: (player: Player) => Player) => {
+    if (isReserve) {
+      setReserves(prev => prev.map(p => p.id === player.id ? updater(p) : p));
+      return;
+    }
+
+    setPlayers(prev => ({
+      ...prev,
+      [club.id]: (prev[club.id] || []).map(p => p.id === player.id ? updater(p) : p)
+    }));
+  };
 
   const isLocked = player.boardLockoutUntil && new Date(currentDate) < new Date(player.boardLockoutUntil);
   const lockDateLabel = player.boardLockoutUntil ? new Date(player.boardLockoutUntil).toLocaleDateString('pl-PL') : "";
@@ -125,13 +144,7 @@ export const ContractManagementView: React.FC = () => {
         const lockoutDate = new Date(currentDate);
         lockoutDate.setMonth(lockoutDate.getMonth() + (decision.status === 'VETO' ? 6 : 3));
         
-        setPlayers(prev => {
-          const updated = { ...prev };
-          updated[club.id] = updated[club.id].map(p => 
-            p.id === player.id ? { ...p, boardLockoutUntil: lockoutDate.toISOString() } : p
-          );
-          return updated;
-        });
+        updateContractPlayer(p => ({ ...p, boardLockoutUntil: lockoutDate.toISOString() }));
       }
     }, 1500);
   };
@@ -145,7 +158,7 @@ export const ContractManagementView: React.FC = () => {
 
     setTimeout(() => {
       // VETO ZARZĄDU przy przedłużeniu kontraktu
-      const squad = players[club.id] || [];
+      const squad = isReserve ? reserves : (players[club.id] || []);
       const directorCheck = club.sportingDirector
         ? SportingDirectorService.evaluateContractRenewalDecision({
             club,
@@ -198,17 +211,14 @@ export const ContractManagementView: React.FC = () => {
           lockoutDateStr = d.toISOString();
         }
 
-        setPlayers(prev => ({
-          ...prev,
-          [club.id]: prev[club.id].map(p => p.id === player.id ? {
+        updateContractPlayer(p => ({
             ...p,
             negotiationStep: nextStep,
             negotiationLockoutUntil: lockoutDateStr,
             isNegotiationPermanentBlocked: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2
               ? true
               : p.isNegotiationPermanentBlocked
-          } : p)
-        }));
+          }));
 
         setCounterOffer(nextStep >= 3 ? null : mindflowDecision.demands);
         setNegotiationMessage(nextStep >= 3
@@ -221,10 +231,7 @@ export const ContractManagementView: React.FC = () => {
       const playerDemand = FinanceService.calculatePlayerBonusDemand(player, offerSalary, club.reputation);
 
       if (FinanceService.isOfferInsulting(offerBonus, playerDemand)) {
-        setPlayers(prev => ({
-          ...prev,
-          [club.id]: prev[club.id].map(p => p.id === player.id ? { ...p, isNegotiationPermanentBlocked: true } : p)
-        }));
+        updateContractPlayer(p => ({ ...p, isNegotiationPermanentBlocked: true }));
         setNegotiationMessage("Nie traktujecie mnie powaznie wiec nie będziemy o niczym rozmawiac. Do widzenia!");
         setCounterOffer(null);
         setIsProcessing(false);
@@ -248,16 +255,13 @@ export const ContractManagementView: React.FC = () => {
         const lockoutDate = new Date(currentDate);
         lockoutDate.setMonth(lockoutDate.getMonth() + 6);
 
-        setPlayers(prev => ({
-          ...prev,
-          [club.id]: prev[club.id].map(p => p.id === player.id ? { 
+        updateContractPlayer(p => ({ 
             ...p, 
             annualSalary: offerSalary, 
             contractEndDate: newEndDate,
             negotiationStep: 0,
             contractLockoutUntil: lockoutDate.toISOString() 
-          } : p)
-        }));
+          }));
         setClubs(prev => prev.map(c => c.id === club.id ? { 
           ...c, 
           budget: c.budget - offerBonus,
@@ -279,14 +283,11 @@ export const ContractManagementView: React.FC = () => {
           lockoutDateStr = d.toISOString();
         }
 
-        setPlayers(prev => ({
-          ...prev,
-          [club.id]: prev[club.id].map(p => p.id === player.id ? { 
+        updateContractPlayer(p => ({ 
             ...p, 
             negotiationStep: nextStep,
             negotiationLockoutUntil: lockoutDateStr 
-          } : p)
-        }));
+          }));
 
         if (nextStep >= 3) {
           setNegotiationMessage("Chyba się jednak nie dogadamy. Próbowaliśmy kilka razy, ale Twoje oferty są nieakceptowalne. Do widzenia.");
@@ -338,11 +339,19 @@ export const ContractManagementView: React.FC = () => {
       history: updatedHistory // Podpinamy nową historię
     };
 
-    setPlayers(prev => ({
-      ...prev,
-      [club.id]: prev[club.id].filter(p => p.id !== viewedPlayerId),
-      'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), releasedPlayer]
-    }));
+    if (isReserve) {
+      setReserves(prev => prev.filter(p => p.id !== viewedPlayerId));
+      setPlayers(prev => ({
+        ...prev,
+        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), releasedPlayer]
+      }));
+    } else {
+      setPlayers(prev => ({
+        ...prev,
+        [club.id]: (prev[club.id] || []).filter(p => p.id !== viewedPlayerId),
+        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), releasedPlayer]
+      }));
+    }
 
     if (lineups[club.id]) {
       const old = lineups[club.id];
@@ -353,7 +362,7 @@ export const ContractManagementView: React.FC = () => {
         reserves: old.reserves.filter(id => id !== viewedPlayerId)
       });
     }
-    navigateTo(ViewState.SQUAD_VIEW);
+    navigateTo(returnTarget);
   };
 
   const getStatusColor = (status: string) => {
@@ -385,7 +394,7 @@ export const ContractManagementView: React.FC = () => {
               </div>
            </div>
            <button 
-             onClick={() => navigateTo(ViewState.SQUAD_VIEW)} 
+             onClick={() => navigateTo(returnTarget)} 
              className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase text-slate-400 hover:text-white transition-all active:scale-95 shadow-lg"
            >
              Powrót do kadry
@@ -495,7 +504,7 @@ export const ContractManagementView: React.FC = () => {
                             {player.transferReportDate ? ` (${new Date(player.transferReportDate).toLocaleDateString('pl-PL')}).` : '.'}
                             {' '}Szczegóły: {pendingTransferFeeLabel}.
                          </p>
-                         <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="mt-4 px-10 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all">Powrót do kadry</button>
+                         <button onClick={() => navigateTo(returnTarget)} className="mt-4 px-10 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all">Powrót do kadry</button>
                       </div>
                    ) : (player.isNegotiationPermanentBlocked || (player.negotiationStep || 0) >= 3 || (player.negotiationLockoutUntil && new Date(currentDate) < new Date(player.negotiationLockoutUntil))) && !isOfferSent ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-center gap-6 animate-fade-in py-12">
@@ -510,7 +519,7 @@ export const ContractManagementView: React.FC = () => {
                                )
                             }
                          </p>
-                         <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="mt-4 px-10 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all">Powrót do kadry</button>
+                         <button onClick={() => navigateTo(returnTarget)} className="mt-4 px-10 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all">Powrót do kadry</button>
                       </div>
                    ) : (
                       <>
@@ -715,7 +724,7 @@ export const ContractManagementView: React.FC = () => {
                            { isOfferSent && !isProcessing && !showSuccessModal && (
                               <div className="flex gap-4">
                                  <button 
-                                    onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
+                                    onClick={() => navigateTo(returnTarget)}
                                     className="flex-1 py-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white"
                                  >
                                     Wróć później
@@ -764,7 +773,7 @@ export const ContractManagementView: React.FC = () => {
               </div>
             </div>
             <button 
-              onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
+              onClick={() => navigateTo(returnTarget)}
               className="w-full py-6 bg-emerald-600 text-white font-black uppercase italic rounded-3xl hover:bg-emerald-500 transition-all shadow-[0_20px_40px_rgba(16,185,129,0.2)] active:scale-95 border-b-8 border-emerald-800 text-xl tracking-tighter"
             >
               POWRÓT DO KADRY 🏁
