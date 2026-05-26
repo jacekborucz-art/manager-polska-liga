@@ -24,6 +24,36 @@ import { generatePlayerReport } from '../../services/TrainingAssistantService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { ManagerExperienceService } from '../../services/ManagerExperienceService';
 
+const NATIONALITY_FLAG_MAP: Record<string, string> = {
+  'Albania': '🇦🇱', 'Andora': '🇦🇩', 'Austria': '🇦🇹', 'Belgia': '🇧🇪',
+  'Białoruś': '🇧🇾', 'Bośnia i Hercegowina': '🇧🇦', 'Bułgaria': '🇧🇬',
+  'Chorwacja': '🇭🇷', 'Cypr': '🇨🇾', 'Czarnogóra': '🇲🇪', 'Czechy': '🇨🇿',
+  'Dania': '🇩🇰', 'Estonia': '🇪🇪', 'Finlandia': '🇫🇮', 'Francja': '🇫🇷',
+  'Grecja': '🇬🇷', 'Hiszpania': '🇪🇸', 'Holandia': '🇳🇱', 'Irlandia': '🇮🇪',
+  'Islandia': '🇮🇸', 'Kosowo': '🇽🇰', 'Liechtenstein': '🇱🇮', 'Litwa': '🇱🇹',
+  'Luksemburg': '🇱🇺', 'Łotwa': '🇱🇻', 'Macedonia Północna': '🇲🇰', 'Malta': '🇲🇹',
+  'Mołdawia': '🇲🇩', 'Monako': '🇲🇨', 'Niemcy': '🇩🇪', 'Norwegia': '🇳🇴',
+  'Polska': '🇵🇱', 'Portugalia': '🇵🇹', 'Rosja': '🇷🇺', 'Rumunia': '🇷🇴',
+  'San Marino': '🇸🇲', 'Serbia': '🇷🇸', 'Słowacja': '🇸🇰', 'Słowenia': '🇸🇮',
+  'Szwajcaria': '🇨🇭', 'Szwecja': '🇸🇪', 'Ukraina': '🇺🇦', 'Watykan': '🇻🇦',
+  'Węgry': '🇭🇺', 'Wielka Brytania': '🇬🇧', 'Włochy': '🇮🇹',
+};
+
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  'Albania': 'al', 'Andora': 'ad', 'Austria': 'at', 'Belgia': 'be',
+  'Białoruś': 'by', 'Bośnia i Hercegowina': 'ba', 'Bułgaria': 'bg',
+  'Chorwacja': 'hr', 'Cypr': 'cy', 'Czarnogóra': 'me', 'Czechy': 'cz',
+  'Dania': 'dk', 'Estonia': 'ee', 'Finlandia': 'fi', 'Francja': 'fr',
+  'Grecja': 'gr', 'Hiszpania': 'es', 'Holandia': 'nl', 'Irlandia': 'ie',
+  'Islandia': 'is', 'Kosowo': 'xk', 'Liechtenstein': 'li', 'Litwa': 'lt',
+  'Luksemburg': 'lu', 'Łotwa': 'lv', 'Macedonia Północna': 'mk', 'Malta': 'mt',
+  'Mołdawia': 'md', 'Monako': 'mc', 'Niemcy': 'de', 'Norwegia': 'no',
+  'Polska': 'pl', 'Portugalia': 'pt', 'Rosja': 'ru', 'Rumunia': 'ro',
+  'San Marino': 'sm', 'Serbia': 'rs', 'Słowacja': 'sk', 'Słowenia': 'si',
+  'Szwajcaria': 'ch', 'Szwecja': 'se', 'Ukraina': 'ua', 'Watykan': 'va',
+  'Węgry': 'hu', 'Wielka Brytania': 'gb', 'Włochy': 'it',
+};
+
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
@@ -2246,6 +2276,39 @@ export const SquadView: React.FC = () => {
           return entry.sourceKey.startsWith('season:');
         }) ?? [];
 
+        const managerFlag = NATIONALITY_FLAG_MAP[safeManagerProfile?.nationality ?? ''] ?? safeManagerProfile?.nationalityFlag ?? '';
+        const managerCountryCode = COUNTRY_CODE_MAP[safeManagerProfile?.nationality ?? ''];
+        const managerFlagUrl = managerCountryCode ? `https://flagcdn.com/w160/${managerCountryCode}.png` : null;
+        const managerAccentPrimary = myClub.colorsHex?.[0] ?? '#eab308';
+        const managerAccentSecondary = myClub.colorsHex?.[1] ?? managerAccentPrimary;
+        const managerPanelStyle = {
+          background: `radial-gradient(circle at 92% 8%, ${managerAccentPrimary}26 0%, transparent 38%),
+                       radial-gradient(circle at 0% 100%, ${managerAccentSecondary}1f 0%, transparent 44%),
+                       rgba(2, 6, 23, 0.76)`,
+          boxShadow: `0 18px 45px -32px ${managerAccentPrimary}cc, inset 0 1px 0 rgba(255,255,255,0.06)`,
+        };
+        const managerExpPanelStyle = {
+          background: `radial-gradient(circle at 85% 10%, ${managerAccentPrimary}66 0%, transparent 42%),
+                       radial-gradient(circle at 10% 95%, ${managerAccentSecondary}4d 0%, transparent 46%),
+                       rgba(2, 6, 23, 0.82)`,
+          boxShadow: `0 18px 45px -20px ${managerAccentPrimary}99, inset 0 1px 0 rgba(255,255,255,0.08)`,
+        };
+
+        const currentYear = currentDate.getFullYear();
+        const seasonStartYear = currentDate.getMonth() >= 6 ? currentYear : currentYear - 1;
+        const currentSeasonLabel = `${seasonStartYear}/${seasonStartYear + 1}`;
+
+        const userLeagueClubs = clubs.filter(c => c.leagueId === myClub.leagueId);
+        const sortedLeague = [...userLeagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const currentRank = isUserClub ? sortedLeague.findIndex(c => c.id === userTeamId) + 1 : 0;
+
+        const allCareerTotals = {
+          wins: (managerCareerTotals?.wins ?? 0) + (isUserClub ? myClub.stats.wins : 0),
+          draws: (managerCareerTotals?.draws ?? 0) + (isUserClub ? myClub.stats.draws : 0),
+          losses: (managerCareerTotals?.losses ?? 0) + (isUserClub ? myClub.stats.losses : 0),
+          points: (managerCareerTotals?.points ?? 0) + (isUserClub ? myClub.stats.points : 0),
+        };
+
         const StaffCard = ({ m, nameColor }: { m: typeof clubStaff[0]; nameColor: string }) => (
           <div
             className="flex flex-col items-center gap-0.5 cursor-pointer hover:opacity-70 transition-opacity"
@@ -2269,111 +2332,211 @@ export const SquadView: React.FC = () => {
             {/* KARTA SZCZEGÓŁÓW */}
             {isManagerProfileOpen && safeManagerProfile && (
               <div
-                className="relative w-[760px] max-h-[88vh] bg-slate-950/80 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                className="relative w-[880px] max-h-[90vh] bg-slate-950/95 rounded-[28px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden border border-white/10"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 border-b border-yellow-500/20 relative">
-                  <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Profil trenera</span>
-                  <span className="text-[28px] font-black italic uppercase tracking-tighter text-yellow-100 mt-1 whitespace-nowrap">{safeManagerProfile.firstName} {safeManagerProfile.lastName}</span>
-                  <span className="text-[12px] text-slate-300 mt-0.5">{safeManagerProfile.nationalityFlag} {safeManagerProfile.nationality} · {safeManagerProfile.age} lat</span>
-                  <button onClick={() => setIsManagerProfileOpen(false)} className="absolute right-6 top-6 text-slate-500 hover:text-white transition-colors text-lg">✕</button>
+                <div
+                  className="relative px-8 py-7 border-b border-white/10 overflow-hidden"
+                  style={{
+                    background: `radial-gradient(circle at 82% 20%, ${managerAccentPrimary}40 0%, transparent 36%),
+                                 radial-gradient(circle at 18% 90%, ${managerAccentSecondary}2f 0%, transparent 42%),
+                                 rgba(2, 6, 23, 0.92)`,
+                  }}
+                >
+                  <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
+                  <div className="absolute right-[-20px] top-[-20px] text-[120px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
+                  <div className="flex items-center gap-6 pr-12">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-black uppercase tracking-tighter text-yellow-400">Profil trenera</div>
+                      <div className="text-[32px] font-black uppercase tracking-tighter text-yellow-100 leading-none truncate mt-1">
+                        {safeManagerProfile.firstName} {safeManagerProfile.lastName}
+                      </div>
+                      <div className="flex items-center gap-3 mt-3">
+                        <span className="text-[15px] font-black uppercase tracking-tighter text-slate-200">{safeManagerProfile.nationality}</span>
+                        {managerFlagUrl ? (
+                          <img src={managerFlagUrl} alt={safeManagerProfile.nationality} className="h-4 w-7 rounded-sm object-cover border border-white/15" />
+                        ) : (
+                          <span className="text-[16px] leading-none">{managerFlag}</span>
+                        )}
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500/70" />
+                        <span className="text-[15px] font-black uppercase tracking-tighter text-slate-200">{safeManagerProfile.age} lat</span>
+                      </div>
+                    </div>
+                    <div className="relative shrink-0 rounded-xl border border-white/15 px-3 py-3 w-[112px] text-center overflow-hidden" style={managerPanelStyle}>
+                      <div className="absolute right-[-4px] top-[-6px] text-[38px] font-black italic uppercase tracking-tighter text-white/[0.04] select-none pointer-events-none">LVL</div>
+                      <div className="relative z-10 text-[10px] font-black uppercase tracking-tighter text-yellow-300 mb-1.5">Doświadczenie</div>
+                      <div className="relative z-10 text-[32px] font-black uppercase tracking-tighter text-white leading-none">{safeManagerProfile.experience}</div>
+                    </div>
+                    <div className="relative shrink-0 rounded-xl border border-white/15 px-3 py-3 w-[118px] text-center overflow-hidden" style={managerExpPanelStyle}>
+                      <div className="absolute right-[-5px] top-[-6px] text-[42px] font-black italic uppercase tracking-tighter text-white/[0.06] select-none pointer-events-none">EXP</div>
+                      <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.24) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.24) 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
+                      <div className="relative z-10 text-[10px] font-black uppercase tracking-tighter text-emerald-300 mb-1.5">Punkty EXP</div>
+                      <div className="relative z-10 text-[32px] font-black uppercase tracking-tighter text-white leading-none">{formatManagerExp(safeManagerProfile.expPoints)}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsManagerProfileOpen(false)} className="absolute right-6 top-6 w-9 h-9 rounded-full border border-white/10 bg-slate-950/80 text-slate-400 hover:text-white hover:border-white/30 transition-colors text-lg">✕</button>
                 </div>
 
-                <div className="px-8 py-6 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-y-auto custom-scrollbar max-h-[68vh]">
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="rounded-2xl border border-yellow-500/20 bg-yellow-950/30 p-4 text-center">
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-400 mb-1">Doświadczenie</div>
-                      <div className="text-[34px] font-black italic uppercase tracking-tighter text-white leading-none">{safeManagerProfile.experience}</div>
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-1">skala 1-99</div>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center">
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 mb-1">Punkty EXP</div>
-                      <div className="text-[34px] font-black italic uppercase tracking-tighter text-white leading-none">{formatManagerExp(safeManagerProfile.expPoints)}</div>
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-1">minimum 1</div>
-                    </div>
-                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/30 p-4 text-center">
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-cyan-400 mb-1">Bilans kariery</div>
-                      <div className="text-[18px] font-black italic uppercase tracking-tighter text-white leading-none mt-2">
-                        Z{managerCareerTotals?.wins ?? 0}-R{managerCareerTotals?.draws ?? 0}-P{managerCareerTotals?.losses ?? 0}
+                <div
+                  className="px-8 py-6 overflow-y-auto custom-scrollbar max-h-[70vh]"
+                  style={{
+                    background: `radial-gradient(circle at 100% 12%, ${managerAccentPrimary}18 0%, transparent 30%),
+                                 radial-gradient(circle at 0% 72%, ${managerAccentSecondary}14 0%, transparent 34%),
+                                 #020617`,
+                  }}
+                >
+                  <div className="relative mb-4 rounded-2xl border border-white/10 px-5 py-3 flex items-center justify-between gap-5 overflow-hidden" style={managerPanelStyle}>
+                    <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+                    <div className="text-[12px] font-black uppercase tracking-tighter text-cyan-300 whitespace-nowrap">OGÓLNY BILANS KARIERY</div>
+                    <div className="grid grid-cols-3 text-center divide-x divide-white/10 flex-1 max-w-[540px]">
+                      <div className="px-4">
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Zwycięstwa</div>
+                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.wins}</div>
                       </div>
-                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-2">{managerCareerTotals?.points ?? 0} pkt ligowych</div>
+                      <div className="px-4">
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Remisy</div>
+                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.draws}</div>
+                      </div>
+                      <div className="px-4">
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Porażki</div>
+                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.losses}</div>
+                      </div>
                     </div>
                   </div>
 
                   {managerExperienceProgress && (
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 mb-4">
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300">Postęp doświadczenia</div>
-                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                    <div className="relative rounded-2xl border border-white/10 p-5 mb-5 overflow-hidden" style={managerPanelStyle}>
+                      <div className="absolute right-[-10px] top-[-14px] text-[72px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
+                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
+                      <div className="relative z-10">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-200">Postęp doświadczenia</div>
+                        <div className="text-[12px] font-black uppercase tracking-tighter text-slate-400">
                           {managerExperienceProgress.nextRating
                             ? `${formatManagerExp(managerExperienceProgress.pointsToNext)} EXP do poziomu ${managerExperienceProgress.nextRating}`
                             : 'Maksymalny poziom'}
                         </div>
                       </div>
-                      <div className="h-3 rounded-full bg-slate-900 border border-white/10 overflow-hidden">
+                      <div className="h-5 rounded-full bg-slate-900 border border-white/10 overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-yellow-500 via-emerald-400 to-cyan-400"
                           style={{ width: `${managerExperienceProgress.progressPercent}%` }}
                         />
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Poziom {managerExperienceProgress.rating}</span>
-                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                        <span className="text-[12px] font-black uppercase tracking-tighter text-slate-500">Poziom {managerExperienceProgress.rating}</span>
+                        <span className="text-[12px] font-black uppercase tracking-tighter text-slate-500">
                           {managerExperienceProgress.nextRatingPoints
-                            ? `${formatManagerExp(managerExperienceProgress.nextRatingPoints)} EXP`
+                          ? `${formatManagerExp(managerExperienceProgress.nextRatingPoints)} EXP`
                             : `${formatManagerExp(managerExperienceProgress.currentPoints)} EXP`}
                         </span>
+                      </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300 mb-3 text-center">Historia kariery</div>
-                      {safeManagerProfile.careerHistory.length === 0 ? (
-                        <div className="text-[12px] italic text-slate-600 text-center">Brak zakończonych sezonów</div>
+                  <div className="grid grid-cols-1 gap-5">
+                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
+                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
+                      <div className="relative z-10">
+                      <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200 mb-4">Historia kariery</div>
+                      {safeManagerProfile.careerHistory.length === 0 && !isUserClub ? (
+                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak zakończonych sezonów</div>
                       ) : (
-                        <div className="flex flex-col gap-2">
-                          {safeManagerProfile.careerHistory.map(entry => (
-                            <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-slate-900/70 px-3 py-2">
-                              <div className="min-w-0">
-                                <div className="text-[12px] font-black italic uppercase tracking-tighter text-white truncate">{entry.seasonLabel} · {entry.clubName}</div>
-                                <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
-                                  {entry.finalRank ? `${entry.finalRank}. miejsce` : 'Miejsce n/d'} · Z{entry.wins}-R{entry.draws}-P{entry.losses}
-                                </div>
-                              </div>
-                              <div className="text-[14px] font-black italic uppercase tracking-tighter text-yellow-300 whitespace-nowrap">{entry.points ?? 0} pkt</div>
-                            </div>
-                          ))}
+                        <div className="overflow-hidden rounded-xl border border-white/10">
+                          <table className="w-full">
+                            <thead className="bg-slate-900/80">
+                              <tr className="border-b border-white/10">
+                                <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400">Sezon</th>
+                                <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">Klub</th>
+                                <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">Miejsce</th>
+                                <th className="text-center px-3 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">ZW</th>
+                                <th className="text-center px-3 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">RE</th>
+                                <th className="text-center px-3 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">PO</th>
+                                <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-yellow-400 border-l border-white/10">Pkt</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/8">
+                              {isUserClub && (
+                                <tr className="bg-yellow-950/25">
+                                  <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-yellow-200 whitespace-nowrap">
+                                    {currentSeasonLabel}
+                                    <span className="ml-2 text-[10px] text-yellow-500">obecnie</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-white border-l border-white/10">
+                                    <div className="flex items-center justify-center gap-2">
+                                      {getClubLogo(myClub.id) && (
+                                        <img src={getClubLogo(myClub.id)!} alt={myClub.name} className="w-5 h-5 object-contain shrink-0" />
+                                      )}
+                                      <span>{myClub.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 border-l border-white/10">{currentRank > 0 ? currentRank : 'N/d'}</td>
+                                  <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 border-l border-white/10">{myClub.stats.wins}</td>
+                                  <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 border-l border-white/10">{myClub.stats.draws}</td>
+                                  <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 border-l border-white/10">{myClub.stats.losses}</td>
+                                  <td className="px-4 py-3 text-center text-[17px] font-semibold uppercase tracking-tighter text-yellow-300 border-l border-white/10">{myClub.stats.points}</td>
+                                </tr>
+                              )}
+                              {safeManagerProfile.careerHistory.map(entry => {
+                                const entryClubLogo = getClubLogo(entry.clubId);
+                                return (
+                                  <tr key={entry.id} className="bg-slate-950/35">
+                                    <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 whitespace-nowrap">{entry.seasonLabel}</td>
+                                    <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-white border-l border-white/10">
+                                      <div className="flex items-center justify-center gap-2">
+                                        {entryClubLogo && (
+                                          <img src={entryClubLogo} alt={entry.clubName} className="w-5 h-5 object-contain shrink-0" />
+                                        )}
+                                        <span>{entry.clubName}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-300 border-l border-white/10">{entry.finalRank ? entry.finalRank : 'N/d'}</td>
+                                    <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-300 border-l border-white/10">{entry.wins}</td>
+                                    <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-300 border-l border-white/10">{entry.draws}</td>
+                                    <td className="px-3 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-300 border-l border-white/10">{entry.losses}</td>
+                                    <td className="px-4 py-3 text-center text-[17px] font-semibold uppercase tracking-tighter text-yellow-300 border-l border-white/10">{entry.points ?? 0}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       )}
+                      </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300 mb-3 text-center">Osiągnięcia</div>
+                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
+                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
+                      <div className="relative z-10">
+                      <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200 mb-4">Osiągnięcia</div>
                       {safeManagerProfile.achievements.length === 0 ? (
-                        <div className="text-[12px] italic text-slate-600 text-center">Brak osiągnięć</div>
+                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak osiągnięć</div>
                       ) : (
-                        <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-2 gap-3">
                           {safeManagerProfile.achievements.map(entry => (
-                            <div key={entry.id} className="rounded-xl border border-yellow-500/15 bg-yellow-950/20 px-3 py-2">
-                              <div className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-200">{entry.title}</div>
-                              <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-500/70">{entry.competition}</div>
+                            <div key={entry.id} className="rounded-xl border border-yellow-500/20 bg-yellow-950/20 px-4 py-3">
+                              <div className="text-[15px] font-black uppercase tracking-tighter text-yellow-200 leading-tight">{entry.title}</div>
+                              <div className="text-[12px] font-black uppercase tracking-tighter text-yellow-500/70 mt-1">{entry.competition}</div>
                             </div>
                           ))}
                         </div>
                       )}
+                      </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300">Historia EXP</div>
+                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
+                      <div className="absolute right-[-16px] top-[-18px] text-[72px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
+                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
+                      <div className="relative z-10">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200">Historia EXP</div>
                         <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/70 p-1">
                           {managerExpFilterOptions.map(option => (
                             <button
                               key={option.id}
                               onClick={() => setManagerExpFilter(option.id)}
-                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black italic uppercase tracking-tighter transition-colors ${
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-tighter transition-colors ${
                                 managerExpFilter === option.id
                                   ? 'bg-yellow-500 text-slate-950'
                                   : 'text-slate-500 hover:text-white'
@@ -2385,34 +2548,45 @@ export const SquadView: React.FC = () => {
                         </div>
                       </div>
                       {safeManagerProfile.expHistory.length === 0 ? (
-                        <div className="text-[12px] italic text-slate-600 text-center">Brak wpisów</div>
+                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak wpisów</div>
                       ) : filteredManagerExpHistory.length === 0 ? (
-                        <div className="text-[12px] font-black italic uppercase tracking-tighter text-slate-600 text-center">Brak wpisów dla filtra</div>
+                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak wpisów dla filtra</div>
                       ) : (
-                        <div className="flex flex-col gap-2">
-                          {filteredManagerExpHistory.slice(0, 24).map(entry => (
-                            <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-slate-900/70 px-3 py-2">
-                              <div className="min-w-0">
-                                <div className="text-[12px] font-black italic uppercase tracking-tighter text-white truncate">{entry.label}</div>
-                                <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">{entry.date} · {entry.competition}</div>
-                              </div>
-                              <div className="flex flex-col items-end">
-                                <div className={`text-[14px] font-black italic uppercase tracking-tighter whitespace-nowrap ${entry.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                                  {entry.delta > 0 ? `+${formatManagerExp(entry.delta)}` : formatManagerExp(entry.delta)}
-                                </div>
-                                <div className="text-[9px] font-black italic uppercase tracking-tighter text-slate-600 whitespace-nowrap">
-                                  razem {formatManagerExp(entry.totalAfter)}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                        <>
+                          <div className="overflow-hidden rounded-xl border border-white/10">
+                            <table className="w-full">
+                              <thead className="bg-slate-900/80">
+                                <tr>
+                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Data</th>
+                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Zdarzenie</th>
+                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Rozgrywki</th>
+                                  <th className="text-right px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Zmiana</th>
+                                  <th className="text-right px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Razem</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/8">
+                                {filteredManagerExpHistory.slice(0, 24).map(entry => (
+                                  <tr key={entry.id} className="bg-slate-950/35">
+                                    <td className="px-4 py-3 text-[13px] font-black uppercase tracking-tighter text-slate-400 whitespace-nowrap">{entry.date}</td>
+                                    <td className="px-4 py-3 text-[14px] font-black uppercase tracking-tighter text-white">{entry.label}</td>
+                                    <td className="px-4 py-3 text-[13px] font-black uppercase tracking-tighter text-slate-400">{entry.competition}</td>
+                                    <td className={`px-4 py-3 text-right text-[17px] font-black uppercase tracking-tighter whitespace-nowrap ${entry.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                      {entry.delta > 0 ? `+${formatManagerExp(entry.delta)}` : formatManagerExp(entry.delta)}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-[15px] font-black uppercase tracking-tighter text-slate-300 whitespace-nowrap">{formatManagerExp(entry.totalAfter)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                           {filteredManagerExpHistory.length > 24 && (
-                            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-600 text-center pt-1">
+                            <div className="text-[12px] font-black uppercase tracking-tighter text-slate-600 text-center pt-3">
                               Pokazano 24 z {filteredManagerExpHistory.length} wpisów
                             </div>
                           )}
-                        </div>
+                        </>
                       )}
+                      </div>
                     </div>
                   </div>
                 </div>
