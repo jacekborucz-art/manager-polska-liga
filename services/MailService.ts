@@ -170,7 +170,7 @@ export const MailService = {
       sender: template.sender,
       role: template.role,
       subject: template.subject.replace(/\{CLUB\}/g, userClub.name).replace(/\{TARGET_LEAGUE\}/g, targetLeagueName),
-      body: template.body.replace(/\{CLUB\}/g, userClub.name).replace(/\{TARGET_LEAGUE\}/g, targetLeagueName) + `\n\nP.S. Zarząd przyznał Panu budżet transferowy na ten sezon w wysokości ${userClub.transferBudget.toLocaleString('pl-PL')} PLN. Proszę nim mądrze zarządzać.`,
+      body: template.body.replace(/\{CLUB\}/g, userClub.name).replace(/\{TARGET_LEAGUE\}/g, targetLeagueName).replace(/\{TRANSFER_BUDGET\}/g, userClub.transferBudget.toLocaleString('pl-PL')),
       date: gameDate ? new Date(gameDate) : new Date(),
       isRead: false,
       type: template.type,
