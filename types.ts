@@ -420,6 +420,30 @@ export interface MailMessage {
     responseDeadline: string;
   } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
+  } | {
+    type: 'TEAM_OF_WEEK';
+    leagueId: string;
+    leagueName: string;
+    roundNumber: number;
+    formation: '4-4-2';
+    team: {
+      slotIndex: number;
+      role: PlayerPosition;
+      x: number;
+      y: number;
+      playerId: string;
+      playerName: string;
+      clubId: string;
+      clubName: string;
+      position: PlayerPosition;
+      rating: number;
+      shirt: string;
+      shirtSecondary?: string;
+      shorts: string;
+      socks: string;
+      pattern?: ClubKitPattern;
+      labelColor: string;
+    }[];
   };
 }
 

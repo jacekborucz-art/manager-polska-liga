@@ -2,11 +2,104 @@ import React, { useState } from 'react';
 import { MailMessage, MailType, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
+import { KitPreview } from '../common/KitPreview';
 
 interface MailDetailsModalProps {
   mail: MailMessage;
   onClose: () => void;
 }
+
+const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
+  if (mail.metadata?.type !== 'TEAM_OF_WEEK') return null;
+
+  const rows = [
+    mail.metadata.team.filter(player => player.role === 'FWD'),
+    mail.metadata.team.filter(player => player.role === 'MID'),
+    mail.metadata.team.filter(player => player.role === 'DEF'),
+    mail.metadata.team.filter(player => player.role === 'GK'),
+  ];
+
+  return (
+    <div className="space-y-7">
+      <p className="whitespace-pre-wrap text-base font-medium leading-relaxed text-slate-300 opacity-90">
+        {mail.body}
+      </p>
+
+      <div className="rounded-[28px] border border-emerald-300/20 bg-emerald-950/30 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-black italic uppercase tracking-tighter text-emerald-300">
+              Jedenastka {mail.metadata.roundNumber}. tygodnia
+            </p>
+            <h4 className="text-[24px] font-black italic uppercase tracking-tighter text-white">
+              {mail.metadata.leagueName} / 4-4-2
+            </h4>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-[12px] font-black italic uppercase tracking-tighter text-white">
+            Gazeta Sportowa
+          </div>
+        </div>
+
+        <div className="relative mx-auto aspect-[2/3.05] w-full max-w-[620px] overflow-hidden bg-[#0e5a20] shadow-[0_35px_90px_rgba(0,0,0,0.65)]">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.04)_50%,transparent_50%)] bg-[length:80px_80px]" />
+          <svg className="absolute inset-0 h-full w-full opacity-35" viewBox="0 0 100 150" fill="none" stroke="white" strokeWidth="0.8">
+            <rect x="2" y="2" width="96" height="146" />
+            <line x1="2" y1="75" x2="98" y2="75" />
+            <circle cx="50" cy="75" r="15" />
+            <circle cx="50" cy="75" r="1" fill="white" />
+            <rect x="20" y="2" width="60" height="25" />
+            <rect x="35" y="2" width="30" height="10" />
+            <path d="M 35 27 Q 50 35 65 27" />
+            <rect x="20" y="123" width="60" height="25" />
+            <rect x="35" y="138" width="30" height="10" />
+            <path d="M 35 123 Q 50 115 65 123" />
+          </svg>
+
+          {mail.metadata.team.map(player => (
+            <div
+              key={player.playerId}
+              className="absolute z-10 flex w-[118px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
+              style={{ left: `${player.x * 100}%`, top: `${player.y * 100}%` }}
+            >
+              <div className="relative">
+                <KitPreview
+                  shirt={player.shirt}
+                  shirtSecondary={player.shirtSecondary}
+                  shorts={player.shorts}
+                  socks={player.socks}
+                  pattern={player.pattern}
+                  className="h-16 w-16"
+                  label={player.rating.toFixed(1)}
+                  labelColor={player.labelColor}
+                />
+                <div className="absolute -right-3 -top-2 rounded-full border border-white/30 bg-slate-950 px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter text-white">
+                  {player.role}
+                </div>
+              </div>
+              <div className="mt-1 w-full rounded-xl border border-black/30 bg-black/55 px-2 py-1 shadow-lg">
+                <p className="truncate text-[10px] font-black italic uppercase tracking-tighter text-white">{player.playerName}</p>
+                <p className="truncate text-[8px] font-black italic uppercase tracking-tighter text-emerald-200">{player.clubName}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-4">
+          {rows.map((row, index) => (
+            <div key={index} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+              {row.map(player => (
+                <div key={player.playerId} className="flex items-center justify-between gap-2 py-1">
+                  <span className="truncate text-[10px] font-black italic uppercase tracking-tighter text-slate-200">{player.playerName}</span>
+                  <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">{player.rating.toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClose }) => {
   const {
@@ -70,7 +163,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-6 animate-fade-in">
       <div
         className={`${
-          mail.type === MailType.SCOUT ? 'max-w-[1693px] w-[88vw] h-[86vh]' : 'max-w-2xl max-h-[90vh]'
+          mail.type === MailType.SCOUT || mail.metadata?.type === 'TEAM_OF_WEEK' ? 'max-w-[1693px] w-[88vw] h-[86vh]' : 'max-w-2xl max-h-[90vh]'
         } w-full overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/60 shadow-[0_50px_100px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col relative`}
       >
         <div className="shrink-0 border-b border-white/5 bg-white/5 p-8 flex items-center justify-between">
@@ -110,6 +203,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           <div className="prose prose-invert max-w-none">
             {mail.type === MailType.SCOUT ? (
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
+            ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
+              <TeamOfWeekPitch mail={mail} />
             ) : mail.subject?.toLowerCase().includes('sparing') ? (
               (() => {
                 const matchRegex = /^(.+)\s(\d+[–-]\d+)\s(.+)$/;

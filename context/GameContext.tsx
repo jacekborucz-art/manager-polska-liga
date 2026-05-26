@@ -126,6 +126,7 @@ import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
+import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -2518,6 +2519,39 @@ setMessages([welcomeMail, fanMail]);
     setRoundResults(prev => ({ ...prev, [results.dateKey]: results }));
   }, []);
 
+  const queueLeagueTeamOfWeekMail = useCallback((
+    sourceClubs: Club[],
+    sourcePlayers: Record<string, Player[]>,
+    sourceFixtures: Fixture[],
+    sourceLineups: Record<string, Lineup>,
+    sourceDate: Date,
+    sourceSeasonNumber: number,
+    liveRatings?: Record<string, number>
+  ) => {
+    if (!userTeamId) return;
+    const userClub = sourceClubs.find(club => club.id === userTeamId);
+    if (!userClub || userClub.leagueId === 'NONE') return;
+    const league = leagues.find(item => item.id === userClub.leagueId);
+    if (!league) return;
+
+    const mail = LeagueTeamOfWeekService.buildMail({
+      leagueId: userClub.leagueId,
+      leagueName: league.name,
+      date: sourceDate,
+      seasonNumber: sourceSeasonNumber,
+      fixtures: sourceFixtures,
+      clubs: sourceClubs,
+      players: sourcePlayers,
+      lineups: sourceLineups,
+      matchHistory: MatchHistoryService.getAll(),
+      liveRatings,
+    });
+
+    if (!mail || sentMailIdsRef.current.has(mail.id)) return;
+    sentMailIdsRef.current.add(mail.id);
+    prependUniqueMessages([mail]);
+  }, [leagues, prependUniqueMessages, userTeamId]);
+
   const applySimulationResult = useCallback((simulation: SimulationOutput) => {
     if (simulation.aiTransferLogEntries && simulation.aiTransferLogEntries.length > 0) {
       setAiTransferLog(prev => [...simulation.aiTransferLogEntries!, ...prev].slice(0, 1000));
@@ -2776,6 +2810,16 @@ setMessages([welcomeMail, fanMail]);
       addRoundResults(simulation.roundResults);
     }
 
+    queueLeagueTeamOfWeekMail(
+      finalClubs,
+      finalPlayers,
+      simulation.updatedFixtures,
+      refinedLineups,
+      currentDate,
+      simulation.seasonNumber,
+      simulation.ratings
+    );
+
     setLeagueSchedules(prevSchedules => {
       const updatedSchedules: Record<number, LeagueSchedule> = { ...prevSchedules };
       Object.keys(updatedSchedules).forEach(tier => {
@@ -2802,7 +2846,7 @@ setMessages([welcomeMail, fanMail]);
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument
