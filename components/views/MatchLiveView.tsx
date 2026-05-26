@@ -2618,7 +2618,9 @@ return {
     const homeRank = sortedStandings.findIndex(c => c.id === ctx.homeClub.id) + 1;
     
     // Obliczamy frekwencję (korzystając z pogody zdefiniowanej w env.weather)
-    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather, ctx.awayClub);
+    const leaderPoints = sortedStandings[0]?.stats.points ?? 0;
+    const isTitleRace = homeRank <= 3 && ctx.homeClub.stats.played >= 27 && (leaderPoints - ctx.homeClub.stats.points) <= 9;
+    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather, ctx.awayClub, isTitleRace);
 
     // NAPRAWKA DUPLIKACJI WYNIKÓW:
     // Priorytet: wyniki z advanceDay (jeśli już uruchomił się dla daty meczu)

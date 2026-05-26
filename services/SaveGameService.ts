@@ -1,5 +1,6 @@
 
 import { FinanceService } from './FinanceService';
+import { ManagerExperienceService } from './ManagerExperienceService';
 
 export const SAVE_VERSION = '2.0';
 
@@ -326,7 +327,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     coaches: asRecord(data.coaches),
     staffMembers: asRecord(data.staffMembers),
     roundResults: asRecord(data.roundResults),
-    managerProfile: data.managerProfile ?? null,
+    managerProfile: ManagerExperienceService.ensureManagerExperience(data.managerProfile),
     seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
     messages: normalizeMessages(data.messages),
     activeTrainingId: data.activeTrainingId ?? 'T_TACTICAL_PERIOD',

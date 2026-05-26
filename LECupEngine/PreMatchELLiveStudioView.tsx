@@ -146,7 +146,7 @@ export const PreMatchELLiveStudioView: React.FC = () => {
     const scatter = 0.10 * (1 - repNorm);
     const randomOffset = (pseudoRng * 2 - 1) * scatter;
     const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
-    const weatherPenalty = weather.description.toLowerCase().includes('deszcz') ? 0.88 : 1.0;
+    const weatherPenalty = (weather.description.includes('Ulewny') || weather.description.includes('niegu')) ? 0.92 : (weather.description.includes('deszcz') || weather.description.includes('Lekki')) ? 0.96 : 1.0;
     return Math.floor(homeClub.stadiumCapacity * Math.min(1, fillRate * weatherPenalty));
   }, [homeClub, awayClub, fixture, weather]);
 

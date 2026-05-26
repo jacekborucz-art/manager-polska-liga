@@ -178,7 +178,7 @@ export const PreMatchCupStudioView: React.FC = () => {
     const leagueClubs = clubs.filter(c => c.leagueId === data.homeClub.leagueId);
     const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     const homeRank = sorted.findIndex(c => c.id === data.homeClub.id) + 1 || 10;
-    return AttendanceService.calculate(data.homeClub, homeRank, data.weather, data.awayClub);
+    return AttendanceService.calculate(data.homeClub, homeRank, data.weather, data.awayClub, false, true);
   }, [data, clubs]);
 
   const rivalryContext = useMemo(

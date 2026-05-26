@@ -22,12 +22,13 @@ import { MotivationTalkResult } from '../../services/WeeklyMotivationService';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { generatePlayerReport } from '../../services/TrainingAssistantService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
+import { ManagerExperienceService } from '../../services/ManagerExperienceService';
 
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber } = useGame();
+          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -43,6 +44,8 @@ export const SquadView: React.FC = () => {
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
   const [roleSubmenuOpen, setRoleSubmenuOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [isManagerProfileOpen, setIsManagerProfileOpen] = useState(false);
+  const [managerExpFilter, setManagerExpFilter] = useState<'ALL' | 'DOMESTIC' | 'EUROPE' | 'SEASON'>('ALL');
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [isStaffMenuOpen, setIsStaffMenuOpen] = useState(false);
   const [staffActionMsg, setStaffActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -2219,6 +2222,29 @@ export const SquadView: React.FC = () => {
         const MONTHS_PL = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
 
         const selectedMember = selectedStaffId ? clubStaff.find(s => s.id === selectedStaffId) ?? null : null;
+        const safeManagerProfile = ManagerExperienceService.ensureManagerExperience(managerProfile);
+        const managerExperienceProgress = safeManagerProfile
+          ? ManagerExperienceService.getExperienceProgress(safeManagerProfile.expPoints)
+          : null;
+        const formatManagerExp = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1);
+        const managerCareerTotals = safeManagerProfile?.careerHistory.reduce((acc, entry) => ({
+          wins: acc.wins + entry.wins,
+          draws: acc.draws + entry.draws,
+          losses: acc.losses + entry.losses,
+          points: acc.points + (entry.points ?? 0),
+        }), { wins: 0, draws: 0, losses: 0, points: 0 });
+        const managerExpFilterOptions: Array<{ id: 'ALL' | 'DOMESTIC' | 'EUROPE' | 'SEASON'; label: string }> = [
+          { id: 'ALL', label: 'Wszystko' },
+          { id: 'DOMESTIC', label: 'Kraj' },
+          { id: 'EUROPE', label: 'Europa' },
+          { id: 'SEASON', label: 'Sezon' },
+        ];
+        const filteredManagerExpHistory = safeManagerProfile?.expHistory.filter(entry => {
+          if (managerExpFilter === 'ALL') return true;
+          if (managerExpFilter === 'DOMESTIC') return ['Liga Polska', 'Puchar Polski', 'Ekstraklasa'].includes(entry.competition);
+          if (managerExpFilter === 'EUROPE') return ['Liga Mistrzów', 'Liga Europy', 'Liga Konferencji'].includes(entry.competition);
+          return entry.sourceKey.startsWith('season:');
+        }) ?? [];
 
         const StaffCard = ({ m, nameColor }: { m: typeof clubStaff[0]; nameColor: string }) => (
           <div
@@ -2238,9 +2264,161 @@ export const SquadView: React.FC = () => {
 
         return createPortal(
           <PortalScaleWrapper>
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => { setIsStaffOpen(false); setSelectedStaffId(null); }}>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => { setIsStaffOpen(false); setSelectedStaffId(null); setIsManagerProfileOpen(false); }}>
 
             {/* KARTA SZCZEGÓŁÓW */}
+            {isManagerProfileOpen && safeManagerProfile && (
+              <div
+                className="relative w-[760px] max-h-[88vh] bg-slate-950/80 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 border-b border-yellow-500/20 relative">
+                  <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Profil trenera</span>
+                  <span className="text-[28px] font-black italic uppercase tracking-tighter text-yellow-100 mt-1 whitespace-nowrap">{safeManagerProfile.firstName} {safeManagerProfile.lastName}</span>
+                  <span className="text-[12px] text-slate-300 mt-0.5">{safeManagerProfile.nationalityFlag} {safeManagerProfile.nationality} · {safeManagerProfile.age} lat</span>
+                  <button onClick={() => setIsManagerProfileOpen(false)} className="absolute right-6 top-6 text-slate-500 hover:text-white transition-colors text-lg">✕</button>
+                </div>
+
+                <div className="px-8 py-6 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-y-auto custom-scrollbar max-h-[68vh]">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="rounded-2xl border border-yellow-500/20 bg-yellow-950/30 p-4 text-center">
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-400 mb-1">Doświadczenie</div>
+                      <div className="text-[34px] font-black italic uppercase tracking-tighter text-white leading-none">{safeManagerProfile.experience}</div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-1">skala 1-99</div>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center">
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 mb-1">Punkty EXP</div>
+                      <div className="text-[34px] font-black italic uppercase tracking-tighter text-white leading-none">{formatManagerExp(safeManagerProfile.expPoints)}</div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-1">minimum 1</div>
+                    </div>
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/30 p-4 text-center">
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-cyan-400 mb-1">Bilans kariery</div>
+                      <div className="text-[18px] font-black italic uppercase tracking-tighter text-white leading-none mt-2">
+                        Z{managerCareerTotals?.wins ?? 0}-R{managerCareerTotals?.draws ?? 0}-P{managerCareerTotals?.losses ?? 0}
+                      </div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500 mt-2">{managerCareerTotals?.points ?? 0} pkt ligowych</div>
+                    </div>
+                  </div>
+
+                  {managerExperienceProgress && (
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 mb-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300">Postęp doświadczenia</div>
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                          {managerExperienceProgress.nextRating
+                            ? `${formatManagerExp(managerExperienceProgress.pointsToNext)} EXP do poziomu ${managerExperienceProgress.nextRating}`
+                            : 'Maksymalny poziom'}
+                        </div>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-900 border border-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-yellow-500 via-emerald-400 to-cyan-400"
+                          style={{ width: `${managerExperienceProgress.progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Poziom {managerExperienceProgress.rating}</span>
+                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                          {managerExperienceProgress.nextRatingPoints
+                            ? `${formatManagerExp(managerExperienceProgress.nextRatingPoints)} EXP`
+                            : `${formatManagerExp(managerExperienceProgress.currentPoints)} EXP`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300 mb-3 text-center">Historia kariery</div>
+                      {safeManagerProfile.careerHistory.length === 0 ? (
+                        <div className="text-[12px] italic text-slate-600 text-center">Brak zakończonych sezonów</div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {safeManagerProfile.careerHistory.map(entry => (
+                            <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-slate-900/70 px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-black italic uppercase tracking-tighter text-white truncate">{entry.seasonLabel} · {entry.clubName}</div>
+                                <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                                  {entry.finalRank ? `${entry.finalRank}. miejsce` : 'Miejsce n/d'} · Z{entry.wins}-R{entry.draws}-P{entry.losses}
+                                </div>
+                              </div>
+                              <div className="text-[14px] font-black italic uppercase tracking-tighter text-yellow-300 whitespace-nowrap">{entry.points ?? 0} pkt</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300 mb-3 text-center">Osiągnięcia</div>
+                      {safeManagerProfile.achievements.length === 0 ? (
+                        <div className="text-[12px] italic text-slate-600 text-center">Brak osiągnięć</div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {safeManagerProfile.achievements.map(entry => (
+                            <div key={entry.id} className="rounded-xl border border-yellow-500/15 bg-yellow-950/20 px-3 py-2">
+                              <div className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-200">{entry.title}</div>
+                              <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-500/70">{entry.competition}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="text-[11px] font-black italic uppercase tracking-tighter text-slate-300">Historia EXP</div>
+                        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/70 p-1">
+                          {managerExpFilterOptions.map(option => (
+                            <button
+                              key={option.id}
+                              onClick={() => setManagerExpFilter(option.id)}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black italic uppercase tracking-tighter transition-colors ${
+                                managerExpFilter === option.id
+                                  ? 'bg-yellow-500 text-slate-950'
+                                  : 'text-slate-500 hover:text-white'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {safeManagerProfile.expHistory.length === 0 ? (
+                        <div className="text-[12px] italic text-slate-600 text-center">Brak wpisów</div>
+                      ) : filteredManagerExpHistory.length === 0 ? (
+                        <div className="text-[12px] font-black italic uppercase tracking-tighter text-slate-600 text-center">Brak wpisów dla filtra</div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {filteredManagerExpHistory.slice(0, 24).map(entry => (
+                            <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-slate-900/70 px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-black italic uppercase tracking-tighter text-white truncate">{entry.label}</div>
+                                <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">{entry.date} · {entry.competition}</div>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <div className={`text-[14px] font-black italic uppercase tracking-tighter whitespace-nowrap ${entry.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                  {entry.delta > 0 ? `+${formatManagerExp(entry.delta)}` : formatManagerExp(entry.delta)}
+                                </div>
+                                <div className="text-[9px] font-black italic uppercase tracking-tighter text-slate-600 whitespace-nowrap">
+                                  razem {formatManagerExp(entry.totalAfter)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {filteredManagerExpHistory.length > 24 && (
+                            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-600 text-center pt-1">
+                              Pokazano 24 z {filteredManagerExpHistory.length} wpisów
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {selectedMember && (
               <div
                 className="relative w-[460px] bg-slate-950/70 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
@@ -2535,7 +2713,7 @@ export const SquadView: React.FC = () => {
             )}
 
             {/* LISTA SZTABU */}
-            {!selectedMember && (
+            {!selectedMember && !isManagerProfileOpen && (
               <div
                 className="relative w-[800px] bg-slate-950 rounded-[36px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
                 onClick={e => e.stopPropagation()}
@@ -2552,7 +2730,17 @@ export const SquadView: React.FC = () => {
                 </div>
 
                 {coachName && (
-                  <div className="w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40">
+                  <div
+                    className="w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 cursor-pointer hover:from-yellow-800/60 hover:to-yellow-900/40 transition-colors"
+                    onClick={() => {
+                      if (isUserClub && safeManagerProfile) setIsManagerProfileOpen(true);
+                      else if (myClub.coachId) {
+                        setIsStaffOpen(false);
+                        setSelectedStaffId(null);
+                        viewCoachDetails(myClub.coachId);
+                      }
+                    }}
+                  >
                     <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Trener</span>
                     <span className="text-[28px] font-black italic uppercase tracking-tighter text-yellow-100 mt-1">{coachName}</span>
                   </div>

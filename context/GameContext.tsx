@@ -125,6 +125,7 @@ import { PlayerDevelopmentService } from '../services/PlayerDevelopmentService';
 import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
+import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -1603,6 +1604,133 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const summaryMail = MailService.generateSeasonSummaryMail(summaryData);
     setMessages(prev => [summaryMail, ...prev]);
 
+    if (userTeamId) {
+      const seasonLabel = `${newYear - 1}/${newYear}`;
+      const seasonEndDateForManager = new Date(newYear - 1, 5, 30);
+      const userClubBeforeSeasonEnd = clubs.find(c => c.id === userTeamId);
+      const userLeagueStandings = userClubBeforeSeasonEnd
+        ? [...clubs]
+            .filter(c => c.leagueId === userClubBeforeSeasonEnd.leagueId)
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor)
+        : [];
+      const userFinalRank = userLeagueStandings.findIndex(c => c.id === userTeamId) + 1;
+      const managerAwards: ManagerExpAwardInput[] = [];
+      const managerAchievements: import('../types').ManagerAchievement[] = [];
+      const userFinishedSeasonFixtures = allFixtures.filter(f =>
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        !String(f.leagueId).includes('_DRAW')
+      );
+      const managerSeasonRecord = userFinishedSeasonFixtures.reduce((record, f) => {
+        const homeScore = f.homeScore ?? 0;
+        const awayScore = f.awayScore ?? 0;
+        let winnerId: string | null = null;
+        if (homeScore > awayScore) winnerId = f.homeTeamId;
+        else if (awayScore > homeScore) winnerId = f.awayTeamId;
+        else if (f.homePenaltyScore !== undefined || f.awayPenaltyScore !== undefined) {
+          const homePens = f.homePenaltyScore ?? 0;
+          const awayPens = f.awayPenaltyScore ?? 0;
+          if (homePens > awayPens) winnerId = f.homeTeamId;
+          else if (awayPens > homePens) winnerId = f.awayTeamId;
+        }
+
+        if (winnerId === userTeamId) return { ...record, wins: record.wins + 1 };
+        if (winnerId === null) return { ...record, draws: record.draws + 1 };
+        return { ...record, losses: record.losses + 1 };
+      }, { wins: 0, draws: 0, losses: 0 });
+
+      if (champion?.id === userTeamId) {
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:ekstraklasa-champion`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: 50,
+          competition: 'Ekstraklasa',
+          label: 'Mistrzostwo Polski',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:ekstraklasa-champion`,
+          seasonLabel,
+          title: `Mistrz Polski ${seasonLabel}`,
+          competition: 'Ekstraklasa',
+        });
+      } else if (userClubBeforeSeasonEnd?.leagueId === 'L_PL_1' && userFinalRank === 2) {
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:ekstraklasa-runner-up`,
+          seasonLabel,
+          title: `Wicemistrz Polski ${seasonLabel}`,
+          competition: 'Ekstraklasa',
+        });
+      }
+
+      if (cupWinnerId === userTeamId) {
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:polish-cup-winner`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: 25,
+          competition: 'Puchar Polski',
+          label: 'Zdobycie Pucharu Polski',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:polish-cup-winner`,
+          seasonLabel,
+          title: `Puchar Polski ${newYear}`,
+          competition: 'Puchar Polski',
+        });
+      } else if (cupLoserId === userTeamId) {
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:polish-cup-finalist`,
+          seasonLabel,
+          title: `Finalista Pucharu Polski ${newYear}`,
+          competition: 'Puchar Polski',
+        });
+      }
+
+      if (promoteFromL2Ids.includes(userTeamId) || promoteFromL3Ids.includes(userTeamId)) {
+        const promotionDelta = ManagerExperienceService.promotionExpForReputation(userClubBeforeSeasonEnd?.reputation ?? 5);
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:promotion:${userTeamId}`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: promotionDelta,
+          competition: 'Liga Polska',
+          label: promoteFromL2Ids.includes(userTeamId) ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi',
+        });
+      }
+
+      if (relegateFromL1Ids.includes(userTeamId) || relegateFromL2Ids.includes(userTeamId) || relegateFromL3Ids.includes(userTeamId)) {
+        const relegationDelta = relegateFromL1Ids.includes(userTeamId) ? -40 : relegateFromL2Ids.includes(userTeamId) ? -30 : -25;
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:relegation:${userTeamId}`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: relegationDelta,
+          competition: 'Liga Polska',
+          label: relegateFromL1Ids.includes(userTeamId) ? 'Spadek z Ekstraklasy' : relegateFromL2Ids.includes(userTeamId) ? 'Spadek z 1. Ligi' : 'Spadek z 2. Ligi',
+        });
+      }
+
+      if (userClubBeforeSeasonEnd) {
+        setManagerProfile(prev => {
+          let next = ManagerExperienceService.applyExpAwards(prev, managerAwards);
+          next = ManagerExperienceService.addCareerSeason(next, {
+            id: `career:${seasonLabel}:${userTeamId}`,
+            seasonLabel,
+            clubId: userTeamId,
+            clubName: userClubBeforeSeasonEnd.name,
+            finalRank: userFinalRank > 0 ? userFinalRank : undefined,
+            points: userClubBeforeSeasonEnd.stats.points,
+            wins: managerSeasonRecord.wins,
+            draws: managerSeasonRecord.draws,
+            losses: managerSeasonRecord.losses,
+          });
+          next = ManagerExperienceService.addAchievements(next, managerAchievements);
+          return next;
+        });
+      }
+    }
+
     // 4. Aktualizacja Klubów i Lig
 // 4. Aktualizacja Klubów i Trenerów (Nagrody i Kary)
     const updatedCoaches = { ...coaches };
@@ -2303,7 +2431,7 @@ if (userTeamId) {
   };
 
   const saveManagerProfile = (profile: ManagerProfile) => {
-    setManagerProfile(profile);
+    setManagerProfile(ManagerExperienceService.ensureManagerExperience(profile));
     navigateTo(ViewState.TEAM_SELECTION);
   };
 
@@ -2548,6 +2676,20 @@ setMessages([welcomeMail, fanMail]);
     }
 
     const currentDateKey = currentDate.toISOString().split('T')[0];
+    if (userTeamId) {
+      const domesticMatchAwards = simulation.updatedFixtures
+        .filter(fixture => {
+          const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+          return !Number.isNaN(fixtureDate.getTime()) && fixtureDate.toISOString().split('T')[0] === currentDateKey;
+        })
+        .map(fixture => ManagerExperienceService.buildDomesticMatchAward(fixture, userTeamId, currentDate, seasonNumber))
+        .filter((award): award is ManagerExpAwardInput => !!award);
+
+      if (domesticMatchAwards.length > 0) {
+        setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, domesticMatchAwards));
+      }
+    }
+
     const pzpnCandidates = simulation.updatedFixtures.filter(fixture => {
       const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
       return PzpnDisciplinaryService.isEligibleFixture(fixture)
@@ -12014,6 +12156,19 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       CL: 'Ligi Mistrzów', EL: 'Ligi Europy', CONF: 'Ligi Konferencji',
     };
 
+    const GROUP_EXIT_TYPES: Record<string, 'CL'|'EL'|'CONF'> = {
+      [CompetitionType.CL_R16]: 'CL',
+      [CompetitionType.EL_R16]: 'EL',
+      [CompetitionType.CONF_R16]: 'CONF',
+    };
+    const PROGRESS_STAGE_BY_EVENT: Record<string, 'GROUP_ENTRY' | 'NEXT_ROUND' | 'FINAL'> = {
+      Q1_ADVANCE: 'NEXT_ROUND',
+      Q2_ADVANCE: 'GROUP_ENTRY',
+      R16: 'NEXT_ROUND',
+      QF: 'NEXT_ROUND',
+      SF: 'FINAL',
+    };
+
     const awardPrize = (prize: number, description: string, date: string) => {
       setClubs(prev => prev.map(c => {
         if (c.id !== userTeamId) return c;
@@ -12028,6 +12183,55 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         return { ...c, budget: c.budget + prize, financeHistory: [log, ...(c.financeHistory || [])].slice(0, 50) };
       }));
     };
+
+    const managerEuroAwards: ManagerExpAwardInput[] = [];
+    const managerEuroAchievements: import('../types').ManagerAchievement[] = [];
+    const addManagerEuroAward = (award: ManagerExpAwardInput) => {
+      managerEuroAwards.push(award);
+    };
+
+    globalFixtures
+      .filter(f =>
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        !String(f.leagueId).includes('_DRAW') &&
+        !!ManagerExperienceService.getEuropeanCompetitionCode(String(f.leagueId))
+      )
+      .forEach(f => {
+        const fixtureDate = f.date instanceof Date ? f.date : new Date(f.date);
+        const award = ManagerExperienceService.buildEuropeanMatchAward(f, userTeamId, fixtureDate, seasonNumber, clubs);
+        if (award) addManagerEuroAward(award);
+      });
+
+    Object.entries(GROUP_STAGE_COMP).forEach(([leagueId, comp]) => {
+      const groupFixture = globalFixtures.find(f =>
+        f.leagueId === leagueId &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      if (!groupFixture) return;
+      addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+        `euro-progress:${comp}:group-entry:${seasonNumber}`,
+        comp,
+        'GROUP_ENTRY',
+        groupFixture.date instanceof Date ? groupFixture.date : new Date(groupFixture.date),
+        seasonNumber,
+      ));
+    });
+
+    Object.entries(GROUP_EXIT_TYPES).forEach(([leagueId, comp]) => {
+      const r16Fixture = globalFixtures.find(f =>
+        f.leagueId === leagueId &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      if (!r16Fixture) return;
+      addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+        `euro-progress:${comp}:group-exit:${seasonNumber}`,
+        comp,
+        'GROUP_EXIT',
+        r16Fixture.date instanceof Date ? r16Fixture.date : new Date(r16Fixture.date),
+        seasonNumber,
+      ));
+    });
 
     const userEurFixtures = globalFixtures.filter(f =>
       f.status === MatchStatus.FINISHED &&
@@ -12095,6 +12299,18 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
 
         sentMailIdsRef.current.add(key);
         awardPrize(FinanceService.calculateEuropeanPrizeMoney(retInfo.comp, retInfo.event), `Premia UEFA — ${retInfo.label}`, fDate);
+        const managerProgressSourceKey = retInfo.event === 'Q2_ADVANCE'
+          ? `euro-progress:${retInfo.comp}:group-entry:${seasonNumber}`
+          : retInfo.event === 'SF'
+            ? `euro-progress:${retInfo.comp}:final:${seasonNumber}`
+            : `euro-progress:${retInfo.comp}:${retInfo.event.toLowerCase()}:${seasonNumber}:${f.id}`;
+        addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+          managerProgressSourceKey,
+          retInfo.comp,
+          PROGRESS_STAGE_BY_EVENT[retInfo.event],
+          fDate,
+          seasonNumber,
+        ));
 
         // Awans z kwalifikacji do fazy ligowej → osobna premia za uczestnictwo
         if (retInfo.event === 'Q2_ADVANCE') {
@@ -12116,6 +12332,19 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
           sentMailIdsRef.current.add(finalistKey);
           awardPrize(FinanceService.calculateEuropeanPrizeMoney(finalInfo.comp, 'FINALIST'), `Premia UEFA — udział w finale ${finalInfo.name}`, fDate);
         }
+        addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+          `euro-progress:${finalInfo.comp}:final:${seasonNumber}`,
+          finalInfo.comp,
+          'FINAL',
+          fDate,
+          seasonNumber,
+        ));
+        managerEuroAchievements.push({
+          id: `achievement:euro:${finalInfo.comp}:finalist:${seasonNumber}:${f.id}`,
+          seasonLabel: fDate.slice(0, 4),
+          title: `Finalista ${ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp)} ${fDate.slice(0, 4)}`,
+          competition: ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp),
+        });
         const h = f.homeScore ?? 0;
         const a = f.awayScore ?? 0;
         let winnerId: string | null = null;
@@ -12133,10 +12362,31 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
             sentMailIdsRef.current.add(winnerKey);
             awardPrize(FinanceService.calculateEuropeanPrizeMoney(finalInfo.comp, 'WINNER'), `Premia UEFA — zwycięstwo w ${finalInfo.name}`, fDate);
           }
+          addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+            `euro-progress:${finalInfo.comp}:winner:${seasonNumber}:${f.id}`,
+            finalInfo.comp,
+            'WINNER',
+            fDate,
+            seasonNumber,
+          ));
+          managerEuroAchievements.push({
+            id: `achievement:euro:${finalInfo.comp}:winner:${seasonNumber}:${f.id}`,
+            seasonLabel: fDate.slice(0, 4),
+            title: `Mistrz ${ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp)} ${fDate.slice(0, 4)}`,
+            competition: ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp),
+          });
         }
       }
     });
-  }, [globalFixtures, userTeamId, setClubs]);
+
+    if (managerEuroAwards.length > 0 || managerEuroAchievements.length > 0) {
+      setManagerProfile(prev => {
+        let next = ManagerExperienceService.applyExpAwards(prev, managerEuroAwards);
+        next = ManagerExperienceService.addAchievements(next, managerEuroAchievements);
+        return next;
+      });
+    }
+  }, [globalFixtures, userTeamId, setClubs, clubs, seasonNumber]);
 
   const jumpToDate = (date: Date) => setTargetJumpTime(new Date(date).setHours(0,0,0,0));
   const jumpToNextEvent = () => {

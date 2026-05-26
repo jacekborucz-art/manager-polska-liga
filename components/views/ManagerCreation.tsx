@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, ManagerProfile } from '../../types';
+import { ManagerExperienceService } from '../../services/ManagerExperienceService';
 
 const EUROPEAN_COUNTRIES = [
   { name: 'Albania', flag: '🇦🇱' }, { name: 'Andora', flag: '🇦🇩' }, { name: 'Austria', flag: '🇦🇹' },
@@ -47,7 +48,12 @@ export const ManagerCreation: React.FC = () => {
         lastName,
         age,
         nationality: selectedCountry.name,
-        nationalityFlag: selectedCountry.flag
+        nationalityFlag: selectedCountry.flag,
+        expPoints: 1,
+        experience: ManagerExperienceService.getExperienceRating(1),
+        expHistory: [],
+        careerHistory: [],
+        achievements: [],
       });
     }
   };

@@ -2204,12 +2204,47 @@ export interface StatRow {
   club: Club;
 }
 
+export interface ManagerExpEntry {
+  id: string;
+  sourceKey: string;
+  date: string;
+  season: number;
+  delta: number;
+  totalAfter: number;
+  competition: string;
+  label: string;
+}
+
+export interface ManagerCareerSeason {
+  id: string;
+  seasonLabel: string;
+  clubId: string;
+  clubName: string;
+  finalRank?: number;
+  points?: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export interface ManagerAchievement {
+  id: string;
+  seasonLabel: string;
+  title: string;
+  competition: string;
+}
+
 export interface ManagerProfile {
   firstName: string;
   lastName: string;
   age: number;
   nationality: string;
   nationalityFlag: string;
+  expPoints: number;
+  experience: number;
+  expHistory: ManagerExpEntry[];
+  careerHistory: ManagerCareerSeason[];
+  achievements: ManagerAchievement[];
 }
 
 export interface TrainingCycle {

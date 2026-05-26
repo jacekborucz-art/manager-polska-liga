@@ -1775,7 +1775,7 @@ return {
     const homeRank = sortedStandings.findIndex(c => c.id === ctx.homeClub.id) + 1;
     
     // Obliczamy frekwencję (korzystając z pogody zdefiniowanej w env.weather)
-    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather);
+    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather, ctx.awayClub, false, true);
 
     // NAPRAWKA DUPLIKACJI WYNIKÓW:
     // Priorytet: wyniki z advanceDay (jeśli już uruchomił się dla daty meczu)
