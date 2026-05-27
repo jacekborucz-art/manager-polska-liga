@@ -2077,6 +2077,22 @@ export interface MatchHistoryEntry {
   ratings?: Record<string, number>;
   homeTacticId?: string;
   awayTacticId?: string;
+  kits?: {
+    home: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+    away: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+  };
 }
 export interface LeagueRoundResults {
   dateKey: string;

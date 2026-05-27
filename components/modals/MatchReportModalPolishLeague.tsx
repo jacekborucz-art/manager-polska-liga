@@ -2,9 +2,10 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { PlayerPosition, Player } from '../../types';
+import { PlayerPosition, Player, ClubKitPattern } from '../../types';
 import { TacticRepository } from '../../resources/tactics_db';
 import { KitSelectionService } from '../../services/KitSelectionService';
+import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
 interface MatchReportModalProps {
@@ -32,21 +33,6 @@ const pickGoalkeeperColor = (blocked: string[]): string => {
   }));
   scored.sort((a, b) => b.minDist - a.minDist);
   return scored[0].color;
-};
-
-const getContrastText = (bgHex: string, secondaryHex: string): string => {
-  const parse = (hex: string) => {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.substring(0, 2), 16);
-    const g = parseInt(h.substring(2, 4), 16);
-    const b = parseInt(h.substring(4, 6), 16);
-    return { r, g, b };
-  };
-  const lum = ({ r, g, b }: { r: number; g: number; b: number }) => 0.299 * r + 0.587 * g + 0.114 * b;
-  const bgL = lum(parse(bgHex));
-  const secL = lum(parse(secondaryHex));
-  if (Math.abs(bgL - secL) > 60) return secondaryHex;
-  return bgL > 128 ? '#000000' : '#ffffff';
 };
 
 const isColorDark = (hex: string): boolean => {
@@ -128,13 +114,13 @@ const PitchKit: React.FC<{
   left: string;
   top: string;
   primary: string;
+  shirtSecondary?: string;
   secondary: string;
-  trim: string;
+  pattern?: ClubKitPattern;
   isMom?: boolean;
   isRedCarded?: boolean;
-}> = ({ player, left, top, primary, secondary, trim, isMom, isRedCarded }) => {
+}> = ({ player, left, top, primary, shirtSecondary, secondary, pattern, isMom, isRedCarded }) => {
   if (!player) return null;
-  const shirtText = getContrastText(primary, secondary);
   const label = `${player.firstName.charAt(0)}. ${player.lastName}`;
   return (
     <div
@@ -142,17 +128,15 @@ const PitchKit: React.FC<{
       style={{ left, top, transform: 'translate(-50%, -50%)', filter: isRedCarded ? 'grayscale(1)' : undefined, opacity: isRedCarded ? 0.35 : undefined }}
     >
       <div className="relative flex flex-col items-center">
-        <svg viewBox="0 0 24 24" className={`w-[28px] h-[28px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)] ${isMom ? 'filter drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]' : ''}`}>
-          <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={primary} />
-          <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={secondary} fillOpacity="0.9" />
-          <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={secondary} fillOpacity="0.35" />
-          <path d="M12 7.2v11.8" stroke={trim} strokeWidth="1" strokeOpacity="0.8" />
-          {isMom && <circle cx="12" cy="2.5" r="2" fill="#fbbf24" />}
-        </svg>
-        <svg viewBox="0 0 28 18" className="-mt-0.5 w-[14px] h-[8px] drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]">
-          <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={secondary} stroke={trim} strokeWidth="1.2" strokeLinejoin="round" />
-          <path d="M14 3v12" stroke={trim} strokeWidth="0.8" strokeOpacity="0.7" />
-        </svg>
+        <KitPreview
+          shirt={primary}
+          shirtSecondary={shirtSecondary}
+          shorts={secondary}
+          socks={secondary}
+          pattern={pattern}
+          className={`h-[36px] w-[32px] ${isMom ? 'filter drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]' : ''}`}
+        />
+        {isMom && <span className="absolute -top-1 right-1 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.95)]" />}
       </div>
       <div className={`mt-[2px] max-w-[64px] rounded border px-[3px] py-[1px] text-center shadow-[0_4px_10px_rgba(0,0,0,0.5)] ${isMom ? 'bg-amber-500/90 border-amber-300' : 'bg-black/85 border-white/10'}`}>
         <span className={`block truncate text-[6.5px] font-black uppercase tracking-[0.1em] ${isMom ? 'text-black' : 'text-white'}`}>
@@ -239,7 +223,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
 
   if (!matchId || !match || !homeClub || !awayClub) return null;
 
-  const kits = KitSelectionService.selectOptimalKits(homeClub, awayClub);
+  const kits = match.kits ?? KitSelectionService.selectOptimalKits(homeClub, awayClub);
 
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + czerwone kartki + niestrzelone karne)
   const buildEvents = (teamId: string) => {
@@ -537,7 +521,6 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
               const isGK = slot.role === PlayerPosition.GK;
               const primary = isGK ? homeGKColor : homePrimary;
               const secondary = isGK ? homeGKColor : homeSecondary;
-              const trim = getContrastText(primary, secondary);
               const isRedCarded = !!player && match.cards.some(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
               return (
                 <PitchKit
@@ -556,8 +539,9 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
                           : `calc(${getPitchSlotTop(true, slot.y)} - 30px)`
                   }
                   primary={primary}
+                  shirtSecondary={isGK ? undefined : kits.home.shirtSecondary}
                   secondary={secondary}
-                  trim={trim}
+                  pattern={isGK ? 'solid' : kits.home.pattern}
                 />
               );
             })}
@@ -567,7 +551,6 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
               const isGK = slot.role === PlayerPosition.GK;
               const primary = isGK ? awayGKColor : awayPrimary;
               const secondary = isGK ? awayGKColor : awaySecondary;
-              const trim = getContrastText(primary, secondary);
               const isRedCarded = !!player && match.cards.some(c => c.playerId === player.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW'));
               return (
                 <PitchKit
@@ -586,8 +569,9 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
                           : `calc(${getPitchSlotTop(false, slot.y)} + 30px)`
                   }
                   primary={primary}
+                  shirtSecondary={isGK ? undefined : kits.away.shirtSecondary}
                   secondary={secondary}
-                  trim={trim}
+                  pattern={isGK ? 'solid' : kits.away.pattern}
                 />
               );
             })}
@@ -655,18 +639,14 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
             <div className="flex items-center gap-4">
               <div className="flex-1 flex items-center justify-end min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex flex-col items-center shrink-0">
-                    <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(kits.home.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
-                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.primary} />
-                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.home.secondary} fillOpacity="0.9" />
-                      <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.home.secondary} fillOpacity="0.35" />
-                      <path d="M12 7.2v11.8" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="1" strokeOpacity="0.8" />
-                    </svg>
-                    <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(kits.home.secondary) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
-                      <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.home.secondary} stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
-                      <path d="M14 3v12" stroke={getContrastText(kits.home.primary, kits.home.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
-                    </svg>
-                  </div>
+                  <KitPreview
+                    shirt={kits.home.primary}
+                    shirtSecondary={kits.home.shirtSecondary}
+                    shorts={kits.home.secondary}
+                    socks={kits.home.secondary}
+                    pattern={kits.home.pattern}
+                    className={`h-[58px] w-[52px] ${isColorDark(kits.home.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : ''}`}
+                  />
                   <div className="flex flex-col items-end min-w-0">
                     <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-right leading-none truncate pr-1">{homeClub.name}</span>
                   </div>
@@ -692,18 +672,14 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
                   <div className="flex flex-col items-start overflow-hidden min-w-0">
                     <span className="text-2xl font-black italic text-white uppercase tracking-tighter text-left leading-none truncate w-full pr-2">{awayClub.name}</span>
                   </div>
-                  <div className="flex flex-col items-center shrink-0">
-                    <svg viewBox="0 0 24 24" className={`w-[48px] h-[48px] ${isColorDark(kits.away.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]'}`}>
-                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.primary} />
-                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={kits.away.secondary} fillOpacity="0.9" />
-                      <path d="M7 2L2 5v4l3 1V6.5L8.3 5l1.7 2.3h4L15.7 5 19 6.5V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={kits.away.secondary} fillOpacity="0.35" />
-                      <path d="M12 7.2v11.8" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="1" strokeOpacity="0.8" />
-                    </svg>
-                    <svg viewBox="0 0 28 18" className={`-mt-2 w-[32px] h-[20px] ${isColorDark(kits.away.secondary) ? 'drop-shadow-[0_0_6px_rgba(255,255,255,0.3)]' : 'drop-shadow-[0_3px_5px_rgba(0,0,0,0.4)]'}`}>
-                      <path d="M4 2h20l2 4-3 10H16l-2-6-2 6H5L2 6z" fill={kits.away.secondary} stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.15" strokeLinejoin="round" />
-                      <path d="M14 3v12" stroke={getContrastText(kits.away.primary, kits.away.secondary)} strokeWidth="0.8" strokeOpacity="0.7" />
-                    </svg>
-                  </div>
+                  <KitPreview
+                    shirt={kits.away.primary}
+                    shirtSecondary={kits.away.shirtSecondary}
+                    shorts={kits.away.secondary}
+                    socks={kits.away.secondary}
+                    pattern={kits.away.pattern}
+                    className={`h-[58px] w-[52px] ${isColorDark(kits.away.primary) ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]' : ''}`}
+                  />
                 </div>
               </div>
             </div>
