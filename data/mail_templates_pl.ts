@@ -110,7 +110,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
     subject: 'Imponująca seria przed przerwą zimową!',
-    body: 'Panie Trenerze,\n\nkorzystamy z przerwy zimowej, aby przekazać Panu słowa najwyższego uznania. Forma, jaką {CLUB} zaprezentował w ostatnich kolejkach przed pauzą, jest absolutnie imponująca. Seria wygranych meczów buduje znakomitą atmosferę w klubie i napawa nas optymizmem przed drugą rundą sezonu.\n\nZarząd jest przekonany, że kontynuacja tej drogi zaowocuje znakomitym wynikiem końcowym. Proszę utrzymać tę koncentrację i motywację podczas obozu zimowego.\n\nZ wyrazami uznania,\nZarząd Klubu'
+    body: 'Panie Trenerze,\n\nKorzystamy z przerwy zimowej, aby przekazać Panu słowa najwyższego uznania. Forma, jaką {CLUB} zaprezentował w ostatnich kolejkach przed pauzą, jest absolutnie imponująca. Seria wygranych meczów buduje znakomitą atmosferę w klubie i napawa nas optymizmem przed drugą rundą sezonu.\n\nZarząd jest przekonany, że kontynuacja tej drogi zaowocuje znakomitym wynikiem końcowym. Proszę utrzymać tę koncentrację i motywację podczas obozu zimowego.\n\nZ wyrazami uznania,\nZarząd Klubu'
   },
   {
     id: 'board_winter_form_good',
@@ -118,7 +118,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
     subject: 'Dobra forma {CLUB} przed przerwą zimową',
-    body: 'Panie Trenerze,\n\nprzed przerwą zimową chcielibyśmy podsumować ostatnie tygodnie. Wyniki {CLUB} są zadowalające — drużyna prezentuje dobrą formę, a punkty zdobywane są regularnie. To solidna podstawa do pracy w drugiej części sezonu.\n\nLiczymy, że obóz zimowy zostanie dobrze wykorzystany, a drużyna wróci na boisko jeszcze mocniejsza.\n\nPozdrawienia,\nZarząd Klubu'
+    body: 'Panie Trenerze,\n\nPrzed przerwą zimową chcielibyśmy podsumować ostatnie tygodnie. Wyniki {CLUB} są zadowalające — drużyna prezentuje dobrą formę, a punkty zdobywane są regularnie. To solidna podstawa do pracy w drugiej części sezonu.\n\nLiczymy, że obóz zimowy zostanie dobrze wykorzystany, a drużyna wróci na boisko jeszcze mocniejsza.\n\nPozdrawienia,\nZarząd Klubu'
   },
   {
     id: 'board_winter_form_mixed',
@@ -126,7 +126,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Dyrektor Sportowy',
     subject: 'Analiza formy przed przerwą zimową',
-    body: 'Panie Trenerze,\n\nprzerwa zimowa to dobry moment na szczerą ocenę sytuacji. Ostatnie wyniki {CLUB} są nierówne — kilka zwycięstw przeplatanych stratami punktów, na które nie możemy sobie pozwolić. Widać potencjał, ale brakuje regularności.\n\nProsimy o przeanalizowanie taktyki i ustawieniu drużyny podczas obozu zimowego. Oczekujemy zdecydowanie lepszej konsekwencji po powrocie z przerwy.\n\nZ poważaniem,\nDyrektor Sportowy'
+    body: 'Panie Trenerze,\n\nPrzerwa zimowa to dobry moment na szczerą ocenę sytuacji. Ostatnie wyniki {CLUB} są nierówne — kilka zwycięstw przeplatanych stratami punktów, na które nie możemy sobie pozwolić. Widać potencjał, ale brakuje regularności.\n\nProsimy o przeanalizowanie taktyki i ustawieniu drużyny podczas obozu zimowego. Oczekujemy zdecydowanie lepszej konsekwencji po powrocie z przerwy.\n\nZ poważaniem,\nDyrektor Sportowy'
   },
   {
     id: 'board_winter_form_poor',
@@ -134,7 +134,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Właściciel Klubu',
     subject: 'Pilna rozmowa po wynikach przed przerwą',
-    body: 'Panie Trenerze,\n\nprzerwa zimowa powinna zostać przez Pana potraktowana jako ostatnie ostrzeżenie. Wyniki {CLUB} w ostatnich kolejkach są głęboko niezadowalające i budzą poważne obawy o dalszy przebieg sezonu.\n\nOczekuję gruntownej analizy przyczyn tak słabej dyspozycji i konkretnych zmian, które przyniosą efekty już w pierwszych meczach rundy wiosennej. Zarząd bacznie obserwuje sytuację.\n\nZ całą powagą,\nWłaściciel Klubu'
+    body: 'Panie Trenerze,\n\nPrzerwa zimowa powinna zostać przez Pana potraktowana jako ostatnie ostrzeżenie. Wyniki {CLUB} w ostatnich kolejkach są głęboko niezadowalające i budzą poważne obawy o dalszy przebieg sezonu.\n\nOczekuję gruntownej analizy przyczyn tak słabej dyspozycji i konkretnych zmian, które przyniosą efekty już w pierwszych meczach rundy wiosennej. Zarząd bacznie obserwuje sytuację.\n\nZ całą powagą,\nWłaściciel Klubu'
   },
 
   // --- BOARD WEEKLY PRESSURE MAILS ---
@@ -144,7 +144,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Dyrektor Sportowy',
     subject: 'Obecna pozycja w tabeli',
-    body: 'Panie Trenerze,\n\nchcielibyśmy zwrócić Pana uwagę na obecną sytuację {CLUB} w tabeli ligowej. Pozycja, którą aktualnie zajmujemy, odbiega od naszych oczekiwań. Jesteśmy przekonani, że drużyna ma potencjał, by wypracować lepszy wynik, jednak czas gra na niekorzyść. Oczekujemy wyraźnej poprawy w najbliższych kolejkach.\n\nZarząd Klubu'
+    body: 'Panie Trenerze,\n\nChcielibyśmy zwrócić Pana uwagę na obecną sytuację {CLUB} w tabeli ligowej. Pozycja, którą aktualnie zajmujemy, odbiega od naszych oczekiwań. Jesteśmy przekonani, że drużyna ma potencjał, by wypracować lepszy wynik, jednak czas gra na niekorzyść. Oczekujemy wyraźnej poprawy w najbliższych kolejkach.\n\nZarząd Klubu'
   },
   {
     id: 'board_pressure_warning',
@@ -152,7 +152,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
     subject: 'Wyniki poniżej oczekiwań',
-    body: 'Panie Trenerze,\n\nprzesyłamy niniejsze pismo jako formalne wyrażenie niezadowolenia zarządu z obecnych wyników sportowych {CLUB}. Jesteśmy poważnie zaniepokojeni tempem i jakością pracy. Pozycja w tabeli jest nie do zaakceptowania i wymaga natychmiastowej, zdecydowanej reakcji z Pana strony.\n\nNasz kredyt zaufania maleje. Zarząd Klubu'
+    body: 'Panie Trenerze,\n\nPrzesyłamy niniejsze pismo jako formalne wyrażenie niezadowolenia zarządu z obecnych wyników sportowych {CLUB}. Jesteśmy poważnie zaniepokojeni tempem i jakością pracy. Pozycja w tabeli jest nie do zaakceptowania i wymaga natychmiastowej, zdecydowanej reakcji z Pana strony.\n\nNasz kredyt zaufania maleje. Zarząd Klubu'
   },
   {
     id: 'board_pressure_critical',
@@ -160,7 +160,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Właściciel Klubu',
     subject: 'PILNE: Wymagane działania',
-    body: 'Panie Trenerze,\n\nsytuacja sportowa {CLUB} osiągnęła punkt krytyczny. Obecna pozycja w tabeli jest katastrofalna i stanowi zagrożenie dla celów całego klubu. Zarząd jest zdecydowany podjąć wszelkie niezbędne kroki, by odwrócić tę sytuację.\n\nOczekujemy NATYCHMIASTOWEJ poprawy. Jeśli wyniki nie zmienią się w ciągu najbliższych kolejek, zarząd będzie zmuszony rozważyć radykalne decyzje kadrowe.\n\nZ całą powagą,\nZarząd Klubu'
+    body: 'Panie Trenerze,\n\nSytuacja sportowa {CLUB} osiągnęła punkt krytyczny. Obecna pozycja w tabeli jest katastrofalna i stanowi zagrożenie dla celów całego klubu. Zarząd jest zdecydowany podjąć wszelkie niezbędne kroki, by odwrócić tę sytuację.\n\nOczekujemy NATYCHMIASTOWEJ poprawy. Jeśli wyniki nie zmienią się w ciągu najbliższych kolejek, zarząd będzie zmuszony rozważyć radykalne decyzje kadrowe.\n\nZ całą powagą,\nZarząd Klubu'
   },
 
   // --- MATCH EVENTS (FIXED LOGIC) ---
@@ -261,7 +261,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.FANS,
     sender: 'Stowarzyszenie Kibiców',
     role: 'Przewodniczący',
-    subject: 'Wsparcie z trybun - liczymy na walkę!',
+    subject: 'Wsparcie z trybun. Liczymy na walkę!',
     body: 'Witamy w naszym ukochanym klubie. My, kibice {CLUB}, nie oczekujemy od Pana cudów, ale wymagamy jednego: pełnego zaangażowania i walki o każdy centymetr murawy. Liczymy, że potrafi Pan zmotywować tych chłopaków tak, aby po meczu mogli spojrzeć nam w oczy. {TRANSFER_DEMAND} Jesteśmy z wami!'
   },
   {
