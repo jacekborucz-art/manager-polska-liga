@@ -112,7 +112,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
     if (activeClubLockoutUntil) {
       setBoardVeto({
-        msg: `TEN ZAWODNIK ODRZUCIL OFERTE TWOJEGO KLUBU. POWROT DO ROZMOW MOZLIWY ZA 3 MIESIACE: ${new Date(activeClubLockoutUntil).toLocaleDateString()}`,
+        msg: 'TEN ZAWODNIK NIE CHCE WRACAC DO ROZMOW Z TWOIM KLUBEM PO POPRZEDNICH NEGOCJACJACH. SPROBUJ PONOWNIE ZA KILKA MIESIECY.',
       });
       return;
     }

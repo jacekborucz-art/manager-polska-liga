@@ -236,6 +236,12 @@ const isActiveTransferOffer = (offer: TransferOffer): boolean =>
 const hasActiveTransferConflict = (playerId: string, transferOffers: TransferOffer[]): boolean =>
   transferOffers.some(offer => offer.playerId === playerId && isActiveTransferOffer(offer));
 
+const getHiddenOffenseLockoutDate = (currentDate: Date): Date => {
+  const lockoutDate = new Date(currentDate);
+  lockoutDate.setMonth(lockoutDate.getMonth() + 3 + Math.floor(Math.random() * 10));
+  return lockoutDate;
+};
+
 const hasActiveIncomingConflict = (
   playerId: string,
   incomingOffers: IncomingTransferOffer[],
@@ -974,7 +980,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
-  const [activeTrainingId, setActiveTrainingId] = useState<string | null>('T_TACTICAL_PERIOD');
+  const [activeTrainingId, setActiveTrainingId] = useState<string | null>(null);
 
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
@@ -1474,6 +1480,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
+    setActiveTrainingId(null);
+    setTrainingProgressHistory([]);
+    sentMailIdsRef.current = new Set();
     setPzpnDisciplinaryEvents([]);
     setProcessedDrawIds([]);
     const initialSuperCup = SuperCupService.generateFixture(2025, STATIC_CLUBS);
@@ -3848,6 +3857,40 @@ setMessages([welcomeMail, fanMail]);
           ].slice(0, 50) : c.financeHistory,
         } as Club : c);
       });
+    }
+
+    if (
+      userTeamId &&
+      !isResigned &&
+      !activeTrainingId &&
+      dateToProcess.getMonth() === 6 &&
+      dateToProcess.getDate() === 4
+    ) {
+      const trainingReminderKey = `TRAINING_PROGRAM_URGENT_${seasonNumber}_${userTeamId}`;
+      if (!sentMailIdsRef.current.has(trainingReminderKey)) {
+        sentMailIdsRef.current.add(trainingReminderKey);
+        const trainingReminderMail: MailMessage = {
+          id: trainingReminderKey,
+          sender: 'Asystent',
+          role: 'Asystent trenera',
+          subject: 'Program treningowy drużyny. PILNE!',
+          body: `Szanowny Trenerze,
+
+Chciałbym zwrócić uwagę na konieczność jak najszybszego ustalenia programu treningowego dla drużyny.
+
+Na obecnym etapie istnieje ryzyko, że forma zespołu może nie być wystarczająca na rozpoczęcie rozgrywek ligowych. W związku z tym uważam, że powinniśmy możliwie szybko określić plan zajęć, intensywność treningów oraz główne obszary wymagające poprawy.
+
+Pozwoli nam to lepiej przygotować zawodników pod względem fizycznym, taktycznym i mentalnym przed najbliższymi meczami.
+
+Z poważaniem,
+Asystent`,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 100,
+        };
+        setMessages(prev => [trainingReminderMail, ...prev]);
+      }
     }
 
 // --- EMERGENCY GK PROTOCOL (STAGE 1 PRO) ---
@@ -8337,7 +8380,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned, buildContractStaffAlert, transferOffers, lineups]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
 
 
    const confirmCLGroupDraw = () => {
@@ -10897,6 +10940,15 @@ const finalResult: SimulationOutput = {
       };
     }
 
+    const transferClubLockoutUntil = targetPlayer.transferClubLockouts?.[userTeamId];
+    if (transferClubLockoutUntil && new Date(currentDate) < new Date(transferClubLockoutUntil)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Agent zawodnika odrzuca kontakt z twoim klubem po poprzednio anulowanym transferze. Mozesz sprobowac ponownie za kilka miesiecy.'
+      };
+    }
+
     if (targetPlayer.transferOfferBanUntil && new Date(currentDate) < new Date(targetPlayer.transferOfferBanUntil)) {
       return {
         ok: false,
@@ -11690,13 +11742,47 @@ const finalResult: SimulationOutput = {
       : null;
 
     if (directorPurchaseDecision?.blocked) {
+      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+      const cancelledOffer: TransferOffer = {
+        ...readyOffer,
+        status: TransferOfferStatus.PLAYER_REJECTED,
+        sellerReason: `Klub ${buyerClub.name} wycofal sie po zgodzie zawodnika. Agent nie chce wracac do rozmow przez najblizsze miesiace.`,
+        playerReason: `Klub ${buyerClub.name} wycofal sie po zgodzie zawodnika. Agent nie chce wracac do rozmow przez najblizsze miesiace.`
+      };
+
       setClubs(prev => prev.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club));
+      setTransferOffers(prev => prev.map(offer => offer.id === offerId ? cancelledOffer : offer));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClub.id]: (prev[sellerClub.id] || []).map(player =>
+          player.id === targetPlayer.id
+            ? {
+                ...player,
+                transferClubLockouts: {
+                  ...(player.transferClubLockouts || {}),
+                  [buyerClub.id]: lockoutDate.toISOString()
+                }
+              }
+            : player
+        )
+      }));
       if (directorPurchaseDecision.mail) prependUniqueMessages([directorPurchaseDecision.mail], true);
+      prependUniqueMessages([{
+        id: `MAIL_TRANSFER_PLAYER_OFFENDED_${offerId}`,
+        sender: `Agent gracza ${targetPlayer.lastName}`,
+        role: 'Agencja menadzerska',
+        subject: `Rozmowy zerwane: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `Po zaakceptowaniu warunkow przez zawodnika klub ${buyerClub.name} wycofal sie z transferu decyzja pionu klubowego. Moj klient odebral to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 97
+      }]);
       return {
         ok: false,
         status: 'VALIDATION_ERROR',
-        message: `Dyrektor sportowy zablokowal transfer: ${directorPurchaseDecision.message}`,
-        offer: transferOffer,
+        message: `Dyrektor sportowy zablokowal transfer: ${directorPurchaseDecision.message} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
+        offer: cancelledOffer,
       };
     }
 
@@ -11902,9 +11988,41 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         userClub
       );
       if (!boardDecision.approved) {
+        const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+        setPlayers(prevPlayers => ({
+          ...prevPlayers,
+          ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+            player.id === resolvedPlayer.id
+              ? {
+                  ...player,
+                  freeAgentLockoutUntil: null,
+                  isNegotiationPermanentBlocked: false,
+                  freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                    player.freeAgentClubLockouts,
+                    userTeamId,
+                    lockoutDate.toISOString()
+                  )
+                }
+              : player
+          )
+        }));
+
+        const offendedMail: MailMessage = {
+          id: `MAIL_FA_BOARD_VETO_${mail.id}`,
+          sender: `Agent gracza ${resolvedPlayer.lastName}`,
+          role: 'Agencja Menadzerska',
+          subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+          body: `Po zaakceptowaniu warunkow klub ${userClub.name} wycofal sie z podpisania kontraktu decyzja zarzadu. Moj klient potraktowal to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 97
+        };
+
+        setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
         return showGameNotification({
           title: 'Veto zarzadu',
-          message: boardDecision.reason,
+          message: `${boardDecision.reason} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
           tone: 'error'
         });
       }
@@ -11921,15 +12039,44 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       : null;
 
     if (directorFreeAgentDecision?.blocked) {
+      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+      setPlayers(prevPlayers => ({
+        ...prevPlayers,
+        ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+          player.id === resolvedPlayer.id
+            ? {
+                ...player,
+                freeAgentLockoutUntil: null,
+                isNegotiationPermanentBlocked: false,
+                freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                  player.freeAgentClubLockouts,
+                  userTeamId,
+                  lockoutDate.toISOString()
+                )
+              }
+            : player
+        )
+      }));
       setClubs(prev => prev.map(c => c.id === userTeamId ? directorFreeAgentDecision.updatedClub : c));
-      setMessages(prev => prev.filter(existingMail => existingMail.id !== mailId));
+      const offendedMail: MailMessage = {
+        id: `MAIL_FA_DIRECTOR_VETO_${mail.id}`,
+        sender: `Agent gracza ${resolvedPlayer.lastName}`,
+        role: 'Agencja Menadzerska',
+        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+        body: `Po zaakceptowaniu warunkow klub ${userClub.name} wycofal sie z podpisania kontraktu. Moj klient potraktowal to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 97
+      };
+      setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
       if (directorFreeAgentDecision.mail) {
         prependUniqueMessages([directorFreeAgentDecision.mail], true);
       }
 
       return showGameNotification({
         title: 'Weto dyrektora sportowego',
-        message: directorFreeAgentDecision.message,
+        message: `${directorFreeAgentDecision.message} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
         tone: 'error'
       });
     }

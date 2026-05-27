@@ -205,6 +205,8 @@ export const TransferOfferView: React.FC = () => {
   }, [buyerClub, player, players, userTeamId, fee, timing]);
   const canOpenNegotiation = activeStatus === TransferOfferStatus.PLAYER_NEGOTIATION;
   const isTransferLocked = !!(player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil));
+  const transferClubLockoutUntil = userTeamId ? player.transferClubLockouts?.[userTeamId] : undefined;
+  const isPlayerOffendedByClub = !!(transferClubLockoutUntil && new Date(currentDate) < new Date(transferClubLockoutUntil));
   const isTransferOfferBanned = !!(player.transferOfferBanUntil && new Date(currentDate) < new Date(player.transferOfferBanUntil));
   const isLoanedPlayer = !!player.loan;
   const isUnavailable = player.clubId === userTeamId || player.clubId === 'FREE_AGENTS' || hasPendingTransfer || isLoanedPlayer;
@@ -362,7 +364,7 @@ export const TransferOfferView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setTiming(TransferTiming.IMMEDIATE)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned}
+                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IMMEDIATE
                         ? 'bg-white text-slate-900 border-white'
@@ -373,7 +375,7 @@ export const TransferOfferView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setTiming(TransferTiming.IN_SIX_MONTHS)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned}
+                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IN_SIX_MONTHS
                         ? 'bg-white text-slate-900 border-white'
@@ -384,7 +386,7 @@ export const TransferOfferView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setTiming(TransferTiming.IN_TWELVE_MONTHS)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned}
+                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IN_TWELVE_MONTHS
                         ? 'bg-white text-slate-900 border-white'
@@ -395,7 +397,7 @@ export const TransferOfferView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setTiming(TransferTiming.CONTRACT_END)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned}
+                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.CONTRACT_END
                         ? 'bg-white text-slate-900 border-white'
@@ -412,13 +414,13 @@ export const TransferOfferView: React.FC = () => {
                     <div className="flex items-center gap-3 mt-2">
                       <button
                         onClick={() => setFee(f => Math.max(marketValue, f - feeStep))}
-                        disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                        disabled={isTransferLocked || isPlayerOffendedByClub || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
                         className="w-16 h-16 rounded-[12px] bg-black/40 border border-white/10 text-3xl font-black text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                       >−</button>
                       <span className="flex-1 text-center text-2xl font-black text-emerald-400 font-mono">{fee.toLocaleString()} PLN</span>
                       <button
                         onClick={() => setFee(f => Math.min(Math.max(100_000, maxFee), f + feeStep))}
-                        disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                        disabled={isTransferLocked || isPlayerOffendedByClub || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
                         className="w-16 h-16 rounded-[12px] bg-black/40 border border-white/10 text-3xl font-black text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                       >+</button>
                     </div>
@@ -427,7 +429,7 @@ export const TransferOfferView: React.FC = () => {
                         <button
                           key={s}
                           onClick={() => setFeeStep(s)}
-                          disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                          disabled={isTransferLocked || isPlayerOffendedByClub || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
                           className={`flex-1 py-2 rounded-[10px] text-[10px] font-black border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${feeStep === s ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-black/30 text-slate-300 border-white/10 hover:border-white/30'}`}
                         >
                           {s >= 1_000_000 ? `${s / 1_000_000}M` : `${s / 1_000}k`}
@@ -462,7 +464,16 @@ export const TransferOfferView: React.FC = () => {
                   </div>
                 )}
 
-                {!isTransferLocked && !isTransferOfferBanned && clubRefusesTalks && (
+                {!isTransferLocked && isPlayerOffendedByClub && (
+                  <div className="rounded-[24px] border border-red-500/30 bg-red-500/10 p-5">
+                    <p className="text-sm font-black uppercase tracking-[0.2em]">Agent odrzuca kontakt</p>
+                    <p className="text-sm text-slate-200 mt-3">
+                      Po poprzednio anulowanym transferze zawodnik nie chce wracac do rozmow z twoim klubem. Sprobuj ponownie za kilka miesiecy.
+                    </p>
+                  </div>
+                )}
+
+                {!isTransferLocked && !isPlayerOffendedByClub && !isTransferOfferBanned && clubRefusesTalks && (
                   <div className="rounded-[24px] border border-red-500/30 bg-red-500/10 p-5">
                     <p className="text-sm font-black uppercase tracking-[0.2em]">Rozmowy niedostepne</p>
                     <p className="text-sm text-slate-200 mt-3">
@@ -509,11 +520,13 @@ export const TransferOfferView: React.FC = () => {
                 ) : (
                   <button
                     onClick={handleSubmit}
-                    disabled={isTransferLocked || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
+                    disabled={isTransferLocked || isPlayerOffendedByClub || isTransferOfferBanned || clubRefusesTalks || hasAnyActiveAgreement || isTransferCompleted}
                     className="w-full py-4 rounded-[24px] bg-blue-600 hover:bg-blue-500 text-white font-black italic uppercase tracking-[0.25em] text-sm shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isTransferLocked
                       ? 'ODRZUCONO'
+                      : isPlayerOffendedByClub
+                        ? 'AGENT ODRZUCA KONTAKT'
                       : isTransferOfferBanned
                         ? 'ZAWODNIK PO SWIEZYM TRANSFERZE'
                       : isFutureAgreementSigned

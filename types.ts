@@ -1137,6 +1137,7 @@ export interface Player {
   transferListDemandUntil?: string | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;
+  transferClubLockouts?: Record<string, string>;
   transferOfferBanUntil?: string | null;
   freeAgentLockoutUntil: string | null;
   freeAgentClubLockouts?: Record<string, string>;
@@ -1901,10 +1902,11 @@ isPenalties?: boolean;
   lastGoalBoostMinute: number;
     activeTacticalBoost: number; // Suma aktualnie dodanego momentum (do zwrotu)
   tacticalBoostExpiry: number; // Minuta, w której impuls wygasa i wraca
-   liveStats: {
+  liveStats: {
     home: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };
     away: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };
   };
+  actionContributions?: Record<string, number>;
   momentumSum: number;
   momentumTicks: number;
   // KONIEC WSTAWKI
