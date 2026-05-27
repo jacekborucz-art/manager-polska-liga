@@ -701,6 +701,7 @@ interface GameContextType {
   currentDate: Date;
   viewState: ViewState;
   sessionSeed: number;
+  matchSimulationSeed: number;
   previousViewState: ViewState | null;
   clubs: Club[];
   leagues: League[];
@@ -944,6 +945,8 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentDate, setCurrentDate] = useState<Date>(START_DATE);
   const [sessionSeed, setSessionSeed] = useState<number>(() => generateRuntimeSeed());
+  const [runtimeSimulationSeed, setRuntimeSimulationSeed] = useState<number>(() => generateRuntimeSeed());
+  const matchSimulationSeed = (sessionSeed ^ runtimeSimulationSeed) >>> 0;
   const [viewState, setViewState] = useState<ViewState>(ViewState.START_MENU);
   const [previousViewState, setPreviousViewState] = useState<ViewState | null>(null);
   const [clubs, setClubs] = useState<Club[]>([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
@@ -1397,6 +1400,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
     setSessionSeed(generateRuntimeSeed());
+    setRuntimeSimulationSeed(generateRuntimeSeed());
     const template = SeasonTemplateGenerator.generate(startYear);
     // -> tutaj wstaw kod
     const coachData = CoachService.generateInitialCoaches([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
@@ -2363,6 +2367,7 @@ if (userTeamId) {
     const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
+    setRuntimeSimulationSeed(generateRuntimeSeed());
     setClubs(loadedClubs);
     setLeagues(data.leagues);
     setPlayers(data.players);
@@ -2863,23 +2868,23 @@ setMessages([welcomeMail, fanMail]);
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument
-    const result = BackgroundMatchProcessorPolishCup.processCupEvent(currentDate, userTeamId, allFixtures, clubs, players, lineups, sessionSeed, seasonNumber);
+    const result = BackgroundMatchProcessorPolishCup.processCupEvent(currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber);
     
     setGlobalFixtures(prev => prev.map(f => result.updatedFixtures.find(uf => uf.id === f.id) || f));
     setPlayers(result.updatedPlayers);
     setLineups(result.updatedLineups);
     setClubs(result.updatedClubs);
-  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, sessionSeed]);
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed]);
 
   const processCLMatchDay = useCallback(() => {
     // null zamiast userTeamId — gracz kliknął "Symuluj", więc symulujemy WSZYSTKIE mecze
     // łącznie z drużyną gracza (brak trybu live dla CL)
     const clResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-      currentDate, null, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
+      currentDate, null, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches
     );
     setGlobalFixtures(prev => {
       const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
@@ -2899,7 +2904,7 @@ setMessages([welcomeMail, fanMail]);
     });
     setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
-  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed]);
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed]);
 
     const processNegotiationResponses = (simDate: Date) => {
     const today = new Date(simDate).setHours(0,0,0,0);
@@ -4244,7 +4249,7 @@ Asystent`,
           if (!nextWcState.groupStageComplete) {
             nextWcState = {
               ...nextWcState,
-              groups: WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches),
+              groups: WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches),
             };
             wcChanged = true;
           }
@@ -4280,7 +4285,7 @@ Asystent`,
         const wcKODayKey = `WC_KO_${wcYear}_${wcDay}`;
         if (!processedDrawIds.includes(wcKODayKey)) {
           if (nextWcState.groupStageComplete && !nextWcState.knockoutComplete) {
-            const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches);
+            const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches);
             nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
 
             wcChanged = true;
@@ -4298,7 +4303,7 @@ Asystent`,
           const hasUnplayedDueMatch = nextWcState.knockoutMatches.some(m => m.date === `${wcYear}-06-${String(koDay).padStart(2, '0')}` && !m.winner && m.home && m.away);
           if (!hasUnplayedDueMatch) continue;
 
-          const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, sessionSeed, nationalTeams, players, coaches);
+          const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches);
           nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
           wcChanged = true;
         }
@@ -5026,7 +5031,7 @@ Asystent`,
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
           if (processedDrawIds.includes(slot.id)) break; // mecz już przetworzony — dzień przesuwa się normalnie
           const uefaScResult = BackgroundMatchUEFASuperCup.processSuperCupMatch(
-            dateToProcess, allFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches
+            dateToProcess, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches
           );
           setGlobalFixtures(prev => {
             const clMap = new Map(uefaScResult.updatedFixtures.map(f => [f.id, f]));
@@ -6136,7 +6141,7 @@ Asystent`,
           players,
           coaches,
           seasonNumber,
-          sessionSeed
+          matchSimulationSeed
         );
         setPlayers(ntSimulation.updatedPlayers);
         ntSimulation.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
@@ -6201,7 +6206,7 @@ Asystent`,
       }
     }
 
-    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, coaches, sessionSeed);
+    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, coaches, matchSimulationSeed);
     
     // 2. Obliczanie regeneracji kondycji i urazów
     const diffTime = Math.abs(dateToProcess.getTime() - lastRecoveryDate.getTime());
@@ -6786,7 +6791,7 @@ const finalResult: SimulationOutput = {
     const clResult = isUEFASuperCupDay
       ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
       : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-          dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, sessionSeed, coaches
+          dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, matchSimulationSeed, coaches
         );
     // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
     // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
@@ -8388,7 +8393,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
 
 
    const confirmCLGroupDraw = () => {
@@ -12626,7 +12631,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
-    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     wcqPlayoffState, setWcqPlayoffState,

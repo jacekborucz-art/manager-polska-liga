@@ -337,9 +337,9 @@ const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { atta
   }, 0);
 
   return {
-    attackMult: Math.max(0.35, 1 - redEquivalent * 0.48),
-    defenseLeakMult: 1 + redEquivalent * 0.42,
-    winProbPenalty: redEquivalent * 0.18,
+    attackMult: Math.max(0.25, 1 - redEquivalent * 0.68),
+    defenseLeakMult: 1 + redEquivalent * 0.75,
+    winProbPenalty: redEquivalent * 0.28,
   };
 };
 

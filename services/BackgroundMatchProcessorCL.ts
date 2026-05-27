@@ -173,6 +173,50 @@ const getGoalsPoissonLike = (
 };
 
 // ============================================================
+//  RZADKIE POGROMY PRZY DUŻEJ RÓŻNICY KLAS
+// ============================================================
+const applyRareMismatchRout = (
+  homeScore: number,
+  awayScore: number,
+  homeClub: Club,
+  awayClub: Club,
+  xgHome: number,
+  xgAway: number,
+  rng: (o: number) => number,
+  isChaos: boolean
+): { homeScore: number; awayScore: number } => {
+  const repGap = homeClub.reputation - awayClub.reputation;
+  const xgGap = xgHome - xgAway;
+  const homeFavorite = repGap >= 7 && xgGap >= 0.75;
+  const awayFavorite = repGap <= -7 && xgGap <= -0.75;
+  if (!homeFavorite && !awayFavorite) return { homeScore, awayScore };
+
+  const favoriteScore = homeFavorite ? homeScore : awayScore;
+  const underdogScore = homeFavorite ? awayScore : homeScore;
+  const mismatchChance =
+    Math.max(0, Math.abs(repGap) - 6) * 0.012 +
+    Math.max(0, Math.abs(xgGap) - 0.75) * 0.035 +
+    (favoriteScore >= 3 && underdogScore <= 1 ? 0.05 : favoriteScore >= 2 && underdogScore === 0 ? 0.035 : 0) +
+    (isChaos ? 0.06 : 0);
+
+  if (rng(9300) >= Math.min(0.22, mismatchChance)) return { homeScore, awayScore };
+
+  let extraGoals = 1;
+  if (rng(9301) < 0.55) extraGoals++;
+  if (rng(9302) < 0.22) extraGoals++;
+  if (Math.abs(repGap) >= 12 && rng(9303) < 0.18) extraGoals++;
+
+  const targetMinimum = underdogScore === 0 ? 5 : 4;
+  if (favoriteScore < targetMinimum && rng(9304) < 0.65) {
+    extraGoals = Math.max(extraGoals, targetMinimum - favoriteScore);
+  }
+
+  const cap = underdogScore === 0 ? 7 : 6;
+  if (homeFavorite) return { homeScore: Math.min(cap, homeScore + extraGoals), awayScore };
+  return { homeScore, awayScore: Math.min(cap, awayScore + extraGoals) };
+};
+
+// ============================================================
 //  SYMULACJA ZMIAN (3-5 na drużynę)
 // ============================================================
 const simulateSubs = (
@@ -578,9 +622,9 @@ const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { atta
   }, 0);
 
   return {
-    attackMult: Math.max(0.35, 1 - redEquivalent * 0.48),
-    defenseLeakMult: 1 + redEquivalent * 0.42,
-    winProbPenalty: redEquivalent * 0.18,
+    attackMult: Math.max(0.25, 1 - redEquivalent * 0.68),
+    defenseLeakMult: 1 + redEquivalent * 0.75,
+    winProbPenalty: redEquivalent * 0.28,
   };
 };
 
@@ -755,6 +799,18 @@ const simulateCLMatchFull = (
   // ── Generowanie goli 90 min (Poisson z nasyceniem) ───────────────────
   let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
   let awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
+  const routedScore90 = applyRareMismatchRout(
+    homeScore90,
+    awayScore90,
+    homeClub,
+    awayClub,
+    xgHome,
+    xgAway,
+    rng,
+    isChaosMatch
+  );
+  homeScore90 = routedScore90.homeScore;
+  awayScore90 = routedScore90.awayScore;
 
   // ── Karne w trakcie meczu (Stage 2 — zależne od sędziego) ───────────
   // Prawdopodobieństwo na mecz (suma ~95 minut): strictness/300 na drużynę

@@ -641,7 +641,7 @@ function StatystykiTab({ wcState, nationalTeams }: { wcState: WCState; nationalT
 }
 
 const WorldCupView: React.FC = () => {
-  const { currentDate, wcState, setWcState, navigateTo, sessionSeed, nationalTeams, players, coaches } = useGame();
+  const { currentDate, wcState, setWcState, navigateTo, matchSimulationSeed, nationalTeams, players, coaches } = useGame();
   const [activeTab, setActiveTab] = useState<Tab>('grupy');
   const [skipConfirm, setSkipConfirm] = useState(false);
 
@@ -669,7 +669,7 @@ const WorldCupView: React.FC = () => {
 
   const handleSkipToFinal = () => {
     if (!skipConfirm) { setSkipConfirm(true); return; }
-    const result = WorldCupService.simulateFullTournament(wcState, sessionSeed, nationalTeams, players, coaches);
+    const result = WorldCupService.simulateFullTournament(wcState, matchSimulationSeed, nationalTeams, players, coaches);
     setWcState(result);
     setActiveTab('final');
     setSkipConfirm(false);
@@ -701,7 +701,7 @@ const WorldCupView: React.FC = () => {
 
       healedState = {
         ...healedState,
-        knockoutMatches: WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, sessionSeed, nationalTeams, players, coaches),
+        knockoutMatches: WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, players, coaches),
       };
       changed = true;
     }
@@ -719,7 +719,7 @@ const WorldCupView: React.FC = () => {
     }
 
     if (changed) setWcState(healedState);
-  }, [coaches, currentDate, nationalTeams, players, sessionSeed, setWcState, wcState]);
+  }, [coaches, currentDate, nationalTeams, players, matchSimulationSeed, setWcState, wcState]);
 
   return (
     <div
