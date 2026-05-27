@@ -191,6 +191,68 @@ function normalizeMessages(messages: unknown): any[] {
   }));
 }
 
+function getBoardSignatoryForRole(club: any, templateRole: string): { name: string; role: string } | null {
+  const formatName = (person?: { firstName?: string; lastName?: string }): string | null =>
+    person?.firstName && person?.lastName ? `${person.firstName} ${person.lastName}` : null;
+
+  if (templateRole === 'Prezes Zarządu') {
+    const ceoName = formatName(club?.management?.ceo);
+    if (ceoName) return { name: ceoName, role: 'Prezes Zarządu' };
+
+    const ownerName = formatName(club?.management?.owner);
+    if (ownerName) return { name: ownerName, role: 'Właściciel' };
+  }
+
+  if (templateRole === 'Dyrektor Sportowy') {
+    const sportingDirectorName = formatName(club?.management?.sportingDirector);
+    if (sportingDirectorName) return { name: sportingDirectorName, role: 'Dyrektor Sportowy' };
+  }
+
+  if (templateRole === 'Właściciel Klubu') {
+    const ownerName = formatName(club?.management?.owner);
+    if (ownerName) return { name: ownerName, role: 'Właściciel' };
+  }
+
+  return null;
+}
+
+function migrateWelcomeMailSignatories(messages: any[], clubs: any[], userTeamId: string | null): any[] {
+  const userClub = clubs.find((club: any) => club?.id === userTeamId);
+  if (!userClub?.name) return messages;
+
+  const legacySignatures = [
+    { name: 'Wojciech Marcin Jankowski', role: 'Prezes Zarządu' },
+    { name: 'Marcin Wiśniewski', role: 'Prezes Zarządu' },
+    { name: 'Tomasz Adamski', role: 'Prezes Zarządu' },
+    { name: 'Paweł Nowak', role: 'Dyrektor Sportowy' },
+    { name: 'Krzysztof Mazurek', role: 'Dyrektor Sportowy' },
+    { name: 'Andrzej Karpowicz', role: 'Właściciel' },
+  ];
+
+  return messages.map((message: any) => {
+    if (!String(message?.id ?? '').startsWith('WELCOME_MAIL_') || typeof message?.body !== 'string') {
+      return message;
+    }
+
+    const legacy = legacySignatures.find(signature =>
+      message.body.includes(`${signature.name}\n${signature.role}, ${userClub.name}`)
+    );
+    if (!legacy) return message;
+
+    const signatory = getBoardSignatoryForRole(userClub, message.role) ?? getBoardSignatoryForRole(userClub, legacy.role);
+    if (!signatory) return message;
+
+    return {
+      ...message,
+      role: signatory.role,
+      body: message.body.replace(
+        `${legacy.name}\n${legacy.role}, ${userClub.name}`,
+        `${signatory.name}\n${signatory.role}, ${userClub.name}`
+      ),
+    };
+  });
+}
+
 function normalizeMatchHistory(matchHistory: unknown): any[] {
   return asArray(matchHistory).map((match: any) => ({
     ...match,
@@ -330,7 +392,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     roundResults: asRecord(data.roundResults),
     managerProfile: ManagerExperienceService.ensureManagerExperience(data.managerProfile),
     seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
-    messages: normalizeMessages(data.messages),
+    messages: migrateWelcomeMailSignatories(normalizeMessages(data.messages), normalizedClubs, data.userTeamId ?? null),
     activeTrainingId: typeof data.activeTrainingId === 'string' ? data.activeTrainingId : null,
     activeIntensity: data.activeIntensity ?? 'NORMAL',
     trainingProgressHistory: asArray(data.trainingProgressHistory),

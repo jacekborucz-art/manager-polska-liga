@@ -64,6 +64,31 @@ const isBeforeLeagueSeasonEnd = (date: Date): boolean => {
   return startOfDay(date) <= new Date(seasonEndYear, 4, 23).getTime();
 };
 
+const getClubBoardSignatory = (club: Club, templateRole: string): { name: string; role: string } => {
+  const formatName = (person?: { firstName: string; lastName: string }): string | null =>
+    person ? `${person.firstName} ${person.lastName}` : null;
+
+  if (templateRole === 'Prezes Zarządu') {
+    const ceoName = formatName(club.management?.ceo);
+    if (ceoName) return { name: ceoName, role: 'Prezes Zarządu' };
+
+    const ownerName = formatName(club.management?.owner);
+    if (ownerName) return { name: ownerName, role: 'Właściciel' };
+  }
+
+  if (templateRole === 'Dyrektor Sportowy') {
+    const sportingDirectorName = formatName(club.management?.sportingDirector);
+    if (sportingDirectorName) return { name: sportingDirectorName, role: 'Dyrektor Sportowy' };
+  }
+
+  if (templateRole === 'Właściciel Klubu') {
+    const ownerName = formatName(club.management?.owner);
+    if (ownerName) return { name: ownerName, role: 'Właściciel' };
+  }
+
+  return { name: 'Zarząd Klubu', role: templateRole };
+};
+
 const buildRivalryWarningMail = (
   currentDate: Date,
   userClub: Club,
@@ -164,13 +189,23 @@ export const MailService = {
     }
 
     const template = MAIL_TEMPLATES.find(t => t.id === templateId)!;
+    const signatory = getClubBoardSignatory(userClub, template.role);
+    const subject = template.subject
+      .replace(/\{CLUB\}/g, userClub.name)
+      .replace(/\{TARGET_LEAGUE\}/g, targetLeagueName);
+    const body = template.body
+      .replace(/\{CLUB\}/g, userClub.name)
+      .replace(/\{TARGET_LEAGUE\}/g, targetLeagueName)
+      .replace(/\{TRANSFER_BUDGET\}/g, userClub.transferBudget.toLocaleString('pl-PL'))
+      .replace(/\{BOARD_SIGNATORY_NAME\}/g, signatory.name)
+      .replace(/\{BOARD_SIGNATORY_ROLE\}/g, signatory.role);
     
     return {
       id: `WELCOME_MAIL_${Date.now()}`,
       sender: template.sender,
-      role: template.role,
-      subject: template.subject.replace(/\{CLUB\}/g, userClub.name).replace(/\{TARGET_LEAGUE\}/g, targetLeagueName),
-      body: template.body.replace(/\{CLUB\}/g, userClub.name).replace(/\{TARGET_LEAGUE\}/g, targetLeagueName).replace(/\{TRANSFER_BUDGET\}/g, userClub.transferBudget.toLocaleString('pl-PL')),
+      role: signatory.role,
+      subject,
+      body,
       date: gameDate ? new Date(gameDate) : new Date(),
       isRead: false,
       type: template.type,
