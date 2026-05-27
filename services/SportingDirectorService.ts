@@ -1050,27 +1050,29 @@ const buildReviewBody = (params: {
       : leaguePosition === expectedPosition
         ? `Pozycja w lidze odpowiada obecnym oczekiwaniom klubu. Jestesmy teraz na ${leaguePosition}. miejscu.`
         : leaguePosition === expectedPosition + 1
-          ? `Pozycja w lidze jest minimalnie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a celem minimum byl poziom ${expectedPosition}. miejsca.`
-          : `Pozycja w lidze jest wyraznie ponizej oczekiwan. Jestesmy teraz na ${leaguePosition}. miejscu, a klub powinien trzymac poziom blizej ${expectedPosition}. miejsca.`;
+          ? `Miejsce, ktore aktualnie zajmujemy w tabeli, jest lekko ponizej oczekiwan klubu. Wydaje mi sie, ze przy potencjale tej kadry powinnismy realnie walczyc o wyzsza pozycje.`
+          : `Miejsce, ktore aktualnie zajmujemy w tabeli, jest zdecydowanie ponizej oczekiwan klubu. Wydaje mi sie, ze przy potencjale tej kadry powinnismy realnie walczyc o wyzsza pozycje.`;
 
   return [
-    'Trenerze,',
+    'Szanowny Panie Trenerze,',
     '',
-    opening,
+    'Chcialbym odniesc sie do obecnej sytuacji sportowej zespolu.',
     '',
-    overallLine,
     positionLine,
-    formLine,
-    youthLine,
-    financeLine,
     '',
-    pressureLine,
+    tone === 'NEGATIVE'
+      ? 'Nie oczekuje naglych zmian decyzji, ale oczekujemy wyraznej poprawy w najblizszych tygodniach. Wazne bedzie ustabilizowanie formy, lepsze wykorzystanie zawodnikow oraz wieksza konsekwencja w grze.'
+      : tone === 'MIXED'
+        ? 'Widze pewne obiecujace sygnaly, ale oczekuje wiekszej konsekwencji w kolejnych tygodniach. Stabilizacja formy i lepsze wykorzystanie potencjalu kadry to priorytety na ten okres.'
+        : 'Widze wyrazne przelozenie wysilku na wyniki. Kontynuujmy w tym kierunku i dbajmy o utrzymanie tego poziomu gry.',
     '',
-    relationLine,
-    boardLine,
+    tone !== 'POSITIVE'
+      ? 'Prosze o przygotowanie krotkiej oceny sytuacji oraz planu dzialan, ktory pozwoli nam wrocic na poziom zgodny z zalozeniami zarzadu klubu.'
+      : 'Dziekuje za dobrze wykonana prace i czekam na dalsze efekty w nadchodzacych kolejkach.',
     '',
+    'Z powazaniem,',
     `${director.firstName} ${director.lastName}`,
-    `Dyrektor sportowy ${club.name}`,
+    `Dyrektor Sportowy, ${club.name}`,
   ].join('\n');
 };
 
