@@ -437,6 +437,7 @@ export interface MailMessage {
       clubName: string;
       position: PlayerPosition;
       rating: number;
+      overallRating?: number;
       shirt: string;
       shirtSecondary?: string;
       shorts: string;

@@ -157,6 +157,7 @@ export const LeagueTeamOfWeekService = {
         clubName: candidate.club.name,
         position: candidate.player.position,
         rating: candidate.rating,
+        overallRating: candidate.player.overallRating,
         shirt: kit.shirt,
         shirtSecondary: kit.shirtSecondary,
         shorts: kit.shorts,
