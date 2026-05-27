@@ -3,6 +3,7 @@ import { MailMessage, MailType, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
 import { KitPreview } from '../common/KitPreview';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
 
 interface MailDetailsModalProps {
   mail: MailMessage;
@@ -12,35 +13,82 @@ interface MailDetailsModalProps {
 const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
   if (mail.metadata?.type !== 'TEAM_OF_WEEK') return null;
 
+  const getLeagueDisplayName = (leagueId: string, fallback: string): string => {
+    switch (leagueId) {
+      case 'L_PL_1':
+        return 'Ekstraklasa';
+      case 'L_PL_2':
+        return '1. Liga';
+      case 'L_PL_3':
+        return '2. Liga';
+      case 'L_PL_4':
+        return 'Liga Regionalna';
+      default:
+        return fallback
+          .replace(/Polish League 1/gi, 'Ekstraklasa')
+          .replace(/Polish League 2/gi, '1. Liga')
+          .replace(/Polish League 3/gi, '2. Liga')
+          .replace(/Regional League/gi, 'Liga Regionalna');
+    }
+  };
+
+  const getRoleLabel = (role: string): string => {
+    switch (role) {
+      case 'GK':
+        return 'BR';
+      case 'DEF':
+        return 'OBR';
+      case 'MID':
+        return 'POM';
+      case 'FWD':
+        return 'NAP';
+      default:
+        return role;
+    }
+  };
+
+  const getShortPlayerName = (fullName: string): string => {
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length < 2) return fullName;
+    return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+  };
+
+  const leagueName = getLeagueDisplayName(mail.metadata.leagueId, mail.metadata.leagueName);
   const rows = [
     mail.metadata.team.filter(player => player.role === 'FWD'),
     mail.metadata.team.filter(player => player.role === 'MID'),
     mail.metadata.team.filter(player => player.role === 'DEF'),
     mail.metadata.team.filter(player => player.role === 'GK'),
   ];
+  const orderedTeam = rows.flat();
 
   return (
-    <div className="space-y-7">
-      <p className="whitespace-pre-wrap text-base font-medium leading-relaxed text-slate-300 opacity-90">
-        {mail.body}
-      </p>
+    <div className="grid h-full min-h-0 grid-cols-[minmax(250px,0.78fr)_minmax(380px,1.05fr)_minmax(230px,0.62fr)] gap-5">
+      <div className="min-h-0 rounded-[24px] border border-white/10 bg-black/20 p-5">
+        <div className="mb-4 text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">
+          Treść informacji
+        </div>
+        <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-300 opacity-90">
+          {mail.body}
+        </p>
+      </div>
 
-      <div className="rounded-[28px] border border-emerald-300/20 bg-emerald-950/30 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-        <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="rounded-[24px] border border-emerald-300/20 bg-emerald-950/30 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <div className="mb-3 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-black italic uppercase tracking-tighter text-emerald-300">
+            <p className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">
               Jedenastka {mail.metadata.roundNumber}. tygodnia
             </p>
-            <h4 className="text-[24px] font-black italic uppercase tracking-tighter text-white">
-              {mail.metadata.leagueName} / 4-4-2
+            <h4 className="text-[20px] font-black italic uppercase tracking-tighter text-white">
+              {leagueName} / 4-4-2
             </h4>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-[12px] font-black italic uppercase tracking-tighter text-white">
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-[11px] font-black italic uppercase tracking-tighter text-white">
             Gazeta Sportowa
           </div>
         </div>
 
-        <div className="relative mx-auto aspect-[2/3.05] w-full max-w-[620px] overflow-hidden bg-[#0e5a20] shadow-[0_35px_90px_rgba(0,0,0,0.65)]">
+        <div className="relative mx-auto aspect-[2/3.05] h-[min(54vh,560px)] max-h-[560px] overflow-hidden bg-[#0e5a20] shadow-[0_35px_90px_rgba(0,0,0,0.65)]">
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.04)_50%,transparent_50%)] bg-[length:80px_80px]" />
           <svg className="absolute inset-0 h-full w-full opacity-35" viewBox="0 0 100 150" fill="none" stroke="white" strokeWidth="0.8">
             <rect x="2" y="2" width="96" height="146" />
@@ -58,7 +106,7 @@ const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
           {mail.metadata.team.map(player => (
             <div
               key={player.playerId}
-              className="absolute z-10 flex w-[118px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
+              className="absolute z-10 flex w-[104px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
               style={{ left: `${player.x * 100}%`, top: `${player.y * 100}%` }}
             >
               <div className="relative">
@@ -68,33 +116,60 @@ const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
                   shorts={player.shorts}
                   socks={player.socks}
                   pattern={player.pattern}
-                  className="h-16 w-16"
+                  className="h-12 w-12"
                   label={player.rating.toFixed(1)}
                   labelColor={player.labelColor}
                 />
-                <div className="absolute -right-3 -top-2 rounded-full border border-white/30 bg-slate-950 px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter text-white">
-                  {player.role}
+                <div className="absolute -right-3 -top-2 rounded-full border border-white/30 bg-slate-950 px-1.5 py-0.5 text-[8px] font-black italic uppercase tracking-tighter text-white">
+                  {getRoleLabel(player.role)}
                 </div>
               </div>
-              <div className="mt-1 w-full rounded-xl border border-black/30 bg-black/55 px-2 py-1 shadow-lg">
-                <p className="truncate text-[10px] font-black italic uppercase tracking-tighter text-white">{player.playerName}</p>
-                <p className="truncate text-[8px] font-black italic uppercase tracking-tighter text-emerald-200">{player.clubName}</p>
+              <div className="mt-0.5 w-full rounded-xl border border-black/30 bg-black/55 px-2 py-1 shadow-lg">
+                <p className="truncate text-[8px] font-black italic uppercase tracking-tighter text-white">{getShortPlayerName(player.playerName)}</p>
+                <div className="mt-0.5 flex items-center justify-center gap-1">
+                  {getClubLogo(player.clubId) && (
+                    <img src={getClubLogo(player.clubId)!} alt={player.clubName} className="h-3.5 w-3.5 shrink-0 object-contain" />
+                  )}
+                  <p className="truncate text-[7px] font-black italic uppercase tracking-tighter text-emerald-200">{player.clubName}</p>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-4">
-          {rows.map((row, index) => (
-            <div key={index} className="rounded-2xl border border-white/10 bg-black/25 p-3">
-              {row.map(player => (
-                <div key={player.playerId} className="flex items-center justify-between gap-2 py-1">
-                  <span className="truncate text-[10px] font-black italic uppercase tracking-tighter text-slate-200">{player.playerName}</span>
-                  <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">{player.rating.toFixed(1)}</span>
+      <div className="min-h-0 rounded-[24px] border border-white/10 bg-black/25 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">Pierwsza 11</span>
+          <span className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Oceny</span>
+        </div>
+        <div className="flex min-h-0 flex-col gap-1.5">
+          {orderedTeam.map(player => {
+            const logo = getClubLogo(player.clubId);
+            return (
+              <div key={player.playerId} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/55 px-2.5 py-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-black/35">
+                  {logo ? (
+                    <img src={logo} alt={player.clubName} className="h-6 w-6 object-contain" />
+                  ) : (
+                    <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{getRoleLabel(player.role)}</span>
+                  )}
                 </div>
-              ))}
-            </div>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[7px] font-black italic uppercase tracking-tighter text-slate-300">
+                      {getRoleLabel(player.role)}
+                    </span>
+                    <span className="truncate text-[9px] font-black italic uppercase tracking-tighter text-white">
+                      {getShortPlayerName(player.playerName)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[7px] font-black italic uppercase tracking-tighter text-slate-500">{player.clubName}</p>
+                </div>
+                <span className="shrink-0 text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">{player.rating.toFixed(1)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -116,6 +191,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   } = useGame();
 
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
+  const isTeamOfWeek = mail.metadata?.type === 'TEAM_OF_WEEK';
 
   const userClub = clubs.find(c => c.id === userTeamId);
   const activeDirectorObjective = userClub?.sportingDirectorObjective;
@@ -163,10 +239,10 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-6 animate-fade-in">
       <div
         className={`${
-          mail.type === MailType.SCOUT || mail.metadata?.type === 'TEAM_OF_WEEK' ? 'max-w-[1693px] w-[88vw] h-[86vh]' : 'max-w-2xl max-h-[90vh]'
+          mail.type === MailType.SCOUT ? 'max-w-[1693px] w-[88vw] h-[86vh]' : isTeamOfWeek ? 'max-w-[1500px] w-[82vw] h-[82vh]' : 'max-w-2xl max-h-[90vh]'
         } w-full overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/60 shadow-[0_50px_100px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col relative`}
       >
-        <div className="shrink-0 border-b border-white/5 bg-white/5 p-8 flex items-center justify-between">
+        <div className={`${isTeamOfWeek ? 'p-5' : 'p-8'} shrink-0 border-b border-white/5 bg-white/5 flex items-center justify-between`}>
           <div className="flex items-center gap-6">
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/5 bg-black/40 text-sm font-black uppercase tracking-widest text-slate-200 shadow-inner">
               {getAvatarIcon(mail.type)}
@@ -189,9 +265,9 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           </button>
         </div>
 
-        <div className="custom-scrollbar flex-1 overflow-y-auto p-10">
+        <div className={`custom-scrollbar flex-1 min-h-0 ${isTeamOfWeek ? 'overflow-hidden p-6' : 'overflow-y-auto p-10'}`}>
           {mail.type !== MailType.SCOUT && (
-            <div className="mb-10">
+            <div className={isTeamOfWeek ? 'mb-4' : 'mb-10'}>
               <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-slate-600">Temat:</span>
               <h3 className="text-[10px] font-black italic uppercase tracking-tight leading-relaxed text-white">
                 {mail.subject}
@@ -244,7 +320,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-white/5 bg-black/20 p-8 flex items-center justify-between">
+        <div className={`${isTeamOfWeek ? 'p-5' : 'p-8'} shrink-0 border-t border-white/5 bg-black/20 flex items-center justify-between`}>
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Wyslano:</span>
             <span className="text-[10px] font-black uppercase text-slate-400">
@@ -388,7 +464,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
 
             <button
               onClick={onClose}
-              className="rounded-2xl bg-white px-10 py-4 text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95"
+              className={`${isTeamOfWeek ? 'px-8 py-3' : 'px-10 py-4'} rounded-2xl bg-white text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95`}
             >
               Zamknij wiadomosc
             </button>

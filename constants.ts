@@ -147,10 +147,10 @@ export const START_DATE = new Date('2025-07-01');
 
 // 1. League Definitions
 export const STATIC_LEAGUES: League[] = [
-  { id: 'L_PL_1', name: 'Polish League 1', level: LeagueLevel.TIER_1, teamIds: [] },
-  { id: 'L_PL_2', name: 'Polish League 2', level: LeagueLevel.TIER_2, teamIds: [] },
-  { id: 'L_PL_3', name: 'Polish League 3', level: LeagueLevel.TIER_3, teamIds: [] },
-  { id: 'L_PL_4', name: 'Regional League', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_1', name: 'Ekstraklasa', level: LeagueLevel.TIER_1, teamIds: [] },
+  { id: 'L_PL_2', name: '1. Liga', level: LeagueLevel.TIER_2, teamIds: [] },
+  { id: 'L_PL_3', name: '2. Liga', level: LeagueLevel.TIER_3, teamIds: [] },
+  { id: 'L_PL_4', name: 'Liga Regionalna', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
   { id: 'L_CL', name: 'UEFA Champions League', level: LeagueLevel.EUROPEAN, teamIds: [] },
   { id: 'L_EL', name: 'UEFA Europa League', level: LeagueLevel.EUROPEAN, teamIds: [] },
   { id: 'L_CONF', name: 'UEFA Conference League', level: LeagueLevel.EUROPEAN, teamIds: [] },
