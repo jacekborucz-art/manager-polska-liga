@@ -40,6 +40,15 @@ export const KitSelectionService = {
     return Math.sqrt((((512 + rmean) * r * r) >> 8) + 4 * g * g + (((767 - rmean) * b * b) >> 8));
   },
 
+  getKitClashScore: (
+    kitA: { primary: string; shirtSecondary?: string; secondary: string },
+    kitB: { primary: string; shirtSecondary?: string; secondary: string }
+  ): number => {
+    const colorsA = [kitA.primary, kitA.shirtSecondary, kitA.secondary].filter(Boolean) as string[];
+    const colorsB = [kitB.primary, kitB.shirtSecondary, kitB.secondary].filter(Boolean) as string[];
+    return Math.min(...colorsA.flatMap(a => colorsB.map(b => KitSelectionService.getColorDistance(a, b))));
+  },
+
   /**
    * Determines if a color is light or dark for text contrast.
    */
@@ -62,13 +71,16 @@ export const KitSelectionService = {
     let maxScore = -1;
 
     for (const opt of awayOptions) {
-      const d1 = KitSelectionService.getColorDistance(opt.shirt, hKit.shirt);
-      const d2 = KitSelectionService.getColorDistance(opt.shirt, hKit.shorts);
-      const d3 = KitSelectionService.getColorDistance(opt.shorts, hKit.shirt);
-      const d4 = KitSelectionService.getColorDistance(opt.shorts, hKit.shorts);
-      const d5 = opt.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirtSecondary, hKit.shirt) : d1;
-      const d6 = hKit.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirt, hKit.shirtSecondary) : d1;
-      const score = Math.min(d1, d2, d3, d4, d5, d6) + (opt.id === 'away' ? 40 : 0) + (opt.id === 'third' ? 20 : 0);
+      const shirtDistance = KitSelectionService.getColorDistance(opt.shirt, hKit.shirt);
+      const accentDistance = Math.min(
+        opt.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirtSecondary, hKit.shirt) : shirtDistance,
+        hKit.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirt, hKit.shirtSecondary) : shirtDistance
+      );
+      const shortsDistance = Math.min(
+        KitSelectionService.getColorDistance(opt.shorts, hKit.shirt),
+        KitSelectionService.getColorDistance(opt.shirt, hKit.shorts)
+      );
+      const score = shirtDistance * 1.8 + accentDistance * 0.55 + shortsDistance * 0.25;
       if (score > maxScore) {
         maxScore = score;
         bestOption = opt;

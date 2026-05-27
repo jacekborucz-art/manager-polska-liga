@@ -151,17 +151,18 @@ function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
 function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
   const homeVariants = getClubKitVariantsForClub(homeClub);
   const awayVariants = getClubKitVariantsForClub(awayClub);
-  const CLASH_THRESHOLD = 350;
-  let bestHomeIdx = 0, bestAwayIdx = 0, maxScore = -1;
-  for (let h = 0; h < homeVariants.length; h++) {
-    for (let a = 0; a < awayVariants.length; a++) {
-      const dist = kitEffectiveDistance(homeVariants[h], awayVariants[a]);
-      const score = dist + (h === 0 ? 100 : 0) + (a === 0 ? 50 : 0);
-      if (score > maxScore) { maxScore = score; bestHomeIdx = h; bestAwayIdx = a; }
+  const hKit = homeVariants[0];
+  let bestAwayIdx = 0;
+  let maxDistance = -1;
+
+  for (let a = 0; a < awayVariants.length; a++) {
+    const distance = kitEffectiveDistance(hKit, awayVariants[a]);
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      bestAwayIdx = a;
     }
-    if (h === 0 && kitEffectiveDistance(homeVariants[0], awayVariants[bestAwayIdx]) > CLASH_THRESHOLD) break;
   }
-  const hKit = homeVariants[bestHomeIdx];
+
   const aKit = awayVariants[bestAwayIdx];
 
   return {

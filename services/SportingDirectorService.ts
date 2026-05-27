@@ -1050,27 +1050,27 @@ const buildReviewBody = (params: {
       : leaguePosition === expectedPosition
         ? `Pozycja w lidze odpowiada obecnym oczekiwaniom klubu. Jestesmy teraz na ${leaguePosition}. miejscu.`
         : leaguePosition === expectedPosition + 1
-          ? `Miejsce, ktore aktualnie zajmujemy w tabeli, jest lekko ponizej oczekiwan klubu. Wydaje mi sie, ze przy potencjale tej kadry powinnismy realnie walczyc o wyzsza pozycje.`
-          : `Miejsce, ktore aktualnie zajmujemy w tabeli, jest zdecydowanie ponizej oczekiwan klubu. Wydaje mi sie, ze przy potencjale tej kadry powinnismy realnie walczyc o wyzsza pozycje.`;
+          ? `Miejsce, które aktualnie zajmujemy w tabeli, jest lekko poniżej oczekiwań klubu. Wydaje mi się, że przy potencjale tej kadry powinniśmy realnie walczyć o wyższą pozycję.`
+          : `Miejsce, które aktualnie zajmujemy w tabeli, jest zdecydowanie poniżej oczekiwań klubu. Wydaje mi się, że przy potencjale tej kadry powinniśmy realnie walczyć o wyższą pozycję.`;
 
   return [
     'Szanowny Panie Trenerze,',
     '',
-    'Chcialbym odniesc sie do obecnej sytuacji sportowej zespolu.',
+    'Chciałbym odnieść się do obecnej sytuacji sportowej zespołu.',
     '',
     positionLine,
     '',
     tone === 'NEGATIVE'
-      ? 'Nie oczekuje naglych zmian decyzji, ale oczekujemy wyraznej poprawy w najblizszych tygodniach. Wazne bedzie ustabilizowanie formy, lepsze wykorzystanie zawodnikow oraz wieksza konsekwencja w grze.'
+      ? 'Nie oczekuję nagłych zmian decyzji, ale oczekujemy wyraźnej poprawy w najbliższych tygodniach. Ważne będzie ustabilizowanie formy, lepsze wykorzystanie zawodników oraz większa konsekwencja w grze.'
       : tone === 'MIXED'
-        ? 'Widze pewne obiecujace sygnaly, ale oczekuje wiekszej konsekwencji w kolejnych tygodniach. Stabilizacja formy i lepsze wykorzystanie potencjalu kadry to priorytety na ten okres.'
-        : 'Widze wyrazne przelozenie wysilku na wyniki. Kontynuujmy w tym kierunku i dbajmy o utrzymanie tego poziomu gry.',
+        ? 'Widzę pewne obiecujące sygnały, ale oczekuję większej konsekwencji w kolejnych tygodniach. Stabilizacja formy i lepsze wykorzystanie potencjału kadry to priorytety na ten okres.'
+        : 'Widzę wyraźne przełożenie wysiłku na wyniki. Kontynuujmy w tym kierunku i dbajmy o utrzymanie tego poziomu gry.',
     '',
     tone !== 'POSITIVE'
-      ? 'Prosze o przygotowanie krotkiej oceny sytuacji oraz planu dzialan, ktory pozwoli nam wrocic na poziom zgodny z zalozeniami zarzadu klubu.'
-      : 'Dziekuje za dobrze wykonana prace i czekam na dalsze efekty w nadchodzacych kolejkach.',
+      ? 'Proszę o przygotowanie krótkiej oceny sytuacji oraz planu działań, który pozwoli nam wrócić na poziom zgodny z założeniami zarządu klubu.'
+      : 'Dziękuję za dobrze wykonaną pracę i czekam na dalsze efekty w nadchodzących kolejkach.',
     '',
-    'Z powazaniem,',
+    'Z poważaniem,',
     `${director.firstName} ${director.lastName}`,
     `Dyrektor Sportowy, ${club.name}`,
   ].join('\n');

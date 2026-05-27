@@ -3,6 +3,34 @@ import { Club, ClubKit, ClubKitPattern } from '../types';
 const FALLBACK_COLORS = ['#111111', '#ffffff', '#ff0000', '#facc15'];
 const DEFAULT_KIT_PATTERN: ClubKitPattern = 'solid';
 
+const inferDefaultHomePattern = (club: Club): ClubKitPattern => {
+  const name = club.name.toLowerCase();
+  if (
+    name.includes('barcelona') ||
+    name.includes('inter mediolan') ||
+    name.includes('inter milan') ||
+    name.includes('ac milan') ||
+    name.includes('atletico') ||
+    name.includes('juventus') ||
+    name.includes('psv') ||
+    name.includes('feyenoord') ||
+    name.includes('athletic bilbao') ||
+    name.includes('real sociedad')
+  ) {
+    return 'vertical_stripes';
+  }
+
+  if (
+    name.includes('celtic') ||
+    name.includes('sporting cp') ||
+    name.includes('sporting lizbona')
+  ) {
+    return 'horizontal_stripes';
+  }
+
+  return DEFAULT_KIT_PATTERN;
+};
+
 export const normalizeKitColor = (value: string | undefined, fallback: string): string => {
   if (!value) return fallback;
   const trimmed = value.trim();
@@ -69,6 +97,7 @@ export const createDefaultClubKits = (colorsHex: string[] = []): ClubKit[] => {
 
 export const getClubKits = (club: Club): ClubKit[] => {
   const fallback = createDefaultClubKits(club.colorsHex);
+  fallback[0] = { ...fallback[0], pattern: inferDefaultHomePattern(club) };
   const source = club.kits && club.kits.length >= 2 ? club.kits : fallback;
 
   return [0, 1, 2, 3].map(index => {
@@ -81,7 +110,7 @@ export const getClubKits = (club: Club): ClubKit[] => {
       shirtSecondary: normalizeKitColor(kit?.shirtSecondary, base.shirtSecondary ?? base.shorts),
       shorts: normalizeKitColor(kit?.shorts, base.shorts),
       socks: normalizeKitColor(kit?.socks, base.socks),
-      pattern: normalizeKitPattern(kit?.pattern),
+      pattern: kit?.pattern ? normalizeKitPattern(kit.pattern) : base.pattern,
       isActive: index < 2 ? true : Boolean(kit?.isActive),
     };
   });

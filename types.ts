@@ -1993,6 +1993,22 @@ export interface MatchSummary {
   awayPlayers: PlayerPerformance[];
   timeline: MatchSummaryEvent[];
   attendance?: number;
+  kits?: {
+    home: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+    away: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+  };
   // KO Info
   homePenaltyScore?: number;
   awayPenaltyScore?: number;

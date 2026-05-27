@@ -3092,7 +3092,8 @@ const summary: MatchSummary = {
       awayStats: finalAwayStats,
       homePlayers: calculateUnitRatings(ctx.homePlayers, playedIdsHome, 'HOME', matchState.awayScore, matchState.liveStats.away.shotsOnTarget),
       awayPlayers: calculateUnitRatings(ctx.awayPlayers, playedIdsAway, 'AWAY', matchState.homeScore, matchState.liveStats.home.shotsOnTarget),
-      timeline
+      timeline,
+      kits: kitColors
     };
 
     // TUTAJ WSTAW TEN KOD - Mapowanie ocen zawodników

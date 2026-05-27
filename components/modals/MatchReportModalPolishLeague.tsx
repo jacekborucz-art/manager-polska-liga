@@ -4,7 +4,7 @@ import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { PlayerPosition, Player, ClubKitPattern } from '../../types';
 import { TacticRepository } from '../../resources/tactics_db';
-import { KitSelectionService } from '../../services/KitSelectionService';
+import { KitSelection, KitSelectionService } from '../../services/KitSelectionService';
 import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
@@ -33,6 +33,20 @@ const pickGoalkeeperColor = (blocked: string[]): string => {
   }));
   scored.sort((a, b) => b.minDist - a.minDist);
   return scored[0].color;
+};
+
+const MIN_REPORT_KIT_DISTANCE = 120;
+
+const resolveReportKits = (
+  savedKits: KitSelection | undefined,
+  homeClub: Parameters<typeof KitSelectionService.selectOptimalKits>[0],
+  awayClub: Parameters<typeof KitSelectionService.selectOptimalKits>[1]
+): KitSelection => {
+  const recalculated = KitSelectionService.selectOptimalKits(homeClub, awayClub);
+  if (!savedKits) return recalculated;
+  return KitSelectionService.getKitClashScore(savedKits.home, savedKits.away) < MIN_REPORT_KIT_DISTANCE
+    ? recalculated
+    : savedKits;
 };
 
 const isColorDark = (hex: string): boolean => {
@@ -223,7 +237,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
 
   if (!matchId || !match || !homeClub || !awayClub) return null;
 
-  const kits = match.kits ?? KitSelectionService.selectOptimalKits(homeClub, awayClub);
+  const kits = resolveReportKits(match.kits, homeClub, awayClub);
 
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + czerwone kartki + niestrzelone karne)
   const buildEvents = (teamId: string) => {

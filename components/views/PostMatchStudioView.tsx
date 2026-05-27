@@ -48,7 +48,10 @@ export const PostMatchStudioView: React.FC = () => {
 
   const motm = useMemo(() => PostMatchCommentSelector.calculateMOTM(lastMatchSummary), [lastMatchSummary]);
   const expertComment = useMemo(() => PostMatchCommentSelector.selectComment(lastMatchSummary), [lastMatchSummary]);
-  const kitSelection = useMemo(() => KitSelectionService.selectOptimalKits(homeClub, awayClub), [homeClub, awayClub]);
+  const kitSelection = useMemo(
+    () => lastMatchSummary.kits ?? KitSelectionService.selectOptimalKits(homeClub, awayClub),
+    [lastMatchSummary.kits, homeClub, awayClub]
+  );
 
   const currentRoundNumber = useMemo(() => {
     const schedule = leagueSchedules[1];
