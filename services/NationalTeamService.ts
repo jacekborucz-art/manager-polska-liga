@@ -68,12 +68,16 @@ const calcPolishNTScore = (player: Player): number => {
 type TeamSelectionRule = {
   maxOverall?: number;
   starThreshold?: number;
+  minStars?: number;
   maxStars?: number;
   fallbackMaxOverall?: number;
 };
 
 const TEAM_SELECTION_RULES: Record<string, TeamSelectionRule> = {
-  Liechtenstein: { maxOverall: 60, fallbackMaxOverall: 60 },
+  Liechtenstein: { maxOverall: 55, starThreshold: 55, maxStars: 0, fallbackMaxOverall: 55 },
+  'San Marino': { maxOverall: 52, starThreshold: 52, maxStars: 0, fallbackMaxOverall: 52 },
+  Luksemburg: { maxOverall: 55, starThreshold: 55, maxStars: 1 },
+  Norwegia: { minStars: 3, maxStars: 5 },
   Walia: { maxOverall: 75, starThreshold: 73, maxStars: 2 },
   Irlandia: { maxOverall: 75, starThreshold: 73, maxStars: 2 },
   'Irlandia Północna': { maxOverall: 69, starThreshold: 68, maxStars: 1 },
@@ -125,8 +129,30 @@ const getCoachStarAllowance = (coachExp: number): number => {
   return 1;
 };
 
-const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name'>, coachExp: number = 50): number =>
-  getTeamRule(team)?.maxStars ?? getCoachStarAllowance(coachExp);
+const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name'>, coachExp: number = 50): number => {
+  const rule = getTeamRule(team);
+  if (!rule) return getCoachStarAllowance(coachExp);
+
+  if (rule.minStars !== undefined) {
+    const minStars = rule.minStars;
+    const maxStars = rule.maxStars ?? minStars;
+    if (coachExp >= 75) return maxStars;
+    if (coachExp >= 40) return Math.min(maxStars, minStars + 1);
+    return minStars;
+  }
+
+  return rule.maxStars ?? getCoachStarAllowance(coachExp);
+};
+
+const getSyntheticRegionProfile = (
+  teamName: string,
+  region: Region
+): { baseOffset: number; starChance: number } | undefined => {
+  if (teamName === 'Luksemburg') return { baseOffset: -4, starChance: 0.04 };
+  if (teamName === 'Liechtenstein') return { baseOffset: -12, starChance: 0.008 };
+  if (teamName === 'San Marino') return { baseOffset: -18, starChance: 0.003 };
+  return REGION_PROFILE[region];
+};
 
 const isEligibleForTeam = (
   team: NationalTeam,
@@ -311,7 +337,7 @@ export const NationalTeamService = {
     else if (teamReputation >= 7)  tier = 3;
     else tier = 4;
 
-    const regionProfile = REGION_PROFILE[region];
+    const regionProfile = getSyntheticRegionProfile(teamName, region);
     const buildCandidate = () => {
       const age = 18 + Math.floor(Math.random() * 16); // 18-33 lat
       const genData = PlayerAttributesGenerator.generateAttributes(position, tier, teamReputation, age, tier <= 2, undefined, regionProfile);
