@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, ClubManagement, ClubKit } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, Club, ClubManagement, ClubKit } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
@@ -115,7 +115,9 @@ const MANAGEMENT_ROLE_LABELS: Record<string, string> = {
   academyDirector:   'Dyrektor akademii',
 };
 
-const MANAGEMENT_KEYS: (keyof ClubManagement)[] = ['owner', 'ceo', 'sportingDirector', 'cfo', 'coo', 'marketingDirector', 'academyDirector'];
+const MANAGEMENT_KEYS: (keyof ClubManagement)[] = ['owner', 'ceo', 'cfo', 'coo', 'marketingDirector', 'academyDirector'];
+const ZARZAD_PERSON_KEYS = ['owner', 'ceo', 'sportingDirector', 'cfo', 'coo', 'marketingDirector', 'academyDirector'] as const;
+type ZarzadPersonKey = typeof ZARZAD_PERSON_KEYS[number];
 
 const KIT_PATTERN_OPTIONS: { value: NonNullable<ClubKit['pattern']>; label: string }[] = [
   { value: 'solid',              label: 'Zwykła' },
@@ -131,6 +133,21 @@ const MANAGEMENT_ATTR_LABELS: Record<string, { key: string; label: string }[]> =
   coo:               [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'organizacja', label: 'Organizacja' }, { key: 'zarzadzanieInfrastruktura', label: 'Zarządzanie infrastrukturą' }, { key: 'efektywnoscKosztowa', label: 'Efektywność kosztowa' }, { key: 'logistykaIPlanowanie', label: 'Logistyka i planowanie' }],
   marketingDirector: [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'zdolnosciMarketingowe', label: 'Zdolności marketingowe' }],
   academyDirector:   [{ key: 'doswiadczenie', label: 'Doświadczenie' }, { key: 'rozwojMlodziezy', label: 'Rozwój młodzieży' }, { key: 'zarzadzanie', label: 'Zarządzanie' }],
+};
+
+const splitLegacyManagement = (management: unknown): { management?: ClubManagement; sportingDirector?: unknown } => {
+  if (!management || typeof management !== 'object' || Array.isArray(management)) return {};
+  const { sportingDirector, ...managementWithoutSportingDirector } = management as Record<string, unknown>;
+  return {
+    management: managementWithoutSportingDirector as ClubManagement,
+    sportingDirector,
+  };
+};
+
+const getZarzadPerson = (club: Club | undefined, key: string): any => {
+  if (!club) return null;
+  if (key === 'sportingDirector') return club.sportingDirector;
+  return (club.management as Record<string, any> | undefined)?.[key];
 };
 
 const LEAGUE_FILTER_BTNS = [
@@ -380,11 +397,17 @@ export const EditorView: React.FC = () => {
           setZarzadImportMsg('Błąd: plik nie zawiera wymaganych danych.');
           return;
         }
+        const { management, sportingDirector: legacySportingDirector } = splitLegacyManagement(raw.management);
+        const importedSportingDirector = raw.sportingDirector ?? legacySportingDirector;
         let found = false;
         setClubs(prev => prev.map(c => {
           if (c.id !== raw.clubId) return c;
           found = true;
-          return { ...c, management: { ...c.management, ...raw.management } as ClubManagement };
+          return {
+            ...c,
+            management: { ...c.management, ...management } as ClubManagement,
+            sportingDirector: importedSportingDirector ?? c.sportingDirector,
+          };
         }));
         setZarzadImportMsg(found ? `Zarząd klubu "${raw.clubName ?? raw.clubId}" zaktualizowany.` : `Błąd: klub o ID "${raw.clubId}" nie znaleziony.`);
       } catch {
@@ -411,7 +434,12 @@ export const EditorView: React.FC = () => {
 
   const handleExportZarzad = () => {
     if (!zarzadClub) return;
-    const data = { clubId: zarzadClub.id, clubName: zarzadClub.name, management: zarzadClub.management ?? null };
+    const data = {
+      clubId: zarzadClub.id,
+      clubName: zarzadClub.name,
+      management: zarzadClub.management ?? null,
+      sportingDirector: zarzadClub.sportingDirector ?? null,
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -461,6 +489,7 @@ export const EditorView: React.FC = () => {
         clubId: club.id,
         clubName: club.name,
         management: club.management ?? null,
+        sportingDirector: club.sportingDirector ?? null,
       })),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1008,10 +1037,9 @@ export const EditorView: React.FC = () => {
   };
 
   const handleZarzadPersonSelect = (key: string) => {
-    const mgmt = zarzadClub?.management as Record<string, any> | undefined;
-    const person = mgmt?.[key];
+    const person = getZarzadPerson(zarzadClub, key);
     if (!person) return;
-    setZarzadPersonKey(key);
+    setZarzadPersonKey(key as ZarzadPersonKey);
     setEditZarzadFirstName(person.firstName ?? '');
     setEditZarzadLastName(person.lastName ?? '');
     setEditZarzadAge(String(person.age ?? ''));
@@ -1025,9 +1053,11 @@ export const EditorView: React.FC = () => {
     if (!zarzadClubId || !zarzadPersonKey) return;
     setClubs(prev => prev.map(c => {
       if (c.id !== zarzadClubId) return c;
-      const mgmt = c.management as Record<string, any> | undefined;
-      const oldPerson = mgmt?.[zarzadPersonKey] ?? {};
+      const oldPerson = getZarzadPerson(c, zarzadPersonKey) ?? {};
       const updatedPerson = { ...oldPerson, firstName: editZarzadFirstName, lastName: editZarzadLastName, age: parseInt(editZarzadAge, 10) || oldPerson.age, ...editZarzadAttrs };
+      if (zarzadPersonKey === 'sportingDirector') {
+        return { ...c, sportingDirector: updatedPerson };
+      }
       return { ...c, management: { ...c.management, [zarzadPersonKey]: updatedPerson } as ClubManagement };
     }));
     showGameNotification({ title: 'Zapisano', message: `${editZarzadFirstName} ${editZarzadLastName} — dane zaktualizowane.`, tone: 'success' });
@@ -2944,8 +2974,8 @@ export const EditorView: React.FC = () => {
                       {zarzadImportMsg}
                     </div>
                   )}
-                  {MANAGEMENT_KEYS.filter(k => !!(zarzadClub?.management as Record<string, any> | undefined)?.[k]).map(k => {
-                    const person = (zarzadClub?.management as Record<string, any>)[k];
+                  {ZARZAD_PERSON_KEYS.filter(k => !!getZarzadPerson(zarzadClub, k)).map(k => {
+                    const person = getZarzadPerson(zarzadClub, k);
                     return (
                       <button
                         key={k}

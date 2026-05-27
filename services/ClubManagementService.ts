@@ -8,8 +8,6 @@ import {
   ClubMarketingDirector,
   ClubOwner,
   Region,
-  SportingDirector,
-  SportingDirectorPersonality,
 } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { pickNationalityForRegion } from './NationalityService';
@@ -57,10 +55,6 @@ const FOREIGN_REGIONS: Region[] = [
   Region.IBERIA, Region.BENELUX, Region.SCANDINAVIA, Region.SWEDEN, Region.CZ_SK,
   Region.BALKANS, Region.TURKEY, Region.EX_USSR, Region.POLAND, Region.GREEK,
   Region.ROMANIA, Region.HUNGARIAN, Region.FINLAND, Region.BALTIC,
-];
-
-const PERSONALITIES: SportingDirectorPersonality[] = [
-  'CONTROLLER', 'VISIONARY', 'ACCOUNTANT', 'PARTNER', 'POLITICIAN', 'TALENT_HUNTER',
 ];
 
 const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v));
@@ -198,29 +192,6 @@ const generateCEO = (club: Club, nat: NatPair): ClubCEO => {
   };
 };
 
-const generateSportingDirector = (club: Club, nat: NatPair): SportingDirector => {
-  const name = NameGeneratorService.getRandomName(nat.region);
-  const personality = pickFrom(PERSONALITIES);
-  return {
-    id: buildId(club.id, 'SD', name.firstName, name.lastName),
-    firstName: name.firstName,
-    lastName: name.lastName,
-    age: seniorAge(37),
-    nationality: nat.region,
-    nationalityCountry: nat.country,
-    patience: biasedAttr(club.reputation),
-    control: biasedAttr(club.reputation),
-    flexibility: biasedAttr(club.reputation),
-    ambition: biasedAttr(club.reputation),
-    footballKnowledge: biasedAttr(club.reputation),
-    negotiation: biasedAttr(club.reputation),
-    developmentVision: biasedAttr(club.reputation),
-    financialDiscipline: biasedAttr(club.reputation),
-    relationshipWithManager: 50,
-    personality,
-  };
-};
-
 const generateCFO = (club: Club, nat: NatPair): ClubCFO => {
   const name = NameGeneratorService.getRandomName(nat.region);
   const doswiadczenie = biasedAttr(club.reputation);
@@ -314,8 +285,6 @@ export const ClubManagementService = {
       ? generateCEO(club, pickNationality(clubRegion))
       : undefined;
 
-    const sportingDirector = generateSportingDirector(club, pickNationality(clubRegion));
-
     const cfo = generateCFO(club, pickNationality(clubRegion));
     const coo = generateCOO(club, pickNationality(clubRegion));
     const marketingDirector = generateMarketingDirector(club, pickNationality(clubRegion));
@@ -328,7 +297,6 @@ export const ClubManagementService = {
     return {
       owner,
       ceo,
-      sportingDirector,
       cfo,
       coo,
       marketingDirector,
@@ -338,7 +306,14 @@ export const ClubManagementService = {
 
   generateForAllClubs(clubs: Club[]): Club[] {
     return clubs.map(club => {
-      if (club.management) return club;
+      if (club.management) {
+        const { sportingDirector: legacySportingDirector, ...management } = club.management as ClubManagement & { sportingDirector?: Club['sportingDirector'] };
+        return {
+          ...club,
+          sportingDirector: club.sportingDirector ?? legacySportingDirector,
+          management,
+        };
+      }
       const management = this.generateForClub(club);
       return { ...club, management, board: computeBoardFromManagement(management) };
     });

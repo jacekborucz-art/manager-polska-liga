@@ -191,6 +191,18 @@ function normalizeMessages(messages: unknown): any[] {
   }));
 }
 
+function normalizeClubManagementSource(club: any): any {
+  const management = club?.management;
+  if (!management || typeof management !== 'object' || Array.isArray(management)) return club;
+
+  const { sportingDirector: legacySportingDirector, ...managementWithoutSportingDirector } = management;
+  return {
+    ...club,
+    sportingDirector: club.sportingDirector ?? legacySportingDirector,
+    management: managementWithoutSportingDirector,
+  };
+}
+
 function getBoardSignatoryForRole(club: any, templateRole: string): { name: string; role: string } | null {
   const formatName = (person?: { firstName?: string; lastName?: string }): string | null =>
     person?.firstName && person?.lastName ? `${person.firstName} ${person.lastName}` : null;
@@ -204,7 +216,7 @@ function getBoardSignatoryForRole(club: any, templateRole: string): { name: stri
   }
 
   if (templateRole === 'Dyrektor Sportowy') {
-    const sportingDirectorName = formatName(club?.management?.sportingDirector);
+    const sportingDirectorName = formatName(club?.sportingDirector);
     if (sportingDirectorName) return { name: sportingDirectorName, role: 'Dyrektor Sportowy' };
   }
 
@@ -216,9 +228,10 @@ function getBoardSignatoryForRole(club: any, templateRole: string): { name: stri
   return null;
 }
 
-function migrateWelcomeMailSignatories(messages: any[], clubs: any[], userTeamId: string | null): any[] {
+export function migrateWelcomeMailSignatories(messages: any[], clubs: any[], userTeamId: string | null): any[] {
   const userClub = clubs.find((club: any) => club?.id === userTeamId);
   if (!userClub?.name) return messages;
+  const escapedClubName = String(userClub.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   const legacySignatures = [
     { name: 'Wojciech Marcin Jankowski', role: 'Prezes Zarządu' },
@@ -237,18 +250,20 @@ function migrateWelcomeMailSignatories(messages: any[], clubs: any[], userTeamId
     const legacy = legacySignatures.find(signature =>
       message.body.includes(`${signature.name}\n${signature.role}, ${userClub.name}`)
     );
-    if (!legacy) return message;
-
-    const signatory = getBoardSignatoryForRole(userClub, message.role) ?? getBoardSignatoryForRole(userClub, legacy.role);
+    const signatory = getBoardSignatoryForRole(userClub, message.role) ?? (legacy ? getBoardSignatoryForRole(userClub, legacy.role) : null);
     if (!signatory) return message;
+
+    const body = message.body.replace(
+      new RegExp(`Z poważaniem,\\n[^\\n]+\\n[^\\n]+, ${escapedClubName}`),
+      `Z poważaniem,\n${signatory.name}\n${signatory.role}, ${userClub.name}`
+    );
+
+    if (body === message.body && message.role === signatory.role) return message;
 
     return {
       ...message,
       role: signatory.role,
-      body: message.body.replace(
-        `${legacy.name}\n${legacy.role}, ${userClub.name}`,
-        `${signatory.name}\n${signatory.role}, ${userClub.name}`
-      ),
+      body,
     };
   });
 }
@@ -312,22 +327,25 @@ function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHisto
 
 function normalizeSaveState(data: SaveState): SaveState {
   const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
-  const normalizedClubs = (data.clubs || []).map((club: any) => ({
-    ...club,
-    rosterIds: asArray<string>(club.rosterIds),
-    stats: club.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-    budget: Number.isFinite(club.budget) ? club.budget : 0,
-    transferBudget: Number.isFinite(club.transferBudget) ? Math.max(0, club.transferBudget) : 0,
-    reserveBudget: Number.isFinite(club.reserveBudget)
-      ? Math.max(0, club.reserveBudget)
-      : FinanceService.calculateInitialReserveBudget(club.budget || 0, club.reputation || 1),
-    boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
-    boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
-    boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',
-    signingBonusPool: club.signingBonusPool ?? 0,
-    financeHistory: asArray(club.financeHistory),
-    stadiumExpansionProjects: asArray(club.stadiumExpansionProjects),
-  }));
+  const normalizedClubs = (data.clubs || []).map((rawClub: any) => {
+    const club = normalizeClubManagementSource(rawClub);
+    return {
+      ...club,
+      rosterIds: asArray<string>(club.rosterIds),
+      stats: club.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+      budget: Number.isFinite(club.budget) ? club.budget : 0,
+      transferBudget: Number.isFinite(club.transferBudget) ? Math.max(0, club.transferBudget) : 0,
+      reserveBudget: Number.isFinite(club.reserveBudget)
+        ? Math.max(0, club.reserveBudget)
+        : FinanceService.calculateInitialReserveBudget(club.budget || 0, club.reputation || 1),
+      boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
+      boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
+      boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',
+      signingBonusPool: club.signingBonusPool ?? 0,
+      financeHistory: asArray(club.financeHistory),
+      stadiumExpansionProjects: asArray(club.stadiumExpansionProjects),
+    };
+  });
   const normalizedPlayersBase = Object.fromEntries(
     Object.entries(asRecord<any[]>(data.players)).map(([clubId, squad]) => [
       clubId,

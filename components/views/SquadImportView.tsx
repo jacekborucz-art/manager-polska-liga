@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ClubKit, ClubManagement, Coach, StaffMember, ViewState } from '../../types';
+import { ClubKit, ClubManagement, Coach, SportingDirector, StaffMember, ViewState } from '../../types';
 import { getClubKits } from '../../resources/ClubKits';
 
 interface FileResult {
@@ -28,6 +28,7 @@ interface PendingStaffImport {
 interface PendingManagementImport {
   clubId: string;
   management: ClubManagement;
+  sportingDirector?: SportingDirector | null;
 }
 
 export const SquadImportView: React.FC = () => {
@@ -46,6 +47,15 @@ export const SquadImportView: React.FC = () => {
     const clubName = typeof entry.clubName === 'string' ? entry.clubName : typeof entry.name === 'string' ? entry.name : '';
     const match = clubs.find(c => c.id === clubId || c.name === clubId || c.name === clubName);
     return match?.id ?? null;
+  };
+
+  const splitLegacyManagement = (management: unknown): { management?: ClubManagement; sportingDirector?: SportingDirector | null } => {
+    if (!management || typeof management !== 'object' || Array.isArray(management)) return {};
+    const { sportingDirector, ...managementWithoutSportingDirector } = management as Record<string, unknown>;
+    return {
+      management: managementWithoutSportingDirector as ClubManagement,
+      sportingDirector: sportingDirector as SportingDirector | undefined,
+    };
   };
 
   const processFiles = (files: FileList) => {
@@ -92,7 +102,12 @@ export const SquadImportView: React.FC = () => {
             }
 
             if (entry.management && typeof entry.management === 'object') {
-              collectedManagement.push({ clubId, management: entry.management as ClubManagement });
+              const { management, sportingDirector: legacySportingDirector } = splitLegacyManagement(entry.management);
+              collectedManagement.push({
+                clubId,
+                management: management as ClubManagement,
+                sportingDirector: (entry.sportingDirector as SportingDirector | undefined) ?? legacySportingDirector ?? null,
+              });
               validCount++;
               managementCount++;
               return;
@@ -179,7 +194,11 @@ export const SquadImportView: React.FC = () => {
     if (pendingManagement.length > 0) {
       setClubs(prev => prev.map(club => {
         const entry = pendingManagement.find(item => item.clubId === club.id);
-        return entry ? { ...club, management: { ...club.management, ...entry.management } as ClubManagement } : club;
+        return entry ? {
+          ...club,
+          management: { ...club.management, ...entry.management } as ClubManagement,
+          sportingDirector: entry.sportingDirector ?? club.sportingDirector,
+        } : club;
       }));
     }
     navigateTo(ViewState.DASHBOARD);

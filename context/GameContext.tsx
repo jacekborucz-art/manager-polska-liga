@@ -113,7 +113,7 @@ import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
-import { SAVE_VERSION, SaveState } from '../services/SaveGameService';
+import { SAVE_VERSION, SaveState, migrateWelcomeMailSignatories } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
 import { ReserveScheduleService } from '../services/ReserveScheduleService';
@@ -981,6 +981,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
   const [activeTrainingId, setActiveTrainingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userTeamId || messages.length === 0 || clubs.length === 0) return;
+    const migrated = migrateWelcomeMailSignatories(messages, clubs, userTeamId) as MailMessage[];
+    if (migrated.some((message, index) => message !== messages[index])) {
+      setMessages(migrated);
+    }
+  }, [clubs, messages, userTeamId]);
 
 const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
@@ -2458,6 +2466,7 @@ const selectUserTeam = (clubId: string) => {
       });
     }
     setClubs(prev => prev.map(c => c.id === clubId ? { ...c, coachId: undefined, sportingDirector } : c));
+    const selectedClub = { ...club, coachId: undefined, sportingDirector };
 
     const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
@@ -2490,8 +2499,7 @@ const selectUserTeam = (clubId: string) => {
     // Inicjalizacja puli skautów
     const pool = ScoutService.generateScoutPool(Date.now());
     setScoutPool(pool);
-    const userClub = clubs.find(c => c.id === clubId);
-    const market = ScoutService.generateMarket(pool, userClub?.reputation ?? 5, userClub?.board?.kompetencja);
+    const market = ScoutService.generateMarket(pool, selectedClub.reputation ?? 5, selectedClub.board?.kompetencja);
     setScoutMarket(market);
     setScoutMarketRefreshDate(new Date().toISOString().split('T')[0]);
 
@@ -2506,8 +2514,8 @@ const selectUserTeam = (clubId: string) => {
     });
     setLineups(prev => ({ ...prev, ...otherLineups }));
 
-   const welcomeMail = MailService.generateWelcomeMail(club, squad, currentDate);
-const fanMail = MailService.generateFanWelcomeMail(club, squad, currentDate); // Tę funkcję zaraz dopiszemy
+   const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate);
+const fanMail = MailService.generateFanWelcomeMail(selectedClub, squad, currentDate); // Tę funkcję zaraz dopiszemy
 setMessages([welcomeMail, fanMail]);
 
     navigateTo(ViewState.SQUAD_IMPORT);

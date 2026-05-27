@@ -77,7 +77,7 @@ const getClubBoardSignatory = (club: Club, templateRole: string): { name: string
   }
 
   if (templateRole === 'Dyrektor Sportowy') {
-    const sportingDirectorName = formatName(club.management?.sportingDirector);
+    const sportingDirectorName = formatName(club.sportingDirector);
     if (sportingDirectorName) return { name: sportingDirectorName, role: 'Dyrektor Sportowy' };
   }
 

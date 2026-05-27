@@ -1314,7 +1314,6 @@ export interface ClubAcademyDirector {
 export interface ClubManagement {
   owner: ClubOwner;
   ceo?: ClubCEO;
-  sportingDirector?: SportingDirector;
   cfo: ClubCFO;
   coo: ClubCOO;
   marketingDirector: ClubMarketingDirector;
