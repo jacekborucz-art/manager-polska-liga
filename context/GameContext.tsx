@@ -107,6 +107,7 @@ import { TransferExecutionService } from '../services/TransferExecutionService';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
+import { NationalTeamLineupService } from '../services/NationalTeamLineupService';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
@@ -4007,6 +4008,8 @@ Asystent`,
         });
       }
 
+      setPlayers(prev => NationalTeamLineupService.applyPreMatchSquadRecovery(prev, ntReview.updatedTeams, dateToProcess));
+
       // ── Tygodniowy przegląd kadry (każdy poniedziałek, poza oknem zamrożenia NT) ─
       const ntSeasonYear = dateToProcess.getMonth() >= 6 ? dateToProcess.getFullYear() : dateToProcess.getFullYear() - 1;
       if (dateToProcess.getDay() === 1 && !NationalTeamService.isSquadFrozen(dateToProcess, ntSeasonYear)) {
@@ -6166,12 +6169,13 @@ Asystent`,
         }
 
         // ── Normalne mecze reprezentacji ─────────────────────────────────────
+        const ntPreppedPlayers = NationalTeamLineupService.applyPreMatchSquadRecovery(players, nationalTeams, dateToProcess);
         const ntSimulation = NationalTeamSimulator.simulateMatchDay(
           matchDay,
           dateSeed,
           dateToProcess,
           nationalTeams,
-          players,
+          ntPreppedPlayers,
           coaches,
           seasonNumber,
           matchSimulationSeed
