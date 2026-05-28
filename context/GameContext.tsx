@@ -221,6 +221,16 @@ const generateRuntimeSeed = (): number => {
   return Math.floor(Math.random() * 0x100000000) >>> 0;
 };
 
+const buildCareerScopedSeed = (date: Date, careerSeed: number, scope: string): number => {
+  const input = `${date.toISOString().slice(0, 10)}|${careerSeed}|${scope}`;
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
 const ACTIVE_TRANSFER_OFFER_STATUSES = new Set<TransferOfferStatus>([
   TransferOfferStatus.SELLER_REVIEW,
   TransferOfferStatus.SELLER_COUNTERED,
@@ -726,6 +736,9 @@ interface GameContextType {
   seasonNumber: number;
   activeMatchState: MatchLiveState | null;
   messages: MailMessage[];
+  mediaRelationships: Record<string, number>;
+  sentUnfriendlyPressMonths: string[];
+  sentFriendlyPressMonths: string[];
   activeTrainingId: string | null;
   cupParticipants: string[];
     activeCupDraw: { id: string, label: string, date: Date, pairs: Fixture[] } | null;
@@ -792,8 +805,10 @@ interface GameContextType {
   applySimulationResult: (result: SimulationOutput) => void;
   setActiveMatchState: React.Dispatch<React.SetStateAction<MatchLiveState | null>>;
   setMessages: React.Dispatch<React.SetStateAction<MailMessage[]>>;
+  setMediaRelationships: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   markMessageRead: (id: string) => void;
   deleteMessage: (id: string) => void;
+  addPendingPressArticle: (item: { mail: MailMessage; deliveryDate: string }) => void;
   setActiveTrainingId: (id: string | null) => void;
   confirmCupDraw: (pairs: Fixture[]) => void;
   confirmCLDraw: (pairs: Fixture[]) => void;
@@ -982,6 +997,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const [messages, setMessages] = useState<MailMessage[]>([]);
+  const [mediaRelationships, setMediaRelationships] = useState<Record<string, number>>({});
+  const [sentUnfriendlyPressMonths, setSentUnfriendlyPressMonths] = useState<string[]>([]);
+  const [sentFriendlyPressMonths, setSentFriendlyPressMonths] = useState<string[]>([]);
+  const [pendingPressArticles, setPendingPressArticles] = useState<{ mail: MailMessage; deliveryDate: string }[]>([]);
   const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
   const [activeTrainingId, setActiveTrainingId] = useState<string | null>(null);
 
@@ -1492,6 +1511,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
+    setSentUnfriendlyPressMonths([]);
+    setSentFriendlyPressMonths([]);
     setActiveTrainingId(null);
     setTrainingProgressHistory([]);
     sentMailIdsRef.current = new Set();
@@ -2308,6 +2329,10 @@ if (userTeamId) {
     managerProfile,
     seasonNumber,
     messages,
+    mediaRelationships,
+    sentUnfriendlyPressMonths,
+    sentFriendlyPressMonths,
+    pendingPressArticles,
     activeTrainingId,
     activeIntensity,
     trainingProgressHistory,
@@ -2392,6 +2417,10 @@ if (userTeamId) {
     setManagerProfile(data.managerProfile);
     setSeasonNumber(data.seasonNumber);
     setMessages(data.messages);
+    setMediaRelationships(data.mediaRelationships ?? {});
+    setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
+    setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
+    setPendingPressArticles(data.pendingPressArticles ?? []);
     setActiveTrainingId(data.activeTrainingId);
     setActiveIntensity(data.activeIntensity);
     setTrainingProgressHistory(data.trainingProgressHistory);
@@ -4202,7 +4231,7 @@ Asystent`,
               sender: 'FIFA',
               role: 'Biuro Rozgrywek FIFA',
               subject: `MS ${wcYear} - Grupy kompletne!`,
-              body: `Zwyciezcy barazy UEFA uzupelnili wszystkie grupy Mistrzostw Swiata ${wcYear}. Sklad wszystkich 12 grup jest juz znany!`,
+              body: `Zwyciezcy barazy UEFA i play-off FIFA uzupelnili wszystkie grupy Mistrzostw Swiata ${wcYear}. Sklad wszystkich 12 grup jest juz znany!`,
               date: new Date(dateToProcess),
               isRead: false,
               type: MailType.SYSTEM,
@@ -6071,8 +6100,12 @@ Asystent`,
         !processedDrawIds.includes(primaryEvent.slot.id)) {
       const matchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
       if (matchDay) {
-        // Seed = timestamp daty gry — gwarantuje powtarzalność wyników przy tym samym dniu
         const dateSeed = dateToProcess.getTime();
+        const ntCareerSeed = buildCareerScopedSeed(
+          dateToProcess,
+          matchSimulationSeed,
+          `NT_${matchDay.eventType ?? 'GROUP_MATCH'}_${seasonNumber}`
+        );
 
         // ── Baraże MŚ 2026: Losowanie (29 listopada 2025) ──────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_DRAW') {
@@ -6080,7 +6113,7 @@ Asystent`,
             nationalTeams,
             dateToProcess.getFullYear(),
             seasonNumber,
-            dateSeed
+            ntCareerSeed
           );
           setWcqPlayoffState(playoffState);
           setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
@@ -6093,7 +6126,7 @@ Asystent`,
         // ── Baraże MŚ 2026: Półfinały (17 marca 2026) ─────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_SF') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
+            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
             setWcqPlayoffState(updatedState);
             const playoffSfMailKey = `WCQ_PLAYOFF_POLAND_SF_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffSfMailKey)) {
@@ -6114,7 +6147,7 @@ Asystent`,
         // ── Baraże MŚ 2026: Finały (20 marca 2026) ────────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_FINAL') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, dateSeed);
+            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
             setWcqPlayoffState(updatedState);
             const playoffFinalMailKey = `WCQ_PLAYOFF_POLAND_FINAL_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffFinalMailKey)) {
@@ -6166,12 +6199,12 @@ Asystent`,
       }
     }
 
-    // ── LOSOWANIE MISTRZOSTW ŚWIATA (12 Grudnia roku poprzedzającego MŚ) ─────
+    // ── LOSOWANIE MISTRZOSTW ŚWIATA (5 grudnia roku poprzedzającego MŚ) ─────
     {
       const nextYear = dateToProcess.getFullYear() + 1;
       const curMonth = dateToProcess.getMonth() + 1;
       const curDay = dateToProcess.getDate();
-      if (WorldCupService.isWorldCupYear(nextYear) && curMonth === 12 && curDay === 12 && !wcState) {
+      if (WorldCupService.isWorldCupYear(nextYear) && curMonth === 12 && curDay === 5 && !wcState) {
         const wcDrawKey = `WC_DRAW_${nextYear}`;
         if (!sentMailIdsRef.current.has(wcDrawKey)) {
           sentMailIdsRef.current.add(wcDrawKey);
@@ -6193,15 +6226,14 @@ Asystent`,
             id: wcDrawKey,
             sender: 'FIFA',
             role: 'Biuro Rozgrywek FIFA',
-            subject: `Losowanie Grup MŚ ${nextYear} — 12 Grudnia`,
-            body: `Ceremonia losowania grup Mistrzostw Świata ${nextYear} właśnie się odbyła! 44 drużyny z całego świata poznały swoich grupowych rywali. 4 miejsca są zarezerwowane dla zwycięzców baraży UEFA (marzec ${nextYear}). Otwórz widok losowania aby zobaczyć pełny wynik ceremonii.`,
+            subject: `Losowanie Grup MŚ ${nextYear} — 5 grudnia`,
+            body: `Ceremonia losowania grup Mistrzostw Świata ${nextYear} właśnie się odbyła! 42 drużyny z całego świata poznały swoich grupowych rywali. 4 miejsca są zarezerwowane dla zwycięzców baraży UEFA, a 2 dla zwycięzców play-off FIFA (marzec ${nextYear}). Otwórz widok losowania aby zobaczyć pełny wynik ceremonii.`,
             date: new Date(dateToProcess),
             isRead: false,
             type: MailType.SYSTEM,
             priority: 100,
           };
           setMessages(prev => [wcDrawMail, ...prev]);
-          navigateTo(ViewState.WC_DRAW);
         }
       }
     }
@@ -6946,8 +6978,29 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures);
-      if (newMails.length > 0) prependUniqueMessages(newMails);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths);
+      if (newMails.length > 0) {
+        prependUniqueMessages(newMails);
+        const sentUnfriendlyPressMonthKeys = newMails
+          .map(mail => /^PRESS_UNFRIENDLY_LOSS_(\d{4}_\d{2})_/.exec(mail.id)?.[1])
+          .filter((key): key is string => Boolean(key));
+        if (sentUnfriendlyPressMonthKeys.length > 0) {
+          setSentUnfriendlyPressMonths(prev => Array.from(new Set([...prev, ...sentUnfriendlyPressMonthKeys])));
+        }
+        const sentFriendlyPressMonthKeys = newMails
+          .map(mail => /^PRESS_FRIENDLY_START_(\d{4}_\d{2})_/.exec(mail.id)?.[1])
+          .filter((key): key is string => Boolean(key));
+        if (sentFriendlyPressMonthKeys.length > 0) {
+          setSentFriendlyPressMonths(prev => Array.from(new Set([...prev, ...sentFriendlyPressMonthKeys])));
+        }
+      }
+
+      const todayIso = dateToProcess.toISOString().split('T')[0];
+      const duePressArticles = pendingPressArticles.filter(p => p.deliveryDate <= todayIso);
+      if (duePressArticles.length > 0) {
+        prependUniqueMessages(duePressArticles.map(p => p.mail));
+        setPendingPressArticles(prev => prev.filter(p => p.deliveryDate > todayIso));
+      }
 
       const directorCommunication = SportingDirectorService.generateCommunicationMails({
         club: userClub,
@@ -8393,7 +8446,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
 
 
    const confirmCLGroupDraw = () => {
@@ -9466,6 +9519,8 @@ const finalResult: SimulationOutput = {
 
   const markMessageRead = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
   const deleteMessage = (id: string) => setMessages(prev => prev.filter(m => m.id !== id));
+  const addPendingPressArticle = (item: { mail: MailMessage; deliveryDate: string }) =>
+    setPendingPressArticles(prev => [...prev, item]);
 
   const respondToSportingDirectorObjective = useCallback((response: import('../types').SportingDirectorObjectiveResponse) => {
     if (!userTeamId) return;
@@ -12629,8 +12684,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
-      setMessages, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
-            markMessageRead, deleteMessage, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
+      setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
+            markMessageRead, deleteMessage, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,

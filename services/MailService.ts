@@ -2,6 +2,7 @@ import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
+import { MediaInterviewService } from './MediaInterviewService';
 
 export interface SeasonSummaryData {
   year: number;
@@ -58,6 +59,9 @@ const startOfDay = (date: Date): number => {
 
 const getDayDifference = (from: Date, to: Date): number =>
   Math.round((startOfDay(to) - startOfDay(from)) / 86400000);
+
+const getYearMonthKey = (date: Date): string =>
+  `${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 const isBeforeLeagueSeasonEnd = (date: Date): boolean => {
   const seasonEndYear = date.getMonth() >= 7 ? date.getFullYear() + 1 : date.getFullYear();
@@ -769,7 +773,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     nextFixture?: Fixture,
     existingMails: MailMessage[] = [],
     userLineup?: Lineup,
-    allFixtures?: Fixture[]
+    allFixtures?: Fixture[],
+    managerName?: string,
+    mediaRelationships: Record<string, number> = {},
+    sentUnfriendlyPressMonths: string[] = [],
+    sentFriendlyPressMonths: string[] = []
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -888,7 +896,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       }
     }
 
-    // --- PASSA BEZ WYGRANEJ: Gazeta Sportowa po 5 meczach bez wygranej ---
+    // --- PRASA: forma zespołu i nastawienie mediów ---
     if (allFixtures && allFixtures.length > 0) {
       const NON_COMPETITIVE = ['FRIENDLY', 'BREAK', 'OFF_SEASON', 'TRANSFER_WINDOW', 'BOARD'];
       const competitiveFixtures = allFixtures
@@ -900,16 +908,70 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         )
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+      const isUserWin = (f: Fixture): boolean => {
+        const isHome = f.homeTeamId === userClub.id;
+        const userScore = isHome ? (f.homeScore ?? 0) : (f.awayScore ?? 0);
+        const oppScore = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
+        return userScore > oppScore;
+      };
+
+      const isUserLoss = (f: Fixture): boolean => {
+        const isHome = f.homeTeamId === userClub.id;
+        const userScore = isHome ? (f.homeScore ?? 0) : (f.awayScore ?? 0);
+        const oppScore = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
+        return userScore < oppScore;
+      };
+
+      const userLeagueFixtures = competitiveFixtures.filter(f => f.leagueId === userClub.leagueId);
+      const latestLeagueFixture = userLeagueFixtures[userLeagueFixtures.length - 1];
+      const latestLeagueWasPlayedToday = latestLeagueFixture
+        ? startOfDay(latestLeagueFixture.date) === startOfDay(currentDate)
+        : false;
+
+      if (latestLeagueFixture && userLeagueFixtures.length >= 3 && latestLeagueWasPlayedToday) {
+        const friendlyPressMonthKey = getYearMonthKey(currentDate);
+        const alreadySentFriendlyThisMonth =
+          sentFriendlyPressMonths.includes(friendlyPressMonthKey) ||
+          existingMails.some(m => m.id.startsWith(`PRESS_FRIENDLY_START_${friendlyPressMonthKey}_`));
+
+        if (!alreadySentFriendlyThisMonth) {
+          const friendlyNewspaper = MediaInterviewService.pickFriendlyNewspaper(mediaRelationships);
+          if (friendlyNewspaper) {
+            const recentLeagueFixtures = userLeagueFixtures.slice(-3);
+            const recentWins = recentLeagueFixtures.filter(isUserWin).length;
+            const recentLosses = recentLeagueFixtures.filter(isUserLoss).length;
+            const latestWasWin = isUserWin(latestLeagueFixture);
+            const hasGoodResults = latestWasWin || recentWins >= 2 || recentLosses === 0;
+            const friendlyMailId = `PRESS_FRIENDLY_START_${friendlyPressMonthKey}_${latestLeagueFixture.id}_${friendlyNewspaper}`;
+            const alreadySentFriendly = existingMails.some(m => m.id === friendlyMailId);
+            if (!alreadySentFriendly) {
+              const managerLastName = managerName?.trim().split(/\s+/).slice(-1)[0] ?? 'nowego trenera';
+              const opponentId = latestLeagueFixture.homeTeamId === userClub.id
+                ? latestLeagueFixture.awayTeamId
+                : latestLeagueFixture.homeTeamId;
+              const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+              const venueLabel = latestLeagueFixture.homeTeamId === userClub.id ? 'w domu' : 'na wyjeździe';
+              const variant = MediaInterviewService.determineFriendlySeasonPressVariant(hasGoodResults, latestWasWin);
+              const friendlyMail = MediaInterviewService.generatePressArticleMail(
+                variant,
+                friendlyNewspaper,
+                managerLastName,
+                userClub.name,
+                currentDate,
+                { opponentName, venueLabel }
+              );
+              friendlyMail.id = friendlyMailId;
+              friendlyMail.date = new Date(currentDate);
+              friendlyMail.priority = 52;
+              newMails.push(friendlyMail);
+            }
+          }
+        }
+      }
+
       if (competitiveFixtures.length >= 5) {
         const last5 = competitiveFixtures.slice(-5);
         const last6th = competitiveFixtures.length >= 6 ? competitiveFixtures[competitiveFixtures.length - 6] : null;
-
-        const isUserWin = (f: Fixture): boolean => {
-          const isHome = f.homeTeamId === userClub.id;
-          const userScore = isHome ? (f.homeScore ?? 0) : (f.awayScore ?? 0);
-          const oppScore = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
-          return userScore > oppScore;
-        };
 
         const allLast5NonWin = last5.every(f => !isUserWin(f));
         const prev6thWasWin = last6th === null || isUserWin(last6th);
@@ -921,6 +983,40 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const streakMail = createMail('press_winless_streak', { 'CLUB': userClub.name });
             streakMail.id = streakMailId;
             newMails.push(streakMail);
+          }
+        }
+
+        const unfriendlyPressMonthKey = getYearMonthKey(currentDate);
+        const alreadySentUnfriendlyThisMonth =
+          sentUnfriendlyPressMonths.includes(unfriendlyPressMonthKey) ||
+          existingMails.some(m => m.id.startsWith(`PRESS_UNFRIENDLY_LOSS_${unfriendlyPressMonthKey}_`));
+
+        if (
+          latestLeagueFixture &&
+          userLeagueFixtures.length > 5 &&
+          latestLeagueWasPlayedToday &&
+          isUserLoss(latestLeagueFixture) &&
+          !alreadySentUnfriendlyThisMonth
+        ) {
+          const unfriendlyNewspaper = MediaInterviewService.pickUnfriendlyNewspaper(mediaRelationships);
+          if (unfriendlyNewspaper) {
+            const criticalMailId = `PRESS_UNFRIENDLY_LOSS_${unfriendlyPressMonthKey}_${latestLeagueFixture.id}_${unfriendlyNewspaper}`;
+            const alreadySentCritical = existingMails.some(m => m.id === criticalMailId);
+            if (!alreadySentCritical) {
+              const managerLastName = managerName?.trim().split(/\s+/).slice(-1)[0] ?? 'nowego trenera';
+              const variant = MediaInterviewService.determineUnfriendlySeasonPressVariant();
+              const criticalMail = MediaInterviewService.generatePressArticleMail(
+                variant,
+                unfriendlyNewspaper,
+                managerLastName,
+                userClub.name,
+                currentDate
+              );
+              criticalMail.id = criticalMailId;
+              criticalMail.date = new Date(currentDate);
+              criticalMail.priority = 55;
+              newMails.push(criticalMail);
+            }
           }
         }
       }
@@ -1040,6 +1136,21 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
            'DAYS': severeInjury.health.injury?.daysRemaining.toString() || '30' 
          }));
        }
+    }
+
+    // --- 3 LIPCA: Email z prośbą o wywiad (objęcie stanowiska) ---
+    if (month === 7 && day === 3) {
+      const interviewMailId = `MEDIA_INTERVIEW_OBJECIE_${currentDate.getFullYear()}`;
+      const alreadySent = existingMails.some(m => m.id === interviewMailId);
+      if (!alreadySent) {
+        const mail = MediaInterviewService.generateTakingOverInterviewMail(
+          userClub,
+          userSquad,
+          managerName ?? `${userClub.name} trener`,
+          currentDate
+        );
+        newMails.push(mail);
+      }
     }
 
     return newMails;

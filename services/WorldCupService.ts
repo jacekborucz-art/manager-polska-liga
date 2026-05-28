@@ -59,7 +59,12 @@ function strHash(v: string): number {
 
 // ─── HOSTY MŚ ─────────────────────────────────────────────────────────────────
 
-const WC_HOSTS_2026 = ['Stany Zjednoczone', 'Kanada', 'Meksyk'];
+const WC_HOSTS_2026 = ['Meksyk', 'Kanada', 'Stany Zjednoczone'];
+const WC_HOST_GROUPS_2026: Record<string, number> = {
+  Meksyk: 0,
+  Kanada: 1,
+  'Stany Zjednoczone': 3,
+};
 
 // ─── POISSON SAMPLING ────────────────────────────────────────────────────────
 
@@ -205,18 +210,19 @@ function weightedPick<T extends { reputation: number }>(
   count: number,
   rng: Rng,
   exclude: Set<string>,
-  getName: (t: T) => string
+  getName: (t: T) => string,
+  power = 6
 ): T[] {
   const available = pool.filter(t => !exclude.has(getName(t)));
   const result: T[] = [];
   const remaining = [...available];
 
   for (let i = 0; i < count && remaining.length > 0; i++) {
-    const totalRep = remaining.reduce((s, t) => s + Math.pow(t.reputation, 5), 0);
+    const totalRep = remaining.reduce((s, t) => s + Math.pow(Math.max(1, t.reputation), power), 0);
     let pick = rng.next() * totalRep;
     let chosen = remaining[0];
     for (const t of remaining) {
-      pick -= Math.pow(t.reputation, 5);
+      pick -= Math.pow(Math.max(1, t.reputation), power);
       if (pick <= 0) { chosen = t; break; }
     }
     result.push(chosen);
@@ -225,6 +231,34 @@ function weightedPick<T extends { reputation: number }>(
   }
 
   return result;
+}
+
+function qualifiedPick<T extends { reputation: number }>(
+  pool: T[],
+  count: number,
+  rng: Rng,
+  exclude: Set<string>,
+  getName: (t: T) => string,
+  options: { minReputation?: number; shortlistSize?: number } = {}
+): T[] {
+  const available = pool
+    .filter(t => !exclude.has(getName(t)))
+    .sort((a, b) => b.reputation - a.reputation);
+  const minReputation = options.minReputation ?? 1;
+  const shortlistSize = Math.max(count, options.shortlistSize ?? count * 2);
+  const shortlist = available
+    .filter(t => t.reputation >= minReputation)
+    .slice(0, shortlistSize);
+  const candidatePool = shortlist.length >= count ? shortlist : available.slice(0, Math.max(count, shortlistSize));
+  const picked = weightedPick(candidatePool, count, rng, exclude, getName, 7);
+
+  if (picked.length >= count) return picked;
+
+  const pickedNames = new Set(picked.map(getName));
+  return [
+    ...picked,
+    ...available.filter(t => !pickedNames.has(getName(t))).slice(0, count - picked.length),
+  ];
 }
 
 // ─── GŁÓWNE FUNKCJE ───────────────────────────────────────────────────────────
@@ -243,8 +277,8 @@ export const WorldCupService = {
   /**
    * Zbiera 48 drużyn na MŚ:
    *  UEFA (16) — z WCQPlayoffService (12 zwycięzców grup + 4 zwycięzców baraży)
-   *  CAF (9), AFC (8), CONMEBOL (6), CONCACAF (6), OFC (2) — losowanie ważone reputacją
-   *  Intercont (1) — najlepsza dostępna drużyna z pozostałych
+   *  CAF (9), AFC (8), CONMEBOL (6), CONCACAF (6), OFC (1) — losowanie ważone reputacją z shortlisty
+   *  Intercont (2) — najlepsze dostępne drużyny z pozostałych
    */
   assembleTeams(
     nationalTeams: NationalTeam[],
@@ -301,29 +335,29 @@ export const WorldCupService = {
     }
 
     // ── CAF: 9 ───────────────────────────────────────────────────────────────
-    const cafPicks = weightedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name);
+    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
     cafPicks.forEach(t => addTeam(t.name, 'CAF', t.reputation));
 
     // ── AFC: 8 ───────────────────────────────────────────────────────────────
-    const afcPicks = weightedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name);
+    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
     afcPicks.forEach(t => addTeam(t.name, 'AFC', t.reputation));
 
     // ── CONMEBOL: 6 ──────────────────────────────────────────────────────────
-    const saPicks = weightedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name);
+    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
     saPicks.forEach(t => addTeam(t.name, 'CONMEBOL', t.reputation));
 
     // ── CONCACAF: dopełnienie do 6 (hosty już wstawione) ─────────────────────
     const concacacNeeded = 6 - hosts.filter(h => NATIONAL_TEAMS_CONCACAF.some(t => t.name === h)).length;
     if (concacacNeeded > 0) {
-      const concPicks = weightedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name);
+      const concPicks = qualifiedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 10 });
       concPicks.forEach(t => addTeam(t.name, 'CONCACAF', t.reputation));
     }
 
-    // ── OFC: 2 ───────────────────────────────────────────────────────────────
-    const ofcPicks = weightedPick(NATIONAL_TEAMS_OFC, 2, rng, usedNames, t => t.name);
+    // ── OFC: 1 ───────────────────────────────────────────────────────────────
+    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, 1, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
     ofcPicks.forEach(t => addTeam(t.name, 'OFC', t.reputation));
 
-    // ── Intercontinental: 1 najlepsza pozostała ────────────────────────────
+    // ── Intercontinental: 2 najlepsze pozostałe ────────────────────────────
     const allConfedTeams = [
       ...NATIONAL_TEAMS_AFRICA,
       ...NATIONAL_TEAMS_AFC,
@@ -331,12 +365,11 @@ export const WorldCupService = {
       ...NATIONAL_TEAMS_CONCACAF,
       ...NATIONAL_TEAMS_OFC,
     ];
-    const interContPick = allConfedTeams
+    const interContPicks = allConfedTeams
       .filter(t => !usedNames.has(t.name))
-      .sort((a, b) => b.reputation - a.reputation)[0];
-    if (interContPick && teams.length < 48) {
-      addTeam(interContPick.name, 'INTERCONT', interContPick.reputation);
-    }
+      .sort((a, b) => b.reputation - a.reputation)
+      .slice(0, Math.max(0, 48 - teams.length));
+    interContPicks.forEach(t => addTeam(t.name, 'INTERCONT', t.reputation));
 
     return teams.slice(0, 48);
   },
@@ -678,9 +711,9 @@ export const WorldCupService = {
   },
 
   /**
-   * Zbiera 44 drużyny na losowanie MŚ (bez 4 zwycięzców baraży UEFA).
-   * Zamiast nich tworzy 4 TBD placeholdery z isPlayoffSlot: true.
-   * Wywoływane 12 Grudnia roku poprzedzającego MŚ.
+   * Zbiera 42 znane drużyny na losowanie MŚ.
+   * Pozostałe 6 miejsc to 4 placeholdery baraży UEFA i 2 placeholdery play-off FIFA.
+   * Wywoływane 5 grudnia roku poprzedzającego MŚ.
    */
   assembleTeamsForDraw(
     nationalTeams: NationalTeam[],
@@ -715,6 +748,12 @@ export const WorldCupService = {
       teams.push({ name: tbdName, confederation: 'UEFA', reputation: 0, colors: ['#475569', '#64748b', '#475569'], isHost: false, isPlayoffSlot: true });
     }
 
+    for (const path of ['1', '2']) {
+      const tbdName = `TBD_FIFA_PO_${path}`;
+      usedNames.add(tbdName);
+      teams.push({ name: tbdName, confederation: 'INTERCONT', reputation: 0, colors: ['#475569', '#64748b', '#475569'], isHost: false, isPlayoffSlot: true });
+    }
+
     // ── Hosty (CONCACAF dla 2026) ─────────────────────────────────────────────
     const hosts = WorldCupService.getHosts(year);
     for (const h of hosts) {
@@ -723,51 +762,36 @@ export const WorldCupService = {
     }
 
     // ── CAF: 9 ───────────────────────────────────────────────────────────────
-    const cafPicks = weightedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name);
+    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
     cafPicks.forEach(t => addTeam(t.name, 'CAF', t.reputation));
 
     // ── AFC: 8 ───────────────────────────────────────────────────────────────
-    const afcPicks = weightedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name);
+    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
     afcPicks.forEach(t => addTeam(t.name, 'AFC', t.reputation));
 
     // ── CONMEBOL: 6 ──────────────────────────────────────────────────────────
-    const saPicks = weightedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name);
+    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
     saPicks.forEach(t => addTeam(t.name, 'CONMEBOL', t.reputation));
 
     // ── CONCACAF: dopełnienie do 6 (hosty już wstawione) ─────────────────────
     const concacacNeeded = 6 - hosts.filter(h => NATIONAL_TEAMS_CONCACAF.some(t => t.name === h)).length;
     if (concacacNeeded > 0) {
-      const concPicks = weightedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name);
+      const concPicks = qualifiedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 10 });
       concPicks.forEach(t => addTeam(t.name, 'CONCACAF', t.reputation));
     }
 
-    // ── OFC: 2 ───────────────────────────────────────────────────────────────
-    const ofcPicks = weightedPick(NATIONAL_TEAMS_OFC, 2, rng, usedNames, t => t.name);
+    // ── OFC: 1 ───────────────────────────────────────────────────────────────
+    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, 1, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
     ofcPicks.forEach(t => addTeam(t.name, 'OFC', t.reputation));
-
-    // ── Intercontinental: 1 najlepsza pozostała ────────────────────────────
-    const allConfedTeams = [
-      ...NATIONAL_TEAMS_AFRICA,
-      ...NATIONAL_TEAMS_AFC,
-      ...NATIONAL_TEAMS_CONMEBOL,
-      ...NATIONAL_TEAMS_CONCACAF,
-      ...NATIONAL_TEAMS_OFC,
-    ];
-    const interContPick = allConfedTeams
-      .filter(t => !usedNames.has(t.name))
-      .sort((a, b) => b.reputation - a.reputation)[0];
-    if (interContPick && teams.length < 48) {
-      addTeam(interContPick.name, 'INTERCONT', interContPick.reputation);
-    }
 
     return teams;
   },
 
   /**
    * Losowanie grup z zasadami FIFA:
-   *  Pot 1: hosty pre-przypisane do A/B/C + 9 najlepszych do D-L
+   *  Pot 1: hosty pre-przypisane do A/B/D + 9 najlepszych do wolnych grup
    *  Pot 2-3: kolejne 12 wg reputacji, randomowo do grup
-   *  Pot 4: ostatnie drużyny + 4 TBD (pilnuje max 2 UEFA per grupa)
+   *  Pot 4: ostatnie drużyny + 6 TBD (4 UEFA + 2 play-off FIFA)
    * Ograniczenia: max 1 drużyna per konfederacja (poza UEFA), max 2 UEFA per grupa.
    * Zwraca grupy z polem pots do wyświetlenia w ceremonii.
    */
@@ -787,16 +811,18 @@ export const WorldCupService = {
 
     // ── Pot 1: hosty pre-przypisane, reszta do D-L ────────────────────────
     const hostsOrdered = teams.filter(t => t.isHost);
-    // Hosty: USA→A(0), Kanada→B(1), Meksyk→C(2) — kolejność wg tablicy hosts
-    hostsOrdered.forEach((h, i) => { if (i < 3) placeInGroup(h, i); });
+    hostsOrdered.forEach((h, i) => {
+      const hostGroup = year === 2026 ? WC_HOST_GROUPS_2026[h.name] : i;
+      if (hostGroup !== undefined && hostGroup < LABELS.length) placeInGroup(h, hostGroup);
+    });
 
     const nonHostPot1 = [...teams]
       .filter(t => !t.isHost && !t.isPlayoffSlot)
       .sort((a, b) => b.reputation - a.reputation)
       .slice(0, 9);
     const pot1Shuffled = rng.shuffle(nonHostPot1);
-    // Przypisz do grup D-L (indeksy 3-11)
-    pot1Shuffled.forEach((t, i) => placeInGroup(t, 3 + i));
+    const freePot1Groups = LABELS.map((_, i) => i).filter(i => groupTeams[i].length === 0);
+    pot1Shuffled.forEach((t, i) => placeInGroup(t, freePot1Groups[i]));
 
     const usedInPot1Names = new Set([...hostsOrdered.map(t => t.name), ...nonHostPot1.map(t => t.name)]);
 
@@ -809,7 +835,7 @@ export const WorldCupService = {
     const pot3 = rng.shuffle(remaining.slice(12, 24));
     const pot4Real = rng.shuffle(remaining.slice(24));
     const tbdTeams = [...teams.filter(t => t.isPlayoffSlot)].sort((a, b) => a.name.localeCompare(b.name));
-    const pot4 = [...pot4Real, ...tbdTeams];
+    const pot4 = rng.shuffle([...pot4Real, ...tbdTeams]);
 
     const pots: WCTeam[][] = [
       [...hostsOrdered, ...nonHostPot1],
@@ -819,43 +845,75 @@ export const WorldCupService = {
     ];
 
     // ── Pomocnik: znajdź grupę spełniającą ograniczenia ────────────────────
+    const canPlaceInGroup = (team: WCTeam, gIdx: number): boolean => {
+      if (groupTeams[gIdx].length >= 4) return false;
+      if (team.confederation === 'UEFA' && countUEFA(gIdx) >= 2) return false;
+      if (team.confederation !== 'UEFA' && groupConfs[gIdx].includes(team.confederation)) return false;
+      if (team.confederation !== 'UEFA' && countUEFA(gIdx) === 0 && groupTeams[gIdx].length === 3) return false;
+      return true;
+    };
+
+    const placePotTeams = (potTeams: WCTeam[]): boolean => {
+      const placed: Array<{ groupIdx: number }> = [];
+      const usedGroups = new Set<number>();
+
+      const tryPlace = (idx: number): boolean => {
+        if (idx >= potTeams.length) return true;
+        const team = potTeams[idx];
+        const groupOrder = rng.shuffle([...Array(12).keys()]);
+
+        for (const gIdx of groupOrder) {
+          if (usedGroups.has(gIdx)) continue;
+          if (!canPlaceInGroup(team, gIdx)) continue;
+          placeInGroup(team, gIdx);
+          usedGroups.add(gIdx);
+          placed.push({ groupIdx: gIdx });
+          if (tryPlace(idx + 1)) return true;
+          placed.pop();
+          usedGroups.delete(gIdx);
+          groupTeams[gIdx].pop();
+          groupConfs[gIdx].pop();
+        }
+
+        return false;
+      };
+
+      const success = tryPlace(0);
+      if (success) return true;
+
+      while (placed.length > 0) {
+        const last = placed.pop()!;
+        usedGroups.delete(last.groupIdx);
+        groupTeams[last.groupIdx].pop();
+        groupConfs[last.groupIdx].pop();
+      }
+      return false;
+    };
+
     const findValidGroup = (team: WCTeam, shuffledOrder: number[]): number => {
       for (const gIdx of shuffledOrder) {
-        if (groupTeams[gIdx].length >= 4) continue;
-        // Max 2 UEFA per grupa
-        if (team.confederation === 'UEFA' && countUEFA(gIdx) >= 2) continue;
-        // Max 1 non-UEFA konfederacja per grupa (pomijamy UEFA)
-        if (team.confederation !== 'UEFA' && groupConfs[gIdx].includes(team.confederation)) continue;
-        return gIdx;
+        if (canPlaceInGroup(team, gIdx)) return gIdx;
       }
-      // Fallback: pierwsza dostępna grupa z wolnym miejscem
       return shuffledOrder.find(g => groupTeams[g].length < 4) ?? 0;
     };
 
-    // ── Pre-przypisanie TBD do 4 różnych grup (Ścieżka A→grupa, B→grupa ...) ─
-    const tbdGroupPool = rng.shuffle([...Array(12).keys()]).slice(0, 4);
-    tbdTeams.forEach((tbd, i) => placeInGroup(tbd, tbdGroupPool[i]));
-
     // ── Losowanie Pot 2 ────────────────────────────────────────────────────
-    const groupOrder2 = rng.shuffle([...Array(12).keys()]);
-    pot2.forEach(team => {
-      const gIdx = findValidGroup(team, groupOrder2);
-      placeInGroup(team, gIdx);
-    });
+    if (!placePotTeams(pot2)) {
+      const groupOrder2 = rng.shuffle([...Array(12).keys()]);
+      pot2.forEach(team => placeInGroup(team, findValidGroup(team, groupOrder2)));
+    }
 
     // ── Losowanie Pot 3 ────────────────────────────────────────────────────
-    const groupOrder3 = rng.shuffle([...Array(12).keys()]);
-    pot3.forEach(team => {
-      const gIdx = findValidGroup(team, groupOrder3);
-      placeInGroup(team, gIdx);
-    });
+    if (!placePotTeams(pot3)) {
+      const groupOrder3 = rng.shuffle([...Array(12).keys()]);
+      pot3.forEach(team => placeInGroup(team, findValidGroup(team, groupOrder3)));
+    }
 
-    // ── Losowanie Pot 4 (tylko drużyny rzeczywiste, TBD już pre-przypisane) ──
-    const groupOrder4 = rng.shuffle([...Array(12).keys()]);
-    pot4Real.forEach(team => {
-      const gIdx = findValidGroup(team, groupOrder4);
-      placeInGroup(team, gIdx);
-    });
+    // ── Losowanie Pot 4 ─────────────────────────────────────────────────────
+    if (!placePotTeams(pot4)) {
+      const groupOrder4 = rng.shuffle([...Array(12).keys()]);
+      pot4.forEach(team => placeInGroup(team, findValidGroup(team, groupOrder4)));
+    }
 
     const groups: WCGroup[] = LABELS.map((label, i) => ({
       label,
@@ -867,7 +925,7 @@ export const WorldCupService = {
   },
 
   /**
-   * Wypełnia 4 TBD placeholdery prawdziwymi zwycięzcami baraży.
+   * Wypełnia placeholdery zwycięzcami baraży UEFA i play-off FIFA.
    * Wywoływane 21 marca roku MŚ po zakończeniu finałów baraży.
    */
   fillPlayoffSlots(wcState: WCState, winners: string[], nationalTeams: NationalTeam[]): WCState {
@@ -877,9 +935,9 @@ export const WorldCupService = {
     const newTeams = [...wcState.teams];
     const newGroups = wcState.groups.map(g => ({ ...g, teams: [...g.teams] }));
 
-    const tbdSlots = newTeams.filter(t => t.isPlayoffSlot);
+    const uefaSlots = newTeams.filter(t => t.isPlayoffSlot && t.name.startsWith('TBD_PATH_'));
 
-    tbdSlots.forEach((tbd, i) => {
+    uefaSlots.forEach((tbd, i) => {
       const winner = winners[i];
       if (!winner) return;
       const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
@@ -891,6 +949,36 @@ export const WorldCupService = {
       for (const g of newGroups) {
         const ti = g.teams.indexOf(tbd.name);
         if (ti !== -1) g.teams[ti] = winner;
+      }
+    });
+
+    const usedNames = new Set(newTeams.filter(t => !t.isPlayoffSlot).map(t => t.name));
+    const intercontinentalCandidates = [
+      ...NATIONAL_TEAMS_AFRICA.map(t => ({ ...t, confederation: 'CAF' as WCConfederation })),
+      ...NATIONAL_TEAMS_AFC.map(t => ({ ...t, confederation: 'AFC' as WCConfederation })),
+      ...NATIONAL_TEAMS_CONMEBOL.map(t => ({ ...t, confederation: 'CONMEBOL' as WCConfederation })),
+      ...NATIONAL_TEAMS_CONCACAF.map(t => ({ ...t, confederation: 'CONCACAF' as WCConfederation })),
+      ...NATIONAL_TEAMS_OFC.map(t => ({ ...t, confederation: 'OFC' as WCConfederation })),
+    ].filter(t => !usedNames.has(t.name)).sort((a, b) => b.reputation - a.reputation);
+
+    const fifaSlots = newTeams.filter(t => t.isPlayoffSlot && t.name.startsWith('TBD_FIFA_PO_'));
+    fifaSlots.forEach(tbd => {
+      const group = newGroups.find(g => g.teams.includes(tbd.name));
+      const groupConfs = group
+        ? group.teams
+            .map(name => newTeams.find(t => t.name === name)?.confederation)
+            .filter((conf): conf is WCConfederation => !!conf && conf !== 'INTERCONT')
+        : [];
+      const winner = intercontinentalCandidates.find(t => !usedNames.has(t.name) && !groupConfs.includes(t.confederation));
+      if (!winner) return;
+      usedNames.add(winner.name);
+      const idx = newTeams.findIndex(t => t.name === tbd.name);
+      if (idx !== -1) {
+        newTeams[idx] = { name: winner.name, confederation: winner.confederation, reputation: winner.reputation, colors: getNTColors(winner.name), isHost: false, isPlayoffSlot: false };
+      }
+      if (group) {
+        const ti = group.teams.indexOf(tbd.name);
+        if (ti !== -1) group.teams[ti] = winner.name;
       }
     });
 

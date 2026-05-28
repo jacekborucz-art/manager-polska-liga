@@ -409,7 +409,48 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   }
 };
 
-const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, Loc>, date: Date, home: LiveTeam, away: LiveTeam, goals: MatchGoalEntry[], cards: MatchCardEntry[], injuries: MatchInjuryEntry[]) => {
+const buildRatings = (
+  home: LiveTeam,
+  away: LiveTeam,
+  homeScore: number,
+  awayScore: number,
+  goals: MatchGoalEntry[],
+  cards: MatchCardEntry[],
+  injuries: MatchInjuryEntry[],
+  seed: number
+): Record<string, number> => {
+  const ratings: Record<string, number> = {};
+  const rateTeam = (lt: LiveTeam, opponentGoals: number, won: boolean, draw: boolean) => {
+    const ids = new Set<string>([...Object.keys(lt.minutes), ...(lt.activeXI.filter(Boolean) as string[])]);
+    ids.forEach(id => {
+      const player = lt.squad.find(p => p.id === id);
+      if (!player) return;
+      const mins = lt.minutes[id] ?? 0;
+      if (mins <= 0 && !lt.activeXI.includes(id)) return;
+      const r = new Rng(hash(`${seed}|RATING|${id}`)).next();
+      let score = won ? 6.5 + r * 1.1 : draw ? 5.9 + r * 1.0 : 5.1 + r * 1.1;
+      score += Math.min(0.4, mins / 225);
+      score += goals.filter(g => g.playerId === id && !g.isMiss && !g.varDisallowed).length * 1.0;
+      score += goals.filter(g => g.assistantId === id && !g.isMiss && !g.varDisallowed).length * 0.6;
+      if (player.position === PlayerPosition.GK || player.position === PlayerPosition.DEF) {
+        score += opponentGoals === 0 ? 0.8 : -opponentGoals * 0.25;
+      }
+      cards.filter(c => c.playerId === id).forEach(card => {
+        score -= card.type === 'YELLOW' ? 0.35 : 1.6;
+      });
+      if (injuries.some(injury => injury.playerId === id && injury.severity === InjurySeverity.SEVERE)) score -= 0.25;
+      ratings[id] = Number(clamp(score, 1, 10).toFixed(1));
+    });
+  };
+
+  const homeWin = homeScore > awayScore;
+  const awayWin = awayScore > homeScore;
+  rateTeam(home, awayScore, homeWin, !homeWin && !awayWin);
+  rateTeam(away, homeScore, awayWin, !homeWin && !awayWin);
+  return ratings;
+};
+
+const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, Loc>, date: Date, home: LiveTeam, away: LiveTeam, goals: MatchGoalEntry[], cards: MatchCardEntry[], injuries: MatchInjuryEntry[], ratings: Record<string, number>) => {
   const goalBy: Record<string, number> = {}; const assistBy: Record<string, number> = {}; const yellowBy: Record<string, number> = {}; const redBy: Record<string, number> = {}; const injBy: Record<string, MatchInjuryEntry> = {};
   goals.forEach(g => { if (g.playerId) goalBy[g.playerId] = (goalBy[g.playerId] ?? 0) + 1; if (g.assistantId) assistBy[g.assistantId] = (assistBy[g.assistantId] ?? 0) + 1; });
   cards.forEach(c => { if (!c.playerId) return; if (c.type === 'YELLOW') yellowBy[c.playerId] = (yellowBy[c.playerId] ?? 0) + 1; else if (c.type === 'SECOND_YELLOW') { yellowBy[c.playerId] = (yellowBy[c.playerId] ?? 0) + 1; redBy[c.playerId] = (redBy[c.playerId] ?? 0) + 1; } else redBy[c.playerId] = (redBy[c.playerId] ?? 0) + 1; });
@@ -427,6 +468,7 @@ const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, L
       next.nationalStats.assists += assistBy[id] ?? 0;
       next.nationalStats.yellowCards += yellowBy[id] ?? 0;
       next.nationalStats.redCards += redBy[id] ?? 0;
+      if (ratings[id] !== undefined) next.nationalStats.ratingHistory = [...(next.nationalStats.ratingHistory ?? []), ratings[id]];
       next.nationalSuspensionMatches = Math.max(0, (next.nationalSuspensionMatches ?? 0) - 1);
       if ((yellowBy[id] ?? 0) > 0 && next.nationalStats.yellowCards % 4 === 0) next.nationalSuspensionMatches += 1;
       if ((redBy[id] ?? 0) > 0) next.nationalSuspensionMatches += 2;
@@ -493,9 +535,10 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
     fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
     addedTime = clamp(2 + Math.floor(stop), 2, 7);
   }
-  updatePlayers(updated, locs, date, home, away, goals, cards, injuries);
+  const ratings = buildRatings(home, away, homeScore.value, awayScore.value, goals, cards, injuries, seed);
+  updatePlayers(updated, locs, date, home, away, goals, cards, injuries, ratings);
   const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: (match.competitionLabel ?? md.competitionLabel), group: match.group, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, refereeName: `${referee.firstName} ${referee.lastName}`, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute) };
-  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [] };
+  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [], refereeName: result.refereeName, homeLineup: hs.lineup.startingXI.filter(Boolean) as string[], awayLineup: as.lineup.startingXI.filter(Boolean) as string[], ratings, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId };
   return { result, history };
 };
 

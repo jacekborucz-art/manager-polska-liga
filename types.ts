@@ -270,8 +270,23 @@ export enum MailType {
   STAFF = 'STAFF',
   MEDIA = 'MEDIA',
   SYSTEM = 'SYSTEM',
-  SCOUT = 'SCOUT'
+  SCOUT = 'SCOUT',
+  PRESS = 'PRESS',
 }
+
+export enum Newspaper {
+  GAZETA_SPORTOWA = 'GAZETA_SPORTOWA',
+  DWIE_BRAMKI = 'DWIE_BRAMKI',
+  PILKA_NOZNA = 'PILKA_NOZNA',
+  FUTBOL_NAD_WISLA = 'FUTBOL_NAD_WISLA',
+  DZIENNIK_SPORTOWY = 'DZIENNIK_SPORTOWY',
+}
+
+export interface MediaRelationship {
+  newspaper: Newspaper;
+  relationship: number;
+}
+
 export interface CoachAttributes {
   experience: number;
   decisionMaking: number;
@@ -445,6 +460,12 @@ export interface MailMessage {
       pattern?: ClubKitPattern;
       labelColor: string;
     }[];
+  } | {
+    type: 'INTERVIEW_REQUEST';
+    newspaper: Newspaper;
+    questionIds: string[];
+    placeholders: Record<string, string>;
+    deadline: string;
   };
 }
 

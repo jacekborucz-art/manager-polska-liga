@@ -86,6 +86,10 @@ export interface SaveState {
   pzpnDisciplinaryEvents?: any[];
   sentMailIds?: string[];
   lastProcessedLeagueDate?: string | null;
+  mediaRelationships?: Record<string, number>;
+  sentUnfriendlyPressMonths?: string[];
+  sentFriendlyPressMonths?: string[];
+  pendingPressArticles?: { mail: import('../types').MailMessage; deliveryDate: string }[];
 }
 
 const DEFAULT_START_DATE = new Date('2025-07-01');
@@ -466,6 +470,10 @@ function normalizeSaveState(data: SaveState): SaveState {
     pzpnDisciplinaryEvents: asArray(data.pzpnDisciplinaryEvents),
     sentMailIds: asArray(data.sentMailIds),
     lastProcessedLeagueDate: data.lastProcessedLeagueDate ?? null,
+    mediaRelationships: asRecord(data.mediaRelationships),
+    sentUnfriendlyPressMonths: asArray<string>(data.sentUnfriendlyPressMonths),
+    sentFriendlyPressMonths: asArray<string>(data.sentFriendlyPressMonths),
+    pendingPressArticles: asArray(data.pendingPressArticles),
   };
 }
 

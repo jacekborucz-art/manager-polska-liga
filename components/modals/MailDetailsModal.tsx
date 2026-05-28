@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { MailMessage, MailType, ViewState } from '../../types';
+import { MailMessage, MailType, Newspaper, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
+import { MediaInterviewModal, MediaInterviewResult } from './MediaInterviewModal';
+import { MediaInterviewService } from '../../services/MediaInterviewService';
 import { KitPreview } from '../common/KitPreview';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 
@@ -192,9 +194,80 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     userTeamId,
     reopenWinterCampInvite,
     respondToSportingDirectorObjective,
+    setMediaRelationships,
+    setClubs,
+    setPlayers,
+    managerProfile,
+    addPendingPressArticle,
   } = useGame();
 
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+
+  const handleInterviewComplete = (result: MediaInterviewResult) => {
+    setMediaRelationships(prev =>
+      MediaInterviewService.updateRelationship(prev, result.newspaper as Newspaper, result.totalRelationshipDelta)
+    );
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      return {
+        ...c,
+        morale: Math.min(100, Math.max(0, (c.morale ?? 50) + result.totalScore.morale)),
+        boardConfidence: Math.min(100, Math.max(0, (c.boardConfidence ?? 50) + result.totalScore.zarzad)),
+      };
+    }));
+    if (result.totalScore.zawodnicy !== 0 && userTeamId) {
+      setPlayers(prev => {
+        const squad = prev[userTeamId] ?? [];
+        return {
+          ...prev,
+          [userTeamId]: squad.map(p => ({
+            ...p,
+            morale: Math.min(100, Math.max(0, (p.morale ?? 50) + result.totalScore.zawodnicy)),
+          })),
+        };
+      });
+    }
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (userClub && managerProfile) {
+      const variant = MediaInterviewService.determinePressVariant(result.totalProfileScore);
+      const pressArticleMail = MediaInterviewService.generatePressArticleMail(
+        variant,
+        result.newspaper as Newspaper,
+        managerProfile.lastName,
+        userClub.name,
+        currentDate
+      );
+      const deliveryDate = pressArticleMail.date.toISOString().split('T')[0];
+      addPendingPressArticle({ mail: pressArticleMail, deliveryDate });
+    }
+    deleteMessage(mail.id);
+    setShowInterviewModal(false);
+    onClose();
+  };
+
+  const handleInterviewDecline = () => {
+    if (mail.metadata?.type !== 'INTERVIEW_REQUEST') return;
+    const newspaper = mail.metadata.newspaper as Newspaper;
+    const declineOutcome = MediaInterviewService.determineDeniedPressOutcome();
+    setMediaRelationships(prev =>
+      MediaInterviewService.updateRelationship(prev, newspaper, declineOutcome.relationshipDelta)
+    );
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (userClub && managerProfile) {
+      const pressArticleMail = MediaInterviewService.generatePressArticleMail(
+        declineOutcome.variant,
+        newspaper,
+        managerProfile.lastName,
+        userClub.name,
+        currentDate
+      );
+      const deliveryDate = pressArticleMail.date.toISOString().split('T')[0];
+      addPendingPressArticle({ mail: pressArticleMail, deliveryDate });
+    }
+    deleteMessage(mail.id);
+    onClose();
+  };
   const isTeamOfWeek = mail.metadata?.type === 'TEAM_OF_WEEK';
 
   const userClub = clubs.find(c => c.id === userTeamId);
@@ -466,6 +539,23 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </>
             )}
 
+            {mail.metadata?.type === 'INTERVIEW_REQUEST' && (
+              <>
+                <button
+                  onClick={() => setShowInterviewModal(true)}
+                  className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                >
+                  Udziel wywiadu
+                </button>
+                <button
+                  onClick={handleInterviewDecline}
+                  className="mr-4 rounded-2xl bg-slate-700 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-slate-300 shadow-xl transition-all hover:scale-105 hover:bg-slate-600 active:scale-95"
+                >
+                  Odmów wywiadu
+                </button>
+              </>
+            )}
+
             <button
               onClick={onClose}
               className={`${isTeamOfWeek ? 'px-8 py-3' : 'px-10 py-4'} rounded-2xl bg-white text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95`}
@@ -481,6 +571,16 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
           leagueName={financeReportLeague.name}
           clubs={clubs.filter(c => c.leagueId === financeReportLeague.id)}
           onClose={() => setFinanceReportLeague(null)}
+        />
+      )}
+
+      {showInterviewModal && mail.metadata?.type === 'INTERVIEW_REQUEST' && (
+        <MediaInterviewModal
+          isOpen={showInterviewModal}
+          onClose={handleInterviewComplete}
+          newspaper={mail.metadata.newspaper}
+          questionIds={mail.metadata.questionIds}
+          placeholders={mail.metadata.placeholders}
         />
       )}
     </div>

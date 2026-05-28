@@ -35,6 +35,16 @@ function getFlagCode(name: string): string | null {
   return FLAG_CODE_MAP[name]?.toLowerCase() ?? null;
 }
 
+function isPlayoffPlaceholder(name: string): boolean {
+  return name.startsWith('TBD_PATH_') || name.startsWith('TBD_FIFA_PO_');
+}
+
+function getPlayoffPlaceholderLabel(name: string): string {
+  if (name.startsWith('TBD_PATH_')) return `Zw. Ścieżki ${name.replace('TBD_PATH_', '')}`;
+  if (name.startsWith('TBD_FIFA_PO_')) return `Play-off FIFA ${name.replace('TBD_FIFA_PO_', '')}`;
+  return name;
+}
+
 function DrawFlag({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
   const code = getFlagCode(name);
   const cls = size === 'sm' ? 'w-5 h-3' : 'h-5 w-7';
@@ -80,7 +90,7 @@ function TeamChip({ team, drawnTo, isActive }: { team: WCTeam; drawnTo?: string;
         <DrawFlag name={team.name} size="sm" />
       )}
       <span className={`text-[10px] font-bold truncate max-w-[80px] ${isTBD ? 'text-white/30 italic' : 'text-white/90'}`}>
-        {isTBD ? `Zw. Ścieżki ${team.name.replace('TBD_PATH_', '')}` : team.name}
+        {isTBD ? getPlayoffPlaceholderLabel(team.name) : team.name}
       </span>
       {team.isHost && <span className="text-[8px] text-amber-400 font-black">★</span>}
       {isDrawn && <span className="text-[9px] text-white/30 ml-auto">→{drawnTo}</span>}
@@ -89,7 +99,6 @@ function TeamChip({ team, drawnTo, isActive }: { team: WCTeam; drawnTo?: string;
 }
 
 function GroupSlot({ label, teams, revealedCount }: { label: string; teams: string[]; revealedCount: number }) {
-  const isTBD = (name: string) => name.startsWith('TBD_PATH_');
   return (
     <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl p-2.5">
       <div className="relative flex justify-center mb-2 overflow-hidden rounded-lg py-0.5">
@@ -104,10 +113,10 @@ function GroupSlot({ label, teams, revealedCount }: { label: string; teams: stri
               i === revealedCount - 1 ? 'bg-amber-400/15 border border-amber-400/30 scale-[1.02]' : 'bg-white/[0.05]'
             }`}
           >
-            {isTBD(name) ? (
+            {isPlayoffPlaceholder(name) ? (
               <>
                 <div className="w-4 h-2.5 rounded-sm border border-dashed border-white/20 bg-white/5 shrink-0" />
-                <span className="text-[9px] text-white/30 italic">Zw. Ścieżki {name.replace('TBD_PATH_', '')}</span>
+                <span className="text-[9px] text-white/30 italic">{getPlayoffPlaceholderLabel(name)}</span>
               </>
             ) : (
               <>
@@ -231,7 +240,7 @@ const WCDrawView: React.FC = () => {
               Ceremonia Losowania
               <span className="text-amber-400 ml-3">MŚ {wcState.year}</span>
             </div>
-            <div className="text-xs text-white/50 mt-1">12 Grudnia · Losowanie Grup · FIFA</div>
+            <div className="text-xs text-white/50 mt-1">5 grudnia · Losowanie Grup · FIFA</div>
           </div>
           <div className="flex items-center gap-3">
             {!ceremonyStarted && (
@@ -279,7 +288,7 @@ const WCDrawView: React.FC = () => {
         <div className="mb-4 flex items-center gap-3 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-2 rounded-sm border border-dashed border-white/30 inline-block" />
-            4 miejsca zarezerwowane dla zwycięzców baraży UEFA (marzec {wcState.year})
+            4 miejsca zarezerwowane dla zwycięzców baraży UEFA i 2 dla play-off FIFA (marzec {wcState.year})
           </span>
           {wcState.playoffSlotsResolved && (
             <span className="text-green-400 font-bold">✓ Barażyści znani</span>

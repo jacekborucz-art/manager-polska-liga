@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { PlayerPosition, Player, ClubKitPattern } from '../../types';
+import { PlayerPosition, Player, ClubKitPattern, NationalTeam } from '../../types';
 import { TacticRepository } from '../../resources/tactics_db';
 import { KitSelection, KitSelectionService } from '../../services/KitSelectionService';
 import { KitPreview } from '../common/KitPreview';
@@ -11,6 +11,7 @@ import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 interface MatchReportModalProps {
   matchId: string | null;
   onClose: () => void;
+  teamType?: 'club' | 'national';
 }
 
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-[80px] border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
@@ -47,6 +48,41 @@ const resolveReportKits = (
   return KitSelectionService.getKitClashScore(savedKits.home, savedKits.away) < MIN_REPORT_KIT_DISTANCE
     ? recalculated
     : savedKits;
+};
+
+const resolveNationalReportKits = (
+  savedKits: KitSelection | undefined,
+  homeTeam: NationalTeam,
+  awayTeam: NationalTeam
+): KitSelection => {
+  if (savedKits) return savedKits;
+  const homePrimary = homeTeam.colorsHex?.[0] ?? '#dc2626';
+  const homeSecondary = homeTeam.colorsHex?.[1] ?? '#ffffff';
+  const awayPrimary = awayTeam.colorsHex?.[0] ?? '#2563eb';
+  const awaySecondary = awayTeam.colorsHex?.[1] ?? '#ffffff';
+  const clash = KitSelectionService.getKitClashScore(
+    { primary: homePrimary, secondary: homeSecondary },
+    { primary: awayPrimary, secondary: awaySecondary }
+  );
+  const awayShirt = clash < MIN_REPORT_KIT_DISTANCE ? awaySecondary : awayPrimary;
+  const awayShorts = clash < MIN_REPORT_KIT_DISTANCE ? awayPrimary : awaySecondary;
+
+  return {
+    home: {
+      primary: homePrimary,
+      shirtSecondary: homeSecondary,
+      secondary: homeSecondary,
+      pattern: 'solid',
+      text: KitSelectionService.isColorLight(homePrimary) ? '#000000' : '#ffffff',
+    },
+    away: {
+      primary: awayShirt,
+      shirtSecondary: awayShorts,
+      secondary: awayShorts,
+      pattern: 'solid',
+      text: KitSelectionService.isColorLight(awayShirt) ? '#000000' : '#ffffff',
+    },
+  };
 };
 
 const isColorDark = (hex: string): boolean => {
@@ -171,8 +207,8 @@ const getCompetitionName = (comp: string) => {
   return comp;
 };
 
-export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, onClose }) => {
-  const { clubs, players } = useGame();
+export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, onClose, teamType = 'club' }) => {
+  const { clubs, players, nationalTeams } = useGame();
 
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -206,23 +242,47 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
   );
 
   const homeClub = useMemo(
-    () => (match ? clubs.find(c => c.id === match.homeTeamId) ?? null : null),
-    [match, clubs]
+    () => match
+      ? teamType === 'national'
+        ? nationalTeams.find(t => t.id === match.homeTeamId) ?? null
+        : clubs.find(c => c.id === match.homeTeamId) ?? null
+      : null,
+    [match, clubs, nationalTeams, teamType]
   );
 
   const awayClub = useMemo(
-    () => (match ? clubs.find(c => c.id === match.awayTeamId) ?? null : null),
-    [match, clubs]
+    () => match
+      ? teamType === 'national'
+        ? nationalTeams.find(t => t.id === match.awayTeamId) ?? null
+        : clubs.find(c => c.id === match.awayTeamId) ?? null
+      : null,
+    [match, clubs, nationalTeams, teamType]
   );
 
+  const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
+
   const homePlayers = useMemo(
-    () => (homeClub ? players[homeClub.id] ?? [] : []),
-    [homeClub, players]
+    () => {
+      if (!homeClub) return [];
+      if (teamType === 'national') {
+        const team = homeClub as NationalTeam;
+        return team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+      }
+      return players[homeClub.id] ?? [];
+    },
+    [homeClub, players, allPlayersFlat, teamType]
   );
 
   const awayPlayers = useMemo(
-    () => (awayClub ? players[awayClub.id] ?? [] : []),
-    [awayClub, players]
+    () => {
+      if (!awayClub) return [];
+      if (teamType === 'national') {
+        const team = awayClub as NationalTeam;
+        return team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+      }
+      return players[awayClub.id] ?? [];
+    },
+    [awayClub, players, allPlayersFlat, teamType]
   );
 
   const motmId = useMemo(() => {
@@ -237,7 +297,11 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
 
   if (!matchId || !match || !homeClub || !awayClub) return null;
 
-  const kits = resolveReportKits(match.kits, homeClub, awayClub);
+  const kits = teamType === 'national'
+    ? resolveNationalReportKits(match.kits, homeClub as NationalTeam, awayClub as NationalTeam)
+    : resolveReportKits(match.kits, homeClub as Parameters<typeof KitSelectionService.selectOptimalKits>[0], awayClub as Parameters<typeof KitSelectionService.selectOptimalKits>[1]);
+  const homeShortName = 'shortName' in homeClub ? homeClub.shortName : homeClub.name;
+  const awayShortName = 'shortName' in awayClub ? awayClub.shortName : awayClub.name;
 
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + czerwone kartki + niestrzelone karne)
   const buildEvents = (teamId: string) => {
@@ -349,7 +413,6 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
       );
     }
 
-    const allPlayersFlat = Object.values(players).flat();
     const findPlayer = (id: string) => teamPlayers.find(p => p.id === id) ?? allPlayersFlat.find(p => p.id === id) ?? null;
     const sortedSubs = [...subs].sort((a, b) => a.minute - b.minute);
     const subbedOutIds = new Set(rawSubs.map(s => s.playerOutId).filter(Boolean) as string[]);
@@ -497,7 +560,6 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
     const awayRawSubs = (match.substitutions?.filter(s => s.teamId === awayClub.id) ?? []) as ReportSubstitution[];
     const homeSubs = getChronologicalTeamEvents(match.homeLineup ?? [], homeRawSubs, match.cards as ReportCard[], homeClub.id);
     const awaySubs = getChronologicalTeamEvents(match.awayLineup ?? [], awayRawSubs, match.cards as ReportCard[], awayClub.id);
-    const allPlayersFlat = Object.values(players).flat();
     const findAnyPlayer = (id: string) => allPlayersFlat.find(p => p.id === id) ?? null;
     const getFinalXI = (lineupIds: string[], subs: typeof homeSubs) => {
       const current: (string | null)[] = [...lineupIds];
@@ -714,7 +776,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
           <div className="px-8 pb-6 grid gap-3" style={{ gridTemplateColumns: '250px 1fr 250px' }}>
             <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
               <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
-                {homeClub.shortName}
+                {homeShortName}
               </h3>
               {renderLineup('home')}
             </div>
@@ -725,7 +787,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
 
             <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
               <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
-                {awayClub.shortName}
+                {awayShortName}
               </h3>
               {renderLineup('away')}
             </div>

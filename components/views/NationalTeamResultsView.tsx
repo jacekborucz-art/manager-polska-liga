@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ntBgImg from '../../Graphic/themes/kwalifikacje_pucharswiata2.png';
 import { useGame } from '../../context/GameContext';
 import { MatchCardEntry, MatchGoalEntry, NTMatchResult, ViewState } from '../../types';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 const GLASS_CARD = 'bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden';
 const GLOSS_LAYER = 'absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none';
@@ -203,9 +204,10 @@ function EventList<T>({ items, align, renderItem, getKey, className = '' }: Even
 
 interface MatchRowProps {
   result: NTMatchResult;
+  onOpenReport: (matchId: string) => void;
 }
 
-const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
+const MatchRow: React.FC<MatchRowProps> = ({ result, onOpenReport }) => {
   const isHighlighted = isPlayerTeam(result.home) || isPlayerTeam(result.away);
   const gradientBg = getMatchGradient(result.home, result.away);
   const homeGoalsList = teamGoals(result, 'home');
@@ -222,8 +224,19 @@ const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
 
   return (
     <div
+      role={result.matchId ? 'button' : undefined}
+      tabIndex={result.matchId ? 0 : undefined}
+      onClick={() => result.matchId && onOpenReport(result.matchId)}
+      onKeyDown={event => {
+        if (!result.matchId) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpenReport(result.matchId);
+        }
+      }}
       className={`
-        px-8 py-4 rounded-2xl mb-3 transition-all
+        px-8 py-4 rounded-2xl mb-3 transition-all outline-none
+        ${result.matchId ? 'cursor-pointer hover:-translate-y-0.5 hover:border-white/20 focus-visible:ring-2 focus-visible:ring-emerald-400/70' : ''}
         ${isHighlighted
           ? 'border border-amber-400/50 shadow-[0_0_28px_rgba(251,191,36,0.22)]'
           : 'border border-white/[0.08]'
@@ -340,6 +353,7 @@ const MatchRow: React.FC<MatchRowProps> = ({ result }) => {
 
 const NationalTeamResultsView: React.FC = () => {
   const { lastNTMatchResults, setLastNTMatchResults, advanceDay, currentDate, navigateTo } = useGame();
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   const dateLabel = currentDate.toLocaleDateString('pl-PL', {
     weekday: 'long',
@@ -412,7 +426,7 @@ const NationalTeamResultsView: React.FC = () => {
             <p className="text-slate-500 text-center text-sm py-4">Brak meczow w tym dniu</p>
           ) : (
             <>
-              {polandMatch && <MatchRow result={polandMatch} />}
+              {polandMatch && <MatchRow result={polandMatch} onOpenReport={setSelectedMatchId} />}
               {groupKeys.length > 0 && (
                 <>
                   <div className="h-px bg-white/10 my-4" />
@@ -428,7 +442,7 @@ const NationalTeamResultsView: React.FC = () => {
                           <div className="w-full h-[3px] rounded-full opacity-70" style={{ background: 'linear-gradient(to right, transparent 0%, #dc2626 20%, #ffffff 50%, #dc2626 80%, transparent 100%)' }} />
                         </div>
                         {resultsByGroup[g].map((r, i) => (
-                          <MatchRow key={i} result={r} />
+                          <MatchRow key={i} result={r} onOpenReport={setSelectedMatchId} />
                         ))}
                       </div>
                     ))}
@@ -452,6 +466,11 @@ const NationalTeamResultsView: React.FC = () => {
           Kontynuuj
         </button>
       </div>
+      <MatchReportModalPolishLeague
+        matchId={selectedMatchId}
+        onClose={() => setSelectedMatchId(null)}
+        teamType="national"
+      />
     </div>
   );
 };
