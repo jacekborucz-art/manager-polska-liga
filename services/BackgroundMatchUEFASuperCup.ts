@@ -306,9 +306,12 @@ const simulateCardsAndInjuries = (
     const stamina = p.attributes.stamina || 50;
     const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
     let drain = 2.5 + rng(offset + idx + 4000) * 1.5 + (stamEff * 0.5) + 1.5;
-    if (p.position === PlayerPosition.GK) drain *= 0.15;
+    if (p.position === PlayerPosition.GK) drain *= 0.75 + (stamina / 100) * 0.10;
     fatigueMap[pId] = drain;
-    fatigueDebtMap[pId] = 5 + ((100 - stamina) * 0.15);
+    const gkDebtFactor1 = p.position === PlayerPosition.GK
+      ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+      : 1;
+    fatigueDebtMap[pId] = (5 + ((100 - stamina) * 0.15)) * gkDebtFactor1;
   });
 
   return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap };
@@ -541,9 +544,12 @@ const simulateCLMatchFull = (
     const stamina = p.attributes.stamina || 50;
     const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
     let drain = (2.5 + rng(7000 + idx) * 1.5 + (stamEff * 0.5) + 1.5) * 0.40;
-    if (p.position === PlayerPosition.GK) drain *= 0.15;
+    if (p.position === PlayerPosition.GK) drain *= 0.75 + (stamina / 100) * 0.10;
     fatigueMap[id] = drain;
-    fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40;
+    const gkDebtFactor2 = p.position === PlayerPosition.GK
+      ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+      : 1;
+    fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40 * gkDebtFactor2;
   });
   const awaySubIns = awaySubData.allPlayedIds.filter(id => !awayLineup.startingXI.includes(id));
   awaySubIns.forEach((id, idx) => {
@@ -552,9 +558,12 @@ const simulateCLMatchFull = (
     const stamina = p.attributes.stamina || 50;
     const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
     let drain = (2.5 + rng(8000 + idx) * 1.5 + (stamEff * 0.5) + 1.5) * 0.40;
-    if (p.position === PlayerPosition.GK) drain *= 0.15;
+    if (p.position === PlayerPosition.GK) drain *= 0.75 + (stamina / 100) * 0.10;
     fatigueMap[id] = drain;
-    fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40;
+    const gkDebtFactor3 = p.position === PlayerPosition.GK
+      ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+      : 1;
+    fatigueDebtMap[id] = (5 + ((100 - stamina) * 0.15)) * 0.40 * gkDebtFactor3;
   });
 
   // â”€â”€ Atrybuowanie goli z VAR (Stage 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

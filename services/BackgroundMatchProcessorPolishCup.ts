@@ -299,10 +299,12 @@ const simulateCupMatch = (
       const stamina = p.attributes.stamina || 50;
       const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
       let drain = 2.5 + rng() * 1.5 + stamEff * 0.5 + 1.5;
-      if (p.position === PlayerPosition.GK) drain *= 0.15;
+      if (p.position === PlayerPosition.GK) drain *= 0.75 + (stamina / 100) * 0.10;
       fatigue[pId] = drain;
-      const matchDebt = 5 + (100 - stamina) * 0.15;
-      fatigueDebtMap[pId] = matchDebt;
+      const gkDebtFactor = p.position === PlayerPosition.GK
+        ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+        : 1;
+      fatigueDebtMap[pId] = (5 + (100 - stamina) * 0.15) * gkDebtFactor;
     });
   };
 

@@ -578,8 +578,7 @@ homeLineup.startingXI.forEach((id, idx) => {
     const p = homePlayers.find(px => px.id === id);
     let currentDrain = baseDrain * hPressureDrain;
       if (p?.position === 'GK') {
-      // Redukcja drenażu o losową wartość 10-30% (mnożnik 0.7 - 0.9)
-      const gkReduction = 0.4 + (seededRng(minute + idx + 500) * 0.2);
+      const gkReduction = 0.75 + ((p?.attributes?.stamina || 50) / 100) * 0.10;
       currentDrain *= gkReduction;
     }
         homeFatigue[id] = Math.max(0, homeFatigue[id] - currentDrain);
@@ -594,7 +593,7 @@ homeLineup.startingXI.forEach((id, idx) => {
           let currentDrain = baseDrain; // Korzystamy z zadeklarowanego wcześniej baseDrain
           currentDrain *= awaySidePressureDrain;
           if (p?.position === 'GK') {
-            const gkReduction = 0.7 + (seededRng(minute + idx + 600) * 0.2); // Zmieniony offset dla Gości
+            const gkReduction = 0.75 + ((p?.attributes?.stamina || 50) / 100) * 0.10;
             currentDrain *= gkReduction;
           }
           awayFatigue[id] = Math.max(0, awayFatigue[id] - currentDrain);
@@ -611,7 +610,10 @@ homeLineup.startingXI.forEach((id, idx) => {
         const p = players.find(px => px.id === id);
         if (p) {
           const staminaAttr = p.attributes.stamina || 50;
-          const matchDebt = 5 + ((100 - staminaAttr) * 0.15);
+          const gkDebtFactor = p.position === PlayerPosition.GK
+            ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (staminaAttr / 100) * 0.05))
+            : 1;
+          const matchDebt = (5 + ((100 - staminaAttr) * 0.15)) * gkDebtFactor;
           fatigueDebtMap[id] = matchDebt;
         }
       });

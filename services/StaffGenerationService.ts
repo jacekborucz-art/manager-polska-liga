@@ -158,7 +158,13 @@ function createStaffMember(
     nationality: region,
     nationalityFlag: isPolish ? '🇵🇱' : '🌍',
     role,
-    attributes: buildAttributes(role, quality),
+    attributes: (() => {
+      const rawAttrs = buildAttributes(role, quality);
+      if (reputation >= 15 && (role === StaffRole.PHYSIOTHERAPIST || role === StaffRole.CLUB_DOCTOR)) {
+        return Object.fromEntries(Object.entries(rawAttrs).map(([k, v]) => [k, Math.max(15, v)]));
+      }
+      return rawAttrs;
+    })(),
     currentClubId: clubId,
     hiredDate: new Date(2025, 6, 1).toISOString(),
     contractEndDate: contractEnd(rnd(1, 3)),

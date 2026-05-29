@@ -41,8 +41,8 @@ export const MatchEngineService = {
         if (p.position === PlayerPosition.DEF) drain *= 1.35;
         if (p.position === PlayerPosition.MID) drain *= 1.35;
         if (p.position === PlayerPosition.FWD) drain *= 1.20;
- // Bramkarz męczy się o 90% wolniej (logika stała)
-        if (p.position === PlayerPosition.GK) drain *= 0.07;
+ // Bramkarz męczy się 15-25% wolniej zależnie od staminy
+        if (p.position === PlayerPosition.GK) drain *= 0.75 + ((p.attributes.stamina || 50) / 100) * 0.10;
 
         // TUTAJ WSTAW TEN KOD - Losowy czynnik zmęczenia dla każdego (zakres 0.8x - 1.2x)
         const intensityChaos = 0.8 + (Math.random() * 0.4);

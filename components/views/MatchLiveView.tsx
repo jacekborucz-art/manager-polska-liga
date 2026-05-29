@@ -2716,7 +2716,11 @@ return {
   const applyFatigueDebtToSquad = (squad: Player[], playedIds: Set<string>) => {
       return squad.map(p => {
         if (playedIds.has(p.id)) {
-          const matchDebt = 5 + ((100 - (p.attributes.stamina || 50)) * 0.15);
+          const stamina = p.attributes.stamina || 50;
+          const gkDebtFactor = p.position === PlayerPosition.GK
+            ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+            : 1;
+          const matchDebt = (5 + ((100 - stamina) * 0.15)) * gkDebtFactor;
           return { ...p, fatigueDebt: Math.min(100, (p.fatigueDebt || 0) + matchDebt) };
         }
         return p;

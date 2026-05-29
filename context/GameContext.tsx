@@ -6655,6 +6655,19 @@ Asystent`,
       }
     }
 
+    const aiTrainingEarly = AiWeeklyTrainingService.processWeeklyTraining(
+      postReviewPlayers,
+      postReviewClubs,
+      coaches,
+      userTeamId,
+      dateToProcess,
+      simulation.updatedFixtures,
+      sessionSeed,
+      staffMembers
+    );
+    postReviewPlayers = aiTrainingEarly.updatedPlayers;
+    postReviewClubs = aiTrainingEarly.updatedClubs;
+
 const finalResult: SimulationOutput = {
       ...simulation,
       updatedClubs: postReviewClubs,

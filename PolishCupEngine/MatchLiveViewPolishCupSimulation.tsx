@@ -3327,7 +3327,11 @@ if (activePlayerTempo === 'SLOW') {
           // Jeśli zawodnik grał, naliczamy dług
           const onPitchIds = clubId === ctx.homeClub.id ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
           if (onPitchIds.includes(p.id)) {
-             const matchDebt = 10 + ((100 - (p.attributes.stamina || 50)) * 0.2);
+             const stamina = p.attributes.stamina || 50;
+             const gkDebtFactor = p.position === PlayerPosition.GK
+               ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
+               : 1;
+             const matchDebt = (10 + ((100 - stamina) * 0.2)) * gkDebtFactor;
              updatedPlayer.fatigueDebt = Math.min(100, (updatedPlayer.fatigueDebt || 0) + matchDebt);
           }
           return updatedPlayer;
