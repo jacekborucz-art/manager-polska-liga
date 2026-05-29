@@ -29,8 +29,6 @@ const pickBestFromXi = (
 
 const DAY_MS = 86_400_000;
 const NT_PRE_MATCH_RECOVERY_DAYS = 3;
-const NT_PRE_MATCH_MIN_CONDITION_RECOVERY = 25;
-const clampCondition = (value: number): number => Math.max(0, Math.min(100, value));
 
 const getUpcomingMatchTeamIds = (currentDate: Date, nationalTeams: NationalTeam[]): Set<string> => {
   const matchDate = new Date(currentDate);
@@ -86,8 +84,21 @@ export const NationalTeamLineupService = {
           return player;
         }
 
-        const nextCondition = clampCondition(player.condition + NT_PRE_MATCH_MIN_CONDITION_RECOVERY);
-        if (nextCondition === player.condition) {
+        const stamina = player.attributes.stamina || 50;
+        const strength = player.attributes.strength || 50;
+        const age = player.age || 28;
+        const staminaFactor = (stamina - 50) / 50;
+        const strengthFactor = (strength - 50) / 50;
+        const baseBoost = 32 + (staminaFactor * 10) + (strengthFactor * 8);
+        const ageModifier = age <= 24 ? 1.0
+          : age <= 29 ? 0.85
+          : age <= 32 ? 0.72
+          : age <= 35 ? 0.60
+          : 0.48;
+        const recovery = Math.round(baseBoost * ageModifier);
+        const maxConditionCap = 100 - (player.fatigueDebt || 0);
+        const nextCondition = Math.min(maxConditionCap, player.condition + recovery);
+        if (nextCondition <= player.condition) {
           return player;
         }
 
