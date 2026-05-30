@@ -3611,7 +3611,7 @@ if (activePlayerTempo === 'SLOW') {
                  <div key={p.id} className={`flex items-center gap-3 py-0.7 px-0.2 rounded-xs border transition-all ${isLightInj ? 'bg-orange-500/20 border-orange-400/50' : 'bg-white/[0.02] border-white/[0.05]'}`}>
                     <span className={`font-mono font-black text-[9px] w-6 ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
                     <div className="flex-1 flex flex-col min-w-0">
-                       <span className="text-[10px] text-slate-200 font-bold uppercase italic truncate">{p.firstName.charAt(0)}. {p.lastName}</span>
+                       <span className="text-[12px] text-slate-200 font-bold uppercase italic truncate">{p.firstName.charAt(0)}. {p.lastName}</span>
                        <div className="w-full h-0.5 bg-black/40 rounded-full overflow-hidden mt-1">
                           <div 
                              className={`h-full transition-all duration-1000 ${
@@ -3622,9 +3622,6 @@ if (activePlayerTempo === 'SLOW') {
                           />
                        </div>
                        {/* TUTAJ WSTAW TEN KOD (Wyświetlanie liczby spadku) */}
-                       <div className="flex justify-end">
-                          <span className="text-[7px] font-mono text-rose-500/80 mt-0.5">-{fatigueDrop}%</span>
-                       </div>
                     </div>
                     
                     <div className="flex gap-1 ml-2">
@@ -4372,7 +4369,7 @@ if (activePlayerTempo === 'SLOW') {
 
         {/* UNIFIED BOTTOM HUD */}
 <div className="fixed bottom-[150px] z-50 pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
-  <div className="pointer-events-auto bg-slate-900/25 backdrop-blur-3xl border border-white/10 rounded-none shadow-2xl flex items-stretch overflow-hidden" style={{ zoom: 1.3 }}>
+  <div className="pointer-events-auto bg-slate-900/60 backdrop-blur-3xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/70 rounded-xl flex items-stretch overflow-hidden" style={{ zoom: 1.3, boxShadow: '0 6px 0 rgba(0,0,0,0.6), 0 12px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10)' }}>
 
     {/* SEKCJA: PRĘDKOŚĆ */}
     <div className="flex flex-col items-center gap-1.5 px-4 py-2.5 shrink-0">
@@ -4382,10 +4379,11 @@ if (activePlayerTempo === 'SLOW') {
           <button
             key={s}
             onClick={() => setMatchState(prev => prev ? { ...prev, speed: s as any } : prev)}
-            className={`px-4 py-1 rounded-sm font-black text-[8px] transition-all uppercase tracking-widest border
+            className={`px-4 py-1 rounded-[18px] font-black text-[8px] transition-all uppercase tracking-widest border-t border-x border-b active:translate-y-[2px]
               ${matchState.speed === s
-                ? 'bg-white border-white/50 text-slate-900 shadow-xl'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                ? 'bg-white border-t-white/60 border-x-white/30 border-b-black/60 text-slate-900 shadow-xl'
+                : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:text-white hover:bg-white/10'}`}
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
           >
             x{s}
           </button>
@@ -4427,13 +4425,14 @@ if (activePlayerTempo === 'SLOW') {
                         }
                       } : s);
                     }}
-                    className={`px-4 py-1 rounded-sm text-[8px] font-black uppercase tracking-tight transition-all border
+                    className={`px-4 py-1 rounded-[18px] text-[8px] font-black uppercase tracking-tight transition-all border-t border-x border-b active:translate-y-[2px]
                       ${isActive
-                        ? 'bg-yellow-500 border-yellow-400 text-slate-900 shadow-lg'
+                        ? 'bg-yellow-500 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-slate-900 shadow-lg'
                         : isCoolingDown
-                        ? 'bg-white/3 border-white/5 text-slate-600 cursor-not-allowed'
-                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer'
+                        ? 'bg-white/[0.03] border-t-white/5 border-x-white/[0.03] border-b-black/30 text-slate-600 cursor-not-allowed'
+                        : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer'
                       }`}
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     {opt.l}
                   </button>
@@ -4470,11 +4469,12 @@ if (activePlayerTempo === 'SLOW') {
                     if ((s.userInstructions.passing ?? 'MIXED') === option.value) return s;
                     return { ...s, userInstructions: { ...s.userInstructions, passing: option.value as any, passingCooldown: s.minute + 6, passingResponseFactor: 1.0 } };
                   })}
-                  className={`px-4 py-1 rounded-sm border text-[8px] font-black uppercase tracking-tight transition-all ${
-                    isActive ? 'bg-teal-500/25 border-teal-400/60 text-teal-100'
-                    : locked ? 'bg-white/[0.03] border-white/5 text-slate-600'
-                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                  className={`px-4 py-1 rounded-[18px] border-t border-x border-b text-[8px] font-black uppercase tracking-tight transition-all active:translate-y-[2px] ${
+                    isActive ? 'bg-teal-500/25 border-t-teal-400/60 border-x-teal-500/30 border-b-black/60 text-teal-100'
+                    : locked ? 'bg-white/[0.03] border-t-white/5 border-x-white/[0.03] border-b-black/30 text-slate-600'
+                    : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-300 hover:bg-white/10 hover:text-white'
                   }`}
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
                   {option.label}
                 </button>
@@ -4514,11 +4514,12 @@ if (activePlayerTempo === 'SLOW') {
                       if ((s.userInstructions.pressing ?? 'NORMAL') === option.value) return s;
                       return { ...s, userInstructions: { ...s.userInstructions, pressing: option.value as any, pressingCooldown: s.minute + 6, pressingResponseFactor: 1.0 } };
                     })}
-                    className={`px-3 py-1 rounded-sm border text-[8px] font-black uppercase tracking-tight transition-all ${
-                      isActive ? 'bg-cyan-500/25 border-cyan-400/60 text-cyan-100'
-                      : lockedP ? 'bg-white/[0.03] border-white/5 text-slate-600'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                    className={`px-3 py-1 rounded-[18px] border-t border-x border-b text-[8px] font-black uppercase tracking-tight transition-all active:translate-y-[2px] ${
+                      isActive ? 'bg-cyan-500/25 border-t-cyan-400/60 border-x-cyan-500/30 border-b-black/60 text-cyan-100'
+                      : lockedP ? 'bg-white/[0.03] border-t-white/5 border-x-white/[0.03] border-b-black/30 text-slate-600'
+                      : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-300 hover:bg-white/10 hover:text-white'
                     }`}
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     {option.label}
                   </button>
@@ -4545,11 +4546,12 @@ if (activePlayerTempo === 'SLOW') {
                       if ((s.userInstructions.counterAttack ?? 'NORMAL') === option.value) return s;
                       return { ...s, userInstructions: { ...s.userInstructions, counterAttack: option.value as any, counterAttackCooldown: s.minute + 6, counterAttackResponseFactor: 1.0 } };
                     })}
-                    className={`px-3 py-1 rounded-sm border text-[8px] font-black uppercase tracking-tight transition-all ${
-                      isActive ? 'bg-orange-500/25 border-orange-400/60 text-orange-100'
-                      : lockedC ? 'bg-white/[0.03] border-white/5 text-slate-600'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                    className={`px-3 py-1 rounded-[18px] border-t border-x border-b text-[8px] font-black uppercase tracking-tight transition-all active:translate-y-[2px] ${
+                      isActive ? 'bg-orange-500/25 border-t-orange-400/60 border-x-orange-500/30 border-b-black/60 text-orange-100'
+                      : lockedC ? 'bg-white/[0.03] border-t-white/5 border-x-white/[0.03] border-b-black/30 text-slate-600'
+                      : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-300 hover:bg-white/10 hover:text-white'
                     }`}
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                   >
                     {option.label}
                   </button>
@@ -4568,7 +4570,8 @@ if (activePlayerTempo === 'SLOW') {
     <div className="flex flex-col gap-1.5 px-5 py-2.5 shrink-0 justify-center">
       <button
         onClick={() => setIsCommentaryOpen(v => !v)}
-        className="px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-300 font-black italic uppercase tracking-widest text-[8px] rounded-sm hover:bg-blue-500/20 hover:text-blue-200 transition-all shadow-xl text-center"
+        className="px-4 py-1.5 bg-blue-500/10 border-t border-x border-b border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-blue-300 font-black italic uppercase tracking-widest text-[8px] rounded-[18px] hover:bg-blue-500/20 hover:text-blue-200 transition-all active:translate-y-[2px] text-center"
+        style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
       >
         📋 KOMENTARZ
       </button>
@@ -4586,7 +4589,8 @@ if (activePlayerTempo === 'SLOW') {
       {matchState.isFinished ? (
         <button
           onClick={handleFinish}
-          className="px-4 py-1.5 bg-emerald-600 border-b-2 border-emerald-800 text-white rounded-sm font-black uppercase italic text-[8px] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all text-center"
+          className="px-4 py-1.5 bg-emerald-600 border-t border-x border-b border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60 text-white rounded-[18px] font-black uppercase italic text-[8px] hover:scale-[1.02] active:translate-y-[2px] transition-all text-center"
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           ZAKOŃCZ MECZ
         </button>
@@ -4695,9 +4699,10 @@ if (activePlayerTempo === 'SLOW') {
             setIsUserPaused(nextPaused);
             return { ...s, isPaused: nextPaused };
           })}
-          className={`px-4 py-1.5 rounded-sm font-black uppercase italic text-[8px] shadow-2xl transition-all hover:scale-[1.02] active:scale-95 border-b-2 text-center
-            ${matchState.isHalfTime ? 'bg-blue-600 border-blue-800 text-white' :
-              (matchState.isPaused ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-700 border-black text-slate-400')}`}
+          className={`px-4 py-1.5 rounded-[18px] font-black uppercase italic text-[8px] transition-all hover:scale-[1.02] active:translate-y-[2px] border-t border-x border-b text-center
+            ${matchState.isHalfTime ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' :
+              (matchState.isPaused ? 'bg-white border-t-white/60 border-x-white/30 border-b-black/60 text-slate-900' : 'bg-slate-700 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400')}`}
+          style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           {matchState.minute === 0 && matchState.isPaused ? 'ROZPOCZNIJ' :
            (matchState.isHalfTime ? 'WZNÓW' :
