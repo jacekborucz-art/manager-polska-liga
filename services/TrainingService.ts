@@ -185,19 +185,6 @@ export const TrainingService = {
         if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
         return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
       })();
-      const gkCoachRegressMult = (() => {
-        if (!isGkPlayer) return 1.0;
-        if (!gkCoachQuality || gkCoachQuality <= 0) {
-          if (playerTalent >= 80) return 1.00;
-          if (playerTalent >= 60) return 1.20;
-          return 1.80;
-        }
-        const q = gkCoachQuality;
-        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
-        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
-        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
-        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
-      })();
       const gkAttrSeasonalCap = isGkPlayer ? (() => {
         const t = playerTalent;
         const base = t >= 95 ? 3 : t >= 85 ? 2 : t >= 72 ? 1 : 0;
@@ -218,19 +205,6 @@ export const TrainingService = {
         if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
         return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
       })();
-      const coachRegressMult = (() => {
-        if (assistantCoachQuality === undefined) {
-          if (playerTalent >= 80) return 1.00;
-          if (playerTalent >= 60) return 1.20;
-          if (playerTalent >= 40) return 1.60;
-          return 2.00;
-        }
-        const q = assistantCoachQuality;
-        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
-        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
-        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
-        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
-      })();
       const FITNESS_COACHED_ATTRS: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength'];
       const fitnessCoachMult = (() => {
         if (fitnessCoachQuality === undefined) {
@@ -245,19 +219,6 @@ export const TrainingService = {
         if (q >= 10) return 0.15 + (q - 10) / 4 * 0.85;
         if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
         return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
-      })();
-      const fitnessCoachRegressMult = (() => {
-        if (fitnessCoachQuality === undefined) {
-          if (playerTalent >= 80) return 1.00;
-          if (playerTalent >= 60) return 1.20;
-          if (playerTalent >= 40) return 1.60;
-          return 2.00;
-        }
-        const q = fitnessCoachQuality;
-        if (q >= 14) return Math.max(0.65, 1.00 - (q - 14) / 6 * 0.35);
-        if (q >= 10) return 1.00 + (14 - q) / 4 * 0.50;
-        if (q >= 5)  return 1.50 + (10 - q) / 5 * 0.30;
-        return Math.min(2.20, 1.80 + (5 - q) / 4 * 0.40);
       })();
 
       attrKeys.forEach(key => {
@@ -307,39 +268,42 @@ export const TrainingService = {
           }
         }
 
-        let pRegress = 0.003;
         const age = player.age;
-        if (age >= 36) pRegress += 0.100;
-        else if (age >= 35) pRegress += 0.075;
-        else if (age >= 34) pRegress += 0.055;
-        else if (age >= 33) pRegress += 0.035;
-        else if (age >= 32) pRegress += 0.022;
-        else if (age >= 31) pRegress += 0.012;
-        else if (age >= 30) pRegress += 0.006;
+        const mentalAttrs: (keyof PlayerAttributes)[] = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
 
-        if (!playedThisRound) {
-          if (age >= 32) pRegress += 0.035;
-          else if (age >= 28) pRegress += 0.020;
-          else if (age >= 24) pRegress += 0.012;
-          else pRegress += 0.006;
+        const relevantCoachQuality: number = (() => {
+          if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) return gkCoachQuality ?? 0;
+          if (FITNESS_COACHED_ATTRS.includes(key)) return fitnessCoachQuality ?? 0;
+          return assistantCoachQuality ?? 0;
+        })();
+        const expectedCoachLevel = Math.min(20, clubReputation);
+        const coachDeficitRatio = expectedCoachLevel > 0
+          ? Math.max(0, (expectedCoachLevel - relevantCoachQuality) / expectedCoachLevel)
+          : 0;
+
+        let pRegress = 0;
+
+        if (!hasGeneralPlan) pRegress += 0.006;
+        if (!player.trainingFocus) pRegress += 0.002;
+        if (coachDeficitRatio > 0.3) pRegress += coachDeficitRatio * 0.010;
+        if (!playedThisRound) pRegress += 0.005;
+
+        if (age >= 33) {
+          const ageDeclineBase = age >= 36 ? 0.025 : age >= 35 ? 0.018 : age >= 34 ? 0.012 : 0.007;
+          const clubSlowsDecline =
+            clubReputation >= 14 && relevantCoachQuality >= 14 ? 0.50 :
+            clubReputation >= 10 && relevantCoachQuality >= 10 ? 0.75 : 1.00;
+          pRegress += ageDeclineBase * clubSlowsDecline;
         }
-        if (!hasGeneralPlan) pRegress += 0.004;
-        if (!player.trainingFocus) pRegress += player.age < 24 ? 0.004 : 0.002;
 
-        const physicalAttrs = ['pace', 'stamina', 'strength'];
-        const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
-        if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
-        if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
+        if (FITNESS_COACHED_ATTRS.includes(key) && age >= 33) pRegress *= 1.30;
+        if (mentalAttrs.includes(key)) pRegress *= 0.60;
+
+        const talentProtection = playerTalent >= 80 ? 0.40 : playerTalent >= 65 ? 0.70 : 1.00;
+        pRegress *= talentProtection;
         pRegress *= moraleTrainingModifier.regression;
-        if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) {
-          pRegress *= gkCoachRegressMult;
-        } else if (FITNESS_COACHED_ATTRS.includes(key)) {
-          pRegress *= fitnessCoachRegressMult;
-        } else {
-          pRegress *= coachRegressMult;
-        }
 
-        if (Math.random() < pRegress) {
+        if (pRegress > 0 && Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
           if (currentChange > -3 && attributes[key] > 10) {
             attributes[key] -= 1;
