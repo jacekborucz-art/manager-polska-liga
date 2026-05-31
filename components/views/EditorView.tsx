@@ -157,9 +157,9 @@ const LEAGUE_FILTER_BTNS = [
   { label: '3 Liga',      filter: 'L_PL_4' },
 ] as const;
 
-const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SVK', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA', 'RUS'];
+const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SVK', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA', 'RUS', 'BLR'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
-const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA'];
+const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA', 'L_SA'];
 
 const emptyStats = () => ({
   goals: 0,
@@ -584,6 +584,7 @@ export const EditorView: React.FC = () => {
     'ARG': 'Argentyna',
     'BRA': 'Brazylia',
     'RUS': 'Rosja',
+    'BLR': 'Białoruś',
   };
 
   const toggleExportClub = (id: string) => {
