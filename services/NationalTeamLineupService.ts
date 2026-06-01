@@ -1,5 +1,4 @@
 import { Coach, Lineup, NationalTeam, Player } from '../types';
-import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { LineupService } from './LineupService';
 
 export interface NationalTeamMatchSelection {
@@ -27,92 +26,7 @@ const pickBestFromXi = (
     ?.id ?? null;
 };
 
-const DAY_MS = 86_400_000;
-const NT_PRE_MATCH_RECOVERY_DAYS = 3;
-
-const getUpcomingMatchTeamIds = (currentDate: Date, nationalTeams: NationalTeam[]): Set<string> => {
-  const matchDate = new Date(currentDate);
-  matchDate.setHours(0, 0, 0, 0);
-  matchDate.setTime(matchDate.getTime() + NT_PRE_MATCH_RECOVERY_DAYS * DAY_MS);
-
-  const matchDay = getNTMatchDayForDate(matchDate, matchDate.getFullYear());
-  if (!matchDay || matchDay.matches.length === 0) {
-    return new Set<string>();
-  }
-
-  const teamByName = new Map(nationalTeams.map(team => [team.name, team]));
-  const teamIds = new Set<string>();
-
-  matchDay.matches.forEach(match => {
-    const homeTeam = teamByName.get(match.home);
-    const awayTeam = teamByName.get(match.away);
-    if (homeTeam) teamIds.add(homeTeam.id);
-    if (awayTeam) teamIds.add(awayTeam.id);
-  });
-
-  return teamIds;
-};
-
 export const NationalTeamLineupService = {
-  applyPreMatchSquadRecovery: (
-    playersMap: Record<string, Player[]>,
-    nationalTeams: NationalTeam[],
-    currentDate: Date
-  ): Record<string, Player[]> => {
-    const matchTeamIds = getUpcomingMatchTeamIds(currentDate, nationalTeams);
-    if (matchTeamIds.size === 0) {
-      return playersMap;
-    }
-
-    const squadPlayerIds = new Set<string>();
-    nationalTeams.forEach(team => {
-      if (!matchTeamIds.has(team.id)) return;
-      team.squadPlayerIds.forEach(playerId => squadPlayerIds.add(playerId));
-    });
-
-    if (squadPlayerIds.size === 0) {
-      return playersMap;
-    }
-
-    let changed = false;
-    const updatedPlayersMap: Record<string, Player[]> = {};
-
-    for (const [clubId, squad] of Object.entries(playersMap)) {
-      let squadChanged = false;
-      const updatedSquad = squad.map(player => {
-        if (!squadPlayerIds.has(player.id)) {
-          return player;
-        }
-
-        const stamina = player.attributes.stamina || 50;
-        const strength = player.attributes.strength || 50;
-        const age = player.age || 28;
-        const staminaFactor = (stamina - 50) / 50;
-        const strengthFactor = (strength - 50) / 50;
-        const baseBoost = 32 + (staminaFactor * 10) + (strengthFactor * 8);
-        const ageModifier = age <= 24 ? 1.0
-          : age <= 29 ? 0.85
-          : age <= 32 ? 0.72
-          : age <= 35 ? 0.60
-          : 0.48;
-        const recovery = Math.round(baseBoost * ageModifier);
-        const maxConditionCap = 100 - (player.fatigueDebt || 0);
-        const nextCondition = Math.min(maxConditionCap, player.condition + recovery);
-        if (nextCondition <= player.condition) {
-          return player;
-        }
-
-        squadChanged = true;
-        changed = true;
-        return { ...player, condition: nextCondition };
-      });
-
-      updatedPlayersMap[clubId] = squadChanged ? updatedSquad : squad;
-    }
-
-    return changed ? updatedPlayersMap : playersMap;
-  },
-
   buildMatchSelection: (
     team: NationalTeam,
     squad: Player[],

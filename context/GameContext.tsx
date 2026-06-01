@@ -107,7 +107,6 @@ import { TransferExecutionService } from '../services/TransferExecutionService';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
-import { NationalTeamLineupService } from '../services/NationalTeamLineupService';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
@@ -4025,8 +4024,6 @@ Asystent`,
         });
       }
 
-      setPlayers(prev => NationalTeamLineupService.applyPreMatchSquadRecovery(prev, ntReview.updatedTeams, dateToProcess));
-
       // ── Tygodniowy przegląd kadry (każdy poniedziałek, poza oknem zamrożenia NT) ─
       const ntSeasonYear = dateToProcess.getMonth() >= 6 ? dateToProcess.getFullYear() : dateToProcess.getFullYear() - 1;
       if (dateToProcess.getDay() === 1 && !NationalTeamService.isSquadFrozen(dateToProcess, ntSeasonYear)) {
@@ -4225,6 +4222,7 @@ Asystent`,
       }
     };
 
+    let playersAfterWorldCup = players;
     const processWorldCupDay = () => {
       if (!WorldCupService.isWorldCupYear(dateToProcess.getFullYear())) return;
 
@@ -4296,9 +4294,11 @@ Asystent`,
         const wcGroupDayKey = `WC_GROUP_${wcYear}_${wcDay}`;
         if (!processedDrawIds.includes(wcGroupDayKey)) {
           if (!nextWcState.groupStageComplete) {
+            const groupSimulation = WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = groupSimulation.updatedPlayers ?? playersAfterWorldCup;
             nextWcState = {
               ...nextWcState,
-              groups: WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches),
+              groups: groupSimulation.groups,
             };
             wcChanged = true;
           }
@@ -4334,8 +4334,9 @@ Asystent`,
         const wcKODayKey = `WC_KO_${wcYear}_${wcDay}`;
         if (!processedDrawIds.includes(wcKODayKey)) {
           if (nextWcState.groupStageComplete && !nextWcState.knockoutComplete) {
-            const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches);
-            nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
+            const knockoutSimulation = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+            nextWcState = { ...nextWcState, knockoutMatches: knockoutSimulation.matches };
 
             wcChanged = true;
           }
@@ -4352,8 +4353,9 @@ Asystent`,
           const hasUnplayedDueMatch = nextWcState.knockoutMatches.some(m => m.date === `${wcYear}-06-${String(koDay).padStart(2, '0')}` && !m.winner && m.home && m.away);
           if (!hasUnplayedDueMatch) continue;
 
-          const updatedKO = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, matchSimulationSeed, nationalTeams, players, coaches);
-          nextWcState = { ...nextWcState, knockoutMatches: updatedKO };
+          const knockoutSimulation = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+          playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+          nextWcState = { ...nextWcState, knockoutMatches: knockoutSimulation.matches };
           wcChanged = true;
         }
       }
@@ -6146,11 +6148,12 @@ Asystent`,
         // ── Baraże MŚ 2026: Półfinały (17 marca 2026) ─────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_SF') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
-            setWcqPlayoffState(updatedState);
+            const playoffSimulation = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
+            setWcqPlayoffState(playoffSimulation.state);
+            setPlayers(playoffSimulation.updatedPlayers);
             const playoffSfMailKey = `WCQ_PLAYOFF_POLAND_SF_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffSfMailKey)) {
-              const playoffSfMail = MailService.generateWCQPlayoffPolandMail(updatedState, 'SF', dateToProcess);
+              const playoffSfMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'SF', dateToProcess);
               if (playoffSfMail) {
                 sentMailIdsRef.current.add(playoffSfMailKey);
                 setMessages(prev => [playoffSfMail, ...prev]);
@@ -6167,11 +6170,12 @@ Asystent`,
         // ── Baraże MŚ 2026: Finały (20 marca 2026) ────────────────────────────
         if (matchDay.eventType === 'WCQ_PLAYOFF_FINAL') {
           if (wcqPlayoffState) {
-            const updatedState = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
-            setWcqPlayoffState(updatedState);
+            const playoffSimulation = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
+            setWcqPlayoffState(playoffSimulation.state);
+            setPlayers(playoffSimulation.updatedPlayers);
             const playoffFinalMailKey = `WCQ_PLAYOFF_POLAND_FINAL_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffFinalMailKey)) {
-              const playoffFinalMail = MailService.generateWCQPlayoffPolandMail(updatedState, 'FINAL', dateToProcess);
+              const playoffFinalMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'FINAL', dateToProcess);
               if (playoffFinalMail) {
                 sentMailIdsRef.current.add(playoffFinalMailKey);
                 setMessages(prev => [playoffFinalMail, ...prev]);
@@ -6186,13 +6190,12 @@ Asystent`,
         }
 
         // ── Normalne mecze reprezentacji ─────────────────────────────────────
-        const ntPreppedPlayers = NationalTeamLineupService.applyPreMatchSquadRecovery(players, nationalTeams, dateToProcess);
         const ntSimulation = NationalTeamSimulator.simulateMatchDay(
           matchDay,
           dateSeed,
           dateToProcess,
           nationalTeams,
-          ntPreppedPlayers,
+          players,
           coaches,
           seasonNumber,
           matchSimulationSeed
@@ -6259,7 +6262,7 @@ Asystent`,
       }
     }
 
-    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, coaches, matchSimulationSeed);
+    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, playersAfterWorldCup, lineups, seasonNumber, coaches, matchSimulationSeed);
     
     // 2. Obliczanie regeneracji kondycji i urazów
     const diffTime = Math.abs(dateToProcess.getTime() - lastRecoveryDate.getTime());

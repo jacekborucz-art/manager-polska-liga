@@ -21,6 +21,14 @@ interface GroupStanding {
   gf: number;
 }
 
+interface WCQPlayoffSimulation {
+  state: WCQPlayoffState;
+  updatedPlayers: Record<string, Player[]>;
+}
+
+const clonePlayersMap = (players: Record<string, Player[]>): Record<string, Player[]> =>
+  Object.fromEntries(Object.entries(players).map(([clubId, squad]) => [clubId, [...squad]]));
+
 // ─── SEEDED RNG ────────────────────────────────────────────────────────────────
 
 class Rng {
@@ -254,29 +262,32 @@ function runPlayoffMatch(
   season: number = 0,
   matchDate: Date = new Date(2026, 2, 17),
   usedRefereeIds: Set<string> = new Set(),
-): WCQPlayoffMatchResult {
+): { result: WCQPlayoffMatchResult; updatedPlayers: Record<string, Player[]> } {
   const label = 'Baraże MŚ 2026';
   const res = simulateSinglePlayoffMatch(homeTeam, awayTeam, label, matchDate, seed, nationalTeams, players, coaches, season, usedRefereeIds);
   if (res.matchHistoryEntry) {
     MatchHistoryService.logMatch(res.matchHistoryEntry);
   }
   return {
-    homeTeam,
-    awayTeam,
-    homeGoals: res.homeGoalsAET ?? res.homeGoals,
-    awayGoals: res.awayGoalsAET ?? res.awayGoals,
-    penaltyWinner: res.penaltyWinner,
-    homePenaltyGoals: res.homePenaltyGoals,
-    awayPenaltyGoals: res.awayPenaltyGoals,
-    wentToExtraTime: res.homeGoals === res.awayGoals,
-    refereeName: res.refereeName,
-    homeTeamId: res.homeTeamId,
-    awayTeamId: res.awayTeamId,
-    goals: res.goals,
-    cards: res.cards,
-    venue: res.venue,
-    attendance: res.attendance,
-    weather: res.weather,
+    updatedPlayers: res.updatedPlayers ?? players,
+    result: {
+      homeTeam,
+      awayTeam,
+      homeGoals: res.homeGoalsAET ?? res.homeGoals,
+      awayGoals: res.awayGoalsAET ?? res.awayGoals,
+      penaltyWinner: res.penaltyWinner,
+      homePenaltyGoals: res.homePenaltyGoals,
+      awayPenaltyGoals: res.awayPenaltyGoals,
+      wentToExtraTime: res.homeGoals === res.awayGoals,
+      refereeName: res.refereeName,
+      homeTeamId: res.homeTeamId,
+      awayTeamId: res.awayTeamId,
+      goals: res.goals,
+      cards: res.cards,
+      venue: res.venue,
+      attendance: res.attendance,
+      weather: res.weather,
+    },
   };
 }
 
@@ -378,15 +389,20 @@ export const WCQPlayoffService = {
     players: Record<string, Player[]>,
     coaches: Record<string, Coach>,
     seed: number
-  ): WCQPlayoffState {
+  ): WCQPlayoffSimulation {
     const sfDate = new Date(2026, 2, 17);
     const usedRefereeIds = new Set<string>();
+    let updatedPlayers = clonePlayersMap(players);
     const newPaths = state.paths.map(path => {
       const sf1Seed = seed ^ strHash(`SF1_${path.pathLabel}`);
       const sf2Seed = seed ^ strHash(`SF2_${path.pathLabel}`);
 
-      const sf1Result = runPlayoffMatch(path.sf1Home, path.sf1Away, nationalTeams, players, coaches, sf1Seed, state.seasonYear, sfDate, usedRefereeIds);
-      const sf2Result = runPlayoffMatch(path.sf2Home, path.sf2Away, nationalTeams, players, coaches, sf2Seed, state.seasonYear, sfDate, usedRefereeIds);
+      const sf1Simulation = runPlayoffMatch(path.sf1Home, path.sf1Away, nationalTeams, updatedPlayers, coaches, sf1Seed, state.seasonYear, sfDate, usedRefereeIds);
+      updatedPlayers = sf1Simulation.updatedPlayers;
+      const sf2Simulation = runPlayoffMatch(path.sf2Home, path.sf2Away, nationalTeams, updatedPlayers, coaches, sf2Seed, state.seasonYear, sfDate, usedRefereeIds);
+      updatedPlayers = sf2Simulation.updatedPlayers;
+      const sf1Result = sf1Simulation.result;
+      const sf2Result = sf2Simulation.result;
 
       const sf1Resolved = resolveSFWinner(sf1Result);
       const sf2Resolved = resolveSFWinner(sf2Result);
@@ -417,7 +433,7 @@ export const WCQPlayoffService = {
       return { ...path, sf1Result, sf2Result, sf1Winner, sf2Winner, finalHome, finalAway };
     });
 
-    return { ...state, paths: newPaths, sfCompleted: true };
+    return { state: { ...state, paths: newPaths, sfCompleted: true }, updatedPlayers };
   },
 
   /**
@@ -430,20 +446,23 @@ export const WCQPlayoffService = {
     players: Record<string, Player[]>,
     coaches: Record<string, Coach>,
     seed: number
-  ): WCQPlayoffState {
+  ): WCQPlayoffSimulation {
     const usedRefereeIds = new Set<string>();
+    let updatedPlayers = clonePlayersMap(players);
     const newPaths = state.paths.map(path => {
       if (!path.finalHome || !path.finalAway) return path;
 
       const finalSeed = seed ^ strHash(`FINAL_${path.pathLabel}`);
       const finalDate = new Date(2026, 2, 20);
-      const finalResult = runPlayoffMatch(path.finalHome, path.finalAway, nationalTeams, players, coaches, finalSeed, state.seasonYear, finalDate, usedRefereeIds);
+      const finalSimulation = runPlayoffMatch(path.finalHome, path.finalAway, nationalTeams, updatedPlayers, coaches, finalSeed, state.seasonYear, finalDate, usedRefereeIds);
+      updatedPlayers = finalSimulation.updatedPlayers;
+      const finalResult = finalSimulation.result;
       const finalResolved = resolveSFWinner(finalResult);
       const qualifier = finalResolved.winner;
 
       return { ...path, finalResult, qualifier };
     });
 
-    return { ...state, paths: newPaths, finalCompleted: true };
+    return { state: { ...state, paths: newPaths, finalCompleted: true }, updatedPlayers };
   },
 };

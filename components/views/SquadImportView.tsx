@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
 import { ClubKit, ClubManagement, Coach, SportingDirector, StaffMember, ViewState } from '../../types';
-import { getClubKits } from '../../resources/ClubKits';
+import { getClubKits, getNationalTeamKits } from '../../resources/ClubKits';
 
 interface FileResult {
   name: string;
@@ -11,6 +11,7 @@ interface FileResult {
   kits: number;
   staff: number;
   management: number;
+  nationalTeams: number;
   errors: number;
 }
 
@@ -31,8 +32,17 @@ interface PendingManagementImport {
   sportingDirector?: SportingDirector | null;
 }
 
+interface PendingNationalTeamImport {
+  teamId: string;
+  stadiumName?: string;
+  stadiumCapacity?: number;
+  reputation?: number;
+  colorsHex?: string[];
+  kits?: ClubKit[];
+}
+
 export const SquadImportView: React.FC = () => {
-  const { clubs, importSquad, navigateTo, setClubs, setCoaches, setStaffMembers } = useGame();
+  const { clubs, nationalTeams, importSquad, navigateTo, setClubs, setCoaches, setStaffMembers, setNationalTeams } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
@@ -40,6 +50,7 @@ export const SquadImportView: React.FC = () => {
   const [pendingKits, setPendingKits] = useState<PendingKitImport[]>([]);
   const [pendingStaff, setPendingStaff] = useState<PendingStaffImport[]>([]);
   const [pendingManagement, setPendingManagement] = useState<PendingManagementImport[]>([]);
+  const [pendingNationalTeams, setPendingNationalTeams] = useState<PendingNationalTeamImport[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const findClubId = (entry: Record<string, unknown>): string | null => {
@@ -49,11 +60,18 @@ export const SquadImportView: React.FC = () => {
     return match?.id ?? null;
   };
 
+  const findNationalTeamId = (entry: Record<string, unknown>): string | null => {
+    const teamId = typeof entry.teamId === 'string' ? entry.teamId : typeof entry.id === 'string' ? entry.id : '';
+    const teamName = typeof entry.name === 'string' ? entry.name : '';
+    const match = nationalTeams.find(team => team.id === teamId || team.name === teamName);
+    return match?.id ?? null;
+  };
+
   const splitLegacyManagement = (management: unknown): { management?: ClubManagement; sportingDirector?: SportingDirector | null } => {
     if (!management || typeof management !== 'object' || Array.isArray(management)) return {};
     const { sportingDirector, ...managementWithoutSportingDirector } = management as Record<string, unknown>;
     return {
-      management: managementWithoutSportingDirector as ClubManagement,
+      management: managementWithoutSportingDirector as unknown as ClubManagement,
       sportingDirector: sportingDirector as SportingDirector | undefined,
     };
   };
@@ -63,6 +81,7 @@ export const SquadImportView: React.FC = () => {
     const collectedKits: PendingKitImport[] = [];
     const collectedStaff: PendingStaffImport[] = [];
     const collectedManagement: PendingManagementImport[] = [];
+    const collectedNationalTeams: PendingNationalTeamImport[] = [];
     const results: FileResult[] = [];
     let processed = 0;
     const total = files.length;
@@ -72,13 +91,43 @@ export const SquadImportView: React.FC = () => {
       reader.onload = (ev) => {
         try {
           const raw = JSON.parse(ev.target?.result as string);
-          const rawEntries = Array.isArray(raw?.clubs) ? raw.clubs : Array.isArray(raw) ? raw : [raw];
+          const rawNationalTeamEntries = Array.isArray(raw?.teams)
+            ? raw.teams
+            : raw?.type === 'national_team'
+              ? [raw]
+              : [];
+          const rawEntries = rawNationalTeamEntries.length > 0
+            ? []
+            : Array.isArray(raw?.clubs)
+              ? raw.clubs
+              : Array.isArray(raw)
+                ? raw
+                : [raw];
           let validCount = 0;
           let errorCount = 0;
           let playerCount = 0;
           let kitCount = 0;
           let staffCount = 0;
           let managementCount = 0;
+          let nationalTeamCount = 0;
+
+          rawNationalTeamEntries.forEach((entry: Record<string, unknown>) => {
+            const teamId = findNationalTeamId(entry);
+            if (!teamId) {
+              errorCount++;
+              return;
+            }
+            collectedNationalTeams.push({
+              teamId,
+              stadiumName: typeof entry.stadiumName === 'string' ? entry.stadiumName : undefined,
+              stadiumCapacity: typeof entry.stadiumCapacity === 'number' ? entry.stadiumCapacity : undefined,
+              reputation: typeof entry.reputation === 'number' ? entry.reputation : undefined,
+              colorsHex: Array.isArray(entry.colorsHex) ? entry.colorsHex as string[] : undefined,
+              kits: Array.isArray(entry.kits) ? entry.kits as ClubKit[] : undefined,
+            });
+            validCount++;
+            nationalTeamCount++;
+          });
 
           rawEntries.forEach((entry: Record<string, unknown>) => {
             const clubId = findClubId(entry);
@@ -127,9 +176,9 @@ export const SquadImportView: React.FC = () => {
             errorCount++;
           });
 
-          results.push({ name: file.name, clubs: validCount, players: playerCount, kits: kitCount, staff: staffCount, management: managementCount, errors: errorCount });
+          results.push({ name: file.name, clubs: validCount - nationalTeamCount, players: playerCount, kits: kitCount, staff: staffCount, management: managementCount, nationalTeams: nationalTeamCount, errors: errorCount });
         } catch {
-          results.push({ name: file.name, clubs: 0, players: 0, kits: 0, staff: 0, management: 0, errors: 1 });
+          results.push({ name: file.name, clubs: 0, players: 0, kits: 0, staff: 0, management: 0, nationalTeams: 0, errors: 1 });
         }
 
         processed++;
@@ -139,6 +188,7 @@ export const SquadImportView: React.FC = () => {
           setPendingKits(prev => [...prev, ...collectedKits]);
           setPendingStaff(prev => [...prev, ...collectedStaff]);
           setPendingManagement(prev => [...prev, ...collectedManagement]);
+          setPendingNationalTeams(prev => [...prev, ...collectedNationalTeams]);
         }
       };
       reader.readAsText(file);
@@ -201,6 +251,23 @@ export const SquadImportView: React.FC = () => {
         } : club;
       }));
     }
+    if (pendingNationalTeams.length > 0) {
+      setNationalTeams(prev => prev.map(team => {
+        const entry = pendingNationalTeams.find(item => item.teamId === team.id);
+        if (!entry) return team;
+        const nextTeam = {
+          ...team,
+          stadiumName: entry.stadiumName ?? team.stadiumName,
+          stadiumCapacity: entry.stadiumCapacity ?? team.stadiumCapacity,
+          reputation: entry.reputation !== undefined
+            ? Math.min(20, Math.max(1, entry.reputation))
+            : team.reputation,
+          colorsHex: entry.colorsHex ?? team.colorsHex,
+          kits: entry.kits ?? team.kits,
+        };
+        return { ...nextTeam, kits: getNationalTeamKits(nextTeam) };
+      }));
+    }
     navigateTo(ViewState.DASHBOARD);
   };
 
@@ -214,6 +281,7 @@ export const SquadImportView: React.FC = () => {
     setPendingKits([]);
     setPendingStaff([]);
     setPendingManagement([]);
+    setPendingNationalTeams([]);
   };
 
   const totalClubs = fileResults.reduce((s, r) => s + r.clubs, 0);
@@ -221,8 +289,9 @@ export const SquadImportView: React.FC = () => {
   const totalKits = fileResults.reduce((s, r) => s + r.kits, 0);
   const totalStaff = fileResults.reduce((s, r) => s + r.staff, 0);
   const totalManagement = fileResults.reduce((s, r) => s + r.management, 0);
+  const totalNationalTeams = fileResults.reduce((s, r) => s + r.nationalTeams, 0);
   const totalErrors = fileResults.reduce((s, r) => s + r.errors, 0);
-  const hasPendingImports = pendingEntries.length > 0 || pendingKits.length > 0 || pendingStaff.length > 0 || pendingManagement.length > 0;
+  const hasPendingImports = pendingEntries.length > 0 || pendingKits.length > 0 || pendingStaff.length > 0 || pendingManagement.length > 0 || pendingNationalTeams.length > 0;
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center text-white font-black italic uppercase tracking-tighter">
@@ -233,12 +302,12 @@ export const SquadImportView: React.FC = () => {
         <div>
           <div className="text-2xl text-yellow-400 leading-tight">Wczytaj składy z pliku</div>
           <div className="text-xs text-slate-400 mt-1 normal-case not-italic tracking-normal font-normal">
-            Opcjonalnie. Możesz wgrać składy, stroje ligi, sztab ligi i zarząd ligi z eksportów edytora.
+            Opcjonalnie. Możesz wgrać składy, stroje ligi, sztab ligi, zarząd ligi i reprezentacje z eksportów edytora.
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          {['Składy', 'Stroje', 'Sztab', 'Zarząd'].map(label => (
+        <div className="grid grid-cols-5 gap-2">
+          {['Składy', 'Stroje', 'Sztab', 'Zarząd', 'Reprezentacje'].map(label => (
             <div key={label} className="rounded border border-slate-800 bg-slate-900/40 px-3 py-2 text-center text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">
               {label}
             </div>
@@ -282,15 +351,16 @@ export const SquadImportView: React.FC = () => {
             <div className="divide-y divide-slate-800/60 max-h-52 overflow-y-auto">
               {fileResults.map((r, i) => (
                 <div key={i} className="px-4 py-2 flex items-center gap-3">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.clubs > 0 ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.clubs > 0 || r.nationalTeams > 0 ? 'bg-emerald-400' : 'bg-red-500'}`} />
                   <span className="text-xs text-slate-300 flex-1 truncate normal-case not-italic tracking-normal font-normal">{r.name}</span>
-                  {r.clubs > 0 && (
+                  {(r.clubs > 0 || r.nationalTeams > 0) && (
                     <span className="text-xs text-emerald-400 whitespace-nowrap">
                       {[
                         r.players > 0 ? `${r.players} zaw.` : '',
                         r.kits > 0 ? `${r.kits} str.` : '',
                         r.staff > 0 ? `${r.staff} szt.` : '',
                         r.management > 0 ? `${r.management} zarz.` : '',
+                        r.nationalTeams > 0 ? `${r.nationalTeams} repr.` : '',
                       ].filter(Boolean).join(' / ')}
                     </span>
                   )}
@@ -309,6 +379,7 @@ export const SquadImportView: React.FC = () => {
                   {totalKits > 0 ? ` / ${totalKits} strojów` : ''}
                   {totalStaff > 0 ? ` / ${totalStaff} sztabów` : ''}
                   {totalManagement > 0 ? ` / ${totalManagement} zarządów` : ''}
+                  {totalNationalTeams > 0 ? ` / ${totalNationalTeams} reprezentacji` : ''}
                 </span>
                 {totalErrors > 0 && <span className="text-xs text-red-400">/ {totalErrors} błędów</span>}
               </div>

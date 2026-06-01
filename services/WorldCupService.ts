@@ -24,6 +24,7 @@ import {
   WCQPlayoffState,
   HealthStatus,
   InjurySeverity,
+  TrainingIntensity,
 } from '../types';
 import { WCQPlayoffService } from './WCQPlayoffService';
 import { simulateWCGroupMatch, simulateSinglePlayoffMatch } from './NationalTeamSimulator';
@@ -33,6 +34,22 @@ import { NATIONAL_TEAMS_CONMEBOL } from '../resources/static_db/NationalTeams/Na
 import { NATIONAL_TEAMS_CONCACAF } from '../resources/static_db/NationalTeams/NationalTeamsCONCACAF';
 import { NATIONAL_TEAMS_OFC } from '../resources/static_db/NationalTeams/NationalTeamsOFC';
 import { NATIONAL_TEAMS_EUROPE } from '../resources/static_db/NationalTeams/NationalTeamsEurope';
+import { RecoveryService } from './RecoveryService';
+
+export interface WorldCupGroupDaySimulation {
+  groups: WCGroup[];
+  updatedPlayers?: Record<string, Player[]>;
+}
+
+export interface WorldCupKnockoutDaySimulation {
+  matches: WCKnockoutMatch[];
+  updatedPlayers?: Record<string, Player[]>;
+}
+
+export interface WorldCupTournamentSimulation {
+  state: WCState;
+  updatedPlayers?: Record<string, Player[]>;
+}
 
 // ─── SEEDED RNG ───────────────────────────────────────────────────────────────
 
@@ -422,14 +439,15 @@ export const WorldCupService = {
     nationalTeams?: NationalTeam[],
     players?: Record<string, Player[]>,
     coaches?: Record<string, Coach>
-  ): WCGroup[] {
+  ): WorldCupGroupDaySimulation {
     const schedule = getGroupDaySchedule(day, month);
-    if (!schedule) return groups;
+    if (!schedule) return { groups, updatedPlayers: players };
 
     const getTeamRep = (name: string) =>
       teams.find(t => t.name === name)?.reputation ?? 8;
 
     const newGroups = groups.map(g => ({ ...g, matches: [...g.matches] }));
+    let updatedPlayers = players;
     const matchDate = new Date(year, month - 1, day);
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
@@ -444,8 +462,9 @@ export const WorldCupService = {
         const away = group.teams[awayIdx];
         const matchSeed = seed ^ strHash(`WC_GROUP_${groupLabel}_R${round}_${home}_${away}`);
 
-        if (nationalTeams && players && coaches) {
-          const full = simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, players, coaches);
+        if (nationalTeams && updatedPlayers && coaches) {
+          const full = simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
+          updatedPlayers = full.updatedPlayers ?? updatedPlayers;
           group.matches.push({ home, away, homeGoals: full.homeGoals, awayGoals: full.awayGoals, date: dateStr, goals: full.goals, cards: full.cards });
         } else {
           const rng = new Rng(matchSeed);
@@ -455,7 +474,7 @@ export const WorldCupService = {
       }
     }
 
-    return newGroups;
+    return { groups: newGroups, updatedPlayers };
   },
 
   /**
@@ -538,20 +557,22 @@ export const WorldCupService = {
     nationalTeams?: NationalTeam[],
     players?: Record<string, Player[]>,
     coaches?: Record<string, Coach>
-  ): WCKnockoutMatch[] {
+  ): WorldCupKnockoutDaySimulation {
     const matchDate = new Date(year, month - 1, day);
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const getTeamRep = (name: string | null) =>
       name ? (teams.find(t => t.name === name)?.reputation ?? 8) : 8;
 
+    let updatedPlayers = players;
     const newMatches = wcState.knockoutMatches.map(m => {
       if (m.date !== dateStr || m.winner) return m;
       if (!m.home || !m.away) return m;
 
       const matchSeed = seed ^ strHash(`WC_KO_${m.id}_${m.home}_${m.away}`);
 
-      if (nationalTeams && players && coaches) {
-        const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, players, coaches);
+      if (nationalTeams && updatedPlayers && coaches) {
+        const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
+        updatedPlayers = full.updatedPlayers ?? updatedPlayers;
         const wentToET = full.homeGoals === full.awayGoals;
         const wentToPenalties = full.penaltyWinner !== undefined;
         const winner = full.penaltyWinner
@@ -590,23 +611,36 @@ export const WorldCupService = {
       };
     });
 
-    return propagateWinners(newMatches, year);
+    return { matches: propagateWinners(newMatches, year), updatedPlayers };
   },
 
   /**
    * Symuluje cały turniej od razu (tryb Skip to Final).
    */
-  simulateFullTournament(wcState: WCState, seed: number, nationalTeams?: NationalTeam[], players?: Record<string, Player[]>, coaches?: Record<string, Coach>): WCState {
+  simulateFullTournament(wcState: WCState, seed: number, nationalTeams?: NationalTeam[], players?: Record<string, Player[]>, coaches?: Record<string, Coach>): WorldCupTournamentSimulation {
     let state = { ...wcState };
+    let updatedPlayers = players;
+    let previousMatchDate: Date | null = null;
+    const recoverBeforeMatchDay = (day: number, month: number) => {
+      const matchDate = new Date(state.year, month - 1, day);
+      if (updatedPlayers && previousMatchDate) {
+        const daysBetween = Math.max(1, Math.round((matchDate.getTime() - previousMatchDate.getTime()) / 86_400_000));
+        updatedPlayers = RecoveryService.applyDailyRecovery(updatedPlayers, matchDate, TrainingIntensity.NORMAL, daysBetween);
+      }
+      previousMatchDate = matchDate;
+    };
 
     // Faza grupowa — wszystkie dni
     const groupDays = [
       [2,6],[3,6],[4,6],[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],
     ];
     for (const [day, month] of groupDays) {
+      recoverBeforeMatchDay(day, month);
+      const groupSimulation = WorldCupService.simulateGroupDay(state.groups, state.teams, day, month, state.year, seed, nationalTeams, updatedPlayers, coaches);
+      updatedPlayers = groupSimulation.updatedPlayers ?? updatedPlayers;
       state = {
         ...state,
-        groups: WorldCupService.simulateGroupDay(state.groups, state.teams, day, month, state.year, seed, nationalTeams, players, coaches),
+        groups: groupSimulation.groups,
       };
     }
     state.groupStageComplete = true;
@@ -624,9 +658,12 @@ export const WorldCupService = {
       [29,6],[30,6],
     ];
     for (const [day, month] of koDays) {
+      recoverBeforeMatchDay(day, month);
+      const knockoutSimulation = WorldCupService.simulateKnockoutDay(state, state.teams, day, month, state.year, seed, nationalTeams, updatedPlayers, coaches);
+      updatedPlayers = knockoutSimulation.updatedPlayers ?? updatedPlayers;
       state = {
         ...state,
-        knockoutMatches: WorldCupService.simulateKnockoutDay(state, state.teams, day, month, state.year, seed, nationalTeams, players, coaches),
+        knockoutMatches: knockoutSimulation.matches,
       };
     }
     state.knockoutComplete = true;
@@ -636,7 +673,7 @@ export const WorldCupService = {
     state.champion = finalMatch?.winner ?? undefined;
     state.thirdPlace = thirdMatch?.winner ?? undefined;
 
-    return state;
+    return { state, updatedPlayers };
   },
 
   /**

@@ -1164,6 +1164,8 @@ export interface Player {
   freeAgentLockoutUntil: string | null;
   freeAgentClubLockouts?: Record<string, string>;
   assignedNationalTeamId?: string | null;
+  /** Data ISO końca krótkiej odnowy po występie w reprezentacji. */
+  nationalTeamRecoveryUntil?: string | null;
   /** Lista ID klubów aktualnie zainteresowanych pozyskaniem tego zawodnika (aktualizowana ~1x/miesiąc przez AI) */
   interestedClubs?: string[];
   /** ID klubu AI który aktualnie negocjuje z tym wolnym agentem */
@@ -1517,7 +1519,13 @@ export interface ClubKit {
   isActive?: boolean;
 }
 
-export type ClubKitPattern = 'solid' | 'horizontal_stripes' | 'vertical_stripes';
+export type ClubKitPattern =
+  | 'solid'
+  | 'horizontal_stripes'
+  | 'vertical_stripes'
+  | 'diagonal_stripe'
+  | 'center_band'
+  | 'center_vertical_stripe';
 
 export type BoardClubRequestType =
   | 'CLUB_FUNDS'
@@ -1675,6 +1683,7 @@ export interface NationalTeam {
   continent: string;
   tier: number;
   colorsHex: string[];
+  kits?: ClubKit[];
   stadiumName: string;
   stadiumCapacity: number;
   reputation: number;
@@ -2176,6 +2185,7 @@ export interface NTMatchResult {
   injuries?: MatchInjuryEntry[];
   timeline?: MatchEvent[];
   refereeName?: string;
+  kits?: MatchHistoryEntry['kits'];
 }
 
 export interface CalendarSlot {

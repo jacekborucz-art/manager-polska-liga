@@ -10,7 +10,7 @@ import { FinanceService } from '../../services/FinanceService';
 import { LineupService } from '../../services/LineupService';
 import { SquadGeneratorService } from '../../services/SquadGeneratorService';
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
-import { createDefaultClubKits, getClubKits } from '../../resources/ClubKits';
+import { createDefaultClubKits, createDefaultNationalTeamKits, getClubKits, getNationalTeamKits } from '../../resources/ClubKits';
 import { KitPreview } from '../common/KitPreview';
 
 const ATTR_KEYS: (keyof PlayerAttributes)[] = [
@@ -123,7 +123,19 @@ const KIT_PATTERN_OPTIONS: { value: NonNullable<ClubKit['pattern']>; label: stri
   { value: 'solid',              label: 'Zwykła' },
   { value: 'horizontal_stripes', label: 'Pasy poziome' },
   { value: 'vertical_stripes',   label: 'Pasy pionowe' },
+  { value: 'diagonal_stripe',    label: 'Pas ukośny' },
+  { value: 'center_band',        label: 'Pas poziomy pośrodku' },
+  { value: 'center_vertical_stripe', label: 'Pas pionowy pośrodku' },
 ];
+
+const NT_CONTINENT_BTNS = [
+  { value: 'Europe',        label: 'Europa' },
+  { value: 'Africa',        label: 'Afryka' },
+  { value: 'Asia',          label: 'Azja' },
+  { value: 'North America', label: 'Ameryka Płn.' },
+  { value: 'South America', label: 'Ameryka Płd.' },
+  { value: 'Oceania',       label: 'Oceania' },
+] as const;
 
 const MANAGEMENT_ATTR_LABELS: Record<string, { key: string; label: string }[]> = {
   owner:             [{ key: 'cierpliwosc', label: 'Cierpliwość' }, { key: 'ambicja', label: 'Ambicja' }, { key: 'hojnosc', label: 'Hojność' }, { key: 'doswiadczenie', label: 'Doświadczenie' }],
@@ -197,7 +209,7 @@ const toDateInputValue = (value?: string | null): string => {
 const toIsoDate = (value: string): string => new Date(value).toISOString();
 
 export const EditorView: React.FC = () => {
-  const { clubs, players, lineups, coaches, staffMembers, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs, setCoaches, setStaffMembers, userTeamId } = useGame();
+  const { clubs, players, lineups, coaches, staffMembers, nationalTeams, currentDate, getOrGenerateSquad, updatePlayer, updateLineup, setPlayers, importSquad, navigateTo, showGameNotification, setClubs, setCoaches, setStaffMembers, setNationalTeams, userTeamId } = useGame();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMsg, setImportMsg] = useState<string>('');
@@ -207,6 +219,9 @@ export const EditorView: React.FC = () => {
 
   const kitLeagueImportRef = useRef<HTMLInputElement>(null);
   const [kitImportMsg, setKitImportMsg] = useState('');
+
+  const ntImportRef = useRef<HTMLInputElement>(null);
+  const [ntImportMsg, setNTImportMsg] = useState('');
 
   const sztabImportRef = useRef<HTMLInputElement>(null);
   const [sztabImportMsg, setSztabImportMsg] = useState('');
@@ -353,6 +368,80 @@ export const EditorView: React.FC = () => {
         setKitImportMsg('Błąd parsowania pliku JSON.');
       }
       if (kitLeagueImportRef.current) kitLeagueImportRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportNationalTeamData = () => {
+    const data = {
+      type: 'national_teams',
+      teams: nationalTeams.map(team => ({
+        teamId: team.id,
+        name: team.name,
+        continent: team.continent,
+        stadiumName: team.stadiumName,
+        stadiumCapacity: team.stadiumCapacity,
+        reputation: team.reputation,
+        colorsHex: team.colorsHex,
+        kits: getNationalTeamKits(team),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'reprezentacje.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportNationalTeamData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        const entries = Array.isArray(raw?.teams)
+          ? raw.teams
+          : Array.isArray(raw)
+            ? raw
+            : [raw];
+        let updated = 0;
+        let skipped = 0;
+        let selectedTeamKits: ClubKit[] | null = null;
+        setNationalTeams(prev => prev.map(team => {
+          const entry = entries.find((item: Record<string, unknown>) =>
+            item.teamId === team.id ||
+            item.id === team.id ||
+            item.name === team.name
+          ) as Record<string, unknown> | undefined;
+          if (!entry) return team;
+          const nextTeam = {
+            ...team,
+            stadiumName: typeof entry.stadiumName === 'string' ? entry.stadiumName : team.stadiumName,
+            stadiumCapacity: typeof entry.stadiumCapacity === 'number' ? entry.stadiumCapacity : team.stadiumCapacity,
+            reputation: typeof entry.reputation === 'number'
+              ? Math.min(20, Math.max(1, entry.reputation))
+              : team.reputation,
+            colorsHex: Array.isArray(entry.colorsHex) ? entry.colorsHex as string[] : team.colorsHex,
+            kits: Array.isArray(entry.kits) ? entry.kits as ClubKit[] : team.kits,
+          };
+          const kits = getNationalTeamKits(nextTeam);
+          updated++;
+          if (team.id === selectedNTEditorTeam?.id) selectedTeamKits = kits;
+          return { ...nextTeam, kits };
+        }));
+        skipped = entries.length - updated;
+        if (selectedTeamKits) setEditNTKits(selectedTeamKits);
+        setNTImportMsg(updated > 0
+          ? `Zaimportowano ${updated} reprezentację(-e).${skipped > 0 ? ` (${skipped} pominięto)` : ''}`
+          : 'Błąd: żadna reprezentacja z pliku nie pasuje.'
+        );
+      } catch {
+        setNTImportMsg('Błąd parsowania pliku JSON.');
+      }
+      if (ntImportRef.current) ntImportRef.current.value = '';
     };
     reader.readAsText(file);
   };
@@ -653,7 +742,7 @@ export const EditorView: React.FC = () => {
     setExportSelected(new Set());
   };
 
-  const [activeSection, setActiveSection] = useState<'GRACZE' | 'FINANSE' | 'KLUBY' | 'SZTAB' | 'ZARZĄD'>('GRACZE');
+  const [activeSection, setActiveSection] = useState<'GRACZE' | 'FINANSE' | 'KLUBY' | 'REPREZENTACJE' | 'SZTAB' | 'ZARZĄD'>('GRACZE');
   const [clubsLeagueFilter, setClubsLeagueFilter] = useState<string>('L_PL_1');
   const [editingSigningPool, setEditingSigningPool] = useState<Record<string, string>>({});
 
@@ -671,6 +760,13 @@ export const EditorView: React.FC = () => {
   const [editTeamKits, setEditTeamKits] = useState<ClubKit[]>([]);
   const [editTeamSigningPool, setEditTeamSigningPool] = useState('');
   const [showRepairPanel, setShowRepairPanel] = useState(false);
+
+  const [ntContinentFilter, setNTContinentFilter] = useState('Europe');
+  const [selectedNTEditorId, setSelectedNTEditorId] = useState('');
+  const [editNTStadiumName, setEditNTStadiumName] = useState('');
+  const [editNTStadiumCapacity, setEditNTStadiumCapacity] = useState('');
+  const [editNTReputation, setEditNTReputation] = useState('');
+  const [editNTKits, setEditNTKits] = useState<ClubKit[]>([]);
 
   const [sztabLeagueFilter, setSztabLeagueFilter] = useState('');
   const [sztabSearchQuery, setSztabSearchQuery] = useState('');
@@ -840,6 +936,16 @@ export const EditorView: React.FC = () => {
     return selectedTeamClub.staffIds.map(id => staffMembers[id]).filter(Boolean);
   }, [selectedTeamClub, staffMembers]);
 
+  const filteredNationalTeams = useMemo(() =>
+    nationalTeams
+      .filter(team => team.continent === ntContinentFilter)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+  [nationalTeams, ntContinentFilter]);
+
+  const selectedNTEditorTeam = useMemo(() =>
+    nationalTeams.find(team => team.id === selectedNTEditorId) ?? null,
+  [nationalTeams, selectedNTEditorId]);
+
   const sztabSearchResults = useMemo(() => {
     if (sztabLeagueFilter) {
       const isPolish = sztabLeagueFilter.startsWith('L_PL_');
@@ -893,6 +999,14 @@ export const EditorView: React.FC = () => {
       setEditTeamSigningPool(String(selectedTeamClub.signingBonusPool));
     }
   }, [teamSearchClubId]);
+
+  useEffect(() => {
+    if (!selectedNTEditorTeam) return;
+    setEditNTStadiumName(selectedNTEditorTeam.stadiumName);
+    setEditNTStadiumCapacity(String(selectedNTEditorTeam.stadiumCapacity));
+    setEditNTReputation(String(selectedNTEditorTeam.reputation));
+    setEditNTKits(getNationalTeamKits(selectedNTEditorTeam));
+  }, [selectedNTEditorTeam]);
 
 
   const handleRepairClubFinances = () => {
@@ -979,6 +1093,47 @@ export const EditorView: React.FC = () => {
 
   const resetEditTeamKitsFromColors = () => {
     setEditTeamKits(createDefaultClubKits(editTeamColors));
+  };
+
+  const updateEditNTKit = (index: number, patch: Partial<ClubKit>) => {
+    setEditNTKits(prev => {
+      const base = prev.length === 3
+        ? prev
+        : createDefaultNationalTeamKits(selectedNTEditorTeam?.colorsHex);
+      return base.map((kit, idx) => idx === index ? { ...kit, ...patch } : kit);
+    });
+  };
+
+  const copyEditNTKitColorToBaseParts = (index: number, source: 'shirt' | 'shorts' | 'socks') => {
+    const kit = editNTKits[index];
+    if (!kit) return;
+    const color = kit[source];
+    updateEditNTKit(index, { shirt: color, shorts: color, socks: color });
+  };
+
+  const handleSaveNationalTeam = () => {
+    if (!selectedNTEditorTeam) return;
+    const stadiumName = editNTStadiumName.trim();
+    const stadiumCapacity = Math.max(0, parseInt(editNTStadiumCapacity, 10) || 0);
+    const reputation = Math.min(20, Math.max(1, parseInt(editNTReputation, 10) || 1));
+    const kits = (editNTKits.length === 3 ? editNTKits : createDefaultNationalTeamKits(selectedNTEditorTeam.colorsHex))
+      .map(kit => ({ ...kit, isActive: true }));
+
+    setNationalTeams(prev => prev.map(team => team.id === selectedNTEditorTeam.id
+      ? {
+          ...team,
+          stadiumName,
+          stadiumCapacity,
+          reputation,
+          colorsHex: kits.map(kit => kit.shirt),
+          kits,
+        }
+      : team));
+    showGameNotification({
+      title: 'Zapisano reprezentację',
+      message: `Dane reprezentacji ${selectedNTEditorTeam.name} zostały zaktualizowane.`,
+      tone: 'success'
+    });
   };
 
   const handleSztabPersonSelect = (id: string, type: 'coach' | 'staff') => {
@@ -1456,7 +1611,7 @@ export const EditorView: React.FC = () => {
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <span className="text-sm text-white mr-2">Edytor</span>
         <span className="w-px h-4 bg-slate-700" />
-        {(['GRACZE', 'FINANSE', 'KLUBY', 'SZTAB', 'ZARZĄD'] as const).map(sec => (
+        {(['GRACZE', 'FINANSE', 'KLUBY', 'REPREZENTACJE', 'SZTAB', 'ZARZĄD'] as const).map(sec => (
           <button
             key={sec}
             onClick={() => setActiveSection(sec)}
@@ -1510,6 +1665,20 @@ export const EditorView: React.FC = () => {
             ))}
           </>
         )}
+        {activeSection === 'REPREZENTACJE' && (
+          <>
+            {NT_CONTINENT_BTNS.map(continent => (
+              <button
+                key={continent.value}
+                onClick={() => { setNTContinentFilter(continent.value); setSelectedNTEditorId(''); }}
+                className={`px-2.5 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${ntContinentFilter === continent.value ? 'bg-blue-600 border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                {continent.label}
+              </button>
+            ))}
+          </>
+        )}
         <div className="ml-auto flex items-center gap-3">
           {importMsg && (
             <span className="text-xs text-emerald-400 max-w-xs truncate">{importMsg}</span>
@@ -1519,6 +1688,9 @@ export const EditorView: React.FC = () => {
           )}
           {kitImportMsg && (
             <span className="text-xs text-yellow-300 max-w-xs truncate">{kitImportMsg}</span>
+          )}
+          {ntImportMsg && (
+            <span className="text-xs text-blue-300 max-w-xs truncate">{ntImportMsg}</span>
           )}
           {activeSection === 'KLUBY' && (
             <>
@@ -1567,6 +1739,32 @@ export const EditorView: React.FC = () => {
                 accept=".json"
                 className="hidden"
                 onChange={handleImportLeagueKits}
+              />
+            </>
+          )}
+          {activeSection === 'REPREZENTACJE' && (
+            <>
+              <button
+                onClick={handleExportNationalTeamData}
+                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                title="Eksportuje wszystkie reprezentacje do jednego pliku JSON."
+              >
+                Eksportuj reprezentacje
+              </button>
+              <button
+                onClick={() => { setNTImportMsg(''); ntImportRef.current?.click(); }}
+                className="px-4 py-1.5 bg-blue-900 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                Importuj reprezentację
+              </button>
+              <input
+                ref={ntImportRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportNationalTeamData}
               />
             </>
           )}
@@ -2096,6 +2294,165 @@ export const EditorView: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* SEKCJA REPREZENTACJE */}
+      {activeSection === 'REPREZENTACJE' && (
+        <div className="flex flex-1 overflow-hidden">
+          <div className="w-72 flex-shrink-0 overflow-y-auto border-r border-slate-800 bg-slate-900/45 p-3 editor-scroll">
+            <div className={`${labelCls} mb-3`}>
+              Reprezentacje: {NT_CONTINENT_BTNS.find(continent => continent.value === ntContinentFilter)?.label}
+            </div>
+            <div className="space-y-1">
+              {filteredNationalTeams.map(team => (
+                <button
+                  key={team.id}
+                  onClick={() => setSelectedNTEditorId(team.id)}
+                  className={`w-full rounded border px-3 py-2 text-left text-xs transition-colors ${selectedNTEditorId === team.id ? 'border-blue-500/60 bg-blue-900/50 text-white' : 'border-slate-800 bg-black/20 text-slate-300 hover:border-slate-600 hover:bg-slate-800/70'}`}
+                >
+                  <span className="block">{team.name}</span>
+                  <span className="mt-0.5 block text-[9px] text-slate-500">Rep. {team.reputation} • Tier {team.tier}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-5 editor-scroll">
+            {!selectedNTEditorTeam && (
+              <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                Wybierz reprezentację z listy
+              </div>
+            )}
+
+            {selectedNTEditorTeam && (
+              <div className="mx-auto max-w-5xl">
+                <div className="mb-5 flex items-center gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <div className="text-3xl text-white">{selectedNTEditorTeam.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">{selectedNTEditorTeam.continent} • Tier {selectedNTEditorTeam.tier}</div>
+                  </div>
+                  <div className="ml-auto flex items-center gap-1">
+                    {getNationalTeamKits(selectedNTEditorTeam).map(kit => (
+                      <span key={kit.id} className="h-5 w-5 rounded-full border border-white/30" style={{ background: kit.shirt }} title={kit.name} />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Stadion</div>
+                    <input
+                      type="text"
+                      value={editNTStadiumName}
+                      onChange={(e) => setEditNTStadiumName(e.target.value)}
+                      className={`${inputCls} w-full px-3 py-2`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Pojemność</div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editNTStadiumCapacity}
+                      onChange={(e) => setEditNTStadiumCapacity(e.target.value)}
+                      className={`${inputCls} w-full px-3 py-2 tabular-nums`}
+                    />
+                  </div>
+                  <div>
+                    <div className={`${labelCls} mb-1`}>Reputacja (1–20)</div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={editNTReputation}
+                      onChange={(e) => setEditNTReputation(e.target.value)}
+                      className={`${inputCls} w-full px-3 py-2 tabular-nums`}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className={`${labelCls} mb-3`}>Stroje reprezentacji</div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {editNTKits.map((kit, index) => (
+                      <div key={kit.id || index} className="rounded-lg border border-slate-700 bg-black/25 p-3">
+                        <div className="mb-2 text-xs text-white">{kit.name}</div>
+                        <select
+                          value={kit.pattern ?? 'solid'}
+                          onChange={(e) => updateEditNTKit(index, { pattern: e.target.value as NonNullable<ClubKit['pattern']> })}
+                          className={`${selectCls} mb-3 w-full px-2 py-1.5 text-[10px]`}
+                        >
+                          {KIT_PATTERN_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <div className="flex justify-center">
+                          <KitPreview
+                            shirt={kit.shirt}
+                            shirtSecondary={kit.shirtSecondary}
+                            shorts={kit.shorts}
+                            socks={kit.socks}
+                            pattern={kit.pattern}
+                            className="h-28 w-28"
+                          />
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {([
+                            ['shirt', 'Koszulka'],
+                            ...(kit.pattern && kit.pattern !== 'solid' ? [['shirtSecondary', 'Wzór']] : []),
+                            ['shorts', 'Spodenki'],
+                            ['socks', 'Getry'],
+                          ] as [keyof ClubKit, string][]).map(([part, label]) => (
+                            <div key={part} className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-slate-500">{label}</span>
+                              <div className="relative h-7 w-12 overflow-hidden rounded border border-slate-600">
+                                <div className="h-full w-full" style={{ background: String(kit[part] ?? kit.shorts) }} />
+                                <input
+                                  type="color"
+                                  value={String(kit[part] ?? kit.shorts)}
+                                  onChange={(e) => updateEditNTKit(index, { [part]: e.target.value } as Partial<ClubKit>)}
+                                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 border-t border-slate-800 pt-2">
+                          <div className="mb-1.5 text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Kopiuj kolor na cały komplet</div>
+                          <div className="grid grid-cols-3 gap-1">
+                            {([
+                              ['shirt', 'Kosz.'],
+                              ['shorts', 'Spod.'],
+                              ['socks', 'Getry'],
+                            ] as const).map(([source, label]) => (
+                              <button
+                                key={source}
+                                type="button"
+                                onClick={() => copyEditNTKitColorToBaseParts(index, source)}
+                                className="rounded border border-slate-700 bg-white/5 px-1 py-1 text-[8px] text-slate-400 font-black italic uppercase tracking-tighter transition-colors hover:border-yellow-400/60 hover:text-yellow-300"
+                                title={`Skopiuj kolor: ${label}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSaveNationalTeam}
+                  className="mt-6 w-full rounded-[20px] border-x border-b border-t border-b-black/60 border-x-blue-700/30 border-t-blue-400/60 bg-blue-800 px-5 py-3 text-[11px] font-black italic uppercase tracking-widest text-white transition-all hover:bg-blue-700 active:translate-y-[2px]"
+                  style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.55), 0 8px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                >
+                  Zapisz reprezentację
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

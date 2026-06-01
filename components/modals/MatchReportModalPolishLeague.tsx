@@ -56,33 +56,7 @@ const resolveNationalReportKits = (
   awayTeam: NationalTeam
 ): KitSelection => {
   if (savedKits) return savedKits;
-  const homePrimary = homeTeam.colorsHex?.[0] ?? '#dc2626';
-  const homeSecondary = homeTeam.colorsHex?.[1] ?? '#ffffff';
-  const awayPrimary = awayTeam.colorsHex?.[0] ?? '#2563eb';
-  const awaySecondary = awayTeam.colorsHex?.[1] ?? '#ffffff';
-  const clash = KitSelectionService.getKitClashScore(
-    { primary: homePrimary, secondary: homeSecondary },
-    { primary: awayPrimary, secondary: awaySecondary }
-  );
-  const awayShirt = clash < MIN_REPORT_KIT_DISTANCE ? awaySecondary : awayPrimary;
-  const awayShorts = clash < MIN_REPORT_KIT_DISTANCE ? awayPrimary : awaySecondary;
-
-  return {
-    home: {
-      primary: homePrimary,
-      shirtSecondary: homeSecondary,
-      secondary: homeSecondary,
-      pattern: 'solid',
-      text: KitSelectionService.isColorLight(homePrimary) ? '#000000' : '#ffffff',
-    },
-    away: {
-      primary: awayShirt,
-      shirtSecondary: awayShorts,
-      secondary: awayShorts,
-      pattern: 'solid',
-      text: KitSelectionService.isColorLight(awayShirt) ? '#000000' : '#ffffff',
-    },
-  };
+  return KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
 };
 
 const isColorDark = (hex: string): boolean => {

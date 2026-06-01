@@ -44,6 +44,16 @@ export const RecoveryService = {
       })();
       updatedMap[clubId] = updatedMap[clubId].map(player => {
         const updated = { ...player };
+        const recoveryUntil = player.nationalTeamRecoveryUntil
+          ? new Date(player.nationalTeamRecoveryUntil).setHours(23, 59, 59, 999)
+          : 0;
+        const currentRecoveryDay = new Date(currentDate).setHours(0, 0, 0, 0);
+        const hasNationalTeamRecovery = recoveryUntil >= currentRecoveryDay;
+        const nationalTeamDebtRecoveryMult = hasNationalTeamRecovery ? 2.0 : 1.0;
+        const nationalTeamConditionRecoveryMult = hasNationalTeamRecovery ? 1.35 : 1.0;
+        if (player.nationalTeamRecoveryUntil && !hasNationalTeamRecovery) {
+          updated.nationalTeamRecoveryUntil = null;
+        }
 
 // TUTAJ WSTAW TEN KOD
         // 1. MODYFIKATORY REGENERACJI (Age & Injury Factor)
@@ -62,7 +72,7 @@ export const RecoveryService = {
         // 2. SPŁATA DŁUGU PRZEMĘCZENIA (Fatigue Debt Recovery)
         // Bazowa spłata zależy od Siły (99 STR = ~1.1 pkt długu / doba)
         const debtRecoveryBase = 1.5 + (player.attributes.strength * 0.02); 
-        const totalDebtRecovered = debtRecoveryBase * ageModifier * injuryModifier * daysCount;
+        const totalDebtRecovered = debtRecoveryBase * ageModifier * injuryModifier * daysCount * nationalTeamDebtRecoveryMult;
         updated.fatigueDebt = Math.max(0, (updated.fatigueDebt || 0) - totalDebtRecovered);
 
         // 3. OBLICZANIE REGENERACJI KONDYCJI (Respecting Max Cap)
@@ -72,7 +82,7 @@ export const RecoveryService = {
         const strengthFactor = player.attributes.strength / 100;
         const staminaFactor = player.attributes.stamina / 100;
         
-        let dailyRate = (2.45 + (strengthFactor * 1.5) + (staminaFactor * 1.5)) * recoveryMult;
+        let dailyRate = (2.45 + (strengthFactor * 1.5) + (staminaFactor * 1.5)) * recoveryMult * nationalTeamConditionRecoveryMult;
 
         // WPŁYW WYBRANEJ INTENSYWNOŚCI (STAGE 1 PRO)
         if (intensity === TrainingIntensity.LIGHT) {

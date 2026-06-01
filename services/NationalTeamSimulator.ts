@@ -23,6 +23,7 @@ import { NationalTeamLineupService } from './NationalTeamLineupService';
 import { RefereeService } from './RefereeService';
 import { TacticRepository } from '../resources/tactics_db';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { KitSelectionService } from './KitSelectionService';
 
 export interface NationalTeamMatchDaySimulation {
   results: NTMatchResult[];
@@ -66,6 +67,15 @@ const hash = (v: string) => {
 };
 const nameOf = (p?: Player | null) => p ? `${p.firstName} ${p.lastName}` : 'Unknown';
 const fatMul = (f: number) => 0.52 + 0.48 * Math.pow(clamp(f, 0, 100) / 100, 1.25);
+const DAY_MS = 86_400_000;
+const NT_RECOVERY_DAYS = 3;
+
+const getNationalTeamRecoveryUntil = (date: Date): string => {
+  const recoveryUntil = new Date(date);
+  recoveryUntil.setHours(0, 0, 0, 0);
+  recoveryUntil.setTime(recoveryUntil.getTime() + NT_RECOVERY_DAYS * DAY_MS);
+  return recoveryUntil.toISOString();
+};
 
 const playerOverall = (p: Player): number => {
   if (p.position === PlayerPosition.GK) {
@@ -231,25 +241,71 @@ const doSub = (lt: LiveTeam, slotIdx: number, incoming: Player, minute: number, 
   eventPush(timeline, minute, lt.side, MatchEventType.SUBSTITUTION, `${lt.team.name}: ${nameOf(incoming)} for ${nameOf(outgoing)}`, incoming.id, outgoing?.id);
 };
 
-const maybeSub = (lt: LiveTeam, minute: number, homeScore: number, awayScore: number, subs: MatchSubstitutionEntry[], timeline: MatchEvent[]) => {
+const maybeSub = (lt: LiveTeam, minute: number, homeScore: number, awayScore: number, subs: MatchSubstitutionEntry[], timeline: MatchEvent[], rng: Rng) => {
   if (lt.subs >= 5 || !lt.bench.length || minute < 46) return;
   const act = activePlayers(lt).filter(p => p.position !== PlayerPosition.GK);
-  const losing = lt.side === 'HOME' ? homeScore < awayScore : awayScore < homeScore;
-  const threshold = minute >= 75 ? 76 : minute >= 60 ? 70 : 63;
-  const injured = act.find(p => (lt.fatigue[p.id] ?? 100) < 32) ?? null;
-  const yellowRisk = minute >= 68 ? [...act].filter(p => (lt.yellows[p.id] ?? 0) > 0).sort((a, b) => ((b.attributes.aggression * 0.8) + (100 - (lt.fatigue[b.id] ?? 100))) - ((a.attributes.aggression * 0.8) + (100 - (lt.fatigue[a.id] ?? 100))))[0] ?? null : null;
-  const tired = act.map(p => ({ p, f: lt.fatigue[p.id] ?? 100 })).filter(x => x.f < threshold).sort((a, b) => a.f - b.f)[0]?.p ?? null;
-  const target = injured ?? yellowRisk ?? tired;
+  if (!act.length) return;
+
+  const ownScore = lt.side === 'HOME' ? homeScore : awayScore;
+  const opponentScore = lt.side === 'HOME' ? awayScore : homeScore;
+  const scoreDiff = ownScore - opponentScore;
+  const losing = scoreDiff < 0;
+  const winning = scoreDiff > 0;
+  const coachDecision = lt.coach.attributes.decisionMaking ?? 50;
+  const plannedSubLimit = coachDecision >= 72 ? 4 : coachDecision >= 42 ? 3 : 2;
+  const lateSubLimit = winning && minute >= 84 ? Math.min(5, plannedSubLimit + 1) : plannedSubLimit;
+
+  const candidates = act.map(player => {
+    const idx = slotIndex(lt, player.id);
+    const requiredRole = idx >= 0 ? (TacticRepository.getById(lt.tacticId).slots[idx]?.role ?? player.position) : player.position;
+    const incoming = benchReplacement(lt, requiredRole, minute, losing);
+    if (!incoming || idx < 0) return null;
+
+    const fatigue = lt.fatigue[player.id] ?? player.condition ?? 100;
+    const incomingFatigue = lt.fatigue[incoming.id] ?? incoming.condition ?? 100;
+    const currentPower = LineupService.calculateFitScore(player, requiredRole) * fatMul(fatigue);
+    const incomingPower = LineupService.calculateFitScore(incoming, requiredRole) * fatMul(incomingFatigue);
+    const fatiguePressure = Math.max(0, 78 - fatigue) * 1.25;
+    const yellowPressure = (lt.yellows[player.id] ?? 0) > 0 && minute >= 68
+      ? 11 + player.attributes.aggression * 0.13 + Math.max(0, 76 - fatigue) * 0.35
+      : 0;
+    const tacticalPressure = losing
+      ? (requiredRole === PlayerPosition.DEF ? 7 : requiredRole === PlayerPosition.MID ? 3 : 0)
+      : winning
+        ? (requiredRole === PlayerPosition.FWD ? 6 : requiredRole === PlayerPosition.MID ? 2 : 0)
+        : 0;
+    const benchUpgrade = clamp((incomingPower - currentPower) / 6, -8, 12);
+    const urgency = fatiguePressure + yellowPressure + tacticalPressure + benchUpgrade;
+    return { player, idx, incoming, fatigue, currentPower, incomingPower, urgency, yellowPressure };
+  }).filter(Boolean) as Array<{
+    player: Player;
+    idx: number;
+    incoming: Player;
+    fatigue: number;
+    currentPower: number;
+    incomingPower: number;
+    urgency: number;
+    yellowPressure: number;
+  }>;
+
+  const target = [...candidates].sort((a, b) => b.urgency - a.urgency)[0];
   if (!target) return;
-  const idx = slotIndex(lt, target.id);
-  if (idx < 0) return;
-  const req = TacticRepository.getById(lt.tacticId).slots[idx]?.role ?? target.position;
-  const incoming = benchReplacement(lt, req, minute, losing);
-  if (!incoming) return;
-  const cur = LineupService.calculateFitScore(target, req) * fatMul(lt.fatigue[target.id] ?? 100);
-  const inc = LineupService.calculateFitScore(incoming, req) * fatMul(lt.fatigue[incoming.id] ?? incoming.condition ?? 100);
-  if (!injured && inc < cur * 0.84 && !losing) return;
-  doSub(lt, idx, incoming, minute, subs, timeline);
+
+  const forcedByExhaustion = target.fatigue < 45;
+  const forcedByCardRisk = target.yellowPressure >= 22;
+  const canMakePlannedSub = minute >= 58 && lt.subs < lateSubLimit;
+  const phaseChance = minute >= 84 ? 0.82 : minute >= 75 ? 0.72 : minute >= 67 ? 0.58 : 0.42;
+  const coachChance = (coachDecision - 50) * 0.003;
+  const scoreChance = losing ? 0.12 : winning && minute >= 75 ? 0.08 : 0;
+  const plannedChance = clamp(phaseChance + coachChance + scoreChance, 0.25, 0.95);
+  const urgencyThreshold = minute >= 84 ? 3 : minute >= 75 ? 6 : 10;
+
+  if (!forcedByExhaustion && !forcedByCardRisk) {
+    if (!canMakePlannedSub || target.urgency < urgencyThreshold || rng.next() >= plannedChance) return;
+    if (target.incomingPower < target.currentPower * (losing ? 0.78 : 0.86)) return;
+  }
+
+  doSub(lt, target.idx, target.incoming, minute, subs, timeline);
 };
 
 const fatigueTick = (lt: LiveTeam, minute: number, weatherInt: number, trailing: boolean) => {
@@ -269,7 +325,8 @@ const fatigueTick = (lt: LiveTeam, minute: number, weatherInt: number, trailing:
     drain *= 1 + lt.sentOff.size * 0.09;
     if (trailing && minute >= 70) drain *= 1.06;
     lt.fatigue[id] = clamp((lt.fatigue[id] ?? p.condition ?? 100) - drain, 0, 100);
-    lt.debt[id] = (lt.debt[id] ?? 0) + (drain * 0.42) + ((100 - p.attributes.stamina) * 0.01);
+    const debtRoleFactor = role === PlayerPosition.GK ? 0.35 : 1;
+    lt.debt[id] = (lt.debt[id] ?? 0) + ((drain * 0.22) + ((100 - p.attributes.stamina) * 0.0013)) * debtRoleFactor;
     lt.minutes[id] = (lt.minutes[id] ?? 0) + 1;
   });
 };
@@ -474,6 +531,7 @@ const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, L
       if ((redBy[id] ?? 0) > 0) next.nationalSuspensionMatches += 2;
       if (lt.fatigue[id] !== undefined) next.condition = clamp(lt.fatigue[id], 0, 100);
       if (lt.debt[id] !== undefined) { next.fatigueDebt = clamp((next.fatigueDebt ?? 0) + lt.debt[id], 0, 100); next.condition = Math.min(next.condition, 100 - next.fatigueDebt); }
+      if (mins > 0) next.nationalTeamRecoveryUntil = getNationalTeamRecoveryUntil(date);
       if (injBy[id]) {
         const injury = injBy[id];
         next.health = { status: HealthStatus.INJURED, injury: { type: injury.type, daysRemaining: injury.days, severity: injury.severity, injuryDate: date.toISOString(), totalDays: injury.days, conditionAtInjury: next.condition } };
@@ -499,6 +557,7 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
   const awayCoach = awayTeam.coachId ? (coaches[awayTeam.coachId] ?? fallbackCoach(awayTeam.id)) : fallbackCoach(awayTeam.id);
   const hs = NationalTeamLineupService.buildMatchSelection(homeTeam, homeSquad, homeCoach);
   const as = NationalTeamLineupService.buildMatchSelection(awayTeam, awaySquad, awayCoach);
+  const kits = KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
   const envSeed = `${seed}|${homeTeam.id}|${awayTeam.id}`;
   const weather = NationalTeamEnvironmentService.getWeather(date, homeTeam, awayTeam, md.competitionLabel, envSeed);
   const attendance = NationalTeamEnvironmentService.estimateAttendance(homeTeam, awayTeam, md.competitionLabel, weather, envSeed);
@@ -512,7 +571,7 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
   const homeScore = { value: 0 }; const awayScore = { value: 0 };
   let addedTime = 2; let stop = 0.5;
   for (let minute = 1; minute <= 90 + addedTime; minute++) {
-    if (minute === 46 || (minute >= 58 && minute <= 88 && minute % 7 === 0)) { maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline); maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline); }
+    if (minute === 46 || (minute >= 58 && minute <= 88 && minute % 7 === 0)) { maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline, rng); maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline, rng); }
     const hm = metrics(home); const am = metrics(away);
     const phases = 1 + (rng.next() < clamp(0.06 + (hm.press + am.press) / 5200 + ((homeCoach.attributes.motivation + awayCoach.attributes.motivation) / 1200), 0.08, 0.34) ? 1 : 0);
     for (let i = 0; i < phases; i++) {
@@ -537,8 +596,8 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
   }
   const ratings = buildRatings(home, away, homeScore.value, awayScore.value, goals, cards, injuries, seed);
   updatePlayers(updated, locs, date, home, away, goals, cards, injuries, ratings);
-  const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: (match.competitionLabel ?? md.competitionLabel), group: match.group, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, refereeName: `${referee.firstName} ${referee.lastName}`, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute) };
-  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [], refereeName: result.refereeName, homeLineup: hs.lineup.startingXI.filter(Boolean) as string[], awayLineup: as.lineup.startingXI.filter(Boolean) as string[], ratings, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId };
+  const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: (match.competitionLabel ?? md.competitionLabel), group: match.group, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, refereeName: `${referee.firstName} ${referee.lastName}`, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute), kits };
+  const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [], refereeName: result.refereeName, homeLineup: hs.lineup.startingXI.filter(Boolean) as string[], awayLineup: as.lineup.startingXI.filter(Boolean) as string[], ratings, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId, kits };
   return { result, history };
 };
 
@@ -560,6 +619,7 @@ export interface PlayoffMatchSimResult {
   weather?: WeatherSnapshot;
   refereeName?: string;
   matchHistoryEntry?: MatchHistoryEntry;
+  updatedPlayers?: Record<string, Player[]>;
 }
 
 /**
@@ -625,6 +685,7 @@ export function simulateSinglePlayoffMatch(
   const awayCoach = awayTeam.coachId ? (coaches[awayTeam.coachId] ?? fallbackCoach(awayTeam.id)) : fallbackCoach(awayTeam.id);
   const hs = NationalTeamLineupService.buildMatchSelection(homeTeam, homeSquad, homeCoach);
   const as = NationalTeamLineupService.buildMatchSelection(awayTeam, awaySquad, awayCoach);
+  const kits = KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
   const envSeed = `${seed}|${homeTeam.id}|${awayTeam.id}`;
   const weather = NationalTeamEnvironmentService.getWeather(matchDate, homeTeam, awayTeam, competitionLabel, envSeed);
   const attendance = NationalTeamEnvironmentService.estimateAttendance(homeTeam, awayTeam, competitionLabel, weather, envSeed);
@@ -650,8 +711,8 @@ export function simulateSinglePlayoffMatch(
     let addedTime = 2;
     for (let minute = from; minute <= to + addedTime; minute++) {
       if (minute === 46 || minute === 106 || (minute >= 58 && minute <= 88 && minute % 7 === 0) || (minute >= 108 && minute <= 118 && minute % 5 === 0)) {
-        maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline);
-        maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline);
+        maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline, rng);
+        maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline, rng);
       }
       const hm = metrics(home); const am = metrics(away);
       const phases = 1 + (rng.next() < clamp(0.06 + (hm.press + am.press) / 5200 + ((homeCoach.attributes.motivation + awayCoach.attributes.motivation) / 1200), 0.08, 0.34) ? 1 : 0);
@@ -687,6 +748,8 @@ export function simulateSinglePlayoffMatch(
   }
 
   const goalsAfterAET = { home: homeScore.value, away: awayScore.value };
+  const ratings = buildRatings(home, away, goalsAfterAET.home, goalsAfterAET.away, goals, cards, [], seed);
+  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, [], ratings);
 
   // ── Rzuty karne jeśli remis po dogrywce ───────────────────────────────────
   if (homeScore.value === awayScore.value) {
@@ -724,7 +787,7 @@ export function simulateSinglePlayoffMatch(
       homeScore: goalsAfterAET.home, awayScore: goalsAfterAET.away,
       homePenaltyScore: homePK, awayPenaltyScore: awayPK,
       isExtraTime: true, attendance, venue: homeTeam.stadiumName, weather,
-      goals: sortedGoals, cards: sortedCards, refereeName,
+      goals: sortedGoals, cards: sortedCards, refereeName, kits,
     };
     return {
       homeGoals: goalsAfter90.home,
@@ -743,6 +806,7 @@ export function simulateSinglePlayoffMatch(
       weather,
       refereeName,
       matchHistoryEntry,
+      updatedPlayers,
     };
   }
 
@@ -756,7 +820,7 @@ export function simulateSinglePlayoffMatch(
     homeTeamId: homeTeam.id, awayTeamId: awayTeam.id,
     homeScore: goalsAfterAET.home, awayScore: goalsAfterAET.away,
     isExtraTime: wentToET, attendance, venue: homeTeam.stadiumName, weather,
-    goals: sortedGoals, cards: sortedCards, refereeName,
+    goals: sortedGoals, cards: sortedCards, refereeName, kits,
   };
   return {
     homeGoals: goalsAfter90.home,
@@ -772,7 +836,16 @@ export function simulateSinglePlayoffMatch(
     weather,
     refereeName,
     matchHistoryEntry,
+    updatedPlayers,
   };
+}
+
+export interface WCGroupMatchSimResult {
+  homeGoals: number;
+  awayGoals: number;
+  goals: MatchGoalEntry[];
+  cards: MatchCardEntry[];
+  updatedPlayers?: Record<string, Player[]>;
 }
 
 export function simulateWCGroupMatch(
@@ -783,7 +856,7 @@ export function simulateWCGroupMatch(
   nationalTeams: NationalTeam[],
   players: Record<string, Player[]>,
   coaches: Record<string, Coach>,
-): { homeGoals: number; awayGoals: number; goals: MatchGoalEntry[]; cards: MatchCardEntry[] } {
+): WCGroupMatchSimResult {
   const byName = new Map<string, NationalTeam>(nationalTeams.map(t => [t.name, t]));
   const updatedPlayers = cloneMap(players);
   const locs = locMap(updatedPlayers);
@@ -831,8 +904,8 @@ export function simulateWCGroupMatch(
   let stop = 0.5;
   for (let minute = 1; minute <= 90 + addedTime; minute++) {
     if (minute === 46 || (minute >= 58 && minute <= 88 && minute % 7 === 0)) {
-      maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline);
-      maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline);
+      maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline, rng);
+      maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline, rng);
     }
     const hm = metrics(home);
     const am = metrics(away);
@@ -859,12 +932,15 @@ export function simulateWCGroupMatch(
     fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
     addedTime = clamp(2 + Math.floor(stop), 2, 7);
   }
+  const ratings = buildRatings(home, away, homeScore.value, awayScore.value, goals, cards, injuries, seed);
+  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, injuries, ratings);
 
   return {
     homeGoals: homeScore.value,
     awayGoals: awayScore.value,
     goals: [...goals].sort((a, b) => a.minute - b.minute),
     cards: [...cards].sort((a, b) => a.minute - b.minute),
+    updatedPlayers,
   };
 }
 

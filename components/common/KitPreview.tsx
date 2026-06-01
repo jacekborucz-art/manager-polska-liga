@@ -33,6 +33,7 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
     pattern === 'horizontal_stripes'
       ? { width: 8, height: 10, path: <rect x="0" y="0" width="8" height="5" fill={stripeColor} fillOpacity="0.92" /> }
       : { width: 10, height: 8, path: <rect x="0" y="0" width="5" height="8" fill={stripeColor} fillOpacity="0.92" /> };
+  const usesRepeatingPattern = pattern === 'horizontal_stripes' || pattern === 'vertical_stripes';
 
   return (
     <svg viewBox="0 0 58 64" className={`${className} drop-shadow-[0_10px_16px_rgba(0,0,0,0.5)]`}>
@@ -40,7 +41,7 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
         <clipPath id={shirtClipId}>
           <path d={shirtPath} />
         </clipPath>
-        {pattern !== 'solid' && (
+        {usesRepeatingPattern && (
           <pattern id={stripeId} patternUnits="userSpaceOnUse" width={stripePattern.width} height={stripePattern.height}>
             <rect width={stripePattern.width} height={stripePattern.height} fill={shirt} />
             {stripePattern.path}
@@ -48,7 +49,16 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
         )}
       </defs>
       <path d={shirtPath} fill={shirt} stroke="rgba(255,255,255,0.28)" strokeWidth="1.4" />
-      {pattern !== 'solid' && <rect x="6" y="6" width="46" height="41" fill={`url(#${stripeId})`} clipPath={`url(#${shirtClipId})`} />}
+      {usesRepeatingPattern && <rect x="6" y="6" width="46" height="41" fill={`url(#${stripeId})`} clipPath={`url(#${shirtClipId})`} />}
+      {pattern === 'diagonal_stripe' && (
+        <path d="M8 42L42 6h10L17 46H8z" fill={stripeColor} fillOpacity="0.94" clipPath={`url(#${shirtClipId})`} />
+      )}
+      {pattern === 'center_band' && (
+        <rect x="6" y="24" width="46" height="9" fill={stripeColor} fillOpacity="0.94" clipPath={`url(#${shirtClipId})`} />
+      )}
+      {pattern === 'center_vertical_stripe' && (
+        <rect x="24" y="6" width="10" height="41" fill={stripeColor} fillOpacity="0.94" clipPath={`url(#${shirtClipId})`} />
+      )}
       <path d="M25 11l4 5 4-5" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" />
       {label !== undefined && (
         <text x="29" y="33" textAnchor="middle" fontSize="10" fontWeight="900" fontStyle="italic" fill={labelColor}>

@@ -16,7 +16,7 @@ export const RAW_CHAMPIONS_LEAGUE_CLUBS = [
   { name: "Crvena Zvezda Belgrad", country: "SRB", tier: 3, colors: ['#D50032','#FFFFFF','#D50032'], stadium: "Rajko Mitić Stadium", capacity: 53200, reputation: 14 },
   { name: "Dinamo Kijów", country: "UKR", tier: 2, colors: ['#0057B8','#FFFFFF','#0057B8'], stadium: "Olimpijski", capacity: 70050, reputation: 14 },
   { name: "Dinamo Zagrzeb", country: "CRO", tier: 2, colors: ['#0046AD','#FFFFFF','#0046AD'], stadium: "Maksimir", capacity: 35000, reputation: 13 },
-  { name: "Eintracht Frankfurt", country: "GER", tier: 2, colors: ['#000000','#FFFFFF','#E1001A'], stadium: "Deutsche Bank Park", capacity: 51500, reputation: 16 },
+
   { name: "FC Barcelona", country: "ESP", tier: 1, colors: ['#A50044','#004D98','#FDB913'], stadium: "Camp Nou", capacity: 99354, reputation: 20 },
   { name: "FC Kopenhaga", country: "DEN", tier: 3, colors: ['#9D2235','#FFFFFF','#9D2235'], stadium: "Parken", capacity: 38065, reputation: 14 },
   { name: "Fenerbahçe Stambuł", country: "TUR", tier: 2, colors: ['#0A1E3F','#FCD116','#D21034'], stadium: "Şükrü Saracoğlu", capacity: 50509, reputation: 15 },

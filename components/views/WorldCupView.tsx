@@ -641,7 +641,7 @@ function StatystykiTab({ wcState, nationalTeams }: { wcState: WCState; nationalT
 }
 
 const WorldCupView: React.FC = () => {
-  const { currentDate, wcState, setWcState, navigateTo, matchSimulationSeed, nationalTeams, players, coaches } = useGame();
+  const { currentDate, wcState, setWcState, navigateTo, matchSimulationSeed, nationalTeams, players, setPlayers, coaches } = useGame();
   const [activeTab, setActiveTab] = useState<Tab>('grupy');
   const [skipConfirm, setSkipConfirm] = useState(false);
 
@@ -670,7 +670,8 @@ const WorldCupView: React.FC = () => {
   const handleSkipToFinal = () => {
     if (!skipConfirm) { setSkipConfirm(true); return; }
     const result = WorldCupService.simulateFullTournament(wcState, matchSimulationSeed, nationalTeams, players, coaches);
-    setWcState(result);
+    setWcState(result.state);
+    if (result.updatedPlayers) setPlayers(result.updatedPlayers);
     setActiveTab('final');
     setSkipConfirm(false);
   };
@@ -689,6 +690,7 @@ const WorldCupView: React.FC = () => {
 
     const currentDayKey = Number(`${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}${String(currentDate.getDate()).padStart(2, '0')}`);
     let healedState = wcState;
+    let healedPlayers = players;
     let changed = false;
 
     for (const koDay of WC_KNOCKOUT_DAYS) {
@@ -699,9 +701,11 @@ const WorldCupView: React.FC = () => {
       const hasUnplayedDueMatch = healedState.knockoutMatches.some(m => m.date === date && !m.winner && m.home && m.away);
       if (!hasUnplayedDueMatch) continue;
 
+      const knockoutSimulation = WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, healedPlayers, coaches);
+      healedPlayers = knockoutSimulation.updatedPlayers ?? healedPlayers;
       healedState = {
         ...healedState,
-        knockoutMatches: WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, players, coaches),
+        knockoutMatches: knockoutSimulation.matches,
       };
       changed = true;
     }
@@ -718,8 +722,11 @@ const WorldCupView: React.FC = () => {
       changed = true;
     }
 
-    if (changed) setWcState(healedState);
-  }, [coaches, currentDate, nationalTeams, players, matchSimulationSeed, setWcState, wcState]);
+    if (changed) {
+      setWcState(healedState);
+      setPlayers(healedPlayers);
+    }
+  }, [coaches, currentDate, nationalTeams, players, matchSimulationSeed, setPlayers, setWcState, wcState]);
 
   return (
     <div

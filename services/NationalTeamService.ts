@@ -20,6 +20,7 @@ import {
 } from '../constants';
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator, REGION_PROFILE } from './PlayerAttributesGenerator';
+import { createDefaultNationalTeamKits } from '../resources/ClubKits';
 
 // Skład kadry: 3 GK + 8 DEF + 8 MID + 6 FWD = 25 zawodników
 const NT_GK = 3;
@@ -43,7 +44,7 @@ const KNOWN_CLUBS = [
 ];
 
 const CLUB_COUNTRY_BY_ID = new Map<string, string>(
-  KNOWN_CLUBS.map(club => [club.id, club.country])
+  KNOWN_CLUBS.flatMap(club => club.country ? [[club.id, club.country] as const] : [])
 );
 
 const CLUB_REPUTATION_BY_ID = new Map<string, number>(
@@ -221,6 +222,7 @@ export const NationalTeamService = {
           continent: entry.continent,
           tier: entry.tier,
           colorsHex: entry.colors,
+          kits: createDefaultNationalTeamKits(entry.colors),
           stadiumName: entry.stadium,
           stadiumCapacity: entry.capacity,
           reputation: entry.reputation,
