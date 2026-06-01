@@ -330,7 +330,7 @@ export const StaffSearchView: React.FC = () => {
 
   const handleAcceptStaffCounter = () => {
     if (!selectedMember) return;
-    const k = Math.round(selectedMember.salary / 2 / 10_000) * 10_000;
+    const k = selectedMember.currentClubId ? Math.round(selectedMember.salary / 2 / 10_000) * 10_000 : 0;
     setAgreedSalary(staffCounterSalary);
     setAgreedYears(staffCounterYears);
     setKaucja(k);
@@ -745,9 +745,15 @@ export const StaffSearchView: React.FC = () => {
                   {/* FAZA 3 — potwierdzenie kaucji */}
                   {negPhase === 'confirm_payment' && (
                     <>
-                      <span className="text-[11px] italic text-slate-400 mt-1">Pracownik zgadza się na transfer. Wymagana kaucja dla obecnego klubu:</span>
-                      <span className="text-[26px] font-black italic tracking-tighter text-yellow-400 mt-1">{kaucja.toLocaleString('pl-PL')} PLN</span>
-                      <span className="text-[10px] italic text-slate-500">(6 miesięcznych pensji pracownika)</span>
+                      {kaucja > 0 ? (
+                        <>
+                          <span className="text-[11px] italic text-slate-400 mt-1">Pracownik zgadza się na transfer. Wymagana kaucja dla obecnego klubu:</span>
+                          <span className="text-[26px] font-black italic tracking-tighter text-yellow-400 mt-1">{kaucja.toLocaleString('pl-PL')} PLN</span>
+                          <span className="text-[10px] italic text-slate-500">(6 miesięcznych pensji pracownika)</span>
+                        </>
+                      ) : (
+                        <span className="text-[11px] italic text-slate-400 mt-1">Pracownik zgadza się na warunki kontraktu.</span>
+                      )}
                       <div className="border-b border-white/15 w-full" />
                       <div className="flex gap-3 mt-1">
                         <button onClick={() => setNegOpen(false)} className="px-4 py-2 rounded-xl text-[11px] font-black italic uppercase tracking-tighter text-slate-300 border border-white/15 bg-slate-800/80 hover:bg-slate-700/80 transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.06)_inset]">Anuluj</button>
