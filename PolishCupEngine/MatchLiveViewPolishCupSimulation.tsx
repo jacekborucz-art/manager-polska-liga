@@ -45,6 +45,7 @@ import { RivalryService } from '../services/RivalryService';
 import { buildCupDisplayStats, isCupShotEvent, isCupShotOnTargetEvent } from '../services/CupMatchStatsService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 import { LineupService } from '../services/LineupService';
+import { LiveMatchInstructionBalanceService } from '../services/LiveMatchInstructionBalanceService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -1873,6 +1874,11 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
         const otherIntensity = getIntensityAtSide(otherSide);
         const sideTempo = getTempoAtSide(incidentSide);
         const otherTempo = getTempoAtSide(otherSide);
+        const incidentTeamPool = incidentSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+        const incidentTeamXI = incidentSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+        const incidentAggressionRisk = LiveMatchInstructionBalanceService.getIntensityRiskModifiers(
+          sideIntensity, incidentTeamPool, incidentTeamXI
+        );
 
         // Osobne, niezależne losowania dla kartek i kontuzji
         const cardRoll   = seededRng(currentSeed, nextMinute, 9991);
@@ -1893,6 +1899,8 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
             effectiveRedChance    *= 0.5;
             effectiveYellowChance *= 0.5;
         }
+        effectiveRedChance *= incidentAggressionRisk.aggressionFoul;
+        effectiveYellowChance *= incidentAggressionRisk.aggressionFoul;
         if (incidentSide === userSide && pIncidentMod !== 1.0) {
             effectiveRedChance *= pIncidentMod;
             effectiveYellowChance *= pIncidentMod;
@@ -1911,6 +1919,7 @@ const aiGoalThresholdBoost = pRiskMod * (aiClubRep >= playerClubRep ? 0.04 : 0.0
             injuryIntensityMult = 0.4; // obie ostrożne → −60% kontuzji
         else if (sideIntensity === 'CAUTIOUS' || otherIntensity === 'CAUTIOUS')
             injuryIntensityMult = 0.7; // jedna ostrożna → −30% kontuzji
+        injuryIntensityMult *= incidentAggressionRisk.aggressionInjury;
         // effectiveSevereBonus dodawany do progu kontuzji (por. formuła poniżej)
         if (incidentSide === userSide && pIncidentMod !== 1.0) {
             injuryIntensityMult *= Math.max(0.85, Math.min(1.15, pIncidentMod));

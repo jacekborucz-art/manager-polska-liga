@@ -1114,9 +1114,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
         // Modyfikatory intensywności — używane poniżej przy foulu/karnym/kontuzji
-        const uFoulMod    = uInstr.intensity === 'AGGRESSIVE' ? 1.30 : uInstr.intensity === 'CAUTIOUS' ? 0.72 : 1.0;
-        const uInjuryMod  = uInstr.intensity === 'AGGRESSIVE' ? 1.28 : uInstr.intensity === 'CAUTIOUS' ? 0.70 : 1.0;
-        const uPenaltyMod = uInstr.intensity === 'AGGRESSIVE' ? 1.25 : uInstr.intensity === 'CAUTIOUS' ? 0.70 : 1.0;
+        const userIntensityRisk = LiveMatchInstructionBalanceService.getIntensityRiskModifiers(
+          uInstr.intensity, uPlayersList, uXIList, uInstr.intensityResponseFactor ?? 1.0
+        );
+        const uInjuryMod = userIntensityRisk.injury;
         // PODANIA
         if (uInstr.passing === 'SHORT') {
           const rf = uInstr.passingResponseFactor ?? 1.0;
@@ -1255,14 +1256,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         };
 
-        const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : 1.0);
+        const activeIntensityRisk = isUserAttacking
+          ? userIntensityRisk
+          : LiveMatchInstructionBalanceService.getIntensityRiskModifiers(
+            nextAiActiveShout?.intensity ?? 'NORMAL', oPlayersList, oXIList
+          );
+        const uFoulThreshold = 0.043 * activeIntensityRisk.foul;
         if (rngEvent < uFoulThreshold) { 
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
            const player = (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId)!;
            if (!player) return prev; // Jeśli zawodnik zniknął (np. czerwona kartka), przerwij akcję
-           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * (isUserAttacking ? uPenaltyMod : 1.0));
+           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * activeIntensityRisk.penalty);
 
            if (isPenalty) {
               const attackingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
@@ -1628,11 +1634,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           uInstr.intensityResponseFactor ?? 1.0,
           uInstr.pressingResponseFactor ?? 1.0
         );
-        if (uFatExtra > 0) {
+        if (uFatExtra !== 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
           uXIForFat.filter((id): id is string => id !== null).forEach(id => {
-            uFatTarget[id] = Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra);
+            uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra));
           });
         }
         const aiFatExtra = nextAiActiveShout
@@ -1642,11 +1648,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               nextAiActiveShout.pressing ?? 'NORMAL'
             )
           : 0;
-        if (aiFatExtra > 0) {
+        if (aiFatExtra !== 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
           aiXIForFat.filter((id): id is string => id !== null).forEach(id => {
-            aiFatTarget[id] = Math.max(0, (aiFatTarget[id] ?? 100) - aiFatExtra);
+            aiFatTarget[id] = Math.min(100, Math.max(0, (aiFatTarget[id] ?? 100) - aiFatExtra));
           });
         }
         Object.keys(nextHomeInjuries).forEach(id => { if (nextHomeInjuries[id] === InjurySeverity.SEVERE) fatigue.home[id] = 0; });

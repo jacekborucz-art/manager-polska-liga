@@ -33,6 +33,11 @@ export const DisciplineService = {
       yellowProb *= 1.3;
     }
 
+    // Agresja pomaga w odbiorze, ale przy popełnionym faulu lekko zwiększa ryzyko kartki.
+    const aggressionGap = ((player.attributes.aggression ?? 50) - 50) / 50;
+    yellowProb *= Math.max(0.82, Math.min(1.18, 1 + aggressionGap * 0.18));
+    redProb *= Math.max(0.78, Math.min(1.22, 1 + aggressionGap * 0.22));
+
     // 4. Second Yellow Mitigation
     // Players with a yellow card are usually 30% more careful
     if (currentYellows === 1) {

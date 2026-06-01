@@ -69,6 +69,45 @@ const getProgressiveModifier = (
 };
 
 export const LiveMatchInstructionBalanceService = {
+  getIntensityRiskModifiers: (
+    intensity: InstructionIntensity,
+    players: Player[],
+    startingXI: (string | null)[],
+    intensityResponseFactor = 1
+  ) => {
+    const averageAggression = getAverage(players, startingXI, ['aggression']);
+    const aggressionGap = (averageAggression - 50) / 50;
+    const aggressionSensitivity = intensity === 'AGGRESSIVE' ? 1.25 : intensity === 'CAUTIOUS' ? 0.65 : 1;
+    const aggressionFoulMod = clamp(1 + aggressionGap * 0.18 * aggressionSensitivity, 0.78, 1.28);
+    const aggressionPenaltyMod = clamp(1 + aggressionGap * 0.10 * aggressionSensitivity, 0.88, 1.15);
+    const aggressionInjuryMod = clamp(1 + aggressionGap * 0.06 * aggressionSensitivity, 0.94, 1.10);
+    const instructionFoulMod = intensity === 'AGGRESSIVE'
+      ? 1 + 0.30 * intensityResponseFactor
+      : intensity === 'CAUTIOUS'
+        ? 1 - 0.28 * intensityResponseFactor
+        : 1;
+    const instructionPenaltyMod = intensity === 'AGGRESSIVE'
+      ? 1 + 0.25 * intensityResponseFactor
+      : intensity === 'CAUTIOUS'
+        ? 1 - 0.30 * intensityResponseFactor
+        : 1;
+    const instructionInjuryMod = intensity === 'AGGRESSIVE'
+      ? 1 + 0.28 * intensityResponseFactor
+      : intensity === 'CAUTIOUS'
+        ? 1 - 0.30 * intensityResponseFactor
+        : 1;
+
+    return {
+      averageAggression,
+      aggressionFoul: aggressionFoulMod,
+      aggressionPenalty: aggressionPenaltyMod,
+      aggressionInjury: aggressionInjuryMod,
+      foul: instructionFoulMod * aggressionFoulMod,
+      penalty: instructionPenaltyMod * aggressionPenaltyMod,
+      injury: instructionInjuryMod * aggressionInjuryMod,
+    };
+  },
+
   getCombinationModifier: (
     tempo: InstructionTempo,
     mindset: InstructionMindset,
@@ -102,7 +141,7 @@ export const LiveMatchInstructionBalanceService = {
     const intensityCost = intensity === 'AGGRESSIVE'
       ? 0.018 * intensityResponseFactor
       : intensity === 'CAUTIOUS'
-        ? 0.012 * intensityResponseFactor
+        ? -0.012 * intensityResponseFactor
         : 0;
     const pressingCost = pressing === 'PRESSING' ? 0.015 * pressingResponseFactor : 0;
     const fastPressingCost = tempo === 'FAST' && pressing === 'PRESSING' ? 0.004 : 0;
