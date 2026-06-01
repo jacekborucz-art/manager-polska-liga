@@ -8,6 +8,33 @@ import { TrainingAssistantService, generatePlayerReport } from '../../services/T
 import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
 import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusService';
 
+const MAX_ASSISTANT_TRAINING_SUGGESTIONS_PER_WEEK = 3;
+
+const getAssistantTrainingWeekKey = (date: Date): string => {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const day = Math.floor((
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
+    new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()
+  ) / 86_400_000);
+  return `${date.getFullYear()}-${Math.floor(day / 7)}`;
+};
+
+const createStableAssistantRng = (seed: string): (() => number) => {
+  let state = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    state ^= seed.charCodeAt(i);
+    state = Math.imul(state, 16777619);
+  }
+
+  return () => {
+    state |= 0;
+    state = (state + 0x6D2B79F5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
 export const TrainingView: React.FC = () => {
   const {
     navigateTo,
@@ -43,6 +70,15 @@ export const TrainingView: React.FC = () => {
   const myClub = clubs.find(c => c.id === userTeamId);
   const hasAssistant = (myClub?.staffIds ?? [])
     .some(id => staffMembers[id]?.role === StaffRole.ASSISTANT_COACH);
+  const assistantTrainingWeekKey = getAssistantTrainingWeekKey(currentDate);
+  const assistantTrainingSuggestionCount = myClub?.assistantTrainingSuggestionWeekKey === assistantTrainingWeekKey
+    ? (myClub.assistantTrainingSuggestionCount ?? 0)
+    : 0;
+  const assistantTrainingSuggestionsRemaining = Math.max(
+    0,
+    MAX_ASSISTANT_TRAINING_SUGGESTIONS_PER_WEEK - assistantTrainingSuggestionCount
+  );
+  const isAssistantTrainingSuggestionLimitReached = assistantTrainingSuggestionsRemaining === 0;
   const currentCycle = TRAINING_CYCLES.find(c => c.id === selectedId) || null;
   const sortedPlayers = useMemo(() => (
     [...teamPlayers].sort((a, b) => {
@@ -78,7 +114,16 @@ export const TrainingView: React.FC = () => {
   };
 
   const handleAskAssistant = () => {
-    if (!userTeamId || teamPlayers.length === 0) return;
+    if (!userTeamId || !myClub || teamPlayers.length === 0) return;
+
+    if (isAssistantTrainingSuggestionLimitReached) {
+      showGameNotification({
+        title: 'Limit sugestii asystenta',
+        message: 'Asystent przygotował już 3 propozycje w tym tygodniu. Kolejna konsultacja będzie dostępna w następnym tygodniu.',
+        tone: 'info'
+      });
+      return;
+    }
 
     const assistants = (myClub?.staffIds ?? [])
       .map(id => staffMembers[id])
@@ -87,7 +132,8 @@ export const TrainingView: React.FC = () => {
       ? assistants.reduce((sum, s) => sum + (s.attributes.individualWork ?? 10), 0) / assistants.length
       : 10;
 
-    const plan = TrainingAssistantService.buildPlan(teamPlayers, Math.random, assistantIndividualWork);
+    const planRng = createStableAssistantRng(`${myClub.id}_${assistantTrainingWeekKey}_training_plan`);
+    const plan = TrainingAssistantService.buildPlan(teamPlayers, planRng, assistantIndividualWork);
     const selectedCycle = TRAINING_CYCLES.find(cycle => cycle.id === plan.cycleId);
 
     setSelectedId(plan.cycleId);
@@ -99,10 +145,15 @@ export const TrainingView: React.FC = () => {
         trainingFocus: plan.playerFocuses[player.id] ?? player.trainingFocus ?? null
       }))
     }));
+    setClubs(prev => prev.map(club => club.id === userTeamId ? {
+      ...club,
+      assistantTrainingSuggestionWeekKey: assistantTrainingWeekKey,
+      assistantTrainingSuggestionCount: assistantTrainingSuggestionCount + 1
+    } : club));
 
     showGameNotification({
-      title: 'Asystent ustawil trening',
-      message: `Wybral program ${selectedCycle?.name || 'treningowy'} i przydzielil indywidualny fokus dla ${teamPlayers.length} zawodnikow.`,
+      title: 'Asystent ustawił trening',
+      message: `Wybrał program ${selectedCycle?.name || 'treningowy'} i przydzielił indywidualny fokus dla ${teamPlayers.length} zawodników. Pozostałe konsultacje w tym tygodniu: ${assistantTrainingSuggestionsRemaining - 1}.`,
       tone: 'info'
     });
   };
@@ -189,11 +240,12 @@ export const TrainingView: React.FC = () => {
             </button>
             <button
               onClick={handleAskAssistant}
-              disabled={teamPlayers.length === 0 || !hasAssistant}
+              disabled={teamPlayers.length === 0 || !hasAssistant || isAssistantTrainingSuggestionLimitReached}
+              title={isAssistantTrainingSuggestionLimitReached ? 'Limit 3 konsultacji w tym tygodniu został wykorzystany' : undefined}
               className="px-8 py-4 rounded-2xl bg-blue-600/85 hover:bg-blue-500 disabled:opacity-20 text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-300/60 border-x-blue-400/30 border-b-black/60"
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(37,99,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
             >
-              POPROS ASYSTENTA
+              POPROŚ ASYSTENTA ({assistantTrainingSuggestionsRemaining}/3)
             </button>
             {selectedId && (selectedId !== activeTrainingId || hasIndividualFocusChange) ? (
               <button
