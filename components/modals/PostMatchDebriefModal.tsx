@@ -53,11 +53,11 @@ export const PostMatchDebriefModal = ({
 
   const leftClubName  = userSide === 'HOME' ? homeClubName : awayClubName;
   const rightClubName = userSide === 'HOME' ? awayClubName : homeClubName;
-  const leftScore     = userSide === 'HOME' ? userScore    : oppScore;
-  const rightScore    = userSide === 'HOME' ? oppScore     : userScore;
+  const leftScore     = userScore;
+  const rightScore    = oppScore;
   const hasPenaltyScore = userPenaltyScore !== undefined && oppPenaltyScore !== undefined;
-  const leftPenaltyScore  = userSide === 'HOME' ? userPenaltyScore : oppPenaltyScore;
-  const rightPenaltyScore = userSide === 'HOME' ? oppPenaltyScore  : userPenaltyScore;
+  const leftPenaltyScore  = userPenaltyScore;
+  const rightPenaltyScore = oppPenaltyScore;
 
   const handleSelect = (option: DebriefComment, index: number) => {
     const effect = calculateDebriefEffect(option.hiddenType, context, sessionSeed, index);
