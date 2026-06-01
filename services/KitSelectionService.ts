@@ -18,44 +18,91 @@ export interface KitSelection {
   };
 }
 
-const selectOptimalKitsFromVariants = (homeOptions: ClubKit[], awayOptions: ClubKit[]): KitSelection => {
-  const hKit = homeOptions[0];
-  let bestOption = awayOptions[0];
-  let maxScore = -1;
+const MIN_PRIMARY_SHIRT_DISTANCE = 120;
 
-  for (const opt of awayOptions) {
-    const shirtDistance = KitSelectionService.getColorDistance(opt.shirt, hKit.shirt);
-    const accentDistance = Math.min(
-      opt.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirtSecondary, hKit.shirt) : shirtDistance,
-      hKit.shirtSecondary ? KitSelectionService.getColorDistance(opt.shirt, hKit.shirtSecondary) : shirtDistance
-    );
-    const shortsDistance = Math.min(
-      KitSelectionService.getColorDistance(opt.shorts, hKit.shirt),
-      KitSelectionService.getColorDistance(opt.shirt, hKit.shorts)
-    );
-    const score = shirtDistance * 1.8 + accentDistance * 0.55 + shortsDistance * 0.25;
-    if (score > maxScore) {
-      maxScore = score;
-      bestOption = opt;
+const buildKitSelection = (homeKit: ClubKit, awayKit: ClubKit): KitSelection => ({
+  home: {
+    primary: homeKit.shirt,
+    shirtSecondary: homeKit.shirtSecondary,
+    secondary: homeKit.shorts,
+    pattern: homeKit.pattern,
+    text: KitSelectionService.isColorLight(homeKit.shirt) ? '#000000' : '#ffffff'
+  },
+  away: {
+    primary: awayKit.shirt,
+    shirtSecondary: awayKit.shirtSecondary,
+    secondary: awayKit.shorts,
+    pattern: awayKit.pattern,
+    text: KitSelectionService.isColorLight(awayKit.shirt) ? '#000000' : '#ffffff'
+  }
+});
+
+const getKitPairScore = (homeKit: ClubKit, awayKit: ClubKit) => {
+  const primaryDistance = KitSelectionService.getColorDistance(awayKit.shirt, homeKit.shirt);
+  const accentDistance = Math.min(
+    awayKit.shirtSecondary ? KitSelectionService.getColorDistance(awayKit.shirtSecondary, homeKit.shirt) : primaryDistance,
+    homeKit.shirtSecondary ? KitSelectionService.getColorDistance(awayKit.shirt, homeKit.shirtSecondary) : primaryDistance
+  );
+  const shortsDistance = Math.min(
+    KitSelectionService.getColorDistance(awayKit.shorts, homeKit.shirt),
+    KitSelectionService.getColorDistance(awayKit.shirt, homeKit.shorts)
+  );
+  return {
+    primaryDistance,
+    supportingScore: accentDistance * 0.55 + shortsDistance * 0.25,
+  };
+};
+
+const isBetterKitPair = (
+  candidate: ReturnType<typeof getKitPairScore>,
+  current: ReturnType<typeof getKitPairScore>
+): boolean => {
+  const candidateHasContrast = candidate.primaryDistance >= MIN_PRIMARY_SHIRT_DISTANCE;
+  const currentHasContrast = current.primaryDistance >= MIN_PRIMARY_SHIRT_DISTANCE;
+  if (candidateHasContrast !== currentHasContrast) return candidateHasContrast;
+  if (candidate.primaryDistance !== current.primaryDistance) return candidate.primaryDistance > current.primaryDistance;
+  return candidate.supportingScore > current.supportingScore;
+};
+
+const selectBestAwayKit = (homeKit: ClubKit, awayOptions: ClubKit[]): ClubKit => {
+  let bestAwayKit = awayOptions[0];
+  let bestScore = getKitPairScore(homeKit, bestAwayKit);
+  for (const awayKit of awayOptions.slice(1)) {
+    const score = getKitPairScore(homeKit, awayKit);
+    if (isBetterKitPair(score, bestScore)) {
+      bestAwayKit = awayKit;
+      bestScore = score;
     }
   }
+  return bestAwayKit;
+};
 
-  return {
-    home: {
-      primary: hKit.shirt,
-      shirtSecondary: hKit.shirtSecondary,
-      secondary: hKit.shorts,
-      pattern: hKit.pattern,
-      text: KitSelectionService.isColorLight(hKit.shirt) ? '#000000' : '#ffffff'
-    },
-    away: {
-      primary: bestOption.shirt,
-      shirtSecondary: bestOption.shirtSecondary,
-      secondary: bestOption.shorts,
-      pattern: bestOption.pattern,
-      text: KitSelectionService.isColorLight(bestOption.shirt) ? '#000000' : '#ffffff'
+const selectOptimalKitsFromVariants = (homeOptions: ClubKit[], awayOptions: ClubKit[]): KitSelection => {
+  const homeKit = homeOptions[0];
+  return buildKitSelection(homeKit, selectBestAwayKit(homeKit, awayOptions));
+};
+
+const selectOptimalNationalTeamKitsFromVariants = (homeOptions: ClubKit[], awayOptions: ClubKit[]): KitSelection => {
+  const defaultHomeKit = homeOptions[0];
+  const defaultAwayKit = selectBestAwayKit(defaultHomeKit, awayOptions);
+  if (getKitPairScore(defaultHomeKit, defaultAwayKit).primaryDistance >= MIN_PRIMARY_SHIRT_DISTANCE) {
+    return buildKitSelection(defaultHomeKit, defaultAwayKit);
+  }
+
+  let bestHomeKit = defaultHomeKit;
+  let bestAwayKit = defaultAwayKit;
+  let bestScore = getKitPairScore(bestHomeKit, bestAwayKit);
+  for (const homeKit of homeOptions) {
+    for (const awayKit of awayOptions) {
+      const score = getKitPairScore(homeKit, awayKit);
+      if (isBetterKitPair(score, bestScore)) {
+        bestHomeKit = homeKit;
+        bestAwayKit = awayKit;
+        bestScore = score;
+      }
     }
-  };
+  }
+  return buildKitSelection(bestHomeKit, bestAwayKit);
 };
 
 export const KitSelectionService = {
@@ -110,7 +157,7 @@ export const KitSelectionService = {
   },
 
   selectOptimalNationalTeamKits: (home: NationalTeam, away: NationalTeam): KitSelection =>
-    selectOptimalKitsFromVariants(getActiveNationalTeamKits(home), getActiveNationalTeamKits(away)),
+    selectOptimalNationalTeamKitsFromVariants(getActiveNationalTeamKits(home), getActiveNationalTeamKits(away)),
 
   /**
    * Selects the opponent kit that is furthest from the player's chosen shirt color.

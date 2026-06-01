@@ -55,8 +55,11 @@ const resolveNationalReportKits = (
   homeTeam: NationalTeam,
   awayTeam: NationalTeam
 ): KitSelection => {
-  if (savedKits) return savedKits;
-  return KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
+  const recalculated = KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
+  if (!savedKits) return recalculated;
+  return KitSelectionService.getColorDistance(savedKits.home.primary, savedKits.away.primary) < MIN_REPORT_KIT_DISTANCE
+    ? recalculated
+    : savedKits;
 };
 
 const isColorDark = (hex: string): boolean => {
