@@ -7381,24 +7381,37 @@ const finalResult: SimulationOutput = {
             const scoutStaff = (scoutClub?.staffIds ?? [])
               .map(id => staffMembers[id])
               .filter((s): s is StaffMember => !!s);
-            const assistantExp = (() => {
+            const assistantAnalysisQuality = (() => {
               const assistants = scoutStaff.filter(s => s.role === StaffRole.ASSISTANT_COACH);
               if (assistants.length === 0) return 5;
-              return Math.round(
-                assistants.reduce((sum, s) => sum + (s.attributes.experience ?? 10), 0) / assistants.length
-              );
+              const averageQuality = assistants.reduce((sum, s) => sum +
+                (s.attributes.opponentAnalysis ?? 10) * 0.55 +
+                (s.attributes.experience ?? 10) * 0.20 +
+                (s.attributes.communication ?? 10) * 0.10 +
+                (s.attributes.offensiveTactics ?? 10) * 0.075 +
+                (s.attributes.defensiveTactics ?? 10) * 0.075,
+              0) / assistants.length;
+              const cooperationBonus = Math.min(2, Math.max(0, assistants.length - 1) * 0.75);
+              return Math.min(20, Math.round(averageQuality + cooperationBonus));
             })();
             const analystQuality = (() => {
               const analysts = scoutStaff.filter(s => s.role === StaffRole.VIDEO_ANALYST);
               if (analysts.length === 0) return 5;
-              return Math.round(
-                analysts.reduce((sum, s) => {
-                  const vals = Object.values(s.attributes) as number[];
-                  return sum + vals.reduce((a, b) => a + b, 0) / vals.length;
-                }, 0) / analysts.length
-              );
+              const averageQuality = analysts.reduce((sum, s) => sum +
+                (s.attributes.videoAnalysis ?? 10) * 0.30 +
+                (s.attributes.statsAnalysis ?? 10) * 0.20 +
+                (s.attributes.reporting ?? 10) * 0.15 +
+                (s.attributes.scouting ?? 10) * 0.15 +
+                (s.attributes.tactics ?? 10) * 0.15 +
+                (s.attributes.experience ?? 10) * 0.05,
+              0) / analysts.length;
+              const cooperationBonus = Math.min(1.5, Math.max(0, analysts.length - 1) * 0.75);
+              return Math.min(20, Math.round(averageQuality + cooperationBonus));
             })();
-            const analysisQuality = Math.round((assistantExp + analystQuality) / 2);
+            const analysisQuality = Math.round(
+              assistantAnalysisQuality * 0.40 +
+              analystQuality * 0.60
+            );
             const isHome = tomorrowFixture.homeTeamId === userTeamId;
             const scoutMail = ScoutAssistantService.generatePreMatchReport({
               opponentClub,

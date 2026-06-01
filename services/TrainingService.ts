@@ -280,12 +280,14 @@ export const TrainingService = {
         const coachDeficitRatio = expectedCoachLevel > 0
           ? Math.max(0, (expectedCoachLevel - relevantCoachQuality) / expectedCoachLevel)
           : 0;
+        const coachDeficitRegressionChance = coachDeficitRatio > 0.3
+          ? Math.min(0.0025, coachDeficitRatio * 0.0025)
+          : 0;
 
         let pRegress = 0;
 
         if (!hasGeneralPlan) pRegress += 0.006;
         if (!player.trainingFocus) pRegress += 0.002;
-        if (coachDeficitRatio > 0.3) pRegress += coachDeficitRatio * 0.010;
         if (!playedThisRound) pRegress += 0.005;
 
         if (age >= 33) {
@@ -302,6 +304,7 @@ export const TrainingService = {
         const talentProtection = playerTalent >= 80 ? 0.40 : playerTalent >= 65 ? 0.70 : 1.00;
         pRegress *= talentProtection;
         pRegress *= moraleTrainingModifier.regression;
+        pRegress += coachDeficitRegressionChance;
 
         if (pRegress > 0 && Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
