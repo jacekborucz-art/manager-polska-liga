@@ -135,7 +135,18 @@ export const AiCoachTacticsService = {
       }
     }
 
-    return enforceConsistency(mindset, tempo, intensity);
+    const consistent = enforceConsistency(mindset, tempo, intensity);
+    const wantsCounter = opponentReport?.recommendedApproach === 'COUNTER'
+      || opponentReport?.recommendedApproach === 'LOW_BLOCK';
+    const wantsPressing = opponentReport?.recommendedApproach === 'PRESS'
+      && !wantsCounter
+      && consistent.mindset !== 'DEFENSIVE';
+
+    return {
+      ...consistent,
+      pressing: wantsPressing ? 'PRESSING' : 'NORMAL',
+      counterAttack: wantsCounter ? 'COUNTER' : 'NORMAL',
+    };
   },
 
   // ─── DECYZJA W TRAKCIE MECZU ─────────────────────────────────────────────

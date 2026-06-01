@@ -87,6 +87,7 @@ import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { MatchActionService } from '../../services/MatchActionService';
+import { LiveMatchInstructionBalanceService } from '../../services/LiveMatchInstructionBalanceService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 import { LineupService } from '../../services/LineupService';
@@ -1247,7 +1248,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (seededRng(currentSeed, nextMinute, 631) < counterChance) {
             activeSide = userSide;
             counterAttackTriggered = true;
-            counterAttackShotBonus = Math.min(0.026, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006);
+            const counterQualityModifier = LiveMatchInstructionBalanceService.getCounterAttackModifier(
+              userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+              userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+              userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+              userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI
+            );
+            counterAttackShotBonus = Math.max(
+              0.006,
+              Math.min(0.032, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006 + counterQualityModifier)
+            );
           }
         }
 
@@ -1278,7 +1288,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
             activeSide = aiSideForCounter;
             aiCounterAttackTriggered = true;
-            aiCounterAttackShotBonus = Math.min(0.018, 0.008 + userPressFactor * 0.007 + userRiskFactor * 0.004);
+            const aiCounterQualityModifier = LiveMatchInstructionBalanceService.getCounterAttackModifier(
+              userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+              userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+              userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+              userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI
+            );
+            aiCounterAttackShotBonus = Math.max(
+              0.004,
+              Math.min(0.024, 0.008 + userPressFactor * 0.007 + userRiskFactor * 0.004 + aiCounterQualityModifier)
+            );
           }
         }
         // ─────────────────────────────────────────────────────────────────────
@@ -1483,20 +1502,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const oXIList      = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
-        const uAvgPass = _getXIAvgAttr(uPlayersList, uXIList, 'passing');
-        const oAvgPass = _getXIAvgAttr(oPlayersList, oXIList, 'passing');
-        const uAvgMidDef = (() => {
-          const ids = uXIList.filter((id): id is string => id !== null);
-          const md = uPlayersList.filter(p => ids.includes(p.id) && (p.position === 'MID' || p.position === 'DEF'));
-          if (md.length === 0) return 55;
-          return md.reduce((acc, p) => acc + (p.attributes.defending + p.attributes.technique) / 2, 0) / md.length;
-        })();
-        const oAvgMidDef = (() => {
-          const ids = oXIList.filter((id): id is string => id !== null);
-          const md = oPlayersList.filter(p => ids.includes(p.id) && (p.position === 'MID' || p.position === 'DEF'));
-          if (md.length === 0) return 55;
-          return md.reduce((acc, p) => acc + (p.attributes.defending + p.attributes.technique) / 2, 0) / md.length;
-        })();
         const oppTacticDefBias = TacticRepository.getById(
           userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
         ).defenseBias;
@@ -1516,13 +1521,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         } else if (uInstr.tempo === 'SLOW') {
           const rf = uInstr.tempoResponseFactor ?? 1.0;
           if (isUserAttacking) {
-            const techGap = uAvgTech - oAvgTech;
-            if (techGap > 3) {
-              shotThreshold += Math.min(0.012, techGap * 0.0015) * rf;
-              if (uAvgPass > 62) shotThreshold += 0.005 * rf;
-            } else {
-              shotThreshold -= 0.005 * rf;
-            }
+            shotThreshold += LiveMatchInstructionBalanceService.getSlowTempoModifier(
+              uPlayersList, uXIList, oPlayersList, oXIList
+            ) * rf;
           }
         }
         // NASTAWIENIE
@@ -1533,8 +1534,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         } else if (uInstr.mindset === 'DEFENSIVE') {
           const rf = uInstr.mindsetResponseFactor ?? 1.0;
           if (!isUserAttacking) {
-            const midDefBonus = Math.max(0, (uAvgMidDef - 55) / 40);
-            shotThreshold -= Math.min(0.014, 0.004 + midDefBonus * 0.010) * rf;
+            shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
+              uPlayersList, uXIList, oPlayersList, oXIList
+            ) * rf;
           } else {
             shotThreshold -= 0.005 * rf;
           }
@@ -1547,61 +1549,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // PODANIA
         if (uInstr.passing === 'SHORT') {
           const rf = uInstr.passingResponseFactor ?? 1.0;
-          const uMidFwdIds = uXIList.filter((id): id is string => id !== null);
-          const uMidFwd = uPlayersList.filter(p => uMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const oMidFwdIds = oXIList.filter((id): id is string => id !== null);
-          const oMidFwd = oPlayersList.filter(p => oMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const uShortSum = uMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing, 0);
-          const oShortSum = oMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing, 0);
-          const diff = uShortSum - oShortSum;
-          if (diff > 35) {
-            const bonus = Math.min(0.015, (diff - 35) * 0.0003) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (35 - diff) * 0.0002) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getShortPassingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList, uInstr.tempo === 'FAST'
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         } else if (uInstr.passing === 'LONG') {
           const rf = uInstr.passingResponseFactor ?? 1.0;
-          const uMidFwdIds = uXIList.filter((id): id is string => id !== null);
-          const uMidFwd = uPlayersList.filter(p => uMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const oMidFwdIds = oXIList.filter((id): id is string => id !== null);
-          const oMidFwd = oPlayersList.filter(p => oMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const uLongSum = uMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing + p.attributes.crossing, 0);
-          const oLongSum = oMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing + p.attributes.crossing, 0);
-          const diff = uLongSum - oLongSum;
-          if (diff > 45) {
-            const bonus = Math.min(0.015, (diff - 45) * 0.00025) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (45 - diff) * 0.00015) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getLongPassingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList, uInstr.tempo === 'FAST'
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         }
         // PRESSING
         if (uInstr.pressing === 'PRESSING') {
           const rf = uInstr.pressingResponseFactor ?? 1.0;
-          const uOutIds = uXIList.filter((id): id is string => id !== null);
-          const uOut = uPlayersList.filter(p => uOutIds.includes(p.id) && p.position !== 'GK');
-          const oOutIds = oXIList.filter((id): id is string => id !== null);
-          const oOut = oPlayersList.filter(p => oOutIds.includes(p.id) && p.position !== 'GK');
-          const uPressSum = uOut.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const oPressSum = oOut.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const diff = uPressSum - oPressSum;
-          if (diff > 110) {
-            const bonus = Math.min(0.015, (diff - 110) * 0.0001) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (110 - diff) * 0.00008) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getPressingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         }
+        shotThreshold += LiveMatchInstructionBalanceService.getCombinationModifier(
+          uInstr.tempo, uInstr.mindset, uInstr.pressing, uInstr.counterAttack, isUserAttacking
+        );
         // ───────────────────────────────────────────────────────────────────────
 
         // ─── INSTRUKCJE TAKTYCZNE TRENERA AI → MODYFIKATORY SILNIKA ────────────
@@ -1691,39 +1663,34 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               shotThreshold += counterBonus * techSafetyMod;
             }
           } else if (nextAiActiveShout.tempo === 'SLOW' && isAiAttacking) {
-            const techGap = oAvgTech - uAvgTech;
-            if (techGap > 3) {
-              shotThreshold += Math.min(0.012, techGap * 0.0015);
-              if (oAvgPass > 62) shotThreshold += 0.005;
-            } else {
-              shotThreshold -= 0.005;
-            }
+            shotThreshold += LiveMatchInstructionBalanceService.getSlowTempoModifier(
+              oPlayersList, oXIList, uPlayersList, uXIList
+            );
           }
           if (nextAiActiveShout.mindset === 'OFFENSIVE' && isAiAttacking) {
             shotThreshold += 0.015;
           } else if (nextAiActiveShout.mindset === 'DEFENSIVE' && !isAiAttacking) {
-            const midDefBonus = Math.max(0, (oAvgMidDef - 55) / 40);
-            shotThreshold -= Math.min(0.014, 0.004 + midDefBonus * 0.010);
+            shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
+              oPlayersList, oXIList, uPlayersList, uXIList
+            );
           }
         }
         // AI PRESSING
         if (nextAiActiveShout?.pressing === 'PRESSING') {
-          const aiPressIds = oXIList.filter((id): id is string => id !== null);
-          const aiPressPlayers = oPlayersList.filter(p => aiPressIds.includes(p.id) && p.position !== 'GK');
-          const uPressIds2 = uXIList.filter((id): id is string => id !== null);
-          const uPressPlayers2 = uPlayersList.filter(p => uPressIds2.includes(p.id) && p.position !== 'GK');
-          const aiPressSum = aiPressPlayers.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const uPressSum2 = uPressPlayers2.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const aiPressDiff = aiPressSum - uPressSum2;
-          if (aiPressDiff > 110) {
-            const aiPressBonus = Math.min(0.013, (aiPressDiff - 110) * 0.000088);
-            if (isAiAttacking) shotThreshold += aiPressBonus;
-            else shotThreshold -= aiPressBonus;
-          } else {
-            const aiPressPenalty = Math.min(0.011, (110 - aiPressDiff) * 0.00007);
-            if (isAiAttacking) shotThreshold -= aiPressPenalty;
-            else shotThreshold += aiPressPenalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getPressingModifier(
+            oPlayersList, oXIList, uPlayersList, uXIList
+          );
+          if (isAiAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
+        }
+        if (nextAiActiveShout) {
+          shotThreshold += LiveMatchInstructionBalanceService.getCombinationModifier(
+            nextAiActiveShout.tempo,
+            nextAiActiveShout.mindset,
+            nextAiActiveShout.pressing ?? 'NORMAL',
+            nextAiActiveShout.counterAttack,
+            isAiAttacking
+          );
         }
 
         const aiFoulMod    = nextAiActiveShout?.intensity === 'AGGRESSIVE' ? 1.30 : nextAiActiveShout?.intensity === 'CAUTIOUS' ? 0.72 : 1.0;
@@ -2517,7 +2484,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const fatigue = MatchEngineService.calculateFatigueStep({ ...prev, momentum: momentumUpdate, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue }, ctx, env.weather);
         
-        const uFatExtra = (uInstr.tempo === 'FAST' ? 0.025 * (uInstr.tempoResponseFactor ?? 1.0) : 0) + (uInstr.intensity === 'AGGRESSIVE' ? 0.018 * (uInstr.intensityResponseFactor ?? 1.0) : uInstr.intensity === 'CAUTIOUS' ? 0.012 * (uInstr.intensityResponseFactor ?? 1.0) : 0);
+        const uFatExtra = LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
+          uInstr.tempo,
+          uInstr.intensity,
+          uInstr.pressing,
+          uInstr.tempoResponseFactor ?? 1.0,
+          uInstr.intensityResponseFactor ?? 1.0,
+          uInstr.pressingResponseFactor ?? 1.0
+        );
         if (uFatExtra > 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
@@ -2525,7 +2499,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             uFatTarget[id] = Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra);
           });
         }
-        const aiFatExtra = (nextAiActiveShout?.tempo === 'FAST' ? 0.025 : 0) + (nextAiActiveShout?.intensity === 'AGGRESSIVE' ? 0.018 : nextAiActiveShout?.intensity === 'CAUTIOUS' ? 0.012 : 0) + (nextAiActiveShout?.pressing === 'PRESSING' ? 0.015 : 0);
+        const aiFatExtra = nextAiActiveShout
+          ? LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
+              nextAiActiveShout.tempo,
+              nextAiActiveShout.intensity,
+              nextAiActiveShout.pressing ?? 'NORMAL'
+            )
+          : 0;
         if (aiFatExtra > 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;

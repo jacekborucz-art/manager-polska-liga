@@ -58,6 +58,9 @@ import { InjuryEventGenerator } from '../../services/InjuryEventGenerator';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
+import { LiveMatchInstructionBalanceService } from '../../services/LiveMatchInstructionBalanceService';
+import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
+import { AiOpponentAnalysisService } from '../../services/AiOpponentAnalysisService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { LineupService } from '../../services/LineupService';
 import { FinanceService } from '@/services/FinanceService';
@@ -146,7 +149,7 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { pri
 export const FriendlyMatchLiveView = () => {
   const { 
     navigateTo, userTeamId, clubs, fixtures, players, 
-    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches,
+    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, sessionSeed,
     activeMatchState: matchState, setActiveMatchState: setMatchState,
     activeFriendlyFixtureId, activeFriendlyConditions,
@@ -262,6 +265,24 @@ const isPausedForSevereInjury = useMemo(() => {
       
       const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
       const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
+      const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
+      const aiClubInit = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
+      const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
+      const userLineupInit = userClubInit.id === ctx.homeClub.id ? homeLineupData : awayLineupData;
+      const aiCoachInit = aiClubInit.coachId ? coaches[aiClubInit.coachId] : null;
+      const opponentReport = AiOpponentAnalysisService.generateReport({
+        aiClub: aiClubInit,
+        aiCoach: aiCoachInit,
+        aiStaffMembers: staffMembers,
+        opponentClub: userClubInit,
+        opponentPlayers: userPlayersInit,
+        opponentLineup: userLineupInit,
+        seed: sessionSeed,
+      });
+      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
+        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
+      );
+      const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
 
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
@@ -313,7 +334,8 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           counterAttackResponseFactor: 1.0,
          lastChangeMinute: -5,},
           playedPlayerIds: [],
-        aiActiveShout: null,
+        aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
+        aiNextInstructionMinute: aiInitNextMin,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
         tacticalBoostExpiry: -1
@@ -321,7 +343,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -869,7 +891,39 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (seededRng(currentSeed, nextMinute, 631) < counterChance) {
             activeSide = userSide;
             counterAttackTriggered = true;
-            counterAttackShotBonus = Math.min(0.026, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006);
+            const counterQualityModifier = LiveMatchInstructionBalanceService.getCounterAttackModifier(
+              userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+              userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+              userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+              userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI
+            );
+            counterAttackShotBonus = Math.max(
+              0.006,
+              Math.min(0.032, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006 + counterQualityModifier)
+            );
+          }
+        }
+        let aiCounterAttackTriggered = false;
+        let aiCounterAttackShotBonus = 0;
+        const aiCounterAttackEnabled = prev.aiActiveShout?.counterAttack === 'COUNTER';
+        const userPressure = userSide === 'HOME' ? Math.max(0, prev.momentum) : Math.max(0, -prev.momentum);
+        const aiCounterShape = opponentCounterTactic.defenseBias >= 55 || prev.aiActiveShout?.mindset === 'DEFENSIVE' || userScoreDiff < 0;
+        const userPushes = prev.userInstructions.mindset === 'OFFENSIVE' || userCounterTactic.attackBias >= 60 || userScoreDiff < 0;
+        if (!counterAttackTriggered && activeSide === userSide && aiCounterAttackEnabled && aiCounterShape && userPushes) {
+          const userPressureFactor = Math.max(0, Math.min(1, (userPressure - 20) / 60));
+          const aiShapeFactor = Math.max(0, Math.min(1, (opponentCounterTactic.defenseBias - 50) / 40));
+          const userRiskFactor = Math.max(0, Math.min(1, (userCounterTactic.attackBias - 50) / 45));
+          const aiCounterChance = Math.max(0, Math.min(0.12, 0.018 + userPressureFactor * 0.045 + aiShapeFactor * 0.020 + userRiskFactor * 0.018));
+          if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
+            activeSide = aiSide;
+            aiCounterAttackTriggered = true;
+            const aiCounterQualityModifier = LiveMatchInstructionBalanceService.getCounterAttackModifier(
+              userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+              userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+              userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+              userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI
+            );
+            aiCounterAttackShotBonus = Math.max(0.004, Math.min(0.026, 0.009 + userPressureFactor * 0.008 + userRiskFactor * 0.005 + aiCounterQualityModifier));
           }
         }
 
@@ -1027,13 +1081,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const oXIList      = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
-        const uAvgPass = _getXIAvgAttr(uPlayersList, uXIList, 'passing');
-        const uAvgMidDef = (() => {
-          const ids = uXIList.filter((id): id is string => id !== null);
-          const md = uPlayersList.filter(p => ids.includes(p.id) && (p.position === 'MID' || p.position === 'DEF'));
-          if (md.length === 0) return 55;
-          return md.reduce((acc, p) => acc + (p.attributes.defending + p.attributes.technique) / 2, 0) / md.length;
-        })();
         const oppTacticDefBias = TacticRepository.getById(
           userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
         ).defenseBias;
@@ -1048,13 +1095,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         } else if (uInstr.tempo === 'SLOW') {
           if (isUserAttacking) {
-            const techGap = uAvgTech - oAvgTech;
-            if (techGap > 3) {
-              shotThreshold += Math.min(0.012, techGap * 0.0015);
-              if (uAvgPass > 62) shotThreshold += 0.005;
-            } else {
-              shotThreshold -= 0.005;
-            }
+            shotThreshold += LiveMatchInstructionBalanceService.getSlowTempoModifier(
+              uPlayersList, uXIList, oPlayersList, oXIList
+            );
           }
         }
         // NASTAWIENIE
@@ -1063,8 +1106,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           else if (oppTacticDefBias > 65) shotThreshold += 0.012;
         } else if (uInstr.mindset === 'DEFENSIVE') {
           if (!isUserAttacking) {
-            const midDefBonus = Math.max(0, (uAvgMidDef - 55) / 40);
-            shotThreshold -= Math.min(0.014, 0.004 + midDefBonus * 0.010);
+            shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
+              uPlayersList, uXIList, oPlayersList, oXIList
+            );
           } else {
             shotThreshold -= 0.005;
           }
@@ -1076,64 +1120,78 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // PODANIA
         if (uInstr.passing === 'SHORT') {
           const rf = uInstr.passingResponseFactor ?? 1.0;
-          const uMidFwdIds = uXIList.filter((id): id is string => id !== null);
-          const uMidFwd = uPlayersList.filter(p => uMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const oMidFwdIds = oXIList.filter((id): id is string => id !== null);
-          const oMidFwd = oPlayersList.filter(p => oMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const uShortSum = uMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing, 0);
-          const oShortSum = oMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing, 0);
-          const diff = uShortSum - oShortSum;
-          if (diff > 35) {
-            const bonus = Math.min(0.015, (diff - 35) * 0.0003) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (35 - diff) * 0.0002) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getShortPassingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList, uInstr.tempo === 'FAST'
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         } else if (uInstr.passing === 'LONG') {
           const rf = uInstr.passingResponseFactor ?? 1.0;
-          const uMidFwdIds = uXIList.filter((id): id is string => id !== null);
-          const uMidFwd = uPlayersList.filter(p => uMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const oMidFwdIds = oXIList.filter((id): id is string => id !== null);
-          const oMidFwd = oPlayersList.filter(p => oMidFwdIds.includes(p.id) && (p.position === 'MID' || p.position === 'FWD'));
-          const uLongSum = uMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing + p.attributes.crossing, 0);
-          const oLongSum = oMidFwd.reduce((acc, p) => acc + p.attributes.technique + p.attributes.passing + p.attributes.crossing, 0);
-          const diff = uLongSum - oLongSum;
-          if (diff > 45) {
-            const bonus = Math.min(0.015, (diff - 45) * 0.00025) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (45 - diff) * 0.00015) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getLongPassingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList, uInstr.tempo === 'FAST'
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         }
         // PRESSING
         if (uInstr.pressing === 'PRESSING') {
           const rf = uInstr.pressingResponseFactor ?? 1.0;
-          const uOutIds = uXIList.filter((id): id is string => id !== null);
-          const uOut = uPlayersList.filter(p => uOutIds.includes(p.id) && p.position !== 'GK');
-          const oOutIds = oXIList.filter((id): id is string => id !== null);
-          const oOut = oPlayersList.filter(p => oOutIds.includes(p.id) && p.position !== 'GK');
-          const uPressSum = uOut.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const oPressSum = oOut.reduce((acc, p) => acc + p.attributes.aggression + p.attributes.pace + p.attributes.strength + p.attributes.stamina, 0);
-          const diff = uPressSum - oPressSum;
-          if (diff > 110) {
-            const bonus = Math.min(0.015, (diff - 110) * 0.0001) * rf;
-            if (isUserAttacking) shotThreshold += bonus;
-            else shotThreshold -= bonus;
-          } else {
-            const penalty = Math.min(0.012, (110 - diff) * 0.00008) * rf;
-            if (isUserAttacking) shotThreshold -= penalty;
-            else shotThreshold += penalty;
-          }
+          const modifier = LiveMatchInstructionBalanceService.getPressingModifier(
+            uPlayersList, uXIList, oPlayersList, oXIList
+          ) * rf;
+          if (isUserAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
+        }
+        shotThreshold += LiveMatchInstructionBalanceService.getCombinationModifier(
+          uInstr.tempo, uInstr.mindset, uInstr.pressing, uInstr.counterAttack, isUserAttacking
+        );
+        let nextAiActiveShout = prev.aiActiveShout;
+        let nextAiNextInstructionMinute = prev.aiNextInstructionMinute ?? 10;
+        if (nextMinute >= nextAiNextInstructionMinute) {
+          const aiClub = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
+          const aiCoach = aiClub.coachId ? coaches[aiClub.coachId] : null;
+          const aiFatigueMap = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
+          const aiActiveFatigues = oXIList.filter((id): id is string => id !== null).map(id => aiFatigueMap[id] ?? 100);
+          const aiScoreDiff = userSide === 'HOME' ? nextAwayScore - nextHomeScore : nextHomeScore - nextAwayScore;
+          const aiMomentum = userSide === 'HOME' ? -prev.momentum : prev.momentum;
+          const aiStats = userSide === 'HOME' ? nextLiveStats.away : nextLiveStats.home;
+          const userStats = userSide === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          const decision = AiCoachTacticsService.decideInMatchInstructions(
+            aiScoreDiff, aiMomentum, nextMinute,
+            aiCoach?.attributes.decisionMaking ?? 50,
+            aiCoach?.attributes.experience ?? 50,
+            prev.lastGoalBoostMinute ?? -1,
+            currentSeed,
+            uInstr.mindset,
+            userCounterTactic.attackBias,
+            opponentCounterTactic.defenseBias,
+            {
+              aiAvgFatigue: aiActiveFatigues.length > 0 ? aiActiveFatigues.reduce((sum, value) => sum + value, 0) / aiActiveFatigues.length : 100,
+              aiLowestFatigue: aiActiveFatigues.length > 0 ? Math.min(...aiActiveFatigues) : 100,
+              aiShots: aiStats.shots,
+              userShots: userStats.shots,
+              aiShotsOnTarget: aiStats.shotsOnTarget,
+              userShotsOnTarget: userStats.shotsOnTarget,
+              aiStakes: 'LOW_STAKES',
+              userStakes: 'LOW_STAKES',
+            }
+          );
+          nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;
+          const coachReadiness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
+          nextAiNextInstructionMinute = nextMinute + Math.max(6, Math.round(14 - coachReadiness * 0.05)) + Math.floor(seededRng(currentSeed, nextMinute, 77) * 7);
+        }
+        const isAiAttacking = !isUserAttacking;
+        if (nextAiActiveShout) {
+          shotThreshold += LiveMatchInstructionBalanceService.getInstructionShotModifier(
+            nextAiActiveShout, oPlayersList, oXIList, uPlayersList, uXIList, userCounterTactic.defenseBias, isAiAttacking
+          );
         }
         // KONTRATAK
         if (counterAttackTriggered && activeSide === userSide) {
           shotThreshold += counterAttackShotBonus;
+        }
+        if (aiCounterAttackTriggered && activeSide !== userSide) {
+          shotThreshold += aiCounterAttackShotBonus;
         }
         // ───────────────────────────────────────────────────────────────────────
 
@@ -1562,12 +1620,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const fatigue = MatchEngineService.calculateFatigueStep({ ...prev, momentum: momentumUpdate, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue }, ctx, env.weather);
         
-        const uFatExtra = (uInstr.tempo === 'FAST' ? 0.025 : 0) + (uInstr.intensity === 'AGGRESSIVE' ? 0.018 : uInstr.intensity === 'CAUTIOUS' ? 0.012 : 0);
+        const uFatExtra = LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
+          uInstr.tempo,
+          uInstr.intensity,
+          uInstr.pressing,
+          uInstr.tempoResponseFactor ?? 1.0,
+          uInstr.intensityResponseFactor ?? 1.0,
+          uInstr.pressingResponseFactor ?? 1.0
+        );
         if (uFatExtra > 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
           uXIForFat.filter((id): id is string => id !== null).forEach(id => {
             uFatTarget[id] = Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra);
+          });
+        }
+        const aiFatExtra = nextAiActiveShout
+          ? LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
+              nextAiActiveShout.tempo,
+              nextAiActiveShout.intensity,
+              nextAiActiveShout.pressing ?? 'NORMAL'
+            )
+          : 0;
+        if (aiFatExtra > 0) {
+          const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
+          const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
+          aiXIForFat.filter((id): id is string => id !== null).forEach(id => {
+            aiFatTarget[id] = Math.max(0, (aiFatTarget[id] ?? 100) - aiFatExtra);
           });
         }
         Object.keys(nextHomeInjuries).forEach(id => { if (nextHomeInjuries[id] === InjurySeverity.SEVERE) fatigue.home[id] = 0; });
@@ -1612,7 +1691,9 @@ return {
            lightInjuryPrompt: nextLightInjuryPrompt,
            homeUpgradeProb: nextHomeUpgradeProb, 
            awayUpgradeProb: nextAwayUpgradeProb,
-           userInstructions: nextUserInstructions
+           userInstructions: nextUserInstructions,
+           aiActiveShout: nextAiActiveShout,
+           aiNextInstructionMinute: nextAiNextInstructionMinute
         };
 
 

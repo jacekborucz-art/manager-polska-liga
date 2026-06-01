@@ -36,12 +36,15 @@ import { TalkEffect, getScoreContext } from '../services/HalftimeTalkService';
 import { AiMatchDecisionCupService } from '../services/AiMatchDecisionCupService';
 import { AiMatchPreparationService } from '@/services/AiMatchPreparationService';
 import { AiScoutingService } from '../services/AiScoutingService';
+import { AiOpponentAnalysisService } from '../services/AiOpponentAnalysisService';
+import { AiCoachTacticsService } from '../services/AiCoachTacticsService';
 import { TacticalBrainService } from '@/services/TacticalBrainService';
 import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
 import { RivalryService } from '../services/RivalryService';
 import { buildCupDisplayStats, isCupShotEvent, isCupShotOnTargetEvent } from '../services/CupMatchStatsService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
+import { LineupService } from '../services/LineupService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -504,7 +507,7 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
   const {
     navigateTo, userTeamId, clubs, setClubs, fixtures, players,
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails, setMessages,
-    activeMatchState: matchState, setActiveMatchState: setMatchState, coaches, seasonNumber,
+    activeMatchState: matchState, setActiveMatchState: setMatchState, coaches, staffMembers, seasonNumber,
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
@@ -642,7 +645,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
     });
   };
 
-  // Raport zwiadowczy AI — generowany raz przed meczem na podstawie atrybutu experience trenera AI.
+  // Raport zwiadowczy AI — generowany raz przed meczem na podstawie jakości całego sztabu AI.
   // Wpływa na decyzje taktyczne AI w pierwszych ~25 minutach meczu.
   const aiScoutReport = useMemo(() => {
     if (!ctx || !userTeamId) return undefined;
@@ -652,9 +655,9 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
     const playerLineupForScout = lineups[playerClub.id];
     if (!playerLineupForScout) return undefined;
     const aiCoachObj = coaches[aiClub.coachId || ''];
-    const coachExp = aiCoachObj?.attributes.experience ?? 50;
-    return AiScoutingService.generateReport(playerClub, playerPlayersArr, playerLineupForScout, coachExp);
-  }, [ctx, coaches, lineups, userTeamId]);
+    const staffProfile = AiOpponentAnalysisService.buildStaffProfile(aiClub, aiCoachObj ?? null, staffMembers);
+    return AiScoutingService.generateReport(playerClub, playerPlayersArr, playerLineupForScout, staffProfile.analysisQuality);
+  }, [ctx, coaches, lineups, staffMembers, userTeamId]);
   
 
 
@@ -672,13 +675,34 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
 
   useEffect(() => {
    if (ctx && (!matchState || matchState.fixtureId !== ctx.fixture.id)) {
+      const cupSessionSeed = Date.now();
+      const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
+      const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
+      const userClubInit = userSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
+      const aiClubInit = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
+      const userPlayersInit = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const userLineupInit = userSide === 'HOME' ? homeLineupData : awayLineupData;
+      const aiCoachInit = coaches[aiClubInit.coachId || ''] ?? null;
+      const opponentReport = AiOpponentAnalysisService.generateReport({
+        aiClub: aiClubInit,
+        aiCoach: aiCoachInit,
+        aiStaffMembers: staffMembers,
+        opponentClub: userClubInit,
+        opponentPlayers: userPlayersInit,
+        opponentLineup: userLineupInit,
+        seed: cupSessionSeed,
+      });
+      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
+        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
+      );
+
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true, isPausedForEvent: false, isHalfTime: false, isFinished: false,
-        speed: 1, momentum: 5, momentumPulse: 0, homeScore: 0, awayScore: 0, homeLineup: lineups[ctx.homeClub.id], awayLineup: lineups[ctx.awayClub.id],
+        speed: 1, momentum: 5, momentumPulse: 0, homeScore: 0, awayScore: 0, homeLineup: homeLineupData, awayLineup: awayLineupData,
         homeFatigue: {}, awayFatigue: {}, homeInjuries: {}, awayInjuries: {}, playerYellowCards: {}, sentOffIds: [], homeRiskMode: {}, awayRiskMode: {},
         homeUpgradeProb: {}, awayUpgradeProb: {}, homeInjuryMin: {}, awayInjuryMin: {}, subsCountHome: 0, subsCountAway: 0, homeSubsHistory: [], awaySubsHistory: [],
         lastAiActionMinute: 0, logs: [{ id: 'cup_init', minute: 0, text: "Gwizdek sędziego! Zaczynamy bój o awans!", type: MatchEventType.GENERIC }],
-homeGoals: [], awayGoals: [], sessionSeed: Date.now(),
+homeGoals: [], awayGoals: [], sessionSeed: cupSessionSeed,
         isExtraTime: false, isPenalties: false, homePenaltyScore: undefined, awayPenaltyScore: undefined, penaltySequence: [],
         liveStats: {
           home: { shots: 0, shotsOnTarget: 0, corners: 0, fouls: 0, offsides: 0 },
@@ -695,46 +719,11 @@ homeGoals: [], awayGoals: [], sessionSeed: Date.now(),
         tacticalImpact: 0,
         // -> tutaj wstaw kod
        
-  aiActiveShout: (() => {
-           const aiSideSide = userSide === 'HOME' ? 'AWAY' : 'HOME';
-           const aiClubObj = aiSideSide === 'AWAY' ? ctx.awayClub : ctx.homeClub;
-           const aiCoachObj = coaches[aiClubObj.coachId || ''];
-           const aiTacticObj = TacticRepository.getById(lineups[aiClubObj.id].tacticId);
-
-           const coachExp = aiCoachObj?.attributes.experience || 50;
-           const chaosChance = (100 - coachExp) / 400 + 0.05; // 5% do 25% szansy na błąd
-           const isLogical = Math.random() > chaosChance;
-
-           let mindset: any = 'NEUTRAL';
-           let intensity: any = 'NORMAL';
-           let tempo: any = 'NORMAL';
-
-           if (isLogical) {
-              // Mapowanie logiczne na podstawie biasów taktyki
-              if (aiTacticObj.attackBias > 65) mindset = 'OFFENSIVE';
-              else if (aiTacticObj.defenseBias > 65) mindset = 'DEFENSIVE';
-              
-              if (aiTacticObj.pressingIntensity > 65) intensity = 'AGGRESSIVE';
-              else if (aiTacticObj.pressingIntensity < 35) intensity = 'CAUTIOUS';
-              
-              if (aiTacticObj.attackBias > 70) tempo = 'FAST';
-              else if (aiTacticObj.defenseBias > 75) tempo = 'SLOW';
-           } else {
-              // Wybór losowy (błąd trenera)
-              const mindsets = ['DEFENSIVE', 'NEUTRAL', 'OFFENSIVE'];
-              const intensities = ['CAUTIOUS', 'NORMAL', 'AGGRESSIVE'];
-              mindset = mindsets[Math.floor(Math.random() * 3)];
-              intensity = intensities[Math.floor(Math.random() * 3)];
-           }
-
-           return {
-              id: 'PRE_MATCH_INIT',
-              expiryMinute: 20 + Math.floor(Math.random() * 15), // Pierwsza rewizja ok 20-35 minuty
-              mindset,
-              tempo,
-              intensity
-           };
-        })(),
+  aiActiveShout: {
+           id: 'PRE_MATCH_INIT',
+           expiryMinute: 20 + Math.floor(Math.abs(Math.sin(cupSessionSeed + 77)) * 15),
+           ...preMatchInstr
+        },
 
 
         lastGoalBoostMinute: -15,
@@ -773,7 +762,7 @@ counterAttackResponseFactor: 1.0,
 }
       });
     }
-  }, [ctx, lineups, matchState, setMatchState]);
+  }, [ctx, lineups, matchState, setMatchState, userSide, coaches, staffMembers]);
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [matchState?.logs]);
 

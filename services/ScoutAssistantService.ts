@@ -227,9 +227,10 @@ function generateWrittenReport(params: {
   userLineup: Lineup;
   userAvgRating: number;
   opponentAvgRating: number;
+  errorMult?: number;
 }): Array<{ icon: string; title: string; text: string; color: string }> {
-  const { opponentName, form, keyPlayers, tactic, approach, opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating } = params;
-  const err = () => Math.random() < 0.20;
+  const { opponentName, form, keyPlayers, tactic, approach, opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, errorMult = 1.0 } = params;
+  const err = () => maybeDistort(ERROR_RATE_HIGH * errorMult);
   const sections: Array<{ icon: string; title: string; text: string; color: string }> = [];
 
   // === A: FORMA ===
@@ -723,11 +724,12 @@ function buildMailBody(params: {
   userClubId: string;
   opponentClubId: string;
   isHome?: boolean;
+  errorMult?: number;
 }): string {
   const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
     opponentLeaguePosition, opponentLeaguePlayed = 0, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
     opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
-    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome } = params;
+    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome, errorMult = 1.0 } = params;
 
   // ── STYLE TOKENS (matching game's design language) ─────────────────────
   const FONT = `'Inter', system-ui, sans-serif`;
@@ -922,6 +924,7 @@ function buildMailBody(params: {
   const reportSections = generateWrittenReport({
     opponentName, form, keyPlayers, tactic, approach,
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating,
+    errorMult,
   });
   const reportCard = card('#38bdf8', 'Raport szczegółowy',
     `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0 28px;">` +
@@ -1070,14 +1073,20 @@ function buildMailBody(params: {
   const oppMoraleAvg = opponentPlayers.length > 0
     ? opponentPlayers.reduce((sum, p) => sum + ((p as any).morale ?? 50), 0) / opponentPlayers.length
     : 50;
+  const perceivedOpponentAvgRating = maybeDistort(ERROR_RATE_HIGH * errorMult)
+    ? opponentAvgRating + (Math.random() * 4 - 2)
+    : opponentAvgRating;
+  const perceivedOppMoraleAvg = maybeDistort(ERROR_RATE_HIGH * errorMult)
+    ? Math.max(0, Math.min(100, oppMoraleAvg + (Math.random() * 12 - 6)))
+    : oppMoraleAvg;
 
   let chanceScore = 0;
   const chanceReasons: string[] = [];
 
-  const ratingGap = userAvgRating - opponentAvgRating;
-  if (ratingGap >= 5) { chanceScore += 2; chanceReasons.push(`nasza kadra jest wyraźnie silniejsza jakościowo (śr. OVR ${Math.round(userAvgRating)} vs ${Math.round(opponentAvgRating)})`); }
+  const ratingGap = userAvgRating - perceivedOpponentAvgRating;
+  if (ratingGap >= 5) { chanceScore += 2; chanceReasons.push(`nasza kadra jest wyraźnie silniejsza jakościowo (śr. OVR ${Math.round(userAvgRating)} vs ${Math.round(perceivedOpponentAvgRating)})`); }
   else if (ratingGap >= 2) { chanceScore += 1; chanceReasons.push(`nieznacznie przewyższamy rywala pod względem jakości kadry`); }
-  else if (ratingGap <= -5) { chanceScore -= 2; chanceReasons.push(`rywal dysponuje wyraźnie silniejszą kadrą (śr. OVR ${Math.round(opponentAvgRating)} vs ${Math.round(userAvgRating)})`); }
+  else if (ratingGap <= -5) { chanceScore -= 2; chanceReasons.push(`rywal dysponuje wyraźnie silniejszą kadrą (śr. OVR ${Math.round(perceivedOpponentAvgRating)} vs ${Math.round(userAvgRating)})`); }
   else if (ratingGap <= -2) { chanceScore -= 1; chanceReasons.push(`rywal ma nieznaczną przewagę kadrową`); }
 
   const totalFormMatches = form.wins + form.draws + form.losses;
@@ -1096,10 +1105,10 @@ function buildMailBody(params: {
     else if (opponentLeaguePosition <= 5) { chanceScore -= 1; chanceReasons.push(`rywal jest w górnej części tabeli`); }
   }
 
-  if (oppMoraleAvg <= 35) { chanceScore += 2; chanceReasons.push(`morale drużyny przeciwnej jest bardzo niskie (średnia ${Math.round(oppMoraleAvg)}/100)`); }
-  else if (oppMoraleAvg <= 50) { chanceScore += 1; chanceReasons.push(`morale rywala jest poniżej normy (średnia ${Math.round(oppMoraleAvg)}/100)`); }
-  else if (oppMoraleAvg >= 80) { chanceScore -= 2; chanceReasons.push(`morale rywala jest bardzo wysokie (średnia ${Math.round(oppMoraleAvg)}/100)`); }
-  else if (oppMoraleAvg >= 65) { chanceScore -= 1; chanceReasons.push(`przeciwnik dysponuje wysokim morale`); }
+  if (perceivedOppMoraleAvg <= 35) { chanceScore += 2; chanceReasons.push(`morale drużyny przeciwnej jest bardzo niskie (średnia ${Math.round(perceivedOppMoraleAvg)}/100)`); }
+  else if (perceivedOppMoraleAvg <= 50) { chanceScore += 1; chanceReasons.push(`morale rywala jest poniżej normy (średnia ${Math.round(perceivedOppMoraleAvg)}/100)`); }
+  else if (perceivedOppMoraleAvg >= 80) { chanceScore -= 2; chanceReasons.push(`morale rywala jest bardzo wysokie (średnia ${Math.round(perceivedOppMoraleAvg)}/100)`); }
+  else if (perceivedOppMoraleAvg >= 65) { chanceScore -= 1; chanceReasons.push(`przeciwnik dysponuje wysokim morale`); }
 
   if (tactic.hasCadreProblems) { chanceScore += 1; chanceReasons.push(`rywal ma poważne braki kadrowe`); }
   if (isHome === true) { chanceScore += 1; chanceReasons.push(`gramy na własnym boisku`); }
@@ -1243,6 +1252,7 @@ export const ScoutAssistantService = {
       userClubId,
       opponentClubId: opponentClub.id,
       isHome,
+      errorMult,
     });
 
     const mailId = `SCOUT_REPORT_${opponentClub.id}_${matchDate.toISOString().slice(0, 10)}`;

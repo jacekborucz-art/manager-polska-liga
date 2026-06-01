@@ -51,6 +51,17 @@ const pickBestStaff = (staff: StaffMember[], role: StaffRole, keys: string[]): S
       return score(b) - score(a);
     })[0];
 
+const staffTeamAttr = (members: StaffMember[], key: string, fallback = 10): number => {
+  if (members.length === 0) return clamp(fallback, 1, 20) * 5;
+  const leadValue = clamp(members[0].attributes[key] ?? fallback, 1, 20) * 5;
+  const supportWeights = [0.10, 0.06];
+  const supportBonus = members.slice(1, 3).reduce((sum, member, index) => {
+    const supportValue = clamp(member.attributes[key] ?? fallback, 1, 20) * 5;
+    return sum + (supportValue - 50) * supportWeights[index];
+  }, 0);
+  return clamp(leadValue + supportBonus, 5, 99);
+};
+
 const getStarters = (players: Player[], lineup: Lineup): Player[] =>
   lineup.startingXI
     .map(id => id ? players.find(player => player.id === id) : null)
@@ -131,13 +142,18 @@ export const AiOpponentAnalysisService = {
       .map(id => staffMembers[id])
       .filter((member): member is StaffMember => !!member);
 
-    const assistant = pickBestStaff(clubStaff, StaffRole.ASSISTANT_COACH, [
-      'opponentAnalysis',
-      'offensiveTactics',
-      'defensiveTactics',
-      'communication',
-      'experience',
-    ]);
+    const assistants = clubStaff
+      .filter(member => member.role === StaffRole.ASSISTANT_COACH)
+      .sort((a, b) => {
+        const score = (member: StaffMember) => (
+          (member.attributes.opponentAnalysis ?? 10) +
+          (member.attributes.offensiveTactics ?? 10) +
+          (member.attributes.defensiveTactics ?? 10) +
+          (member.attributes.communication ?? 10) +
+          (member.attributes.experience ?? 10)
+        ) / 5;
+        return score(b) - score(a);
+      });
     const analyst = pickBestStaff(clubStaff, StaffRole.VIDEO_ANALYST, [
       'videoAnalysis',
       'tactics',
@@ -157,8 +173,8 @@ export const AiOpponentAnalysisService = {
     const coachExperience = coach?.attributes.experience ?? 50;
     const coachTraining = coach?.attributes.training ?? 50;
 
-    const assistantAnalysis = staffAttr(assistant, 'opponentAnalysis');
-    const assistantTactics = (staffAttr(assistant, 'offensiveTactics') + staffAttr(assistant, 'defensiveTactics')) / 2;
+    const assistantAnalysis = staffTeamAttr(assistants, 'opponentAnalysis');
+    const assistantTactics = (staffTeamAttr(assistants, 'offensiveTactics') + staffTeamAttr(assistants, 'defensiveTactics')) / 2;
     const videoAnalysis = staffAttr(analyst, 'videoAnalysis');
     const videoTactics = staffAttr(analyst, 'tactics');
     const statsAnalysis = staffAttr(analyst, 'statsAnalysis');
