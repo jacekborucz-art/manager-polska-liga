@@ -172,6 +172,27 @@ const LEAGUE_FILTER_BTNS = [
 const EXPORT_COUNTRY_CODES = ['ENG', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'BUL', 'BEL', 'NED', 'AUT', 'SCO', 'TUR', 'SUI', 'CZE', 'SVK', 'SWE', 'CRO', 'SRB', 'DEN', 'GRE', 'KSA', 'QAT', 'USA', 'ARG', 'BRA', 'RUS', 'BLR'];
 const EXPORT_GROUP_ORDER = ['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4', ...EXPORT_COUNTRY_CODES];
 const EXPORT_INTERNATIONAL_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF', 'L_ASIA', 'L_NA', 'L_SA'];
+const CLUB_CONTINENT_EXPORT_OPTIONS = [
+  { value: 'Europe',        label: 'Europa',        leagueIds: ['L_CL', 'L_EL', 'L_CONF'] },
+  { value: 'Africa',        label: 'Afryka',        leagueIds: ['L_AFRICA'] },
+  { value: 'Asia',          label: 'Azja',          leagueIds: ['L_ASIA'] },
+  { value: 'North America', label: 'Ameryka Płn.',  leagueIds: ['L_NA'] },
+  { value: 'South America', label: 'Ameryka Płd.',  leagueIds: ['L_SA'] },
+] as const;
+
+const getClubDataExportEntry = (club: Club) => ({
+  clubId: club.id,
+  name: club.name,
+  stadiumName: club.stadiumName,
+  stadiumCapacity: club.stadiumCapacity,
+  reputation: club.reputation,
+  colorsHex: club.colorsHex,
+  kits: getClubKits(club),
+  budget: club.budget,
+  transferBudget: club.transferBudget,
+  reserveBudget: club.reserveBudget ?? 0,
+  signingBonusPool: club.signingBonusPool,
+});
 
 const emptyStats = () => ({
   goals: 0,
@@ -216,6 +237,7 @@ export const EditorView: React.FC = () => {
 
   const clubImportRef = useRef<HTMLInputElement>(null);
   const [clubImportMsg, setClubImportMsg] = useState('');
+  const [clubContinentExport, setClubContinentExport] = useState('Europe');
 
   const kitLeagueImportRef = useRef<HTMLInputElement>(null);
   const [kitImportMsg, setKitImportMsg] = useState('');
@@ -231,24 +253,30 @@ export const EditorView: React.FC = () => {
 
   const handleExportClubData = () => {
     if (!selectedTeamClub) return;
-    const data = {
-      clubId: selectedTeamClub.id,
-      name: selectedTeamClub.name,
-      stadiumName: selectedTeamClub.stadiumName,
-      stadiumCapacity: selectedTeamClub.stadiumCapacity,
-      reputation: selectedTeamClub.reputation,
-      colorsHex: selectedTeamClub.colorsHex,
-      kits: getClubKits(selectedTeamClub),
-      budget: selectedTeamClub.budget,
-      transferBudget: selectedTeamClub.transferBudget,
-      reserveBudget: selectedTeamClub.reserveBudget ?? 0,
-      signingBonusPool: selectedTeamClub.signingBonusPool,
-    };
+    const data = getClubDataExportEntry(selectedTeamClub);
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `dane_${selectedTeamClub.name.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportContinentClubData = () => {
+    const continent = CLUB_CONTINENT_EXPORT_OPTIONS.find(option => option.value === clubContinentExport);
+    if (!continent) return;
+    const continentClubs = clubs
+      .filter(club => continent.leagueIds.some(leagueId => leagueId === club.leagueId))
+      .filter(club => continent.value !== 'Europe' || (!club.leagueId.startsWith('L_PL_') && club.country !== 'POL'))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    if (continentClubs.length === 0) return;
+    const data = continentClubs.map(getClubDataExportEntry);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dane_klubow_${continent.label.toLowerCase().replace(/\s+/g, '_')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1701,6 +1729,24 @@ export const EditorView: React.FC = () => {
                 style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 Eksportuj dane klubu
+              </button>
+              <select
+                value={clubContinentExport}
+                onChange={(e) => setClubContinentExport(e.target.value)}
+                className={`${selectCls} px-2 py-1.5`}
+                title="Wybierz kontynent eksportowanych klubów."
+              >
+                {CLUB_CONTINENT_EXPORT_OPTIONS.map(continent => (
+                  <option key={continent.value} value={continent.value}>{continent.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleExportContinentClubData}
+                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                title="Eksportuje dane klubów z wybranego kontynentu. Eksport Europy pomija polskie drużyny."
+              >
+                Eksportuj kontynent
               </button>
               <button
                 onClick={() => { setClubImportMsg(''); clubImportRef.current?.click(); }}
