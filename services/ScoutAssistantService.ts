@@ -621,6 +621,79 @@ function generateWrittenReport(params: {
     sections.push({ icon: '🩹', title: 'Kadra Rywala', text: weakPools[Math.floor(Math.random() * weakPools.length)], color: '#10b981' });
   }
 
+  // === H: ANALIZA JAKOŚCI PRZEWIDYWANEGO SKŁADU PRZECIWNIKA ===
+  const oppOutfield = xi.filter(p => !isGK(p));
+  const userOutfield = userXi.filter(p => !isGK(p));
+
+  if (oppOutfield.length < 5 || userOutfield.length < 5) {
+    sections.push({ icon: '🔬', title: 'Analiza Jakości Składu', text: 'Brak wystarczających danych o składach do przeprowadzenia analizy jakościowej.', color: '#475569' });
+  } else {
+    const avgAttrH = (players: Player[], ...keys: string[]) =>
+      players.reduce((s, p) => s + keys.reduce((ks, k) => ks + (p.attributes[k as keyof typeof p.attributes] ?? 0), 0) / keys.length, 0) / players.length;
+
+    const cats = [
+      {
+        label: 'Technicznie',
+        opp: err() ? avgAttrH(oppOutfield, 'technique', 'passing') + (Math.random() * 4 - 2) : avgAttrH(oppOutfield, 'technique', 'passing'),
+        usr: avgAttrH(userOutfield, 'technique', 'passing'),
+        better: 'dominują technicznie i jakością podań',
+        equal: 'podobny poziom techniczny i jakości podania',
+        worse: 'ustępują nam technicznie i jakością podania',
+      },
+      {
+        label: 'Szybkość',
+        opp: err() ? avgAttrH(oppOutfield, 'pace') + (Math.random() * 4 - 2) : avgAttrH(oppOutfield, 'pace'),
+        usr: avgAttrH(userOutfield, 'pace'),
+        better: 'są szybsi — zagrożenie piłką za plecy obrony',
+        equal: 'zbliżona szybkość obu składów',
+        worse: 'ustępują nam szybkością — możemy grać za ich plecami',
+      },
+      {
+        label: 'Gra powietrzna',
+        opp: err() ? avgAttrH(oppOutfield, 'heading', 'strength') + (Math.random() * 4 - 2) : avgAttrH(oppOutfield, 'heading', 'strength'),
+        usr: avgAttrH(userOutfield, 'heading', 'strength'),
+        better: 'dominują w powietrzu — stałe fragmenty i dośrodkowania to ich atut',
+        equal: 'wyrównana walka w powietrzu i fizyczna',
+        worse: 'ustępują nam w grze na głowach i walce fizycznej',
+      },
+      {
+        label: 'Agresja',
+        opp: err() ? avgAttrH(oppOutfield, 'aggression') + (Math.random() * 4 - 2) : avgAttrH(oppOutfield, 'aggression'),
+        usr: avgAttrH(userOutfield, 'aggression'),
+        better: 'grają agresywniej — twarda walka o każdą piłkę i wysoki pressing',
+        equal: 'porównywalny poziom agresji i zaangażowania w pressingu',
+        worse: 'grają spokojniej — możemy narzucić nasze tempo i intensywność',
+      },
+    ];
+
+    const THRESHOLD_H = 3;
+    const catLines = cats.map(c => {
+      const diff = c.opp - c.usr;
+      let badge: string;
+      let note: string;
+      if (diff >= THRESHOLD_H) { badge = '🔴'; note = c.better; }
+      else if (diff <= -THRESHOLD_H) { badge = '🟢'; note = c.worse; }
+      else { badge = '🟡'; note = c.equal; }
+      return `<b>${badge} ${c.label}:</b> ${note}`;
+    }).join('<br>');
+
+    const betterCount = cats.filter(c => c.opp - c.usr >= THRESHOLD_H).length;
+    const worseCount = cats.filter(c => c.opp - c.usr <= -THRESHOLD_H).length;
+    let summary: string;
+    if (betterCount >= 3) {
+      summary = 'Rywal wyraźnie góruje w kilku kluczowych wymiarach. Dyscyplina taktyczna i kolektywna gra to nasze najważniejsze narzędzia.';
+    } else if (worseCount >= 3) {
+      summary = 'Posiadamy wyraźną przewagę jakościową w większości kategorii. Agresywna gra i narzucenie własnego rytmu powinny przynieść efekty.';
+    } else if (betterCount === 0 && worseCount === 0) {
+      summary = 'Obie drużyny prezentują bardzo zbliżony poziom. O wyniku zadecydują szczegóły taktyczne i dyspozycja indywidualna zawodników.';
+    } else {
+      summary = 'Mieszany obraz jakościowy — mamy atuty i słabości. Klucz to minimalizowanie strat tam, gdzie rywal nas przewyższa.';
+    }
+
+    const sectionText = `${catLines}<br><br><div style="text-align:center;font-style:italic;opacity:0.75;">${summary}</div>`;
+    sections.push({ icon: '🔬', title: 'Analiza Jakości Składu', text: sectionText, color: '#38bdf8' });
+  }
+
   return sections;
 }
 
