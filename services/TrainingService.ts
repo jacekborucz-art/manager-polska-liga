@@ -459,11 +459,6 @@ export const TrainingService = {
         else if (age >= 31) pRegress += 0.012;
         else if (age >= 30) pRegress += 0.006;
 
-        if (age >= 32) pRegress += 0.035;
-        else if (age >= 28) pRegress += 0.020;
-        else if (age >= 24) pRegress += 0.012;
-        else pRegress += 0.006;
-
         const physicalAttrs = ['pace', 'stamina', 'strength'];
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;

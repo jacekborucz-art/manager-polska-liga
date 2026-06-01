@@ -1496,6 +1496,7 @@ export interface Club {
   matchPrepFocusId?: string;
   matchPrepFocusStartDate?: string;
   aiWeeklyTraining?: AiWeeklyTrainingState;
+  userWeeklyTrainingWeekKey?: string;
   winterCamp?: WinterCampState;
   summerCamp?: SummerCampState;
   stadiumSeatColors?: string[];

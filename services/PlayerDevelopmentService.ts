@@ -43,12 +43,16 @@ export const PlayerDevelopmentService = {
     const talent = player.attributes.talent ?? 50;
     const rep = normalizeClubReputation(environment.clubReputation);
     const coach = normalizeCoachQuality(environment.coachQuality);
-    const minutes = player.stats?.minutesPlayed ?? 0;
+    const reserveMatches = player.reserveStats?.matches ?? 0;
+    const minutes = (player.stats?.minutesPlayed ?? 0) + reserveMatches * 90;
     const ratingHistory = player.stats?.ratingHistory ?? [];
+    const reserveAverageRating = reserveMatches > 0
+      ? (player.reserveStats?.totalRatingPoints ?? 0) / reserveMatches
+      : null;
     const averageRating = environment.averageRating ?? (
       ratingHistory.length > 0
         ? ratingHistory.reduce((sum, rating) => sum + rating, 0) / ratingHistory.length
-        : null
+        : reserveAverageRating
     );
 
     let score = 0;

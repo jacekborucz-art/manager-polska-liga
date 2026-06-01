@@ -253,6 +253,15 @@ const getHiddenOffenseLockoutDate = (currentDate: Date): Date => {
   return lockoutDate;
 };
 
+const getUserTrainingWeekKey = (date: Date): string => {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const day = Math.floor((
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
+    new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()
+  ) / 86_400_000);
+  return `${date.getFullYear()}-${Math.floor(day / 7)}`;
+};
+
 const hasActiveIncomingConflict = (
   playerId: string,
   incomingOffers: IncomingTransferOffer[],
@@ -2630,6 +2639,8 @@ setMessages([welcomeMail, fanMail]);
       // TUTAJ WSTAW TEN KOD
       const userClub = finalClubs.find(c => c.id === userTeamId);
       const tier = parseInt(userClub?.leagueId.split('_')[2] || '1');
+      const userTrainingWeekKey = getUserTrainingWeekKey(currentDate);
+      const shouldProcessUserTraining = !!userClub && userClub.userWeeklyTrainingWeekKey !== userTrainingWeekKey;
       
       const gkCoachMember = (userClub?.staffIds ?? [])
         .map(id => staffMembers[id])
@@ -2666,61 +2677,67 @@ setMessages([welcomeMail, fanMail]);
           )
         : undefined;
 
-      finalPlayers = TrainingService.processTrainingEffects(
-        finalPlayers,
-        userTeamId,
-        activeTrainingId,
-        lastMatchSummary,
-        userClub?.reputation || 5,
-        tier,
-        activeIntensity,
-        userClub?.country,
-        gkCoachQuality,
-        assistantCoachQuality,
-        fitnessCoachQuality
-      );
-      // KONIEC WSTAWKI
-
-      // Zapis tygodniowego progresu treningowego (średni OVR drużyny)
-      const teamAfterTraining = finalPlayers[userTeamId] || [];
-      if (teamAfterTraining.length > 0) {
-        const avgOvr = Math.round(
-          teamAfterTraining.reduce((sum, p) => sum + p.overallRating, 0) / teamAfterTraining.length
-        );
-        setTrainingProgressHistory(prev => [...prev.slice(-19), avgOvr]);
-      }
-
-      // Trening rezerw — automatyczny plan trenera rezerw
-      if (reserves.length > 0) {
-        const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
-        const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
-        const coachExperience = reserveCoach?.attributes.experience ?? 50;
-        const coachDecision = reserveCoach?.attributes.decisionMaking ?? 50;
-        const individualWork = Math.round((coachExperience + coachDecision) / 10);
-        const weekSeed = Math.floor(currentDate.getTime() / (7 * 86400000));
-        let rngOffset = 1;
-        const weekRng = () => { const x = Math.sin(weekSeed * 9301 + rngOffset++ * 49297 + 233) * 1000; return x - Math.floor(x); };
-        const reservePlan = TrainingAssistantService.buildPlan(reserves, weekRng, individualWork);
-        const updatedReserves = TrainingService.processReserveTrainingEffects(
-          reserves,
-          reservePlan.cycleId,
-          reservePlan.playerFocuses,
-          coachTrainingAttr,
-          userClub?.reputation || 5,
+      if (shouldProcessUserTraining) {
+        finalPlayers = TrainingService.processTrainingEffects(
+          finalPlayers,
+          userTeamId,
+          activeTrainingId,
+          lastMatchSummary,
+          userClub.reputation || 5,
           tier,
-          userClub?.country
+          activeIntensity,
+          userClub.country,
+          gkCoachQuality,
+          assistantCoachQuality,
+          fitnessCoachQuality
         );
-        const reviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
-        setReserves(reviewedReserves);
-        if (reviewedReserves.length > 0) {
-          const avgOvrRes = Math.round(
-            reviewedReserves.reduce((sum, p) => sum + p.overallRating, 0) / reviewedReserves.length
+        // KONIEC WSTAWKI
+
+        // Zapis tygodniowego progresu treningowego (średni OVR drużyny)
+        const teamAfterTraining = finalPlayers[userTeamId] || [];
+        if (teamAfterTraining.length > 0) {
+          const avgOvr = Math.round(
+            teamAfterTraining.reduce((sum, p) => sum + p.overallRating, 0) / teamAfterTraining.length
           );
-          setReserveProgressHistory(prev => [
-            ...prev.slice(-19),
-            { date: currentDate.toISOString(), overall: avgOvrRes },
-          ]);
+          setTrainingProgressHistory(prev => [...prev.slice(-19), avgOvr]);
         }
+
+        // Trening rezerw — automatyczny plan trenera rezerw
+        if (reserves.length > 0) {
+          const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
+          const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
+          const coachExperience = reserveCoach?.attributes.experience ?? 50;
+          const coachDecision = reserveCoach?.attributes.decisionMaking ?? 50;
+          const individualWork = Math.round((coachExperience + coachDecision) / 10);
+          const weekSeed = Math.floor(currentDate.getTime() / (7 * 86400000));
+          let rngOffset = 1;
+          const weekRng = () => { const x = Math.sin(weekSeed * 9301 + rngOffset++ * 49297 + 233) * 1000; return x - Math.floor(x); };
+          const reservePlan = TrainingAssistantService.buildPlan(reserves, weekRng, individualWork);
+          const updatedReserves = TrainingService.processReserveTrainingEffects(
+            reserves,
+            reservePlan.cycleId,
+            reservePlan.playerFocuses,
+            coachTrainingAttr,
+            userClub.reputation || 5,
+            tier,
+            userClub.country
+          );
+          const reviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
+          setReserves(reviewedReserves);
+          if (reviewedReserves.length > 0) {
+            const avgOvrRes = Math.round(
+              reviewedReserves.reduce((sum, p) => sum + p.overallRating, 0) / reviewedReserves.length
+            );
+            setReserveProgressHistory(prev => [
+              ...prev.slice(-19),
+              { date: currentDate.toISOString(), overall: avgOvrRes },
+            ]);
+          }
+        }
+
+        finalClubs = finalClubs.map(club =>
+          club.id === userTeamId ? { ...club, userWeeklyTrainingWeekKey: userTrainingWeekKey } : club
+        );
       }
     }
 
