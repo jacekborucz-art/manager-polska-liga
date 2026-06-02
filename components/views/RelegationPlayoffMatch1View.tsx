@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import EkstraklasaBg from '../../Graphic/themes/ekstraklasa.png';
 import { RelegationPlayoffLegResult } from '../../types';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 // ── WIDOK WYNIKÓW 1. MECZÓW BARAŻOWYCH (26 MAJA) ───────────────────────────────
 // Pokazuje wyniki dwóch meczów:
@@ -31,9 +32,10 @@ interface MatchCardProps {
   pairIndex: number; // 0 = Para A (13. msc), 1 = Para B (14. msc)
   userTeamId: string | null;
   clubs: ReturnType<typeof useGame>['clubs'];
+  onOpenReport: (matchId: string) => void;
 }
 
-const MatchCard: React.FC<MatchCardProps> = ({ result, pairIndex, userTeamId, clubs }) => {
+const MatchCard: React.FC<MatchCardProps> = ({ result, pairIndex, userTeamId, clubs, onOpenReport }) => {
   const homeClub = clubs.find(c => c.id === result.homeId);
   const awayClub = clubs.find(c => c.id === result.awayId);
   if (!homeClub || !awayClub) return null;
@@ -68,11 +70,12 @@ const MatchCard: React.FC<MatchCardProps> = ({ result, pairIndex, userTeamId, cl
 
   return (
     <div
+      onClick={() => result.matchId && onOpenReport(result.matchId)}
       className={`relative flex items-center justify-between p-5 rounded-[28px] border transition-all duration-300 ${
         isUserMatch
           ? 'border-emerald-500/40 shadow-[0_0_40px_rgba(16,185,129,0.12)]'
           : 'border-white/8'
-      }`}
+      } ${result.matchId ? 'cursor-pointer hover:border-white/20' : ''}`}
       style={{ backgroundImage: bg }}
     >
       {/* Numer pary */}
@@ -132,6 +135,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ result, pairIndex, userTeamId, cl
 export const RelegationPlayoffMatch1View: React.FC = () => {
   const { relegationPlayoffFirstLegResults, confirmRelegationPlayoffMatch1, clubs, userTeamId } = useGame();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   if (!relegationPlayoffFirstLegResults) return null;
 
@@ -204,12 +208,14 @@ export const RelegationPlayoffMatch1View: React.FC = () => {
             pairIndex={0}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
           <MatchCard
             result={relegationPlayoffFirstLegResults.pair1}
             pairIndex={1}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
         </div>
       </div>
@@ -226,6 +232,7 @@ export const RelegationPlayoffMatch1View: React.FC = () => {
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
       `}</style>
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
     </div>
   );
 };

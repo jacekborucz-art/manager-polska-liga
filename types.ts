@@ -190,6 +190,8 @@ export interface RelegationPlayoffLegResult {
   awayId: string;  // ID drużyny gości
   homeGoals: number;
   awayGoals: number;
+  matchId?: string; // raport meczu rozgrywanego w tle
+  isExtraTime?: boolean;
 }
 
 // Wyniki rzutów karnych (gdy dwumecz zakończy się remisem)
@@ -211,7 +213,11 @@ export interface RelegationPlayoffPairOutcome {
   leg2: RelegationPlayoffLegResult;
   winnerId: string;  // ID zwycięzcy dwumeczu
   loserId: string;   // ID przegranego dwumeczu
-  decidedBy: 'AGGREGATE' | 'PENALTIES'; // jak rozstrzygnięto
+  decidedBy: 'AGGREGATE' | 'EXTRA_TIME' | 'PENALTIES'; // jak rozstrzygnięto
+  extraTime?: {
+    homeGoals: number; // gospodarz rewanżu
+    awayGoals: number; // gość rewanżu
+  };
   penalties?: RelegationPlayoffPenalties;
 }
 
@@ -234,6 +240,7 @@ export interface PromotionPlayoffSingleMatchResult {
     awayShots: number;
   };
   winnerId: string;
+  matchId?: string;
 }
 
 // Wyniki półfinałów z 31 maja — potrzebne do wyłonienia finalistów 4 czerwca

@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import EkstraklasaBg from '../../Graphic/themes/ekstraklasa.png';
 import { PlayoffPair, PromotionPlayoffSingleMatchResult } from '../../types';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 // Sekcja helpera — bezpieczne doklejanie alfa do koloru klubu
 const withAlpha = (color: string | undefined, alpha: number): string => {
@@ -19,7 +20,7 @@ const withAlpha = (color: string | undefined, alpha: number): string => {
   return `rgba(148,163,184,${alpha})`;
 };
 
-// Sekcja helpera — opis sposobu rozstrzygniÄ™cia meczu
+// Sekcja helpera — opis sposobu rozstrzygnięcia meczu
 const getDecisionLabel = (result: PromotionPlayoffSingleMatchResult): string => {
   if (result.decidedBy === 'EXTRA_TIME') return 'po dogrywce';
   if (result.decidedBy === 'PENALTIES' && result.penalties) return `karne ${result.penalties.homeShots}:${result.penalties.awayShots}`;
@@ -57,10 +58,11 @@ interface MatchCardProps {
   accentText: string;
   userTeamId: string | null;
   clubs: ReturnType<typeof useGame>['clubs'];
+  onOpenReport: (matchId: string) => void;
 }
 
 // Sekcja karty pojedynczego półfinału
-const MatchCard: React.FC<MatchCardProps> = ({ result, pair, title, accentBorder, accentText, userTeamId, clubs }) => {
+const MatchCard: React.FC<MatchCardProps> = ({ result, pair, title, accentBorder, accentText, userTeamId, clubs, onOpenReport }) => {
   const homeClub = clubs.find(c => c.id === result.homeId);
   const awayClub = clubs.find(c => c.id === result.awayId);
   if (!homeClub || !awayClub) return null;
@@ -78,11 +80,12 @@ const MatchCard: React.FC<MatchCardProps> = ({ result, pair, title, accentBorder
 
   return (
     <div
+      onClick={() => result.matchId && onOpenReport(result.matchId)}
       className={`relative rounded-[28px] border p-5 ${
         isUserMatch
           ? `${accentBorder} shadow-[0_0_40px_rgba(16,185,129,0.12)]`
           : 'border-white/8'
-      }`}
+      } ${result.matchId ? 'cursor-pointer hover:border-white/20' : ''}`}
       style={{ backgroundImage: bg }}
     >
       <div className="flex items-center justify-between gap-4 mb-4">
@@ -150,10 +153,11 @@ interface SectionProps {
   result1: PromotionPlayoffSingleMatchResult;
   userTeamId: string | null;
   clubs: ReturnType<typeof useGame>['clubs'];
+  onOpenReport: (matchId: string) => void;
 }
 
 // Sekcja grupująca dwa półfinały w danej ścieżce barażowej
-const Section: React.FC<SectionProps> = ({ title, subtitle, accentText, accentBorder, pair0, pair1, result0, result1, userTeamId, clubs }) => (
+const Section: React.FC<SectionProps> = ({ title, subtitle, accentText, accentBorder, pair0, pair1, result0, result1, userTeamId, clubs, onOpenReport }) => (
   <div className="mb-8">
     <div className="mb-4">
       <h2 className={`text-2xl font-black uppercase italic tracking-tight ${accentText}`}>{title}</h2>
@@ -169,6 +173,7 @@ const Section: React.FC<SectionProps> = ({ title, subtitle, accentText, accentBo
         accentText={accentText}
         userTeamId={userTeamId}
         clubs={clubs}
+        onOpenReport={onOpenReport}
       />
       <MatchCard
         result={result1}
@@ -178,6 +183,7 @@ const Section: React.FC<SectionProps> = ({ title, subtitle, accentText, accentBo
         accentText={accentText}
         userTeamId={userTeamId}
         clubs={clubs}
+        onOpenReport={onOpenReport}
       />
     </div>
   </div>
@@ -187,6 +193,7 @@ const Section: React.FC<SectionProps> = ({ title, subtitle, accentText, accentBo
 export const PromotionPlayoffSemiView: React.FC = () => {
   const { promotionPlayoffSemiResults, activePlayoffDraw, confirmPromotionPlayoffSemi, clubs, userTeamId } = useGame();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   if (!promotionPlayoffSemiResults || !activePlayoffDraw) return null;
 
@@ -247,6 +254,7 @@ export const PromotionPlayoffSemiView: React.FC = () => {
             result1={promotionPlayoffSemiResults.ekstraklasaSemi1}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
 
           <Section
@@ -260,6 +268,7 @@ export const PromotionPlayoffSemiView: React.FC = () => {
             result1={promotionPlayoffSemiResults.ligaOneSemi1}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
         </div>
       </div>
@@ -275,6 +284,7 @@ export const PromotionPlayoffSemiView: React.FC = () => {
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
       `}</style>
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import EkstraklasaBg from '../../Graphic/themes/ekstraklasa.png';
 import { PlayoffPair, PromotionPlayoffSingleMatchResult } from '../../types';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 // Sekcja helpera — bezpieczne doklejanie alfa do koloru klubu
 const withAlpha = (color: string | undefined, alpha: number): string => {
@@ -64,10 +65,11 @@ interface FinalCardProps {
   accentBg: string;
   userTeamId: string | null;
   clubs: ReturnType<typeof useGame>['clubs'];
+  onOpenReport: (matchId: string) => void;
 }
 
 // Sekcja pojedynczej karty finału barażowego
-const FinalCard: React.FC<FinalCardProps> = ({ title, targetLeague, result, pairs, accentText, accentBorder, accentBg, userTeamId, clubs }) => {
+const FinalCard: React.FC<FinalCardProps> = ({ title, targetLeague, result, pairs, accentText, accentBorder, accentBg, userTeamId, clubs, onOpenReport }) => {
   const homeClub = clubs.find(c => c.id === result.homeId);
   const awayClub = clubs.find(c => c.id === result.awayId);
   if (!homeClub || !awayClub) return null;
@@ -84,7 +86,8 @@ const FinalCard: React.FC<FinalCardProps> = ({ title, targetLeague, result, pair
 
   return (
     <div
-      className={`relative rounded-[30px] border p-6 ${isUserMatch ? `${accentBorder} shadow-[0_0_40px_rgba(16,185,129,0.12)]` : 'border-white/8'}`}
+      onClick={() => result.matchId && onOpenReport(result.matchId)}
+      className={`relative rounded-[30px] border p-6 ${isUserMatch ? `${accentBorder} shadow-[0_0_40px_rgba(16,185,129,0.12)]` : 'border-white/8'} ${result.matchId ? 'cursor-pointer hover:border-white/20' : ''}`}
       style={{ backgroundImage: bg }}
     >
       <div className="flex items-center justify-between gap-4 mb-5">
@@ -148,6 +151,7 @@ const FinalCard: React.FC<FinalCardProps> = ({ title, targetLeague, result, pair
 export const PromotionPlayoffFinalView: React.FC = () => {
   const { promotionPlayoffFinalResults, activePlayoffDraw, confirmPromotionPlayoffFinal, clubs, userTeamId } = useGame();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   if (!promotionPlayoffFinalResults || !activePlayoffDraw) return null;
 
@@ -207,6 +211,7 @@ export const PromotionPlayoffFinalView: React.FC = () => {
             accentBg="bg-amber-500/8"
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
 
           <FinalCard
@@ -219,6 +224,7 @@ export const PromotionPlayoffFinalView: React.FC = () => {
             accentBg="bg-sky-500/8"
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
         </div>
       </div>
@@ -234,6 +240,7 @@ export const PromotionPlayoffFinalView: React.FC = () => {
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
       `}</style>
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
     </div>
   );
 };

@@ -1596,19 +1596,26 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // relegationPlayoffFinalResult.pair0/pair1.loserId = drużyna spadająca do L_PL_4 (lub zostająca w L_PL_3)
     const playoffRelegatedL3Ids: string[] = [];  // kluby z L_PL_3 przegrywające baraże → L_PL_4
     const playoffPromotedL4Ids: string[] = [];   // kluby z L_PL_4 wygrywające baraże → L_PL_3
+    const playoffL4ParticipantIds = new Set<string>();
     if (relegationPlayoffFinalResult) {
       [relegationPlayoffFinalResult.pair0, relegationPlayoffFinalResult.pair1].forEach(outcome => {
+        if (!outcome) return;
         const loserClub = clubs.find(c => c.id === outcome.loserId);
         const winnerClub = clubs.find(c => c.id === outcome.winnerId);
         // Jeśli przegrany to klub z L_PL_3 → spada do L_PL_4
         if (loserClub?.leagueId === 'L_PL_3') playoffRelegatedL3Ids.push(outcome.loserId);
+        if (loserClub?.leagueId === 'L_PL_4') playoffL4ParticipantIds.add(outcome.loserId);
         // Jeśli wygrany to klub z L_PL_4 → awansuje do L_PL_3
-        if (winnerClub?.leagueId === 'L_PL_4') playoffPromotedL4Ids.push(outcome.winnerId);
+        if (winnerClub?.leagueId === 'L_PL_4') {
+          playoffL4ParticipantIds.add(outcome.winnerId);
+          playoffPromotedL4Ids.push(outcome.winnerId);
+        }
       });
     }
 
     // Losowanie z L_PL_4: 4 automatyczne awanse + dodatkowi zwycięzcy baraży.
-    const remainingL4Pool = potentialL4.filter(c => !playoffPromotedL4Ids.includes(c.id));
+    // Uczestnik barażu nie może dostać drugiej szansy przez zwykłe losowanie awansu.
+    const remainingL4Pool = potentialL4.filter(c => !playoffL4ParticipantIds.has(c.id));
     const randomPromotionsNeeded = 4;
     const promotedFromL4Teams = [...remainingL4Pool].sort(() => Math.random() - 0.5).slice(0, randomPromotionsNeeded);
 
@@ -1622,8 +1629,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       if (!promoteFromL2Ids.includes(ekstraklasaWinnerId)) promoteFromL2Ids.push(ekstraklasaWinnerId);
       if (!promoteFromL3Ids.includes(ligaOneWinnerId)) promoteFromL3Ids.push(ligaOneWinnerId);
     }
-    const relegateFromL3Ids = [...relegatedTeamsL3.map(c => c.id), ...playoffRelegatedL3Ids]; // 15-18 + barażowi przegrani
-    const promoteFromL4Ids = [...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids]; // losowi + barażowi zwycięzcy
+    const relegateFromL3Ids = [...new Set([...relegatedTeamsL3.map(c => c.id), ...playoffRelegatedL3Ids])]; // 15-18 + barażowi przegrani
+    const promoteFromL4Ids = [...new Set([...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids])]; // losowi + barażowi zwycięzcy
 
     // 3. Budowa raportu
     const getAwards = (leagueId: string, leagueName: string) => {
@@ -5258,7 +5265,8 @@ Asystent`,
           if (!p0home || !p0away || !p1home || !p1away) { break; } // bezpieczeństwo
 
           // Seed unikalny per data + para — gwarantuje powtarzalność przy tym samym dniu
-          const dateSeed26 = dateToProcess.getTime();
+          const dateSeed26 = dateToProcess.getTime() + sessionSeed;
+          const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
 
           // Sprawdzenie czy drużyna gracza gra w barażu
           const userInPair0_leg1 = userTeamId && (pairs[0].homeId === userTeamId || pairs[0].awayId === userTeamId);
@@ -5269,7 +5277,7 @@ Asystent`,
             const otherPairIdx = playerPairIdx === 0 ? 1 : 0;
             const otherHome = clubs.find(c => c.id === pairs[otherPairIdx].homeId)!;
             const otherAway = clubs.find(c => c.id === pairs[otherPairIdx].awayId)!;
-            const otherResult = RelegationPlayoffSimulator.simulateMatch(otherHome, otherAway, dateSeed26 + (otherPairIdx + 1));
+            const otherResult = RelegationPlayoffSimulator.simulateMatch(otherHome, otherAway, dateSeed26 + (otherPairIdx + 1), playoffSimulationContext);
             // Placeholder dla pary gracza — zostanie nadpisany po interaktywnym meczu
             const placeholder: RelegationPlayoffLegResult = { homeId: pairs[playerPairIdx].homeId, awayId: pairs[playerPairIdx].awayId, homeGoals: 0, awayGoals: 0 };
             setRelegationPlayoffFirstLegResults(playerPairIdx === 0
@@ -5287,8 +5295,8 @@ Asystent`,
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
           } else {
-            const leg1pair0 = RelegationPlayoffSimulator.simulateMatch(p0home, p0away, dateSeed26 + 1);
-            const leg1pair1 = RelegationPlayoffSimulator.simulateMatch(p1home, p1away, dateSeed26 + 2);
+            const leg1pair0 = RelegationPlayoffSimulator.simulateMatch(p0home, p0away, dateSeed26 + 1, playoffSimulationContext);
+            const leg1pair1 = RelegationPlayoffSimulator.simulateMatch(p1home, p1away, dateSeed26 + 2, playoffSimulationContext);
             setRelegationPlayoffFirstLegResults({ pair0: leg1pair0, pair1: leg1pair1 });
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.RELEGATION_PLAYOFF_MATCH_1);
@@ -5315,7 +5323,8 @@ Asystent`,
 
           if (!p0homeR || !p0awayR || !p1homeR || !p1awayR) { break; }
 
-          const dateSeed29 = dateToProcess.getTime();
+          const dateSeed29 = dateToProcess.getTime() + sessionSeed;
+          const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
 
           // clubs z 2.Ligi — para 0 i para 1 (homeId w leg1 = klub 2.Ligi)
           const clubL3pair0 = clubs.find(c => c.id === pairs2[0].homeId)!;
@@ -5333,11 +5342,11 @@ Asystent`,
             // Symuluj tylko rewanż pary bez gracza
             const otherL2Home = clubs.find(c => c.id === pairs2[otherPairIdx].awayId)!; // w rewanżu strony zamienione
             const otherL2Away = clubs.find(c => c.id === pairs2[otherPairIdx].homeId)!;
-            const otherLeg2 = RelegationPlayoffSimulator.simulateMatch(otherL2Home, otherL2Away, dateSeed29 + (otherPairIdx + 1));
+            const otherLeg2 = RelegationPlayoffSimulator.simulateMatch(otherL2Home, otherL2Away, dateSeed29 + (otherPairIdx + 1), playoffSimulationContext);
             const otherClubL3 = otherPairIdx === 0 ? clubL3pair0 : clubL3pair1;
             const otherClubL4 = otherPairIdx === 0 ? clubL4pair0 : clubL4pair1;
             const otherFirstLeg = otherPairIdx === 0 ? firstLeg.pair0 : firstLeg.pair1;
-            const otherOutcome = RelegationPlayoffSimulator.resolveAggregate(otherFirstLeg, otherLeg2, otherClubL3, otherClubL4, dateSeed29 + (otherPairIdx === 0 ? 10 : 20));
+            const otherOutcome = RelegationPlayoffSimulator.resolveAggregate(otherFirstLeg, otherLeg2, otherClubL3, otherClubL4, dateSeed29 + (otherPairIdx === 0 ? 10 : 20), playoffSimulationContext);
             // Wynik gracza zostanie ustalony po interaktywnym meczu — zapisujemy tylko drugą parę
             setRelegationPlayoffFinalResult(playerPairIdx === 0
               ? { pair0: null as any, pair1: otherOutcome }
@@ -5358,10 +5367,10 @@ Asystent`,
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
           } else {
-            const leg2pair0 = RelegationPlayoffSimulator.simulateMatch(p0homeR, p0awayR, dateSeed29 + 1);
-            const leg2pair1 = RelegationPlayoffSimulator.simulateMatch(p1homeR, p1awayR, dateSeed29 + 2);
-            const outcome0 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair0, leg2pair0, clubL3pair0, clubL4pair0, dateSeed29 + 10);
-            const outcome1 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair1, leg2pair1, clubL3pair1, clubL4pair1, dateSeed29 + 20);
+            const leg2pair0 = RelegationPlayoffSimulator.simulateMatch(p0homeR, p0awayR, dateSeed29 + 1, playoffSimulationContext);
+            const leg2pair1 = RelegationPlayoffSimulator.simulateMatch(p1homeR, p1awayR, dateSeed29 + 2, playoffSimulationContext);
+            const outcome0 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair0, leg2pair0, clubL3pair0, clubL4pair0, dateSeed29 + 10, playoffSimulationContext);
+            const outcome1 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair1, leg2pair1, clubL3pair1, clubL4pair1, dateSeed29 + 20, playoffSimulationContext);
             setRelegationPlayoffFinalResult({ pair0: outcome0, pair1: outcome1 });
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.RELEGATION_PLAYOFF_MATCH_2);
@@ -5407,10 +5416,10 @@ Asystent`,
 
           if (userInSemi) {
             // Symuluj wszystkie mecze OPRÓCZ meczu gracza
-            const simsE0 = !userInE0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0') : null;
-            const simsE1 = !userInE1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1') : null;
-            const simsL0 = !userInL0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0') : null;
-            const simsL1 = !userInL1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1') : null;
+            const simsE0 = !userInE0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0', seasonNumber, coaches) : null;
+            const simsE1 = !userInE1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1', seasonNumber, coaches) : null;
+            const simsL0 = !userInL0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0', seasonNumber, coaches) : null;
+            const simsL1 = !userInL1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1', seasonNumber, coaches) : null;
             const otherSemiResults: Partial<PromotionPlayoffSemiResults> = {};
             if (simsE0) otherSemiResults.ekstraklasaSemi0 = simsE0;
             if (simsE1) otherSemiResults.ekstraklasaSemi1 = simsE1;
@@ -5432,10 +5441,10 @@ Asystent`,
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
           } else {
-            const ekstraklasaSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0');
-            const ekstraklasaSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1');
-            const ligaOneSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0');
-            const ligaOneSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1');
+            const ekstraklasaSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0', seasonNumber, coaches);
+            const ekstraklasaSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1', seasonNumber, coaches);
+            const ligaOneSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0', seasonNumber, coaches);
+            const ligaOneSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1', seasonNumber, coaches);
             setPromotionPlayoffSemiResults({ ekstraklasaSemi0, ekstraklasaSemi1, ligaOneSemi0, ligaOneSemi1 });
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PROMOTION_PLAYOFF_SEMI_VIEW);
@@ -5500,7 +5509,7 @@ Asystent`,
             const otherHomeClub = userInEFinal ? ligaOneHomeClub : ekstraklasaHomeClub;
             const otherAwayClub = userInEFinal ? ligaOneAwayClub : ekstraklasaAwayClub;
             const otherLineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(otherHomeClub, otherAwayClub, players, lineups, userTeamId, coaches);
-            const otherFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, otherHomeClub, otherAwayClub, players, otherLineups, dateSeed4June + (userInEFinal ? 2 : 1), userInEFinal ? 'PROMOTION_LIGAONE_FINAL' : 'PROMOTION_EKSTRAKLASA_FINAL');
+            const otherFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, otherHomeClub, otherAwayClub, players, otherLineups, dateSeed4June + (userInEFinal ? 2 : 1), userInEFinal ? 'PROMOTION_LIGAONE_FINAL' : 'PROMOTION_EKSTRAKLASA_FINAL', seasonNumber, coaches);
             setActivePlayoffMatch({
               matchType: 'PROMOTION_FINAL',
               homeClub: playerHome,
@@ -5513,8 +5522,8 @@ Asystent`,
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
           } else {
-            const ekstraklasaFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ekstraklasaHomeClub, ekstraklasaAwayClub, players, ekstraklasaFinalLineups, dateSeed4June + 1, 'PROMOTION_EKSTRAKLASA_FINAL');
-            const ligaOneFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ligaOneHomeClub, ligaOneAwayClub, players, ligaOneFinalLineups, dateSeed4June + 2, 'PROMOTION_LIGAONE_FINAL');
+            const ekstraklasaFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ekstraklasaHomeClub, ekstraklasaAwayClub, players, ekstraklasaFinalLineups, dateSeed4June + 1, 'PROMOTION_EKSTRAKLASA_FINAL', seasonNumber, coaches);
+            const ligaOneFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ligaOneHomeClub, ligaOneAwayClub, players, ligaOneFinalLineups, dateSeed4June + 2, 'PROMOTION_LIGAONE_FINAL', seasonNumber, coaches);
             setPromotionPlayoffFinalResults({ ekstraklasaFinal, ligaOneFinal });
             setProcessedDrawIds(prev => [...prev, slot.id]);
             navigateTo(ViewState.PROMOTION_PLAYOFF_FINAL_VIEW);

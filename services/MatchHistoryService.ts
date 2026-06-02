@@ -14,6 +14,12 @@ export const MatchHistoryService = {
     console.log(`[MatchHistory] Zapisano mecz: ${entry.homeTeamId} vs ${entry.awayTeamId}`);
   },
 
+  updateMatch: (matchId: string, updates: Partial<MatchHistoryEntry>) => {
+    matchHistory = matchHistory.map(entry =>
+      entry.matchId === matchId ? { ...entry, ...updates } : entry
+    );
+  },
+
   // Funkcja pobierająca całą historię
   getAll: () => [...matchHistory],
 

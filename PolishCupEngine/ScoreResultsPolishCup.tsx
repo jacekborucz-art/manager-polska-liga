@@ -1,12 +1,14 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
 import PucharPolskiBg from '../Graphic/themes/PucharPolski.png';
 import { getClubLogo } from '../resources/ClubLogoAssets';
+import { MatchReportModalPolishLeague } from '../components/modals/MatchReportModalPolishLeague';
 
 export const ScoreResultsPolishCup: React.FC = () => {
   const { fixtures, clubs, currentDate, navigateTo, advanceDay, userTeamId, setActiveMatchState: setMatchState } = useGame();
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   const cupResults = useMemo(() => {
     const dateStr = currentDate.toDateString();
@@ -91,7 +93,16 @@ export const ScoreResultsPolishCup: React.FC = () => {
                 return (
                   <div 
                     key={result.id} 
-                    className="flex items-center justify-between py-2.5 px-8 rounded-2xl transition-colors group relative overflow-visible mb-[15px]"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setReportMatchId(result.id)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setReportMatchId(result.id);
+                      }
+                    }}
+                    className="flex items-center justify-between py-2.5 px-8 rounded-2xl transition-colors group relative overflow-visible mb-[15px] cursor-pointer hover:ring-1 hover:ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
                     style={{
                       background: `linear-gradient(to right, ${home.colorsHex[0]}33 0%, ${home.colorsHex[1] || home.colorsHex[0]}22 25%, transparent 42%, transparent 58%, ${away.colorsHex[1] || away.colorsHex[0]}22 75%, ${away.colorsHex[0]}33 100%)`
                     }}
@@ -165,6 +176,8 @@ export const ScoreResultsPolishCup: React.FC = () => {
       <div className="bg-black/20 p-4 flex justify-center shrink-0">
          <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em]">Wszystkie wyniki zostały zatwierdzone przez komisję ligi</p>
       </div>
+
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

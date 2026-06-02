@@ -1042,6 +1042,18 @@ useEffect(() => {
       };
     });
   };
+
+  const requiresExtraTime = (homeScore: number, awayScore: number): boolean => {
+    if (activePlayoffMatch?.matchType !== 'RELEGATION_LEG2' || !activePlayoffMatch.firstLegResult) {
+      return homeScore === awayScore;
+    }
+
+    const firstLeg = activePlayoffMatch.firstLegResult;
+    const clubL3Aggregate = firstLeg.homeGoals + awayScore;
+    const clubL4Aggregate = firstLeg.awayGoals + homeScore;
+    return clubL3Aggregate === clubL4Aggregate;
+  };
+
   // --- TACTICS BATTLE HELPERS ---
   const getTacticStyle = (tacticId: string) => {
     const t = TacticRepository.getById(tacticId);
@@ -1663,7 +1675,7 @@ useEffect(() => {
 
           if (nextMinute > endMinute) {
              // SCENARIUSZ: REMIS - ZATRZYMUJEMY GRE, CZEKAMY NA KLIKNIĘCIE
-             if (prev.homeScore === prev.awayScore) {
+             if (requiresExtraTime(prev.homeScore, prev.awayScore)) {
                return {
                  ...prev,
                  minute: endMinute, 
@@ -1706,7 +1718,7 @@ useEffect(() => {
         }
 
 if (prev.isExtraTime && nextMinute >= 121) {
-        const isDraw = prev.homeScore === prev.awayScore;
+        const isDraw = requiresExtraTime(prev.homeScore, prev.awayScore);
 
         if (isDraw) {
           // REMIS W DOGRYWCE -> RZUTY KARNE
@@ -3247,8 +3259,17 @@ if (activePlayerTempo === 'SLOW') {
           ? 'AWAY'
           : null
       : null;
-    const isHomeWinner = matchState.isPenalties ? penaltyWinner === 'HOME' : matchState.homeScore > matchState.awayScore;
-    const isAwayWinner = matchState.isPenalties ? penaltyWinner === 'AWAY' : matchState.awayScore > matchState.homeScore;
+    const firstRelegationLeg = activePlayoffMatch?.matchType === 'RELEGATION_LEG2'
+      ? activePlayoffMatch.firstLegResult
+      : undefined;
+    const homeWinningScore = firstRelegationLeg
+      ? firstRelegationLeg.awayGoals + matchState.homeScore
+      : matchState.homeScore;
+    const awayWinningScore = firstRelegationLeg
+      ? firstRelegationLeg.homeGoals + matchState.awayScore
+      : matchState.awayScore;
+    const isHomeWinner = matchState.isPenalties ? penaltyWinner === 'HOME' : homeWinningScore > awayWinningScore;
+    const isAwayWinner = matchState.isPenalties ? penaltyWinner === 'AWAY' : awayWinningScore > homeWinningScore;
     const didUserWin = matchState.isPenalties ? penaltyWinner === userSide : (isHomeWinner && userSide === 'HOME') || (isAwayWinner && userSide === 'AWAY');
 
     const updatedClubs = isPlayoffMode
@@ -3504,7 +3525,14 @@ if (activePlayerTempo === 'SLOW') {
     // ── ZAPIS WYNIKU BARAŻOWEGO (state updates muszą być przed modalem) ─────────────────────────
     let cupNavigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO' = 'POST_MATCH_CUP_STUDIO';
     if (isPlayoffMode && activePlayoffMatch) {
-      const legResult = { homeId: ctx.homeClub.id, awayId: ctx.awayClub.id, homeGoals: matchState.homeScore, awayGoals: matchState.awayScore };
+      const legResult = {
+        homeId: ctx.homeClub.id,
+        awayId: ctx.awayClub.id,
+        homeGoals: matchState.homeScore,
+        awayGoals: matchState.awayScore,
+        matchId: ctx.fixture.id,
+        isExtraTime: matchState.isExtraTime,
+      };
       const decidedBy: PromotionPlayoffSingleMatchResult['decidedBy'] = matchState.isPenalties ? 'PENALTIES' : (matchState.isExtraTime ? 'EXTRA_TIME' : 'REGULAR');
       const winnerId = isHomeWinner ? ctx.homeClub.id : ctx.awayClub.id;
 
@@ -3522,7 +3550,35 @@ if (activePlayerTempo === 'SLOW') {
         const clubL3 = clubs.find(c => c.id === firstLeg.homeId)!;
         const clubL4 = clubs.find(c => c.id === firstLeg.awayId)!;
         const seed = currentDate.getTime() + activePlayoffMatch.pairIndex * 10;
-        const outcome = RelegationPlayoffSimulator.resolveAggregate(firstLeg, legResult, clubL3, clubL4, seed);
+        const outcome = matchState.isPenalties
+          ? {
+              leg1: firstLeg,
+              leg2: legResult,
+              winnerId,
+              loserId: winnerId === clubL3.id ? clubL4.id : clubL3.id,
+              decidedBy: 'PENALTIES' as const,
+              penalties: {
+                winnerId,
+                homeShots: matchState.awayPenaltyScore || 0,
+                awayShots: matchState.homePenaltyScore || 0,
+              },
+            }
+          : matchState.isExtraTime
+            ? {
+                leg1: firstLeg,
+                leg2: legResult,
+                winnerId,
+                loserId: winnerId === clubL3.id ? clubL4.id : clubL3.id,
+                decidedBy: 'EXTRA_TIME' as const,
+              }
+            : RelegationPlayoffSimulator.resolveAggregate(
+                firstLeg,
+                legResult,
+                clubL3,
+                clubL4,
+                seed,
+                { playersMap: players, lineups, coaches }
+              );
         const otherOutcome = activePlayoffMatch.otherRelegationPairOutcome!;
         setRelegationPlayoffFinalResult(activePlayoffMatch.pairIndex === 0
           ? { pair0: outcome, pair1: otherOutcome }
@@ -3534,6 +3590,7 @@ if (activePlayerTempo === 'SLOW') {
           homeId: ctx.homeClub.id, awayId: ctx.awayClub.id,
           homeGoals: matchState.homeScore, awayGoals: matchState.awayScore,
           decidedBy, winnerId,
+          matchId: ctx.fixture.id,
           penalties: matchState.isPenalties ? { winnerId, homeShots: matchState.homePenaltyScore || 0, awayShots: matchState.awayPenaltyScore || 0 } : undefined,
         };
         const others = activePlayoffMatch.otherPromotionSemiResults || {};
@@ -3547,6 +3604,7 @@ if (activePlayerTempo === 'SLOW') {
           homeId: ctx.homeClub.id, awayId: ctx.awayClub.id,
           homeGoals: matchState.homeScore, awayGoals: matchState.awayScore,
           decidedBy, winnerId,
+          matchId: ctx.fixture.id,
           penalties: matchState.isPenalties ? { winnerId, homeShots: matchState.homePenaltyScore || 0, awayShots: matchState.awayPenaltyScore || 0 } : undefined,
         };
         const otherFinal = activePlayoffMatch.otherPromotionFinalResult!;
@@ -4148,7 +4206,7 @@ if (activePlayerTempo === 'SLOW') {
 
 
 {/* NOWY LABEL: KONIEC II POŁOWY / DOGRYWKA (PO KONSTRUKCJI REMISU) */}
- {matchState.isPaused && !matchState.isFinished && matchState.minute >= 90 && !matchState.isExtraTime && matchState.homeScore === matchState.awayScore && (
+ {matchState.isPaused && !matchState.isFinished && matchState.minute >= 90 && !matchState.isExtraTime && requiresExtraTime(matchState.homeScore, matchState.awayScore) && (
     <div 
       onClick={startExtraTimeMatch} 
       className="absolute inset-0 z-[60] flex items-center justify-center cursor-pointer" 
@@ -4641,7 +4699,7 @@ if (activePlayerTempo === 'SLOW') {
           onClick={() => setMatchState(s => {
             if (!s) return s;
 
-            if (!s.isExtraTime && s.homeScore === s.awayScore && s.minute >= 90 + (s.addedTime ?? 0)) {
+            if (!s.isExtraTime && requiresExtraTime(s.homeScore, s.awayScore) && s.minute >= 90 + (s.addedTime ?? 0)) {
               return {
                 ...s,
                 minute: 90,

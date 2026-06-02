@@ -1,4 +1,4 @@
-import { Club, Coach, HealthStatus, InjurySeverity, Lineup, MatchEventType, Player, PlayerPosition, PromotionPlayoffSingleMatchResult, Referee } from '../types';
+import { Club, Coach, InjurySeverity, Lineup, MatchCardEntry, MatchGoalEntry, MatchInjuryEntry, MatchSubstitutionEntry, MatchEventType, Player, PlayerPosition, PromotionPlayoffSingleMatchResult, Referee } from '../types';
 import { PolandWeatherService } from './PolandWeatherService';
 import { AiMatchPreparationService } from './AiMatchPreparationService';
 import { GoalAttributionService } from './GoalAttributionService';
@@ -6,6 +6,9 @@ import { TacticRepository } from '../resources/tactics_db';
 import { RefereeService } from './RefereeService';
 import { LineupService } from './LineupService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { KitSelectionService } from './KitSelectionService';
+import { MatchHistoryService } from './MatchHistoryService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 interface PlayoffEngineResult {
   homeScore: number;
@@ -13,6 +16,11 @@ interface PlayoffEngineResult {
   penaltyHome?: number;
   penaltyAway?: number;
   endedAfterExtraTime: boolean;
+  goals: MatchGoalEntry[];
+  cards: MatchCardEntry[];
+  injuries: MatchInjuryEntry[];
+  substitutions: MatchSubstitutionEntry[];
+  referee: Referee;
 }
 
 // ============================================================
@@ -29,7 +37,9 @@ const simulatePlayoffMatchEngine = (
   aLineup: Lineup,
   seed: number,
   weatherEqualizer: number,
-  isNeutralVenue: boolean
+  isNeutralVenue: boolean,
+  homeCoach?: Coach,
+  awayCoach?: Coach
 ): PlayoffEngineResult => {
 
   // ── SEEDED RNG ─────────────────────────────────────────────
@@ -54,17 +64,37 @@ const simulatePlayoffMatchEngine = (
 
   // Sekcja pomocniczych struktur do wewnętrznej symulacji
   const usedGoalMinutes = new Set<number>();
-  const cards: { playerId: string; type: MatchEventType; minute: number }[] = [];
-  const injuries: { playerId: string; severity: InjurySeverity; days: number; type: string }[] = [];
+  const rawCards: { playerId: string; type: MatchEventType; minute: number; teamId: string }[] = [];
+  const injuries: MatchInjuryEntry[] = [];
+  const substitutions: MatchSubstitutionEntry[] = [];
+  const goals: MatchGoalEntry[] = [];
+  const getPlayerName = (player: Player | undefined): string =>
+    player ? `${player.firstName.charAt(0)}. ${player.lastName}` : 'Nieznany';
+  const clamp = (value: number, min: number, max: number): number =>
+    Math.max(min, Math.min(max, value));
 
   // Sekcja siły drużyn na bazie zawodników z wyjściowego składu
-  const getTeamStrength = (players: Player[], xi: (string | null)[]) => {
+  const getTeamStrength = (players: Player[], xi: (string | null)[], club: Club, coach?: Coach) => {
     const active = players.filter(p => xi.includes(p.id));
     if (active.length === 0) return { att: 40, def: 40, gk: 40, overall: 40 };
-    const att = active.reduce((s, p) => s + (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3, 0) / active.length;
-    const def = active.reduce((s, p) => s + (p.attributes.defending + p.attributes.stamina) / 2, 0) / active.length;
+    const effectiveAttribute = (player: Player, value: number): number => {
+      const conditionMultiplier = clamp(player.condition / 100, 0.6, 1);
+      const moraleMultiplier = PlayerMoraleService.getMatchMultiplier(PlayerMoraleService.ensurePlayerState(player));
+      return value * conditionMultiplier * moraleMultiplier;
+    };
+    const coachScore = coach
+      ? coach.attributes.experience * 0.30 + coach.attributes.decisionMaking * 0.35 + coach.attributes.motivation * 0.35
+      : 50;
+    const recentForm = (club.stats.form ?? []).slice(-5);
+    const formScore = recentForm.reduce((sum, result) => sum + (result === 'W' ? 1 : result === 'P' ? -1 : 0), 0);
+    const teamMultiplier =
+      clamp(0.94 + coachScore / 850, 0.96, 1.06) *
+      clamp(1 + formScore * 0.018, 0.92, 1.09) *
+      clamp(0.94 + ((club.morale ?? 50) / 50) * 0.06, 0.94, 1.06);
+    const att = active.reduce((s, p) => s + effectiveAttribute(p, (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3), 0) / active.length * teamMultiplier;
+    const def = active.reduce((s, p) => s + effectiveAttribute(p, (p.attributes.defending + p.attributes.stamina) / 2), 0) / active.length * teamMultiplier;
     const gkPlayer = players.find(p => p.id === xi[0]);
-    const gk = gkPlayer?.attributes.goalkeeping || 40;
+    const gk = gkPlayer ? effectiveAttribute(gkPlayer, gkPlayer.attributes.goalkeeping) * teamMultiplier : 40;
     const overall = (att + def + gk) / 3;
     return { att, def, gk, overall };
   };
@@ -89,8 +119,8 @@ const simulatePlayoffMatchEngine = (
 
   // Sekcja XG na minutę — skopiowana i dopasowana z silnika pucharowego
   const computeMinuteXG = () => {
-    const hStr = getTeamStrength(hPlayers, homeXI);
-    const aStr = getTeamStrength(aPlayers, awayXI);
+    const hStr = getTeamStrength(hPlayers, homeXI, home, homeCoach);
+    const aStr = getTeamStrength(aPlayers, awayXI, away, awayCoach);
     const baseXG = 0.014;
     const ATTR_FLOOR = 20;
 
@@ -129,8 +159,8 @@ const simulatePlayoffMatchEngine = (
 
   // Sekcja chaosu — im bardziej wyrównane drużyny, tym większa losowość
   const getChaosChance = () => {
-    const hStr = getTeamStrength(hPlayers, homeXI);
-    const aStr = getTeamStrength(aPlayers, awayXI);
+    const hStr = getTeamStrength(hPlayers, homeXI, home, homeCoach);
+    const aStr = getTeamStrength(aPlayers, awayXI, away, awayCoach);
     const strengthDiff = Math.abs(hStr.overall - aStr.overall);
     const DIFF_MAX = 25;
     const equalness = Math.max(0, 1 - strengthDiff / DIFF_MAX);
@@ -177,7 +207,7 @@ const simulatePlayoffMatchEngine = (
 
       if (rng() < redDirectChance) {
         const victimId = activeIds[Math.floor(rng() * activeIds.length)];
-        cards.push({ playerId: victimId, type: MatchEventType.RED_CARD, minute });
+        rawCards.push({ playerId: victimId, type: MatchEventType.RED_CARD, minute, teamId: side === 'HOME' ? home.id : away.id });
 
         if (side === 'HOME') {
           homeXI = homeXI.map(id => id === victimId ? null : id);
@@ -188,12 +218,11 @@ const simulatePlayoffMatchEngine = (
         }
       } else if (rng() < yellowChance) {
         const victimId = activeIds[Math.floor(rng() * activeIds.length)];
-        const existingYellows = cards.filter(c => c.playerId === victimId && c.type === MatchEventType.YELLOW_CARD).length;
+        const existingYellows = rawCards.filter(c => c.playerId === victimId && c.type === MatchEventType.YELLOW_CARD).length;
 
-        cards.push({ playerId: victimId, type: MatchEventType.YELLOW_CARD, minute });
+        rawCards.push({ playerId: victimId, type: MatchEventType.YELLOW_CARD, minute, teamId: side === 'HOME' ? home.id : away.id });
 
         if (existingYellows >= 1) {
-          cards.push({ playerId: victimId, type: MatchEventType.RED_CARD, minute });
           if (side === 'HOME') {
             homeXI = homeXI.map(id => id === victimId ? null : id);
             homeRedCount++;
@@ -209,12 +238,12 @@ const simulatePlayoffMatchEngine = (
   // Sekcja kontuzji — wpływa tylko na sam przebieg symulacji, bez zmian stanu gry
   const maybeGiveInjury = (minute: number) => {
     const injuryChance = 0.003 * experienceFactor;
-    const sides: [Player[], (string | null)[]][] = [
-      [hPlayers, homeXI],
-      [aPlayers, awayXI]
+    const sides: [Player[], (string | null)[], string][] = [
+      [hPlayers, homeXI, home.id],
+      [aPlayers, awayXI, away.id]
     ];
 
-    for (const [players, xi] of sides) {
+    for (const [players, xi, teamId] of sides) {
       if (rng() < injuryChance) {
         const activeIds = xi.filter(id => id !== null) as string[];
         if (activeIds.length === 0) continue;
@@ -227,6 +256,9 @@ const simulatePlayoffMatchEngine = (
         const { days, type } = rollInjuryBySeverity(severity, rng);
         injuries.push({
           playerId: victimId,
+          playerName: getPlayerName(players.find(player => player.id === victimId)),
+          minute,
+          teamId,
           severity,
           days,
           type
@@ -235,9 +267,42 @@ const simulatePlayoffMatchEngine = (
     }
   };
 
+  const maybeMakeSubstitution = (minute: number) => {
+    const sides: [Player[], Lineup, (string | null)[], string, (next: (string | null)[]) => void][] = [
+      [hPlayers, hLineup, homeXI, home.id, next => { homeXI = next; }],
+      [aPlayers, aLineup, awayXI, away.id, next => { awayXI = next; }],
+    ];
+
+    for (const [players, lineup, xi, teamId, setXi] of sides) {
+      const activeIds = xi.filter((id): id is string => !!id);
+      const replacement = (lineup.bench ?? [])
+        .map(id => players.find(player => player.id === id))
+        .filter((player): player is Player => !!player && !activeIds.includes(player.id) && player.condition >= 60)
+        .sort((a, b) => b.condition - a.condition)[0];
+      const outgoing = xi
+        .map((id, index) => ({ id, index, player: players.find(candidate => candidate.id === id) }))
+        .filter(entry => entry.index > 0 && !!entry.id && !!entry.player)
+        .sort((a, b) => (a.player?.condition ?? 100) - (b.player?.condition ?? 100))[0];
+      if (!replacement || !outgoing?.id || !outgoing.player) continue;
+
+      const nextXi = [...xi];
+      nextXi[outgoing.index] = replacement.id;
+      setXi(nextXi);
+      substitutions.push({
+        playerOutId: outgoing.player.id,
+        playerOutName: getPlayerName(outgoing.player),
+        playerInId: replacement.id,
+        playerInName: getPlayerName(replacement),
+        minute,
+        teamId,
+      });
+    }
+  };
+
   // Sekcja symulacji minutowej — 90 minut lub dogrywka
   const simulateMinutes = (fromMinute: number, toMinute: number, minuteScale: number) => {
     for (let minute = fromMinute; minute <= toMinute; minute++) {
+      if (minute === 60 || minute === 75 || minute === 105) maybeMakeSubstitution(minute);
       maybeGiveCard(minute);
       maybeGiveInjury(minute);
 
@@ -251,7 +316,16 @@ const simulatePlayoffMatchEngine = (
         while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;
         usedGoalMinutes.add(goalMin);
         const scorer = pickScorer(hPlayers, homeXI);
-        if (scorer) pickAssistant(hPlayers, homeXI, scorer.id);
+        const assistant = scorer ? pickAssistant(hPlayers, homeXI, scorer.id) : null;
+        goals.push({
+          playerId: scorer?.id,
+          playerName: getPlayerName(scorer),
+          minute: goalMin,
+          teamId: home.id,
+          isPenalty: false,
+          assistantId: assistant?.id,
+          assistantName: assistant ? getPlayerName(assistant) : undefined,
+        });
         homeGoals++;
       }
 
@@ -261,7 +335,16 @@ const simulatePlayoffMatchEngine = (
         while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;
         usedGoalMinutes.add(goalMin);
         const scorer = pickScorer(aPlayers, awayXI);
-        if (scorer) pickAssistant(aPlayers, awayXI, scorer.id);
+        const assistant = scorer ? pickAssistant(aPlayers, awayXI, scorer.id) : null;
+        goals.push({
+          playerId: scorer?.id,
+          playerName: getPlayerName(scorer),
+          minute: goalMin,
+          teamId: away.id,
+          isPenalty: false,
+          assistantId: assistant?.id,
+          assistantName: assistant ? getPlayerName(assistant) : undefined,
+        });
         awayGoals++;
       }
     }
@@ -311,9 +394,7 @@ const simulatePlayoffMatchEngine = (
     penaltyHome = simulatePenaltySeries(hPlayers, homeXI, awayGK);
     penaltyAway = simulatePenaltySeries(aPlayers, awayXI, homeGK);
 
-    let sudden = 0;
-    while (penaltyHome === penaltyAway && sudden < 10) {
-      sudden++;
+    while (penaltyHome === penaltyAway) {
       const hShooter = hPlayers.find(p => homeXI.includes(p.id) && p.position !== PlayerPosition.GK);
       const aShooter = aPlayers.find(p => awayXI.includes(p.id) && p.position !== PlayerPosition.GK);
       const hFinishing = hShooter?.attributes.finishing || 50;
@@ -329,12 +410,39 @@ const simulatePlayoffMatchEngine = (
     }
   }
 
+  const yellowCounts: Record<string, number> = {};
+  const cards: MatchCardEntry[] = rawCards.map(card => {
+    const player = [...hPlayers, ...aPlayers].find(candidate => candidate.id === card.playerId);
+    if (card.type === MatchEventType.YELLOW_CARD) {
+      yellowCounts[card.playerId] = (yellowCounts[card.playerId] || 0) + 1;
+      return {
+        playerId: card.playerId,
+        playerName: getPlayerName(player),
+        minute: card.minute,
+        teamId: card.teamId,
+        type: yellowCounts[card.playerId] > 1 ? 'SECOND_YELLOW' : 'YELLOW',
+      };
+    }
+    return {
+      playerId: card.playerId,
+      playerName: getPlayerName(player),
+      minute: card.minute,
+      teamId: card.teamId,
+      type: yellowCounts[card.playerId] > 1 ? 'SECOND_YELLOW' : 'RED',
+    };
+  });
+
   return {
     homeScore: homeGoals,
     awayScore: awayGoals,
     penaltyHome,
     penaltyAway,
     endedAfterExtraTime: endedAfterExtraTime || (regularHomeGoals === regularAwayGoals && homeGoals !== awayGoals),
+    goals,
+    cards,
+    injuries,
+    substitutions,
+    referee,
   };
 };
 
@@ -378,7 +486,9 @@ export const BackgroundPlayOffMatchPolishCup = {
     playersMap: Record<string, Player[]>,
     preparedLineups: Record<string, Lineup>,
     seed: number,
-    stageKey: string
+    stageKey: string,
+    seasonNumber: number = 0,
+    coaches: Record<string, Coach> = {}
   ): PromotionPlayoffSingleMatchResult {
     const hPlayers = playersMap[homeClub.id] || [];
     const aPlayers = playersMap[awayClub.id] || [];
@@ -411,11 +521,50 @@ export const BackgroundPlayOffMatchPolishCup = {
       aLineup,
       seed,
       weatherEqualizer,
-      false
+      false,
+      homeClub.coachId ? coaches[homeClub.coachId] : undefined,
+      awayClub.coachId ? coaches[awayClub.coachId] : undefined
     );
+
+    const matchId = `${stageKey}_${currentDate.toISOString().slice(0, 10)}_${homeClub.id}_${awayClub.id}`;
+    const allStarters = [
+      ...hLineup.startingXI.filter((id): id is string => !!id),
+      ...aLineup.startingXI.filter((id): id is string => !!id),
+    ];
+    const ratings = Object.fromEntries(allStarters.map((id, index) => [id, 6.1 + ((seed + index * 17) % 18) / 10]));
+    const logMatch = (homePenaltyScore?: number, awayPenaltyScore?: number) => MatchHistoryService.logMatch({
+      matchId,
+      date: currentDate.toDateString(),
+      season: seasonNumber,
+      competition: stageKey.includes('EKSTRAKLASA') ? 'BARAŻE O EKSTRAKLASĘ' : 'BARAŻE O 1. LIGĘ',
+      homeTeamId: homeClub.id,
+      awayTeamId: awayClub.id,
+      homeScore: engineResult.homeScore,
+      awayScore: engineResult.awayScore,
+      homePenaltyScore,
+      awayPenaltyScore,
+      isExtraTime: engineResult.endedAfterExtraTime || homePenaltyScore !== undefined,
+      attendance: Math.round(homeClub.stadiumCapacity * Math.min(0.98, 0.72 + (homeClub.reputation + awayClub.reputation) * 0.018)),
+      venue: homeClub.stadiumName,
+      weather,
+      addedTime: 0,
+      goals: engineResult.goals,
+      cards: engineResult.cards,
+      substitutions: engineResult.substitutions,
+      injuries: engineResult.injuries,
+      timeline: [],
+      refereeName: `${engineResult.referee.firstName} ${engineResult.referee.lastName}`,
+      homeLineup: hLineup.startingXI.filter((id): id is string => !!id),
+      awayLineup: aLineup.startingXI.filter((id): id is string => !!id),
+      ratings,
+      homeTacticId: hLineup.tacticId,
+      awayTacticId: aLineup.tacticId,
+      kits: KitSelectionService.selectOptimalKits(homeClub, awayClub),
+    });
 
     if (engineResult.penaltyHome !== undefined && engineResult.penaltyAway !== undefined) {
       const winnerId = engineResult.penaltyHome > engineResult.penaltyAway ? homeClub.id : awayClub.id;
+      logMatch(engineResult.penaltyHome, engineResult.penaltyAway);
       return {
         homeId: homeClub.id,
         awayId: awayClub.id,
@@ -428,9 +577,11 @@ export const BackgroundPlayOffMatchPolishCup = {
           awayShots: engineResult.penaltyAway,
         },
         winnerId,
+        matchId,
       };
     }
 
+    logMatch();
     return {
       homeId: homeClub.id,
       awayId: awayClub.id,
@@ -438,6 +589,7 @@ export const BackgroundPlayOffMatchPolishCup = {
       awayGoals: engineResult.awayScore,
       decidedBy: engineResult.endedAfterExtraTime ? 'EXTRA_TIME' : 'REGULAR',
       winnerId: engineResult.homeScore > engineResult.awayScore ? homeClub.id : awayClub.id,
+      matchId,
     };
   },
 };

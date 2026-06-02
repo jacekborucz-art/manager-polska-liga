@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import EkstraklasaBg from '../../Graphic/themes/ekstraklasa.png';
 import { RelegationPlayoffPairOutcome } from '../../types';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 // ── WIDOK WYNIKÓW REWANŻY BARAŻOWYCH (29 MAJA) ─────────────────────────────────
 // Pokazuje wyniki rewanży + agregat + kto wygrał dwumecz (utrzymanie / awans).
@@ -30,9 +31,10 @@ interface OutcomeCardProps {
   pairIndex: number;
   userTeamId: string | null;
   clubs: ReturnType<typeof useGame>['clubs'];
+  onOpenReport: (matchId: string) => void;
 }
 
-const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamId, clubs }) => {
+const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamId, clubs, onOpenReport }) => {
   // leg1: gosp = L_PL_3 (2.Liga), gość = L_PL_4 (3.Liga)
   // leg2: strony zamienione — gosp = L_PL_4, gość = L_PL_3
   const leg1HomeClub = clubs.find(c => c.id === outcome.leg1.homeId);
@@ -54,6 +56,8 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
   const l3Won = outcome.winnerId === leg1HomeClub.id;
   const aggregateDecisionLabel = outcome.decidedBy === 'PENALTIES' && outcome.penalties
     ? `dwumecz ${l3Agg}:${l4Agg} (${outcome.penalties.homeShots}:${outcome.penalties.awayShots} k.)`
+    : outcome.decidedBy === 'EXTRA_TIME'
+      ? `dwumecz ${l3Agg}:${l4Agg} po dogrywce`
     : `dwumecz ${l3Agg}:${l4Agg}`;
 
   const bg = `linear-gradient(135deg,
@@ -113,7 +117,7 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
             <span className="text-[11px] font-black text-slate-600 italic">:</span>
             <span className={`text-3xl font-black tabular-nums ${leg2RightGoals > leg2LeftGoals ? 'text-white' : 'text-slate-500'}`}>{leg2RightGoals}</span>
           </div>
-          <span className="text-[8px] font-black uppercase tracking-[0.4em] text-slate-600 mt-0.5">rewanÅ¼</span>
+          <span className="text-[8px] font-black uppercase tracking-[0.4em] text-slate-600 mt-0.5">rewanż</span>
           <span className={`text-[10px] font-black uppercase tracking-[0.28em] mt-2 ${l3Won ? 'text-white/80' : 'text-slate-300'}`}>
             {aggregateDecisionLabel}
           </span>
@@ -136,7 +140,10 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
       {/* Wyniki obu meczów */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         {/* Leg 1 — 26 maja */}
-        <div className="bg-black/30 rounded-xl p-3 border border-white/5">
+        <div
+          onClick={() => outcome.leg1.matchId && onOpenReport(outcome.leg1.matchId)}
+          className={`bg-black/30 rounded-xl p-3 border border-white/5 ${outcome.leg1.matchId ? 'cursor-pointer hover:border-white/20' : ''}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">26 MAJA · 1. MECZ</span>
           </div>
@@ -150,7 +157,10 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
         </div>
 
         {/* Leg 2 — 29 maja (strony zamienione) */}
-        <div className="bg-black/30 rounded-xl p-3 border border-white/5">
+        <div
+          onClick={() => outcome.leg2.matchId && onOpenReport(outcome.leg2.matchId)}
+          className={`bg-black/30 rounded-xl p-3 border border-white/5 ${outcome.leg2.matchId ? 'cursor-pointer hover:border-white/20' : ''}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">29 MAJA · REWANŻ</span>
           </div>
@@ -169,10 +179,10 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
       {outcome.decidedBy === 'PENALTIES' && outcome.penalties && (
         <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
           <span className="text-[9px] font-black uppercase tracking-[0.3em] text-amber-400">
-            Remis w agregacie · Rzuty karne: {
+            Remis po dogrywce · Rzuty karne: {
               outcome.penalties.winnerId === leg1HomeClub.id
                 ? `${leg1HomeClub.shortName} ${outcome.penalties.homeShots}:${outcome.penalties.awayShots} ${leg1AwayClub.shortName}`
-                : `${leg1AwayClub.shortName} ${outcome.penalties.homeShots}:${outcome.penalties.awayShots} ${leg1HomeClub.shortName}`
+                : `${leg1AwayClub.shortName} ${outcome.penalties.awayShots}:${outcome.penalties.homeShots} ${leg1HomeClub.shortName}`
             }
           </span>
         </div>
@@ -210,6 +220,7 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ outcome, pairIndex, userTeamI
 export const RelegationPlayoffMatch2View: React.FC = () => {
   const { relegationPlayoffFinalResult, confirmRelegationPlayoffMatch2, clubs, userTeamId } = useGame();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [reportMatchId, setReportMatchId] = useState<string | null>(null);
 
   if (!relegationPlayoffFinalResult) return null;
 
@@ -273,12 +284,14 @@ export const RelegationPlayoffMatch2View: React.FC = () => {
             pairIndex={0}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
           <OutcomeCard
             outcome={relegationPlayoffFinalResult.pair1}
             pairIndex={1}
             userTeamId={userTeamId}
             clubs={clubs}
+            onOpenReport={setReportMatchId}
           />
         </div>
       </div>
@@ -295,6 +308,7 @@ export const RelegationPlayoffMatch2View: React.FC = () => {
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
       `}</style>
+      <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
     </div>
   );
 };
