@@ -8,6 +8,7 @@ import { KitSelectionService } from '../services/KitSelectionService';
 import { PolandWeatherService } from '../services/PolandWeatherService';
 import { AttendanceService } from '../services/AttendanceService';
 import { RivalryService } from '../services/RivalryService';
+import { PolishCupVenueService } from '../services/PolishCupVenueService';
 
 // Import lokalnych zdjęć piłkarzy
 import { getPlayerCardImage } from '../resources/PlayerCardAssets';
@@ -185,6 +186,10 @@ export const PreMatchCupStudioView: React.FC = () => {
     () => data ? RivalryService.getMatchContext(data.homeClub, data.awayClub) : null,
     [data]
   );
+  const venue = useMemo(
+    () => data ? PolishCupVenueService.getVenue(data.fixture, data.homeClub) : null,
+    [data]
+  );
 
   if (loading || !data || !matchKits || !squadDetails || !bettingData) {
     return (
@@ -332,7 +337,7 @@ export const PreMatchCupStudioView: React.FC = () => {
               </div>
               <div className="bg-black/40 border border-white/10 rounded-2xl px-8 py-4 text-center flex-[2]">
                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Miejsce Rozegrania</span>
-                 <span className="text-lg font-black text-white italic uppercase truncate block">{(nextEvent?.label.includes("FINAŁ") || nextEvent?.label.toUpperCase().includes("SUPERPUCHAR")) ? "PGE Narodowy, Warszawa" : data.homeClub.stadiumName}</span>
+                 <span className="text-lg font-black text-white italic uppercase truncate block">{venue?.name}</span>
               </div>
               <div className="bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-center flex-1">
                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Widzów</span>

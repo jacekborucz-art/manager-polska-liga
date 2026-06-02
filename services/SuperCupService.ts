@@ -48,7 +48,8 @@ export const SuperCupService = {
       date: new Date(year, 6, 12), // Sztywna data: 12 Lipca
       status: MatchStatus.SCHEDULED,
       homeScore: null,
-      awayScore: null
+      awayScore: null,
+      neutralVenue: true
     };
   }
 };

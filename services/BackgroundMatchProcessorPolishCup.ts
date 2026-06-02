@@ -8,6 +8,7 @@ import { TacticRepository } from '../resources/tactics_db';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { KitSelectionService } from './KitSelectionService';
+import { PolishCupVenueService } from './PolishCupVenueService';
 // ============================================================
 //  WBUDOWANY SILNIK PUCHAROWY — symulacja minuta po minucie
 //  Zastępuje wywołanie LeagueBackgroundMatchEngine.simulate()
@@ -541,7 +542,8 @@ export const BackgroundMatchProcessorPolishCup = {
       const weatherEqualizer = isBadWeather ? 0.82 : 1.0;
 
       // ── NEUTRALNY TEREN ────────────────────────────────────
-      const isNeutralVenue = fixture.leagueId === CompetitionType.SUPER_CUP || fixture.id.includes('FINAŁ');
+      const venue = PolishCupVenueService.getVenue(fixture, home);
+      const isNeutralVenue = venue.isNeutral;
 
       // ── SYMULACJA MECZU ────────────────────────────────────
       const result = simulateCupMatch(
@@ -617,7 +619,7 @@ export const BackgroundMatchProcessorPolishCup = {
         ...aLineup.startingXI.filter((id): id is string => !!id),
       ];
       const ratings = Object.fromEntries(allStarters.map((id, index) => [id, 6.1 + ((seed + index * 17) % 18) / 10]));
-      const attendance = Math.round(home.stadiumCapacity * Math.min(0.98, 0.72 + (home.reputation + away.reputation) * 0.018));
+      const attendance = Math.round(venue.capacity * Math.min(0.98, 0.72 + (home.reputation + away.reputation) * 0.018));
       RefereeService.recordMatchStats(
         result.referee.id,
         RefereeService.generateMatchRating(result.referee),
@@ -637,7 +639,7 @@ export const BackgroundMatchProcessorPolishCup = {
         awayPenaltyScore: penaltyAway,
         isExtraTime: result.wentToExtraTime,
         attendance,
-        venue: home.stadiumName,
+        venue: venue.name,
         weather,
         goals,
         cards,

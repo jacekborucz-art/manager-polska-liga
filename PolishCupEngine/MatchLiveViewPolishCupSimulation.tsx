@@ -44,6 +44,7 @@ import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
 import { RivalryService } from '../services/RivalryService';
 import { buildCupDisplayStats, isCupShotEvent, isCupShotOnTargetEvent } from '../services/CupMatchStatsService';
+import { PolishCupVenueService } from '../services/PolishCupVenueService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 import { LineupService } from '../services/LineupService';
 import { LiveMatchInstructionBalanceService } from '../services/LiveMatchInstructionBalanceService';
@@ -3498,6 +3499,7 @@ if (activePlayerTempo === 'SLOW') {
       awayScore: matchState.awayScore,
       homePenaltyScore: matchState.homePenaltyScore,
       awayPenaltyScore: matchState.awayPenaltyScore,
+      venue: PolishCupVenueService.getVenue(ctx.fixture, ctx.homeClub).name,
       goals: matchState.homeGoals.map(g => toCupHistoryGoal(g, ctx.homeClub.id))
         .concat(matchState.awayGoals.map(g => toCupHistoryGoal(g, ctx.awayClub.id))),
       cards: (() => {

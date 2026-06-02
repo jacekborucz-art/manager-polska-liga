@@ -7,6 +7,7 @@ import { ChampionshipHistoryService } from '../../data/championship_history';
 import { RefereeService } from '../../services/RefereeService';
 import { computeGroupStandings } from '../../services/WorldCupService';
 import historiaBg from '../../Graphic/themes/historia.png';
+import { PolishCupVenueService } from '../../services/PolishCupVenueService';
 
 const WC_ROUND_LABEL: Record<string, string> = {
   R32: '1/16 Finału',
@@ -978,7 +979,7 @@ export const MatchHistoryView: React.FC = () => {
                  {/* Meta-bar */}
                  <div className="mb-4 flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
                     <div className="flex gap-6 text-slate-400">
-                       <span>Stadion: <span className="text-white">{homeClub?.stadiumName}</span></span>
+                       <span>Stadion: <span className="text-white">{homeClub ? PolishCupVenueService.getHistoryVenue(selectedMatch, homeClub) : selectedMatch.venue}</span></span>
                        {selectedMatch.attendance && <span>Widzów: <span className="text-white">{selectedMatch.attendance.toLocaleString('pl-PL')}</span></span>}
                        {selectedMatch.weather && (
                          <span>Pogoda: <span className="text-white">

@@ -7,6 +7,7 @@ import { TacticRepository } from '../../resources/tactics_db';
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
+import { PolishCupVenueService } from '../../services/PolishCupVenueService';
 
 interface MatchReportModalProps {
   matchId: string | null;
@@ -560,7 +561,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
           <div className="px-8 py-3 flex items-center gap-6 border-b border-white/5 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Stadion</span>
-              <span className="text-[10px] font-black text-slate-300 uppercase italic">{match.venue || homeClub.stadiumName}</span>
+              <span className="text-[10px] font-black text-slate-300 uppercase italic">{PolishCupVenueService.getHistoryVenue(match, homeClub)}</span>
             </div>
             <div className="w-px h-4 bg-white/10" />
             <div className="flex items-center gap-2">
