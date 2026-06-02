@@ -490,7 +490,7 @@ export const PlayerCard: React.FC = () => {
               {(player.nationalStats?.matchesPlayed ?? 0) >= 1 && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 mb-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-red-300">Kadra Narodowa</span>
-                  <span className="text-[10px] font-black text-white font-mono">{player.nationalStats!.matchesPlayed}/{player.nationalStats!.goals}</span>
+                  <span className="text-[10px] font-black text-white">{player.nationalStats!.matchesPlayed}M/{player.nationalStats!.goals}BR</span>
                 </div>
               )}
               {player.loan && (

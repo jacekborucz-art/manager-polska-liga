@@ -1,4 +1,4 @@
-import { Club, CoachAttributes, Fixture } from '../types';
+import { Club, CoachAttributes, CompetitionType, Fixture } from '../types';
 import type { BriefingEffect } from './PreMatchBriefingService';
 import { RivalryService } from './RivalryService';
 
@@ -15,7 +15,7 @@ export interface PressConferenceAnswer {
 
 export interface PressConferenceQuestion {
   id: string;
-  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT';
+  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT' | 'CUP_CONTEXT';
   journalist: string;
   text: string;
   answers: PressConferenceAnswer[];
@@ -41,7 +41,9 @@ export interface PressConferenceMatchEffect {
   opponentReaction: string | null;
 }
 
-export interface PressConferenceFixture extends Pick<Fixture, 'id' | 'homeTeamId' | 'awayTeamId'> {}
+export interface PressConferenceFixture extends Pick<Fixture, 'id' | 'homeTeamId' | 'awayTeamId'> {
+  leagueId?: Fixture['leagueId'];
+}
 
 const stableHash = (value: string): number => {
   let hash = 0;
@@ -87,6 +89,114 @@ const getFormLabel = (club: Club): string => {
   return 'bardzo słabą';
 };
 
+const getLeagueTier = (club: Club): number => {
+  if (club.leagueId === 'L_PL_1') return 1;
+  if (club.leagueId === 'L_PL_2') return 2;
+  if (club.leagueId === 'L_PL_3') return 3;
+  return 4;
+};
+
+const getPolishCupRoundLabel = (fixtureId: string): string => {
+  const normalizedId = fixtureId.toUpperCase();
+  if (normalizedId.includes('FINAŁ') || normalizedId.includes('FINAL')) return 'finał';
+  if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'półfinał';
+  if (normalizedId.includes('1/4')) return 'ćwierćfinał';
+  if (normalizedId.includes('1/8')) return '1/8 finału';
+  if (normalizedId.includes('1/16')) return '1/16 finału';
+  if (normalizedId.includes('1/32')) return '1/32 finału';
+  if (normalizedId.includes('1/64')) return '1/64 finału';
+  return 'kolejna runda';
+};
+
+type LeagueDeciderType = 'TITLE' | 'RELEGATION';
+
+interface LeagueDeciderContext {
+  type: LeagueDeciderType;
+  headline: string;
+  question: string;
+}
+
+const getLeagueDeciderContext = (
+  userClub: Club,
+  opponent: Club,
+  clubs: Club[],
+): LeagueDeciderContext | null => {
+  if (!userClub.leagueId.startsWith('L_PL_')) return null;
+
+  const table = clubs
+    .filter(club => club.leagueId === userClub.leagueId)
+    .sort((a, b) =>
+      b.stats.points - a.stats.points ||
+      b.stats.goalDifference - a.stats.goalDifference ||
+      b.stats.goalsFor - a.stats.goalsFor
+    );
+
+  if (table.length < 2) return null;
+
+  const userRank = table.findIndex(club => club.id === userClub.id) + 1;
+  const opponentRank = table.findIndex(club => club.id === opponent.id) + 1;
+  const totalMatches = (table.length - 1) * 2;
+  const remainingIncludingCurrent = Math.max(0, totalMatches - userClub.stats.played);
+  const remainingAfterCurrent = Math.max(0, remainingIncludingCurrent - 1);
+
+  if (remainingIncludingCurrent === 0 || remainingIncludingCurrent > 3) return null;
+
+  if (userClub.leagueId === 'L_PL_1') {
+    const runnerUp = table[1];
+    const canSealTitleWithWin =
+      userRank === 1 &&
+      userClub.stats.points + 3 > runnerUp.stats.points + remainingAfterCurrent * 3;
+    const directTitleClash =
+      remainingIncludingCurrent <= 2 &&
+      userRank <= 2 &&
+      opponentRank > 0 &&
+      opponentRank <= 2 &&
+      Math.abs(userClub.stats.points - opponent.stats.points) <= 3;
+
+    if (canSealTitleWithWin || directTitleClash) {
+      return {
+        type: 'TITLE',
+        headline: 'Mecz, który może przesądzić o mistrzostwie Polski',
+        question: 'To spotkanie może przesądzić o mistrzostwie Polski. Jak przygotować drużynę na mecz, w którym presja będzie równie ważna jak forma sportowa?',
+      };
+    }
+  }
+
+  const relegationSlots = userClub.leagueId === 'L_PL_3' ? 4 : 3;
+  const lastSafeRank = table.length - relegationSlots;
+  const lastSafeClub = table[lastSafeRank - 1];
+  const firstRelegationClub = table[lastSafeRank];
+  const isInRelegationZone = userRank > lastSafeRank;
+  const isNearBoundary = userRank >= lastSafeRank - 1;
+  const boundaryPoints = isInRelegationZone
+    ? lastSafeClub.stats.points
+    : firstRelegationClub.stats.points;
+  const canSwingAroundBoundary =
+    Math.abs(userClub.stats.points - boundaryPoints) <= remainingIncludingCurrent * 3;
+  const canSealSurvivalWithWin =
+    !isInRelegationZone &&
+    userClub.stats.points + 3 > firstRelegationClub.stats.points + remainingAfterCurrent * 3;
+  const canSealRelegationWithLoss =
+    isInRelegationZone &&
+    userClub.stats.points + remainingAfterCurrent * 3 < lastSafeClub.stats.points;
+  const criticalBoundaryFight =
+    remainingIncludingCurrent <= 2 &&
+    isNearBoundary &&
+    canSwingAroundBoundary;
+
+  if (canSealSurvivalWithWin || canSealRelegationWithLoss || criticalBoundaryFight) {
+    return {
+      type: 'RELEGATION',
+      headline: 'Mecz, który może przesądzić o utrzymaniu',
+      question: isInRelegationZone
+        ? 'Ten mecz może przesądzić o spadku z ligi. Jak zamierza pan pomóc zawodnikom opanować napięcie i walczyć do końca?'
+        : 'Ten mecz może przesądzić o utrzymaniu w lidze. Jak zamierza pan wykorzystać presję, nie paraliżując drużyny?',
+    };
+  }
+
+  return null;
+};
+
 const answers = (
   prefix: string,
   calm: string,
@@ -107,6 +217,111 @@ const getOpponentStatement = (fixtureId: string, opponent: Club): string => {
     `Trener ${opponent.name} podkreślił: „To groźna drużyna. Musimy zagrać z pełnym szacunkiem i cierpliwością”.`,
   ];
   return statements[stableHash(fixtureId) % statements.length];
+};
+
+const getCupQuestions = (
+  fixture: PressConferenceFixture,
+  userClub: Club,
+  opponent: Club,
+  opponentStatement: string,
+  rivalryLabel: string | null,
+): PressConferenceQuestion[] => {
+  const isSuperCup = fixture.leagueId === CompetitionType.SUPER_CUP;
+  const normalizedFixtureId = fixture.id.toUpperCase();
+  const isFinal = normalizedFixtureId.includes('FINAŁ') || normalizedFixtureId.includes('FINAL');
+  const isSemifinal = normalizedFixtureId.includes('1/2') || normalizedFixtureId.includes('SEMI');
+  const roundLabel = getPolishCupRoundLabel(fixture.id);
+  const tierGap = getLeagueTier(userClub) - getLeagueTier(opponent);
+  const isFavourite = tierGap < 0 || (tierGap === 0 && userClub.reputation >= opponent.reputation + 8);
+  const isUnderdog = tierGap > 0 || (tierGap === 0 && opponent.reputation >= userClub.reputation + 8);
+  const roleText = isSuperCup
+    ? `To pierwszy oficjalny mecz sezonu, a stawką od razu jest trofeum. Co może przesądzić o zwycięstwie z ${opponent.name}?`
+    : isFinal
+      ? `To ostatni mecz tej edycji Pucharu Polski. Co może przesądzić o tym, kto sięgnie po trofeum w starciu z ${opponent.name}?`
+      : isSemifinal
+        ? `Stawką meczu z ${opponent.name} jest awans do finału Pucharu Polski. Jak nie pozwolić, by drużyna wybiegła myślami na PGE Narodowy?`
+    : isFavourite
+      ? `Przed meczem z ${opponent.name} jesteście wskazywani jako faworyt. Jak uniknąć rozluźnienia w spotkaniu, w którym nie ma miejsca na poprawkę?`
+      : isUnderdog
+        ? `${opponent.name} przystępuje do tego meczu w roli faworyta. Czy perspektywa sprawienia niespodzianki może dodatkowo napędzić drużynę?`
+        : `Siły przed meczem z ${opponent.name} wydają się wyrównane. Co może przesądzić o awansie w spotkaniu bez marginesu błędu?`;
+  const stakesText = isSuperCup
+    ? `Superpuchar Polski otwiera sezon i od razu daje szansę na trofeum. Jak przygotować zespół na taki mecz na PGE Narodowym?`
+    : isFinal
+      ? `Przed wami finał Pucharu Polski na PGE Narodowym. Jak zamierza pan utrzymać równowagę między mobilizacją a presją walki o trofeum?`
+      : isSemifinal
+        ? `Przed wami półfinał Pucharu Polski. Od meczu na PGE Narodowym dzieli was tylko jedno zwycięstwo. Jak odciąć zespół od myślenia o finale?`
+      : `Przed wami ${roundLabel} Pucharu Polski. Jeden mecz zdecyduje o awansie. Jakie nastawienie będzie najważniejsze?`;
+  const stakesAnswers = isFinal
+    ? answers(
+        `${fixture.id}_CUP_STAKES`,
+        'Finał wymaga spokoju. Musimy skupić się na każdej kolejnej akcji.',
+        'Jesteśmy gotowi na walkę o trofeum i chcemy to pokazać od pierwszej minuty.',
+        'Nie przyjechaliśmy na Narodowy podziwiać oprawy. Puchar ma wrócić z nami.',
+        'W finale emocje nie mogą odebrać nam dyscypliny i cierpliwości.',
+      )
+    : isSemifinal
+      ? answers(
+          `${fixture.id}_CUP_STAKES`,
+          'Nie gramy jeszcze finału. Liczy się wyłącznie najbliższy mecz.',
+          'Wiemy, o co gramy, i ta stawka powinna dodać nam energii.',
+          'To rywal powinien martwić się presją. My zamierzamy narzucić swoje warunki.',
+          'Najważniejsze, aby przez cały mecz kontrolować emocje i realizować plan.',
+        )
+      : answers(
+          `${fixture.id}_CUP_STAKES`,
+          'Musimy zachować spokój. W pucharach liczy się każda decyzja i każda minuta.',
+          'Jesteśmy gotowi na mecz o wysoką stawkę. Chcemy od początku narzucić własne warunki.',
+          'To moment, dla którego pracuje się cały sezon. Oczekuję odwagi i pełnego zaangażowania.',
+          'Nie możemy pozwolić, aby emocje odebrały nam koncentrację. Najważniejsza będzie dyscyplina.',
+        );
+  const rivalryText = rivalryLabel ? ` ${rivalryLabel} dodatkowo podnosi temperaturę spotkania.` : '';
+
+  return [
+    {
+      id: `${fixture.id}_CUP_STAKES`,
+      category: 'CUP_CONTEXT',
+      journalist: 'Pucharowy Wieczór',
+      text: stakesText,
+      answers: stakesAnswers,
+    },
+    {
+      id: `${fixture.id}_CUP_ROLE`,
+      category: 'CUP_CONTEXT',
+      journalist: 'Dziennik Sportowy',
+      text: `${roleText}${rivalryText}`,
+      answers: answers(
+        `${fixture.id}_CUP_ROLE`,
+        'Nazwy i przewidywania nie grają. Musimy wykonać swoją pracę na boisku.',
+        'Znamy swoją wartość. W takim meczu chcemy przejąć inicjatywę.',
+        'Ta stawka powinna nas napędzać. Każdy zawodnik ma szansę zrobić różnicę.',
+        'Potrzebujemy cierpliwości. Pucharowe mecze często rozstrzygają się przez jeden błąd.',
+      ),
+    },
+    {
+      id: `${fixture.id}_OPPONENT`,
+      category: 'OPPONENT',
+      journalist: 'Futbol nad Wisłą',
+      text: `${opponentStatement} W meczu pucharowym takie słowa mogą szczególnie wpłynąć na emocje. Jak pan odpowie?`,
+      answers: [
+        ...answers(
+          `${fixture.id}_OPPONENT`,
+          'Szanujemy rywala, ale skupiamy się na sobie. Odpowiedź damy na boisku.',
+          'Może mówić, co chce. Moi zawodnicy wiedzą, na co ich stać.',
+          'Takie słowa powinny nas napędzać. Wyjdziemy skoncentrowani i odważni.',
+          'Nie możemy dać się wciągnąć w grę słów. Najważniejsza jest dyscyplina.',
+        ),
+        {
+          id: `${fixture.id}_OPPONENT_PROVOCATIVE`,
+          tone: 'PROVOCATIVE',
+          text: 'Jeżeli rywal uważa, że wie o nas wszystko, może się bardzo zdziwić.',
+          moraleDelta: -1,
+          focusDelta: -2,
+          pressureDelta: 4,
+        },
+      ],
+    },
+  ];
 };
 
 export const PreMatchPressConferenceService = {
@@ -199,14 +414,49 @@ export const PreMatchPressConferenceService = {
       fixture.awayTeamId === userClub.id ? userClub : opponent,
     );
     const opponentStatement = getOpponentStatement(fixture.id, opponent);
+    const isDomesticCup = fixture.leagueId === CompetitionType.POLISH_CUP || fixture.leagueId === CompetitionType.SUPER_CUP;
 
-    const tableText = enoughRounds && userRank === 1
+    if (isDomesticCup) {
+      const competitionLabel = fixture.leagueId === CompetitionType.SUPER_CUP ? 'Superpuchar Polski' : 'Puchar Polski';
+      return {
+        fixtureId: fixture.id,
+        headline: `${competitionLabel}: ${userClub.name} przed meczem z ${opponent.name}`,
+        opponentStatement,
+        questions: getCupQuestions(fixture, userClub, opponent, opponentStatement, rivalry.label ?? null),
+      };
+    }
+
+    const leagueDecider = getLeagueDeciderContext(userClub, opponent, clubs);
+    const tableText = leagueDecider?.question ?? (enoughRounds && userRank === 1
       ? `Pozycja lidera zwiększa oczekiwania. Czy zespół jest gotowy udźwignąć presję przed meczem z ${opponent.name}?`
       : enoughRounds && userRank > 0 && userRank >= 13
         ? `Jesteście w dolnej części tabeli. Czy spotkanie z ${opponent.name} może stać się punktem zwrotnym?`
         : enoughRounds && userRank > 0
           ? `Zajmujecie ${userRank}. miejsce w tabeli. Jakiego sygnału oczekuje pan od drużyny w kolejnym meczu?`
-          : `Sezon dopiero nabiera kształtu. Czego oczekuje pan od drużyny w meczu z ${opponent.name}?`;
+          : `Sezon dopiero nabiera kształtu. Czego oczekuje pan od drużyny w meczu z ${opponent.name}?`);
+    const tableAnswers = leagueDecider?.type === 'TITLE'
+      ? answers(
+          `${fixture.id}_TABLE`,
+          'Musimy zachować spokój i potraktować ten mecz jak każde kolejne zadanie.',
+          'To chwila, na którą pracowaliśmy cały sezon. Drużyna jest gotowa.',
+          'Rywal może próbować nas zatrzymać, ale mistrzostwo zależy od nas.',
+          'Nie możemy pozwolić, aby myśl o tytule odebrała nam koncentrację.',
+        )
+      : leagueDecider?.type === 'RELEGATION'
+        ? answers(
+            `${fixture.id}_TABLE`,
+            'W tej sytuacji najważniejsze są opanowanie i odpowiedzialność za zespół.',
+            'Wierzę w zawodników. Presja może wyzwolić w nas dodatkową energię.',
+            'Nie zamierzamy się bać. To rywal powinien czuć ciężar tego spotkania.',
+            'Musimy grać rozsądnie. Jeden nerwowy moment nie może zniszczyć naszego planu.',
+          )
+        : answers(
+            `${fixture.id}_TABLE`,
+            'Tabela jest ważna, ale dzisiaj interesuje nas przede wszystkim najbliższe zadanie.',
+            'Znamy swoją wartość. Naszym celem jest zwycięstwo.',
+            'To dobry moment, żeby pokazać charakter i zrobić kolejny krok razem.',
+            'Nie wolno nam wybiegać myślami za daleko. Najpierw wykonajmy swoją pracę.',
+          );
 
     const opponentText = opponentRank > 0 && opponentRank <= 4
       ? `${opponent.name} jest w ścisłej czołówce. Jak odpowie pan na słowa trenera rywala i skalę tego wyzwania?`
@@ -220,7 +470,9 @@ export const PreMatchPressConferenceService = {
 
     return {
       fixtureId: fixture.id,
-      headline: `${userClub.name} przed meczem z ${opponent.name}`,
+      headline: leagueDecider
+        ? `${leagueDecider.headline}: ${userClub.name} przed meczem z ${opponent.name}`
+        : `${userClub.name} przed meczem z ${opponent.name}`,
       opponentStatement,
       questions: [
         {
@@ -238,16 +490,10 @@ export const PreMatchPressConferenceService = {
         },
         {
           id: `${fixture.id}_TABLE`,
-          category: 'TABLE',
+          category: leagueDecider ? 'MATCH_CONTEXT' : 'TABLE',
           journalist: 'Dziennik Sportowy',
           text: tableText,
-          answers: answers(
-            `${fixture.id}_TABLE`,
-            'Tabela jest ważna, ale dzisiaj interesuje nas przede wszystkim najbliższe zadanie.',
-            'Znamy swoją wartość. Naszym celem jest zwycięstwo.',
-            'To dobry moment, żeby pokazać charakter i zrobić kolejny krok razem.',
-            'Nie wolno nam wybiegać myślami za daleko. Najpierw wykonajmy swoją pracę.',
-          ),
+          answers: tableAnswers,
         },
         {
           id: `${fixture.id}_OPPONENT`,
