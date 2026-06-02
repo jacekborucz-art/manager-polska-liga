@@ -114,7 +114,7 @@ export const ClubDetails: React.FC = () => {
       <td className="relative z-10">
            <div className="flex items-center gap-2">
               <span className="text-sm font-black text-white uppercase italic group-hover:text-blue-400 transition-colors">
-                {player.lastName} <span className="opacity-40 font-medium text-[10px]">{player.firstName}</span>
+                {player.lastName ? <>{player.lastName} <span className="opacity-40 font-medium text-[10px]">{player.firstName}</span></> : player.firstName}
               </span>
 
 {player.isOnTransferList && (
