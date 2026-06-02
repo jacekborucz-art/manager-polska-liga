@@ -1018,7 +1018,10 @@ export const EditorView: React.FC = () => {
     setEditTrenerFirstName(coach.firstName);
     setEditTrenerLastName(coach.lastName);
     setEditTrenerAge(String(coach.age));
-    setEditTrenerNationality(coach.nationality);
+    const nationalityValue = COUNTRY_OPTIONS.some(c => c.name === coach.nationality)
+      ? coach.nationality
+      : getDefaultCountryForRegion(coach.nationality as Region);
+    setEditTrenerNationality(nationalityValue);
     setEditTrenerAttrs({ ...coach.attributes });
     setEditTrenerTacticOffensive(coach.favoriteTactics.offensive);
     setEditTrenerTacticNeutral(coach.favoriteTactics.neutral);
@@ -2028,7 +2031,12 @@ export const EditorView: React.FC = () => {
                           onClick={() => handleTrenerSelect(coach.id)}
                           className={`border-b border-slate-800 cursor-pointer transition-colors ${isSelected ? 'bg-yellow-600/20 border-l-2 border-l-yellow-500' : 'hover:bg-white/5'}`}
                         >
-                          <td className="py-2 pl-4 pr-2 text-white font-black">{coach.firstName} {coach.lastName}</td>
+                          <td className="py-2 pl-4 pr-2 text-white font-black">
+                            {coach.firstName} {coach.lastName}
+                            {coach.currentNationalTeamId && (
+                              <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-blue-700/50 text-blue-300 border border-blue-600/40">NT</span>
+                            )}
+                          </td>
                           <td className="py-2 px-2 text-slate-300">{coach.age}</td>
                           <td className="py-2 px-2 text-emerald-400">{clubName}</td>
                           <td className="py-2 px-2 text-right text-yellow-400 tabular-nums">{coach.attributes.experience}</td>
@@ -2049,7 +2057,17 @@ export const EditorView: React.FC = () => {
             )}
             {trenerzySelectedId && (
               <div className="max-w-lg">
-                <div className="text-xs text-yellow-400 mb-4">{editTrenerFirstName} {editTrenerLastName}</div>
+                <div className="text-xs text-yellow-400 mb-2">{editTrenerFirstName} {editTrenerLastName}</div>
+                {(() => {
+                  const coach = coaches[trenerzySelectedId];
+                  if (!coach?.currentNationalTeamId) return null;
+                  const nt = nationalTeams.find(t => t.id === coach.currentNationalTeamId);
+                  return (
+                    <div className="mb-4 px-3 py-2 rounded bg-blue-900/40 border border-blue-600/40 text-xs text-blue-300 font-black uppercase tracking-tighter">
+                      Trener reprezentacji: {nt?.name ?? coach.currentNationalTeamId}
+                    </div>
+                  );
+                })()}
 
                 {/* Dane osobowe */}
                 <div className="mb-5">
@@ -2086,12 +2104,15 @@ export const EditorView: React.FC = () => {
                     </div>
                     <div>
                       <div className={`${labelCls} text-[10px] mb-1`}>Narodowość</div>
-                      <input
-                        type="text"
+                      <select
                         value={editTrenerNationality}
                         onChange={(e) => setEditTrenerNationality(e.target.value)}
-                        className={`${inputCls} px-2 py-1 w-full`}
-                      />
+                        className={`${selectCls} px-2 py-1 w-full`}
+                      >
+                        {COUNTRY_OPTIONS.map(c => (
+                          <option key={c.name} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
