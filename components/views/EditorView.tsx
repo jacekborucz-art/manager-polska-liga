@@ -774,9 +774,19 @@ export const EditorView: React.FC = () => {
     setExportSelected(new Set());
   };
 
-  const [activeSection, setActiveSection] = useState<'GRACZE' | 'FINANSE' | 'KLUBY' | 'REPREZENTACJE' | 'SZTAB' | 'ZARZĄD'>('GRACZE');
+  const [activeSection, setActiveSection] = useState<'GRACZE' | 'FINANSE' | 'KLUBY' | 'REPREZENTACJE' | 'SZTAB' | 'ZARZĄD' | 'TRENERZY'>('GRACZE');
   const [clubsLeagueFilter, setClubsLeagueFilter] = useState<string>('L_PL_1');
   const [editingSigningPool, setEditingSigningPool] = useState<Record<string, string>>({});
+  const [trenerzySearch, setTrenerzySearch] = useState('');
+  const [trenerzySelectedId, setTrenerzySelectedId] = useState('');
+  const [editTrenerFirstName, setEditTrenerFirstName] = useState('');
+  const [editTrenerLastName, setEditTrenerLastName] = useState('');
+  const [editTrenerAge, setEditTrenerAge] = useState('');
+  const [editTrenerNationality, setEditTrenerNationality] = useState('');
+  const [editTrenerAttrs, setEditTrenerAttrs] = useState<Record<string, number>>({});
+  const [editTrenerTacticOffensive, setEditTrenerTacticOffensive] = useState('');
+  const [editTrenerTacticNeutral, setEditTrenerTacticNeutral] = useState('');
+  const [editTrenerTacticDefensive, setEditTrenerTacticDefensive] = useState('');
 
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [teamSearchClubId, setTeamSearchClubId] = useState('');
@@ -987,6 +997,56 @@ export const EditorView: React.FC = () => {
     const q = sztabSearchQuery.toLowerCase();
     return clubs.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
   }, [sztabSearchQuery, sztabLeagueFilter, clubs]);
+
+  const trenerzySearchResults = useMemo(() => {
+    const q = trenerzySearch.trim().toLowerCase();
+    if (!q) return [];
+    return Object.values(coaches)
+      .filter(coach => {
+        const clubName = clubs.find(c => c.id === coach.currentClubId)?.name ?? '';
+        const haystack = `${coach.firstName} ${coach.lastName} ${clubName}`.toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => `${a.lastName}`.localeCompare(`${b.lastName}`, 'pl'))
+      .slice(0, 50);
+  }, [trenerzySearch, coaches, clubs]);
+
+  const handleTrenerSelect = (id: string) => {
+    const coach = coaches[id];
+    if (!coach) return;
+    setTrenerzySelectedId(id);
+    setEditTrenerFirstName(coach.firstName);
+    setEditTrenerLastName(coach.lastName);
+    setEditTrenerAge(String(coach.age));
+    setEditTrenerNationality(coach.nationality);
+    setEditTrenerAttrs({ ...coach.attributes });
+    setEditTrenerTacticOffensive(coach.favoriteTactics.offensive);
+    setEditTrenerTacticNeutral(coach.favoriteTactics.neutral);
+    setEditTrenerTacticDefensive(coach.favoriteTactics.defensive);
+  };
+
+  const handleTrenerSave = () => {
+    if (!trenerzySelectedId) return;
+    const age = parseInt(editTrenerAge, 10);
+    if (isNaN(age)) return;
+    setCoaches(prev => ({
+      ...prev,
+      [trenerzySelectedId]: {
+        ...prev[trenerzySelectedId],
+        firstName: editTrenerFirstName,
+        lastName: editTrenerLastName,
+        age,
+        nationality: editTrenerNationality,
+        attributes: editTrenerAttrs as any,
+        favoriteTactics: {
+          offensive: editTrenerTacticOffensive,
+          neutral: editTrenerTacticNeutral,
+          defensive: editTrenerTacticDefensive,
+        },
+      },
+    }));
+    showGameNotification({ title: 'Zapisano', message: `${editTrenerFirstName} ${editTrenerLastName} — dane zaktualizowane.`, tone: 'success' });
+  };
 
   const sztabClub = useMemo(() => clubs.find(c => c.id === sztabClubId) ?? null, [clubs, sztabClubId]);
   const sztabClubPersons = useMemo(() => {
@@ -1643,12 +1703,12 @@ export const EditorView: React.FC = () => {
       <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <span className="text-sm text-white mr-2">Edytor</span>
         <span className="w-px h-4 bg-slate-700" />
-        {(['GRACZE', 'FINANSE', 'KLUBY', 'REPREZENTACJE', 'SZTAB', 'ZARZĄD'] as const).map(sec => (
+        {(['GRACZE', 'TRENERZY', 'KLUBY', 'REPREZENTACJE', 'SZTAB', 'ZARZĄD', 'FINANSE'] as const).map(sec => (
           <button
             key={sec}
             onClick={() => setActiveSection(sec)}
             className={`px-3 py-1 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeSection === sec ? 'bg-yellow-600 border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 text-white' : 'bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 text-slate-400 hover:bg-white/10 hover:text-white'}`}
-            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)', ...(sec === 'FINANSE' ? { display: 'none' } : {}) }}
           >
             {sec}
           </button>
@@ -1925,6 +1985,194 @@ export const EditorView: React.FC = () => {
                 ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* SEKCJA TRENERZY */}
+      {activeSection === 'TRENERZY' && (
+        <div className="flex-1 overflow-hidden flex gap-0">
+
+          {/* LEWA — szukajka + lista */}
+          <div className="w-[480px] flex-shrink-0 flex flex-col border-r border-slate-800 overflow-hidden">
+            <div className="px-4 pt-4 pb-3 flex-shrink-0">
+              <input
+                type="text"
+                value={trenerzySearch}
+                onChange={(e) => { setTrenerzySearch(e.target.value); setTrenerzySelectedId(''); }}
+                className={`${inputCls} px-3 py-2 w-full`}
+                placeholder="szukaj trenera po nazwisku lub klubie..."
+              />
+              {trenerzySearch.trim() && trenerzySearchResults.length === 0 && (
+                <div className="text-xs text-slate-500 mt-2">Brak wyników.</div>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto editor-scroll">
+              {trenerzySearchResults.length > 0 && (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 bg-slate-900 z-10">
+                    <tr className="border-b border-slate-700">
+                      <th className="text-left py-2 pl-4 pr-2 text-slate-400 font-black uppercase tracking-tighter">Trener</th>
+                      <th className="text-left py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Wiek</th>
+                      <th className="text-left py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Klub</th>
+                      <th className="text-right py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Dośw.</th>
+                      <th className="text-right py-2 pl-2 pr-4 text-slate-400 font-black uppercase tracking-tighter">Trening</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trenerzySearchResults.map(coach => {
+                      const clubName = clubs.find(c => c.id === coach.currentClubId)?.name ?? '—';
+                      const isSelected = coach.id === trenerzySelectedId;
+                      return (
+                        <tr
+                          key={coach.id}
+                          onClick={() => handleTrenerSelect(coach.id)}
+                          className={`border-b border-slate-800 cursor-pointer transition-colors ${isSelected ? 'bg-yellow-600/20 border-l-2 border-l-yellow-500' : 'hover:bg-white/5'}`}
+                        >
+                          <td className="py-2 pl-4 pr-2 text-white font-black">{coach.firstName} {coach.lastName}</td>
+                          <td className="py-2 px-2 text-slate-300">{coach.age}</td>
+                          <td className="py-2 px-2 text-emerald-400">{clubName}</td>
+                          <td className="py-2 px-2 text-right text-yellow-400 tabular-nums">{coach.attributes.experience}</td>
+                          <td className="py-2 pl-2 pr-4 text-right text-slate-300 tabular-nums">{coach.attributes.training}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* PRAWA — formularz edycji */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 editor-scroll">
+            {!trenerzySelectedId && (
+              <div className="text-xs text-slate-500 mt-4">Wybierz trenera z listy, aby edytować jego dane.</div>
+            )}
+            {trenerzySelectedId && (
+              <div className="max-w-lg">
+                <div className="text-xs text-yellow-400 mb-4">{editTrenerFirstName} {editTrenerLastName}</div>
+
+                {/* Dane osobowe */}
+                <div className="mb-5">
+                  <div className={`${labelCls} mb-2`}>Dane osobowe</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Imię</div>
+                      <input
+                        type="text"
+                        value={editTrenerFirstName}
+                        onChange={(e) => setEditTrenerFirstName(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Nazwisko</div>
+                      <input
+                        type="text"
+                        value={editTrenerLastName}
+                        onChange={(e) => setEditTrenerLastName(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Wiek</div>
+                      <input
+                        type="number"
+                        min={20}
+                        max={80}
+                        value={editTrenerAge}
+                        onChange={(e) => setEditTrenerAge(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Narodowość</div>
+                      <input
+                        type="text"
+                        value={editTrenerNationality}
+                        onChange={(e) => setEditTrenerNationality(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Atrybuty */}
+                <div className="mb-5">
+                  <div className={`${labelCls} mb-2`}>Atrybuty</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {COACH_ATTR_LABELS.map(({ key, label }) => (
+                      <div key={key}>
+                        <div className={`${labelCls} text-[10px] mb-1`}>{label}</div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={editTrenerAttrs[key] ?? ''}
+                          onChange={(e) => {
+                            let n = parseInt(e.target.value, 10);
+                            if (isNaN(n)) n = 1;
+                            setEditTrenerAttrs(prev => ({ ...prev, [key]: Math.min(99, Math.max(1, n)) }));
+                          }}
+                          className={`${inputCls} px-2 py-1 w-full`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Ulubione taktyki */}
+                <div className="mb-6">
+                  <div className={`${labelCls} mb-2`}>Ulubione taktyki</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1 text-orange-400`}>Ofensywna</div>
+                      <select
+                        value={editTrenerTacticOffensive}
+                        onChange={(e) => setEditTrenerTacticOffensive(e.target.value)}
+                        className={`${selectCls} px-2 py-1 w-full`}
+                      >
+                        {['4-3-3 Atak', '3-4-3', 'Wysoki Pressing', 'Total Football', '4-1-2-1-2'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1 text-blue-400`}>Neutralna</div>
+                      <select
+                        value={editTrenerTacticNeutral}
+                        onChange={(e) => setEditTrenerTacticNeutral(e.target.value)}
+                        className={`${selectCls} px-2 py-1 w-full`}
+                      >
+                        {['4-4-2', '4-3-3 Zrównoważona', '3-5-2', '4-5-1', '4-2-3-1', '5-3-2'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1 text-teal-400`}>Defensywna</div>
+                      <select
+                        value={editTrenerTacticDefensive}
+                        onChange={(e) => setEditTrenerTacticDefensive(e.target.value)}
+                        className={`${selectCls} px-2 py-1 w-full`}
+                      >
+                        {['5-4-1', '5-3-2 Blok', '4-4-2 Kontratak', 'Niski Blok', '4-5-1 Defensywna', '3-6-1'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleTrenerSave}
+                  className="px-6 py-2 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest bg-yellow-700 hover:bg-yellow-600 text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-yellow-400/60 border-x-yellow-600/30 border-b-black/60"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                >
+                  Zapisz zmiany
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

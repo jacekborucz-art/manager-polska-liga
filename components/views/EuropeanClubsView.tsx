@@ -860,7 +860,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               {injured && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-red-500" />}
               {/* POZ */}
               <span className="flex items-center">
-                <span className={`text-[8px] font-black italic uppercase px-1.5 py-0.5 rounded ${POS_BADGE[p.position]}`}>
+                <span className={`text-[8px] font-black italic uppercase w-6 h-6 flex items-center justify-center rounded-full ${POS_BADGE[p.position]}`}>
                   {POS_SHORT[p.position]}
                 </span>
               </span>
@@ -875,7 +875,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               <span
                 className={`text-[8px] min-w-0 self-stretch flex items-center gap-2 px-2.5 -my-2.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),inset_1px_0_0_rgba(255,255,255,0.10),0_0_18px_rgba(0,0,0,0.18)] ${T}`}
                 style={{
-                  background: `linear-gradient(90deg, ${clubPrimary} 0%, ${clubSecondary} 58%, ${clubAccent} 100%)`,
+                  background: `linear-gradient(90deg, ${clubPrimary}66 0%, ${clubSecondary}44 58%, ${clubAccent}33 100%)`,
                   textShadow: '0 1px 3px rgba(0,0,0,0.72)'
                 }}
               >
