@@ -5,6 +5,7 @@ import {
 import { NameGeneratorService } from './NameGeneratorService';
 import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -396,6 +397,7 @@ export const AcademyService = {
       negotiationStep: 0,
       negotiationLockoutUntil: null,
       contractLockoutUntil: null,
+      moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
       fatigueDebt: 0,
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,

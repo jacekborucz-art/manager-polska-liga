@@ -5,6 +5,7 @@ import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
 import { FreeAgentNegotiationService } from './FreeAgentNegotiationService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerContractMindflowService } from './PlayerContractMindflowService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -773,7 +774,7 @@ export const AiContractService = {
           currentClub.signingBonusPool -= proposedBonus;
           currentClub.budget -= proposedBonus;
           return {
-            ...p,
+            ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
             annualSalary: proposedSalary,
             contractEndDate: newEndDate,
             negotiationStep: 0,
@@ -1002,7 +1003,10 @@ processAiRecruitment: (
         );
 
         const signedPlayer: Player = {
-          ...PlayerCareerService.resetClubStatsForNewEntry(fa),
+          ...PlayerMoraleService.applyContractSigningMindflowReset(
+            PlayerCareerService.resetClubStatsForNewEntry(fa),
+            currentDate
+          ),
           clubId: aiClub.id,
           annualSalary: proposedSalary,
           contractEndDate: newEndDate,
@@ -1860,7 +1864,10 @@ processAiRecruitment: (
         );
 
         const transferredPlayer: Player = {
-          ...PlayerCareerService.resetClubStatsForNewEntry(player),
+          ...PlayerMoraleService.applyContractSigningMindflowReset(
+            PlayerCareerService.resetClubStatsForNewEntry(player),
+            currentDate
+          ),
           clubId: buyerClubId,
           annualSalary: proposedSalary,
           contractEndDate: newEndDate,
@@ -2187,7 +2194,11 @@ performSeasonSquadReview: (
           newEndDate.setDate(30);
           finalSquad = finalSquad.map(p =>
             p.id === player.id
-              ? { ...p, annualSalary: proposedSalary, contractEndDate: newEndDate.toISOString() }
+              ? {
+                  ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
+                  annualSalary: proposedSalary,
+                  contractEndDate: newEndDate.toISOString()
+                }
               : p
           );
         } else {

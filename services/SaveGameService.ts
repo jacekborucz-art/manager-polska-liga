@@ -370,6 +370,7 @@ function normalizeSaveState(data: SaveState): SaveState {
           negotiationStep: player.negotiationStep ?? 0,
           negotiationLockoutUntil: player.negotiationLockoutUntil ?? null,
           contractLockoutUntil: player.contractLockoutUntil ?? null,
+          moraleDemandLockoutUntil: player.moraleDemandLockoutUntil ?? null,
           fatigueDebt: player.fatigueDebt ?? 0,
           isNegotiationPermanentBlocked: player.isNegotiationPermanentBlocked ?? false,
           transferLockoutUntil: player.transferLockoutUntil ?? null,

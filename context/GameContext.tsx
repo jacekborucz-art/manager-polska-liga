@@ -124,6 +124,8 @@ import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator
 import { PlayerDevelopmentService } from '../services/PlayerDevelopmentService';
 import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
+import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowService';
+import { PlayerTransferConversationResult } from '../services/PlayerTransferMindflowService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
@@ -945,6 +947,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   scoutMarketPeriodStart: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
   conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
+  resolvePlayerRoleConversation: (playerId: string, result: PlayerRoleConversationResult) => void;
+  resolvePlayerTransferConversation: (playerId: string, result: PlayerTransferConversationResult) => void;
   fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
   extendStaffContract: (staffId: string, years: number) => void;
   negotiateStaffContract: (staffId: string, newSalary: number, years: number) => void;
@@ -3742,6 +3746,58 @@ setMessages([welcomeMail, fanMail]);
 
     return result;
   }, [currentDate, players, reserves, sessionSeed, userTeamId]);
+
+  const resolvePlayerRoleConversation = useCallback((playerId: string, result: PlayerRoleConversationResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        const nextPlayer = PlayerMoraleService.withMoraleChange(
+          player,
+          result.moraleDelta,
+          result.outcome === 'CONVINCED'
+            ? 'Udana rozmowa o statusie w drużynie'
+            : result.outcome === 'IGNORED'
+              ? 'Trener przerwał rozmowę o statusie'
+              : 'Nieudana rozmowa o statusie w drużynie',
+          currentDate
+        );
+
+        return result.outcome === 'CONVINCED'
+          ? { ...nextPlayer, roleDemandUntil: null, requestedSquadRole: null }
+          : nextPlayer;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  const resolvePlayerTransferConversation = useCallback((playerId: string, result: PlayerTransferConversationResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        const nextPlayer = PlayerMoraleService.withMoraleChange(
+          player,
+          result.moraleDelta,
+          result.outcome === 'ACCEPTED_PLAN'
+            ? 'Zaakceptował plan klubu dotyczący przyszłego transferu'
+            : result.outcome === 'IGNORED'
+              ? 'Trener przerwał rozmowę o przyszłym transferze'
+              : 'Nieudana rozmowa o przyszłym transferze',
+          currentDate
+        );
+
+        return result.outcome === 'ACCEPTED_PLAN'
+          ? { ...nextPlayer, transferListDemandUntil: null }
+          : nextPlayer;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
 
   const ensureWinterCampInviteState = useCallback((baseDate: Date = currentDate) => {
     if (!userTeamId) return;
@@ -12237,7 +12293,10 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     );
 
     const updatedPlayer = {
-      ...PlayerCareerService.resetClubStatsForNewEntry(resolvedPlayer),
+      ...PlayerMoraleService.applyContractSigningMindflowReset(
+        PlayerCareerService.resetClubStatsForNewEntry(resolvedPlayer),
+        currentDate
+      ),
       clubId: userTeamId,
       annualSalary: salary,
       goalBonus: goalBonus ?? undefined,
@@ -12757,7 +12816,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     pendingOpenTalk, setPendingOpenTalk,
-    applyWeeklyMotivation, conductIndividualTalk, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
+    applyWeeklyMotivation, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,

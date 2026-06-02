@@ -6,6 +6,8 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { PlayerRoleMindflowModal } from '../modals/PlayerRoleMindflowModal';
+import { PlayerTransferMindflowModal } from '../modals/PlayerTransferMindflowModal';
 
 const COUNTRY_FLAG_CODES: Record<string, string> = {
   Albania: 'AL', Andora: 'AD', Armenia: 'AM', Austria: 'AT', Azerbejdżan: 'AZ',
@@ -123,7 +125,7 @@ const getCountryFlagCode = (country: string, region: Region): string | null => {
 };
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, pendingOpenTalk, setPendingOpenTalk, submitLoanOffer } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, pendingOpenTalk, setPendingOpenTalk, submitLoanOffer, sessionSeed } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -135,6 +137,8 @@ export const PlayerCard: React.FC = () => {
   const [loanDuration, setLoanDuration] = useState<LoanOfferDuration>('SEASON');
   const [loanFeedback, setLoanFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [showAllCareer, setShowAllCareer] = useState(false);
+  const [isRoleMindflowOpen, setIsRoleMindflowOpen] = useState(false);
+  const [isTransferMindflowOpen, setIsTransferMindflowOpen] = useState(false);
   useEffect(() => {
     if (pendingOpenTalk) {
       setIsTalkPanelOpen(true);
@@ -566,13 +570,27 @@ export const PlayerCard: React.FC = () => {
                     <span className="block text-[7px] font-black italic uppercase tracking-tighter text-violet-300">
                       Domaga się statusu: {playerMorale.requestedSquadRole === 'KEY_PLAYER' ? 'kluczowy zawodnik' : 'podstawowa jedenastka'} do {roleDemandDeadline.toLocaleDateString('pl-PL')}
                     </span>
+                    <button
+                      onClick={() => setIsRoleMindflowOpen(true)}
+                      className="mt-2 w-full rounded-[10px] border border-violet-400/30 bg-violet-500/15 px-2 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-violet-100 transition-colors hover:bg-violet-500/25"
+                    >
+                      Porozmawiaj o statusie
+                    </button>
                   </div>
                 )}
                 {transferListDemandDeadline && !Number.isNaN(transferListDemandDeadline.getTime()) && (
                   <div className="mt-2 rounded-[12px] border border-red-500/30 bg-red-500/10 px-2 py-1.5">
                     <span className="block text-[7px] font-black italic uppercase tracking-tighter text-red-300">
-                      Prosi o listę transferową do {transferListDemandDeadline.toLocaleDateString('pl-PL')}
+                      {player.isUntouchable ? 'Chce porozmawiać o swojej przyszłości' : 'Prosi o listę transferową'} do {transferListDemandDeadline.toLocaleDateString('pl-PL')}
                     </span>
+                    {player.isUntouchable && (
+                      <button
+                        onClick={() => setIsTransferMindflowOpen(true)}
+                        className="mt-2 w-full rounded-[10px] border border-red-400/30 bg-red-500/15 px-2 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-red-100 transition-colors hover:bg-red-500/25"
+                      >
+                        Porozmawiaj o przyszłości
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1501,6 +1519,26 @@ export const PlayerCard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {isRoleMindflowOpen && (
+        <PlayerRoleMindflowModal
+          player={playerMorale}
+          currentDate={currentDate}
+          sessionSeed={sessionSeed}
+          onResolve={result => resolvePlayerRoleConversation(player.id, result)}
+          onClose={() => setIsRoleMindflowOpen(false)}
+        />
+      )}
+
+      {isTransferMindflowOpen && (
+        <PlayerTransferMindflowModal
+          player={playerMorale}
+          currentDate={currentDate}
+          sessionSeed={sessionSeed}
+          onResolve={result => resolvePlayerTransferConversation(player.id, result)}
+          onClose={() => setIsTransferMindflowOpen(false)}
+        />
       )}
 
       <style>{`

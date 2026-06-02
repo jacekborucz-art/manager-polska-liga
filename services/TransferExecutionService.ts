@@ -1,6 +1,7 @@
 import { Club, Player, TransferOffer } from '../types';
 import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 interface TransferExecutionResult {
   updatedClubs: Club[];
@@ -61,7 +62,10 @@ export const TransferExecutionService = {
     );
 
     const transferredPlayer: Player = {
-      ...PlayerCareerService.resetClubStatsForNewEntry(player),
+      ...PlayerMoraleService.applyContractSigningMindflowReset(
+        PlayerCareerService.resetClubStatsForNewEntry(player),
+        currentDate
+      ),
       clubId: buyerClub.id,
       annualSalary: offer.salary,
       goalBonus: offer.goalBonus ?? undefined,

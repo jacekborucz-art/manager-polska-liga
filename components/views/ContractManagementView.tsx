@@ -8,6 +8,7 @@ import { MailService } from '../../services/MailService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { SportingDirectorService } from '../../services/SportingDirectorService';
 import { PlayerContractMindflowService, ContractMindsetState } from '../../services/PlayerContractMindflowService';
+import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 const MINDSET_LABELS: Record<ContractMindsetState, string> = {
   SUPER_HAPPY: 'BARDZO SZCZĘŚLIWY',
@@ -256,7 +257,7 @@ export const ContractManagementView: React.FC = () => {
         lockoutDate.setMonth(lockoutDate.getMonth() + 6);
 
         updateContractPlayer(p => ({ 
-            ...p, 
+            ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
             annualSalary: offerSalary, 
             contractEndDate: newEndDate,
             negotiationStep: 0,

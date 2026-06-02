@@ -103,6 +103,95 @@ const roleLabel = (role: 'STARTER' | 'KEY_PLAYER' | null | undefined): string =>
   return 'bez określonego statusu';
 };
 
+type MinutesDemandApproach = 'PATIENT' | 'CALM' | 'ASSERTIVE' | 'BRAZEN';
+
+interface MinutesDemandMindset {
+  approach: MinutesDemandApproach;
+  selfBeliefBias: number;
+  minimumMinutesGap: number;
+  readinessThreshold: number;
+  priority: number;
+  moraleDrop: number;
+}
+
+const getMinutesDemandMindset = (personality: PlayerMoralePersonality): MinutesDemandMindset => {
+  const mindsets: Record<PlayerMoralePersonality, MinutesDemandMindset> = {
+    PROFESSIONAL: { approach: 'CALM', selfBeliefBias: 0, minimumMinutesGap: 0.18, readinessThreshold: 64, priority: 3, moraleDrop: -1 },
+    AMBITIOUS: { approach: 'ASSERTIVE', selfBeliefBias: 8, minimumMinutesGap: 0.12, readinessThreshold: 53, priority: 4, moraleDrop: -2 },
+    SENSITIVE: { approach: 'PATIENT', selfBeliefBias: -2, minimumMinutesGap: 0.22, readinessThreshold: 66, priority: 3, moraleDrop: -2 },
+    CONFIDENT: { approach: 'ASSERTIVE', selfBeliefBias: 7, minimumMinutesGap: 0.14, readinessThreshold: 55, priority: 4, moraleDrop: -2 },
+    NERVOUS: { approach: 'PATIENT', selfBeliefBias: -5, minimumMinutesGap: 0.25, readinessThreshold: 70, priority: 3, moraleDrop: -2 },
+    LOYAL: { approach: 'PATIENT', selfBeliefBias: -6, minimumMinutesGap: 0.24, readinessThreshold: 72, priority: 2, moraleDrop: -1 },
+    EGOIST: { approach: 'BRAZEN', selfBeliefBias: 12, minimumMinutesGap: 0.08, readinessThreshold: 46, priority: 5, moraleDrop: -3 },
+    CALM: { approach: 'PATIENT', selfBeliefBias: -4, minimumMinutesGap: 0.22, readinessThreshold: 69, priority: 2, moraleDrop: -1 },
+  };
+  return mindsets[personality];
+};
+
+const getMinutesDemandCopy = (player: Player, approach: MinutesDemandApproach, recentAverageRating: number | null): { subject: string; body: string } => {
+  const formSentence = recentAverageRating !== null && recentAverageRating >= 7
+    ? `Moje ostatnie występy też dają mi argumenty. Średnia ocen z ostatnich meczów to ${recentAverageRating.toFixed(1).replace('.', ',')}.`
+    : 'Czuję się gotowy, żeby dać drużynie więcej na boisku.';
+
+  if (approach === 'BRAZEN') {
+    return {
+      subject: `Żądanie większej liczby minut: ${player.lastName}`,
+      body: `Trenerze,\n\nPowiem wprost: przy mojej jakości obecna liczba minut jest nie do zaakceptowania. Widzę zawodników, którzy dostają więcej szans, choć nie dają drużynie więcej ode mnie. ${formSentence}\n\nOczekuję realnej zmiany w najbliższych tygodniach. Nie zamierzam bez końca czekać na ławce, gdy wiem, że zasługuję na grę.\n\n${player.firstName} ${player.lastName}`,
+    };
+  }
+
+  if (approach === 'ASSERTIVE') {
+    return {
+      subject: `Rozmowa o większej liczbie minut: ${player.lastName}`,
+      body: `Trenerze,\n\nChciałbym jasno porozmawiać o swojej sytuacji. Uważam, że jestem gotowy na większą odpowiedzialność, a obecna liczba minut nie odpowiada mojej pozycji w kadrze. ${formSentence}\n\nProszę o realną szansę w najbliższych tygodniach. Chcę udowodnić swoją wartość na boisku, ale potrzebuję do tego uczciwej okazji.\n\n${player.firstName} ${player.lastName}`,
+    };
+  }
+
+  if (approach === 'CALM') {
+    return {
+      subject: `Prośba o więcej występów: ${player.lastName}`,
+      body: `Trenerze,\n\nChciałbym spokojnie porozmawiać o swojej roli. Szanuję decyzje sztabu, ale czuję, że mogę dać drużynie więcej. ${formSentence}\n\nNie oczekuję gwarancji miejsca w składzie. Proszę jedynie o realną możliwość pokazania, że zasługuję na więcej minut.\n\n${player.firstName} ${player.lastName}`,
+    };
+  }
+
+  return {
+    subject: `Prośba o szansę: ${player.lastName}`,
+    body: `Trenerze,\n\nWiem, że o miejsce w składzie trzeba cierpliwie walczyć i nie chcę stawiać sprawy na ostrzu noża. Czuję jednak, że jestem gotowy, by pomóc drużynie częściej. ${formSentence}\n\nJeśli pojawi się okazja, proszę dać mi szansę. Chciałbym odpowiedzieć na boisku i pokazać, że można na mnie liczyć.\n\n${player.firstName} ${player.lastName}`,
+  };
+};
+
+const getTransferListDemandCopy = (
+  player: Player,
+  personality: PlayerMoralePersonality,
+  seeksHigherReputation: boolean
+): { subject: string; body: string } => {
+  if (seeksHigherReputation) {
+    return {
+      subject: `Rozmowa o kolejnym kroku w karierze: ${player.lastName}`,
+      body: `Trenerze,\n\nCzuję, że sportowo jestem gotowy na kolejny krok. Moja forma i poziom, który pokazuję na boisku, dają mi przekonanie, że powinienem spróbować gry w klubie o wyższej reputacji i większych ambicjach.\n\nSzanuję drużynę i nie chcę odchodzić za wszelką cenę. Proszę jednak o zgodę na odejście, jeśli pojawi się odpowiednia oferta z mocniejszego klubu. Chciałbym, żebyśmy uczciwie porozmawiali o mojej przyszłości.\n\n${player.firstName} ${player.lastName}`,
+    };
+  }
+
+  if (player.isUntouchable) {
+    if (personality === 'EGOIST' || personality === 'AMBITIOUS' || personality === 'CONFIDENT') {
+      return {
+        subject: `Rozmowa o mojej przyszłości: ${player.lastName}`,
+        body: `Trenerze,\n\nChciałbym porozmawiać o swojej przyszłości. Wiem, że klub oznaczył mnie jako zawodnika „nie na sprzedaż”, ale nie chcę, żeby ten status zamknął mi drogę do kolejnego kroku w karierze.\n\nCzuję, że jestem gotowy na nowe wyzwanie. Nie oczekuję zgody na pierwszy przypadkowy transfer, ale chcę jasnej deklaracji, że przy naprawdę dobrej ofercie klub będzie gotowy usiąść do rozmów.\n\n${player.firstName} ${player.lastName}`,
+      };
+    }
+
+    return {
+      subject: `Prośba o rozmowę o przyszłości: ${player.lastName}`,
+      body: `Trenerze,\n\nDoceniam, że klub uważa mnie za ważnego zawodnika. Chciałbym jednak spokojnie porozmawiać o statusie „nie na sprzedaż”. W dłuższej perspektywie chciałbym mieć możliwość zrobienia kolejnego kroku w karierze.\n\nNie zależy mi na konflikcie ani odejściu do przypadkowego zespołu. Proszę tylko, aby klub pozostał otwarty na naprawdę dobrą ofertę i potraktował moje ambicje poważnie.\n\n${player.firstName} ${player.lastName}`,
+    };
+  }
+
+  return {
+    subject: `Prośba o listę transferową: ${player.lastName}`,
+    body: `Trenerze,\n\nNie czuję się już dobrze w tej drużynie. Mam poczucie, że mój poziom sportowy i ambicje rozchodzą się z miejscem, w którym obecnie jesteśmy jako zespół.\n\nProszę o zgodę na wystawienie mnie na listę transferową. Chcę zachować profesjonalizm, ale potrzebuję jasnej drogi do zmiany otoczenia.\n\n${player.firstName} ${player.lastName}`,
+  };
+};
+
 const getPlayerTalkResponse = (talkType: IndividualTalkType, isPositive: boolean): string => {
   const responses: Record<IndividualTalkType, { positive: string; negative: string }> = {
     PRAISE: {
@@ -177,6 +266,33 @@ export const PlayerMoraleService = {
     roleDemandUntil: player.roleDemandUntil ?? null,
     requestedSquadRole: player.requestedSquadRole ?? null,
     transferListDemandUntil: player.transferListDemandUntil ?? null,
+    moraleDemandLockoutUntil: player.moraleDemandLockoutUntil ?? null,
+  }),
+
+  getMoraleDemandLockoutUntil: (currentDate: Date): string => {
+    const lockoutUntil = new Date(currentDate);
+    lockoutUntil.setFullYear(lockoutUntil.getFullYear() + 1);
+    return lockoutUntil.toISOString();
+  },
+
+  isMoraleDemandLocked: (player: Player, currentDate: Date): boolean => {
+    if (!player.moraleDemandLockoutUntil) return false;
+    const lockoutUntil = new Date(player.moraleDemandLockoutUntil);
+    return !Number.isNaN(lockoutUntil.getTime()) && dateOnly(currentDate).getTime() < dateOnly(lockoutUntil).getTime();
+  },
+
+  hasActiveMoraleDemand: (player: Player): boolean =>
+    !!player.minutesDemandUntil || !!player.roleDemandUntil || !!player.transferListDemandUntil,
+
+  applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
+    ...player,
+    moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
+    lastMoraleDemandDate: null,
+    minutesDemandUntil: null,
+    minutesDemandBaseline: null,
+    roleDemandUntil: null,
+    requestedSquadRole: null,
+    transferListDemandUntil: null,
   }),
 
   withMoraleChange: (player: Player, delta: number, reason: string, date: Date): Player => {
@@ -453,11 +569,12 @@ export const PlayerMoraleService = {
         new Date(mail.date).getTime() >= currentDate.getTime() - 21 * DAY_MS
       );
 
-    const hasUpcomingLeagueFixtures = (fixtures ?? []).some(f =>
+    const hasLeagueFixtureDuringDemandWindow = (fixtures ?? []).some(f =>
       f.status === MatchStatus.SCHEDULED &&
       f.leagueId === club.leagueId &&
       (f.homeTeamId === club.id || f.awayTeamId === club.id) &&
-      f.date.getTime() >= currentDate.getTime()
+      f.date.getTime() >= currentDate.getTime() &&
+      f.date.getTime() <= deadline.getTime()
     );
 
     const createdMails: MailMessage[] = [];
@@ -471,6 +588,8 @@ export const PlayerMoraleService = {
       const personality = withMorale.moralePersonality ?? 'CALM';
       const lastDemand = withMorale.lastMoraleDemandDate ? new Date(withMorale.lastMoraleDemandDate) : null;
       const demandCooldown = lastDemand && !Number.isNaN(lastDemand.getTime()) && dayDiff(lastDemand, currentDate) < 21;
+      const isDemandLockedAfterContract = PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate);
+      const hasActiveDemand = PlayerMoraleService.hasActiveMoraleDemand(withMorale);
       const isHealthyEnough = withMorale.health.status === HealthStatus.HEALTHY || ((withMorale.health.injury?.daysRemaining ?? 0) <= 3);
       const hasSportingArgument = withMorale.overallRating >= squadAverage - 1 && (rank <= Math.max(8, Math.ceil(squad.length * 0.35)) || positionRank <= 2);
       const pressureBonus = personality === 'AMBITIOUS' || personality === 'EGOIST' || personality === 'CONFIDENT' ? 1 : 0;
@@ -489,8 +608,10 @@ export const PlayerMoraleService = {
         hasSportingArgument &&
         isHealthyEnough &&
         !demandCooldown &&
+        !isDemandLockedAfterContract &&
+        !hasActiveDemand &&
         !withMorale.transferPendingClubId &&
-        hasUpcomingLeagueFixtures &&
+        hasLeagueFixtureDuringDemandWindow &&
         !hasRecentMail(withMorale, 'ROLE') &&
         (withMorale.morale ?? 50) <= (ignoresStatusNoise ? 34 : 48 + pressureBonus * 6);
 
@@ -500,39 +621,112 @@ export const PlayerMoraleService = {
           : withMorale.squadRole === 'STARTER' || roleExpectation === 'STARTER'
             ? 0.48
             : 0.35;
+      const minutesMindset = getMinutesDemandMindset(personality);
+      const recentRatings = (withMorale.stats.ratingHistory ?? []).slice(-3);
+      const recentAverageRating = recentRatings.length > 0
+        ? recentRatings.reduce((sum, rating) => sum + rating, 0) / recentRatings.length
+        : null;
+      const formArgument = recentAverageRating === null
+        ? 0
+        : recentAverageRating >= 7.2
+          ? 12
+          : recentAverageRating >= 6.8
+            ? 7
+            : recentAverageRating < 6.2
+              ? -8
+              : 0;
+      const positionOpportunity = positionRank === 1 ? 20 : positionRank === 2 ? 12 : positionRank === 3 ? 3 : -10;
+      const squadOpportunity = rank <= 3 ? 14 : rank <= 8 ? 8 : rank <= Math.ceil(squad.length * 0.5) ? 2 : -8;
+      const roleConfidence = withMorale.squadRole === 'KEY_PLAYER' ? 12 : withMorale.squadRole === 'STARTER' ? 7 : 0;
+      const moraleUrgency = (withMorale.morale ?? 50) <= 25 ? 14 : (withMorale.morale ?? 50) <= 40 ? 8 : (withMorale.morale ?? 50) <= 55 ? 3 : 0;
+      const perceivedReadiness =
+        38 +
+        Math.round((withMorale.overallRating - squadAverage) * 3) +
+        positionOpportunity +
+        squadOpportunity +
+        roleConfidence +
+        formArgument +
+        moraleUrgency +
+        minutesMindset.selfBeliefBias;
+      const minutesGap = expectedShare - minutesShare;
+      const hasPerceivedSportingArgument =
+        hasSportingArgument ||
+        (
+          (minutesMindset.approach === 'ASSERTIVE' || minutesMindset.approach === 'BRAZEN') &&
+          withMorale.overallRating >= squadAverage - 4 &&
+          positionRank <= 3
+        );
 
       const shouldRequestMinutes =
-        hasSportingArgument &&
+        hasPerceivedSportingArgument &&
         isHealthyEnough &&
         !demandCooldown &&
+        !isDemandLockedAfterContract &&
+        !hasActiveDemand &&
         !withMorale.transferPendingClubId &&
-        hasUpcomingLeagueFixtures &&
+        hasLeagueFixtureDuringDemandWindow &&
         !withMorale.minutesDemandUntil &&
         !hasRecentMail(withMorale, 'MINUTES') &&
-        minutesShare < expectedShare &&
-        (withMorale.morale ?? 50) <= (personality === 'LOYAL' ? 30 : personality === 'PROFESSIONAL' ? 38 : 52 + pressureBonus * 5);
+        minutesGap >= minutesMindset.minimumMinutesGap &&
+        perceivedReadiness >= minutesMindset.readinessThreshold;
 
       const isClearlyAboveSquadLevel = withMorale.overallRating >= squadAverage + 7 && rank <= Math.max(3, Math.ceil(squad.length * 0.12));
+      const transferAmbitionBias =
+        personality === 'EGOIST' ? 12 :
+        personality === 'AMBITIOUS' ? 9 :
+        personality === 'CONFIDENT' ? 6 :
+        personality === 'PROFESSIONAL' ? -2 :
+        personality === 'LOYAL' ? -9 :
+        personality === 'CALM' ? -6 :
+        -3;
+      const transferMoodPressure =
+        (withMorale.morale ?? 50) <= 24 ? 12 :
+        (withMorale.morale ?? 50) <= 39 ? 7 :
+        (withMorale.morale ?? 50) <= 54 ? 3 :
+        0;
+      const transferRandomFactor = Math.floor(seededRng(stableHash(`${withMorale.id}_${dateKey}`), 43) * 13) - 6;
+      const hasExcellentForm = recentAverageRating !== null && recentAverageRating >= 7;
+      const reputationStepUpPressure = Math.max(0, 12 - club.reputation) * 2;
+      const wantsHigherReputationMove =
+        isClearlyAboveSquadLevel &&
+        hasExcellentForm &&
+        club.reputation < 12 &&
+        reputationStepUpPressure + transferAmbitionBias + transferRandomFactor >= 13;
+      const protectedExitPressure =
+        Math.round((withMorale.overallRating - squadAverage) * 2) +
+        (rank <= 3 ? 10 : 4) +
+        reputationStepUpPressure +
+        transferAmbitionBias +
+        transferMoodPressure +
+        transferRandomFactor;
+      const wantsProtectedExitConversation = !!withMorale.isUntouchable && protectedExitPressure >= 22;
       const shouldRequestTransferList =
         isClearlyAboveSquadLevel &&
         isHealthyEnough &&
         !demandCooldown &&
+        !isDemandLockedAfterContract &&
+        !hasActiveDemand &&
         !withMorale.isOnTransferList &&
         !withMorale.transferPendingClubId &&
         !withMorale.transferListDemandUntil &&
         !hasRecentMail(withMorale, 'TRANSFER_LIST') &&
-        (withMorale.morale ?? 50) <= (personality === 'LOYAL' ? 28 : personality === 'PROFESSIONAL' ? 34 : 44 + pressureBonus * 6);
+        (
+          wantsProtectedExitConversation ||
+          wantsHigherReputationMove ||
+          (withMorale.morale ?? 50) <= (personality === 'LOYAL' ? 28 : personality === 'PROFESSIONAL' ? 34 : 44 + pressureBonus * 6)
+        );
 
       if (createdMails.length >= 2) return withMorale;
 
       if (shouldRequestTransferList) {
         const mailId = `PLAYER_TRANSFER_LIST_REQUEST_${withMorale.id}_${dateKey}`;
+        const demandCopy = getTransferListDemandCopy(withMorale, personality, wantsHigherReputationMove);
         createdMails.push({
           id: mailId,
           sender: `${withMorale.firstName} ${withMorale.lastName}`,
           role: 'Zawodnik',
-          subject: `Prośba o listę transferową: ${withMorale.lastName}`,
-          body: `Trenerze,\n\nNie czuję się już dobrze w tej drużynie. Mam poczucie, że mój poziom sportowy i ambicje rozchodzą się z miejscem, w którym obecnie jesteśmy jako zespół.\n\nProszę o zgodę na wystawienie mnie na listę transferową. Chcę zachować profesjonalizm, ale potrzebuję jasnej drogi do zmiany otoczenia.\n\n${withMorale.firstName} ${withMorale.lastName}`,
+          subject: demandCopy.subject,
+          body: demandCopy.body,
           date: new Date(currentDate),
           isRead: false,
           type: MailType.STAFF,
@@ -583,16 +777,17 @@ export const PlayerMoraleService = {
 
       if (shouldRequestMinutes) {
         const mailId = `PLAYER_MINUTES_REQUEST_${withMorale.id}_${dateKey}`;
+        const demandCopy = getMinutesDemandCopy(withMorale, minutesMindset.approach, recentAverageRating);
         createdMails.push({
           id: mailId,
           sender: `${withMorale.firstName} ${withMorale.lastName}`,
           role: 'Zawodnik',
-          subject: `Prośba o więcej występów: ${withMorale.lastName}`,
-          body: `Trenerze,\n\nCzuję, że mogę dać drużynie więcej. Na tle kadry mam argumenty sportowe, a mimo tego moje minuty są poniżej poziomu, którego oczekuję.\n\nProszę o realną szansę w najbliższych tygodniach. Nie oczekuję prezentów, ale chcę widzieć, że dobra forma i pozycja w zespole przekładają się na występy.\n\n${withMorale.firstName} ${withMorale.lastName}`,
+          subject: demandCopy.subject,
+          body: demandCopy.body,
           date: new Date(currentDate),
           isRead: false,
           type: MailType.STAFF,
-          priority: 3,
+          priority: minutesMindset.priority,
           metadata: {
             type: 'PLAYER_MORALE_REQUEST',
             playerId: withMorale.id,
@@ -600,7 +795,7 @@ export const PlayerMoraleService = {
             responseDeadline: deadlineKey,
           },
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -2, 'Zawodnik domaga się większej liczby występów', currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, minutesMindset.moraleDrop, 'Zawodnik domaga się większej liczby występów', currentDate);
         return {
           ...withMorale,
           lastMoraleDemandDate: dateKey,
