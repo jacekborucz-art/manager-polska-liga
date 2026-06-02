@@ -129,6 +129,7 @@ import { PlayerTransferConversationResult } from '../services/PlayerTransferMind
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
+import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -946,6 +947,9 @@ finalizeFreeAgentContract: (mailId: string) => void;
   scoutMarketManualRefreshCount: number;
   scoutMarketPeriodStart: string;
   applyWeeklyMotivation: (moraleDelta: number) => void;
+  completedPressConferenceFixtureIds: string[];
+  pressConferenceEffects: Record<string, PressConferenceMatchEffect>;
+  completePreMatchPressConference: (fixtureId: string, answers: PressConferenceAnswer[]) => void;
   conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
   resolvePlayerRoleConversation: (playerId: string, result: PlayerRoleConversationResult) => void;
   resolvePlayerTransferConversation: (playerId: string, result: PlayerTransferConversationResult) => void;
@@ -1029,6 +1033,8 @@ const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(Traini
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
 const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
  const [pendingOpenTalk, setPendingOpenTalk] = useState(false);
+ const [completedPressConferenceFixtureIds, setCompletedPressConferenceFixtureIds] = useState<string[]>([]);
+ const [pressConferenceEffects, setPressConferenceEffects] = useState<Record<string, PressConferenceMatchEffect>>({});
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
  const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
  const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
@@ -1526,6 +1532,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setMessages([]);
     setSentUnfriendlyPressMonths([]);
     setSentFriendlyPressMonths([]);
+    setCompletedPressConferenceFixtureIds([]);
+    setPressConferenceEffects({});
     setActiveTrainingId(null);
     setTrainingProgressHistory([]);
     sentMailIdsRef.current = new Set();
@@ -2346,6 +2354,8 @@ if (userTeamId) {
     sentUnfriendlyPressMonths,
     sentFriendlyPressMonths,
     pendingPressArticles,
+    completedPressConferenceFixtureIds,
+    pressConferenceEffects,
     activeTrainingId,
     activeIntensity,
     trainingProgressHistory,
@@ -2434,6 +2444,8 @@ if (userTeamId) {
     setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
     setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
     setPendingPressArticles(data.pendingPressArticles ?? []);
+    setCompletedPressConferenceFixtureIds(data.completedPressConferenceFixtureIds ?? []);
+    setPressConferenceEffects(data.pressConferenceEffects ?? {});
     setActiveTrainingId(data.activeTrainingId);
     setActiveIntensity(data.activeIntensity);
     setTrainingProgressHistory(data.trainingProgressHistory);
@@ -3840,6 +3852,42 @@ setMessages([welcomeMail, fanMail]);
     }));
     setWinterCampInvitePending(false);
   }, [userTeamId]);
+
+  const completePreMatchPressConference = useCallback((fixtureId: string, answers: PressConferenceAnswer[]) => {
+    if (!userTeamId || completedPressConferenceFixtureIds.includes(fixtureId)) return;
+    const fixture = allFixtures.find(item => item.id === fixtureId);
+    const playoffOpponentId = activePlayoffMatch
+      ? (activePlayoffMatch.homeClub.id === userTeamId ? activePlayoffMatch.awayClub.id : activePlayoffMatch.homeClub.id)
+      : null;
+    const opponentTeamId = fixture
+      ? (fixture.homeTeamId === userTeamId ? fixture.awayTeamId : fixture.homeTeamId)
+      : playoffOpponentId;
+    if (!opponentTeamId) return;
+    const opponentClub = clubs.find(club => club.id === opponentTeamId);
+    const opponentCoach = opponentClub?.coachId ? coaches[opponentClub.coachId] : null;
+    const matchEffect = PreMatchPressConferenceService.calculateMatchEffect(
+      fixtureId,
+      userTeamId,
+      opponentTeamId,
+      answers,
+      opponentCoach?.attributes,
+    );
+    const moraleDelta = matchEffect.userMoraleDelta;
+    const reason = `Konferencja prasowa przed meczem: ${fixtureId}`;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] ?? []).map(player =>
+        PlayerMoraleService.withMoraleChange(player, moraleDelta, reason, currentDate)
+      ),
+    }));
+    setClubs(prev => prev.map(club => club.id === userTeamId
+      ? { ...club, morale: Math.max(5, Math.min(95, Math.round((club.morale ?? 50) + moraleDelta))) }
+      : club
+    ));
+    setPressConferenceEffects(prev => ({ ...prev, [fixtureId]: matchEffect }));
+    setCompletedPressConferenceFixtureIds(prev => prev.includes(fixtureId) ? prev : [...prev, fixtureId]);
+  }, [activePlayoffMatch, allFixtures, clubs, coaches, completedPressConferenceFixtureIds, currentDate, userTeamId]);
 
   const saveWinterCampProgram = useCallback((program: WinterCampProgram, intensity: WinterCampIntensity) => {
     if (!userTeamId) return;
@@ -12816,7 +12864,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     pendingOpenTalk, setPendingOpenTalk,
-    applyWeeklyMotivation, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
+    applyWeeklyMotivation, completedPressConferenceFixtureIds, pressConferenceEffects, completePreMatchPressConference, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,

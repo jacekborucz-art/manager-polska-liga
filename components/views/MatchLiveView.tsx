@@ -103,6 +103,7 @@ import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/P
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
+import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
 import {
   adjustBriefingEffectForPressure,
   adjustDebriefEffectForPressure,
@@ -154,7 +155,7 @@ export const MatchLiveView = () => {
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, setClubs,
     activeMatchState: matchState, setActiveMatchState: setMatchState,
-    pendingMatchKits
+    pendingMatchKits, pressConferenceEffects
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
@@ -302,7 +303,11 @@ export const MatchLiveView = () => {
   }, [ctx, userTeamId]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
-    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(effect, rivalryContext) : effect;
+    const conferenceEffect = ctx && userTeamId
+      ? PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], userTeamId)
+      : null;
+    const combinedEffect = PreMatchPressConferenceService.combineWithBriefing(conferenceEffect, effect);
+    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(combinedEffect, rivalryContext) : combinedEffect;
     const pressureEffect = adjustBriefingEffectForPressure(rivalryEffect, userPressureProfile);
     setShowBriefing(false);
     setMatchState(prev => {
@@ -419,13 +424,14 @@ const isPausedForSevereInjury = useMemo(() => {
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
       );
+      const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
       const aiBriefingEffect = adjustBriefingEffectForPressure(
-        calculateAiCoachBriefingEffect(
+        PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, calculateAiCoachBriefingEffect(
           aiClubInit.reputation,
           userClubInit.reputation,
           aiCoachInit?.attributes,
           sessionSeed + 17
-        ),
+        )),
         aiPressureProfile
       );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
@@ -499,7 +505,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -90,6 +90,8 @@ export interface SaveState {
   sentUnfriendlyPressMonths?: string[];
   sentFriendlyPressMonths?: string[];
   pendingPressArticles?: { mail: import('../types').MailMessage; deliveryDate: string }[];
+  completedPressConferenceFixtureIds?: string[];
+  pressConferenceEffects?: Record<string, import('./PreMatchPressConferenceService').PressConferenceMatchEffect>;
 }
 
 const DEFAULT_START_DATE = new Date('2025-07-01');
@@ -475,6 +477,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     sentUnfriendlyPressMonths: asArray<string>(data.sentUnfriendlyPressMonths),
     sentFriendlyPressMonths: asArray<string>(data.sentFriendlyPressMonths),
     pendingPressArticles: asArray(data.pendingPressArticles),
+    completedPressConferenceFixtureIds: asArray<string>(data.completedPressConferenceFixtureIds),
+    pressConferenceEffects: asRecord(data.pressConferenceEffects),
   };
 }
 

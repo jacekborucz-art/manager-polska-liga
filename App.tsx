@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameProvider, useGame } from './context/GameContext';
-import { ViewState } from './types';
+import { CompetitionType, MatchStatus, ViewState } from './types';
 import { StartMenu } from './components/views/StartMenu';
 import { TeamSelection } from './components/views/TeamSelection';
 import { SquadImportView } from './components/views/SquadImportView';
@@ -102,6 +102,69 @@ import { PostMatchFriendlyStudioView } from './components/views/PostMatchFriendl
 import { FriendlyMatchesRaportView } from './components/views/FriendlyMatchesRaportView';
 import { Analytics } from "@vercel/analytics/react";
 import { GameScaler } from './components/GameScaler';
+import { PreMatchPressConferenceModal } from './components/modals/PreMatchPressConferenceModal';
+
+const PRESS_CONFERENCE_VIEWS = new Set<ViewState>([
+  ViewState.PRE_MATCH_STUDIO,
+  ViewState.PRE_MATCH_CUP_STUDIO,
+  ViewState.PRE_MATCH_CL_STUDIO,
+  ViewState.PRE_MATCH_CL_LIVE_STUDIO,
+  ViewState.PRE_MATCH_EL_STUDIO,
+  ViewState.PRE_MATCH_EL_LIVE_STUDIO,
+  ViewState.PRE_MATCH_CONF_STUDIO,
+  ViewState.PRE_MATCH_CONF_LIVE_STUDIO,
+  ViewState.PRE_MATCH_PLAYOFF_STUDIO,
+]);
+
+const PreMatchPressConferenceGate: React.FC = () => {
+  const {
+    viewState,
+    fixtures,
+    clubs,
+    currentDate,
+    userTeamId,
+    activePlayoffMatch,
+    completedPressConferenceFixtureIds,
+  } = useGame();
+
+  if (!userTeamId || !PRESS_CONFERENCE_VIEWS.has(viewState)) return null;
+
+  if (viewState === ViewState.PRE_MATCH_PLAYOFF_STUDIO && activePlayoffMatch) {
+    const fixtureId = [
+      'PLAYOFF',
+      activePlayoffMatch.matchType,
+      activePlayoffMatch.leagueContext ?? 'RELEGATION',
+      activePlayoffMatch.pairIndex,
+      activePlayoffMatch.homeClub.id,
+      activePlayoffMatch.awayClub.id,
+      currentDate.toISOString().slice(0, 10),
+    ].join('_');
+    if (completedPressConferenceFixtureIds.includes(fixtureId)) return null;
+
+    return (
+      <PreMatchPressConferenceModal
+        fixture={{ id: fixtureId, homeTeamId: activePlayoffMatch.homeClub.id, awayTeamId: activePlayoffMatch.awayClub.id }}
+        userClub={activePlayoffMatch.userSide === 'HOME' ? activePlayoffMatch.homeClub : activePlayoffMatch.awayClub}
+        opponent={activePlayoffMatch.userSide === 'HOME' ? activePlayoffMatch.awayClub : activePlayoffMatch.homeClub}
+      />
+    );
+  }
+
+  const fixture = fixtures.find(item =>
+    item.status === MatchStatus.SCHEDULED &&
+    item.leagueId !== CompetitionType.FRIENDLY &&
+    item.date.toDateString() === currentDate.toDateString() &&
+    (item.homeTeamId === userTeamId || item.awayTeamId === userTeamId)
+  );
+  if (!fixture || completedPressConferenceFixtureIds.includes(fixture.id)) return null;
+
+  const userClub = clubs.find(club => club.id === userTeamId);
+  const opponentId = fixture.homeTeamId === userTeamId ? fixture.awayTeamId : fixture.homeTeamId;
+  const opponent = clubs.find(club => club.id === opponentId);
+  if (!userClub || !opponent) return null;
+
+  return <PreMatchPressConferenceModal fixture={fixture} userClub={userClub} opponent={opponent} />;
+};
 
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
@@ -398,6 +461,7 @@ case ViewState.CL_GROUP_DRAW:
   return (
     <>
       <main>{renderView()}</main>
+      <PreMatchPressConferenceGate />
       <GameNotification />
     </>
   );

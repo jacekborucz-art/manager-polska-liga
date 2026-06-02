@@ -67,7 +67,8 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { TalkEffect } from '../services/HalftimeTalkService';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
-import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
+import { BriefingEffect, BriefingMatchStage, calculateAiCoachBriefingEffect } from '../services/PreMatchBriefingService';
+import { PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
@@ -169,7 +170,7 @@ export const ELMatchLiveView = () => {
     navigateTo, userTeamId, clubs, fixtures, players, 
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, sessionSeed,
-    activeMatchState: matchState, setActiveMatchState: setMatchState
+    activeMatchState: matchState, setActiveMatchState: setMatchState, pressConferenceEffects
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
@@ -255,8 +256,12 @@ export const ELMatchLiveView = () => {
   }, [ctx, userTeamId]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
+    const conferenceEffect = ctx && userTeamId
+      ? PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], userTeamId)
+      : null;
+    const combinedEffect = PreMatchPressConferenceService.combineWithBriefing(conferenceEffect, effect);
     setShowBriefing(false);
-    setMatchState(prev => { if (!prev) return prev; return { ...prev, preMatchMotivation: { actionMod: effect.actionMod, goalMod: effect.goalMod, momentumBonus: effect.momentumBonus, expiryMinute: effect.expiryMinute, fatigueMult: effect.fatigueMult, rivalBoost: effect.rivalBoost, label: effect.label } }; });
+    setMatchState(prev => { if (!prev) return prev; return { ...prev, preMatchMotivation: { actionMod: combinedEffect.actionMod, goalMod: combinedEffect.goalMod, momentumBonus: combinedEffect.momentumBonus, expiryMinute: combinedEffect.expiryMinute, fatigueMult: combinedEffect.fatigueMult, rivalBoost: combinedEffect.rivalBoost, label: combinedEffect.label } }; });
   };
 
   const firstLegInfo = useMemo(() => {
@@ -368,6 +373,11 @@ const isPausedForSevereInjury = useMemo(() => {
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
       );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
+      const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
+      const aiBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(
+        aiConferenceEffect,
+        calculateAiCoachBriefingEffect(aiClubInit.reputation, userClubInit.reputation, aiCoachInit?.attributes, sessionSeed + 17, getEuropeanBriefingMatchStage(ctx.fixture.leagueId as CompetitionType))
+      );
 
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
@@ -420,6 +430,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
          lastChangeMinute: -5,},
           playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
+        aiPreMatchMotivation: { actionMod: aiBriefingEffect.actionMod, goalMod: aiBriefingEffect.goalMod, momentumBonus: aiBriefingEffect.momentumBonus, expiryMinute: aiBriefingEffect.expiryMinute, fatigueMult: aiBriefingEffect.fatigueMult, rivalBoost: aiBriefingEffect.rivalBoost, label: aiBriefingEffect.label },
         aiNextInstructionMinute: aiInitNextMin,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
@@ -428,7 +439,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, pressConferenceEffects]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1275,11 +1286,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute
             ? prev.preMatchMotivation
             : null;
+        const activeAiBriefing =
+          prev.aiPreMatchMotivation && nextMinute <= prev.aiPreMatchMotivation.expiryMinute
+            ? prev.aiPreMatchMotivation
+            : null;
         const briefingFinishingFitMod = activeBriefing
           ? Math.max(0.96, Math.min(1.05, 1 + activeBriefing.goalMod * 1.25))
           : 1.0;
+        const aiBriefingFinishingFitMod = activeAiBriefing
+          ? Math.max(0.96, Math.min(1.05, 1 + activeAiBriefing.goalMod * 1.25))
+          : 1.0;
         const briefingFreshnessDelta = activeBriefing
           ? Math.max(-3, Math.min(3, (1 - activeBriefing.fatigueMult) * 45))
+          : 0;
+        const aiBriefingFreshnessDelta = activeAiBriefing
+          ? Math.max(-3, Math.min(3, (1 - activeAiBriefing.fatigueMult) * 45))
           : 0;
 
         if (activeBriefing) {
@@ -1290,8 +1311,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             shotThreshold += activeBriefing.rivalBoost * 0.012;
           }
         }
+        if (activeAiBriefing) {
+          if (isAiAttacking) {
+            shotThreshold += activeAiBriefing.actionMod * 0.12;
+            shotThreshold += (1 - activeAiBriefing.fatigueMult) * 0.04;
+          } else if (activeAiBriefing.rivalBoost !== 0) {
+            shotThreshold += activeAiBriefing.rivalBoost * 0.012;
+          }
+        }
         if (nextMinute === 1 && activeBriefing?.momentumBonus && isUserAttacking) {
           shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
+        }
+        if (nextMinute === 1 && activeAiBriefing?.momentumBonus && isAiAttacking) {
+          shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
         }
 
         let pauseForEvent = false;
@@ -1471,10 +1503,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
            const scorerBriefingFatigue = activeSide === userSide
              ? Math.max(0, Math.min(100, scorerLiveFatigue + briefingFreshnessDelta))
-             : scorerLiveFatigue;
+             : Math.max(0, Math.min(100, scorerLiveFatigue + aiBriefingFreshnessDelta));
            const scorerBriefingFitMod = activeSide === userSide
              ? scorerFitMod * briefingFinishingFitMod
-             : scorerFitMod;
+             : scorerFitMod * aiBriefingFinishingFitMod;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
            const isGoal = GoalAttributionService.checkShotSuccess(
@@ -1586,10 +1618,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const cornerOppFatigue = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
                 const headerBriefingFatigue = activeSide === userSide
                   ? Math.max(0, Math.min(100, hScorerFat + briefingFreshnessDelta))
-                  : hScorerFat;
+                  : Math.max(0, Math.min(100, hScorerFat + aiBriefingFreshnessDelta));
                 const headerBriefingFitMod = activeSide === userSide
                   ? briefingFinishingFitMod
-                  : 1.0;
+                  : aiBriefingFinishingFitMod;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),
@@ -1700,7 +1732,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }, 3500);
         }
 
-        const momentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const briefingMomentumImpulse =
+          nextMinute === 1
+            ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)
+              + (activeAiBriefing?.momentumBonus ?? 0) * (aiSide === 'HOME' ? 1 : -1)
+            : 0;
+        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const momentumUpdate = Math.max(-100, Math.min(100, rawMomentumUpdate + briefingMomentumImpulse));
 
      if (priorityAiTrigger) {
            const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory }, ctx, aiSide, true);

@@ -28,7 +28,8 @@ import { MailService } from '../services/MailService';
 import { MatchCupTacticsModal } from '../components/modals/MatchCupTacticsModal';
 import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
 import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
-import { BriefingEffect, BriefingMatchStage } from '../services/PreMatchBriefingService';
+import { BriefingEffect, BriefingMatchStage, calculateAiCoachBriefingEffect } from '../services/PreMatchBriefingService';
+import { PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 import { TalkEffect, getScoreContext } from '../services/HalftimeTalkService';
@@ -511,7 +512,7 @@ export const MatchLiveViewPolishCupSimulation: React.FC = () => {
     activeMatchState: matchState, setActiveMatchState: setMatchState, coaches, staffMembers, seasonNumber,
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
-    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
+    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults, pressConferenceEffects,
   } = useGame();
 
   // ── TRYB BARAŻOWY — buduje ctx z activePlayoffMatch zamiast fixtures ──────
@@ -620,6 +621,12 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
 
+  const conferenceMatchEffect = useMemo(() => {
+    if (!ctx || !userTeamId) return null;
+    const opponentTeamId = ctx.homeClub.id === userTeamId ? ctx.awayClub.id : ctx.homeClub.id;
+    return PreMatchPressConferenceService.findMatchEffect(pressConferenceEffects, ctx.fixture.id, userTeamId, opponentTeamId);
+  }, [ctx, pressConferenceEffects, userTeamId]);
+
   const kitColors = useMemo(() => ctx ? KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub) : null, [ctx]);
   const rivalryContext = useMemo(
     () => ctx ? RivalryService.getMatchContext(ctx.homeClub, ctx.awayClub) : null,
@@ -627,7 +634,11 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
   );
 
   const handleBriefingClose = (effect: BriefingEffect) => {
-    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(effect, rivalryContext) : effect;
+    const conferenceEffect = userTeamId
+      ? PreMatchPressConferenceService.getTeamMatchEffect(conferenceMatchEffect, userTeamId)
+      : null;
+    const combinedEffect = PreMatchPressConferenceService.combineWithBriefing(conferenceEffect, effect);
+    const rivalryEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(combinedEffect, rivalryContext) : combinedEffect;
     setShowBriefing(false);
     setMatchState(prev => {
       if (!prev) return prev;
@@ -696,6 +707,17 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
       );
+      const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(conferenceMatchEffect, aiClubInit.id);
+      const aiBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(
+        aiConferenceEffect,
+        calculateAiCoachBriefingEffect(
+          aiClubInit.reputation,
+          userClubInit.reputation,
+          aiCoachInit?.attributes,
+          cupSessionSeed + 17,
+          getCupBriefingMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType),
+        ),
+      );
 
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true, isPausedForEvent: false, isHalfTime: false, isFinished: false,
@@ -720,10 +742,19 @@ homeGoals: [], awayGoals: [], sessionSeed: cupSessionSeed,
         tacticalImpact: 0,
         // -> tutaj wstaw kod
        
-  aiActiveShout: {
+        aiActiveShout: {
            id: 'PRE_MATCH_INIT',
            expiryMinute: 20 + Math.floor(Math.abs(Math.sin(cupSessionSeed + 77)) * 15),
            ...preMatchInstr
+        },
+        aiPreMatchMotivation: {
+          actionMod: aiBriefingEffect.actionMod,
+          goalMod: aiBriefingEffect.goalMod,
+          momentumBonus: aiBriefingEffect.momentumBonus,
+          expiryMinute: aiBriefingEffect.expiryMinute,
+          fatigueMult: aiBriefingEffect.fatigueMult,
+          rivalBoost: aiBriefingEffect.rivalBoost,
+          label: aiBriefingEffect.label,
         },
 
 
@@ -763,7 +794,7 @@ counterAttackResponseFactor: 1.0,
 }
       });
     }
-  }, [ctx, lineups, matchState, setMatchState, userSide, coaches, staffMembers]);
+  }, [activePlayoffMatch?.matchType, conferenceMatchEffect, ctx, lineups, matchState, setMatchState, userSide, coaches, staffMembers]);
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [matchState?.logs]);
 
@@ -1224,6 +1255,10 @@ useEffect(() => {
         if (nextMinute === 1 && prev.preMatchMotivation?.momentumBonus) {
           const dir = userSide === 'HOME' ? 1 : -1;
           nextMomentum = clamp(nextMomentum + prev.preMatchMotivation.momentumBonus * dir, -100, 100);
+        }
+        if (nextMinute === 1 && prev.aiPreMatchMotivation?.momentumBonus) {
+          const dir = userSide === 'HOME' ? -1 : 1;
+          nextMomentum = clamp(nextMomentum + prev.aiPreMatchMotivation.momentumBonus * dir, -100, 100);
         }
         // === BALANS 2025 – stałe do łatwego tuningu ===
         const RED_CARD_CHANCE        = 0.00001;  // ~0.065 czerwonych/mecz
@@ -1782,6 +1817,9 @@ if (prev.isExtraTime && nextMinute >= 121) {
           pGoalMod    += prev.preMatchMotivation.goalMod;
           pFatigueMod += (prev.preMatchMotivation.fatigueMult - 1.0);
         }
+        const activeAiBriefing = prev.aiPreMatchMotivation && nextMinute <= prev.aiPreMatchMotivation.expiryMinute
+          ? prev.aiPreMatchMotivation
+          : null;
         pActionMod = clamp(pActionMod, 0.93, 1.07);
         pFatigueMod = clamp(pFatigueMod, 0.92, 1.14);
         pRiskMod = clamp(pRiskMod, 0.93, 1.07);
@@ -2447,6 +2485,9 @@ dynamicThreshold *= undedogThresholdMultiplier;
         if (eventSide === userSide && pActionMod !== 1.0) {
            dynamicThreshold = Math.max(0.25, dynamicThreshold * (1.0 / pActionMod));
         }
+        if (eventSide !== userSide && activeAiBriefing) {
+           dynamicThreshold = Math.max(0.25, dynamicThreshold * (1.0 / (1 + activeAiBriefing.actionMod)));
+        }
 
         if (instr.pressing === 'PRESSING') {
           const rf = instr.pressingResponseFactor ?? 1.0;
@@ -2645,6 +2686,9 @@ dynamicThreshold *= undedogThresholdMultiplier;
         if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.22);
         if (eventSide === userSide && pGoalMod !== 1.0) {
             rawGoalProbability *= pGoalMod;
+        }
+        if (eventSide !== userSide && activeAiBriefing) {
+            rawGoalProbability *= 1 + activeAiBriefing.goalMod;
         }
         const goalProbability = leadDiff >= 7
             ? Math.min(0.01, rawGoalProbability)
