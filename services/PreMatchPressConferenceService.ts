@@ -15,7 +15,7 @@ export interface PressConferenceAnswer {
 
 export interface PressConferenceQuestion {
   id: string;
-  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT' | 'CUP_CONTEXT';
+  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT' | 'CUP_CONTEXT' | 'EUROPE_CONTEXT';
   journalist: string;
   text: string;
   answers: PressConferenceAnswer[];
@@ -324,6 +324,176 @@ const getCupQuestions = (
   ];
 };
 
+type EuropeanCupStage = 'QUALIFYING' | 'GROUP_ENTRY' | 'GROUP_STAGE' | 'R16' | 'QF' | 'SF' | 'FINAL' | 'SUPER_CUP';
+
+interface EuropeanCupContext {
+  competitionLabel: string;
+  stage: EuropeanCupStage;
+  stageLabel: string;
+  isReturnLeg: boolean;
+}
+
+const getEuropeanCupContext = (fixture: PressConferenceFixture): EuropeanCupContext | null => {
+  if (fixture.leagueId === CompetitionType.UEFA_SUPER_CUP) {
+    return {
+      competitionLabel: 'Superpuchar Europy',
+      stage: 'SUPER_CUP',
+      stageLabel: 'mecz o Superpuchar Europy',
+      isReturnLeg: false,
+    };
+  }
+
+  const competitionId = fixture.leagueId;
+  if (!competitionId || competitionId.endsWith('_DRAW')) return null;
+
+  const competitionLabel = competitionId.startsWith('CL_')
+    ? 'Liga Mistrzów UEFA'
+    : competitionId.startsWith('EL_')
+      ? 'Liga Europy UEFA'
+      : competitionId.startsWith('CONF_')
+        ? 'Liga Konferencji UEFA'
+        : null;
+
+  if (!competitionLabel) return null;
+
+  const isReturnLeg = competitionId.endsWith('_RETURN');
+  if (competitionId.includes('_R1Q')) {
+    return { competitionLabel, stage: 'QUALIFYING', stageLabel: '1. runda preeliminacyjna', isReturnLeg };
+  }
+  if (competitionId.includes('_R2Q')) {
+    return { competitionLabel, stage: 'GROUP_ENTRY', stageLabel: 'decydująca runda preeliminacyjna', isReturnLeg };
+  }
+  if (competitionId.includes('_GROUP_STAGE')) {
+    return { competitionLabel, stage: 'GROUP_STAGE', stageLabel: 'faza grupowa', isReturnLeg };
+  }
+  if (competitionId.includes('_R16')) {
+    return { competitionLabel, stage: 'R16', stageLabel: '1/8 finału', isReturnLeg };
+  }
+  if (competitionId.includes('_QF')) {
+    return { competitionLabel, stage: 'QF', stageLabel: 'ćwierćfinał', isReturnLeg };
+  }
+  if (competitionId.includes('_SF')) {
+    return { competitionLabel, stage: 'SF', stageLabel: 'półfinał', isReturnLeg };
+  }
+  if (competitionId.includes('_FINAL')) {
+    return { competitionLabel, stage: 'FINAL', stageLabel: 'finał', isReturnLeg };
+  }
+
+  return null;
+};
+
+const getEuropeanStageQuestion = (
+  context: EuropeanCupContext,
+  opponent: Club,
+): string => {
+  if (context.stage === 'SUPER_CUP') {
+    return `Przed wami mecz o Superpuchar Europy z ${opponent.name}. Jak przygotować drużynę na walkę o pierwsze międzynarodowe trofeum sezonu?`;
+  }
+  if (context.stage === 'QUALIFYING') {
+    return context.isReturnLeg
+      ? `Rewanż z ${opponent.name} zdecyduje, czy pozostaniecie w walce o europejskie puchary. Jak zespół radzi sobie z presją preeliminacji?`
+      : `Rozpoczynacie europejskie preeliminacje meczem z ${opponent.name}. Jak uniknąć nerwowości na początku tej drogi?`;
+  }
+  if (context.stage === 'GROUP_ENTRY') {
+    return context.isReturnLeg
+      ? `Rewanż z ${opponent.name} może dać wam awans do fazy grupowej ${context.competitionLabel}. Jak ważny jest to moment dla klubu?`
+      : `Od fazy grupowej ${context.competitionLabel} dzieli was dwumecz z ${opponent.name}. Jak zamierzacie udźwignąć stawkę tego spotkania?`;
+  }
+  if (context.stage === 'GROUP_STAGE') {
+    return `W fazie grupowej każdy punkt może zdecydować o awansie do 1/8 finału. Jakiego meczu spodziewa się pan przeciwko ${opponent.name}?`;
+  }
+  if (context.stage === 'R16') {
+    return context.isReturnLeg
+      ? `Rewanż w 1/8 finału z ${opponent.name} zdecyduje o awansie do najlepszej ósemki. Jak zachować równowagę między odwagą a kontrolą?`
+      : `Rozpoczynacie walkę o ćwierćfinał ${context.competitionLabel}. Jakiego nastawienia oczekuje pan w meczu z ${opponent.name}?`;
+  }
+  if (context.stage === 'QF') {
+    return context.isReturnLeg
+      ? `Rewanż z ${opponent.name} zdecyduje o awansie do półfinału. Czy drużyna jest gotowa na mecz o takiej presji?`
+      : `Ćwierćfinał ${context.competitionLabel} to już najwyższy poziom europejskiej rywalizacji. Co może przesądzić o wyniku z ${opponent.name}?`;
+  }
+  if (context.stage === 'SF') {
+    return context.isReturnLeg
+      ? `Od europejskiego finału dzieli was jeden rewanż z ${opponent.name}. Jak nie pozwolić, by stawka sparaliżowała zawodników?`
+      : `Przed wami półfinał ${context.competitionLabel}. Jak przygotować drużynę na spotkanie, które może otworzyć drogę do finału?`;
+  }
+  return `Przed wami finał ${context.competitionLabel} z ${opponent.name}. Jak utrzymać koncentrację, gdy jeden mecz zdecyduje o europejskim trofeum?`;
+};
+
+const getEuropeanCupQuestions = (
+  fixture: PressConferenceFixture,
+  opponent: Club,
+  opponentStatement: string,
+  rivalryLabel: string | null,
+  context: EuropeanCupContext,
+): PressConferenceQuestion[] => {
+  const returnLegText = context.isReturnLeg
+    ? ' To rewanż, więc drużyna musi odpowiednio zarządzać emocjami i przebiegiem dwumeczu.'
+    : '';
+  const rivalryText = rivalryLabel ? ` ${rivalryLabel} dodatkowo podnosi temperaturę spotkania.` : '';
+  const routeText = context.stage === 'QUALIFYING'
+    ? 'Europejska droga dopiero się zaczyna, ale jeden słabszy wieczór może ją szybko zakończyć. Jak utrzymać pełną koncentrację?'
+    : context.stage === 'GROUP_ENTRY'
+      ? `Stawką tej rundy jest awans do fazy grupowej ${context.competitionLabel}. Czy zawodnicy potrafią potraktować tę szansę jako motywację, a nie ciężar?`
+      : context.stage === 'GROUP_STAGE'
+        ? `Faza grupowa ${context.competitionLabel} wymaga regularności. Jak połączyć ambicję awansu z cierpliwością w walce o każdy punkt?`
+        : context.stage === 'FINAL' || context.stage === 'SUPER_CUP'
+          ? 'Stawką jest europejskie trofeum. Co będzie najważniejsze w zarządzaniu emocjami zespołu?'
+          : `Przed wami ${context.stageLabel} ${context.competitionLabel}. Jak zachować spokój, gdy każdy błąd może kosztować awans?`;
+
+  return [
+    {
+      id: `${fixture.id}_EURO_STAKES`,
+      category: 'EUROPE_CONTEXT',
+      journalist: 'Europejski Futbol',
+      text: getEuropeanStageQuestion(context, opponent),
+      answers: answers(
+        `${fixture.id}_EURO_STAKES`,
+        'Musimy zachować spokój i konsekwentnie realizować plan na ten mecz.',
+        'Jesteśmy gotowi na ten poziom rywalizacji i chcemy to udowodnić na boisku.',
+        'Takie mecze powinny napędzać zawodników. To szansa, na którą ciężko pracowaliśmy.',
+        'Nie możemy pozwolić, aby stawka odebrała nam koncentrację i dyscyplinę.',
+      ),
+    },
+    {
+      id: `${fixture.id}_EURO_ROUTE`,
+      category: 'EUROPE_CONTEXT',
+      journalist: 'Sport Europa',
+      text: `${routeText}${returnLegText}${rivalryText}`,
+      answers: answers(
+        `${fixture.id}_EURO_ROUTE`,
+        'Najważniejszy jest najbliższy fragment meczu. Nie możemy wybiegać myślami dalej.',
+        'Zespół zna stawkę i wierzy, że potrafi zrobić kolejny krok.',
+        'Chcemy wykorzystać ten moment. W europejskich pucharach trzeba grać odważnie.',
+        'Potrzebujemy cierpliwości. Na tym poziomie jeden niepotrzebny błąd może zmienić wszystko.',
+      ),
+    },
+    {
+      id: `${fixture.id}_EURO_OPPONENT`,
+      category: 'OPPONENT',
+      journalist: 'Futbol nad Wisłą',
+      text: `${opponentStatement} W europejskich pucharach takie słowa mogą dodatkowo wpłynąć na atmosferę. Jak pan odpowie?`,
+      answers: [
+        ...answers(
+          `${fixture.id}_EURO_OPPONENT`,
+          'Szanujemy rywala, ale odpowiedzi chcemy udzielić swoją grą.',
+          'Może mówić, co chce. Jesteśmy przygotowani na to spotkanie.',
+          'Takie słowa tylko zwiększają naszą determinację. Chcemy pokazać swoją jakość.',
+          'Nie możemy dać się wciągnąć w grę słów. W Europie koncentracja jest kluczowa.',
+        ),
+        {
+          id: `${fixture.id}_EURO_OPPONENT_PROVOCATIVE`,
+          tone: 'PROVOCATIVE',
+          text: 'Jeżeli rywal sądzi, że europejska scena nas onieśmieli, szybko przekona się, że jest inaczej.',
+          moraleDelta: -1,
+          focusDelta: -2,
+          pressureDelta: 4,
+        },
+      ],
+    },
+  ];
+};
+
 export const PreMatchPressConferenceService = {
   calculateMatchEffect(
     fixtureId: string,
@@ -415,6 +585,7 @@ export const PreMatchPressConferenceService = {
     );
     const opponentStatement = getOpponentStatement(fixture.id, opponent);
     const isDomesticCup = fixture.leagueId === CompetitionType.POLISH_CUP || fixture.leagueId === CompetitionType.SUPER_CUP;
+    const europeanCupContext = getEuropeanCupContext(fixture);
 
     if (isDomesticCup) {
       const competitionLabel = fixture.leagueId === CompetitionType.SUPER_CUP ? 'Superpuchar Polski' : 'Puchar Polski';
@@ -423,6 +594,15 @@ export const PreMatchPressConferenceService = {
         headline: `${competitionLabel}: ${userClub.name} przed meczem z ${opponent.name}`,
         opponentStatement,
         questions: getCupQuestions(fixture, userClub, opponent, opponentStatement, rivalry.label ?? null),
+      };
+    }
+
+    if (europeanCupContext) {
+      return {
+        fixtureId: fixture.id,
+        headline: `${europeanCupContext.competitionLabel}: ${europeanCupContext.stageLabel} przed meczem z ${opponent.name}`,
+        opponentStatement,
+        questions: getEuropeanCupQuestions(fixture, opponent, opponentStatement, rivalry.label ?? null, europeanCupContext),
       };
     }
 
