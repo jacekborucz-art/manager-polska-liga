@@ -155,6 +155,7 @@ export interface ImportedSquadPlayer {
   isOnTransferList?: boolean;
   isUntouchable?: boolean;
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  nationalStats?: { matchesPlayed?: number; goals?: number };
   attributes: {
     strength: number; stamina: number; pace: number; defending: number;
     passing: number; attacking: number; finishing: number; technique: number;
@@ -10023,6 +10024,7 @@ const finalResult: SimulationOutput = {
           secondaryPositionRating: cleanSecondaryPositionRating,
           overallRating: overall, attributes: attrs,
           stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+          nationalStats: { goals: p.nationalStats?.goals ?? 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: p.nationalStats?.matchesPlayed ?? 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
           health: { status: HealthStatus.HEALTHY },
           condition: 80, suspensionMatches: 0,
           cupSuspensionMatches: 0, euroSuspensionMatches: 0, nationalSuspensionMatches: 0,

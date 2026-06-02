@@ -754,6 +754,10 @@ export const EditorView: React.FC = () => {
           isUntouchable: !!p.isUntouchable,
           squadRole: p.squadRole ?? null,
           attributes: { ...p.attributes },
+          nationalStats: {
+            matchesPlayed: p.nationalStats?.matchesPlayed ?? 0,
+            goals: p.nationalStats?.goals ?? 0,
+          },
         })),
       };
     });

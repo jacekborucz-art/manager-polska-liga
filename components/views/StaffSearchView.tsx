@@ -34,6 +34,50 @@ const ROLE_COLORS: Record<StaffRole, string> = {
   [StaffRole.CLUB_DOCTOR]:      'text-cyan-400',
 };
 
+const ATTR_HEADER_LABELS: Record<string, string> = {
+  offensiveTactics: 'T-OFFEN',
+  defensiveTactics: 'T-DEFEN',
+  motivation: 'MOTYW',
+  communication: 'KOMUN',
+  opponentAnalysis: 'A-PRZEC',
+  individualWork: 'P-INDYW',
+  dressingRoom: 'Z-SZAT',
+  gkTechnique: 'T-BRAM',
+  positioning: 'UST-BRAM',
+  footwork: 'G-NOG',
+  reflexes: 'REF-REAK',
+  mentalTraining: 'T-MENT',
+  defenseComm: 'K-OBR',
+  penaltyAnalysis: 'A-KARN',
+  periodization: 'PER-TREN',
+  fitnessTests: 'T-WYDOL',
+  nutrition: 'DIET',
+  injuryPrevention: 'P-KONT',
+  recovery: 'REGEN',
+  strengthTraining: 'T-SIŁ',
+  speedTraining: 'T-SZYB',
+  videoAnalysis: 'A-VIDEO',
+  tactics: 'TAKT',
+  statsAnalysis: 'A-STAT',
+  scouting: 'SKAUT',
+  reporting: 'RAPORT',
+  software: 'OPR-ANAL',
+  setPieces: 'A-STFRAG',
+  sportsMassage: 'M-SPORT',
+  rehabilitation: 'REHAB',
+  muscleInjuries: 'L-KMIĘŚ',
+  taping: 'TAPING',
+  manualTherapy: 'T-MAN',
+  matchRecovery: 'R-MECZ',
+  diagnostics: 'DIAGN',
+  sportsSurgery: 'CH-SPORT',
+  pharmacology: 'FARMA',
+  cardiology: 'KARD-SPORT',
+  injuryTreatment: 'L-KONT',
+  medicalTests: 'B-MED',
+  healthManagement: 'Z-ZDROW',
+};
+
 const REGION_LABELS: Record<string, string> = {
   POLAND: 'Polska', ENGLAND: 'Anglia', GERMANY: 'Niemcy', FRANCE: 'Francja',
   SPAIN: 'Hiszpania', ITALY: 'Włochy', BALKANS: 'Bałkany', CZ_SK: 'Czechy/Słowacja',
@@ -377,10 +421,20 @@ export const StaffSearchView: React.FC = () => {
   }, [ALL_ATTRS]);
 
   return (
-    <div className="min-h-screen bg-[#070B14] text-white flex flex-col">
+    <div className="relative isolate min-h-screen bg-[#070B14] text-white flex flex-col overflow-hidden">
+
+      {/* GLASS BACKGROUND */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(126,34,206,0.18),transparent_32%),radial-gradient(circle_at_82%_72%,rgba(14,116,144,0.12),transparent_38%),linear-gradient(135deg,rgba(15,23,42,0.72),rgba(2,6,23,0.96))]" />
+        <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        <div className="absolute -left-20 top-28 -rotate-12 select-none whitespace-nowrap text-[96px] font-black italic uppercase tracking-tighter text-white/[0.025]">Manager Futbolu</div>
+        <div className="absolute right-[-110px] top-[42%] -rotate-12 select-none whitespace-nowrap text-[112px] font-black italic uppercase tracking-tighter text-white/[0.025]">Manager Futbolu</div>
+        <div className="absolute left-[24%] bottom-[-28px] -rotate-12 select-none whitespace-nowrap text-[104px] font-black italic uppercase tracking-tighter text-white/[0.02]">Manager Futbolu</div>
+        <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-white/[0.055] via-white/[0.018] to-transparent" />
+      </div>
 
       {/* HEADER */}
-      <header className="flex items-center justify-between px-8 py-5 border-b border-white/10 shrink-0">
+      <header className="relative z-10 flex items-center justify-between px-8 py-5 border-b border-white/10 bg-slate-950/35 backdrop-blur-xl shrink-0">
         <div className="flex items-center gap-4">
           <div className="text-3xl">🧑‍💼</div>
           <div>
@@ -399,7 +453,7 @@ export const StaffSearchView: React.FC = () => {
       </header>
 
       {/* FILTRY */}
-      <div className="px-8 py-4 border-b border-white/10 flex flex-wrap gap-4 items-end shrink-0">
+      <div className="relative z-10 px-8 py-4 border-b border-white/10 bg-slate-900/25 backdrop-blur-xl flex flex-wrap gap-4 items-end shrink-0">
         <div className="flex flex-col gap-1">
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Szukaj</span>
           <input
@@ -462,7 +516,7 @@ export const StaffSearchView: React.FC = () => {
       </div>
 
       {/* TABELA MATRIX */}
-      <div className="flex-1 overflow-auto px-8 py-4">
+      <div className="relative z-10 flex-1 overflow-auto px-8 py-4 bg-slate-950/20 backdrop-blur-sm">
         <table className="border-collapse table-auto">
           <thead>
             <tr>
@@ -485,16 +539,16 @@ export const StaffSearchView: React.FC = () => {
               {ALL_ATTRS.map((a, i) => {
                 const isFirstOfGroup = i === 0 || ALL_ATTRS[i - 1].role !== a.role;
                 return (
-                  <th key={a.key} className={`py-1 px-0 w-8 align-bottom ${isFirstOfGroup ? 'border-l border-white/10' : ''}`}>
-                    <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '90px' }} className={`text-[8px] font-black uppercase tracking-wide whitespace-nowrap flex items-center ${ROLE_COLORS[a.role]}`}>
-                      {a.label}
+                  <th key={a.key} title={a.label} className={`py-1 px-0 w-8 align-bottom cursor-help ${isFirstOfGroup ? 'border-l border-white/10' : ''}`}>
+                    <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '90px' }} className={`text-[10px] uppercase tracking-wide whitespace-nowrap flex items-center ${ROLE_COLORS[a.role]}`}>
+                      {ATTR_HEADER_LABELS[a.key] ?? a.label}
                     </div>
                   </th>
                 );
               })}
-              <th className="py-1 px-0 w-8 align-bottom border-l border-white/10">
-                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '90px' }} className="text-[8px] font-black uppercase tracking-wide whitespace-nowrap flex items-center text-amber-400">
-                  Doświadczenie
+              <th title="Doświadczenie" className="py-1 px-0 w-8 align-bottom border-l border-white/10 cursor-help">
+                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '90px' }} className="mx-auto text-[10px] uppercase tracking-wide whitespace-nowrap flex items-center text-amber-400">
+                  Dośw.
                 </div>
               </th>
             </tr>
@@ -533,7 +587,11 @@ export const StaffSearchView: React.FC = () => {
                   const val = staff.attributes[a.key];
                   const isFirstOfGroup = i === 0 || ALL_ATTRS[i - 1].role !== a.role;
                   return (
-                    <td key={a.key} className={`py-1 px-0 w-8 text-center ${isFirstOfGroup ? 'border-l border-white/10' : ''}`}>
+                    <td
+                      key={a.key}
+                      title={`${a.label}: ${val ?? 'brak danych'}`}
+                      className={`py-1 px-0 w-8 text-center cursor-help ${isFirstOfGroup ? 'border-l border-white/10' : ''}`}
+                    >
                       {val !== undefined ? (
                         <span className="text-[11px] font-black tabular-nums text-slate-200">{val}</span>
                       ) : (
@@ -542,7 +600,10 @@ export const StaffSearchView: React.FC = () => {
                     </td>
                   );
                 })}
-                <td className="py-1 px-0 w-8 text-center border-l border-white/10">
+                <td
+                  title={`Doświadczenie: ${staff.attributes['experience'] ?? 'brak danych'}`}
+                  className="py-1 px-0 w-8 text-center border-l border-white/10 cursor-help"
+                >
                   {staff.attributes['experience'] !== undefined ? (
                     <span className="text-[11px] font-black tabular-nums text-amber-400">{staff.attributes['experience']}</span>
                   ) : (
