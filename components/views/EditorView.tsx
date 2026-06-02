@@ -151,12 +151,12 @@ const splitLegacyManagement = (management: unknown): { management?: ClubManageme
   if (!management || typeof management !== 'object' || Array.isArray(management)) return {};
   const { sportingDirector, ...managementWithoutSportingDirector } = management as Record<string, unknown>;
   return {
-    management: managementWithoutSportingDirector as ClubManagement,
+    management: managementWithoutSportingDirector as unknown as ClubManagement,
     sportingDirector,
   };
 };
 
-const getZarzadPerson = (club: Club | undefined, key: string): any => {
+const getZarzadPerson = (club: Club | null | undefined, key: string): any => {
   if (!club) return null;
   if (key === 'sportingDirector') return club.sportingDirector;
   return (club.management as Record<string, any> | undefined)?.[key];

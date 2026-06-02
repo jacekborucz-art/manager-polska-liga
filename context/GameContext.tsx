@@ -5759,7 +5759,7 @@ Asystent`,
           const awayClub = clubs.find(c => c.id === pair.awayTeamId);
           const homeCoach = homeClub?.coachId ? (coaches[homeClub.coachId] ?? null) : null;
           const awayCoach = awayClub?.coachId ? (coaches[awayClub.coachId] ?? null) : null;
-          const pairSeed = sessionSeed + pair.id.length + idx * 137;
+          const pairSeed = matchSimulationSeed + pair.id.length + idx * 137;
           newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, homeCoach, awayCoach, pairSeed));
         });
         if (newReports.length > 0) {
