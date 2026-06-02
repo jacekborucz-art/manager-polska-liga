@@ -321,9 +321,8 @@ export const TrainingView: React.FC = () => {
                         return (
                           <tr key={player.id} onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, player }); }} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-context-menu ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
                             <td className={`py-2 px-3 sticky left-0 z-10 whitespace-nowrap ${stickyBg}`}>
-                              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border mr-2 ${posColor}`}>{player.position}</span>
-                              <button onClick={() => viewPlayerDetails(player.id)} className="font-black text-white hover:text-emerald-400 transition-colors cursor-pointer active:translate-y-[2px]">{player.firstName[0]}. {player.lastName}</button>
-                              <span className="ml-2 text-slate-500 font-bold">OVR {player.overallRating}</span>
+                              <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border mr-2 text-[11px] font-black ${posColor}`}>{player.overallRating}</span>
+                              <button onClick={() => viewPlayerDetails(player.id)} className="text-[11px] font-black uppercase text-white hover:text-emerald-400 transition-colors cursor-pointer active:translate-y-[2px]">{player.firstName[0]}. {player.lastName}</button>
                             </td>
                             {COLS.map(k => {
                               const val = (player.attributes[k as keyof typeof player.attributes] as number) ?? 0;
