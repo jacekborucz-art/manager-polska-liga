@@ -3,7 +3,7 @@ import { GoalAttributionService } from './GoalAttributionService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { TACTICS_DB } from '../resources/tactics_db';
 
-const MAX_SUBS = 9;
+const MAX_SUBS = 11;
 const BASE_DRAIN = 0.12;
 const GOAL_LAMBDA_BASE = 0.018;
 
@@ -98,36 +98,9 @@ function buildLineupWithTactic(
 
   while (starters.length < 11) starters.push(null);
 
-  const remaining = healthy.filter(p => !usedIds.has(p.id));
-  const bench: string[] = [];
-  const benchedIds = new Set<string>();
-
-  const addBench = (pos: PlayerPosition, count: number) => {
-    let added = 0;
-    for (const p of remaining) {
-      if (added >= count) break;
-      if (!benchedIds.has(p.id) && p.position === pos) {
-        bench.push(p.id);
-        benchedIds.add(p.id);
-        added++;
-      }
-    }
-  };
-
-  addBench(PlayerPosition.GK, 1);
-  addBench(PlayerPosition.DEF, 4);
-  addBench(PlayerPosition.MID, 2);
-  addBench(PlayerPosition.FWD, 2);
-
-  for (const p of remaining) {
-    if (bench.length >= MAX_SUBS) break;
-    if (!benchedIds.has(p.id)) {
-      bench.push(p.id);
-      benchedIds.add(p.id);
-    }
-  }
-
-  return { starters, bench };
+  // Na sparing jedzie cała dostępna kadra. Limit dotyczy wykonanych zmian,
+  // a nie liczby zawodników, spośród których trener może wybierać.
+  return { starters, bench: healthy.filter(p => !usedIds.has(p.id)).map(p => p.id) };
 }
 
 function getCoachBonus(coach: Coach | null): { atk: number; def: number } {
@@ -174,6 +147,8 @@ export const AiFriendlyMatchSimulator = {
 
     let hSubsUsed = 0;
     let aSubsUsed = 0;
+    const hPlannedSubsTarget = 9 + Math.floor(rng(12001) * 3);
+    const aPlannedSubsTarget = 9 + Math.floor(rng(12002) * 3);
     const substitutedInIds = new Set<string>();
     const substitutedOutIds = new Set<string>();
     const expelledIds = new Set<string>();
@@ -211,36 +186,47 @@ export const AiFriendlyMatchSimulator = {
         return undefined;
       }
       if (position === PlayerPosition.DEF) {
-        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID);
+        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID)
+          ?? lineup.bench.find(id => available(id) && getPos(id) !== PlayerPosition.GK);
       }
       if (position === PlayerPosition.MID) {
-        return lineup.bench.find(id => available(id) && (getPos(id) === PlayerPosition.DEF || getPos(id) === PlayerPosition.FWD));
+        return lineup.bench.find(id => available(id) && (getPos(id) === PlayerPosition.DEF || getPos(id) === PlayerPosition.FWD))
+          ?? lineup.bench.find(id => available(id) && getPos(id) !== PlayerPosition.GK);
       }
       if (position === PlayerPosition.FWD) {
-        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID);
+        return lineup.bench.find(id => available(id) && getPos(id) === PlayerPosition.MID)
+          ?? lineup.bench.find(id => available(id) && getPos(id) !== PlayerPosition.GK);
       }
-      return undefined;
+      return lineup.bench.find(id => available(id) && getPos(id) !== PlayerPosition.GK);
     };
 
-    const performSub = (lineup: SimLineup, players: Player[], fMap: Record<string, number>, side: 'H' | 'A', minute: number) => {
-      if ((side === 'H' ? hSubsUsed : aSubsUsed) >= MAX_SUBS) return;
+    const performSub = (
+      lineup: SimLineup,
+      players: Player[],
+      fMap: Record<string, number>,
+      side: 'H' | 'A',
+      minute: number,
+      forceRotation = false,
+      goalkeeperOnly = false
+    ): boolean => {
+      if ((side === 'H' ? hSubsUsed : aSubsUsed) >= MAX_SUBS) return false;
 
       let worstIdx = -1;
       let worstFatigue = Infinity;
       lineup.starters.forEach((id, idx) => {
         if (!id || substitutedInIds.has(id)) return;
         const p = players.find(x => x.id === id);
-        if (!p || p.position === PlayerPosition.GK) return;
+        if (!p || (p.position === PlayerPosition.GK) !== goalkeeperOnly) return;
         const f = fMap[id] ?? 100;
         if (f < worstFatigue) { worstFatigue = f; worstIdx = idx; }
       });
 
-      if (worstIdx === -1 || worstFatigue >= 88) return;
+      if (worstIdx === -1 || (!forceRotation && worstFatigue >= 88)) return false;
 
       const outId = lineup.starters[worstIdx] as string;
       const pos = players.find(p => p.id === outId)?.position ?? PlayerPosition.MID;
       const inId = findReplacement(lineup, players, pos);
-      if (!inId) return;
+      if (!inId) return false;
 
       lineup.starters[worstIdx] = inId;
       substitutedInIds.add(inId);
@@ -252,6 +238,29 @@ export const AiFriendlyMatchSimulator = {
         teamId: sideTeamId(side), minute,
       });
       if (side === 'H') hSubsUsed++; else aSubsUsed++;
+      return true;
+    };
+
+    const performPlannedSub = (
+      lineup: SimLineup,
+      players: Player[],
+      fMap: Record<string, number>,
+      side: 'H' | 'A',
+      minute: number,
+      forceRotation = false,
+      goalkeeperOnly = false
+    ): boolean => {
+      const target = side === 'H' ? hPlannedSubsTarget : aPlannedSubsTarget;
+      const used = side === 'H' ? hSubsUsed : aSubsUsed;
+      if (goalkeeperOnly) {
+        const hasBackupGoalkeeper = lineup.bench.some(id =>
+          !substitutedOutIds.has(id) &&
+          !lineup.starters.includes(id) &&
+          players.find(p => p.id === id)?.position === PlayerPosition.GK
+        );
+        if (!hasBackupGoalkeeper) return false;
+      }
+      return used < target && performSub(lineup, players, fMap, side, minute, forceRotation, goalkeeperOnly);
     };
 
     const getTeamPower = (players: Player[], lineup: SimLineup, fMap: Record<string, number>) => {
@@ -271,26 +280,30 @@ export const AiFriendlyMatchSimulator = {
     // ── GLOWNA PETLA MINUTOWA ──────────────────────────────────────────────────
     for (let minute = 1; minute <= totalMinutes; minute++) {
 
-      const hActiveXI = hLineup.starters.filter(Boolean) as string[];
-      const aActiveXI = aLineup.starters.filter(Boolean) as string[];
-
       // ZMIANY
       if (minute === 45) {
-        for (let s = 0; s < 3; s++) {
-          if (rng(minute + 45 + s * 7) < 0.75) performSub(hLineup, homePlayers, homeFatigue, 'H', minute);
-          if (rng(minute + 55 + s * 7) < 0.75) performSub(aLineup, awayPlayers, awayFatigue, 'A', minute);
+        performPlannedSub(hLineup, homePlayers, homeFatigue, 'H', minute, true, true);
+        performPlannedSub(aLineup, awayPlayers, awayFatigue, 'A', minute, true, true);
+        while (hSubsUsed < hPlannedSubsTarget) {
+          if (!performPlannedSub(hLineup, homePlayers, homeFatigue, 'H', minute, true)) break;
+        }
+        while (aSubsUsed < aPlannedSubsTarget) {
+          if (!performPlannedSub(aLineup, awayPlayers, awayFatigue, 'A', minute, true)) break;
         }
       }
       if (minute === 60 || minute === 70 || minute === 80) {
-        if (rng(minute + 11) < 0.80) performSub(hLineup, homePlayers, homeFatigue, 'H', minute);
-        if (rng(minute + 22) < 0.80) performSub(hLineup, homePlayers, homeFatigue, 'H', minute);
-        if (rng(minute + 33) < 0.80) performSub(aLineup, awayPlayers, awayFatigue, 'A', minute);
-        if (rng(minute + 44) < 0.80) performSub(aLineup, awayPlayers, awayFatigue, 'A', minute);
+        if (rng(minute + 11) < 0.80) performPlannedSub(hLineup, homePlayers, homeFatigue, 'H', minute, true);
+        if (rng(minute + 22) < 0.80) performPlannedSub(hLineup, homePlayers, homeFatigue, 'H', minute, true);
+        if (rng(minute + 33) < 0.80) performPlannedSub(aLineup, awayPlayers, awayFatigue, 'A', minute, true);
+        if (rng(minute + 44) < 0.80) performPlannedSub(aLineup, awayPlayers, awayFatigue, 'A', minute, true);
       }
       if (minute >= 88) {
-        performSub(hLineup, homePlayers, homeFatigue, 'H', minute);
-        performSub(aLineup, awayPlayers, awayFatigue, 'A', minute);
+        performPlannedSub(hLineup, homePlayers, homeFatigue, 'H', minute);
+        performPlannedSub(aLineup, awayPlayers, awayFatigue, 'A', minute);
       }
+
+      const hActiveXI = hLineup.starters.filter(Boolean) as string[];
+      const aActiveXI = aLineup.starters.filter(Boolean) as string[];
 
       // SILA ZESPOLOW
       const hPwr = getTeamPower(homePlayers, hLineup, homeFatigue);
@@ -427,27 +440,34 @@ export const AiFriendlyMatchSimulator = {
         injuries.push({ playerId: id, playerName: pName(id), teamId: sideTeamId(side), severity, minute, days, type });
         fMap[id] = Math.max(0, (fMap[id] || 100) - (severity === InjurySeverity.SEVERE ? 55 : 20));
 
-        if (severity === InjurySeverity.SEVERE) {
-          const usedCount = side === 'H' ? hSubsUsed : aSubsUsed;
-          if (usedCount < MAX_SUBS) {
-            const pIdxInLineup = lineup.starters.indexOf(id);
-            if (pIdxInLineup !== -1) {
-              const pos = sPlayers.find(p => p.id === id)?.position ?? PlayerPosition.MID;
-              const candidate = findReplacement(lineup, sPlayers, pos);
-              if (candidate) {
-                lineup.starters[pIdxInLineup] = candidate;
-                substitutedInIds.add(candidate);
-                substitutedOutIds.add(id);
-                allPlayedIds.add(candidate);
-                substitutions.push({ playerOutId: id, playerOutName: pName(id), playerInId: candidate, playerInName: pName(candidate), teamId: sideTeamId(side), minute });
-                if (side === 'H') hSubsUsed++; else aSubsUsed++;
-              } else {
-                lineup.starters[pIdxInLineup] = null;
-              }
+        // Lekki uraz pozostawia miejsce na decyzję trenera. Jeśli zawodnik gra dalej
+        // albo ławka jest już pusta, zwiększamy jego drenaż kondycji.
+        const shouldLeavePitch = severity === InjurySeverity.SEVERE || rng(20000 + minute * 37 + pIdx * 101) < 0.55;
+        if (!shouldLeavePitch) {
+          lightInjuredOnPitch.set(id, 0.30);
+          return;
+        }
+
+        // Zmiana po urazie jest awaryjna: może przekroczyć limit planowej rotacji,
+        // o ile na ławce pozostał jeszcze dostępny zawodnik.
+        const pIdxInLineup = lineup.starters.indexOf(id);
+        if (pIdxInLineup !== -1) {
+          const pos = sPlayers.find(p => p.id === id)?.position ?? PlayerPosition.MID;
+          const candidate = findReplacement(lineup, sPlayers, pos);
+          if (candidate) {
+            lineup.starters[pIdxInLineup] = candidate;
+            substitutedInIds.add(candidate);
+            substitutedOutIds.add(id);
+            allPlayedIds.add(candidate);
+            substitutions.push({ playerOutId: id, playerOutName: pName(id), playerInId: candidate, playerInName: pName(candidate), teamId: sideTeamId(side), minute });
+            if (side === 'H') hSubsUsed++; else aSubsUsed++;
+          } else {
+            if (severity === InjurySeverity.SEVERE) {
+              lineup.starters[pIdxInLineup] = null;
+            } else {
+              lightInjuredOnPitch.set(id, 0.30);
             }
           }
-        } else {
-          lightInjuredOnPitch.set(id, 0.30);
         }
       });
 
