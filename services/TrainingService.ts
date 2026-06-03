@@ -1,10 +1,11 @@
 import { Player, PlayerAttributes, MatchSummary, HealthStatus, TrainingIntensity, PlayerPosition, InjurySeverity, Fixture, MatchStatus } from '../types';
-import { TRAINING_CYCLES } from '../data/training_definitions_pl';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerDevelopmentService } from './PlayerDevelopmentService';
+import { getTrainableAttributesForPosition } from './TrainingAttributeRules';
+import { findTeamTrainingCycle, getDefaultTeamTrainingCycle } from './TrainingProgramRules';
 
 const DAILY_TRAINING_INJURY_CHANCE = 0.005;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
@@ -132,9 +133,9 @@ export const TrainingService = {
     const updatedMap = { ...playersMap };
     if (!updatedMap[userTeamId]) return updatedMap;
 
-    const selectedCycle = TRAINING_CYCLES.find(c => c.id === activeTrainingId);
+    const selectedCycle = findTeamTrainingCycle(activeTrainingId);
     const hasGeneralPlan = !!selectedCycle;
-    const cycle = selectedCycle || TRAINING_CYCLES[0];
+    const cycle = selectedCycle || getDefaultTeamTrainingCycle();
 
     updatedMap[userTeamId] = updatedMap[userTeamId].map(player => {
       const intensityMultiplier =
@@ -162,13 +163,8 @@ export const TrainingService = {
       const playedThisRound = !!performance;
       const rating = performance?.rating || 0;
 
-      const attrKeys: (keyof PlayerAttributes)[] = [
-        'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
-        'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
-        'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
-      ];
-
       const isGkPlayer = player.position === PlayerPosition.GK;
+      const attrKeys = getTrainableAttributesForPosition(player.position);
       const GK_COACHED_ATTRS: (keyof PlayerAttributes)[] = ['goalkeeping', 'positioning', 'mentality', 'passing'];
       const playerTalent = player.attributes.talent;
       const gkCoachMultiplier = (() => {
@@ -370,7 +366,7 @@ export const TrainingService = {
     leagueTier: number,
     clubCountry?: string
   ): Player[] => {
-    const cycle = TRAINING_CYCLES.find(c => c.id === trainingId) || TRAINING_CYCLES[0];
+    const cycle = findTeamTrainingCycle(trainingId) || getDefaultTeamTrainingCycle();
     const coachScore = coachTrainingAttr / 100;
 
     return reserves.map(player => {
@@ -415,11 +411,7 @@ export const TrainingService = {
       const attributes = { ...updated.attributes };
       const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
-      const attrKeys: (keyof PlayerAttributes)[] = [
-        'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
-        'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
-        'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
-      ];
+      const attrKeys = getTrainableAttributesForPosition(player.position);
 
       const effectiveFocus = (player.trainingFocus || playerFocuses[player.id]) ?? null;
 

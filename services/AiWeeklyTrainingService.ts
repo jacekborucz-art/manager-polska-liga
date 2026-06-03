@@ -1,9 +1,10 @@
-import { Club, Coach, Fixture, HealthStatus, MatchStatus, Player, PlayerAttributes, TrainingIntensity, StaffMember } from '../types';
+import { Club, Coach, Fixture, HealthStatus, MatchStatus, Player, TrainingIntensity, StaffMember } from '../types';
 import { TrainingAssistantService } from './TrainingAssistantService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { PlayerDevelopmentService } from './PlayerDevelopmentService';
-import { TRAINING_CYCLES } from '../data/training_definitions_pl';
+import { getTrainableAttributesForPosition } from './TrainingAttributeRules';
+import { findTeamTrainingCycle, getDefaultTeamTrainingCycle } from './TrainingProgramRules';
 
 const DAY_MS = 86_400_000;
 
@@ -160,7 +161,7 @@ export const AiWeeklyTrainingService = {
       const aiStaffQ = Math.max(1, Math.min(20, baseStaffQuality + noise));
 
       const plan = TrainingAssistantService.buildPlan(squad, rng);
-      const cycle = TRAINING_CYCLES.find(trainingCycle => trainingCycle.id === plan.cycleId) || TRAINING_CYCLES[0];
+      const cycle = findTeamTrainingCycle(plan.cycleId) || getDefaultTeamTrainingCycle();
       const intensity = plan.cycleId === 'T_RECOVERY_YOGA'
         ? TrainingIntensity.LIGHT
         : pickIntensity(coach, squad, daysUntilNextMatch, rng);
@@ -201,12 +202,6 @@ export const AiWeeklyTrainingService = {
       const leagueTier = parseInt(club.leagueId?.split('_')[2] || '1') || 1;
       const aiGrowthMult = getAiCoachGrowthMult(aiStaffQ);
       const aiRegressMult = getAiCoachRegressMult(aiStaffQ);
-      const aiAttrKeys: (keyof PlayerAttributes)[] = [
-        'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
-        'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
-        'freeKicks', 'penalties', 'corners', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate'
-      ];
-
       updatedPlayers[club.id] = squad.map(player => {
         if (player.health.status === HealthStatus.INJURED) return player;
         const playerLoad = fatigueLoad + Math.round((rng() - 0.5) * 2);
@@ -222,7 +217,7 @@ export const AiWeeklyTrainingService = {
         );
         const playerTalent = player.attributes.talent;
 
-        aiAttrKeys.forEach(key => {
+        getTrainableAttributesForPosition(player.position).forEach(key => {
           let pGrowth = 0.004;
           if (cycle.primaryAttributes.includes(key)) pGrowth += 0.035;
           if (cycle.secondaryAttributes.includes(key)) pGrowth += 0.018;
