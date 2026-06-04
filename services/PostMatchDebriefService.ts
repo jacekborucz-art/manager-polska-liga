@@ -236,9 +236,19 @@ export const getDebriefContext = (
 
   const lastOppGoalMin = oppGoals.length > 0 ? Math.max(...oppGoals.map(g => g.minute)) : 0;
   const lastUserGoalMin = userGoals.length > 0 ? Math.max(...userGoals.map(g => g.minute)) : 0;
+  const userHalfTimeScore = userGoals.filter(g => g.minute <= 45).length;
+  const oppHalfTimeScore = oppGoals.filter(g => g.minute <= 45).length;
+  const halfTimeDiff = userHalfTimeScore - oppHalfTimeScore;
+  const secondHalfDiff = diff - halfTimeDiff;
+  const wasLosingAtHalfTime = halfTimeDiff < 0;
+  const wasLeadingAtHalfTime = halfTimeDiff > 0;
+  const wasLevelAtHalfTime = halfTimeDiff === 0;
+  const lostSecondHalf = secondHalfDiff < 0;
 
   if (isLoss) {
     if (userHasRedCard) return 'RED_CARD_LOSS';
+    if (wasLeadingAtHalfTime) return 'LOSS_AFTER_LEADING';
+    if ((wasLevelAtHalfTime || wasLeadingAtHalfTime) && lostSecondHalf) return 'LOSS_BAD_SECOND_HALF';
     if (Math.abs(diff) >= 3) return 'BIG_LOSS';
     if (isWeakOpp) return 'LOSS_WEAK';
     if (isStrongOpp) return 'LOSS_STRONG';
@@ -248,6 +258,8 @@ export const getDebriefContext = (
   }
 
   if (isWin) {
+    if (wasLosingAtHalfTime) return 'WIN_FROM_BEHIND';
+    if (wasLeadingAtHalfTime && lostSecondHalf) return 'WIN_BAD_SECOND_HALF';
     if (isStrongOpp) return 'WIN_STRONG';
     if (diff >= 3) return 'BIG_WIN';
     if (isWeakOpp) return 'WIN_WEAK';
@@ -255,6 +267,8 @@ export const getDebriefContext = (
   }
 
   // Remis
+  if (wasLosingAtHalfTime) return 'DRAW_FROM_BEHIND';
+  if (wasLeadingAtHalfTime) return 'DRAW_AFTER_LEADING';
   if (lastOppGoalMin >= 80 && oppGoals.length > 0) return 'DRAW_LAST_MIN_AGAINST';
   if (lastUserGoalMin >= 80 && userGoals.length > 0) return 'DRAW_LAST_MIN_FOR';
   if (isStrongOpp) return 'DRAW_STRONG';
@@ -263,12 +277,25 @@ export const getDebriefContext = (
 
 // ─── POBRANIE KOMENTARZY DLA KONTEKSTU ───────────────────────────────────────
 const getDebriefOutcome = (context: DebriefContext): DebriefOutcome => {
-  if (['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'PENALTY_WIN'].includes(context)) return 'WIN';
-  if (['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context)) return 'LOSS';
+  if (['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'WIN_FROM_BEHIND', 'WIN_BAD_SECOND_HALF', 'PENALTY_WIN'].includes(context)) return 'WIN';
+  if (['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LOSS_AFTER_LEADING', 'LOSS_BAD_SECOND_HALF', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context)) return 'LOSS';
   return 'DRAW';
 };
 
+const HALF_SWING_CONTEXTS: DebriefContext[] = [
+  'WIN_FROM_BEHIND',
+  'WIN_BAD_SECOND_HALF',
+  'DRAW_FROM_BEHIND',
+  'DRAW_AFTER_LEADING',
+  'LOSS_AFTER_LEADING',
+  'LOSS_BAD_SECOND_HALF',
+];
+
 export const getCommentsForContext = (context: DebriefContext, matchStage: DebriefMatchStage = 'LEAGUE'): DebriefComment[] => {
+  if (HALF_SWING_CONTEXTS.includes(context)) {
+    return POST_MATCH_DEBRIEF[context];
+  }
+
   if (matchStage === 'CUP' && context === 'BIG_WIN') {
     return CUP_BIG_WIN_DEBRIEF;
   }
@@ -290,8 +317,8 @@ export const getCommentsForContext = (context: DebriefContext, matchStage: Debri
 
 // ─── KONTEKSTOWA TRAFNOŚĆ KOMENTARZA ────────────────────────────────────────
 const getContextFit = (type: DebriefCommentType, context: DebriefContext): number => {
-  const isWinCtx = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'PENALTY_WIN'].includes(context);
-  const isLossCtx = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
+  const isWinCtx = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'WIN_FROM_BEHIND', 'WIN_BAD_SECOND_HALF', 'PENALTY_WIN'].includes(context);
+  const isLossCtx = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LOSS_AFTER_LEADING', 'LOSS_BAD_SECOND_HALF', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
 
   if (type === 'PRAISE') {
     if (isWinCtx) return 0.9;
@@ -320,8 +347,8 @@ const getContextFit = (type: DebriefCommentType, context: DebriefContext): numbe
 
 // ─── ZAKRESY BAZOWYCH DELT MORALE PER TYP ────────────────────────────────────
 const getBaseRange = (type: DebriefCommentType, context: DebriefContext): { min: number; max: number } => {
-  const isWinCtx = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'PENALTY_WIN'].includes(context);
-  const isLossCtx = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
+  const isWinCtx = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'WIN_FROM_BEHIND', 'WIN_BAD_SECOND_HALF', 'PENALTY_WIN'].includes(context);
+  const isLossCtx = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LOSS_AFTER_LEADING', 'LOSS_BAD_SECOND_HALF', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
 
   if (type === 'PRAISE') {
     if (isWinCtx) return { min: 4, max: 10 };
@@ -390,15 +417,21 @@ export const getDebriefContextLabel = (context: DebriefContext, matchStage: Debr
     WIN_STRONG: 'WYGRANA Z FAWORYTEM',
     WIN_WEAK: 'WYGRANA ZE SŁABSZYM',
     WIN_NORMAL: 'ZWYCIĘSTWO',
+    WIN_FROM_BEHIND: 'WYGRANA PO ODROBIENIU STRAT',
+    WIN_BAD_SECOND_HALF: 'WYGRANA MIMO SŁABEJ DRUGIEJ POŁOWY',
     PENALTY_WIN: 'WYGRANA PO KARNYCH',
     PENALTY_LOSS: 'PORAŻKA PO KARNYCH',
     DRAW_LAST_MIN_AGAINST: 'REMIS W OSTATNIEJ CHWILI',
     DRAW_LAST_MIN_FOR: 'URATOWANY REMIS',
+    DRAW_FROM_BEHIND: 'REMIS PO ODROBIENIU STRAT',
+    DRAW_AFTER_LEADING: 'REMIS PO UTRACIE PROWADZENIA',
     DRAW_STRONG: 'REMIS Z FAWORYTEM',
     DRAW: 'REMIS',
     BIG_LOSS: 'WYSOKA PRZEGRANA',
     LOSS_STRONG: 'PRZEGRANA Z FAWORYTEM',
     LOSS_WEAK: 'PRZEGRANA ZE SŁABSZYM',
+    LOSS_AFTER_LEADING: 'PORAŻKA PO UTRACIE PROWADZENIA',
+    LOSS_BAD_SECOND_HALF: 'PORAŻKA PO SŁABEJ DRUGIEJ POŁOWIE',
     LAST_MIN_LOSS: 'PRZEGRANA W KOŃCÓWCE',
     NARROW_LOSS: 'MINIMALNA PRZEGRANA',
     RED_CARD_LOSS: 'PRZEGRANA Z 10 ZAWODNIKAMI',
@@ -412,8 +445,8 @@ export const getDebriefContextLabel = (context: DebriefContext, matchStage: Debr
 
 // ─── KOLOR AKCENTU PER KONTEKST ──────────────────────────────────────────────
 export const getDebriefAccentColor = (context: DebriefContext): { via: string; badge: string; glow: string } => {
-  const isWin = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'PENALTY_WIN'].includes(context);
-  const isLoss = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
+  const isWin = ['BIG_WIN', 'WIN_STRONG', 'WIN_WEAK', 'WIN_NORMAL', 'WIN_FROM_BEHIND', 'WIN_BAD_SECOND_HALF', 'PENALTY_WIN'].includes(context);
+  const isLoss = ['BIG_LOSS', 'LOSS_STRONG', 'LOSS_WEAK', 'LOSS_AFTER_LEADING', 'LOSS_BAD_SECOND_HALF', 'LAST_MIN_LOSS', 'NARROW_LOSS', 'RED_CARD_LOSS', 'PENALTY_LOSS'].includes(context);
   const isBigLoss = context === 'BIG_LOSS' || context === 'LOSS_WEAK' || context === 'RED_CARD_LOSS';
   const isBigWin = context === 'BIG_WIN' || context === 'WIN_STRONG';
 
@@ -422,6 +455,6 @@ export const getDebriefAccentColor = (context: DebriefContext): { via: string; b
   if (isBigLoss) return { via: 'via-red-500', badge: 'text-red-400 border-red-500/40 bg-red-500/10', glow: 'rgba(239,68,68,0.10)' };
   if (isLoss) return { via: 'via-orange-500', badge: 'text-orange-400 border-orange-500/40 bg-orange-500/10', glow: 'rgba(249,115,22,0.08)' };
   if (context === 'DRAW_LAST_MIN_AGAINST') return { via: 'via-orange-400', badge: 'text-orange-400 border-orange-400/40 bg-orange-400/10', glow: 'rgba(251,146,60,0.08)' };
-  if (context === 'DRAW_LAST_MIN_FOR' || context === 'DRAW_STRONG') return { via: 'via-blue-400', badge: 'text-blue-400 border-blue-400/40 bg-blue-400/10', glow: 'rgba(96,165,250,0.08)' };
+  if (context === 'DRAW_LAST_MIN_FOR' || context === 'DRAW_STRONG' || context === 'DRAW_FROM_BEHIND') return { via: 'via-blue-400', badge: 'text-blue-400 border-blue-400/40 bg-blue-400/10', glow: 'rgba(96,165,250,0.08)' };
   return { via: 'via-slate-400', badge: 'text-slate-300 border-slate-500/40 bg-slate-500/10', glow: 'rgba(148,163,184,0.05)' };
 };

@@ -3,15 +3,21 @@ export type DebriefContext =
   | 'WIN_STRONG'
   | 'WIN_WEAK'
   | 'WIN_NORMAL'
+  | 'WIN_FROM_BEHIND'
+  | 'WIN_BAD_SECOND_HALF'
   | 'PENALTY_WIN'
   | 'PENALTY_LOSS'
   | 'DRAW_LAST_MIN_AGAINST'
   | 'DRAW_LAST_MIN_FOR'
+  | 'DRAW_FROM_BEHIND'
+  | 'DRAW_AFTER_LEADING'
   | 'DRAW_STRONG'
   | 'DRAW'
   | 'BIG_LOSS'
   | 'LOSS_STRONG'
   | 'LOSS_WEAK'
+  | 'LOSS_AFTER_LEADING'
+  | 'LOSS_BAD_SECOND_HALF'
   | 'LAST_MIN_LOSS'
   | 'NARROW_LOSS'
   | 'RED_CARD_LOSS';
@@ -78,6 +84,32 @@ export const POST_MATCH_DEBRIEF: Record<DebriefContext, DebriefComment[]> = {
     { id: 'wn_10', text: 'Wygraliśmy i to je dziś najważniejsze!', hiddenType: 'SILENCE' },
   ],
 
+  WIN_FROM_BEHIND: [
+    { id: 'wfb_1', text: 'Po pierwszej połowie byliśmy pod ścianą, a mimo tego wróciliście i wygraliście. To jest charakter.', hiddenType: 'PRAISE' },
+    { id: 'wfb_2', text: 'Tak reaguje drużyna, która wierzy do końca. Druga połowa była odpowiedzią, jakiej oczekiwałem.', hiddenType: 'PRAISE' },
+    { id: 'wfb_3', text: 'Odwróciliśmy mecz po przerwie. Cieszy wynik, ale musimy pamiętać, dlaczego w ogóle musieliśmy gonić.', hiddenType: 'CALM' },
+    { id: 'wfb_4', text: 'Wygrana po odrabianiu strat jest cenna. Teraz spokojnie analizujemy pierwszą połowę i bierzemy lekcję.', hiddenType: 'CALM' },
+    { id: 'wfb_5', text: 'Właśnie tak trzeba odpowiedzieć po słabej pierwszej połowie! Taka energia ma być od pierwszej minuty!', hiddenType: 'AGGRESSIVE' },
+    { id: 'wfb_6', text: 'Pokazaliście złość i dumę po przerwie. Następnym razem nie czekamy z tym do drugiej połowy!', hiddenType: 'AGGRESSIVE' },
+    { id: 'wfb_7', text: 'Wygraliśmy, ale pierwsza połowa była ostrzeżeniem. Nie możemy budzić się dopiero po stracie bramek.', hiddenType: 'CRITICIZE' },
+    { id: 'wfb_8', text: 'Doceniam comeback, ale taki początek meczu nie może się powtórzyć.', hiddenType: 'CRITICIZE' },
+    { id: 'wfb_9', text: 'Odwróciliśmy wynik. To mówi dużo.', hiddenType: 'SILENCE' },
+    { id: 'wfb_10', text: 'Wygrana po trudnej pierwszej połowie. Zapamiętajcie to.', hiddenType: 'SILENCE' },
+  ],
+
+  WIN_BAD_SECOND_HALF: [
+    { id: 'wbsh_1', text: 'Pierwsza połowa dała nam przewagę i dobrze, że ją dowieźliśmy. Za ten fragment należy się uznanie.', hiddenType: 'PRAISE' },
+    { id: 'wbsh_2', text: 'Wygraliśmy dzięki temu, co zrobiliście przed przerwą. To była solidna robota.', hiddenType: 'PRAISE' },
+    { id: 'wbsh_3', text: 'Trzy punkty są nasze, ale po przerwie straciliśmy kontrolę. Musimy umieć zamykać takie mecze spokojniej.', hiddenType: 'CALM' },
+    { id: 'wbsh_4', text: 'Dobry wynik, nierówne dziewięćdziesiąt minut. Pierwszą połowę bierzemy jako wzór, drugą analizujemy.', hiddenType: 'CALM' },
+    { id: 'wbsh_5', text: 'Nie możemy po prowadzeniu nagle odpuścić! Wynik nas uratował, ale standard ma być wyższy!', hiddenType: 'AGGRESSIVE' },
+    { id: 'wbsh_6', text: 'Pierwsza połowa była nasza, druga była ostrzeżeniem. Chcę pełnej intensywności do końca!', hiddenType: 'AGGRESSIVE' },
+    { id: 'wbsh_7', text: 'Wygraliśmy, ale druga połowa była za słaba. Takie oddawanie inicjatywy może nas kiedyś kosztować punkty.', hiddenType: 'CRITICIZE' },
+    { id: 'wbsh_8', text: 'Prowadzenie nie jest zaproszeniem do cofnięcia się. Po przerwie było za dużo nerwów.', hiddenType: 'CRITICIZE' },
+    { id: 'wbsh_9', text: 'Wynik dobry, druga połowa do poprawy.', hiddenType: 'SILENCE' },
+    { id: 'wbsh_10', text: 'Wygraliśmy, ale każdy wie, co stało się po przerwie.', hiddenType: 'SILENCE' },
+  ],
+
   PENALTY_WIN: [
     { id: 'pw_1', text: 'Wytrzymaliście presję do samego końca. Szacunek Panowie!', hiddenType: 'PRAISE' },
     { id: 'pw_2', text: 'To był test nerwów i zdaliście go znakomicie. Jestem z was dumny.', hiddenType: 'PRAISE' },
@@ -128,6 +160,32 @@ export const POST_MATCH_DEBRIEF: Record<DebriefContext, DebriefComment[]> = {
     { id: 'dlmf_8', text: 'Zastanawiam się dlaczego tak późno zaczęliśmy grać?', hiddenType: 'CRITICIZE' },
     { id: 'dlmf_9', text: 'Walczyliście i to jest najważniejsze.', hiddenType: 'SILENCE' },
     { id: 'dlmf_10', text: 'Bez komentarza.', hiddenType: 'SILENCE' },
+  ],
+
+  DRAW_FROM_BEHIND: [
+    { id: 'dfb_1', text: 'Przegrywaliśmy do przerwy, a jednak wróciliście do meczu. Ten punkt ma w sobie charakter.', hiddenType: 'PRAISE' },
+    { id: 'dfb_2', text: 'Druga połowa była dużo lepsza. Nie wygraliśmy, ale pokazaliście reakcję.', hiddenType: 'PRAISE' },
+    { id: 'dfb_3', text: 'Uratowany remis po słabej pierwszej połowie daje nam punkt i materiał do pracy.', hiddenType: 'CALM' },
+    { id: 'dfb_4', text: 'Dobrze, że podnieśliśmy się po przerwie. Teraz trzeba zrozumieć, czemu początek był tak trudny.', hiddenType: 'CALM' },
+    { id: 'dfb_5', text: 'Taką drugą połowę chcę widzieć od początku! Nie możemy potrzebować zimnego prysznica!', hiddenType: 'AGGRESSIVE' },
+    { id: 'dfb_6', text: 'Wyrwaliśmy remis, ale następnym razem idziemy po pełny zwrot i trzy punkty!', hiddenType: 'AGGRESSIVE' },
+    { id: 'dfb_7', text: 'Remis nas trochę ratuje, ale pierwsza połowa była zbyt słaba. Nie możemy tak wchodzić w mecze.', hiddenType: 'CRITICIZE' },
+    { id: 'dfb_8', text: 'Doceniam reakcję, ale przez pierwsze czterdzieści pięć minut sami zrobiliśmy sobie problem.', hiddenType: 'CRITICIZE' },
+    { id: 'dfb_9', text: 'Odrobiliśmy stratę. Tylko tyle i aż tyle.', hiddenType: 'SILENCE' },
+    { id: 'dfb_10', text: 'Remis po gonieniu wyniku. Każdy wie, co to znaczy.', hiddenType: 'SILENCE' },
+  ],
+
+  DRAW_AFTER_LEADING: [
+    { id: 'dal_1', text: 'Pierwsza połowa była dobra, ale nie dowieźliśmy tego do końca. Szkoda, bo było za co was chwalić.', hiddenType: 'PRAISE' },
+    { id: 'dal_2', text: 'Były bardzo dobre fragmenty, szczególnie przed przerwą. Musimy nauczyć się zamieniać je na pełne trzy punkty.', hiddenType: 'PRAISE' },
+    { id: 'dal_3', text: 'Prowadziliśmy do przerwy i kończymy z remisem. Spokojnie, ale konkretnie: trzeba lepiej kontrolować drugą połowę.', hiddenType: 'CALM' },
+    { id: 'dal_4', text: 'Jeden punkt zostaje, ale ten mecz był do wygrania. Analizujemy zarządzanie prowadzeniem.', hiddenType: 'CALM' },
+    { id: 'dal_5', text: 'Nie po to budujemy prowadzenie, żeby po przerwie je oddać! To musi boleć!', hiddenType: 'AGGRESSIVE' },
+    { id: 'dal_6', text: 'Pierwsza połowa pokazała, że potrafimy. Druga pokazała, że nie wolno nam ani na chwilę zgasnąć!', hiddenType: 'AGGRESSIVE' },
+    { id: 'dal_7', text: 'Ten remis jest naszą winą. Mieliśmy przewagę i za łatwo oddaliśmy kontrolę.', hiddenType: 'CRITICIZE' },
+    { id: 'dal_8', text: 'Dobra pierwsza połowa nie wystarczy, jeśli po przerwie przestajemy grać.', hiddenType: 'CRITICIZE' },
+    { id: 'dal_9', text: 'Prowadzenie zamienione w remis. Bez komentarza.', hiddenType: 'SILENCE' },
+    { id: 'dal_10', text: 'Każdy wie, które czterdzieści pięć minut było problemem.', hiddenType: 'SILENCE' },
   ],
 
   DRAW_STRONG: [
@@ -193,6 +251,32 @@ export const POST_MATCH_DEBRIEF: Record<DebriefContext, DebriefComment[]> = {
     { id: 'lw_8', text: 'Nie wyszło. Ale wiem, że ten zespół potrafi dużo więcej!!!', hiddenType: 'PRAISE' },
     { id: 'lw_9', text: 'Brak słów. ', hiddenType: 'SILENCE' },
     { id: 'lw_10', text: 'Nie mam nic do powiedzenia.', hiddenType: 'SILENCE' },
+  ],
+
+  LOSS_AFTER_LEADING: [
+    { id: 'lal_1', text: 'Pierwsza połowa dawała nam wszystko, żeby wygrać. To, co stało się po przerwie, nie może przykryć dobrych fragmentów.', hiddenType: 'PRAISE' },
+    { id: 'lal_2', text: 'Widziałem jakość przed przerwą, ale mecz trwa dziewięćdziesiąt minut. Musimy umieć ją utrzymać.', hiddenType: 'PRAISE' },
+    { id: 'lal_3', text: 'Prowadziliśmy do przerwy i przegraliśmy cały mecz. To wymaga spokojnej, bardzo dokładnej analizy.', hiddenType: 'CALM' },
+    { id: 'lal_4', text: 'Nie będziemy krzyczeć dla samego krzyku. Ten mecz pokazuje, że zarządzanie prowadzeniem jest naszym problemem.', hiddenType: 'CALM' },
+    { id: 'lal_5', text: 'Nie akceptuję tego! Wygrywaliśmy i oddaliśmy cały mecz po przerwie!', hiddenType: 'AGGRESSIVE' },
+    { id: 'lal_6', text: 'Prowadzenie ma nas wzmocnić, nie uśpić! Druga połowa była za miękka!', hiddenType: 'AGGRESSIVE' },
+    { id: 'lal_7', text: 'To jest najgorszy rodzaj porażki. Mieliśmy mecz w rękach i sami go wypuściliśmy.', hiddenType: 'CRITICIZE' },
+    { id: 'lal_8', text: 'Dobra pierwsza połowa nie ma znaczenia, jeśli po przerwie przestajemy bronić wyniku i grać w piłkę.', hiddenType: 'CRITICIZE' },
+    { id: 'lal_9', text: 'Wygrywaliśmy. Przegraliśmy. Każdy zna wagę tych słów.', hiddenType: 'SILENCE' },
+    { id: 'lal_10', text: 'Nie trzeba wielu słów po takim odwróceniu meczu.', hiddenType: 'SILENCE' },
+  ],
+
+  LOSS_BAD_SECOND_HALF: [
+    { id: 'lbsh_1', text: 'Do przerwy byliśmy w meczu. Za ten fragment można was docenić, ale potem wszystko nam uciekło.', hiddenType: 'PRAISE' },
+    { id: 'lbsh_2', text: 'Pierwsza połowa pokazała, że potrafimy rywalizować. Problemem była reakcja po przerwie.', hiddenType: 'PRAISE' },
+    { id: 'lbsh_3', text: 'Przegraliśmy po słabej drugiej połowie. Spokojnie rozłożymy to na czynniki i znajdziemy przyczynę.', hiddenType: 'CALM' },
+    { id: 'lbsh_4', text: 'Wynik boli, bo do przerwy było za co się zaczepić. Po przerwie zabrakło organizacji.', hiddenType: 'CALM' },
+    { id: 'lbsh_5', text: 'Nie możemy wychodzić z szatni i grać gorzej niż przed przerwą! To jest kwestia koncentracji!', hiddenType: 'AGGRESSIVE' },
+    { id: 'lbsh_6', text: 'Druga połowa zniszczyła cały wysiłek z początku meczu. Tak nie buduje się wyników!', hiddenType: 'AGGRESSIVE' },
+    { id: 'lbsh_7', text: 'Po przerwie byliśmy zbyt pasywni. Przestaliśmy wygrywać pojedynki i zapłaciliśmy za to.', hiddenType: 'CRITICIZE' },
+    { id: 'lbsh_8', text: 'To nie była porażka z jednej akcji. To była słaba druga połowa i musimy to nazwać wprost.', hiddenType: 'CRITICIZE' },
+    { id: 'lbsh_9', text: 'Pierwsza połowa była w porządku. Druga nie.', hiddenType: 'SILENCE' },
+    { id: 'lbsh_10', text: 'Po przerwie straciliśmy ten mecz.', hiddenType: 'SILENCE' },
   ],
 
   LAST_MIN_LOSS: [
