@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType, WCState } from '../../types';
+import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType, WCState, Club, NationalTeam } from '../../types';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { ChampionshipHistoryService } from '../../data/championship_history';
 import { RefereeService } from '../../services/RefereeService';
 import { computeGroupStandings } from '../../services/WorldCupService';
 import historiaBg from '../../Graphic/themes/historia.png';
 import { PolishCupVenueService } from '../../services/PolishCupVenueService';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
 
 const WC_ROUND_LABEL: Record<string, string> = {
   R32: '1/16 Finału',
@@ -16,6 +17,27 @@ const WC_ROUND_LABEL: Record<string, string> = {
   SF: 'Półfinał',
   THIRD: 'O 3. miejsce',
   FINAL: 'Finał',
+};
+
+const getTeamLogoUrl = (team?: Club | NationalTeam) => {
+  if (!team) return null;
+  return getClubLogo(team.id) ?? (team.logoFile ? new URL(`../../Graphic/logo/${team.logoFile}`, import.meta.url).href : null);
+};
+
+const TeamMark: React.FC<{ team?: Club | NationalTeam; className?: string }> = ({ team, className = 'w-9 h-9' }) => {
+  const logo = getTeamLogoUrl(team);
+
+  if (logo) {
+    return <img src={logo} alt="" className={`${className} object-contain shrink-0 drop-shadow-lg`} />;
+  }
+
+  const colors = team?.colorsHex ?? ['#64748b', '#1e293b'];
+  return (
+    <div className={`${className} rounded-xl border border-white/10 flex flex-col overflow-hidden shrink-0 shadow-lg`}>
+      <div className="flex-1" style={{ backgroundColor: colors[0] ?? '#64748b' }} />
+      <div className="flex-1" style={{ backgroundColor: colors[1] ?? colors[0] ?? '#1e293b' }} />
+    </div>
+  );
 };
 
 function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
@@ -518,6 +540,23 @@ export const MatchHistoryView: React.FC = () => {
   }, [history, selectedLeague, selectedSeason, nationalTeams]);
 
   const getClub = (id: string) => clubs.find(c => c.id === id) || nationalTeams.find(t => t.id === id);
+  const filterButtonClass = (isActive: boolean) => `group relative w-full h-14 rounded-xl overflow-hidden border text-center transition-all duration-300 hover:-translate-y-0.5 active:translate-y-[2px] before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-500 hover:before:translate-x-full ${
+    isActive
+      ? 'bg-slate-900 border-white/20 shadow-2xl scale-[1.02] text-white'
+      : 'bg-slate-900/40 border-white/5 text-slate-400 hover:border-white/10 hover:bg-slate-900/60 hover:text-slate-200 hover:shadow-[0_10px_24px_rgba(59,130,246,0.22)]'
+  }`;
+  const filterItems = [
+    { id: 'ALL', label: 'WSZYSTKO', code: 'ALL', accent: '#3b82f6' },
+    { id: 'L_PL_1', label: 'EKSTRAKLASA', code: 'EKS', accent: '#facc15' },
+    { id: 'L_PL_2', label: '1. LIGA', code: '1L', accent: '#38bdf8' },
+    { id: 'L_PL_3', label: '2. LIGA', code: '2L', accent: '#fb923c' },
+    { id: 'POLISH_CUP', label: 'PUCHAR POLSKI', code: 'PP', accent: '#ef4444' },
+    { id: 'CL', label: 'LIGA MISTRZÓW', code: 'CL', accent: '#60a5fa' },
+    { id: 'EL', label: 'PUCHAR LIGI EUROPY', code: 'EL', accent: '#f97316' },
+    { id: 'CONF', label: 'PUCHAR LIGI KONFERENCJI', code: 'LK', accent: '#22c55e' },
+    { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', code: 'NT', accent: '#14b8a6' },
+    { id: 'FRIENDLY', label: 'MECZE TOWARZYSKIE', code: 'FR', accent: '#a78bfa' }
+  ];
 
   return (
     <>
@@ -537,7 +576,7 @@ export const MatchHistoryView: React.FC = () => {
         </div>
         <button
           onClick={() => navigateTo(ViewState.DASHBOARD)}
-          className="px-8 py-3 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all active:translate-y-[2px]"
+          className="relative overflow-hidden px-8 py-3 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-xs font-black uppercase tracking-widest text-center hover:bg-white/10 hover:border-white/30 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(59,130,246,0.22)] transition-all active:translate-y-[2px] before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-500 hover:before:translate-x-full"
           style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
         >
           &larr; Wyjdź
@@ -546,53 +585,45 @@ export const MatchHistoryView: React.FC = () => {
 
       <div className="relative flex-1 flex gap-6 min-h-0">
         {/* SIDEBAR FILTERS */}
-        <div className="w-64 flex flex-col gap-3 shrink-0 bg-slate-900/40 rounded-[35px] border border-white/5 p-6">
+        <div className="w-64 flex flex-col gap-1.5 shrink-0 bg-slate-900/40 rounded-[35px] border border-white/5 p-3">
             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 px-2">Kategorie</span>
             <button
               onClick={() => { setViewMode('champions'); setSelectedLeague('ALL'); }}
-              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
-                viewMode === 'champions'
-                  ? 'border-t border-x border-b border-t-yellow-400/60 border-x-yellow-500/30 border-b-black/60 bg-yellow-600 text-white'
-                  : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
-              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              className={filterButtonClass(viewMode === 'champions')}
             >
-              <span className="text-lg opacity-60">👑</span>
-              ZWYCIĘZCY
+              <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">WIN</div>
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-400" />
+              <div className={`absolute inset-0 transition-opacity pointer-events-none ${viewMode === 'champions' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`} style={{ background: 'linear-gradient(90deg, #facc15, transparent)' }} />
+              <div className="relative z-10 flex h-full items-center justify-center px-5">
+                <span className="font-black italic uppercase tracking-tighter text-xs">ZWYCIĘZCY</span>
+              </div>
             </button>
             <button
               onClick={() => { setViewMode('worldCup'); setSelectedLeague('WORLD_CUP'); }}
-              className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
-                viewMode === 'worldCup'
-                  ? 'border-t border-x border-b border-t-amber-400/60 border-x-amber-500/30 border-b-black/60 bg-amber-600 text-white'
-                  : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
-              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              className={filterButtonClass(viewMode === 'worldCup')}
             >
-              <span className="text-lg opacity-60">🏆</span>
-              MISTRZOSTWA ŚWIATA
+              <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">MS</div>
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400" />
+              <div className={`absolute inset-0 transition-opacity pointer-events-none ${viewMode === 'worldCup' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`} style={{ background: 'linear-gradient(90deg, #f59e0b, transparent)' }} />
+              <div className="relative z-10 flex h-full items-center justify-center px-5">
+                <span className="font-black italic uppercase tracking-tighter text-xs">MISTRZOSTWA ŚWIATA</span>
+              </div>
             </button>
-            {viewMode === 'matches' && [
-              { id: 'ALL', label: 'WSZYSTKO', icon: '🌍' },
-              { id: 'L_PL_1', label: 'EKSTRAKLASA', icon: '🏆' },
-              { id: 'L_PL_2', label: '1. LIGA', icon: '🥈' },
-              { id: 'L_PL_3', label: '2. LIGA', icon: '🥉' },
-              { id: 'POLISH_CUP', label: 'PUCHAR POLSKI', icon: '🛡️' },
-              { id: 'CL', label: 'LIGA MISTRZÓW', icon: '⭐' },
-              { id: 'EL', label: 'PUCHAR LIGI EUROPY', icon: '🟠' },
-              { id: 'CONF', label: 'PUCHAR LIGI KONFERENCJI', icon: '🟢' },
-              { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', icon: '🌐' },
-              { id: 'FRIENDLY', label: 'MECZE TOWARZYSKIE', icon: '🤝' }
-            ].map(l => (
+            {viewMode === 'matches' && filterItems.map(l => (
               <button
                 key={l.id}
                 onClick={() => { setViewMode('matches'); setSelectedLeague(l.id); }}
-                className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] ${
-                  selectedLeague === l.id && viewMode === 'matches'
-                    ? 'border-t border-x border-b border-t-blue-400/60 border-x-blue-500/30 border-b-black/60 bg-blue-600 text-white'
-                    : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'}`}
-                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                className={filterButtonClass(selectedLeague === l.id && viewMode === 'matches')}
               >
-                <span className="text-lg opacity-60">{l.icon}</span>
-                {l.label}
+                <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">{l.code}</div>
+                <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: l.accent }} />
+                <div
+                  className={`absolute inset-0 transition-opacity pointer-events-none ${selectedLeague === l.id && viewMode === 'matches' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`}
+                  style={{ background: `linear-gradient(90deg, ${l.accent}, transparent)` }}
+                />
+                <div className="relative z-10 flex h-full items-center justify-center px-5">
+                  <span className="font-black italic uppercase tracking-tighter text-xs">{l.label}</span>
+                </div>
               </button>
             ))}
 
@@ -614,7 +645,7 @@ export const MatchHistoryView: React.FC = () => {
                    <button
                      key={s}
                      onClick={() => setSelectedSeason(s)}
-                     className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all active:translate-y-[2px] ${
+                     className={`relative overflow-hidden px-6 py-2 rounded-xl text-xs font-black text-center transition-all hover:-translate-y-0.5 hover:border-white/30 hover:shadow-[0_10px_24px_rgba(59,130,246,0.22)] active:translate-y-[2px] before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-500 hover:before:translate-x-full ${
                        selectedSeason === s
                          ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-black'
                          : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500'}`}
@@ -645,9 +676,9 @@ export const MatchHistoryView: React.FC = () => {
                           ${selectedMatch?.matchId === m.matchId ? 'ring-2 ring-blue-500 bg-blue-900/20 shadow-2xl scale-[1.01]' : 'hover:scale-[1.005]'}`}
                       >
                         <div className="flex-1 flex justify-center items-center gap-8">
-                          <div className="flex items-center gap-4 w-56 justify-end">
-                             <span className="truncate uppercase italic font-black text-sm text-slate-300 group-hover:text-white transition-colors">{home?.name || 'Nieznany'}</span>
-                             <div className="w-2 h-8 rounded-full shadow-lg shrink-0" style={{ backgroundColor: home?.colorsHex[0] || '#ccc' }} />
+                          <div className="flex items-center gap-3 w-64 justify-end">
+                             <TeamMark team={home} />
+                             <span className="truncate uppercase italic font-black text-base text-slate-300 group-hover:text-white transition-colors">{home?.name || 'Nieznany'}</span>
                           </div>
                           
                           <div className="bg-black/60 px-6 py-3 rounded-2xl text-emerald-400 font-mono text-xl shadow-inner min-w-[100px] text-center border border-white/10 group-hover:border-blue-500/30 transition-all tabular-nums">
@@ -663,9 +694,9 @@ export const MatchHistoryView: React.FC = () => {
   ) : null}
 </div>
 
-                          <div className="flex items-center gap-4 w-56 justify-start">
-                             <div className="w-2 h-8 rounded-full shadow-lg shrink-0" style={{ backgroundColor: away?.colorsHex[0] || '#ccc' }} />
-                             <span className="truncate uppercase italic font-black text-sm text-slate-300 group-hover:text-white transition-colors">{away?.name || 'Nieznany'}</span>
+                          <div className="flex items-center gap-3 w-64 justify-start">
+                             <span className="truncate uppercase italic font-black text-base text-slate-300 group-hover:text-white transition-colors">{away?.name || 'Nieznany'}</span>
+                             <TeamMark team={away} />
                           </div>
                         </div>
 
@@ -1008,18 +1039,12 @@ export const MatchHistoryView: React.FC = () => {
                  </div>
 
                  {/* Drużyny + wynik */}
-                 <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                     <div className="flex-1 flex items-center justify-end gap-3">
+                       <TeamMark team={homeClub} className="w-10 h-10" />
                        {homeClub
                          ? <button onClick={e => { e.stopPropagation(); viewClubDetails(homeClub.id); }} className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight text-right hover:text-amber-300 transition-colors cursor-pointer">{homeClub.name}</button>
                          : <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight text-right">{homeClub?.name}</span>
-                       }
-                       {homeClub?.logoFile
-                         ? <img src={new URL(`../../Graphic/logo/${homeClub.logoFile}`, import.meta.url).href} alt="" className="w-10 h-10 object-contain shrink-0" />
-                         : <div className="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shrink-0">
-                             <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[0] }} />
-                             <div className="flex-1" style={{ backgroundColor: homeClub?.colorsHex[1] || homeClub?.colorsHex[0] }} />
-                           </div>
                        }
                     </div>
                     <div className="flex items-center gap-2 mx-8 min-w-[120px] justify-center">
@@ -1028,17 +1053,11 @@ export const MatchHistoryView: React.FC = () => {
                        <span className="text-2xl font-black tabular-nums text-white">{selectedMatch.awayScore}</span>
                     </div>
                     <div className="flex-1 flex items-center justify-start gap-3">
-                       {awayClub?.logoFile
-                         ? <img src={new URL(`../../Graphic/logo/${awayClub.logoFile}`, import.meta.url).href} alt="" className="w-10 h-10 object-contain shrink-0" />
-                         : <div className="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shrink-0">
-                             <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[0] }} />
-                             <div className="flex-1" style={{ backgroundColor: awayClub?.colorsHex[1] || awayClub?.colorsHex[0] }} />
-                           </div>
-                       }
                        {awayClub
                          ? <button onClick={e => { e.stopPropagation(); viewClubDetails(awayClub.id); }} className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight hover:text-amber-300 transition-colors cursor-pointer">{awayClub.name}</button>
                          : <span className="font-black italic uppercase tracking-tighter text-2xl text-white leading-tight">{awayClub?.name}</span>
                        }
+                       <TeamMark team={awayClub} className="w-10 h-10" />
                     </div>
                  </div>
 

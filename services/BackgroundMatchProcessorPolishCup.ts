@@ -29,6 +29,11 @@ interface CupMatchResult {
   referee: Referee;
 }
 
+const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
 const simulateCupMatch = (
   home: Club,
   away: Club,
@@ -100,9 +105,9 @@ const simulateCupMatch = (
 // ── MNOŻNIK CZERWONYCH KARTEK ────────────────────────────────
   const redCardMultiplier = (redCount: number): number => {
     if (redCount === 0) return 1.0;
-    if (redCount === 1) return 0.72; // drużyna w 10 nadal strzela, tylko rzadziej
-    if (redCount === 2) return 0.45;
-    return 0.25;
+    if (redCount === 1) return 0.60; // drużyna w 10 nadal strzela, tylko rzadziej
+    if (redCount === 2) return 0.34;
+    return 0.18;
   };
 
   // ── FUNKCJA: OBLICZ XG PER MINUTA ───────────────────────────
@@ -150,8 +155,8 @@ const simulateCupMatch = (
       + awayTacticBonus + awayDailyForm * 0.002;
 
     // ── Kara za czerwone kartki ─────────────────────────────────
-    const homeXGAfterRed = homeXGBase * redCardMultiplier(homeRedCount) * (1 + awayRedCount * 0.18);
-    const awayXGAfterRed = awayXGBase * redCardMultiplier(awayRedCount) * (1 + homeRedCount * 0.195);
+    const homeXGAfterRed = homeXGBase * redCardMultiplier(homeRedCount) * (1 + awayRedCount * 0.28);
+    const awayXGAfterRed = awayXGBase * redCardMultiplier(awayRedCount) * (1 + homeRedCount * 0.28);
 
     // ── Pogoda (zła pogoda wyrównuje nieco szanse — chaos terenu) ──
     const homeXGWeather = homeXGAfterRed * weatherEqualizer;
@@ -319,9 +324,9 @@ const simulateCupMatch = (
       setXi(nextXi);
       substitutions.push({
         playerOutId: outgoing.player.id,
-        playerOutName: `${outgoing.player.firstName.charAt(0)}. ${outgoing.player.lastName}`,
+        playerOutName: formatPlayerReportName(outgoing.player),
         playerInId: replacement.id,
-        playerInName: `${replacement.firstName.charAt(0)}. ${replacement.lastName}`,
+        playerInName: formatPlayerReportName(replacement),
         minute,
         teamId,
       });
@@ -560,7 +565,7 @@ export const BackgroundMatchProcessorPolishCup = {
       const allMatchPlayers = hPlayers.concat(aPlayers);
       const getPlayerName = (playerId: string): string => {
         const player = allMatchPlayers.find(candidate => candidate.id === playerId);
-        return player ? `${player.firstName.charAt(0)}. ${player.lastName}` : 'Nieznany';
+        return player ? formatPlayerReportName(player) : 'Nieznany';
       };
       const goals: MatchGoalEntry[] = result.scorers.map(s => {
         const player = allMatchPlayers.find(candidate => candidate.id === s.playerId);
@@ -737,7 +742,12 @@ export const BackgroundMatchProcessorPolishCup = {
             }
             if (card.type === MatchEventType.RED_CARD) {
               cup.redCards += 1;
-              cupSusp += 2;
+              const isSecondYellow = result.cards.some(candidate =>
+                candidate.playerId === card.playerId &&
+                candidate.minute === card.minute &&
+                candidate.type === MatchEventType.YELLOW_CARD
+              );
+              cupSusp += isSecondYellow ? 2 : 3;
             }
             return { ...p, cupStats: cup, cupSuspensionMatches: cupSusp };
           });

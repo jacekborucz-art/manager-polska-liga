@@ -73,6 +73,11 @@ const isColorDark = (hex: string): boolean => {
 const getPitchSlotTop = (isHome: boolean, slotY: number): string =>
   `${isHome ? 55 + slotY * 32 : 45 - slotY * 32}%`;
 
+const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
 type ReportSubstitution = {
   playerOutId?: string;
   playerOutName: string;
@@ -148,7 +153,7 @@ const PitchKit: React.FC<{
   isRedCarded?: boolean;
 }> = ({ player, left, top, primary, shirtSecondary, secondary, pattern, isMom, isRedCarded }) => {
   if (!player) return null;
-  const label = `${player.firstName.charAt(0)}. ${player.lastName}`;
+  const label = formatPlayerReportName(player);
   return (
     <div
       className="absolute z-20 flex flex-col items-center gap-0"
@@ -338,7 +343,12 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
   const homeEvents = buildEvents(match.homeTeamId);
   const awayEvents = buildEvents(match.awayTeamId);
 
-  const fmtName = (name: string) => name.includes(' ') ? name.charAt(0) + '. ' + name.split(' ').slice(1).join(' ') : name;
+  const fmtName = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) return parts[0] ?? name;
+    const rest = parts.slice(1).join(' ');
+    return rest ? `${parts[0].charAt(0)}. ${rest}` : parts[0];
+  };
 
   const renderTeamEvents = (events: ReturnType<typeof buildEvents>, align: 'left' | 'right') => (
     <div className={`flex flex-wrap gap-x-4 gap-y-0.5 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
@@ -442,9 +452,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
       const redCard = playerId ? match.cards.find(c => c.playerId === playerId && (c.type === 'RED' || c.type === 'SECOND_YELLOW')) : undefined;
       const injury = playerId ? injuries.find(i => i.playerId === playerId) : undefined;
       const subIn = playerId ? sortedSubs.find(s => s.playerInId === playerId) : undefined;
-      const displayName = player
-        ? `${player.firstName.charAt(0)}. ${player.lastName}`
-        : displayNameFallback;
+      const displayName = player ? formatPlayerReportName(player) : displayNameFallback;
       const isRedCarded = !!redCard;
 
       return (

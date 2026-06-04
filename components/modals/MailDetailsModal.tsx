@@ -278,20 +278,51 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     activeDirectorObjective.status === 'ACTIVE' &&
     activeDirectorObjective.id === mail.metadata.objectiveId;
 
-  const getTypeColor = (type: MailType) => {
+  const getTypeStyle = (type: MailType) => {
     switch (type) {
       case MailType.BOARD:
-        return 'text-amber-500';
+        return {
+          label: 'Zarząd klubu',
+          accent: '#f59e0b',
+          glow: 'rgba(245,158,11,0.35)',
+          headerText: 'text-amber-100',
+        };
       case MailType.FANS:
-        return 'text-rose-500';
+        return {
+          label: 'Kibice',
+          accent: '#f43f5e',
+          glow: 'rgba(244,63,94,0.35)',
+          headerText: 'text-rose-100',
+        };
       case MailType.STAFF:
-        return 'text-blue-500';
+        return {
+          label: 'Sztab',
+          accent: '#3b82f6',
+          glow: 'rgba(59,130,246,0.35)',
+          headerText: 'text-blue-100',
+        };
       case MailType.MEDIA:
-        return 'text-emerald-500';
+      case MailType.PRESS:
+        return {
+          label: 'Media',
+          accent: '#10b981',
+          glow: 'rgba(16,185,129,0.35)',
+          headerText: 'text-emerald-100',
+        };
       case MailType.SCOUT:
-        return 'text-cyan-400';
+        return {
+          label: 'Skauting',
+          accent: '#22d3ee',
+          glow: 'rgba(34,211,238,0.35)',
+          headerText: 'text-cyan-100',
+        };
       default:
-        return 'text-slate-400';
+        return {
+          label: 'Centrum klubowe',
+          accent: '#38bdf8',
+          glow: 'rgba(56,189,248,0.32)',
+          headerText: 'text-sky-100',
+        };
     }
   };
 
@@ -312,48 +343,69 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     }
   };
 
+  const typeStyle = getTypeStyle(mail.type);
+  const sentDate = mail.date.toLocaleDateString('pl-PL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const senderInitials = mail.sender
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0])
+    .join('')
+    .toUpperCase();
+
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-6 animate-fade-in">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/[0.82] p-6 animate-fade-in backdrop-blur-[2px]">
       <div
         className={`${
-          mail.type === MailType.SCOUT ? 'max-w-[1693px] w-[88vw] h-[86vh]' : isTeamOfWeek ? 'max-w-[1500px] w-[82vw] h-[90vh]' : 'max-w-2xl max-h-[90vh]'
-        } w-full overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/60 shadow-[0_50px_100px_rgba(0,0,0,0.8)] backdrop-blur-2xl flex flex-col relative`}
+          mail.type === MailType.SCOUT ? 'max-w-[1693px] w-[88vw] h-[86vh]' : isTeamOfWeek ? 'max-w-[1500px] w-[82vw] h-[90vh]' : 'max-w-4xl max-h-[92vh]'
+        } w-full overflow-hidden rounded-[30px] border bg-[#071321] shadow-[0_38px_90px_rgba(0,0,0,0.92),0_0_0_1px_rgba(255,255,255,0.04)] flex flex-col relative`}
+        style={{ borderColor: `${typeStyle.accent}55`, boxShadow: `0 38px 90px rgba(0,0,0,0.92), 0 0 46px ${typeStyle.glow}` }}
       >
-        <div className={`${isTeamOfWeek ? 'p-5' : 'p-8'} shrink-0 border-b border-white/5 bg-white/5 flex items-center justify-between`}>
-          <div className="flex items-center gap-6">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/5 bg-black/40 text-sm font-black uppercase tracking-widest text-slate-200 shadow-inner">
-              {getAvatarIcon(mail.type)}
-            </div>
-            <div>
-              <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${getTypeColor(mail.type)}`}>
-                Wiadomosc przychodzaca
-              </span>
-              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">
-                {mail.sender}
-              </h2>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{mail.role}</p>
-            </div>
+        <div className={`${isTeamOfWeek ? 'p-5' : 'px-8 py-6'} relative shrink-0 overflow-hidden border-b bg-[#063846]`} style={{ borderBottomColor: `${typeStyle.accent}66` }}>
+          <div className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: typeStyle.accent }} />
+          <div className="absolute right-8 top-6 text-[64px] font-black italic uppercase leading-none tracking-tighter text-white/[0.04] select-none">
+            {typeStyle.label}
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/8 text-lg font-light text-slate-300 shadow-lg transition-all hover:scale-110 hover:border-white/30 hover:bg-white/20 hover:text-white active:scale-95"
-          >
-            x
-          </button>
+
+          <div className="relative z-10 flex items-start justify-between gap-8">
+            <div className="flex min-w-0 items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border text-base font-black italic uppercase tracking-tighter text-white shadow-[0_16px_36px_rgba(0,0,0,0.45)]" style={{ borderColor: typeStyle.accent, backgroundColor: `${typeStyle.accent}22` }}>
+                {senderInitials || getAvatarIcon(mail.type)}
+              </div>
+
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-black italic uppercase tracking-tighter">
+                  <span className={typeStyle.headerText}>
+                    {typeStyle.label}
+                  </span>
+                  <span className="text-sky-100/80">
+                    {sentDate}
+                  </span>
+                </div>
+                <h2 className="max-w-[720px] text-[31px] font-black italic uppercase tracking-tighter leading-none text-white">{mail.subject || mail.sender}</h2>
+                <p className="mt-3 text-[13px] font-semibold leading-relaxed text-sky-100">
+                  <span className="text-white">{mail.sender}</span>
+                  {mail.role && <span className="text-sky-100/75"> / {mail.role}</span>}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-transparent text-lg font-light text-sky-100 shadow-lg transition-all hover:scale-110 hover:bg-white/10 hover:text-white active:scale-95"
+            >
+              x
+            </button>
+          </div>
         </div>
 
-        <div className={`custom-scrollbar flex-1 min-h-0 ${isTeamOfWeek ? 'overflow-hidden p-4' : 'overflow-y-auto p-10'}`}>
-          {mail.type !== MailType.SCOUT && (
-            <div className={isTeamOfWeek ? 'mb-4' : 'mb-10'}>
-              <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-slate-600">Temat:</span>
-              <h3 className="text-[10px] font-black italic uppercase tracking-tight leading-relaxed text-white">
-                {mail.subject}
-              </h3>
-              <div className="mt-4 h-1 w-12 rounded-full bg-blue-500" />
-            </div>
-          )}
-
-          <div className="prose prose-invert max-w-none">
+        <div className={`custom-scrollbar flex-1 min-h-0 bg-[#071321] ${isTeamOfWeek ? 'overflow-hidden p-4' : 'overflow-y-auto px-9 py-8'}`}>
+          <div className={`${mail.type === MailType.SCOUT || isTeamOfWeek ? 'prose prose-invert max-w-none' : ''}`}>
             {mail.type === MailType.SCOUT ? (
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
             ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
@@ -390,18 +442,18 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 );
               })()
             ) : (
-              <p className="whitespace-pre-wrap text-base font-medium leading-relaxed text-slate-300 opacity-90">
+              <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif]">
                 {mail.body}
               </p>
             )}
           </div>
         </div>
 
-        <div className={`${isTeamOfWeek ? 'p-4' : 'p-8'} shrink-0 border-t border-white/5 bg-black/20 flex items-center justify-between`}>
+        <div className={`${isTeamOfWeek ? 'p-4' : 'px-8 py-5'} shrink-0 border-t bg-[#06101c] flex items-center justify-between`} style={{ borderTopColor: `${typeStyle.accent}33` }}>
           <div className="flex flex-col">
-            <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Wyslano:</span>
-            <span className="text-[10px] font-black uppercase text-slate-400">
-              {mail.date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}
+            <span className="text-[8px] font-black italic uppercase tracking-tighter text-sky-200/50">Wysłano</span>
+            <span className="text-[11px] font-black italic uppercase tracking-tighter text-sky-100">
+              {sentDate}
             </span>
           </div>
 

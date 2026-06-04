@@ -74,6 +74,11 @@ type SimulatedSub = { min: number; outId: string; inId: string };
 type SimulatedExit = { min: number; outId: string };
 type PlayerInterval = { playerId: string; start: number; end: number };
 
+const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
 // ============================================================
 //  RNG — deterministyczny hash (sin-based jak LeagueBackgroundMatchEngine)
 // ============================================================
@@ -391,7 +396,7 @@ const attributeGoalsToPlayers = (
     const isPenalty = rng(baseOffset + i + 700) < 0.02;
 
     goals.push({
-      playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?',
+      playerName: scorer ? formatPlayerReportName(scorer) : '?',
       playerId: scorer?.id,
       minute,
       teamId,
@@ -428,7 +433,7 @@ const simulateInjuriesPerMinute = (
   const entryMins = currentXI.map(() => 0);
   const currentBench = [...lineup.bench];
   let subsUsed = 0;
-  const injuryChance = 0.00306 * refExpFactor;
+  const injuryChance = 0.002295 * refExpFactor;
   const injuries: MatchInjuryEntry[] = [];
   let updatedPlayers = [...players];
   const injuryPenaltyMap: Record<string, number> = {};
@@ -470,7 +475,7 @@ const simulateInjuriesPerMinute = (
     const severity = isSev ? InjurySeverity.SEVERE : InjurySeverity.LIGHT;
     let injuryRollOffset = offset + minute + 808;
     const { days, type } = rollInjuryBySeverity(severity, () => rng(injuryRollOffset++));
-    const playerName = `${p.firstName} ${p.lastName}`;
+    const playerName = formatPlayerReportName(p);
 
     injuries.push({ playerId: pId, playerName, minute, teamId, severity, days, type });
     injuryPenaltyMap[pId] = (isSev ? 55 : 20) + rng(offset + minute + 5000) * 15;
@@ -560,7 +565,7 @@ const simulateCardsAndInjuries = (
   intervals.forEach((interval, idx) => {
     const p = players.find(x => x.id === interval.playerId);
     if (!p) return;
-    const playerName = `${p.firstName} ${p.lastName}`;
+    const playerName = formatPlayerReportName(p);
     const minuteFactor = Math.max(0.1, Math.min(1, (interval.end - interval.start) / 90));
     const randomMinute = (base: number) => Math.max(1, Math.min(90, Math.floor(interval.start + rng(base) * Math.max(1, interval.end - interval.start))));
 
@@ -832,7 +837,7 @@ const simulateCLMatchFull = (
     const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
     if (!kicker) return;
     if (isScored) {
-      inMatchGoals.push({ playerName: `${kicker.firstName} ${kicker.lastName}`, playerId: kicker.id, minute: penMin, teamId: side === 'H' ? homeClub.id : awayClub.id, isPenalty: true });
+      inMatchGoals.push({ playerName: formatPlayerReportName(kicker), playerId: kicker.id, minute: penMin, teamId: side === 'H' ? homeClub.id : awayClub.id, isPenalty: true });
     }
     // chybiony karny — nie dodajemy do scorers
   };
@@ -866,7 +871,7 @@ const simulateCLMatchFull = (
       const isVarDisallowed = rng(baseOffset + i + 502) < 0.04;
       if (!isVarDisallowed) adjustedScore++;
       entries.push({
-        playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?',
+        playerName: scorer ? formatPlayerReportName(scorer) : '?',
         playerId: scorer?.id,
         assistId: assist?.id,
         minute,
@@ -889,12 +894,12 @@ const simulateCLMatchFull = (
   const homeSubs = homeAllSubs.map(s => {
     const out = homePlayersAll.find(p => p.id === s.outId);
     const inP = homePlayersAll.find(p => p.id === s.inId);
-    return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInId: s.inId, playerInName: inP ? `${inP.firstName} ${inP.lastName}` : '?', minute: s.min, teamId: homeClub.id };
+    return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : '?', playerInId: s.inId, playerInName: inP ? formatPlayerReportName(inP) : '?', minute: s.min, teamId: homeClub.id };
   });
   const awaySubs = awayAllSubs.map(s => {
     const out = awayPlayersAll.find(p => p.id === s.outId);
     const inP = awayPlayersAll.find(p => p.id === s.inId);
-    return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInId: s.inId, playerInName: inP ? `${inP.firstName} ${inP.lastName}` : '?', minute: s.min, teamId: awayClub.id };
+    return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : '?', playerInId: s.inId, playerInName: inP ? formatPlayerReportName(inP) : '?', minute: s.min, teamId: awayClub.id };
   });
 
   // ── Dogrywka / karne ─────────────────────────────────────────────────
@@ -939,7 +944,7 @@ const simulateCLMatchFull = (
       usedETMin.add(minute);
       const activeXI = getActiveLineupAt(minute, homeLineup.startingXI, homeAllSubs, homeTimeline.appliedExits);
       const scorer = GoalAttributionService.pickScorer(homePlayersAll, activeXI, false, () => rng(2000 + i + 500));
-      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
+      etGoals.push({ playerName: scorer ? formatPlayerReportName(scorer) : '?', playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
     }
 
     for (let i = 0; i < etAwayCount; i++) {
@@ -948,7 +953,7 @@ const simulateCLMatchFull = (
       usedETMin.add(minute);
       const activeXI = getActiveLineupAt(minute, awayLineup.startingXI, awayAllSubs, awayTimeline.appliedExits);
       const scorer = GoalAttributionService.pickScorer(awayPlayersAll, activeXI, false, () => rng(2100 + i + 500));
-      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : '?', playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
+      etGoals.push({ playerName: scorer ? formatPlayerReportName(scorer) : '?', playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
     }
   }
 
@@ -998,8 +1003,8 @@ const simulateCLMatchFull = (
     substitutions: [
       ...homeSubs,
       ...awaySubs,
-      ...homeTimeline.appliedExits.map(s => { const out = homePlayersAll.find(p => p.id === s.outId); return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInName: '', minute: s.min, teamId: homeClub.id }; }),
-      ...awayTimeline.appliedExits.map(s => { const out = awayPlayersAll.find(p => p.id === s.outId); return { playerOutId: s.outId, playerOutName: out ? `${out.firstName} ${out.lastName}` : '?', playerInName: '', minute: s.min, teamId: awayClub.id }; }),
+      ...homeTimeline.appliedExits.map(s => { const out = homePlayersAll.find(p => p.id === s.outId); return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : '?', playerInName: '', minute: s.min, teamId: homeClub.id }; }),
+      ...awayTimeline.appliedExits.map(s => { const out = awayPlayersAll.find(p => p.id === s.outId); return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : '?', playerInName: '', minute: s.min, teamId: awayClub.id }; }),
     ],
     updatedHomePlayers: homeInjuryData.updatedPlayers,
     updatedAwayPlayers: awayInjuryData.updatedPlayers,

@@ -16,6 +16,11 @@ import { AiScoutingService } from './AiScoutingService';
 import { buildMatchPressureContext } from './MatchPressureService';
 import { SeasonTransitionService } from './SeasonTransitionService';
 
+const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
 const ensureEmergencyGoalkeepers = (
   clubs: Club[],
   playersMap: Record<string, Player[]>,
@@ -263,7 +268,8 @@ if (todayFixtures.length === 0) {
 
       const clubSalt = home.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
       const matchHash = fixture.id.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
-      const seed = (matchHash ^ clubSalt) ^ (currentDate.getTime() / 1000 | 0);
+      const reloadEntropy = Math.floor(Math.random() * 0x7fffffff);
+      const seed = (matchHash ^ clubSalt) ^ (currentDate.getTime() / 1000 | 0) ^ sessionSeed ^ reloadEntropy;
       
       // --- PRZYGOTOWANIE DANYCH DLA V2 ---
       const hCoach = coaches[home.coachId || ''] || { attributes: { experience: 50, decisionMaking: 50, motivation: 50 } };
@@ -310,7 +316,7 @@ if (todayFixtures.length === 0) {
           const p = (currentPlayers[home.id].concat(currentPlayers[away.id])).find(x => x.id === s.playerId);
           return {
             playerId: s.playerId,
-            playerName: p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany',
+            playerName: p ? formatPlayerReportName(p) : 'Nieznany',
             minute: s.minute,
             teamId: p ? p.clubId : '?',
             isPenalty: s.isPenalty,
@@ -328,7 +334,7 @@ if (todayFixtures.length === 0) {
             if (!playerMatchCards[pId]) playerMatchCards[pId] = [];
             
             const p = (currentPlayers[home.id].concat(currentPlayers[away.id])).find(x => x.id === pId);
-            const playerName = p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany';
+            const playerName = p ? formatPlayerReportName(p) : 'Nieznany';
 
             if (c.type === MatchEventType.YELLOW_CARD) {
               if (playerMatchCards[pId].includes('YELLOW')) {
@@ -357,9 +363,9 @@ if (todayFixtures.length === 0) {
           const pIn  = allP.find(x => x.id === s.playerInId);
           return {
             playerOutId: s.playerOutId,
-            playerOutName: pOut ? `${pOut.firstName.charAt(0)}. ${pOut.lastName}` : 'Nieznany',
+            playerOutName: pOut ? formatPlayerReportName(pOut) : 'Nieznany',
             playerInId: s.playerInId,
-            playerInName: pIn  ? `${pIn.firstName.charAt(0)}.  ${pIn.lastName}` : 'Nieznany',
+            playerInName: pIn ? formatPlayerReportName(pIn) : 'Nieznany',
             minute: s.minute,
             teamId: s.isHome ? home.id : away.id
           };
@@ -369,7 +375,7 @@ if (todayFixtures.length === 0) {
           const p = allP.find(x => x.id === inj.playerId);
           return {
             playerId: inj.playerId,
-            playerName: p ? `${p.firstName.charAt(0)}. ${p.lastName}` : 'Nieznany',
+            playerName: p ? formatPlayerReportName(p) : 'Nieznany',
             minute: inj.minute,
             teamId: p?.clubId ?? '?',
             severity: inj.severity,

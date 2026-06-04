@@ -113,6 +113,11 @@ const getEuropeanBriefingMatchStage = (competition: CompetitionType): BriefingMa
   return 'CUP';
 };
 
+const formatPlayerReportName = (player: Player): string => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
 const checkShootoutWinner = (seq: { side: 'HOME' | 'AWAY', result: 'SCORED' | 'MISSED' }[]): 'HOME' | 'AWAY' | null => {
   const homeShots = seq.filter((_, i) => i % 2 === 0);
   const awayShots = seq.filter((_, i) => i % 2 === 1);
@@ -2319,7 +2324,7 @@ const summary: MatchSummary = {
             ? playersList.find(px => px.id === g.scorerId)
             : playersList.find(px => px.lastName === g.playerName);
           const nameToDisplay = foundPlayer
-            ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}`
+            ? formatPlayerReportName(foundPlayer)
             : g.playerName;
           return (
             <span key={`g-${i}`} className={`text-[11px] font-bold flex items-center gap-1 ${g.isMiss ? 'text-rose-500' : g.varDisallowed ? 'text-slate-500' : 'text-white'}`}>
@@ -2334,7 +2339,7 @@ const summary: MatchSummary = {
         {cards.map((c, i) => {
           const playersList = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
           const foundPlayer = playersList.find(px => px.lastName === c.playerName);
-          const cardName = foundPlayer ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}` : c.playerName;
+          const cardName = foundPlayer ? formatPlayerReportName(foundPlayer) : c.playerName;
           return (
             <span key={`c-${i}`} className="text-[11px] font-bold text-white flex items-center gap-1">
               {c.type === MatchEventType.RED_CARD ? '🟥' : '🟨'} {cardName} ({c.minute}')
@@ -2344,7 +2349,7 @@ const summary: MatchSummary = {
         {injs.map((j, i) => {
           const playersList = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
           const foundPlayer = playersList.find(px => px.lastName === j.playerName);
-          const injName = foundPlayer ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}` : j.playerName;
+          const injName = foundPlayer ? formatPlayerReportName(foundPlayer) : j.playerName;
           return (
             <span key={`j-${i}`} className="text-[11px] font-bold text-white flex items-center gap-1">
               <span className={j.type === MatchEventType.INJURY_SEVERE ? 'text-red-500' : 'text-white'}>✚</span> {injName} ({j.minute}')
@@ -2380,7 +2385,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
           if (!p) return null;
           
           const liveRating = calculateLiveRating(p, side, matchState);
-          const nameWithInitial = `${p.firstName.charAt(0)}. ${p.lastName}`;
+          const nameWithInitial = formatPlayerReportName(p);
           // Poprawiona detekcja goli: sprawdzamy zarówno nazwisko jak i format z inicjałem
           const goalsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => !g.isMiss && (g.playerName === p.lastName || g.playerName === nameWithInitial || g.scorerId === p.id)).length;
           const assistsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => g.assistantId === p.id).length;
@@ -2441,7 +2446,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div key={`sub-off-${p.id}-${sIdx}`} className={`flex items-center gap-3 py-1.5 px-3 rounded-xl bg-black/50 opacity-80 transition-all ${side === 'AWAY' ? 'flex-row-reverse text-right' : ''}`}>
                   <span className={`w-8 font-mono font-black text-[8px] text-slate-200 ${side === 'AWAY' ? 'text-right' : ''}`}>{p.position}</span>
                   <div className="flex-1 flex flex-col min-w-0">
-                     <span className="text-red-100 grayscale-0 truncate font-bold uppercase italic tracking-tight text-[10px]">{p.firstName.charAt(0)}. ${p.lastName}</span>
+                     <span className="text-red-100 grayscale-0 truncate font-bold uppercase italic tracking-tight text-[10px]">{formatPlayerReportName(p)}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] font-black text-slate-600 italic">{sub.minute} min 🔄</span>
@@ -2889,7 +2894,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     textShadow: '0 2px 0 rgba(0,0,0,0.95), 0 -1px 0 rgba(0,0,0,0.95), 1px 0 0 rgba(0,0,0,0.95), -1px 0 0 rgba(0,0,0,0.95)'
   }}
 >
-  {`${p.firstName.charAt(0)}. ${p.lastName}`}
+  {formatPlayerReportName(p)}
           </div>
         </div>
       );
@@ -2941,7 +2946,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           textShadow: '0 2px 0 rgba(0,0,0,0.95), 0 -1px 0 rgba(0,0,0,0.95), 1px 0 0 rgba(0,0,0,0.95), -1px 0 0 rgba(0,0,0,0.95)'
         }}
       >
-        {`${p.firstName.charAt(0)}. ${p.lastName}`}
+        {formatPlayerReportName(p)}
       </div>
     </div>
   );

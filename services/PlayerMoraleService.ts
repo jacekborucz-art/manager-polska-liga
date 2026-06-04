@@ -103,6 +103,11 @@ const roleLabel = (role: 'STARTER' | 'KEY_PLAYER' | null | undefined): string =>
   return 'bez określonego statusu';
 };
 
+const isAvailableForMinutesDemand = (player: Player): boolean =>
+  player.health.status === HealthStatus.HEALTHY &&
+  player.condition >= 75 &&
+  (player.fatigueDebt ?? 0) <= 55;
+
 type MinutesDemandApproach = 'PATIENT' | 'CALM' | 'ASSERTIVE' | 'BRAZEN';
 
 interface MinutesDemandMindset {
@@ -659,7 +664,7 @@ export const PlayerMoraleService = {
 
       const shouldRequestMinutes =
         hasPerceivedSportingArgument &&
-        isHealthyEnough &&
+        isAvailableForMinutesDemand(withMorale) &&
         !demandCooldown &&
         !isDemandLockedAfterContract &&
         !hasActiveDemand &&
@@ -839,6 +844,12 @@ export const PlayerMoraleService = {
       if (hasPlayed) {
         withMorale = {
           ...PlayerMoraleService.withMoraleChange(withMorale, 4, 'Dostał szansę po prośbie o minuty', currentDate),
+          minutesDemandUntil: null,
+          minutesDemandBaseline: null,
+        };
+      } else if (expired && !isAvailableForMinutesDemand(withMorale)) {
+        withMorale = {
+          ...withMorale,
           minutesDemandUntil: null,
           minutesDemandBaseline: null,
         };

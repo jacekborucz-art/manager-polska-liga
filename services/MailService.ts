@@ -63,6 +63,11 @@ const getDayDifference = (from: Date, to: Date): number =>
 const getYearMonthKey = (date: Date): string =>
   `${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+const getMailDate = (mail: MailMessage): Date | null => {
+  const mailDate = mail.date instanceof Date ? mail.date : new Date(mail.date);
+  return Number.isNaN(mailDate.getTime()) ? null : mailDate;
+};
+
 const isBeforeLeagueSeasonEnd = (date: Date): boolean => {
   const seasonEndYear = date.getMonth() >= 7 ? date.getFullYear() + 1 : date.getFullYear();
   return startOfDay(date) <= new Date(seasonEndYear, 4, 23).getTime();
@@ -836,6 +841,17 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const day = currentDate.getDate();
     const isBeforeLastLeagueMatch = isBeforeLeagueSeasonEnd(currentDate);
     const isWinterBreak = (month === 12 && day >= 18) || month === 1;
+    const boardPositionMonthKey = getYearMonthKey(currentDate);
+    const boardPositionTemplateIds = new Set([
+      'board_excellent_position',
+      'board_bad_position',
+      'board_watching_patience',
+    ]);
+    const alreadySentBoardPositionThisMonth = existingMails.some(mail => {
+      const mailDate = getMailDate(mail);
+      if (!mailDate || getYearMonthKey(mailDate) !== boardPositionMonthKey) return false;
+      return [...boardPositionTemplateIds].some(templateId => mail.id.includes(`_${templateId}_`));
+    });
     const remainingUserLeagueMatches = allFixtures
       ? allFixtures.filter(f =>
           f.status === MatchStatus.SCHEDULED &&
@@ -853,7 +869,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        const isHighRepClub = userClub.reputation >= 8;
        const isFirstHalf = played < 17;
 
-       if (rng < 0.15) {
+       if (!alreadySentBoardPositionThisMonth && rng < 0.15) {
           if (rank <= expectedRank - 3) {
              newMails.push(createMail('board_excellent_position', { 'CLUB': userClub.name }));
           } else if (rank >= expectedRank + 4) {
