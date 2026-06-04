@@ -16,7 +16,9 @@ import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   let r = 6.0;
-  const goals = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => g.playerName === player.lastName).length;
+  const goals = (side === 'HOME' ? state.homeGoals : state.awayGoals)
+    .filter((g: any) => (g.scorerId ? g.scorerId === player.id : g.playerName === player.lastName) && !g.varDisallowed && !g.isMiss)
+    .length;
   const assists = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => g.assistantId === player.id).length;
   const cards = state.playerYellowCards[player.id] || 0;
   const isRed = state.sentOffIds.includes(player.id);
@@ -2977,7 +2979,9 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
       const perfs = teamPlayers.filter(p => playedIds.has(p.id)).map(p => {
         const perf: PlayerPerformance = {
           playerId: p.id, name: p.lastName, position: p.position,
-          goals: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => g.playerName === p.lastName).length,
+          goals: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals']
+            .filter(g => (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.varDisallowed && !g.isMiss)
+            .length,
           assists: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => g.assistantId === p.id).length,
           yellowCards: matchState.playerYellowCards[p.id] || 0,
           redCards: matchState.sentOffIds.includes(p.id) ? 1 : 0,
@@ -3103,8 +3107,28 @@ const summary: MatchSummary = {
       awayScore: matchState.awayScore,
       attendance: attendance,
       kits: kitColors,
-      goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
-        .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
+      goals: summary.homeGoals.map(g => ({
+        playerId: g.scorerId,
+        playerName: g.playerName,
+        minute: g.minute,
+        teamId: ctx.homeClub.id,
+        isPenalty: g.isPenalty,
+        assistantId: g.assistantId,
+        assistantName: g.assistantName,
+        isMiss: g.isMiss,
+      })).concat(summary.awayGoals.map(g => ({
+        playerId: g.scorerId,
+        playerName: g.playerName,
+        minute: g.minute,
+        teamId: ctx.awayClub.id,
+        isPenalty: g.isPenalty,
+        assistantId: g.assistantId,
+        assistantName: g.assistantName,
+        isMiss: g.isMiss,
+      }))),
+      ratings: finalRatingsMap,
+      homeLineup: summary.homePlayers.map(player => player.playerId),
+      awayLineup: summary.awayPlayers.map(player => player.playerId),
       cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           return [...matchState.logs]

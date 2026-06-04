@@ -442,6 +442,30 @@ export interface MailMessage {
     responseDeadline: string;
   } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
+    matches?: {
+      homeName: string;
+      awayName: string;
+      homeScore: number;
+      awayScore: number;
+      homeCountry?: string;
+      awayCountry?: string;
+    }[];
+  } | {
+    type: 'WCQ_PLAYOFF_POLAND';
+    stage: 'SF' | 'FINAL';
+    pathLabel: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeScore: number;
+    awayScore: number;
+    scoreLabel: string;
+    polandWon: boolean;
+    lead: string;
+    finalOpponent?: string | null;
+    penaltyWinner?: string;
+    homePenaltyGoals?: number;
+    awayPenaltyGoals?: number;
+    wentToExtraTime?: boolean;
   } | {
     type: 'TEAM_OF_WEEK';
     leagueId: string;

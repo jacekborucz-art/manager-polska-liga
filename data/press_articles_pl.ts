@@ -14,9 +14,11 @@ export type PressVariant =
   | 'NIEPRZYCHYLNE_KRYZYS'
   | 'PRZYCHYLNE_DOBRY_START'
   | 'PRZYCHYLNE_ZWYCIESKI_START'
+  | 'PRZYCHYLNE_DOBRA_FORMA'
   | 'PRZYCHYLNE_SZATNIA'
   | 'PRZYCHYLNE_SLABY_OPTYMIZM'
-  | 'PRZYCHYLNE_SLABY_SZATNIA';
+  | 'PRZYCHYLNE_SLABY_SZATNIA'
+  | 'PRZYCHYLNE_TRUDNY_OKRES';
 
 export interface PressArticleContext {
   opponentName?: string;
@@ -104,6 +106,11 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
     body: (m, c, context) =>
       `Lepszego początku trudno było sobie wymarzyć. ${c} pod wodzą ${m} rozpoczęła nowy etap od zwycięstwa nad ${context?.opponentName ?? 'rywalem'} ${context?.venueLabel ?? 'w lidze'}, a wokół zespołu wyraźnie poprawiły się nastroje.\n\nChoć to dopiero pierwszy ważniejszy sprawdzian nowego szkoleniowca, kibice mają powody do umiarkowanego optymizmu. Drużyna wyglądała na dobrze przygotowaną, zaangażowaną i przede wszystkim pewną swoich założeń.\n\nSam trener studzi emocje, ale trudno nie zauważyć, że pierwsze tygodnie pracy w ${c} mogą budować solidny fundament pod dalszy rozwój.`,
   },
+  PRZYCHYLNE_DOBRA_FORMA: {
+    headline: (m, _c, context) => `${m} łapie rytm. Wygrana z ${context?.opponentName ?? 'rywalem'} wzmacnia wiarę kibiców`,
+    body: (m, c, context) =>
+      `${c} pod wodzą ${m} dopisała kolejne ważne zwycięstwo, pokonując ${context?.opponentName ?? 'rywala'} ${context?.venueLabel ?? 'w lidze'}. Po wielu tygodniach pracy coraz wyraźniej widać, że zespół ma własny rytm i coraz lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`,
+  },
   PRZYCHYLNE_SZATNIA: {
     headline: (m, c) => `Piłkarze po stronie ${m}. W ${c} mówi się o bardzo dobrej atmosferze`,
     body: (m, c) =>
@@ -118,5 +125,10 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
     headline: (m, c) => `Mimo słabego startu szatnia wspiera ${m}. W ${c} nie ma paniki`,
     body: (m, c) =>
       `Słabszy początek sezonu nie musi oznaczać kryzysu. Według informacji z otoczenia ${c} nowy trener ${m} nadal cieszy się dużym wsparciem ze strony zawodników.\n\nW klubie ma panować przekonanie, że obecne problemy wynikają bardziej z czasu potrzebnego na wdrożenie nowych rozwiązań niż głębszych problemów wewnątrz drużyny. Piłkarze podobno pozytywnie oceniają komunikację sztabu oraz codzienną organizację pracy.\n\nOczywiście cierpliwość w futbolu ma swoje granice, ale na dziś w ${c} nie widać oznak większej nerwowości.`,
+  },
+  PRZYCHYLNE_TRUDNY_OKRES: {
+    headline: (m, c) => `${c} bez fajerwerków, ale wokół ${m} wciąż widać spokój`,
+    body: (m, c) =>
+      `Ostatnie wyniki ${c} nie dają powodów do pełnej satysfakcji, ale w klubie nie widać atmosfery paniki. Według osób zbliżonych do drużyny ${m} nadal ma wsparcie szatni, a zawodnicy wierzą, że konsekwencja w pracy może przełożyć się na stabilniejszą formę.\n\nKibice oczekiwaliby zapewne większej regularności, zwłaszcza na tym etapie sezonu, jednak obraz gry nie jest jednoznacznie negatywny. Zespół ma fragmenty dobrej organizacji, choć wciąż brakuje mu skuteczności i spokojniejszego domykania spotkań.\n\nNajbliższe tygodnie pokażą, czy ${c} potrafi zamienić cierpliwość w punkty, ale na razie projekt nie wygląda na taki, który traci zaufanie od środka.`,
   },
 };

@@ -112,6 +112,7 @@ export const PreMatchBriefingModal = ({
     if (matchStage === 'CUP_FINAL') return 'FINAŁ PUCHARU';
     if (matchStage === 'CUP_SEMIFINAL') return 'PÓŁFINAŁ PUCHARU';
     if (matchStage === 'CUP') return 'MECZ PUCHAROWY';
+    if (matchStage === 'FRIENDLY') return 'SPARING';
     return 'MECZ O PUNKTY';
   };
 

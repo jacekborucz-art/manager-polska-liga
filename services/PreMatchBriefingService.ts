@@ -5,7 +5,7 @@ export { PREMATCH_BRIEFINGS };
 export type { BriefingSpeechType };
 
 export type BriefingScenario = 'UNDERDOG' | 'EQUAL' | 'FAVORITE';
-export type BriefingMatchStage = 'LEAGUE' | 'CUP' | 'CUP_SEMIFINAL' | 'CUP_FINAL';
+export type BriefingMatchStage = 'LEAGUE' | 'FRIENDLY' | 'CUP' | 'CUP_SEMIFINAL' | 'CUP_FINAL';
 
 export interface ScenarioBriefingOption extends BriefingSpeech {
   originalIndex: number;
@@ -44,7 +44,20 @@ const BRIEFING_SCENARIO_RULES: Record<BriefingSpeechType, BriefingScenario[]> = 
   DOMINANCE: ['EQUAL', 'FAVORITE'],
 };
 
-type CupBriefingStage = Exclude<BriefingMatchStage, 'LEAGUE'>;
+type CupBriefingStage = Exclude<BriefingMatchStage, 'LEAGUE' | 'FRIENDLY'>;
+
+const FRIENDLY_PREMATCH_BRIEFINGS: BriefingSpeech[] = [
+  { id: 'FR_PB_1', text: 'To sparing, ale nie spacer. Chcę zobaczyć odwagę, zaangażowanie i reakcję na mocniejszego rywala.', hiddenType: 'UPRISING' },
+  { id: 'FR_PB_2', text: 'Gramy odpowiedzialnie. Najważniejsze są organizacja, asekuracja i dobre nawyki bez niepotrzebnego ryzyka.', hiddenType: 'FORTRESS' },
+  { id: 'FR_PB_3', text: 'To dobry moment, żeby pokazać charakter. Nie gramy o punkty, ale gramy o zaufanie i miejsce w zespole.', hiddenType: 'WOUNDED_PRIDE' },
+  { id: 'FR_PB_4', text: 'Chcę intensywności od pierwszej minuty. Sparing ma nam dać odpowiedź, kto jest gotowy na większe obciążenia.', hiddenType: 'KAMIKAZE' },
+  { id: 'FR_PB_5', text: 'Trzymamy się planu. Testujemy założenia, podejmujemy dobre decyzje i uczymy się z każdej sytuacji.', hiddenType: 'TACTICIAN' },
+  { id: 'FR_PB_6', text: 'Zacznijmy wysoko i aktywnie. Chcę zobaczyć pressing, szybki odbiór i energię po stracie piłki.', hiddenType: 'BLITZ' },
+  { id: 'FR_PB_7', text: 'Nie forsujemy tempa bez sensu. Budujemy akcje cierpliwie, utrzymujemy rytm i dbamy o jakość podań.', hiddenType: 'PATIENCE' },
+  { id: 'FR_PB_8', text: 'Pełna koncentracja. Sparing ma być profesjonalny: bez prostych strat, bez głupich fauli, bez chaosu.', hiddenType: 'PROFESSIONALISM' },
+  { id: 'FR_PB_9', text: 'Podejdźmy do tego spokojnie. Minuty, rytm i zdrowie są dziś równie ważne jak sam wynik.', hiddenType: 'LOOSE' },
+  { id: 'FR_PB_10', text: 'Narzucamy swój styl. Chcę widzieć pewność, tempo i zawodników, którzy biorą odpowiedzialność za grę.', hiddenType: 'DOMINANCE' },
+];
 
 const CUP_PREMATCH_BRIEFINGS: Record<CupBriefingStage, BriefingSpeech[]> = {
   CUP: [
@@ -86,7 +99,11 @@ const CUP_PREMATCH_BRIEFINGS: Record<CupBriefingStage, BriefingSpeech[]> = {
 };
 
 const getBriefingPool = (matchStage: BriefingMatchStage): BriefingSpeech[] =>
-  matchStage === 'LEAGUE' ? PREMATCH_BRIEFINGS : CUP_PREMATCH_BRIEFINGS[matchStage];
+  matchStage === 'FRIENDLY'
+    ? FRIENDLY_PREMATCH_BRIEFINGS
+    : matchStage === 'LEAGUE'
+      ? PREMATCH_BRIEFINGS
+      : CUP_PREMATCH_BRIEFINGS[matchStage];
 
 export const getBriefingsForScenario = (scenario: BriefingScenario, matchStage: BriefingMatchStage = 'LEAGUE'): ScenarioBriefingOption[] =>
   getBriefingPool(matchStage)

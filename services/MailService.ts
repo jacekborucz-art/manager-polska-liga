@@ -747,6 +747,23 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       isRead: false,
       type: MailType.MEDIA,
       priority: stage === 'FINAL' ? 155 : 145,
+      metadata: {
+        type: 'WCQ_PLAYOFF_POLAND',
+        stage,
+        pathLabel: polandPath.pathLabel,
+        homeTeam: result.homeTeam,
+        awayTeam: result.awayTeam,
+        homeScore: result.homeGoals,
+        awayScore: result.awayGoals,
+        scoreLabel: scoreForPoland,
+        polandWon,
+        lead,
+        finalOpponent,
+        penaltyWinner: result.penaltyWinner,
+        homePenaltyGoals: result.homePenaltyGoals,
+        awayPenaltyGoals: result.awayPenaltyGoals,
+        wentToExtraTime: result.wentToExtraTime,
+      },
     };
   },
 
@@ -962,6 +979,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const recentLosses = recentLeagueFixtures.filter(isUserLoss).length;
             const latestWasWin = isUserWin(latestLeagueFixture);
             const hasGoodResults = latestWasWin || recentWins >= 2 || recentLosses === 0;
+            const isEarlyLeagueSeason = userLeagueFixtures.length <= 5;
             const friendlyMailId = `PRESS_FRIENDLY_START_${friendlyPressMonthKey}_${latestLeagueFixture.id}_${friendlyNewspaper}`;
             const alreadySentFriendly = existingMails.some(m => m.id === friendlyMailId);
             if (!alreadySentFriendly) {
@@ -971,7 +989,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
                 : latestLeagueFixture.homeTeamId;
               const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
               const venueLabel = latestLeagueFixture.homeTeamId === userClub.id ? 'w domu' : 'na wyjeździe';
-              const variant = MediaInterviewService.determineFriendlySeasonPressVariant(hasGoodResults, latestWasWin);
+              const variant = MediaInterviewService.determineFriendlySeasonPressVariant(
+                hasGoodResults,
+                latestWasWin,
+                isEarlyLeagueSeason
+              );
               const friendlyMail = MediaInterviewService.generatePressArticleMail(
                 variant,
                 friendlyNewspaper,

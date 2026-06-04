@@ -2,7 +2,7 @@ import { DebriefContext, DebriefCommentType, DebriefComment, POST_MATCH_DEBRIEF 
 
 export type { DebriefContext, DebriefCommentType };
 
-export type DebriefMatchStage = 'LEAGUE' | 'CUP' | 'CUP_SEMIFINAL' | 'CUP_FINAL';
+export type DebriefMatchStage = 'LEAGUE' | 'FRIENDLY' | 'CUP' | 'CUP_SEMIFINAL' | 'CUP_FINAL';
 
 export interface DebriefEffect {
   moraleDelta: number;
@@ -59,7 +59,91 @@ const REACTION_UNEXPECTED: string[] = [
 ];
 
 type DebriefOutcome = 'WIN' | 'DRAW' | 'LOSS';
-type CupDebriefStage = Exclude<DebriefMatchStage, 'LEAGUE'>;
+type CupDebriefStage = Exclude<DebriefMatchStage, 'LEAGUE' | 'FRIENDLY'>;
+
+const FRIENDLY_HALF_SWING_DEBRIEF: Partial<Record<DebriefContext, DebriefComment[]>> = {
+  WIN_FROM_BEHIND: [
+    { id: 'fr_wfb_1', text: 'Pierwsza połowa była trudna, ale reakcja po przerwie była bardzo dobra. Właśnie po to gramy sparingi.', hiddenType: 'PRAISE' },
+    { id: 'fr_wfb_2', text: 'Podnieśliście się po słabym początku. Wynik cieszy, ale najważniejsza jest lekcja z pierwszych minut.', hiddenType: 'CALM' },
+    { id: 'fr_wfb_3', text: 'Nie chcę czekać do przerwy, żeby zobaczyć taką energię. W następnym sparingu startujemy od razu.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_wfb_4', text: 'Comeback jest dobry, ale początek meczu był sygnałem ostrzegawczym. Musimy szybciej wejść w rytm.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_wfb_5', text: 'Odrobiliśmy stratę. To ważna informacja.', hiddenType: 'SILENCE' },
+  ],
+  WIN_BAD_SECOND_HALF: [
+    { id: 'fr_wbsh_1', text: 'Pierwsza połowa była solidna i dała nam przewagę. Ten fragment warto zapamiętać.', hiddenType: 'PRAISE' },
+    { id: 'fr_wbsh_2', text: 'Wygraliśmy sparing, ale druga połowa pokazała rzeczy do poprawy. O to chodzi w takim meczu.', hiddenType: 'CALM' },
+    { id: 'fr_wbsh_3', text: 'Po przerwie nie możemy gasnąć. Nawet w sparingu intensywność musi trwać dłużej.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_wbsh_4', text: 'Druga połowa była zbyt chaotyczna. Wynik tego nie przykrywa.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_wbsh_5', text: 'Dobry wynik, nierówny mecz.', hiddenType: 'SILENCE' },
+  ],
+  DRAW_FROM_BEHIND: [
+    { id: 'fr_dfb_1', text: 'Po przerwie zobaczyłem reakcję, której szukaliśmy. Ten sparing dał nam dobry materiał.', hiddenType: 'PRAISE' },
+    { id: 'fr_dfb_2', text: 'Remis po słabszej pierwszej połowie jest sygnałem, że zespół potrafi się dostosować.', hiddenType: 'CALM' },
+    { id: 'fr_dfb_3', text: 'Druga połowa była lepsza, ale chcę tej odwagi od początku meczu.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_dfb_4', text: 'Nie możemy potrzebować straty bramki, żeby zacząć grać. To jest wniosek z tego sparingu.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_dfb_5', text: 'Odrobiliśmy stratę. Analiza będzie ważniejsza niż wynik.', hiddenType: 'SILENCE' },
+  ],
+  DRAW_AFTER_LEADING: [
+    { id: 'fr_dal_1', text: 'Pierwsza połowa miała dobre fragmenty. Szkoda, że po przerwie nie utrzymaliśmy tego poziomu.', hiddenType: 'PRAISE' },
+    { id: 'fr_dal_2', text: 'Ten sparing pokazał, że umiemy zbudować przewagę, ale musimy lepiej zarządzać meczem.', hiddenType: 'CALM' },
+    { id: 'fr_dal_3', text: 'Po prowadzeniu nie możemy odpuszczać rytmu. Chcę więcej koncentracji po przerwie.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_dal_4', text: 'Oddaliśmy kontrolę zbyt łatwo. W sparingu też trzeba dbać o nawyki.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_dal_5', text: 'Dobra pierwsza połowa, słabsza druga.', hiddenType: 'SILENCE' },
+  ],
+  LOSS_AFTER_LEADING: [
+    { id: 'fr_lal_1', text: 'Przed przerwą były rzeczy, które można docenić. Po przerwie dostaliśmy lekcję.', hiddenType: 'PRAISE' },
+    { id: 'fr_lal_2', text: 'Prowadzenie w sparingu nie jest celem samym w sobie. Ważne, że wiemy już, co się rozsypało.', hiddenType: 'CALM' },
+    { id: 'fr_lal_3', text: 'Nie akceptuję takiego spadku po przerwie. Nawet w sparingu musimy trzymać standard.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_lal_4', text: 'Mieliśmy kontrolę i ją oddaliśmy. To jest główny temat do analizy.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_lal_5', text: 'Prowadziliśmy. Przegraliśmy. Materiał do pracy jest oczywisty.', hiddenType: 'SILENCE' },
+  ],
+  LOSS_BAD_SECOND_HALF: [
+    { id: 'fr_lbsh_1', text: 'Do przerwy było kilka dobrych sygnałów. Druga połowa pokazała, gdzie brakuje nam stabilności.', hiddenType: 'PRAISE' },
+    { id: 'fr_lbsh_2', text: 'To sparing, więc wynik nie jest najważniejszy. Najważniejsze, że mamy konkretny problem do naprawy.', hiddenType: 'CALM' },
+    { id: 'fr_lbsh_3', text: 'Po przerwie nie możemy wyglądać gorzej fizycznie i mentalnie. To musi się poprawić.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_lbsh_4', text: 'Druga połowa była za słaba. Sparing nie zwalnia z organizacji i odpowiedzialności.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_lbsh_5', text: 'Pierwsza połowa do przyjęcia. Druga do analizy.', hiddenType: 'SILENCE' },
+  ],
+};
+
+const FRIENDLY_POST_MATCH_DEBRIEF: Record<DebriefOutcome, DebriefComment[]> = {
+  WIN: [
+    { id: 'fr_w_1', text: 'Dobry sparing. Wynik cieszy, ale najbardziej interesuje mnie jakość i realizacja założeń.', hiddenType: 'PRAISE' },
+    { id: 'fr_w_2', text: 'Było zaangażowanie i kilka dobrych automatyzmów. To jest krok w dobrą stronę.', hiddenType: 'PRAISE' },
+    { id: 'fr_w_3', text: 'Wygraliśmy, ale traktujemy to spokojnie. Najważniejsze są wnioski na trening.', hiddenType: 'CALM' },
+    { id: 'fr_w_4', text: 'Dobre minuty, dobry rytm. Teraz regeneracja i analiza fragmentów, które możemy poprawić.', hiddenType: 'CALM' },
+    { id: 'fr_w_5', text: 'Chcę takiej intensywności częściej! Sparing ma budować nawyki, a dzisiaj było ich sporo.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_w_6', text: 'Wynik jest dobry, ale nie odpuszczamy. Następny test ma być jeszcze lepszy.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_w_7', text: 'Wygraliśmy, ale kilka strat i ustawień bez piłki wymaga poprawy.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_w_8', text: 'Nie patrzymy tylko na wynik. W sparingu błędy są po to, żeby je nazwać i usunąć.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_w_9', text: 'Dobry test.', hiddenType: 'SILENCE' },
+    { id: 'fr_w_10', text: 'Wnioski są ważniejsze niż wynik.', hiddenType: 'SILENCE' },
+  ],
+  DRAW: [
+    { id: 'fr_d_1', text: 'To był pożyteczny sparing. Były dobre fragmenty i kilka rzeczy, które musimy uporządkować.', hiddenType: 'PRAISE' },
+    { id: 'fr_d_2', text: 'Doceniam pracę i zaangażowanie. Wynik jest neutralny, ale materiał do analizy bardzo konkretny.', hiddenType: 'PRAISE' },
+    { id: 'fr_d_3', text: 'Remis w sparingu nie jest problemem. Ważne, żebyśmy wyciągnęli właściwe wnioski.', hiddenType: 'CALM' },
+    { id: 'fr_d_4', text: 'Spokojnie. Ten mecz miał sprawdzić rozwiązania i dał nam dużo informacji.', hiddenType: 'CALM' },
+    { id: 'fr_d_5', text: 'Chcę więcej konkretu pod bramką. Sparing czy nie, sytuacje trzeba kończyć lepiej.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_d_6', text: 'Nie zadowalamy się przeciętnością. Ten test miał pokazać głód gry i momentami go brakowało.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_d_7', text: 'Za dużo niedokładności. Wynik nie boli, ale jakość w kilku fazach już tak.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_d_8', text: 'Mieliśmy momenty kontroli i za łatwo je oddawaliśmy. To trzeba poprawić.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_d_9', text: 'Test zakończony. Analiza pokaże resztę.', hiddenType: 'SILENCE' },
+    { id: 'fr_d_10', text: 'Bez wielkich słów. Do pracy.', hiddenType: 'SILENCE' },
+  ],
+  LOSS: [
+    { id: 'fr_l_1', text: 'Nie wszystko wyszło, ale widziałem fragmenty, na których możemy budować.', hiddenType: 'PRAISE' },
+    { id: 'fr_l_2', text: 'Dziękuję za walkę. Sparing ma pokazywać problemy i dzisiaj kilka z nich zobaczyliśmy.', hiddenType: 'PRAISE' },
+    { id: 'fr_l_3', text: 'To był mecz kontrolny. Wynik przyjmujemy, analizujemy błędy i pracujemy dalej.', hiddenType: 'CALM' },
+    { id: 'fr_l_4', text: 'Spokojnie. Lepiej zobaczyć te problemy teraz niż w meczu o stawkę.', hiddenType: 'CALM' },
+    { id: 'fr_l_5', text: 'Sparing nie oznacza braku ambicji. Chcę więcej agresji, dokładności i reakcji po stracie.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_l_6', text: 'Ten test miał nas czegoś nauczyć. Jeżeli nie wyciągniemy wniosków, zmarnujemy go.', hiddenType: 'AGGRESSIVE' },
+    { id: 'fr_l_7', text: 'Za dużo prostych błędów. W sparingu można testować, ale nie można tracić koncentracji.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_l_8', text: 'Nie podobała mi się organizacja po stracie piłki. To jest temat numer jeden.', hiddenType: 'CRITICIZE' },
+    { id: 'fr_l_9', text: 'Materiał do pracy jest jasny.', hiddenType: 'SILENCE' },
+    { id: 'fr_l_10', text: 'Wracamy do treningu.', hiddenType: 'SILENCE' },
+  ],
+};
 
 const CUP_BIG_WIN_DEBRIEF: DebriefComment[] = [
   { id: 'cup_bw_1', text: 'Tak trzeba zamykać pucharowe mecze z niżej notowanym rywalem. Pełna kontrola i awans.', hiddenType: 'PRAISE' },
@@ -292,6 +376,10 @@ const HALF_SWING_CONTEXTS: DebriefContext[] = [
 ];
 
 export const getCommentsForContext = (context: DebriefContext, matchStage: DebriefMatchStage = 'LEAGUE'): DebriefComment[] => {
+  if (matchStage === 'FRIENDLY') {
+    return FRIENDLY_HALF_SWING_DEBRIEF[context] ?? FRIENDLY_POST_MATCH_DEBRIEF[getDebriefOutcome(context)];
+  }
+
   if (HALF_SWING_CONTEXTS.includes(context)) {
     return POST_MATCH_DEBRIEF[context];
   }
@@ -440,6 +528,7 @@ export const getDebriefContextLabel = (context: DebriefContext, matchStage: Debr
   if (matchStage === 'CUP_FINAL') return `FINAŁ: ${baseLabel}`;
   if (matchStage === 'CUP_SEMIFINAL') return `PÓŁFINAŁ: ${baseLabel}`;
   if (matchStage === 'CUP') return `PUCHAR: ${baseLabel}`;
+  if (matchStage === 'FRIENDLY') return `SPARING: ${baseLabel}`;
   return baseLabel;
 };
 

@@ -107,6 +107,7 @@ import { TransferExecutionService } from '../services/TransferExecutionService';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
+import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
@@ -5724,7 +5725,28 @@ Asystent`,
     }
 
     // ── SPARINGI AI: GENEROWANIE PAR (3 lipca) ────────────────────────────────
-    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && aiFriendlyPairs.length === 0) {
+    const isSameFriendlyDate = (a: Date, b: Date): boolean =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+
+    const hasAiFriendlyPairOnDates = (targetDates: Date[]): boolean =>
+      aiFriendlyPairs.some(p => {
+        const pairDate = p.date instanceof Date ? p.date : new Date(p.date);
+        return targetDates.some(targetDate => isSameFriendlyDate(pairDate, targetDate));
+      });
+
+    const getBusyFriendlyClubIds = (targetDates: Date[]): Set<string> => new Set<string>(
+      globalFixtures
+        .filter(f => {
+          if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+          const fDate = f.date instanceof Date ? f.date : new Date(f.date);
+          return targetDates.some(targetDate => isSameFriendlyDate(fDate, targetDate));
+        })
+        .flatMap(f => [f.homeTeamId, f.awayTeamId])
+    );
+
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && !hasAiFriendlyPairOnDates(AiFriendlyGeneratorService.getSummerFriendlyDates(dateToProcess.getFullYear()))) {
       const busyClubIds = new Set<string>(
         globalFixtures
           .filter(f => {
@@ -5738,17 +5760,29 @@ Asystent`,
       setAiFriendlyPairs(pairs);
     }
 
+    if (dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 5) {
+      const winterYear = dateToProcess.getFullYear() + 1;
+      const winterDates = AiFriendlyGeneratorService.getWinterFriendlyDates(winterYear);
+      if (!hasAiFriendlyPairOnDates(winterDates)) {
+        const busyClubIds = getBusyFriendlyClubIds(winterDates);
+        const pairs = AiFriendlyGeneratorService.generateWinter(clubs, userTeamId, winterYear, busyClubIds);
+        setAiFriendlyPairs(prev => [...prev, ...pairs]);
+      }
+    }
+
     // ── SPARINGI AI: SYMULACJA W TLE (8 i 9 lipca) ───────────────────────────
-    if (dateToProcess.getMonth() === 6 && (dateToProcess.getDate() === 8 || dateToProcess.getDate() === 9)) {
+    if ((dateToProcess.getMonth() === 6 && (dateToProcess.getDate() === 8 || dateToProcess.getDate() === 9)) || (dateToProcess.getMonth() === 0 && dateToProcess.getDate() >= 2 && dateToProcess.getDate() <= 18)) {
       const dayDate = dateToProcess.getDate();
+      const dayMonth = dateToProcess.getMonth();
+      const dayYear = dateToProcess.getFullYear();
       const alreadySimulated = aiFriendlyReports.some(r => {
         const d = r.date instanceof Date ? r.date : new Date(r.date);
-        return d.getMonth() === 6 && d.getDate() === dayDate;
+        return isSameFriendlyDate(d, dateToProcess);
       });
       if (!alreadySimulated && aiFriendlyPairs.length > 0) {
         const dayPairs = aiFriendlyPairs.filter(p => {
           const d = p.date instanceof Date ? p.date : new Date(p.date);
-          return d.getDate() === dayDate;
+          return isSameFriendlyDate(d, dateToProcess);
         });
         const newReports: AiFriendlyMatchReport[] = [];
         dayPairs.forEach((pair, idx) => {
@@ -5821,16 +5855,25 @@ Asystent`,
               awayLineup: r.awayStartingXI,
             });
           });
-          const dateLabel = `${dayDate} ${dayDate === 8 ? 'lipca' : 'lipca'}`;
-          const lines = newReports.map(r => {
+          const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+          const dateLabel = `${dayDate} ${monthNames[dayMonth]}`;
+          const friendlyMatches = newReports.map(r => {
             const hClub = clubs.find(c => c.id === r.homeTeamId);
             const aClub = clubs.find(c => c.id === r.awayTeamId);
             const hName = hClub?.name ?? r.homeTeamId;
             const aName = aClub?.name ?? r.awayTeamId;
-            return `${hName} ${r.homeScore}–${r.awayScore} ${aName}`;
+            return {
+              homeName: hName,
+              awayName: aName,
+              homeScore: r.homeScore,
+              awayScore: r.awayScore,
+              homeCountry: hClub?.country,
+              awayCountry: aClub?.country,
+            };
           });
+          const lines = friendlyMatches.map(match => `${match.homeName} ${match.homeScore}-${match.awayScore} ${match.awayName}`);
           const friendlyNewsMail: MailMessage = {
-            id: `MAIL_AI_FRIENDLY_${dayDate}_${dateToProcess.getFullYear()}`,
+            id: `MAIL_AI_FRIENDLY_${dayYear}_${dayMonth}_${dayDate}`,
             sender: 'Serwis Sportowy',
             role: 'Redakcja',
             subject: `Wyniki sparingów — ${dateLabel}`,
@@ -5839,7 +5882,7 @@ Asystent`,
             isRead: false,
             type: MailType.MEDIA,
             priority: 20,
-            metadata: { type: 'AI_FRIENDLY_REPORT_LINK' },
+            metadata: { type: 'AI_FRIENDLY_REPORT_LINK', matches: friendlyMatches },
           };
           prependUniqueMessages([friendlyNewsMail]);
         }
@@ -6232,6 +6275,36 @@ Asystent`,
     // zasymuluj wyniki w tle i wyświetl je graczowi w NationalTeamResultsView.
     // Data zostanie przesunięta dopiero gdy gracz kliknie "Kontynuuj" w tym widoku.
     // Używamy processedDrawIds żeby nie symulować ponownie przy tym samym slocie.
+    if (dateToProcess.getFullYear() === 2025 && dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 30 && wcqPlayoffState?.drawCompleted) {
+      const marchFriendlyScheduleKey = `MARCH_2026_WORLD_NT_FRIENDLY_SCHEDULE_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(marchFriendlyScheduleKey)) {
+        const matchDays = WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
+          .map(date => WorldNationalFriendlyService.generatePlayoffWindowMatchDay(date, nationalTeams, wcqPlayoffState, matchSimulationSeed))
+          .filter(Boolean) as NonNullable<ReturnType<typeof WorldNationalFriendlyService.generatePlayoffWindowMatchDay>>[];
+        const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+        const scheduleLines = matchDays.flatMap(matchDay => [
+          `${matchDay.day} ${monthNames[matchDay.month]}`,
+          ...matchDay.matches.map(match => `- ${match.home} vs ${match.away}`),
+          '',
+        ]);
+        if (scheduleLines.length > 0) {
+          sentMailIdsRef.current.add(marchFriendlyScheduleKey);
+          const scheduleMail: MailMessage = {
+            id: marchFriendlyScheduleKey,
+            sender: 'FIFA',
+            role: 'Departament Meczów Międzynarodowych',
+            subject: 'Terminarz marcowych meczów towarzyskich',
+            body: `Zatwierdzono terminarz meczów towarzyskich reprezentacji na marcowe okno barażowe 2026.\n\nW sparingach zagrają reprezentacje spoza Europy oraz europejskie kadry, które nie uczestniczą w barażach MŚ.\n\n${scheduleLines.join('\n').trim()}`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.MEDIA,
+            priority: 18,
+          };
+          setMessages(prev => [scheduleMail, ...prev]);
+        }
+      }
+    }
+
     if (primaryEvent?.kind === EventKind.NATIONAL_TEAM_MATCH &&
         !processedDrawIds.includes(primaryEvent.slot.id)) {
       const matchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
@@ -6244,6 +6317,51 @@ Asystent`,
         );
 
         // ── Baraże MŚ 2026: Losowanie (29 listopada 2025) ──────────────────────
+        const simulateMarchPlayoffFriendlies = (basePlayers: Record<string, Player[]>): Record<string, Player[]> | null => {
+          const friendlyMatchDay = WorldNationalFriendlyService.generatePlayoffWindowMatchDay(
+            dateToProcess,
+            nationalTeams,
+            wcqPlayoffState,
+            matchSimulationSeed
+          );
+          if (!friendlyMatchDay) return null;
+
+          const friendlySimulation = NationalTeamSimulator.simulateMatchDay(
+            friendlyMatchDay,
+            dateSeed + 202603,
+            dateToProcess,
+            nationalTeams,
+            basePlayers,
+            coaches,
+            seasonNumber,
+            matchSimulationSeed
+          );
+          friendlySimulation.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+          setLastNTMatchResults(friendlySimulation.results);
+
+          const resultsMailKey = `MARCH_2026_WORLD_NT_FRIENDLY_RESULTS_${dateToProcess.getDate()}_${seasonNumber}`;
+          if (!sentMailIdsRef.current.has(resultsMailKey) && friendlySimulation.results.length > 0) {
+            sentMailIdsRef.current.add(resultsMailKey);
+            const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+            const dateLabel = `${dateToProcess.getDate()} ${monthNames[dateToProcess.getMonth()]}`;
+            const resultLines = friendlySimulation.results.map(result => `${result.home} ${result.homeGoals}-${result.awayGoals} ${result.away}`);
+            const resultsMail: MailMessage = {
+              id: resultsMailKey,
+              sender: 'FIFA',
+              role: 'Serwis Meczów Międzynarodowych',
+              subject: `Wyniki meczów towarzyskich - ${dateLabel}`,
+              body: `Rozegrano mecze towarzyskie reprezentacji z dnia ${dateLabel}:\n\n${resultLines.join('\n')}`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.MEDIA,
+              priority: 18,
+            };
+            setMessages(prev => [resultsMail, ...prev]);
+          }
+
+          return friendlySimulation.updatedPlayers;
+        };
+
         if (matchDay.eventType === 'WCQ_PLAYOFF_DRAW') {
           const playoffState = WCQPlayoffService.conductDraw(
             nationalTeams,
@@ -6264,7 +6382,8 @@ Asystent`,
           if (wcqPlayoffState) {
             const playoffSimulation = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
             setWcqPlayoffState(playoffSimulation.state);
-            setPlayers(playoffSimulation.updatedPlayers);
+            const friendlyUpdatedPlayers = simulateMarchPlayoffFriendlies(playoffSimulation.updatedPlayers);
+            setPlayers(friendlyUpdatedPlayers ?? playoffSimulation.updatedPlayers);
             const playoffSfMailKey = `WCQ_PLAYOFF_POLAND_SF_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffSfMailKey)) {
               const playoffSfMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'SF', dateToProcess);
@@ -6286,7 +6405,8 @@ Asystent`,
           if (wcqPlayoffState) {
             const playoffSimulation = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
             setWcqPlayoffState(playoffSimulation.state);
-            setPlayers(playoffSimulation.updatedPlayers);
+            const friendlyUpdatedPlayers = simulateMarchPlayoffFriendlies(playoffSimulation.updatedPlayers);
+            setPlayers(friendlyUpdatedPlayers ?? playoffSimulation.updatedPlayers);
             const playoffFinalMailKey = `WCQ_PLAYOFF_POLAND_FINAL_${seasonNumber}`;
             if (!sentMailIdsRef.current.has(playoffFinalMailKey)) {
               const playoffFinalMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'FINAL', dateToProcess);
@@ -6314,9 +6434,34 @@ Asystent`,
           seasonNumber,
           matchSimulationSeed
         );
-        setPlayers(ntSimulation.updatedPlayers);
-        ntSimulation.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
-        setLastNTMatchResults(ntSimulation.results);
+        const worldFriendlyMatchDay = WorldNationalFriendlyService.generateMatchDay(
+          matchDay,
+          nationalTeams,
+          dateToProcess.getFullYear(),
+          matchSimulationSeed
+        );
+        const worldFriendlySimulation = worldFriendlyMatchDay
+          ? NationalTeamSimulator.simulateMatchDay(
+            worldFriendlyMatchDay,
+            dateSeed + 919191,
+            dateToProcess,
+            nationalTeams,
+            ntSimulation.updatedPlayers,
+            coaches,
+            seasonNumber,
+            matchSimulationSeed
+          )
+          : null;
+        const finalNTPlayers = worldFriendlySimulation?.updatedPlayers ?? ntSimulation.updatedPlayers;
+        const finalNTResults = worldFriendlySimulation
+          ? [...ntSimulation.results, ...worldFriendlySimulation.results]
+          : ntSimulation.results;
+        const finalNTMatchHistoryEntries = worldFriendlySimulation
+          ? [...ntSimulation.matchHistoryEntries, ...worldFriendlySimulation.matchHistoryEntries]
+          : ntSimulation.matchHistoryEntries;
+        setPlayers(finalNTPlayers);
+        finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+        setLastNTMatchResults(finalNTResults);
         // ── Po ostatniej kolejce fazy grupowej MŚ (17 listopada) → email-podsumowanie ──
         if (dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
           const wcqSummaryKey = `WCQ_GROUPS_SUMMARY_${seasonNumber}`;

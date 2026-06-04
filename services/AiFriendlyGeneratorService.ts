@@ -3,9 +3,30 @@ import { Club, AiFriendlyPair } from '../types';
 
 const EUROPEAN_LEAGUE_IDS = ['L_CL', 'L_EL', 'L_CONF'];
 const PAIRS_PER_DAY = 20;
+const JANUARY_PAIRS_PER_DAY = 40;
+
+interface AiFriendlyGeneratorOptions {
+  dates?: Date[];
+  pairsPerDay?: number;
+  minDaysBetweenMatches?: number;
+}
+
+const buildDateRange = (year: number, month: number, startDay: number, endDay: number): Date[] =>
+  Array.from({ length: endDay - startDay + 1 }, (_, idx) => new Date(year, month, startDay + idx));
 
 export class AiFriendlyGeneratorService {
-  static generate(clubs: Club[], userTeamId: string | null, year: number, busyClubIds: Set<string> = new Set()): AiFriendlyPair[] {
+  static getSummerFriendlyDates(year: number): Date[] {
+    return [
+      new Date(year, 6, 8),
+      new Date(year, 6, 9),
+    ];
+  }
+
+  static getWinterFriendlyDates(year: number): Date[] {
+    return buildDateRange(year, 0, 2, 18);
+  }
+
+  static generate(clubs: Club[], userTeamId: string | null, year: number, busyClubIds: Set<string> = new Set(), options: AiFriendlyGeneratorOptions = {}): AiFriendlyPair[] {
     const primaryPolish = clubs.filter(c =>
       ['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(c.leagueId) && c.id !== userTeamId && !busyClubIds.has(c.id)
     );
@@ -14,29 +35,32 @@ export class AiFriendlyGeneratorService {
     );
     const polishClubs = [...primaryPolish, ...secondaryPolish];
     const europeanClubs = clubs.filter(c =>
-      EUROPEAN_LEAGUE_IDS.includes(c.leagueId) && !busyClubIds.has(c.id)
+      EUROPEAN_LEAGUE_IDS.includes(c.leagueId) && c.id !== userTeamId && !busyClubIds.has(c.id)
     );
 
     const pairs: AiFriendlyPair[] = [];
-    const usedIds = new Set<string>();
+    const dates = options.dates ?? AiFriendlyGeneratorService.getSummerFriendlyDates(year);
+    const pairsPerDay = options.pairsPerDay ?? PAIRS_PER_DAY;
+    const minDaysBetweenMatches = options.minDaysBetweenMatches ?? dates.length;
+    const lastPlayedDateIndex = new Map<string, number>();
 
-    const dates = [
-      new Date(year, 6, 8),
-      new Date(year, 6, 9),
-    ];
-
-    for (const date of dates) {
+    for (let dateIndex = 0; dateIndex < dates.length; dateIndex++) {
+      const date = dates[dateIndex];
+      const usedToday = new Set<string>();
       let count = 0;
       let attempts = 0;
+      const isAvailable = (club: Club): boolean =>
+        !usedToday.has(club.id) &&
+        (lastPlayedDateIndex.get(club.id) === undefined || dateIndex - (lastPlayedDateIndex.get(club.id) ?? -999) >= minDaysBetweenMatches);
 
-      while (count < PAIRS_PER_DAY && attempts < 1000) {
+      while (count < pairsPerDay && attempts < 3000) {
         attempts++;
 
-        const availablePolish = polishClubs.filter(c => !usedIds.has(c.id));
+        const availablePolish = polishClubs.filter(isAvailable);
         if (availablePolish.length === 0) break;
 
-        const availablePrimary = primaryPolish.filter(c => !usedIds.has(c.id));
-        const availableSecondary = secondaryPolish.filter(c => !usedIds.has(c.id));
+        const availablePrimary = primaryPolish.filter(isAvailable);
+        const availableSecondary = secondaryPolish.filter(isAvailable);
         const pickPool = (Math.random() < 0.9 && availablePrimary.length > 0) ? availablePrimary : (availableSecondary.length > 0 ? availableSecondary : availablePrimary);
         const polishTeam = pickPool[Math.floor(Math.random() * pickPool.length)];
         const roll = Math.random() * 100;
@@ -45,7 +69,7 @@ export class AiFriendlyGeneratorService {
         if (roll < 70) {
           // 70% - polska druzyna
           const candidates = polishClubs.filter(c =>
-            !usedIds.has(c.id) &&
+            isAvailable(c) &&
             c.id !== polishTeam.id &&
             c.reputation >= polishTeam.reputation - 5 &&
             c.reputation <= polishTeam.reputation + 3
@@ -58,7 +82,7 @@ export class AiFriendlyGeneratorService {
         if (!opponent) {
           // 30% lub fallback - druzyna europejska
           const candidates = europeanClubs.filter(c =>
-            !usedIds.has(c.id) &&
+            isAvailable(c) &&
             c.reputation >= polishTeam.reputation - 3 &&
             c.reputation <= polishTeam.reputation + 3
           );
@@ -80,12 +104,22 @@ export class AiFriendlyGeneratorService {
           date: new Date(date),
         });
 
-        usedIds.add(polishTeam.id);
-        usedIds.add(opponent.id);
+        usedToday.add(polishTeam.id);
+        usedToday.add(opponent.id);
+        lastPlayedDateIndex.set(polishTeam.id, dateIndex);
+        lastPlayedDateIndex.set(opponent.id, dateIndex);
         count++;
       }
     }
 
     return pairs;
+  }
+
+  static generateWinter(clubs: Club[], userTeamId: string | null, year: number, busyClubIds: Set<string> = new Set()): AiFriendlyPair[] {
+    return AiFriendlyGeneratorService.generate(clubs, userTeamId, year, busyClubIds, {
+      dates: AiFriendlyGeneratorService.getWinterFriendlyDates(year),
+      pairsPerDay: JANUARY_PAIRS_PER_DAY,
+      minDaysBetweenMatches: 2,
+    });
   }
 }

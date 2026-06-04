@@ -9,6 +9,11 @@ interface TeamOfWeekCandidate {
   player: Player;
   club: Club;
   rating: number;
+  selectionScore: number;
+  goals: number;
+  assists: number;
+  cleanSheet: boolean;
+  savedPenalties: number;
 }
 
 export interface TeamOfWeekBuildContext {
@@ -58,8 +63,35 @@ const getPlayerClub = (playerId: string, players: PlayerMap, clubs: Club[]): { p
   return null;
 };
 
+const resolvePlayerId = (
+  playerId: string | undefined,
+  playerName: string | undefined,
+  teamId: string,
+  players: PlayerMap
+): string | null => {
+  if (playerId) return playerId;
+  if (!playerName) return null;
+
+  const normalized = playerName.trim().toLowerCase();
+  const squad = players[teamId] ?? [];
+  const exact = squad.find(player =>
+    `${player.firstName} ${player.lastName}`.trim().toLowerCase() === normalized ||
+    player.lastName.trim().toLowerCase() === normalized
+  );
+
+  return exact?.id ?? null;
+};
+
 const selectBestByFormation = (candidates: TeamOfWeekCandidate[]): TeamOfWeekCandidate[] => {
-  const sorted = [...candidates].sort((a, b) => b.rating - a.rating || b.player.overallRating - a.player.overallRating);
+  const sorted = [...candidates].sort((a, b) =>
+    b.selectionScore - a.selectionScore ||
+    b.rating - a.rating ||
+    b.goals - a.goals ||
+    b.assists - a.assists ||
+    Number(b.cleanSheet) - Number(a.cleanSheet) ||
+    b.savedPenalties - a.savedPenalties ||
+    b.player.overallRating - a.player.overallRating
+  );
   const selected: TeamOfWeekCandidate[] = [];
   const selectedIds = new Set<string>();
   const clubCounts = new Map<string, number>();
@@ -106,6 +138,43 @@ const selectBestByFormation = (candidates: TeamOfWeekCandidate[]): TeamOfWeekCan
   return selected.slice(0, 11);
 };
 
+interface PlayerRoundImpact {
+  goals: number;
+  assists: number;
+  cleanSheet: boolean;
+  savedPenalties: number;
+  cardPenalty: number;
+}
+
+const emptyImpact = (): PlayerRoundImpact => ({
+  goals: 0,
+  assists: 0,
+  cleanSheet: false,
+  savedPenalties: 0,
+  cardPenalty: 0,
+});
+
+const calculateSelectionScore = (player: Player, rating: number, impact: PlayerRoundImpact): number => {
+  let score = rating;
+
+  const goalWeight = player.position === PlayerPosition.DEF ? 1.15 : player.position === PlayerPosition.MID ? 1.0 : 0.85;
+  score += impact.goals * goalWeight;
+  score += impact.assists * 0.55;
+
+  if (impact.goals >= 3) score += 1.6;
+  else if (impact.goals === 2) score += 0.45;
+
+  if (impact.cleanSheet) {
+    if (player.position === PlayerPosition.GK) score += 1.1;
+    if (player.position === PlayerPosition.DEF) score += 0.75;
+  }
+
+  score += impact.savedPenalties * 1.5;
+  score -= impact.cardPenalty;
+
+  return Math.round(score * 100) / 100;
+};
+
 export const LeagueTeamOfWeekService = {
   buildMail: (context: TeamOfWeekBuildContext): MailMessage | null => {
     const dateKey = getDateKey(context.date);
@@ -119,12 +188,68 @@ export const LeagueTeamOfWeekService = {
     if (!leagueFixtures.every(fixture => fixture.status === MatchStatus.FINISHED)) return null;
 
     const ratingsByPlayer = new Map<string, number>();
+    const impactsByPlayer = new Map<string, PlayerRoundImpact>();
     const finishedFixtureIds = new Set(leagueFixtures.map(fixture => fixture.id));
 
     context.matchHistory
       .filter(entry => entry.season === context.seasonNumber && finishedFixtureIds.has(entry.matchId))
       .forEach(entry => {
         Object.entries(entry.ratings ?? {}).forEach(([playerId, rating]) => ratingsByPlayer.set(playerId, rating));
+
+        const homeCleanSheet = entry.awayScore === 0;
+        const awayCleanSheet = entry.homeScore === 0;
+        (entry.homeLineup ?? []).forEach(playerId => {
+          if (!impactsByPlayer.has(playerId)) impactsByPlayer.set(playerId, emptyImpact());
+          impactsByPlayer.get(playerId)!.cleanSheet ||= homeCleanSheet;
+        });
+        (entry.awayLineup ?? []).forEach(playerId => {
+          if (!impactsByPlayer.has(playerId)) impactsByPlayer.set(playerId, emptyImpact());
+          impactsByPlayer.get(playerId)!.cleanSheet ||= awayCleanSheet;
+        });
+
+        (entry.goals ?? []).forEach(goal => {
+          if (goal.varDisallowed) return;
+
+          const scorerId = resolvePlayerId(goal.playerId, goal.playerName, goal.teamId, context.players);
+          const assistantId = resolvePlayerId(goal.assistantId, goal.assistantName, goal.teamId, context.players);
+
+          if (goal.isPenalty && goal.isMiss) {
+            const defendingTeamId = goal.teamId === entry.homeTeamId ? entry.awayTeamId : entry.homeTeamId;
+            const defendingLineup = goal.teamId === entry.homeTeamId ? entry.awayLineup : entry.homeLineup;
+            const goalkeeperId = (defendingLineup ?? []).find(playerId => {
+              const resolved = getPlayerClub(playerId, context.players, context.clubs);
+              return resolved?.player.position === PlayerPosition.GK;
+            });
+            if (goalkeeperId) {
+              if (!impactsByPlayer.has(goalkeeperId)) impactsByPlayer.set(goalkeeperId, emptyImpact());
+              impactsByPlayer.get(goalkeeperId)!.savedPenalties += 1;
+            } else {
+              const squadGoalkeeper = (context.players[defendingTeamId] ?? []).find(player => player.position === PlayerPosition.GK);
+              if (squadGoalkeeper) {
+                if (!impactsByPlayer.has(squadGoalkeeper.id)) impactsByPlayer.set(squadGoalkeeper.id, emptyImpact());
+                impactsByPlayer.get(squadGoalkeeper.id)!.savedPenalties += 1;
+              }
+            }
+            return;
+          }
+
+          if (scorerId) {
+            if (!impactsByPlayer.has(scorerId)) impactsByPlayer.set(scorerId, emptyImpact());
+            impactsByPlayer.get(scorerId)!.goals += 1;
+          }
+
+          if (assistantId) {
+            if (!impactsByPlayer.has(assistantId)) impactsByPlayer.set(assistantId, emptyImpact());
+            impactsByPlayer.get(assistantId)!.assists += 1;
+          }
+        });
+
+        (entry.cards ?? []).forEach(card => {
+          const playerId = resolvePlayerId(card.playerId, card.playerName, card.teamId, context.players);
+          if (!playerId) return;
+          if (!impactsByPlayer.has(playerId)) impactsByPlayer.set(playerId, emptyImpact());
+          impactsByPlayer.get(playerId)!.cardPenalty += card.type === 'YELLOW' ? 0.25 : 1.4;
+        });
       });
 
     Object.entries(context.liveRatings ?? {}).forEach(([playerId, rating]) => ratingsByPlayer.set(playerId, rating));
@@ -136,7 +261,16 @@ export const LeagueTeamOfWeekService = {
       const resolved = getPlayerClub(playerId, context.players, context.clubs);
       if (!resolved) return;
       if (resolved.club.leagueId !== context.leagueId) return;
-      candidates.push({ ...resolved, rating });
+      const impact = impactsByPlayer.get(playerId) ?? emptyImpact();
+      candidates.push({
+        ...resolved,
+        rating,
+        selectionScore: calculateSelectionScore(resolved.player, rating, impact),
+        goals: impact.goals,
+        assists: impact.assists,
+        cleanSheet: impact.cleanSheet,
+        savedPenalties: impact.savedPenalties,
+      });
     });
 
     const selected = selectBestByFormation(candidates);

@@ -67,6 +67,10 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect } from '../../services/HalftimeTalkService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
+import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
+import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
+import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
@@ -156,9 +160,19 @@ export const FriendlyMatchLiveView = () => {
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
+  const [showBriefing, setShowBriefing] = useState(() => !matchState?.preMatchMotivation);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
+  const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [pendingFinishPayload, setPendingFinishPayload] = useState<{
+    simResultMerged: any;
+    matchHistoryArgs: any;
+    summary: MatchSummary;
+    userTeamId: string;
+    debriefContext: DebriefContext;
+    sessionSeed: number;
+  } | null>(null);
   const [activePenalty, setActivePenalty] = useState<{
     side: 'HOME' | 'AWAY',
     kicker: Player,
@@ -259,9 +273,29 @@ const isPausedForSevereInjury = useMemo(() => {
     return userLineup.startingXI.some(id => id && userInjuries[id] === InjurySeverity.SEVERE);
   }, [matchState, userSide]);
 
+  const handleBriefingClose = (effect: BriefingEffect) => {
+    setShowBriefing(false);
+    setMatchState(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        preMatchMotivation: {
+          actionMod:     effect.actionMod,
+          goalMod:       effect.goalMod,
+          momentumBonus: effect.momentumBonus,
+          expiryMinute:  effect.expiryMinute,
+          fatigueMult:   effect.fatigueMult,
+          rivalBoost:    effect.rivalBoost,
+          label:         effect.label,
+        },
+      };
+    });
+  };
+
   useEffect(() => {
    if (ctx && (!matchState || matchState.fixtureId !== ctx.fixture.id)) {
       const sessionSeed = Math.abs(Math.floor(Date.now() * Math.random()));
+      setShowBriefing(true);
       
       const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
       const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
@@ -281,6 +315,12 @@ const isPausedForSevereInjury = useMemo(() => {
       });
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
+      );
+      const aiBriefingEffect = calculateAiCoachBriefingEffect(
+        aiClubInit.reputation,
+        userClubInit.reputation,
+        aiCoachInit?.attributes,
+        sessionSeed + 17
       );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
 
@@ -333,8 +373,17 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           pressingResponseFactor: 1.0,
           counterAttackResponseFactor: 1.0,
          lastChangeMinute: -5,},
-          playedPlayerIds: [],
+        playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
+        aiPreMatchMotivation: {
+          actionMod:     aiBriefingEffect.actionMod,
+          goalMod:       aiBriefingEffect.goalMod,
+          momentumBonus: aiBriefingEffect.momentumBonus,
+          expiryMinute:  aiBriefingEffect.expiryMinute,
+          fatigueMult:   aiBriefingEffect.fatigueMult,
+          rivalBoost:    aiBriefingEffect.rivalBoost,
+          label:         aiBriefingEffect.label,
+        },
         aiNextInstructionMinute: aiInitNextMin,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
@@ -569,6 +618,26 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     setIsHalftimeTalkOpen(false);
   };
 
+  const handleDebriefClose = (effect: DebriefEffect) => {
+    if (!pendingFinishPayload) return;
+    const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
+      if (c.id !== pendingFinishPayload.userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
+      return { ...c, morale: newMorale };
+    });
+
+    applySimulationResult({
+      ...pendingFinishPayload.simResultMerged,
+      updatedClubs: finalUpdatedClubs,
+    });
+    MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
+    setLastMatchSummary(pendingFinishPayload.summary);
+    setMatchState(null);
+    setShowPostMatchDebrief(false);
+    setPendingFinishPayload(null);
+    navigateTo(ViewState.POST_MATCH_FRIENDLY_STUDIO);
+  };
+
   const handleTacticsClose = (newLineup: Lineup, subsCount: number, subsHistory: SubstitutionRecord[]) => {
     setMatchState(prev => {
       if (!prev) return prev;
@@ -588,7 +657,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
   };
 
   useEffect(() => {
-    if (!matchState || matchState.isPaused || matchState.isPausedForEvent || 
+    if (!matchState || showBriefing || matchState.isPaused || matchState.isPausedForEvent || 
         matchState.isFinished || matchState.isHalfTime || matchState.isPenalties || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activeVAR) return;
 
     const tickInterval = matchState.speed === 5 ? 120 
@@ -1187,6 +1256,48 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             nextAiActiveShout, oPlayersList, oXIList, uPlayersList, uXIList, userCounterTactic.defenseBias, isAiAttacking
           );
         }
+        const activeBriefing =
+          prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute
+            ? prev.preMatchMotivation
+            : null;
+        const activeAiBriefing =
+          prev.aiPreMatchMotivation && nextMinute <= prev.aiPreMatchMotivation.expiryMinute
+            ? prev.aiPreMatchMotivation
+            : null;
+        const briefingFinishingFitMod = activeBriefing
+          ? Math.max(0.96, Math.min(1.05, 1 + activeBriefing.goalMod * 1.25))
+          : 1.0;
+        const aiBriefingFinishingFitMod = activeAiBriefing
+          ? Math.max(0.96, Math.min(1.05, 1 + activeAiBriefing.goalMod * 1.25))
+          : 1.0;
+        const briefingFreshnessDelta = activeBriefing
+          ? Math.max(-3, Math.min(3, (1 - activeBriefing.fatigueMult) * 45))
+          : 0;
+        const aiBriefingFreshnessDelta = activeAiBriefing
+          ? Math.max(-3, Math.min(3, (1 - activeAiBriefing.fatigueMult) * 45))
+          : 0;
+        if (activeBriefing) {
+          if (isUserAttacking) {
+            shotThreshold += activeBriefing.actionMod * 0.12;
+            shotThreshold += (1 - activeBriefing.fatigueMult) * 0.04;
+          } else if (activeBriefing.rivalBoost !== 0) {
+            shotThreshold += activeBriefing.rivalBoost * 0.012;
+          }
+        }
+        if (activeAiBriefing) {
+          if (isAiAttacking) {
+            shotThreshold += activeAiBriefing.actionMod * 0.12;
+            shotThreshold += (1 - activeAiBriefing.fatigueMult) * 0.04;
+          } else if (activeAiBriefing.rivalBoost !== 0) {
+            shotThreshold += activeAiBriefing.rivalBoost * 0.012;
+          }
+        }
+        if (nextMinute === 1 && activeBriefing?.momentumBonus && isUserAttacking) {
+          shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
+        }
+        if (nextMinute === 1 && activeAiBriefing?.momentumBonus && isAiAttacking) {
+          shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
+        }
         // KONTRATAK
         if (counterAttackTriggered && activeSide === userSide) {
           shotThreshold += counterAttackShotBonus;
@@ -1350,7 +1461,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            // Live fatigue strzelca i bramkarza
            const oppFatigueMap = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
            const myFatigueMap  = activeSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
-           const scorerLiveFatigue = myFatigueMap[scorer.id]  ?? 100;
+           const activeFreshnessDelta = activeSide === userSide ? briefingFreshnessDelta : aiBriefingFreshnessDelta;
+           const activeFinishingFitMod = activeSide === userSide ? briefingFinishingFitMod : aiBriefingFinishingFitMod;
+           const scorerLiveFatigue = Math.max(0, Math.min(100, (myFatigueMap[scorer.id] ?? 100) + activeFreshnessDelta));
            const gkLiveFatigue     = gk ? (oppFatigueMap[gk.id] ?? 100) : 100;
 
            // Position Fit Modifier - kara za grę poza naturalną pozycją
@@ -1373,7 +1486,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
-           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod, gkFitMod, oppFatigueMap);
+           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod * activeFinishingFitMod, gkFitMod, oppFatigueMap);
           
 
            if (isGoal) {
@@ -1573,7 +1686,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }, 3500);
         }
 
-        const momentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const briefingMomentumImpulse =
+          nextMinute <= 6
+            ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)
+              + (activeAiBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? -1 : 1)
+            : 0;
+        const momentumUpdate = Math.max(-100, Math.min(100, rawMomentumUpdate + briefingMomentumImpulse));
 
      if (priorityAiTrigger) {
            const decision = AiMatchDecisionServiceFriendlyMatch.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory }, ctx, aiSide, true, false, activeFriendlyConditions?.maxSubstitutions ?? 5);
@@ -1706,7 +1825,7 @@ return {
       });
     }, tickInterval);
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.isPenalties, matchState?.speed, isCelebratingGoal, ctx, env, userSide, isTacticsOpen, activePenalty, activeVAR, hasMandatorySub, firstLegInfo, setMatchState]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.isPenalties, matchState?.speed, showBriefing, isCelebratingGoal, ctx, env, userSide, isTacticsOpen, activePenalty, activeVAR, hasMandatorySub, firstLegInfo, setMatchState]);
 
  const handleFinishMatch = () => {
     if (!matchState || !ctx) return;
@@ -2074,19 +2193,7 @@ const summary: MatchSummary = {
     });
     // KONIEC WSTAWKI
 
-    applySimulationResult({ 
-      ...simResult, 
-      updatedClubs, 
-      updatedFixtures, 
-      updatedPlayers, 
-      roundResults: finalRoundResults, 
-      seasonNumber, 
-      ratings: undefined
-    });
-
-
-
-    MatchHistoryService.logMatch({
+    const matchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
       season: seasonNumber,
@@ -2100,7 +2207,7 @@ const summary: MatchSummary = {
 
       goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
         .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
-     cards: (() => {
+      cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           // Sortujemy logi chronologicznie, aby poprawnie wykryć, która żółta jest drugą
           return [...matchState.logs]
@@ -2123,11 +2230,35 @@ const summary: MatchSummary = {
                };
             });
         })()
-    });
+    };
 
-    setLastMatchSummary(summary); 
-    setMatchState(null);
-    navigateTo(ViewState.POST_MATCH_FRIENDLY_STUDIO);
+    const debriefUserScore = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+    const debriefOppScore  = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+    const debriefUserRep   = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+    const debriefOppRep    = userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+    const debriefUserGoals = (userSide === 'HOME' ? matchState.homeGoals : matchState.awayGoals).filter(g => !g.varDisallowed);
+    const debriefOppGoals  = (userSide === 'HOME' ? matchState.awayGoals : matchState.homeGoals).filter(g => !g.varDisallowed);
+    const debriefUserPIds  = userSide === 'HOME' ? ctx.homePlayers.map(p => p.id) : ctx.awayPlayers.map(p => p.id);
+    const debriefUserHasRC = matchState.sentOffIds.some(id => debriefUserPIds.includes(id));
+    const debriefCtx = getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRC);
+
+    setPendingFinishPayload({
+      simResultMerged: {
+        ...simResult,
+        updatedClubs,
+        updatedFixtures,
+        updatedPlayers,
+        roundResults: finalRoundResults,
+        seasonNumber,
+        ratings: undefined
+      },
+      matchHistoryArgs,
+      summary,
+      userTeamId: userTeamId!,
+      debriefContext: debriefCtx,
+      sessionSeed: matchState.sessionSeed,
+    });
+    setShowPostMatchDebrief(true);
   };
 
   if (!matchState || !ctx || !env || !kitColors) return null;
@@ -3147,6 +3278,23 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       </div>
     )}
 
+      {showBriefing && ctx && matchState && (
+        <PreMatchBriefingModal
+          isOpen={showBriefing}
+          onClose={handleBriefingClose}
+          userClubName={userSide === 'HOME' ? ctx.homeClub.name : ctx.awayClub.name}
+          oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
+          userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
+          oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          userClubColors={userSide === 'HOME' ? ctx.homeClub.colorsHex : ctx.awayClub.colorsHex}
+          oppClubColors={userSide === 'HOME' ? ctx.awayClub.colorsHex : ctx.homeClub.colorsHex}
+          userClubId={userSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id}
+          oppClubId={userSide === 'HOME' ? ctx.awayClub.id : ctx.homeClub.id}
+          sessionSeed={matchState.sessionSeed}
+          matchStage="FRIENDLY"
+        />
+      )}
+
 {(() => {
         const isHome = userSide === 'HOME';
         const uXI  = isHome ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
@@ -3218,6 +3366,21 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
           />
         );
       })()}
+
+    {showPostMatchDebrief && pendingFinishPayload && (
+      <PostMatchDebriefModal
+        isOpen={true}
+        onClose={handleDebriefClose}
+        context={pendingFinishPayload.debriefContext}
+        userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
+        oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
+        userSide={userSide}
+        homeClubName={pendingFinishPayload.summary.homeClub.name}
+        awayClubName={pendingFinishPayload.summary.awayClub.name}
+        sessionSeed={pendingFinishPayload.sessionSeed}
+        matchStage="FRIENDLY"
+      />
+    )}
 
 ///Etykieta przerwa w meczu ///
      {matchState.isHalfTime && !isTacticsOpen && (

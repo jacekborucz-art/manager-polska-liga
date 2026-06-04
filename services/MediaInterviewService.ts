@@ -31,10 +31,16 @@ const FRIENDLY_GOOD_RESULTS_PRESS_VARIANTS: PressVariant[] = [
   'PRZYCHYLNE_ZWYCIESKI_START',
   'PRZYCHYLNE_SZATNIA',
 ];
+const FRIENDLY_GOOD_RESULTS_MID_SEASON_PRESS_VARIANTS: PressVariant[] = [
+  'PRZYCHYLNE_DOBRA_FORMA',
+];
 const FRIENDLY_WEAK_START_PRESS_VARIANTS: PressVariant[] = [
   'PRZYCHYLNE_SZATNIA',
   'PRZYCHYLNE_SLABY_OPTYMIZM',
   'PRZYCHYLNE_SLABY_SZATNIA',
+];
+const FRIENDLY_WEAK_MID_SEASON_PRESS_VARIANTS: PressVariant[] = [
+  'PRZYCHYLNE_TRUDNY_OKRES',
 ];
 
 export interface MediaDeclineOutcome {
@@ -289,12 +295,21 @@ export class MediaInterviewService {
     ];
   }
 
-  static determineFriendlySeasonPressVariant(hasGoodResults: boolean, latestWasWin = true): PressVariant {
-    const variants = hasGoodResults
-      ? FRIENDLY_GOOD_RESULTS_PRESS_VARIANTS.filter(variant =>
-          latestWasWin || variant !== 'PRZYCHYLNE_ZWYCIESKI_START'
-        )
-      : FRIENDLY_WEAK_START_PRESS_VARIANTS;
+  static determineFriendlySeasonPressVariant(
+    hasGoodResults: boolean,
+    latestWasWin = true,
+    isEarlySeason = true
+  ): PressVariant {
+    const baseVariants = hasGoodResults
+      ? isEarlySeason
+        ? FRIENDLY_GOOD_RESULTS_PRESS_VARIANTS
+        : FRIENDLY_GOOD_RESULTS_MID_SEASON_PRESS_VARIANTS
+      : isEarlySeason
+        ? FRIENDLY_WEAK_START_PRESS_VARIANTS
+        : FRIENDLY_WEAK_MID_SEASON_PRESS_VARIANTS;
+    const variants = baseVariants.filter(variant =>
+      latestWasWin || variant !== 'PRZYCHYLNE_ZWYCIESKI_START'
+    );
     return variants[Math.floor(Math.random() * variants.length)];
   }
 

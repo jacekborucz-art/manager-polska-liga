@@ -3,6 +3,7 @@ import ntBgImg from '../../Graphic/themes/kwalifikacje_pucharswiata2.png';
 import { useGame } from '../../context/GameContext';
 import { MatchCardEntry, MatchGoalEntry, NTMatchResult, ViewState } from '../../types';
 import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
+import { WORLD_FRIENDLY_GROUP } from '../../services/WorldNationalFriendlyService';
 
 const GLASS_CARD = 'bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden';
 const GLOSS_LAYER = 'absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none';
@@ -372,6 +373,8 @@ const NationalTeamResultsView: React.FC = () => {
     return acc;
   }, {});
   const groupKeys = Object.keys(resultsByGroup).sort();
+  const getGroupLabel = (group: string): string =>
+    group === WORLD_FRIENDLY_GROUP ? 'Mecze towarzyskie świata' : `Grupa ${group}`;
 
   const handleContinue = () => {
     setLastNTMatchResults(null);
@@ -437,7 +440,7 @@ const NationalTeamResultsView: React.FC = () => {
                         <div className="relative flex flex-col items-center mb-3">
                           <div className="relative w-full flex justify-center py-1 mb-1 overflow-hidden rounded-lg">
                             <div className="absolute inset-0 opacity-25" style={{ background: 'linear-gradient(to right, transparent 0%, #dc2626 25%, #ffffff 50%, #dc2626 75%, transparent 100%)' }} />
-                            <p className="text-xl font-black italic uppercase tracking-tighter text-white text-center relative z-10">Grupa {g}</p>
+                            <p className="text-xl font-black italic uppercase tracking-tighter text-white text-center relative z-10">{getGroupLabel(g)}</p>
                           </div>
                           <div className="w-full h-[3px] rounded-full opacity-70" style={{ background: 'linear-gradient(to right, transparent 0%, #dc2626 20%, #ffffff 50%, #dc2626 80%, transparent 100%)' }} />
                         </div>

@@ -182,6 +182,300 @@ const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
   );
 };
 
+const ISO3_TO_ISO2: Record<string, string> = {
+  POL: 'pl', ENG: 'gb-eng', SCO: 'gb-sct', WAL: 'gb-wls', NIR: 'gb-nir',
+  ESP: 'es', GER: 'de', DEU: 'de', FRA: 'fr', ITA: 'it', POR: 'pt',
+  NED: 'nl', BEL: 'be', CRO: 'hr', SUI: 'ch', AUT: 'at', CZE: 'cz',
+  SVK: 'sk', HUN: 'hu', ROU: 'ro', BUL: 'bg', GRE: 'gr', TUR: 'tr',
+  SWE: 'se', NOR: 'no', DEN: 'dk', FIN: 'fi', IRL: 'ie', UKR: 'ua',
+  RUS: 'ru', SRB: 'rs', BIH: 'ba', SVN: 'si', ARG: 'ar', BRA: 'br',
+  URU: 'uy', COL: 'co', CHI: 'cl', PER: 'pe', ECU: 'ec', PAR: 'py',
+  BOL: 'bo', MEX: 'mx', USA: 'us', CAN: 'ca', MAR: 'ma', ALG: 'dz',
+  EGY: 'eg', NGA: 'ng', SEN: 'sn', CIV: 'ci', KSA: 'sa', UZB: 'uz',
+  QAT: 'qa', IRN: 'ir', JPN: 'jp', KOR: 'kr', AUS: 'au',
+};
+
+const TEAM_NAME_TO_FLAG: Record<string, string> = {
+  Anglia: 'gb-eng',
+  Szkocja: 'gb-sct',
+  Walia: 'gb-wls',
+  Polska: 'pl',
+  Hiszpania: 'es',
+  Niemcy: 'de',
+  Francja: 'fr',
+  Holandia: 'nl',
+  Portugalia: 'pt',
+  Belgia: 'be',
+  Chorwacja: 'hr',
+  Rumunia: 'ro',
+  Szwajcaria: 'ch',
+  Urugwaj: 'uy',
+  Japonia: 'jp',
+  'Korea PŁD': 'kr',
+  Kolumbia: 'co',
+  'Wybrzeże Kości Słoniowej': 'ci',
+  Meksyk: 'mx',
+  Senegal: 'sn',
+  Australia: 'au',
+  'Stany Zjednoczone': 'us',
+  Chile: 'cl',
+  Peru: 'pe',
+  Maroko: 'ma',
+  Rosja: 'ru',
+  Algieria: 'dz',
+  Nigeria: 'ng',
+  'Arabia Saudyjska': 'sa',
+  Uzbekistan: 'uz',
+  Egipt: 'eg',
+  Kanada: 'ca',
+  Ekwador: 'ec',
+  Katar: 'qa',
+  Grecja: 'gr',
+  Kostaryka: 'cr',
+  Panama: 'pa',
+  Iran: 'ir',
+};
+
+type FriendlyMailMatch = {
+  homeName: string;
+  awayName: string;
+  homeScore: number;
+  awayScore: number;
+  homeCountry?: string;
+  awayCountry?: string;
+};
+
+const getFlagCode = (teamName: string, country?: string): string | null => {
+  const normalizedCountry = country?.trim().toUpperCase();
+  if (normalizedCountry && ISO3_TO_ISO2[normalizedCountry]) return ISO3_TO_ISO2[normalizedCountry];
+  if (normalizedCountry?.length === 2) return normalizedCountry.toLowerCase();
+  return TEAM_NAME_TO_FLAG[teamName] ?? null;
+};
+
+const FlagBadge: React.FC<{ teamName: string; country?: string; align: 'left' | 'right' }> = ({ teamName, country, align }) => {
+  const code = getFlagCode(teamName, country);
+  const fallback = teamName.slice(0, 2).toUpperCase();
+
+  if (!code) {
+    return (
+      <div className="flex h-9 w-12 items-center justify-center rounded-md border border-yellow-300/20 bg-yellow-300/10 text-[10px] font-black italic uppercase tracking-tighter text-yellow-100">
+        {fallback}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://flagcdn.com/w80/${code}.png`}
+      alt={teamName}
+      className={`h-9 w-12 rounded-md border border-white/10 bg-white/5 object-cover shadow-lg ${align === 'right' ? 'order-first' : ''}`}
+    />
+  );
+};
+
+const getFriendlyMatchesFromMail = (mail: MailMessage): FriendlyMailMatch[] => {
+  if (mail.metadata?.type === 'AI_FRIENDLY_REPORT_LINK' && mail.metadata.matches?.length) {
+    return mail.metadata.matches;
+  }
+
+  const matchRegex = /^(.+)\s(\d+)[–-](\d+)\s(.+)$/;
+  return mail.body
+    .split('\n')
+    .map(line => line.trim().match(matchRegex))
+    .filter((match): match is RegExpMatchArray => !!match)
+    .map(match => ({
+      homeName: match[1].trim(),
+      awayName: match[4].trim(),
+      homeScore: Number(match[2]),
+      awayScore: Number(match[3]),
+    }));
+};
+
+const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
+  const matches = getFriendlyMatchesFromMail(mail);
+  const intro = mail.body.split('\n').find(line => line.trim() && !line.match(/^(.+)\s(\d+)[–-](\d+)\s(.+)$/));
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
+      {intro && (
+        <p className="mb-6 text-[13px] font-black italic uppercase tracking-tighter text-sky-100/75">
+          {intro}
+        </p>
+      )}
+
+      <div className="w-full overflow-hidden rounded-2xl border border-yellow-300/20 bg-black/20 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+        {matches.map((match, index) => {
+          const homeWon = match.homeScore > match.awayScore;
+          const awayWon = match.awayScore > match.homeScore;
+
+          return (
+            <div key={`${match.homeName}_${match.awayName}_${index}`}>
+              {index > 0 && <div className="mx-8 border-t border-yellow-300/30" />}
+              <div className="grid grid-cols-[1fr_92px_1fr] items-center gap-4 px-6 py-4">
+                <div className="flex min-w-0 items-center justify-end gap-3 text-right">
+                  <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${homeWon ? 'text-white' : 'text-slate-300'}`}>
+                    {match.homeName}
+                  </span>
+                  <FlagBadge teamName={match.homeName} country={match.homeCountry} align="left" />
+                </div>
+
+                <div className="flex items-center justify-center rounded-xl border border-yellow-300/35 bg-yellow-300/10 px-3 py-2 text-[18px] font-black italic uppercase tracking-tighter text-yellow-100 shadow-[inset_0_0_18px_rgba(250,204,21,0.08)]">
+                  {match.homeScore} : {match.awayScore}
+                </div>
+
+                <div className="flex min-w-0 items-center justify-start gap-3 text-left">
+                  <FlagBadge teamName={match.awayName} country={match.awayCountry} align="right" />
+                  <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${awayWon ? 'text-white' : 'text-slate-300'}`}>
+                    {match.awayName}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+type WCQPlayoffPolandMailData = {
+  stage: 'SF' | 'FINAL';
+  pathLabel?: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  scoreLabel: string;
+  polandWon: boolean;
+  lead: string;
+  finalOpponent?: string | null;
+  wentToExtraTime?: boolean;
+  penaltyWinner?: string;
+};
+
+const getWCQPlayoffPolandMailData = (mail: MailMessage): WCQPlayoffPolandMailData | null => {
+  if (mail.metadata?.type === 'WCQ_PLAYOFF_POLAND') {
+    return {
+      stage: mail.metadata.stage,
+      pathLabel: mail.metadata.pathLabel,
+      homeTeam: mail.metadata.homeTeam,
+      awayTeam: mail.metadata.awayTeam,
+      homeScore: mail.metadata.homeScore,
+      awayScore: mail.metadata.awayScore,
+      scoreLabel: mail.metadata.scoreLabel,
+      polandWon: mail.metadata.polandWon,
+      lead: mail.metadata.lead,
+      finalOpponent: mail.metadata.finalOpponent,
+      wentToExtraTime: mail.metadata.wentToExtraTime,
+      penaltyWinner: mail.metadata.penaltyWinner,
+    };
+  }
+
+  const isLegacyPlayoffMail = mail.sender === 'Sport Express' && mail.subject.toLowerCase().includes('bara');
+  if (!isLegacyPlayoffMail) return null;
+
+  const lines = mail.body.split('\n').map(line => line.trim()).filter(Boolean);
+  const lead = lines.find(line => line.includes('Reprezentacja Polski')) ?? '';
+  const matchLine = lines.find(line => /^Polska\s+[—-]\s+/.test(line));
+  const scoreLineIndex = matchLine ? lines.indexOf(matchLine) + 1 : -1;
+  const scoreLine = scoreLineIndex > 0 ? lines[scoreLineIndex] : '';
+  const opponent = matchLine?.replace(/^Polska\s+[—-]\s+/, '').trim() || 'Rywal';
+  const scoreMatch = scoreLine.match(/(\d+)\s*:\s*(\d+)/);
+  const homeScore = scoreMatch ? Number(scoreMatch[1]) : 0;
+  const awayScore = scoreMatch ? Number(scoreMatch[2]) : 0;
+  const polandWon = homeScore > awayScore || mail.subject.toLowerCase().includes('finale bara') && !mail.subject.toLowerCase().includes('odpada') && !mail.subject.toLowerCase().includes('przegrywa');
+  const finalLine = lines.find(line => line.includes('Polska zagra z reprezentacją'));
+  const finalOpponent = finalLine?.match(/reprezentacją\s+(.+?)\./)?.[1] ?? null;
+
+  return {
+    stage: mail.subject.toLowerCase().includes('półfinal') ? 'SF' : 'FINAL',
+    homeTeam: 'Polska',
+    awayTeam: opponent,
+    homeScore,
+    awayScore,
+    scoreLabel: scoreLine || `${homeScore}:${awayScore}`,
+    polandWon,
+    lead,
+    finalOpponent,
+    wentToExtraTime: scoreLine.includes('dogr.'),
+    penaltyWinner: scoreLine.includes('k.') ? (polandWon ? 'Polska' : opponent) : undefined,
+  };
+};
+
+const WCQPlayoffPolandMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
+  const data = getWCQPlayoffPolandMailData(mail);
+  if (!data) return null;
+
+  const statusText = data.polandWon
+    ? data.stage === 'FINAL' ? 'Awans na mundial' : 'Awans do finału baraży'
+    : data.stage === 'FINAL' ? 'Koniec walki o mundial' : 'Koniec baraży';
+  const stageLabel = data.stage === 'SF' ? 'Półfinał baraży' : 'Finał baraży';
+  const extraLabel = data.penaltyWinner
+    ? `Karne: wygrała ${data.penaltyWinner}`
+    : data.wentToExtraTime
+      ? 'Po dogrywce'
+      : 'Po 90 minutach';
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
+      <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-5 py-2">
+        <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-200">Sport Express</span>
+        <span className="h-1 w-1 rounded-full bg-yellow-300/80" />
+        <span className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-100">{stageLabel}</span>
+      </div>
+
+      <div className={`mb-6 w-full rounded-2xl border px-6 py-5 ${data.polandWon ? 'border-emerald-300/25 bg-emerald-500/10' : 'border-rose-300/25 bg-rose-500/10'}`}>
+        <p className={`mb-2 text-[12px] font-black italic uppercase tracking-tighter ${data.polandWon ? 'text-emerald-200' : 'text-rose-200'}`}>
+          {statusText}
+        </p>
+        <p className="mx-auto max-w-2xl text-[16px] font-medium leading-8 text-sky-50">
+          {data.lead}
+        </p>
+      </div>
+
+      <div className="w-full overflow-hidden rounded-3xl border border-yellow-300/25 bg-black/25 shadow-[0_24px_70px_rgba(0,0,0,0.4)]">
+        <div className="border-b border-yellow-300/25 bg-yellow-300/10 px-6 py-3">
+          <p className="text-[11px] font-black italic uppercase tracking-tighter text-yellow-100">
+            Wynik meczu {data.pathLabel ? `/ Ścieżka ${data.pathLabel}` : ''}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-[1fr_128px_1fr] items-center gap-5 px-7 py-8">
+          <div className="flex min-w-0 flex-col items-end gap-3 text-right">
+            <FlagBadge teamName={data.homeTeam} align="left" />
+            <span className={`max-w-full truncate text-[18px] font-black italic uppercase tracking-tighter ${data.homeScore >= data.awayScore ? 'text-white' : 'text-slate-300'}`}>
+              {data.homeTeam}
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex h-20 w-32 items-center justify-center rounded-2xl border border-yellow-300/40 bg-yellow-300/10 text-[30px] font-black italic uppercase tracking-tighter text-yellow-50 shadow-[inset_0_0_24px_rgba(250,204,21,0.08)]">
+              {data.homeScore} : {data.awayScore}
+            </div>
+            <span className="mt-2 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">{extraLabel}</span>
+          </div>
+
+          <div className="flex min-w-0 flex-col items-start gap-3 text-left">
+            <FlagBadge teamName={data.awayTeam} align="right" />
+            <span className={`max-w-full truncate text-[18px] font-black italic uppercase tracking-tighter ${data.awayScore >= data.homeScore ? 'text-white' : 'text-slate-300'}`}>
+              {data.awayTeam}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {data.stage === 'SF' && data.polandWon && data.finalOpponent && (
+        <div className="mt-6 w-full rounded-2xl border border-sky-300/20 bg-sky-400/10 px-6 py-5">
+          <p className="mb-1 text-[11px] font-black italic uppercase tracking-tighter text-sky-200">Co dalej?</p>
+          <p className="text-[15px] font-medium leading-7 text-sky-50">
+            W finale ścieżki Polska zagra z reprezentacją {data.finalOpponent}. Stawką będzie bezpośredni awans na mundial.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClose }) => {
   const {
     finalizeFreeAgentContract,
@@ -410,6 +704,10 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
             ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
               <TeamOfWeekPitch mail={mail} />
+            ) : getWCQPlayoffPolandMailData(mail) ? (
+              <WCQPlayoffPolandMail mail={mail} />
+            ) : mail.metadata?.type === 'AI_FRIENDLY_REPORT_LINK' ? (
+              <FriendlyResultsMail mail={mail} />
             ) : mail.subject?.toLowerCase().includes('sparing') ? (
               (() => {
                 const matchRegex = /^(.+)\s(\d+[–-]\d+)\s(.+)$/;
