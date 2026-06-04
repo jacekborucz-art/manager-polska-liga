@@ -219,6 +219,12 @@ const applyRedCardPenalty = (lt: LiveTeam, expelled: Player): void => {
   lt.redCardPenalty = Math.max(0.65, lt.redCardPenalty * (1 - penalty));
 };
 
+const shortHandedGoalChance = (sentOffCount: number): number => {
+  if (sentOffCount >= 2) return 0.001;
+  if (sentOffCount === 1) return 0.28;
+  return 1;
+};
+
 const benchReplacement = (lt: LiveTeam, requiredRole: PlayerPosition, minute: number, losing: boolean) => {
   const bench = lt.bench.map(id => lt.squad.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
   if (!bench.length) return null;
@@ -428,6 +434,7 @@ const maybeCardOrPenalty = (att: LiveTeam, def: LiveTeam, minute: number, weathe
   const taker = pickPenalty(att, rng);
   const keeper = pickKeeper(def);
   if (!taker || !keeper) return;
+  if (rng.next() > shortHandedGoalChance(att.sentOff.size)) return;
   const scoreChance = clamp(0.63 + ((taker.attributes.penalties * 1.6 + taker.attributes.finishing * 0.8 + taker.attributes.mentality * 0.7 + taker.attributes.technique * 0.55) - (keeper.attributes.goalkeeping * 1.42 + keeper.attributes.positioning * 0.82 + keeper.attributes.mentality * 0.56)) / 360 + (att.side === 'HOME' ? 0.02 : 0) - weatherInt * 0.03, 0.48, 0.9);
   eventPush(timeline, minute, att.side, MatchEventType.PENALTY_AWARDED, `Penalty for ${att.team.name}`, taker.id, defender.id);
   if (rng.next() < scoreChance) {
@@ -451,13 +458,14 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   const overallAtt = attM.att + attM.build + attM.create + attM.def + attM.press;
   const overallDef = defM.att + defM.build + defM.create + defM.def + defM.press;
   const dominanceFactor = clamp(overallAtt / overallDef, 0.3, 2.5);
-  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty + Math.max(0, numbersAdvantage) * 0.03 * dominanceFactor;
+  const attackShortHanded = shortHandedGoalChance(att.sentOff.size);
+  const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty * attackShortHanded + Math.max(0, numbersAdvantage) * 0.03 * dominanceFactor;
   if (rng.next() >= phaseChance) return;
   const shot = shooter.attributes.finishing * 0.92 + shooter.attributes.attacking * 0.75 + shooter.attributes.positioning * 0.65 + shooter.attributes.technique * 0.56 + shooter.attributes.heading * 0.26 + creator.attributes.vision * 0.18 + creator.attributes.passing * 0.18 + attM.att * 0.022 + attM.create * 0.015 + (att.coach?.attributes.motivation ?? 50) * 0.18;
   const prev = keeper.attributes.goalkeeping * 0.94 + keeper.attributes.positioning * 0.58 + defM.def * 0.022 + defender.attributes.defending * 0.32 + defender.attributes.positioning * 0.22 + weatherInt * 4;
   const onTarget = clamp(0.2 + (shot - prev) / 920 + Math.max(0, 100 - (att.fatigue[shooter.id] ?? 100)) * -0.001 - weatherInt * 0.035, 0.1, 0.42);
   if (rng.next() >= onTarget) return;
-  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty + Math.max(0, numbersAdvantage) * 0.04 * dominanceFactor;
+  const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty * attackShortHanded + Math.max(0, numbersAdvantage) * 0.04 * dominanceFactor;
   if (rng.next() < goalChance) {
     const assistant = creator.id !== shooter.id ? creator : null;
     goals.push(goalEntry(shooter, att.team.id, minute, false, assistant));

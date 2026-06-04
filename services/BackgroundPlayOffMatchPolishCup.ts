@@ -114,6 +114,12 @@ const simulatePlayoffMatchEngine = (
     return 0.25;
   };
 
+  const shortHandedGoalChance = (redCount: number): number => {
+    if (redCount >= 2) return 0.001;
+    if (redCount === 1) return 0.28;
+    return 1;
+  };
+
   // Sekcja wpływu doświadczenia sędziego na chaos meczu
   const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
 
@@ -310,7 +316,7 @@ const simulatePlayoffMatchEngine = (
       const chaos = getChaosChance();
       const saturation = getSaturationFactor();
 
-      const homeChance = xg.home * saturation * minuteScale * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      const homeChance = xg.home * saturation * minuteScale * shortHandedGoalChance(homeRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
       if (rng() < homeChance) {
         let goalMin = minute;
         while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;
@@ -329,7 +335,7 @@ const simulatePlayoffMatchEngine = (
         homeGoals++;
       }
 
-      const awayChance = xg.away * saturation * minuteScale * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      const awayChance = xg.away * saturation * minuteScale * shortHandedGoalChance(awayRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
       if (rng() < awayChance) {
         let goalMin = minute;
         while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;

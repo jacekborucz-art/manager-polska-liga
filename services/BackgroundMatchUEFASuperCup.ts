@@ -346,6 +346,13 @@ const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { atta
   };
 };
 
+const getShortHandedGoalChance = (redExits: SimulatedExit[], minute: number): number => {
+  const activeReds = redExits.filter(exit => exit.min < minute).length;
+  if (activeReds >= 2) return 0.001;
+  if (activeReds === 1) return 0.28;
+  return 1;
+};
+
 const adjustExtraTimeWinProbability = (
   homeWinProb: number,
   homeRedExits: SimulatedExit[],
@@ -521,6 +528,7 @@ const simulateCLMatchFull = (
     const subs       = side === 'H' ? homeSubData.matchSubs : awaySubData.matchSubs;
     const exits      = side === 'H' ? homeRedExits : awayRedExits;
     const penMin     = Math.floor(5 + rng(rollOffset + 2) * 85);
+    if (rng(rollOffset + 4) > getShortHandedGoalChance(exits, penMin)) return;
     const activeXI   = getActiveLineupAt(penMin, lineup.startingXI, subs, exits);
     const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
     if (!kicker) return;
@@ -583,6 +591,7 @@ const simulateCLMatchFull = (
       let minute = Math.floor(1 + rng(baseOffset + i) * 94);
       while (usedMinutes.has(minute)) { minute = minute >= 96 ? 1 : minute + 1; }
       usedMinutes.add(minute);
+      if (rng(baseOffset + i + 503) > getShortHandedGoalChance(exits, minute)) continue;
       const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs, exits);
       const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
       const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;

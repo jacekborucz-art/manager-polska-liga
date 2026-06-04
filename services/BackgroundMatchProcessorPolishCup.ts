@@ -110,6 +110,12 @@ const simulateCupMatch = (
     return 0.18;
   };
 
+  const shortHandedGoalChance = (redCount: number): number => {
+    if (redCount >= 2) return 0.001;
+    if (redCount === 1) return 0.28;
+    return 1;
+  };
+
   // ── FUNKCJA: OBLICZ XG PER MINUTA ───────────────────────────
   // Formuła MULTIPLIKATYWNA — klasa drużyny jest mnożnikiem, nie dodatkiem.
   // Dzięki temu duże różnice klas (Ekstraklasa vs IV liga) realnie dominują wynik.
@@ -368,7 +374,7 @@ const simulateCupMatch = (
       const saturation = getSaturationFactor();
 
       // Szansa HOME
-      const homeChance = xg.home * saturation * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      const homeChance = xg.home * saturation * shortHandedGoalChance(homeRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
       if (rng() < homeChance) {
         // Sprawdź czy minuta nie jest zajęta
         let goalMin = minute;
@@ -384,7 +390,7 @@ const simulateCupMatch = (
       }
 
       // Szansa AWAY
-      const awayChance = xg.away * saturation * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      const awayChance = xg.away * saturation * shortHandedGoalChance(awayRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
       if (rng() < awayChance) {
         let goalMin = minute;
         while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;

@@ -133,6 +133,12 @@ const allPlayedIds = new Set<string>([
     const playerYellowCounts = new Map<string, number>();
     const expelledIds = new Set<string>();
 
+    const shortHandedGoalChance = (redCount: number): number => {
+      if (redCount >= 2) return 0.001;
+      if (redCount === 1) return 0.28;
+      return 1;
+    };
+
     // Funkcja obliczająca sumę atrybutów STARTING XI uwzględniającą kondycję
     const getTeamPower = (players: Player[], lineup: Lineup, fMap: Record<string, number>) => {
       const xi = players.filter(p => lineup.startingXI.includes(p.id));
@@ -399,8 +405,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier * hMoraleDebuff;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier * aMoraleDebuff;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * shortHandedGoalChance(homeRedCount) * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier * hMoraleDebuff;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * shortHandedGoalChance(awayRedCount) * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier * aMoraleDebuff;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {
@@ -429,6 +435,7 @@ const allPlayedIds = new Set<string>([
       const penaltyProb = (referee.strictness / 35000) * penaltyExperienceFactor;
       if (seededRng(minute + 700) < penaltyProb) {
         const side = seededRng(minute + 701) < 0.5 ? 'H' : 'A';
+        if (seededRng(minute + 704) > shortHandedGoalChance(side === 'H' ? homeRedCount : awayRedCount)) continue;
         const isScored = seededRng(minute + 702) < 0.78; // 78% skuteczności karnych
         const kicker = GoalAttributionService.pickScorer(side === 'H' ? homePlayers : awayPlayers, (side === 'H' ? homeLineup : awayLineup).startingXI as string[], false, () => seededRng(minute + 703));
         if (!kicker) continue; // brak kandydatów (np. czerwona kartka wyczyściła skład)
