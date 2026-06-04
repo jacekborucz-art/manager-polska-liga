@@ -1,4 +1,13 @@
-export type TalkType = 'CALM' | 'AGGRESSIVE' | 'PRAISE' | 'CRITICIZE' | 'SILENCE';
+export type TalkType =
+  | 'CALM'
+  | 'AGGRESSIVE'
+  | 'PRAISE'
+  | 'CRITICIZE'
+  | 'SILENCE'
+  | 'FRIENDLY_SAFE'
+  | 'FRIENDLY_COMPETE'
+  | 'FRIENDLY_EXPERIMENT'
+  | 'FRIENDLY_DISCIPLINE';
 
 export type ScoreContext =
   | 'DRAW_LOW'
@@ -13,6 +22,34 @@ export interface TalkOption {
   text: string;
   hiddenType: TalkType;
 }
+
+export const FRIENDLY_HALFTIME_TALKS: TalkOption[] = [
+  {
+    id: 'FR_SAFE',
+    text: 'To tylko sparing. Grajcie ostrożnie, bez zbędnego ryzyka i bez głupich urazów.',
+    hiddenType: 'FRIENDLY_SAFE',
+  },
+  {
+    id: 'FR_COMPETE',
+    text: 'Sparing czy nie, każdy tutaj walczy o miejsce w składzie. Pokażcie mi, kto jest gotowy.',
+    hiddenType: 'FRIENDLY_COMPETE',
+  },
+  {
+    id: 'FR_EXPERIMENT',
+    text: 'Traktujemy tę połowę jak test. Próbujcie odważniej rozwiązań z treningu.',
+    hiddenType: 'FRIENDLY_EXPERIMENT',
+  },
+  {
+    id: 'FR_DISCIPLINE',
+    text: 'Wynik jest drugorzędny, ale organizacja nie. Chcę dyscypliny i odpowiedzialności.',
+    hiddenType: 'FRIENDLY_DISCIPLINE',
+  },
+  {
+    id: 'FR_SILENCE',
+    text: 'Bez komentarza',
+    hiddenType: 'SILENCE',
+  },
+];
 
 export const HALFTIME_TALKS: Record<ScoreContext, TalkOption[]> = {
 

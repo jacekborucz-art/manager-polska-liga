@@ -8,6 +8,24 @@ const GLOSS = "absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transpar
 
 const REVEAL_DELAY_MS = 380; // ms per team reveal
 
+const NT_FLAG_CODE_MAP: Record<string, string> = {
+  Albania: 'AL', Andora: 'AD', Armenia: 'AM', Austria: 'AT', Azerbejdżan: 'AZ',
+  Belgia: 'BE', Białoruś: 'BY', 'Bośnia i Hercegowina': 'BA', Bułgaria: 'BG', Chorwacja: 'HR',
+  Cypr: 'CY', Czarnogóra: 'ME', Czechy: 'CZ', Dania: 'DK', Estonia: 'EE',
+  Finlandia: 'FI', Francja: 'FR', Gibraltar: 'GI', Grecja: 'GR', Gruzja: 'GE',
+  Hiszpania: 'ES', Holandia: 'NL', Irlandia: 'IE', Islandia: 'IS', Izrael: 'IL',
+  Kazachstan: 'KZ', Kosovo: 'XK', Liechtenstein: 'LI', Litwa: 'LT', Luksemburg: 'LU',
+  Łotwa: 'LV', 'Macedonia Północna': 'MK', Malta: 'MT', Mołdawia: 'MD', Niemcy: 'DE',
+  Norwegia: 'NO', Polska: 'PL', Portugalia: 'PT', Rumunia: 'RO', 'San Marino': 'SM',
+  Serbia: 'RS', Słowacja: 'SK', Słowenia: 'SI', Szkocja: 'GB-SCT', Szwajcaria: 'CH',
+  Szwecja: 'SE', Turcja: 'TR', Ukraina: 'UA', Walia: 'GB-WLS', Węgry: 'HU',
+  Włochy: 'IT', 'Wyspy Owcze': 'FO', Anglia: 'GB-ENG', 'Irlandia Północna': 'GB-NIR',
+};
+
+function getNTFlagCode(name: string): string | null {
+  return NT_FLAG_CODE_MAP[name]?.toLowerCase() ?? null;
+}
+
 /** Kolejność odsłaniania slotów: [pathIdx, slot] */
 const REVEAL_ORDER: Array<[number, 'sf1Home' | 'sf1Away' | 'sf2Home' | 'sf2Away']> = [
   [0, 'sf1Home'], [0, 'sf1Away'],
@@ -83,7 +101,7 @@ export const WCQPlayoffDrawView: React.FC = () => {
         <div className="absolute inset-0 bg-slate-950/70" />
       </div>
 
-      <div className="relative z-10 flex flex-col h-full p-5 gap-4 overflow-auto">
+      <div className="relative z-10 flex flex-col h-full p-5 gap-4 overflow-auto max-w-[1540px] mx-auto w-full">
 
         {/* HEADER */}
         <div className={GLASS + " p-5 flex items-center justify-between shrink-0"}>
@@ -127,17 +145,14 @@ export const WCQPlayoffDrawView: React.FC = () => {
                 <div className={GLOSS} />
 
                 {/* Nagłówek ścieżki */}
-                <div className="flex items-center gap-3 pb-2 border-b border-white/[0.07]">
-                  <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-black text-lg ${colorClass}`}>
-                    {label}
+                <div className="flex items-center justify-center pb-2 border-b border-white/[0.07]">
+                  <div className={`h-10 px-5 rounded-xl border flex items-center justify-center text-sm font-black italic uppercase tracking-tighter ${colorClass}`}>
+                    ŚCIEŻKA {label}
                   </div>
-                  <span className="text-white/70 text-xs font-bold uppercase tracking-wider">
-                    Ścieżka {label}
-                  </span>
                 </div>
 
                 {/* Półfinał 1 */}
-                <div className="bg-white/[0.03] rounded-2xl px-4 py-3 flex flex-col gap-1.5">
+                <div className="bg-white/[0.03] rounded-2xl px-5 py-4 flex flex-col gap-2">
                   <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Półfinał 1</p>
                   <MatchupRow
                     home={path.sf1Home}
@@ -148,7 +163,7 @@ export const WCQPlayoffDrawView: React.FC = () => {
                 </div>
 
                 {/* Półfinał 2 */}
-                <div className="bg-white/[0.03] rounded-2xl px-4 py-3 flex flex-col gap-1.5">
+                <div className="bg-white/[0.03] rounded-2xl px-5 py-4 flex flex-col gap-2">
                   <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Półfinał 2</p>
                   <MatchupRow
                     home={path.sf2Home}
@@ -160,7 +175,7 @@ export const WCQPlayoffDrawView: React.FC = () => {
 
                 {/* Finał */}
                 <div className="mt-auto pt-2 border-t border-white/[0.06] flex items-center justify-center">
-                  <span className="text-[9px] font-black uppercase tracking-[0.35em] text-slate-600">
+                  <span className="text-[9px] font-black uppercase tracking-[0.35em] text-cyan-300">
                     → Finał ścieżki · 20 marca 2026 ←
                   </span>
                 </div>
@@ -208,18 +223,47 @@ interface TeamSlotProps {
   align: 'left' | 'right';
 }
 
-const TeamSlot: React.FC<TeamSlotProps> = ({ name, revealed, align }) => (
-  <div
-    className={`
-      flex-1 px-3 py-2 rounded-xl border text-xs font-black uppercase tracking-wide
-      transition-all duration-500
-      ${align === 'right' ? 'text-right' : 'text-left'}
-      ${revealed
-        ? 'bg-white/[0.06] border-white/15 text-white opacity-100 translate-y-0'
-        : 'bg-white/[0.02] border-white/5 text-transparent opacity-40 translate-y-1'
-      }
-    `}
-  >
-    {revealed ? name : '— — —'}
-  </div>
-);
+const TeamSlot: React.FC<TeamSlotProps> = ({ name, revealed, align }) => {
+  const flagCode = getNTFlagCode(name);
+  const flag = flagCode ? (
+    <img
+      src={`https://flagcdn.com/w40/${flagCode}.png`}
+      alt={name}
+      className="h-5 w-7 object-cover rounded-sm border border-white/10 shrink-0"
+    />
+  ) : (
+    <div className="h-5 w-7 rounded-sm border border-white/10 bg-white/10 flex items-center justify-center text-[8px] font-black text-slate-300 shrink-0">
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+
+  return (
+    <div
+      className={`
+        flex-1 min-h-[44px] px-2 py-2 rounded-xl border text-2xl font-black italic uppercase tracking-tighter
+        transition-all duration-500 flex items-center gap-3 min-w-0
+        ${align === 'right' ? 'justify-end text-right' : 'justify-start text-left'}
+        ${revealed
+          ? 'bg-transparent border-transparent text-white opacity-100 translate-y-0'
+          : 'bg-transparent border-transparent text-transparent opacity-40 translate-y-1'
+        }
+      `}
+    >
+      {revealed ? (
+        align === 'right' ? (
+          <>
+            <span className="truncate">{name}</span>
+            {flag}
+          </>
+        ) : (
+          <>
+            {flag}
+            <span className="truncate">{name}</span>
+          </>
+        )
+      ) : (
+        <span className="w-full text-center">— — —</span>
+      )}
+    </div>
+  );
+};

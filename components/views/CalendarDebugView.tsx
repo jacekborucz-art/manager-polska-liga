@@ -18,6 +18,10 @@ export const CalendarDebugView: React.FC = () => {
   const userSchedule = useMemo(() => leagueSchedules[userTier], [leagueSchedules, userTier]);
 
   const [showFriendlyScheduler, setShowFriendlyScheduler] = useState(false);
+  const [filterMode, setFilterMode] = useState<'all' | 'month' | 'dateRange'>('all');
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const confirmedFriendlyDates = useMemo(() => {
     const set = new Set<string>();
@@ -36,6 +40,38 @@ export const CalendarDebugView: React.FC = () => {
   const slots = useMemo(() => {
     return seasonTemplate ? seasonTemplate.slots : [];
   }, [seasonTemplate]);
+
+  const availableMonths = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { key: string; label: string }[] = [];
+    slots.forEach(s => {
+      const key = `${s.start.getFullYear()}-${s.start.getMonth()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push({ key, label: s.start.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }).toUpperCase() });
+      }
+    });
+    return result;
+  }, [slots]);
+
+  const filteredSlots = useMemo(() => {
+    if (filterMode === 'all') return slots;
+    if (filterMode === 'month' && selectedMonthKey) {
+      const [y, m] = selectedMonthKey.split('-').map(Number);
+      return slots.filter(s => s.start.getFullYear() === y && s.start.getMonth() === m);
+    }
+    if (filterMode === 'dateRange') {
+      const from = dateFrom ? new Date(dateFrom).setHours(0,0,0,0) : null;
+      const to = dateTo ? new Date(dateTo).setHours(23,59,59,999) : null;
+      return slots.filter(s => {
+        const slotStart = new Date(s.start).setHours(0,0,0,0);
+        if (from !== null && slotStart < from) return false;
+        if (to !== null && slotStart > to) return false;
+        return true;
+      });
+    }
+    return slots;
+  }, [slots, filterMode, selectedMonthKey, dateFrom, dateTo]);
 
   const activeTodaySlotId = useMemo(() => {
     const today = new Date(currentDate).setHours(0,0,0,0);
@@ -134,14 +170,28 @@ export const CalendarDebugView: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-3rem)] max-w-[1400px] mx-auto flex flex-col gap-4 animate-fade-in overflow-hidden relative">
+    <div className="h-[calc(100vh-3rem)] max-w-[1400px] mx-auto flex flex-col gap-4 animate-fade-in overflow-hidden relative pt-6">
       
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-        <div 
+        <div
           className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] opacity-20 transition-all duration-1000"
           style={{ background: userClub?.colorsHex[0] || '#3b82f6' }}
         />
+        <div
+          className="absolute bottom-[-15%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[150px] opacity-10 transition-all duration-1000"
+          style={{ background: userClub?.colorsHex[1] || userClub?.colorsHex[0] || '#1e40af' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-slate-950/20" />
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 select-none">
+          <div className="text-[15vw] font-black italic uppercase tracking-tighter text-white opacity-[0.018] leading-none text-center">
+            {userClub?.shortName || userClub?.name}
+          </div>
+          <div className="text-[3.5vw] font-black uppercase tracking-[0.6em] text-white opacity-[0.025]">
+            PLANER
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center justify-between px-8 py-5 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-3xl shrink-0 shadow-2xl">
@@ -181,10 +231,63 @@ export const CalendarDebugView: React.FC = () => {
          </div>
       </div>
 
+      <div className="flex items-center gap-5 px-7 py-4 bg-indigo-950/60 rounded-[24px] border border-indigo-500/15 backdrop-blur-xl shrink-0 flex-wrap shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_8px_32px_rgba(0,0,0,0.5)]">
+        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/70">Filtruj:</span>
+        <div className="flex items-center gap-2">
+          {(['all', 'month', 'dateRange'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setFilterMode(mode)}
+              className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 border-t border-x border-b active:translate-y-[2px] ${
+                filterMode === mode
+                  ? 'bg-blue-600/90 border-t-blue-300/60 border-x-blue-400/30 border-b-black/60 text-white shadow-[0_4px_20px_rgba(59,130,246,0.4)]'
+                  : 'bg-slate-800/70 border-t-white/15 border-x-white/10 border-b-black/50 text-slate-200 hover:-translate-y-[2px] hover:bg-slate-700/80 hover:text-white hover:shadow-[0_6px_20px_rgba(0,0,0,0.5)]'
+              }`}
+            >
+              {mode === 'all' ? 'Wszystkie' : mode === 'month' ? 'Miesiąc' : 'Zakres dat'}
+            </button>
+          ))}
+        </div>
+        {filterMode === 'month' && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {availableMonths.map(m => (
+              <button
+                key={m.key}
+                onClick={() => setSelectedMonthKey(selectedMonthKey === m.key ? null : m.key)}
+                className={`px-3.5 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 border-t border-x border-b active:translate-y-[2px] ${
+                  selectedMonthKey === m.key
+                    ? 'bg-blue-600/90 border-t-blue-300/60 border-x-blue-400/30 border-b-black/60 text-white shadow-[0_4px_16px_rgba(59,130,246,0.45)] -translate-y-[1px]'
+                    : 'bg-slate-800/70 border-t-white/15 border-x-white/10 border-b-black/50 text-slate-200 hover:-translate-y-[2px] hover:bg-slate-700/80 hover:text-white hover:shadow-[0_6px_16px_rgba(0,0,0,0.5)]'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {filterMode === 'dateRange' && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/70">Od</span>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-slate-900/80 border-t border-x border-b border-t-white/15 border-x-white/10 border-b-black/50 rounded-xl px-4 py-2 text-[10px] font-mono text-slate-100 focus:outline-none focus:border-t-blue-400/50 focus:border-x-blue-500/30 transition-all" />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/70">Do</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-slate-900/80 border-t border-x border-b border-t-white/15 border-x-white/10 border-b-black/50 rounded-xl px-4 py-2 text-[10px] font-mono text-slate-100 focus:outline-none focus:border-t-blue-400/50 focus:border-x-blue-500/30 transition-all" />
+            </div>
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="px-4 py-2 rounded-xl bg-rose-600/70 border-t border-x border-b border-t-rose-300/50 border-x-rose-400/20 border-b-black/60 text-[9px] font-black uppercase tracking-widest text-white hover:-translate-y-[2px] hover:bg-rose-500/80 hover:shadow-[0_6px_20px_rgba(239,68,68,0.4)] transition-all duration-200 active:translate-y-[2px]">
+                Wyczyść
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex-1 min-h-0 bg-slate-900/30 rounded-[40px] border border-white/5 backdrop-blur-2xl shadow-2xl flex flex-col">
          <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0 p-8 rounded-[40px]">
             <div className="max-w-4xl mx-auto space-y-3">
-               {slots.map((slot) => {
+               {filteredSlots.map((slot) => {
                  const theme = getCompTheme(slot.competition, slot.label);
                  const isTodayActive = activeTodaySlotId === slot.id;
                  const userMatch = getUserMatchForSlot(slot);

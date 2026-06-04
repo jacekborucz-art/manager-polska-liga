@@ -3152,7 +3152,11 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         const uXI  = isHome ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
         const oXI  = isHome ? matchState.awayLineup.startingXI : matchState.homeLineup.startingXI;
         const uFat = isHome ? matchState.homeFatigue : matchState.awayFatigue;
+        const uPlayers = isHome ? ctx.homePlayers : ctx.awayPlayers;
         const validIds = uXI.filter((id): id is string => id !== null);
+        const playersOnPitch = validIds
+          .map(id => uPlayers.find(player => player.id === id))
+          .filter((player): player is NonNullable<typeof player> => Boolean(player));
         const avgUserFatigue = validIds.length > 0 ? validIds.reduce((acc, id) => acc + (uFat[id] ?? 100), 0) / validIds.length : 100;
         const uStats = isHome ? matchState.liveStats.home : matchState.liveStats.away;
         const oStats = isHome ? matchState.liveStats.away : matchState.liveStats.home;
@@ -3209,6 +3213,8 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
             momentumEndOf1st={matchState.momentum}
             avgFatigue={avgUserFatigue}
             sessionSeed={matchState.sessionSeed}
+            isFriendly
+            playersOnPitch={playersOnPitch}
           />
         );
       })()}

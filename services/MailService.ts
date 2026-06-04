@@ -901,11 +901,15 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       if (!alreadySentWinterForm) {
         const recentForm = userClub.stats.form.slice(-5);
         const wins = recentForm.filter(r => r === 'W').length;
-        let winterTemplateId: string;
-        if (wins >= 4)       winterTemplateId = 'board_winter_form_excellent';
-        else if (wins === 3) winterTemplateId = 'board_winter_form_good';
-        else if (wins === 2) winterTemplateId = 'board_winter_form_mixed';
-        else                 winterTemplateId = 'board_winter_form_poor';
+        const templateByTone = [
+          'board_winter_form_poor',
+          'board_winter_form_mixed',
+          'board_winter_form_good',
+          'board_winter_form_excellent',
+        ];
+        const formTone = wins >= 4 ? 3 : wins === 3 ? 2 : wins === 2 ? 1 : 0;
+        const rankToneFloor = rank === 1 ? 2 : rank <= 3 ? 1 : 0;
+        const winterTemplateId = templateByTone[Math.max(formTone, rankToneFloor)];
         const winterMail = createMail(winterTemplateId, { 'CLUB': userClub.name });
         winterMail.id = `WINTER_FORM_${currentDate.getFullYear()}`;
         newMails.push(winterMail);

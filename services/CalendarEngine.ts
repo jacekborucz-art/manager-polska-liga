@@ -1028,13 +1028,27 @@ export const CalendarEngine = {
       }
 
       // ── SPARING ────────────────────────────────────────────────────────────
-      // Sparingi nie mają fixtures w systemie — traktowane jako dni informacyjne (auto-advance)
       case CompetitionType.FRIENDLY: {
+        const fixture = allFixtures.find(
+          f =>
+            f.date.toDateString() === dateStr &&
+            f.leagueId === CompetitionType.FRIENDLY &&
+            (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+            f.status === MatchStatus.SCHEDULED,
+        );
+
         return {
           slot,
           kind: EventKind.MATCH_FRIENDLY,
-          participation: 'info',
-          targetView: ViewState.DASHBOARD,
+          participation: fixture ? 'player' : 'info',
+          targetView: ViewState.PRE_MATCH_FRIENDLY_STUDIO,
+          fixture,
+          opponentClubId: fixture
+            ? fixture.homeTeamId === userTeamId
+              ? fixture.awayTeamId
+              : fixture.homeTeamId
+            : undefined,
+          isHome: fixture ? fixture.homeTeamId === userTeamId : undefined,
         };
       }
 

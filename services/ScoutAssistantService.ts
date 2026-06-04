@@ -724,12 +724,13 @@ function buildMailBody(params: {
   userClubId: string;
   opponentClubId: string;
   isHome?: boolean;
+  isFriendly?: boolean;
   errorMult?: number;
 }): string {
   const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
     opponentLeaguePosition, opponentLeaguePlayed = 0, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
     opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
-    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome, errorMult = 1.0 } = params;
+    opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome, isFriendly = false, errorMult = 1.0 } = params;
 
   // ── STYLE TOKENS (matching game's design language) ─────────────────────
   const FONT = `'Inter', system-ui, sans-serif`;
@@ -1097,7 +1098,7 @@ function buildMailBody(params: {
     else if (form.wins >= 3) { chanceScore -= 1; chanceReasons.push(`rywal prezentuje dobrą formę`); }
   }
 
-  const hasReliableLeagueTable = opponentLeaguePlayed >= 4;
+  const hasReliableLeagueTable = !isFriendly && opponentLeaguePlayed >= 4;
   if (hasReliableLeagueTable) {
     if (opponentLeaguePosition <= 3) { chanceScore -= 2; chanceReasons.push(`${opponentName} zajmuje czołową pozycję w tabeli (${opponentLeaguePosition}. miejsce)`); }
     else if (opponentLeaguePosition >= 15) { chanceScore += 2; chanceReasons.push(`rywal plasuje się nisko w tabeli (${opponentLeaguePosition}. miejsce)`); }
@@ -1155,7 +1156,7 @@ function buildMailBody(params: {
 
     <!-- HEADER -->
     <div style="${cardBg};border-radius:24px;padding:30px 40px;margin-bottom:20px;border-top:1px solid rgba(255,255,255,0.12);">
-      <span style="${label('#3b82f6')}">RAPORT PRZEDMECZOWY · JUTRO</span>
+      <span style="${label('#3b82f6')}">${isFriendly ? 'RAPORT SPARINGOWY · JUTRO' : 'RAPORT PRZEDMECZOWY · JUTRO'}</span>
       <div style="${bigTitle}font-size:28px;line-height:1.1;color:#3b82f6;">${opponentName}</div>
     </div>
 
@@ -1168,7 +1169,7 @@ function buildMailBody(params: {
       <div style="display:flex;flex-direction:row;gap:14px;">
         ${tacticVisualCard}
         ${disciplineCard}
-        ${isSameLeague ? leagueTableCard : ''}
+        ${!isFriendly && isSameLeague ? leagueTableCard : ''}
       </div>
     </div>
 
@@ -1202,9 +1203,10 @@ export const ScoutAssistantService = {
     analysisQuality?: number;
     userClubId: string;
     isHome?: boolean;
+    isFriendly?: boolean;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePlayed, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePlayed, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome, isFriendly = false } = params;
     const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
@@ -1252,6 +1254,7 @@ export const ScoutAssistantService = {
       userClubId,
       opponentClubId: opponentClub.id,
       isHome,
+      isFriendly,
       errorMult,
     });
 
@@ -1259,9 +1262,9 @@ export const ScoutAssistantService = {
 
     return {
       id: mailId,
-      sender: 'Raport Przedmeczowy',
+      sender: isFriendly ? 'Raport Sparingowy' : 'Raport Przedmeczowy',
       role: 'Zespół analityków',
-      subject: `Analiza przeciwnika: ${opponentClub.name}`,
+      subject: isFriendly ? `Analiza sparingu: ${opponentClub.name}` : `Analiza przeciwnika: ${opponentClub.name}`,
       body,
       date: matchDate,
       isRead: false,

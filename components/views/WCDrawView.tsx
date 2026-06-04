@@ -19,15 +19,18 @@ const FLAG_CODE_MAP: Record<string, string> = {
   Szwecja: 'SE', Turcja: 'TR', Ukraina: 'UA', Węgry: 'HU', Włochy: 'IT', 'Wyspy Owcze': 'FO',
   Algieria: 'DZ', Angola: 'AO', 'Burkina Faso': 'BF', Kamerun: 'CM', "Côte d'Ivoire": 'CI',
   Egipt: 'EG', Ghana: 'GH', Gwinea: 'GN', Maroko: 'MA', Mali: 'ML', Nigeria: 'NG',
-  Senegal: 'SN', 'RPA': 'ZA', Tanzania: 'TZ', Tunezja: 'TN', Uganda: 'UG', Zambia: 'ZM',
+  Senegal: 'SN', 'RPA': 'ZA', 'Republika Południowej Afryki': 'ZA', Tanzania: 'TZ', Tunezja: 'TN', Uganda: 'UG', Zambia: 'ZM',
+  'Wybrzeże Kości Słoniowej': 'CI', Gabon: 'GA', 'Demokratyczna Republika Konga': 'CD', 'Wyspy Zielonego Przylądka': 'CV',
   Argentyna: 'AR', Boliwia: 'BO', Brazylia: 'BR', Chile: 'CL', Ekwador: 'EC',
   Kolumbia: 'CO', Peru: 'PE', Paragwaj: 'PY', Urugwaj: 'UY', Wenezuela: 'VE',
   Meksyk: 'MX', Kanada: 'CA', 'Stany Zjednoczone': 'US', Kostaryka: 'CR', Honduras: 'HN',
-  Jamajka: 'JM', Panama: 'PA', 'Trynidad i Tobago': 'TT', Kuba: 'CU',
+  Jamajka: 'JM', Panama: 'PA', 'Trynidad i Tobago': 'TT', Kuba: 'CU', Gwatemala: 'GT', Nikaragua: 'NI',
+  Haiti: 'HT', Curaçao: 'CW', 'Republika Dominikany': 'DO',
   Australia: 'AU', Chiny: 'CN', Indie: 'IN', Indonezja: 'ID', Iran: 'IR',
-  Irak: 'IQ', Japonia: 'JP', 'Korea Południowa': 'KR', 'Arabia Saudyjska': 'SA',
-  'Zjednoczone Emiraty Arabskie': 'AE', Uzbekistan: 'UZ', 'Wietnam': 'VN', Katar: 'QA',
-  'Nowa Zelandia': 'NZ', Fiji: 'FJ', Salwador: 'SV', Szkocja: 'GB-SCT', Walia: 'GB-WLS',
+  Irak: 'IQ', Japonia: 'JP', 'Korea Południowa': 'KR', 'Korea PŁD': 'KR', 'Korea PŁN': 'KP', 'Arabia Saudyjska': 'SA',
+  Jordania: 'JO', Kuwejt: 'KW', Oman: 'OM', Syria: 'SY', Tadżykistan: 'TJ', Kirgistan: 'KG', Singapur: 'SG',
+  'Zjednoczone Emiraty Arabskie': 'AE', ZEA: 'AE', Uzbekistan: 'UZ', 'Wietnam': 'VN', Katar: 'QA',
+  'Nowa Zelandia': 'NZ', Fiji: 'FJ', Fidżi: 'FJ', Salwador: 'SV', Szkocja: 'GB-SCT', Walia: 'GB-WLS',
   'Irlandia Północna': 'GB-NIR', Anglia: 'GB-ENG',
 };
 
@@ -47,10 +50,10 @@ function getPlayoffPlaceholderLabel(name: string): string {
 
 function DrawFlag({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
   const code = getFlagCode(name);
-  const cls = size === 'sm' ? 'w-5 h-3' : 'h-5 w-7';
+  const cls = size === 'sm' ? 'w-6 h-4' : 'h-6 w-9';
   if (!code) {
     return (
-      <div className={`${cls} rounded-sm border border-white/10 bg-white/10 flex items-center justify-center text-[8px] font-black text-slate-300 shrink-0`}>
+      <div className={`${cls} rounded-sm border border-white/10 bg-white/10 flex items-center justify-center text-[9px] font-black text-slate-300 shrink-0`}>
         {name.slice(0, 2).toUpperCase()}
       </div>
     );
@@ -79,55 +82,55 @@ function TeamChip({ team, drawnTo, isActive }: { team: WCTeam; drawnTo?: string;
   const isDrawn = !!drawnTo;
   const isTBD = team.isPlayoffSlot;
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all duration-300 ${
+    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-300 ${
       isActive ? 'ring-2 ring-amber-400 bg-amber-400/10' :
       isDrawn ? 'opacity-40' :
       'bg-white/[0.04] border border-white/[0.06]'
     }`}>
       {isTBD ? (
-        <div className="w-5 h-3 rounded-sm border border-dashed border-white/30 bg-white/5 shrink-0" />
+        <div className="w-6 h-4 rounded-sm border border-dashed border-white/30 bg-white/5 shrink-0" />
       ) : (
         <DrawFlag name={team.name} size="sm" />
       )}
-      <span className={`text-[10px] font-bold truncate max-w-[80px] ${isTBD ? 'text-white/30 italic' : 'text-white/90'}`}>
+      <span className={`text-[11px] font-bold truncate max-w-[110px] ${isTBD ? 'text-white/30 italic' : 'text-white/90 uppercase'}`}>
         {isTBD ? getPlayoffPlaceholderLabel(team.name) : team.name}
       </span>
-      {team.isHost && <span className="text-[8px] text-amber-400 font-black">★</span>}
-      {isDrawn && <span className="text-[9px] text-white/30 ml-auto">→{drawnTo}</span>}
+      {team.isHost && <span className="text-[9px] text-amber-400 font-black">★</span>}
+      {isDrawn && <span className="text-[10px] text-white/30 ml-auto">→{drawnTo}</span>}
     </div>
   );
 }
 
 function GroupSlot({ label, teams, revealedCount }: { label: string; teams: string[]; revealedCount: number }) {
   return (
-    <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl p-2.5">
-      <div className="relative flex justify-center mb-2 overflow-hidden rounded-lg py-0.5">
+    <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-3">
+      <div className="relative flex justify-center mb-2.5 overflow-hidden rounded-lg py-1">
         <div className="absolute inset-0 opacity-20" style={{ background: 'linear-gradient(to right, transparent 0%, #f59e0b 25%, #ffffff 50%, #f59e0b 75%, transparent 100%)' }} />
-        <span className={`${HEADING_FONT} text-sm text-white relative z-10`}>Grupa {label}</span>
+        <span className={`${HEADING_FONT} text-base text-white relative z-10`}>Grupa {label}</span>
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {teams.slice(0, revealedCount).map((name, i) => (
           <div
             key={i}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-500 ${
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-500 ${
               i === revealedCount - 1 ? 'bg-amber-400/15 border border-amber-400/30 scale-[1.02]' : 'bg-white/[0.05]'
             }`}
           >
             {isPlayoffPlaceholder(name) ? (
               <>
-                <div className="w-4 h-2.5 rounded-sm border border-dashed border-white/20 bg-white/5 shrink-0" />
-                <span className="text-[9px] text-white/30 italic">{getPlayoffPlaceholderLabel(name)}</span>
+                <div className="w-6 h-4 rounded-sm border border-dashed border-white/20 bg-white/5 shrink-0" />
+                <span className="text-[10px] text-white/30 italic">{getPlayoffPlaceholderLabel(name)}</span>
               </>
             ) : (
               <>
                 <DrawFlag name={name} size="sm" />
-                <span className="text-[10px] text-white/90 font-semibold truncate">{name}</span>
+                <span className="text-[15px] text-white/90 font-semibold uppercase">{name}</span>
               </>
             )}
           </div>
         ))}
         {Array.from({ length: Math.max(0, 4 - revealedCount) }).map((_, i) => (
-          <div key={`empty-${i}`} className="h-[26px] rounded-md border border-dashed border-white/10 bg-white/[0.02]" />
+          <div key={`empty-${i}`} className="h-[34px] rounded-lg border border-dashed border-white/10 bg-white/[0.02]" />
         ))}
       </div>
     </div>
@@ -231,7 +234,7 @@ const WCDrawView: React.FC = () => {
     >
       <div className="absolute inset-0 bg-slate-950/75 pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col flex-1 px-4 py-5 max-w-7xl mx-auto w-full">
+      <div className="relative z-10 flex flex-col flex-1 px-6 py-5 max-w-[1580px] mx-auto w-full">
 
         {/* Nagłówek */}
         <div className="flex items-center justify-between mb-5">
@@ -285,7 +288,7 @@ const WCDrawView: React.FC = () => {
         </div>
 
         {/* Info o TBD */}
-        <div className="mb-4 flex items-center gap-3 text-xs text-white/50">
+        <div className="mb-4 flex items-center gap-3 text-sm text-white/55">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-2 rounded-sm border border-dashed border-white/30 inline-block" />
             4 miejsca zarezerwowane dla zwycięzców baraży UEFA i 2 dla play-off FIFA (marzec {wcState.year})
@@ -298,22 +301,22 @@ const WCDrawView: React.FC = () => {
           )}
         </div>
 
-        <div className="flex gap-4 flex-1">
-          {/* Lewa strona: 4 koszyki */}
-          <div className="w-[280px] shrink-0 flex flex-col gap-3">
-            {pots.map((pot, p) => {
+        <div className="flex gap-5 flex-1">
+          {/* Lewa strona: koszyki 1-2 */}
+          <div className="w-[280px] shrink-0 flex flex-col gap-3.5">
+            {pots.slice(0, 2).map((pot, p) => {
               const pc = POT_COLORS[p];
               const isActivePot = !ceremonyDone && currentStep?.potIndex === p;
               return (
                 <div
                   key={p}
-                  className={`${pc.bg} border ${pc.border} rounded-2xl p-3 transition-all duration-300 ${isActivePot ? 'ring-2 ring-amber-400/50' : ''}`}
+                  className={`${pc.bg} border ${pc.border} rounded-2xl p-4 transition-all duration-300 ${isActivePot ? 'ring-2 ring-amber-400/50' : ''}`}
                 >
-                  <div className={`text-[10px] font-black uppercase tracking-widest ${pc.text} mb-2`}>
+                  <div className={`text-xs font-black uppercase tracking-widest ${pc.text} mb-2.5 text-center pb-1.5 border-b border-amber-400/30`}>
                     {POT_COLORS[p].label}
                     {isActivePot && <span className="ml-2 animate-pulse">●</span>}
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1.5">
                     {pot.map((team, t) => {
                       const drawnStep = drawSteps.findIndex(s => s.potIndex === p && s.teamIndex === t);
                       const isDrawn = drawnStep >= 0 && drawnStep < revealedSteps;
@@ -363,7 +366,7 @@ const WCDrawView: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {wcState.groups.map(group => (
                 <GroupSlot
                   key={group.label}
@@ -373,6 +376,42 @@ const WCDrawView: React.FC = () => {
                 />
               ))}
             </div>
+          </div>
+
+          {/* Prawa strona: koszyki 3-4 */}
+          <div className="w-[280px] shrink-0 flex flex-col gap-3.5">
+            {pots.slice(2).map((pot, idx) => {
+              const p = idx + 2;
+              const pc = POT_COLORS[p];
+              const isActivePot = !ceremonyDone && currentStep?.potIndex === p;
+              return (
+                <div
+                  key={p}
+                  className={`${pc.bg} border ${pc.border} rounded-2xl p-4 transition-all duration-300 ${isActivePot ? 'ring-2 ring-amber-400/50' : ''}`}
+                >
+                  <div className={`text-xs font-black uppercase tracking-widest ${pc.text} mb-2.5 text-center pb-1.5 border-b border-amber-400/30`}>
+                    {POT_COLORS[p].label}
+                    {isActivePot && <span className="ml-2 animate-pulse">●</span>}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {pot.map((team, t) => {
+                      const drawnStep = drawSteps.findIndex(s => s.potIndex === p && s.teamIndex === t);
+                      const isDrawn = drawnStep >= 0 && drawnStep < revealedSteps;
+                      const isActivePotTeam = !ceremonyDone && currentStep?.potIndex === p && currentStep?.teamIndex === t;
+                      const drawnGroup = isDrawn ? drawSteps[drawnStep]?.groupLabel : undefined;
+                      return (
+                        <TeamChip
+                          key={team.name}
+                          team={team}
+                          drawnTo={drawnGroup}
+                          isActive={isActivePotTeam}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

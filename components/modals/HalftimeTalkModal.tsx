@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TalkOption } from '../../data/halftime_talks_pl';
+import type { Player } from '../../types';
 import {
   TalkEffect,
   getScoreContext,
   getTalksForContext,
+  getFriendlyTalksForContext,
   calculateTalkEffect,
+  calculateFriendlyTalkEffect,
 } from '../../services/HalftimeTalkService';
 
 const JerseyIcon = ({ primary, secondary, size = "w-10 h-10" }: { primary: string, secondary: string, size?: string }) => (
@@ -50,6 +53,8 @@ interface HalftimeTalkModalProps {
   momentumEndOf1st: number;
   avgFatigue: number;
   sessionSeed: number;
+  isFriendly?: boolean;
+  playersOnPitch?: Player[];
 }
 
 type Phase = 'SELECTING' | 'REACTING';
@@ -82,6 +87,8 @@ export const HalftimeTalkModal = ({
   momentumEndOf1st,
   avgFatigue,
   sessionSeed,
+  isFriendly = false,
+  playersOnPitch = [],
 }: HalftimeTalkModalProps) => {
   const [phase, setPhase] = useState<Phase>('SELECTING');
   const [reactionText, setReactionText] = useState('');
@@ -90,18 +97,29 @@ export const HalftimeTalkModal = ({
   if (!isOpen) return null;
 
   const context = getScoreContext(userScore, oppScore);
-  const talks: TalkOption[] = getTalksForContext(context);
+  const talks: TalkOption[] = isFriendly ? getFriendlyTalksForContext(context) : getTalksForContext(context);
 
   const handleSelect = (option: TalkOption, index: number) => {
-    const effect = calculateTalkEffect(
-      option.hiddenType,
-      context,
-      momentumEndOf1st,
-      avgFatigue,
-      userShots,
-      sessionSeed,
-      index
-    );
+    const effect = isFriendly
+      ? calculateFriendlyTalkEffect(
+          option.hiddenType,
+          context,
+          momentumEndOf1st,
+          avgFatigue,
+          userShots,
+          sessionSeed,
+          index,
+          playersOnPitch
+        )
+      : calculateTalkEffect(
+          option.hiddenType,
+          context,
+          momentumEndOf1st,
+          avgFatigue,
+          userShots,
+          sessionSeed,
+          index
+        );
     setReactionText(effect.reactionText);
     setPendingEffect(effect);
     setPhase('REACTING');
@@ -315,7 +333,7 @@ export const HalftimeTalkModal = ({
         {phase === 'SELECTING' && (
           <div className="relative flex flex-col">
             <div className="flex flex-col items-center gap-3 px-8 pt-5 pb-2">
-              <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">ROZMOWA MOTYWACYJNA</span>
+              <span className="text-sm font-black italic uppercase tracking-tighter text-cyan-400">{isFriendly ? 'ROZMOWA W SPARINGU' : 'ROZMOWA MOTYWACYJNA'}</span>
               <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
             </div>
             <div className="px-8 pb-5 grid grid-cols-2 gap-3">
@@ -366,5 +384,4 @@ export const HalftimeTalkModal = ({
     </div>
   , document.body);
 };
-
 

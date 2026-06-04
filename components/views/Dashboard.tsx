@@ -236,11 +236,21 @@ const boardConfidence = useMemo(() => {
 
         // ── Liga ────────────────────────────────────────────────────────────
         case EventKind.MATCH_LEAGUE:
-        case EventKind.MATCH_FRIENDLY:
           return {
             text: lineupValidation.valid ? 'DZIEŃ MECZOWY ⚽' : 'BŁĄD SKŁADU ⚠️',
             action: () => lineupValidation.valid
               ? navigateTo(ViewState.PRE_MATCH_STUDIO)
+              : navigateTo(ViewState.SQUAD_VIEW),
+            isMatch: true,
+            disabled: isJumping,
+            error: lineupValidation.valid ? null : lineupValidation.error,
+          };
+
+        case EventKind.MATCH_FRIENDLY:
+          return {
+            text: lineupValidation.valid ? 'SPARING ⚽' : 'BŁĄD SKŁADU ⚠️',
+            action: () => lineupValidation.valid
+              ? navigateTo(ViewState.PRE_MATCH_FRIENDLY_STUDIO)
               : navigateTo(ViewState.SQUAD_VIEW),
             isMatch: true,
             disabled: isJumping,
@@ -930,7 +940,12 @@ const boardConfidence = useMemo(() => {
                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Następny Mecz</span>
                      </div>
                      <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border"
-                       style={{ color: myClub?.colorsHex[0] ?? '#3b82f6', borderColor: `${myClub?.colorsHex[0] ?? '#3b82f6'}40`, background: `${myClub?.colorsHex[0] ?? '#3b82f6'}12` }}>
+                       style={{
+                         color: '#ffffff',
+                         borderColor: `${myClub?.colorsHex[0] ?? '#3b82f6'}60`,
+                         background: `${myClub?.colorsHex[0] ?? '#3b82f6'}55`,
+                         textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                       }}>
                        {roundLabel}
                      </span>
                    </div>
@@ -950,9 +965,6 @@ const boardConfidence = useMemo(() => {
                          </div>
                        )}
                        <span className="text-[10px] font-black italic uppercase text-white text-center leading-tight line-clamp-2">{myClub?.name}</span>
-                       {isHome !== undefined && (
-                         <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/70">{isHome ? 'DOM' : 'WYJAZD'}</span>
-                       )}
                      </div>
 
                      {/* VS */}
@@ -975,9 +987,6 @@ const boardConfidence = useMemo(() => {
                          </div>
                        )}
                        <span className="text-[10px] font-black italic uppercase text-white text-center leading-tight line-clamp-2">{opponent?.name}</span>
-                       {isHome !== undefined && (
-                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">{isHome ? 'WYJAZD' : 'DOM'}</span>
-                       )}
                      </div>
                    </div>
 
@@ -987,6 +996,12 @@ const boardConfidence = useMemo(() => {
                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                      </svg>
                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{dateLabel}</span>
+                     {isHome !== undefined && (
+                       <>
+                         <span className="h-1 w-1 rounded-full bg-white/15" />
+                         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400">{isHome ? 'DOM' : 'WYJAZD'}</span>
+                       </>
+                     )}
                    </div>
                  </div>
                </div>

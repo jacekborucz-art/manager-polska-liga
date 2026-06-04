@@ -7429,7 +7429,7 @@ const finalResult: SimulationOutput = {
     }
 
 
-    // --- SCOUT ASSISTANT: Raport przedmeczowy (dzień przed meczem ligowym lub pucharowym) ---
+    // --- SCOUT ASSISTANT: Raport przedmeczowy (dzień przed meczem ligowym, pucharowym lub sparingowym) ---
     if (userTeamId) {
       const tomorrowStr = nextDay.toDateString();
       const tomorrowFixture = allFixtures.find(f =>
@@ -7438,6 +7438,7 @@ const finalResult: SimulationOutput = {
         (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
         (typeof f.leagueId === 'string' && (
           f.leagueId.startsWith('L_PL_') ||
+          f.leagueId === 'FRIENDLY' ||
           f.leagueId === 'POLISH_CUP' ||
           f.leagueId === 'SUPER_CUP' ||
           (f.leagueId.startsWith('CL_') && !f.leagueId.endsWith('_DRAW')) ||
@@ -7446,6 +7447,7 @@ const finalResult: SimulationOutput = {
       );
 
       if (tomorrowFixture) {
+        const isFriendlyReport = tomorrowFixture.leagueId === 'FRIENDLY';
         const scoutMailKey = `SCOUT_REPORT_${tomorrowFixture.id}`;
         if (!sentMailIdsRef.current.has(scoutMailKey)) {
           const opponentId = tomorrowFixture.homeTeamId === userTeamId
@@ -7487,6 +7489,7 @@ const finalResult: SimulationOutput = {
             const leagueName = tomorrowFixture.leagueId === 'L_PL_1' ? 'Ekstraklasa'
               : tomorrowFixture.leagueId === 'L_PL_2' ? '1. Liga'
               : tomorrowFixture.leagueId === 'L_PL_3' ? '2. Liga'
+              : tomorrowFixture.leagueId === 'FRIENDLY' ? 'Sparing'
               : tomorrowFixture.leagueId === 'POLISH_CUP' ? 'Puchar Polski'
               : tomorrowFixture.leagueId === 'SUPER_CUP' ? 'Superpuchar'
               : clLeagueNames[tomorrowFixture.leagueId as string] ?? 'Liga Mistrzów';
@@ -7547,6 +7550,7 @@ const finalResult: SimulationOutput = {
               analysisQuality,
               userClubId: userTeamId!,
               isHome,
+              isFriendly: isFriendlyReport,
             });
             sentMailIdsRef.current.add(scoutMailKey);
             setMessages(prev => [scoutMail, ...prev]);

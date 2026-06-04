@@ -1,4 +1,5 @@
-import { TalkType, ScoreContext, HALFTIME_TALKS, TalkOption } from '../data/halftime_talks_pl';
+import { TalkType, ScoreContext, HALFTIME_TALKS, FRIENDLY_HALFTIME_TALKS, TalkOption } from '../data/halftime_talks_pl';
+import type { Player } from '../types';
 
 export type { TalkType, ScoreContext };
 
@@ -43,6 +44,30 @@ const REACTION_TEXTS: Record<TalkType, string[]> = {
     'Zawodnicy patrzą po sobie. Brak słów mówi wszystko.',
     'Szatnia odpoczynek w milczeniu. Nikt nie odzywa.',
   ],
+  FRIENDLY_SAFE: [
+    'Starszyzna drużyny przyjmuje to ze spokojem. Młodsi zawodnicy wyglądają na trochę przygaszonych.',
+    'Zmęczeni gracze wyraźnie łapią oddech, ale kilku ambitnych piłkarzy chce grać ostrzej.',
+    'Szatnia rozumie, że zdrowie jest ważniejsze od wyniku.',
+    'Część zawodników zwalnia tempo w głowie, reszta skupia się na prostszej grze.',
+  ],
+  FRIENDLY_COMPETE: [
+    'Młodsi zawodnicy prostują plecy. Kilku rezerwowych wygląda, jakby właśnie dostało swoją szansę.',
+    'W szatni robi się głośniej. Ambitni gracze chcą udowodnić, że zasługują na skład.',
+    'Piłkarze o mocnym charakterze reagują natychmiast, ale zmęczeni wyglądają mniej pewnie.',
+    'Rywalizacja o miejsce w składzie wyraźnie podkręca atmosferę.',
+  ],
+  FRIENDLY_EXPERIMENT: [
+    'Kreatywni zawodnicy zaczynają żywo dyskutować o rozwiązaniach z treningu.',
+    'Młodsi gracze słuchają uważnie. Liderzy pilnują, żeby pomysł nie zmienił się w chaos.',
+    'Szatnia wygląda na gotową do testowania nowych wariantów.',
+    'Kilku piłkarzy kiwa głową, jakby dokładnie czekało na taki sygnał.',
+  ],
+  FRIENDLY_DISCIPLINE: [
+    'Liderzy biorą odpowiedzialność za ustawienie zespołu.',
+    'Szatnia uspokaja się. Zawodnicy skupiają się na organizacji i prostych decyzjach.',
+    'Piłkarze o wysokiej mentalności reagują najlepiej. Reszta szybko łapie rytm.',
+    'Widać mniej emocji, ale więcej koncentracji.',
+  ],
 };
 
 // ─── WYZNACZENIE KONTEKSTU WYNIKU ─────────────────────────────────────────────
@@ -61,11 +86,124 @@ export const getTalksForContext = (context: ScoreContext): TalkOption[] => {
   return HALFTIME_TALKS[context];
 };
 
+export const getFriendlyTalksForContext = (_context: ScoreContext): TalkOption[] => {
+  return FRIENDLY_HALFTIME_TALKS;
+};
+
 // ─── SEEDED RNG ──────────────────────────────────────────────────────────────
 const seededRng = (seed: number, offset: number): number => {
   const s = seed + offset;
   const x = Math.sin(s) * 10000;
   return x - Math.floor(x);
+};
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const avg = (values: number[], fallback: number): number => {
+  if (values.length === 0) return fallback;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+// ─── SPARING: PROFIL SZATNI I WPŁYW NA DRUGĄ POŁOWĘ ─────────────────────────
+export const calculateFriendlyTalkEffect = (
+  talkType: TalkType,
+  context: ScoreContext,
+  momentumEndOf1st: number,
+  avgFatigue: number,
+  userShots: number,
+  seed: number,
+  optionIndex: number,
+  playersOnPitch: Player[] = []
+): TalkEffect => {
+  if (talkType === 'SILENCE') {
+    return calculateTalkEffect(talkType, context, momentumEndOf1st, avgFatigue, userShots, seed, optionIndex);
+  }
+
+  const rng1 = seededRng(seed, optionIndex + 31);
+  const rng2 = seededRng(seed, optionIndex + 32);
+  const rng3 = seededRng(seed, optionIndex + 33);
+
+  const moraleValues = playersOnPitch.map(player => player.morale ?? 55);
+  const leadershipValues = playersOnPitch.map(player => player.attributes.leadership);
+  const mentalityValues = playersOnPitch.map(player => player.attributes.mentality);
+  const workRateValues = playersOnPitch.map(player => player.attributes.workRate);
+  const aggressionValues = playersOnPitch.map(player => player.attributes.aggression);
+  const overallValues = playersOnPitch.map(player => player.overallRating);
+
+  const avgMorale = avg(moraleValues, 55);
+  const avgLeadership = avg(leadershipValues, 50);
+  const avgMentality = avg(mentalityValues, 50);
+  const avgWorkRate = avg(workRateValues, 50);
+  const avgAggression = avg(aggressionValues, 50);
+  const avgOverall = avg(overallValues, 50);
+
+  const youngShare = playersOnPitch.length > 0
+    ? playersOnPitch.filter(player => player.age <= 22).length / playersOnPitch.length
+    : 0.25;
+  const veteranShare = playersOnPitch.length > 0
+    ? playersOnPitch.filter(player => player.age >= 30).length / playersOnPitch.length
+    : 0.20;
+  const tiredFactor = clamp((60 - avgFatigue) / 35, 0, 1);
+  const moraleFactor = clamp((avgMorale - 50) / 35, -1, 1);
+  const leadershipFactor = clamp((avgLeadership - 50) / 40, -1, 1);
+  const mentalityFactor = clamp((avgMentality - 50) / 40, -1, 1);
+  const workRateFactor = clamp((avgWorkRate - 50) / 40, -1, 1);
+  const aggressionFactor = clamp((avgAggression - 50) / 40, -1, 1);
+  const qualityFactor = clamp((avgOverall - 55) / 35, -1, 1);
+  const scorePressure =
+    context === 'LOSING_HIGH' ? 0.75
+    : context === 'LOSING_ONE' ? 0.45
+    : context === 'WINNING_HIGH' ? -0.35
+    : context === 'WINNING_ONE' ? -0.15
+    : 0;
+
+  let momentumDelta = 0;
+  let tempoRF = 1;
+  let mindsetRF = 1;
+  let intensityRF = 1;
+  let regenBonus = 0;
+
+  if (talkType === 'FRIENDLY_SAFE') {
+    const fit = 0.35 + tiredFactor * 0.75 + veteranShare * 0.35 + leadershipFactor * 0.20 - youngShare * 0.25 - scorePressure * 0.20;
+    momentumDelta = 1.5 + fit * 5 - youngShare * 3 + (rng1 - 0.5) * 3;
+    tempoRF = 0.88 - tiredFactor * 0.04;
+    mindsetRF = 1.02 + leadershipFactor * 0.04;
+    intensityRF = 0.86 - tiredFactor * 0.03;
+    regenBonus = 2.5 + tiredFactor * 2.5;
+  } else if (talkType === 'FRIENDLY_COMPETE') {
+    const fit = 0.25 + youngShare * 0.55 + workRateFactor * 0.45 + moraleFactor * 0.25 + aggressionFactor * 0.20 - tiredFactor * 0.60;
+    momentumDelta = 3 + fit * 9 + scorePressure * 3 + (rng1 - 0.5) * 5;
+    tempoRF = 1.07 + workRateFactor * 0.05;
+    mindsetRF = 1.04 + moraleFactor * 0.05;
+    intensityRF = 1.14 + aggressionFactor * 0.05;
+    regenBonus = -1.2 - tiredFactor * 1.8;
+  } else if (talkType === 'FRIENDLY_EXPERIMENT') {
+    const fit = 0.20 + mentalityFactor * 0.45 + qualityFactor * 0.25 + youngShare * 0.25 - tiredFactor * 0.15;
+    momentumDelta = 2 + fit * 7 + (userShots >= 4 ? 1.5 : 0) + (rng1 - 0.5) * 4;
+    tempoRF = 1.05 + mentalityFactor * 0.04;
+    mindsetRF = 1.10 + qualityFactor * 0.04;
+    intensityRF = 0.99 + workRateFactor * 0.04;
+    regenBonus = 0.4;
+  } else if (talkType === 'FRIENDLY_DISCIPLINE') {
+    const fit = 0.30 + leadershipFactor * 0.55 + mentalityFactor * 0.45 + veteranShare * 0.20 - aggressionFactor * 0.15;
+    momentumDelta = 2.5 + fit * 6 - Math.max(0, momentumEndOf1st) * 0.03 + (rng1 - 0.5) * 3;
+    tempoRF = 0.96;
+    mindsetRF = 1.12 + leadershipFactor * 0.05;
+    intensityRF = 0.97 + mentalityFactor * 0.04;
+    regenBonus = 1.0 + tiredFactor;
+  }
+
+  const rfNoise = (rng2 - 0.5) * 0.06;
+  const reactions = REACTION_TEXTS[talkType] ?? REACTION_TEXTS.SILENCE;
+
+  return {
+    momentumDelta: Math.round(clamp(momentumDelta, -10, 18) * 10) / 10,
+    tempoResponseFactor: parseFloat(clamp(tempoRF + rfNoise, 0.78, 1.20).toFixed(2)),
+    mindsetResponseFactor: parseFloat(clamp(mindsetRF + rfNoise * 0.7, 0.82, 1.22).toFixed(2)),
+    intensityResponseFactor: parseFloat(clamp(intensityRF + rfNoise * 0.8, 0.78, 1.22).toFixed(2)),
+    fatigueRegenBonus: Math.round(regenBonus * 10) / 10,
+    reactionText: reactions[Math.floor(rng3 * reactions.length)],
+  };
 };
 
 // ─── GŁÓWNA KALKULACJA — 7 WĄTKÓW PSYCHOLOGII ────────────────────────────────
