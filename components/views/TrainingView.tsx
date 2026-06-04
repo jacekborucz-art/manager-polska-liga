@@ -68,6 +68,7 @@ export const TrainingView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'training' | 'focus'>('training');
   const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
   const [hasIndividualFocusChange, setHasIndividualFocusChange] = useState(false);
+  const [hoveredCycleHint, setHoveredCycleHint] = useState<{ name: string; description: string; x: number; y: number } | null>(null);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
   const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
   const cachedReport = useMemo(() => {
@@ -145,6 +146,19 @@ export const TrainingView: React.FC = () => {
     { label: 'ATAK', keys: ['attacking', 'finishing', 'freeKicks', 'corners', 'penalties'], color: '#fb7185' },
     { label: 'MENTAL', keys: ['mentality', 'workRate', 'leadership', 'aggression'], color: '#a78bfa' }
   ];
+
+  const CYCLE_ACCENT: Record<string, string> = {
+    T_TACTICAL_PERIOD: '#7c3aed',
+    T_GEGENPRESSING:   '#ea580c',
+    T_TIKI_TAKA:       '#0284c7',
+    T_CATENACCIO:      '#1d4ed8',
+    T_SAQ:             '#d97706',
+    T_AIR_DOM:         '#9333ea',
+    T_SET_PIECES:      '#e11d48',
+    T_RECOVERY_YOGA:   '#0d9488',
+    T_HIGH_PRESS:      '#dc2626',
+    T_COUNTER_ATTACK:  '#65a30d',
+  };
 
   const buildProgressRows = (sourcePlayers: Player[]) => PROGRESS_MODULES.map(module => {
     const values = sourcePlayers.flatMap(player => module.keys.map(key => (
@@ -373,6 +387,16 @@ export const TrainingView: React.FC = () => {
         >
           <span className="block text-[9px] font-black uppercase tracking-[0.28em] text-emerald-400/80">Atrybut</span>
           <span className="block text-[10px] font-bold text-white whitespace-nowrap">{hoveredAttribute.label}</span>
+        </div>
+      )}
+
+      {hoveredCycleHint && (
+        <div
+          className="fixed z-[120] pointer-events-none w-80 rounded-2xl border border-white/15 bg-slate-950/96 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+          style={{ left: `${hoveredCycleHint.x + 18}px`, top: `${Math.max(hoveredCycleHint.y - 80, 18)}px` }}
+        >
+          <span className="block text-[8px] font-black uppercase tracking-[0.35em] text-slate-500 mb-2">{hoveredCycleHint.name}</span>
+          <p className="text-[13px] text-white font-semibold leading-relaxed">{hoveredCycleHint.description}</p>
         </div>
       )}
 
@@ -753,45 +777,50 @@ export const TrainingView: React.FC = () => {
            })()}
 
            {/* SIATKA PROGRAMÓW TRENINGOWYCH */}
-           <div className="grid grid-cols-2 auto-rows-[64px] gap-3">
-              {teamTrainingCycles.map(cycle => {
-                const isActive = activeTrainingId === cycle.id;
-                const isSelected = selectedId === cycle.id;
-                return (
-                  <button
-                    key={cycle.id}
-                    onClick={() => setSelectedId(cycle.id)}
-                    className={`group relative h-full p-3 rounded-2xl transition-all duration-300 text-left overflow-hidden active:translate-y-[2px] border-t border-x border-b
-                      ${isSelected
-                        ? 'bg-emerald-600/15 border-t-emerald-400/60 border-x-emerald-500/30 border-b-black/60'
-                        : 'bg-slate-900/40 border-t-white/10 border-x-white/5 border-b-black/40 hover:bg-slate-900/60'}
-                    `}
-                    style={{ boxShadow: isSelected ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(16,185,129,0.15), inset 0 1px 0 rgba(255,255,255,0.08)' : '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}
-                  >
-                    {/* OPIS NA HOVER */}
-                    <div className="absolute inset-0 rounded-2xl p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center z-20 pointer-events-none" style={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.12)' }}>
-                      <p className="text-[10px] text-white font-medium leading-relaxed text-center italic">"{cycle.description}"</p>
-                    </div>
-
-                    <div className="relative z-10 flex h-full items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-2xl shrink-0 transition-transform group-hover:scale-110
-                        ${isSelected ? 'bg-emerald-500 border border-emerald-300 text-white' : 'bg-slate-800 border border-white/10'}`}>
-                        {cycle.icon}
+           <div>
+              <div className="mb-3">
+                <span className="block text-[11px] font-black text-white uppercase tracking-[0.35em]">Programy Treningowe</span>
+                <div className="mt-1.5 h-px bg-gradient-to-r from-yellow-400/70 via-yellow-300/30 to-transparent" />
+              </div>
+              <div className="grid grid-cols-2 auto-rows-[64px] gap-3">
+                {teamTrainingCycles.map(cycle => {
+                  const isActive = activeTrainingId === cycle.id;
+                  const isSelected = selectedId === cycle.id;
+                  const accent = CYCLE_ACCENT[cycle.id] ?? '#10b981';
+                  return (
+                    <button
+                      key={cycle.id}
+                      onClick={() => setSelectedId(cycle.id)}
+                      onMouseEnter={e => setHoveredCycleHint({ name: cycle.name, description: cycle.description, x: Math.min(e.clientX, window.innerWidth - 330), y: e.clientY })}
+                      onMouseMove={e => setHoveredCycleHint({ name: cycle.name, description: cycle.description, x: Math.min(e.clientX, window.innerWidth - 330), y: e.clientY })}
+                      onMouseLeave={() => setHoveredCycleHint(null)}
+                      className="relative h-full p-3 rounded-2xl transition-all duration-200 text-left overflow-hidden active:translate-y-[2px] border-t border-x border-b border-b-black/60 hover:scale-[1.03] hover:brightness-110"
+                      style={{
+                        backgroundColor: isSelected ? `${accent}22` : `${accent}0d`,
+                        borderTopColor: isSelected ? `${accent}99` : `${accent}44`,
+                        borderLeftColor: isSelected ? `${accent}55` : `${accent}22`,
+                        borderRightColor: isSelected ? `${accent}55` : `${accent}22`,
+                        boxShadow: isSelected
+                          ? `0 3px 0 rgba(0,0,0,0.5), 0 6px 20px ${accent}44, inset 0 1px 0 rgba(255,255,255,0.08)`
+                          : `0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)`
+                      }}
+                    >
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl transition-opacity duration-200"
+                        style={{ backgroundColor: accent, opacity: isSelected ? 1 : 0.35, boxShadow: isSelected ? `0 0 8px ${accent}` : 'none' }}
+                      />
+                      <div className="relative z-10 flex h-full items-center gap-3 pl-2">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <h4 className="text-sm font-black text-white uppercase italic tracking-tighter truncate">{cycle.name}</h4>
+                          {isActive && (
+                            <span className="bg-blue-600/20 text-blue-400 text-[7px] px-2 py-0.5 rounded-full border border-blue-500/30 font-black tracking-widest uppercase shrink-0">OBECNY</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <h4 className="text-sm font-black text-white uppercase italic tracking-tighter truncate">{cycle.name}</h4>
-                        {isActive && (
-                          <span className="bg-blue-600/20 text-blue-400 text-[7px] px-2 py-0.5 rounded-full border border-blue-500/30 font-black tracking-widest uppercase shrink-0">OBECNY</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                    )}
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
            </div>
 
            {/* PANEL DIAGNOSTYKI */}
@@ -918,12 +947,6 @@ export const TrainingView: React.FC = () => {
                       style={{ boxShadow: isSelected ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 16px rgba(16,185,129,0.15), inset 0 1px 0 rgba(255,255,255,0.08)' : isCurrent ? '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(29,78,216,0.15), inset 0 1px 0 rgba(255,255,255,0.06)' : '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}
                     >
                       <div className="flex items-center gap-3 mb-2">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-2xl shrink-0 transition-transform group-hover:scale-110
-                          ${isSelected ? 'bg-emerald-500 border border-emerald-300'
-                          : isCurrent ? 'bg-blue-500/30 border border-blue-500/40'
-                          : 'bg-slate-800 border border-white/10'}`}>
-                          {focus.icon}
-                        </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="text-sm font-black text-white uppercase italic tracking-tighter truncate">{focus.name}</h4>
                           {isCurrent && isReady && (
@@ -953,7 +976,6 @@ export const TrainingView: React.FC = () => {
                 {activeFocus ? (
                   <>
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-3xl">{activeFocus.icon}</div>
                       <div>
                         <p className="text-base font-black text-white uppercase italic tracking-tighter">{activeFocus.name}</p>
                         {isReady ? (
@@ -993,7 +1015,6 @@ export const TrainingView: React.FC = () => {
                 <div className="bg-slate-900/60 rounded-[28px] border border-white/10 backdrop-blur-3xl p-5 flex flex-col gap-3 animate-fade-in">
                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Wybrany Fokus</span>
                   <div className="flex items-center gap-3 mb-1">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-2xl">{previewFocus.icon}</div>
                     <h4 className="text-base font-black text-white uppercase italic tracking-tighter">{previewFocus.name}</h4>
                   </div>
 

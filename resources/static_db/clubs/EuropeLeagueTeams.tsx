@@ -282,7 +282,7 @@ export const RAW_EUROPA_LEAGUE_CLUBS = [
   { name: "FK Vojvodina Novi Sad", country: "SRB", tier: 3, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Karađorđe Stadium", capacity: 14458, reputation: 8 },
   { name: "FK Novi Pazar", country: "SRB", tier: 3, colors: ['#006633', '#FFFFFF', '#FFD700'], stadium: "Stadion Novi Pazar", capacity: 12000, reputation: 8 },
   
-  { name: "FK TSC Bačka Topola", country: "SRB", tier: 3, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "TSC Arena", capacity: 4500, reputation: 8 },
+ 
   { name:  "Partizan Belgrad", country: "SRB", tier: 3, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Stadion Partizana", capacity: 32000, reputation: 10 },
 
 
