@@ -10,6 +10,8 @@ import {
   calculateTalkEffect,
   calculateFriendlyTalkEffect,
 } from '../../services/HalftimeTalkService';
+import type { LeagueMotivationContext } from '../../services/LeagueMotivationContextService';
+import { getLeagueMotivationContextLabel } from '../../services/LeagueMotivationContextService';
 
 const JerseyIcon = ({ primary, secondary, size = "w-10 h-10" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative">
@@ -55,6 +57,7 @@ interface HalftimeTalkModalProps {
   sessionSeed: number;
   isFriendly?: boolean;
   playersOnPitch?: Player[];
+  leagueMotivationContext?: LeagueMotivationContext | null;
 }
 
 type Phase = 'SELECTING' | 'REACTING';
@@ -89,6 +92,7 @@ export const HalftimeTalkModal = ({
   sessionSeed,
   isFriendly = false,
   playersOnPitch = [],
+  leagueMotivationContext = null,
 }: HalftimeTalkModalProps) => {
   const [phase, setPhase] = useState<Phase>('SELECTING');
   const [reactionText, setReactionText] = useState('');
@@ -97,7 +101,8 @@ export const HalftimeTalkModal = ({
   if (!isOpen) return null;
 
   const context = getScoreContext(userScore, oppScore);
-  const talks: TalkOption[] = isFriendly ? getFriendlyTalksForContext(context) : getTalksForContext(context);
+  const talks: TalkOption[] = isFriendly ? getFriendlyTalksForContext(context) : getTalksForContext(context, leagueMotivationContext);
+  const leagueMotivationLabel = getLeagueMotivationContextLabel(leagueMotivationContext);
 
   const handleSelect = (option: TalkOption, index: number) => {
     const effect = isFriendly
@@ -269,7 +274,7 @@ export const HalftimeTalkModal = ({
 
           <div className="flex justify-center">
             <div className={`inline-flex items-center rounded-full px-4 py-1 ${getContextBadge()}`}>
-              <span className="text-[9px] font-black italic uppercase tracking-[0.25em] text-white">PRZERWA</span>
+              <span className="text-[9px] font-black italic uppercase tracking-[0.25em] text-white">{leagueMotivationLabel ?? 'PRZERWA'}</span>
             </div>
           </div>
 
@@ -384,4 +389,3 @@ export const HalftimeTalkModal = ({
     </div>
   , document.body);
 };
-

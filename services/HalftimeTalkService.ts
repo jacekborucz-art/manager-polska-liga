@@ -1,5 +1,6 @@
 import { TalkType, ScoreContext, HALFTIME_TALKS, FRIENDLY_HALFTIME_TALKS, TalkOption } from '../data/halftime_talks_pl';
 import type { Player } from '../types';
+import type { LeagueMotivationContext } from './LeagueMotivationContextService';
 
 export type { TalkType, ScoreContext };
 
@@ -70,6 +71,65 @@ const REACTION_TEXTS: Record<TalkType, string[]> = {
   ],
 };
 
+const LEAGUE_STAKES_HALFTIME_TALKS: Record<LeagueMotivationContext, TalkOption[]> = {
+  LAST_ROUND_GENERAL: [
+    { id: 'LG_LAST_HT_1', text: 'To ostatnie czterdzieści pięć minut sezonu. Zagrajcie je odpowiedzialnie i z honorem.', hiddenType: 'CALM' },
+    { id: 'LG_LAST_HT_2', text: 'Nie kończymy sezonu spacerem. Chcę energii, pressingu i pełnej koncentracji do końca.', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_LAST_HT_3', text: 'Są dobre fragmenty. Dokończcie ten sezon tak, żeby szatnia mogła spojrzeć sobie w oczy.', hiddenType: 'PRAISE' },
+    { id: 'LG_LAST_HT_4', text: 'Ostatnia połowa nie zwalnia z wymagań. Proste błędy i odpuszczanie są nie do przyjęcia.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_LAST_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  TITLE_OR_PROMOTION_SECURED: [
+    { id: 'LG_DONE_HT_1', text: 'Cel jest już nasz, ale standard zostaje. Gramy spokojnie, mądrze i bez chaosu.', hiddenType: 'CALM' },
+    { id: 'LG_DONE_HT_2', text: 'Pokażcie w drugiej połowie, dlaczego jesteśmy drużyną, która zasłużyła na ten sukces.', hiddenType: 'PRAISE' },
+    { id: 'LG_DONE_HT_3', text: 'Nie ma wakacji w przerwie meczu! Chcę jakości i intensywności do ostatniego gwizdka.', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_DONE_HT_4', text: 'Za dużo luzu. Sukces nie daje prawa do niedokładności i lekceważenia rywala.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_DONE_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  TITLE_DECIDER: [
+    { id: 'LG_TITLE_HT_1', text: 'Mistrzostwo jest o jedną połowę stąd. Chłodna głowa, zero prezentów, pełna kontrola.', hiddenType: 'CALM' },
+    { id: 'LG_TITLE_HT_2', text: 'To jest moment mistrzów! Wychodzicie i bierzecie ten tytuł bez cofania się!', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_TITLE_HT_3', text: 'Wytrzymujecie presję. Jestem z was dumny, ale potrzebuję jeszcze jednej wielkiej połowy.', hiddenType: 'PRAISE' },
+    { id: 'LG_TITLE_HT_4', text: 'Jeśli teraz stracimy koncentrację, cały sezon może nas zaboleć. Obudźcie się natychmiast!', hiddenType: 'CRITICIZE' },
+    { id: 'LG_TITLE_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  DIRECT_PROMOTION_DECIDER: [
+    { id: 'LG_PROMO_HT_1', text: 'Awans jest blisko. Nie gonimy emocji, gonimy plan i właściwe decyzje.', hiddenType: 'CALM' },
+    { id: 'LG_PROMO_HT_2', text: 'Czterdzieści pięć minut od awansu! Wychodzimy z ogniem i nie oddajemy inicjatywy.', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_PROMO_HT_3', text: 'Dobrze znosicie ciężar meczu. Jeszcze jedna połowa odwagi i odpowiedzialności.', hiddenType: 'PRAISE' },
+    { id: 'LG_PROMO_HT_4', text: 'Awans sam się nie zrobi. Jeśli ktoś czeka, aż rywal pęknie, to popełnia błąd.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_PROMO_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  PLAYOFF_PLACE_DECIDER: [
+    { id: 'LG_PLAYOFF_HT_1', text: 'Baraże są w zasięgu. Druga połowa musi być cierpliwa, ale odważna.', hiddenType: 'CALM' },
+    { id: 'LG_PLAYOFF_HT_2', text: 'To połowa, która może przedłużyć sezon. Wyjdźcie i wyrwijcie sobie tę szansę!', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_PLAYOFF_HT_3', text: 'Walczycie jak drużyna, która chce grać dalej. Teraz dołóżcie skuteczność.', hiddenType: 'PRAISE' },
+    { id: 'LG_PLAYOFF_HT_4', text: 'Za mało konkretu jak na mecz o baraże. Potrzebuję więcej odwagi i decyzji.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_PLAYOFF_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  RELEGATION_DECIDER: [
+    { id: 'LG_STAY_HT_1', text: 'Utrzymanie wymaga spokoju. Każdy błąd może ważyć, więc gramy prosto i razem.', hiddenType: 'CALM' },
+    { id: 'LG_STAY_HT_2', text: 'To walka o ligę! Nie ma oszczędzania nóg, nie ma chowania się za kolegą!', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_STAY_HT_3', text: 'Widzę walkę. Teraz musicie ją utrzymać, nawet jeśli będzie bolało.', hiddenType: 'PRAISE' },
+    { id: 'LG_STAY_HT_4', text: 'Jeśli ktoś myśli, że samo się utrzyma, jest w błędzie. Więcej odpowiedzialności natychmiast!', hiddenType: 'CRITICIZE' },
+    { id: 'LG_STAY_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  EUROPE_PLACE_DECIDER: [
+    { id: 'LG_EUROPE_HT_1', text: 'Europa wymaga dojrzałości. Nie podpalamy się, kontrolujemy przestrzeń i tempo.', hiddenType: 'CALM' },
+    { id: 'LG_EUROPE_HT_2', text: 'To jest druga połowa o puchary! Tempo, agresja i wiara w każdy atak!', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_EUROPE_HT_3', text: 'Gracie jak drużyna z ambicją na Europę. Teraz trzeba to potwierdzić wynikiem.', hiddenType: 'PRAISE' },
+    { id: 'LG_EUROPE_HT_4', text: 'Za dużo zachowawczości. Tak nie wygrywa się miejsca w pucharach.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_EUROPE_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+  ALREADY_RELEGATED: [
+    { id: 'LG_DOWN_HT_1', text: 'Spadek już boli, ale druga połowa nadal jest o naszej godności i reakcji.', hiddenType: 'CALM' },
+    { id: 'LG_DOWN_HT_2', text: 'Nie wolno nam zniknąć tylko dlatego, że tabela jest przeciwko nam. Walczymy do końca.', hiddenType: 'AGGRESSIVE' },
+    { id: 'LG_DOWN_HT_3', text: 'Doceniam tych, którzy nie odpuszczają. Teraz reszta ma do nich dołączyć.', hiddenType: 'PRAISE' },
+    { id: 'LG_DOWN_HT_4', text: 'Spadek nie tłumaczy braku charakteru. Chcę odpowiedzi w drugiej połowie.', hiddenType: 'CRITICIZE' },
+    { id: 'LG_DOWN_HT_5', text: 'Bez komentarza', hiddenType: 'SILENCE' },
+  ],
+};
+
 // ─── WYZNACZENIE KONTEKSTU WYNIKU ─────────────────────────────────────────────
 export const getScoreContext = (userScore: number, oppScore: number): ScoreContext => {
   const diff = userScore - oppScore;
@@ -82,7 +142,8 @@ export const getScoreContext = (userScore: number, oppScore: number): ScoreConte
 };
 
 // ─── POBRANIE OPCJI DLA KONTEKSTU ────────────────────────────────────────────
-export const getTalksForContext = (context: ScoreContext): TalkOption[] => {
+export const getTalksForContext = (context: ScoreContext, leagueMotivationContext?: LeagueMotivationContext | null): TalkOption[] => {
+  if (leagueMotivationContext) return LEAGUE_STAKES_HALFTIME_TALKS[leagueMotivationContext];
   return HALFTIME_TALKS[context];
 };
 

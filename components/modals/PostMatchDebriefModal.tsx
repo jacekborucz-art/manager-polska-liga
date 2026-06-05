@@ -9,6 +9,8 @@ import {
   getDebriefContextLabel,
   getDebriefAccentColor,
 } from '../../services/PostMatchDebriefService';
+import type { LeagueMotivationContext } from '../../services/LeagueMotivationContextService';
+import { getLeagueMotivationContextLabel } from '../../services/LeagueMotivationContextService';
 
 interface PostMatchDebriefModalProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ interface PostMatchDebriefModalProps {
   matchStage?: DebriefMatchStage;
   userPenaltyScore?: number;
   oppPenaltyScore?: number;
+  leagueMotivationContext?: LeagueMotivationContext | null;
 }
 
 type Phase = 'SELECTING' | 'REACTING';
@@ -40,6 +43,7 @@ export const PostMatchDebriefModal = ({
   matchStage = 'LEAGUE',
   userPenaltyScore,
   oppPenaltyScore,
+  leagueMotivationContext = null,
 }: PostMatchDebriefModalProps) => {
   const [phase, setPhase] = useState<Phase>('SELECTING');
   const [reactionText, setReactionText] = useState('');
@@ -47,9 +51,9 @@ export const PostMatchDebriefModal = ({
 
   if (!isOpen) return null;
 
-  const comments: DebriefComment[] = getCommentsForContext(context, matchStage);
+  const comments: DebriefComment[] = getCommentsForContext(context, matchStage, leagueMotivationContext);
   const accent = getDebriefAccentColor(context);
-  const contextLabel = getDebriefContextLabel(context, matchStage);
+  const contextLabel = getLeagueMotivationContextLabel(leagueMotivationContext) ?? getDebriefContextLabel(context, matchStage);
 
   const leftClubName  = userSide === 'HOME' ? homeClubName : awayClubName;
   const rightClubName = userSide === 'HOME' ? awayClubName : homeClubName;
@@ -82,6 +86,14 @@ export const PostMatchDebriefModal = ({
 
         {/* HEADER */}
         <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex flex-col gap-3">
+          <div className="flex justify-center">
+            <div className={`inline-flex items-center rounded-full px-4 py-1 ${accent.badge}`}>
+              <span className="text-[9px] font-black italic uppercase tracking-[0.25em]">
+                {contextLabel}
+              </span>
+            </div>
+          </div>
+
           <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white leading-none text-center">
             ODPRAWA<br />
             <span className={accent.badge.split(' ')[0]}>POMECZOWA</span>

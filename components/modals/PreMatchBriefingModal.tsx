@@ -10,6 +10,8 @@ import {
 } from '../../services/PreMatchBriefingService';
 import { RivalryService } from '../../services/RivalryService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import type { LeagueMotivationContext } from '../../services/LeagueMotivationContextService';
+import { getLeagueMotivationContextLabel } from '../../services/LeagueMotivationContextService';
 
 interface PreMatchBriefingModalProps {
   isOpen: boolean;
@@ -24,6 +26,7 @@ interface PreMatchBriefingModalProps {
   oppClubColors?: string[];
   userClubId?: string;
   oppClubId?: string;
+  leagueMotivationContext?: LeagueMotivationContext | null;
 }
 
 type Phase = 'SELECTING' | 'REACTING';
@@ -41,6 +44,7 @@ export const PreMatchBriefingModal = ({
   oppClubColors = ['#1e293b'],
   userClubId,
   oppClubId,
+  leagueMotivationContext = null,
 }: PreMatchBriefingModalProps) => {
   const [phase, setPhase] = useState<Phase>('SELECTING');
   const [reactionText, setReactionText] = useState('');
@@ -49,8 +53,9 @@ export const PreMatchBriefingModal = ({
   if (!isOpen) return null;
 
   const scenario: BriefingScenario = detectScenario(userRep, oppRep);
-  const availableBriefings = getBriefingsForScenario(scenario, matchStage);
+  const availableBriefings = getBriefingsForScenario(scenario, matchStage, leagueMotivationContext);
   const rivalryContext = RivalryService.getMatchContextByNames(userClubName, oppClubName);
+  const leagueMotivationLabel = getLeagueMotivationContextLabel(leagueMotivationContext);
 
   const handleSelect = (index: number) => {
     const speech = availableBriefings[index];
@@ -137,11 +142,11 @@ export const PreMatchBriefingModal = ({
         {/* HEADER */}
         <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex flex-col gap-3">
 
-          {rivalryContext.label && (
+          {(rivalryContext.label || leagueMotivationLabel) && (
             <div className="flex justify-center">
               <div className="inline-flex items-center rounded-full bg-red-600 px-4 py-1">
                 <span className="text-[9px] font-black italic uppercase tracking-[0.25em] text-white">
-                  {rivalryContext.label}
+                  {leagueMotivationLabel ?? rivalryContext.label}
                 </span>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import type { BriefingSpeech } from '../data/prematch_briefing_pl';
 import { BriefingSpeechType, PREMATCH_BRIEFINGS } from '../data/prematch_briefing_pl';
 import type { CoachAttributes } from '../types';
+import type { LeagueMotivationContext } from './LeagueMotivationContextService';
 export { PREMATCH_BRIEFINGS };
 export type { BriefingSpeechType };
 
@@ -98,6 +99,57 @@ const CUP_PREMATCH_BRIEFINGS: Record<CupBriefingStage, BriefingSpeech[]> = {
   ],
 };
 
+const LEAGUE_STAKES_PREMATCH_BRIEFINGS: Record<LeagueMotivationContext, BriefingSpeech[]> = {
+  LAST_ROUND_GENERAL: [
+    { id: 'LG_LAST_PB_1', text: 'To ostatni mecz sezonu. Zamykamy go z godnością, koncentracją i pełnym profesjonalizmem.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_LAST_PB_2', text: 'Nieważne, co mówi tabela. Ostatni gwizdek sezonu ma pokazać, kim jesteśmy jako drużyna.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'LG_LAST_PB_3', text: 'Nie szarpiemy się bez sensu. Gramy dojrzale, cierpliwie i kończymy sezon dobrą piłką.', hiddenType: 'PATIENCE' },
+    { id: 'LG_LAST_PB_4', text: 'Ostatnia kolejka często zostaje w pamięci. Dajcie kibicom powód, żeby bili wam brawo.', hiddenType: 'DOMINANCE' },
+  ],
+  TITLE_OR_PROMOTION_SECURED: [
+    { id: 'LG_DONE_PB_1', text: 'Cel jest już osiągnięty, ale mistrzowie i drużyny awansujące nie odpuszczają standardów.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_DONE_PB_2', text: 'Możemy czuć dumę, ale nie samozadowolenie. Wyjdźcie i pokażcie, dlaczego jesteśmy na szczycie.', hiddenType: 'DOMINANCE' },
+    { id: 'LG_DONE_PB_3', text: 'Bez głupiego ryzyka. Gramy spokojnie, z klasą i szacunkiem do pracy wykonanej przez cały sezon.', hiddenType: 'PATIENCE' },
+    { id: 'LG_DONE_PB_4', text: 'To ma być święto, ale święto z piłką przy nodze i kontrolą nad meczem.', hiddenType: 'TACTICIAN' },
+  ],
+  TITLE_DECIDER: [
+    { id: 'LG_TITLE_PB_1', text: 'Dzisiaj możemy zostać mistrzami. Nie czekamy na cudze wyniki. Bierzemy to na boisku.', hiddenType: 'DOMINANCE' },
+    { id: 'LG_TITLE_PB_2', text: 'Mistrzostwo wygrywa się głową. Każde podanie, każdy odbiór, każda decyzja ma znaczenie.', hiddenType: 'TACTICIAN' },
+    { id: 'LG_TITLE_PB_3', text: 'Remis może wystarczyć, ale nie wychodzimy po remis. Wychodzimy po pewność i kontrolę.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_TITLE_PB_4', text: 'Przez cały sezon pracowaliście na tę chwilę. Teraz nie wolno zrobić kroku w tył.', hiddenType: 'KAMIKAZE' },
+  ],
+  DIRECT_PROMOTION_DECIDER: [
+    { id: 'LG_PROMO_PB_1', text: 'Dzisiejszy mecz może dać nam awans. Nie odkładamy marzeń na później, załatwiamy to teraz.', hiddenType: 'DOMINANCE' },
+    { id: 'LG_PROMO_PB_2', text: 'Awans wymaga chłodnej głowy. Niech presja pracuje dla nas, nie przeciwko nam.', hiddenType: 'TACTICIAN' },
+    { id: 'LG_PROMO_PB_3', text: 'Każdy z was wie, ile kosztował ten sezon. Jeszcze dziewięćdziesiąt minut pełnej odpowiedzialności.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_PROMO_PB_4', text: 'Nie patrzcie na tabelę. Patrzcie na piłkę, na rywala i na przestrzeń, którą mamy wykorzystać.', hiddenType: 'PATIENCE' },
+  ],
+  PLAYOFF_PLACE_DECIDER: [
+    { id: 'LG_PLAYOFF_PB_1', text: 'To mecz o baraże. Jedno spotkanie może przedłużyć nasze marzenia o awansie.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'LG_PLAYOFF_PB_2', text: 'Nie ma kalkulowania. Musimy być odważni, ale mądrzy. Baraże trzeba sobie wyrwać.', hiddenType: 'KAMIKAZE' },
+    { id: 'LG_PLAYOFF_PB_3', text: 'Taki mecz wygrywa drużyna, która nie traci struktury pod presją. Trzymamy plan.', hiddenType: 'TACTICIAN' },
+    { id: 'LG_PLAYOFF_PB_4', text: 'Od pierwszej minuty niech wiedzą, że walczymy o coś większego niż trzy punkty.', hiddenType: 'BLITZ' },
+  ],
+  RELEGATION_DECIDER: [
+    { id: 'LG_STAY_PB_1', text: 'To jest walka o utrzymanie. Nie gramy pięknie dla ocen, gramy o życie tego klubu w lidze.', hiddenType: 'KAMIKAZE' },
+    { id: 'LG_STAY_PB_2', text: 'Presja jest ogromna, ale panika nic nam nie da. Dyscyplina, asekuracja i walka do końca.', hiddenType: 'FORTRESS' },
+    { id: 'LG_STAY_PB_3', text: 'Każdy metr boiska ma znaczenie. Jeśli trzeba cierpieć, cierpimy razem.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'LG_STAY_PB_4', text: 'Nie pozwólcie, żeby strach prowadził ten mecz. Prowadzić ma plan i charakter.', hiddenType: 'TACTICIAN' },
+  ],
+  EUROPE_PLACE_DECIDER: [
+    { id: 'LG_EUROPE_PB_1', text: 'Dzisiaj gramy o miejsce, które może otworzyć klubowi Europę. To jest konkretna stawka.', hiddenType: 'DOMINANCE' },
+    { id: 'LG_EUROPE_PB_2', text: 'Puchary zdobywa się dojrzałością. Bez chaosu, bez prezentów, z pełną koncentracją.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_EUROPE_PB_3', text: 'To jest mecz dla zawodników, którzy chcą grać na większej scenie. Pokażcie tę ambicję.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'LG_EUROPE_PB_4', text: 'Narzućmy tempo od początku. Niech rywal poczuje, że to my chcemy Europy bardziej.', hiddenType: 'BLITZ' },
+  ],
+  ALREADY_RELEGATED: [
+    { id: 'LG_DOWN_PB_1', text: 'Spadek jest przesądzony, ale herb nadal jest na koszulce. Ostatnie mecze pokażą nasz charakter.', hiddenType: 'WOUNDED_PRIDE' },
+    { id: 'LG_DOWN_PB_2', text: 'Nie odzyskamy tabeli jednym meczem, ale możemy odzyskać trochę dumy i zaufania kibiców.', hiddenType: 'PROFESSIONALISM' },
+    { id: 'LG_DOWN_PB_3', text: 'Gramy spokojnie, odpowiedzialnie i bez rozsypywania się. To pierwszy krok do odbudowy.', hiddenType: 'PATIENCE' },
+    { id: 'LG_DOWN_PB_4', text: 'Nie uciekamy od bólu tego sezonu. Wychodzimy i walczymy, bo klub zasługuje na reakcję.', hiddenType: 'KAMIKAZE' },
+  ],
+};
+
 const getBriefingPool = (matchStage: BriefingMatchStage): BriefingSpeech[] =>
   matchStage === 'FRIENDLY'
     ? FRIENDLY_PREMATCH_BRIEFINGS
@@ -105,8 +157,14 @@ const getBriefingPool = (matchStage: BriefingMatchStage): BriefingSpeech[] =>
       ? PREMATCH_BRIEFINGS
       : CUP_PREMATCH_BRIEFINGS[matchStage];
 
-export const getBriefingsForScenario = (scenario: BriefingScenario, matchStage: BriefingMatchStage = 'LEAGUE'): ScenarioBriefingOption[] =>
-  getBriefingPool(matchStage)
+export const getBriefingsForScenario = (
+  scenario: BriefingScenario,
+  matchStage: BriefingMatchStage = 'LEAGUE',
+  leagueMotivationContext?: LeagueMotivationContext | null
+): ScenarioBriefingOption[] =>
+  (matchStage === 'LEAGUE' && leagueMotivationContext
+    ? LEAGUE_STAKES_PREMATCH_BRIEFINGS[leagueMotivationContext]
+    : getBriefingPool(matchStage))
     .map((speech, originalIndex) => ({ ...speech, originalIndex }))
     .filter((speech) => BRIEFING_SCENARIO_RULES[speech.hiddenType].includes(scenario));
 

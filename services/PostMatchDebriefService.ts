@@ -1,4 +1,5 @@
 import { DebriefContext, DebriefCommentType, DebriefComment, POST_MATCH_DEBRIEF } from '../data/postmatch_debrief_pl';
+import type { LeagueMotivationContext } from './LeagueMotivationContextService';
 
 export type { DebriefContext, DebriefCommentType };
 
@@ -301,6 +302,193 @@ const CUP_POST_MATCH_DEBRIEF: Record<CupDebriefStage, Record<DebriefOutcome, Deb
   },
 };
 
+const LEAGUE_STAKES_POST_MATCH_DEBRIEF: Record<LeagueMotivationContext, Record<DebriefOutcome, DebriefComment[]>> = {
+  LAST_ROUND_GENERAL: {
+    WIN: [
+      { id: 'lg_last_w_1', text: 'Wygraliśmy ostatni mecz sezonu. Dobrze zamknęliście ten rozdział.', hiddenType: 'PRAISE' },
+      { id: 'lg_last_w_2', text: 'Koniec sezonu z trzema punktami. Doceniam koncentrację do ostatniego gwizdka.', hiddenType: 'CALM' },
+      { id: 'lg_last_w_3', text: 'Taką energię trzeba zabrać do przygotowań. Nie pozwalamy, żeby to był jednorazowy zryw.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_last_w_4', text: 'Wygrana cieszy, ale cały sezon pokazał też rzeczy, które musimy poprawić.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_last_w_5', text: 'Sezon zakończony zwycięstwem.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_last_d_1', text: 'Ostatni mecz sezonu dał punkt i kilka ważnych wniosków.', hiddenType: 'CALM' },
+      { id: 'lg_last_d_2', text: 'Walczyliście do końca. Wynik nie jest idealny, ale charakter był widoczny.', hiddenType: 'PRAISE' },
+      { id: 'lg_last_d_3', text: 'Nie chciałem kończyć sezonu remisem. Następny ma zacząć się z większym głodem.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_last_d_4', text: 'Za dużo niedokładności jak na mecz, którym mieliśmy domknąć sezon.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_last_d_5', text: 'Sezon dobiegł końca.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_last_l_1', text: 'Taki koniec sezonu boli, ale musimy spokojnie wyciągnąć wnioski.', hiddenType: 'CALM' },
+      { id: 'lg_last_l_2', text: 'Dziękuję tym, którzy walczyli do końca mimo wyniku.', hiddenType: 'PRAISE' },
+      { id: 'lg_last_l_3', text: 'Nie tak kończy się sezon. Ten niedosyt ma zostać z nami w przygotowaniach.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_last_l_4', text: 'Ostatni mecz obnażył problemy, których nie możemy przenieść na kolejny sezon.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_last_l_5', text: 'Koniec sezonu. Bez komentarza.', hiddenType: 'SILENCE' },
+    ],
+  },
+  TITLE_OR_PROMOTION_SECURED: {
+    WIN: [
+      { id: 'lg_done_w_1', text: 'Cel już był osiągnięty, a wy nadal wygraliście. Tak wygląda drużyna ze standardem.', hiddenType: 'PRAISE' },
+      { id: 'lg_done_w_2', text: 'Świętujemy, ale z szacunkiem do pracy. Dobrze, że nie odpuściliście.', hiddenType: 'CALM' },
+      { id: 'lg_done_w_3', text: 'To ma być nasza mentalność po sukcesie: dalej głód, dalej intensywność!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_done_w_4', text: 'Wygraliśmy, ale były momenty zbyt luźne. Sukces nie usprawiedliwia rozkojarzenia.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_done_w_5', text: 'Zrobiliśmy swoje.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_done_d_1', text: 'Cel jest nasz. Remis przyjmujemy spokojnie, ale standard gry musi zostać wyższy.', hiddenType: 'CALM' },
+      { id: 'lg_done_d_2', text: 'Nie przegraliście i utrzymaliście godność tego sukcesu. Doceniam to.', hiddenType: 'PRAISE' },
+      { id: 'lg_done_d_3', text: 'Po osiągniętym celu też trzeba chcieć wygrywać. Tego zabrakło.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_done_d_4', text: 'Za dużo samozadowolenia. Nie lubię, gdy sukces rozmywa koncentrację.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_done_d_5', text: 'Cel osiągnięty.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_done_l_1', text: 'Sukcesu nikt nam nie odbierze, ale taka porażka nie może stać się nawykiem.', hiddenType: 'CALM' },
+      { id: 'lg_done_l_2', text: 'Sezon i tak należy do was. Ten mecz analizujemy bez paniki.', hiddenType: 'PRAISE' },
+      { id: 'lg_done_l_3', text: 'Nie akceptuję odpuszczania po sukcesie. Drużyna z ambicją gra do końca!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_done_l_4', text: 'To wyglądało jak zbyt wczesne świętowanie. Tak nie bronimy własnego standardu.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_done_l_5', text: 'Sukces jest. Wynik do zapomnienia.', hiddenType: 'SILENCE' },
+    ],
+  },
+  TITLE_DECIDER: {
+    WIN: [
+      { id: 'lg_title_w_1', text: 'Jesteśmy mistrzami. Udźwignęliście najważniejszy ciężar sezonu.', hiddenType: 'PRAISE' },
+      { id: 'lg_title_w_2', text: 'Tytuł zdobyty. Zapamiętajcie spokój i odpowiedzialność, które nas tu doprowadziły.', hiddenType: 'CALM' },
+      { id: 'lg_title_w_3', text: 'Tak wygrywa się mistrzostwo! Taka wiara ma zostać w tej szatni na lata!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_title_w_4', text: 'Mistrzostwo jest nasze, ale nawet dziś są detale do poprawy.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_title_w_5', text: 'Mistrzostwo.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_title_d_1', text: 'Jeśli ten punkt wystarcza, doceniamy go. Jeśli nie, wiemy, czego zabrakło.', hiddenType: 'CALM' },
+      { id: 'lg_title_d_2', text: 'Wytrzymaliście ogromną presję. Taki punkt też wymaga charakteru.', hiddenType: 'PRAISE' },
+      { id: 'lg_title_d_3', text: 'Mieliśmy pójść po pełną kontrolę. Remis zostawia zbyt wiele nerwów.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_title_d_4', text: 'W meczu o mistrzostwo trzeba być bardziej bezwzględnym.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_title_d_5', text: 'Wszystko zależy od tabeli.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_title_l_1', text: 'Taka porażka w meczu o mistrzostwo boli podwójnie. Musimy ją udźwignąć.', hiddenType: 'CALM' },
+      { id: 'lg_title_l_2', text: 'Nie przekreślam sezonu jednym meczem, ale ten ból musi czegoś nas nauczyć.', hiddenType: 'PRAISE' },
+      { id: 'lg_title_l_3', text: 'To był mecz o tytuł! Nie możemy w takim momencie wyglądać na sparaliżowanych!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_title_l_4', text: 'Nie byliśmy wystarczająco dojrzali w najważniejszym momencie sezonu.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_title_l_5', text: 'Nie teraz. Bez komentarza.', hiddenType: 'SILENCE' },
+    ],
+  },
+  DIRECT_PROMOTION_DECIDER: {
+    WIN: [
+      { id: 'lg_promo_w_1', text: 'Awans jest nasz. Udźwignęliście presję i zrobiliście to razem.', hiddenType: 'PRAISE' },
+      { id: 'lg_promo_w_2', text: 'To zwycięstwo jest nagrodą za cały sezon pracy. Spokojnie, zasłużyliście.', hiddenType: 'CALM' },
+      { id: 'lg_promo_w_3', text: 'Tak się bierze awans! Odwaga, tempo i wiara do końca!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_promo_w_4', text: 'Awans cieszy, ale wyższa liga ukarze te błędy, które dzisiaj jeszcze widzieliśmy.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_promo_w_5', text: 'Awans.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_promo_d_1', text: 'Punkt w meczu o awans trzeba ocenić chłodno. Najważniejsze, czy przybliża nas do celu.', hiddenType: 'CALM' },
+      { id: 'lg_promo_d_2', text: 'Presja była ogromna, a wy nie pękliście. Teraz patrzymy, co daje nam tabela.', hiddenType: 'PRAISE' },
+      { id: 'lg_promo_d_3', text: 'W takim meczu trzeba szukać zwycięstwa mocniej. Remis zostawia niedosyt.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_promo_d_4', text: 'Za mało odwagi jak na spotkanie, które mogło dać awans.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_promo_d_5', text: 'Czekamy na znaczenie tego punktu.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_promo_l_1', text: 'Porażka w meczu o awans boli, ale musimy natychmiast odzyskać kontrolę nad głowami.', hiddenType: 'CALM' },
+      { id: 'lg_promo_l_2', text: 'Nie wszystko dziś wyszło, ale sezon jeszcze nie musi być przegrany.', hiddenType: 'PRAISE' },
+      { id: 'lg_promo_l_3', text: 'Takiej szansy nie można oddać bez odpowiedzi! To musi was wstrząsnąć!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_promo_l_4', text: 'W najważniejszym momencie zabrakło jakości i odwagi.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_promo_l_5', text: 'Szansa uciekła.', hiddenType: 'SILENCE' },
+    ],
+  },
+  PLAYOFF_PLACE_DECIDER: {
+    WIN: [
+      { id: 'lg_playoff_w_1', text: 'Wyrwaliście miejsce w barażach. Teraz sezon naprawdę wchodzi w decydującą fazę.', hiddenType: 'PRAISE' },
+      { id: 'lg_playoff_w_2', text: 'Dobra robota. Cieszymy się, ale baraże wymagają jeszcze chłodniejszej głowy.', hiddenType: 'CALM' },
+      { id: 'lg_playoff_w_3', text: 'Taką determinacją przedłuża się sezon! Teraz idziemy po więcej.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_playoff_w_4', text: 'Wygraliśmy, ale baraże nie wybaczą momentów takiej nerwowości.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_playoff_w_5', text: 'Gramy dalej.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_playoff_d_1', text: 'Remis w walce o baraże zostawia nas z rachunkami. Musimy przyjąć ten punkt i tabelę.', hiddenType: 'CALM' },
+      { id: 'lg_playoff_d_2', text: 'Walczyliście, ale w takim meczu detale ważą więcej niż zwykle.', hiddenType: 'PRAISE' },
+      { id: 'lg_playoff_d_3', text: 'Mieliśmy to wyrwać, a nie czekać na układ wyników!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_playoff_d_4', text: 'Za mało konkretu pod bramką jak na mecz o baraże.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_playoff_d_5', text: 'Tyle.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_playoff_l_1', text: 'Przegrana w walce o baraże jest trudna do przyjęcia. Musimy nazwać błędy spokojnie.', hiddenType: 'CALM' },
+      { id: 'lg_playoff_l_2', text: 'Doceniam wysiłek, ale dzisiaj zabrakło tego jednego poziomu więcej.', hiddenType: 'PRAISE' },
+      { id: 'lg_playoff_l_3', text: 'To była szansa na przedłużenie sezonu! Nie wolno tak jej oddawać!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_playoff_l_4', text: 'W meczu o baraże zabrakło nam odwagi, skuteczności i zimnej krwi.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_playoff_l_5', text: 'Szansa przepadła.', hiddenType: 'SILENCE' },
+    ],
+  },
+  RELEGATION_DECIDER: {
+    WIN: [
+      { id: 'lg_stay_w_1', text: 'To było zwycięstwo o ogromnym ciężarze. Pokazaliście charakter w walce o utrzymanie.', hiddenType: 'PRAISE' },
+      { id: 'lg_stay_w_2', text: 'Trzy punkty w takim meczu są bezcenne. Oddychamy, ale nie tracimy czujności.', hiddenType: 'CALM' },
+      { id: 'lg_stay_w_3', text: 'Tak walczy drużyna, która nie chce spaść! Tę energię musimy utrzymać.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_stay_w_4', text: 'Wygraliśmy, ale sytuacja pokazała, jak wiele wcześniej zaniedbaliśmy.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_stay_w_5', text: 'Żyjemy.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_stay_d_1', text: 'Punkt w walce o utrzymanie może być ważny, ale niczego nie możemy uznać za załatwione.', hiddenType: 'CALM' },
+      { id: 'lg_stay_d_2', text: 'Nie pękliście pod presją. Teraz sprawdzamy, ile ten punkt znaczy.', hiddenType: 'PRAISE' },
+      { id: 'lg_stay_d_3', text: 'W takim meczu trzeba gryźć trawę po zwycięstwo, nie tylko przetrwanie!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_stay_d_4', text: 'Za dużo strachu. Utrzymania nie da się obronić samym cofnięciem.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_stay_d_5', text: 'Jeden punkt.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_stay_l_1', text: 'Porażka w walce o utrzymanie jest ciosem. Musimy ją przyjąć i jeszcze raz policzyć szanse.', hiddenType: 'CALM' },
+      { id: 'lg_stay_l_2', text: 'Walczyliście momentami, ale w takim meczu momenty nie wystarczą.', hiddenType: 'PRAISE' },
+      { id: 'lg_stay_l_3', text: 'To był mecz o ligę! Nie możemy przechodzić obok takiej stawki!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_stay_l_4', text: 'Zabrakło odpowiedzialności w meczu, w którym każdy błąd ważył podwójnie.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_stay_l_5', text: 'Bardzo ciężki wynik.', hiddenType: 'SILENCE' },
+    ],
+  },
+  EUROPE_PLACE_DECIDER: {
+    WIN: [
+      { id: 'lg_europe_w_1', text: 'Wygraliśmy mecz o puchary. Pokazaliście ambicję drużyny gotowej na większą scenę.', hiddenType: 'PRAISE' },
+      { id: 'lg_europe_w_2', text: 'To ważny krok. Cieszymy się, ale Europa wymaga jeszcze większej jakości.', hiddenType: 'CALM' },
+      { id: 'lg_europe_w_3', text: 'Tak walczy się o puchary! Ta szatnia ma prawo chcieć więcej.', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_europe_w_4', text: 'Wygrana cieszy, ale przy europejskim poziomie takie błędy będą kosztować.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_europe_w_5', text: 'Ważny krok.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_europe_d_1', text: 'Remis w walce o puchary zostawia niedosyt, ale nadal może mieć znaczenie.', hiddenType: 'CALM' },
+      { id: 'lg_europe_d_2', text: 'Nie przegraliście meczu o dużej stawce. To też wymaga odporności.', hiddenType: 'PRAISE' },
+      { id: 'lg_europe_d_3', text: 'Jeśli chcemy Europy, musimy takie mecze wygrywać odważniej!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_europe_d_4', text: 'Za mało jakości w ostatniej tercji jak na mecz o puchary.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_europe_d_5', text: 'Niedosyt.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_europe_l_1', text: 'Porażka w meczu o puchary boli, ale musimy zachować chłodną analizę.', hiddenType: 'CALM' },
+      { id: 'lg_europe_l_2', text: 'Ambicji nie odmawiam, lecz dziś zabrakło jakości w najważniejszych momentach.', hiddenType: 'PRAISE' },
+      { id: 'lg_europe_l_3', text: 'Takiej szansy na Europę nie można oddać bez zdecydowanej reakcji!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_europe_l_4', text: 'Jeśli chcemy pucharów, musimy grać dojrzalej niż dzisiaj.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_europe_l_5', text: 'Europa oddaliła się.', hiddenType: 'SILENCE' },
+    ],
+  },
+  ALREADY_RELEGATED: {
+    WIN: [
+      { id: 'lg_down_w_1', text: 'Spadek jest faktem, ale dzisiaj pokazaliście, że charakter jeszcze tu jest.', hiddenType: 'PRAISE' },
+      { id: 'lg_down_w_2', text: 'To zwycięstwo nie zmieni tabeli, ale może być początkiem odbudowy.', hiddenType: 'CALM' },
+      { id: 'lg_down_w_3', text: 'Takiej złości i dumy potrzebujemy, jeśli mamy wrócić silniejsi!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_down_w_4', text: 'Szkoda, że taka reakcja przyszła dopiero teraz.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_down_w_5', text: 'Wygrana po spadku.', hiddenType: 'SILENCE' },
+    ],
+    DRAW: [
+      { id: 'lg_down_d_1', text: 'Spadek jest przesądzony. Ten remis traktujemy jako fragment trudnej odbudowy.', hiddenType: 'CALM' },
+      { id: 'lg_down_d_2', text: 'Nie odpuściliście całkowicie i to trzeba zauważyć.', hiddenType: 'PRAISE' },
+      { id: 'lg_down_d_3', text: 'Nawet po spadku trzeba grać z większą wściekłością niż dziś!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_down_d_4', text: 'Za dużo bierności jak na drużynę, która powinna odzyskiwać twarz.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_down_d_5', text: 'Remis. Nic więcej.', hiddenType: 'SILENCE' },
+    ],
+    LOSS: [
+      { id: 'lg_down_l_1', text: 'Spadek i kolejna porażka. Musimy spokojnie rozpocząć odbudowę od fundamentów.', hiddenType: 'CALM' },
+      { id: 'lg_down_l_2', text: 'Doceniam tych, którzy mimo wszystko próbowali walczyć.', hiddenType: 'PRAISE' },
+      { id: 'lg_down_l_3', text: 'Nie wolno nam przyzwyczaić się do przegrywania! Nawet teraz!', hiddenType: 'AGGRESSIVE' },
+      { id: 'lg_down_l_4', text: 'Ten mecz pokazał, dlaczego znaleźliśmy się w takiej sytuacji.', hiddenType: 'CRITICIZE' },
+      { id: 'lg_down_l_5', text: 'Bez słów.', hiddenType: 'SILENCE' },
+    ],
+  },
+};
+
 // ─── WYZNACZENIE KONTEKSTU PO MECZU ─────────────────────────────────────────
 export const getDebriefContext = (
   userScore: number,
@@ -375,9 +563,17 @@ const HALF_SWING_CONTEXTS: DebriefContext[] = [
   'LOSS_BAD_SECOND_HALF',
 ];
 
-export const getCommentsForContext = (context: DebriefContext, matchStage: DebriefMatchStage = 'LEAGUE'): DebriefComment[] => {
+export const getCommentsForContext = (
+  context: DebriefContext,
+  matchStage: DebriefMatchStage = 'LEAGUE',
+  leagueMotivationContext?: LeagueMotivationContext | null
+): DebriefComment[] => {
   if (matchStage === 'FRIENDLY') {
     return FRIENDLY_HALF_SWING_DEBRIEF[context] ?? FRIENDLY_POST_MATCH_DEBRIEF[getDebriefOutcome(context)];
+  }
+
+  if (matchStage === 'LEAGUE' && leagueMotivationContext) {
+    return LEAGUE_STAKES_POST_MATCH_DEBRIEF[leagueMotivationContext][getDebriefOutcome(context)];
   }
 
   if (HALF_SWING_CONTEXTS.includes(context)) {

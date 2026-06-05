@@ -115,6 +115,7 @@ import {
   getLivePressureModifiers,
   getPressureProfileForSide,
 } from '../../services/MatchPressureService';
+import { detectLeagueMotivationContext } from '../../services/LeagueMotivationContextService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -282,6 +283,20 @@ export const MatchLiveView = () => {
     () => getPressureProfileForSide(livePressureContext, userSide === 'HOME' ? 'AWAY' : 'HOME'),
     [livePressureContext, userSide]
   );
+
+  const leagueMotivationContext = useMemo(() => {
+    if (!ctx || !userTeamId || typeof ctx.fixture.leagueId !== 'string') return null;
+    const userClub = userSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
+    const opponentClub = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
+    const standings = clubs.filter(club => club.leagueId === ctx.fixture.leagueId);
+    return detectLeagueMotivationContext({
+      fixture: ctx.fixture,
+      userClub,
+      opponentClub,
+      standings,
+      fixtures,
+    });
+  }, [ctx, userTeamId, userSide, clubs, fixtures]);
 
   const rivalryContext = useMemo(
     () => ctx ? RivalryService.getMatchContext(ctx.homeClub, ctx.awayClub) : null,
@@ -4263,6 +4278,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           userClubId={userSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id}
           oppClubId={userSide === 'HOME' ? ctx.awayClub.id : ctx.homeClub.id}
           sessionSeed={matchState.sessionSeed}
+          leagueMotivationContext={leagueMotivationContext}
         />
       )}
 
@@ -4369,6 +4385,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             momentumEndOf1st={matchState.momentum}
             avgFatigue={avgUserFatigue}
             sessionSeed={matchState.sessionSeed}
+            leagueMotivationContext={leagueMotivationContext}
           />
         );
       })()}
@@ -4384,6 +4401,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         homeClubName={pendingFinishPayload.summary.homeClub.name}
         awayClubName={pendingFinishPayload.summary.awayClub.name}
         sessionSeed={pendingFinishPayload.sessionSeed}
+        leagueMotivationContext={leagueMotivationContext}
       />
     )}
 
