@@ -199,14 +199,13 @@ const hasStandoutSeasonOutput = (player: Player, profile: SeasonOutputProfile): 
   if (profile.matches < 10) return false;
 
   const excellentRatings = profile.matches >= 14 && (profile.averageRating ?? 0) >= 7.22;
-  if (excellentRatings) return true;
 
   if (player.position === 'FWD') {
-    return profile.goals >= 14 || profile.goalContributions >= 20;
+    return profile.goals >= 14 || profile.goalContributions >= 20 || (excellentRatings && profile.goalContributions >= 12);
   }
 
   if (player.position === 'MID') {
-    return profile.assists >= 10 || profile.goalContributions >= 16;
+    return profile.assists >= 10 || profile.goalContributions >= 16 || (excellentRatings && profile.goalContributions >= 8);
   }
 
   if (player.position === 'DEF') {
@@ -243,6 +242,20 @@ const getAgeTransferStabilityBias = (player: Player): number => {
   if (player.age <= 31) return isEliteLatePrime ? -3 : -8;
   if (player.age <= 34) return isEliteLatePrime ? -8 : -14;
   return isEliteLatePrime ? -12 : -20;
+};
+
+const hasRealisticCareerStepUpside = (
+  player: Player,
+  personality: PlayerMoralePersonality,
+  hasHighReputationInterest: boolean
+): boolean => {
+  if (hasHighReputationInterest) return true;
+  if (player.age <= 24) return true;
+  if (player.age <= 27 && player.overallRating >= 72) return true;
+  if (player.overallRating >= 78) return true;
+
+  const hasUnrealisticAmbition = personality === 'EGOIST' || personality === 'AMBITIOUS';
+  return hasUnrealisticAmbition && player.age <= 30 && player.overallRating >= 72;
 };
 
 type MinutesDemandApproach = 'PATIENT' | 'CALM' | 'ASSERTIVE' | 'BRAZEN';
@@ -1406,13 +1419,16 @@ export const PlayerMoraleService = {
       );
       const highReputationInterestDelta = highestInterestedClubReputation - club.reputation;
       const hasHighReputationInterest = highReputationInterestDelta >= 3;
+      const hasCareerStepUpside = hasRealisticCareerStepUpside(withMorale, personality, hasHighReputationInterest);
       const reputationStepUpPressure = Math.max(0, 12 - club.reputation) * 2;
       const wantsHigherReputationMove =
+        hasCareerStepUpside &&
         isClearlyAboveSquadLevel &&
         hasExcellentForm &&
         club.reputation < 12 &&
         reputationStepUpPressure + transferAmbitionBias + ageTransferStabilityBias + eliteLatePrimeMoveBoost + transferRandomFactor >= 13;
       const wantsBreakoutSeasonMove =
+        hasCareerStepUpside &&
         hasStandoutSeason &&
         club.reputation < 14 &&
         (withMorale.overallRating >= squadAverage + 2 || rank <= Math.max(8, Math.ceil(squad.length * 0.35))) &&
