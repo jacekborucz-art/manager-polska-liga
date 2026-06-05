@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole } from '../../types';
+import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole, MailMessage, MailType } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -58,7 +58,7 @@ export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails } = useGame();
+          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails, setMessages } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -350,6 +350,10 @@ export const SquadView: React.FC = () => {
     if (!userTeamId || !myLineup) return;
 
     const slotIndex = myLineup.startingXI.indexOf(player.id);
+    const firstTeamAverage = myPlayers.length > 0
+      ? myPlayers.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / myPlayers.length
+      : player.overallRating;
+    const isAboveFirstTeamLevel = player.overallRating >= firstTeamAverage + 2;
 
     // Jeśli zawodnik był w XI — szukamy zastępcy z rezerw taktycznych
     let replacementId: string | null = null;
@@ -395,6 +399,50 @@ export const SquadView: React.FC = () => {
         d.getMonth() + 1
       );
       updatedPlayer = { ...player, history: newHistory };
+    }
+    if (isAboveFirstTeamLevel) {
+      const moralePlayer = PlayerMoraleService.ensurePlayerState(updatedPlayer);
+      const protestDeadline = new Date(currentDate);
+      protestDeadline.setDate(protestDeadline.getDate() + 14);
+      const protestDeadlineKey = protestDeadline.toISOString().split('T')[0];
+      const protestTargetMorale = player.overallRating >= firstTeamAverage + 7 || player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER'
+        ? 10
+        : 16;
+      const targetMorale = Math.min(moralePlayer.morale ?? 50, protestTargetMorale);
+      updatedPlayer = {
+        ...PlayerMoraleService.withMoraleChange(
+          moralePlayer,
+          targetMorale - (moralePlayer.morale ?? 50),
+          'Zesłanie ponadprzeciętnego zawodnika do rezerw',
+          currentDate
+        ),
+        squadRole: null,
+        reserveProtestUntil: protestDeadlineKey,
+      };
+
+      const playerName = `${player.firstName} ${player.lastName}`;
+      const protestMail: MailMessage = {
+        id: `PLAYER_RESERVE_PROTEST_${player.id}_${new Date(currentDate).toISOString().split('T')[0]}`,
+        sender: playerName,
+        role: 'Zawodnik',
+        subject: `Protest po zesłaniu do rezerw: ${player.lastName}`,
+        body: [
+          'Trenerze,',
+          '',
+          'Nie zgadzam się z decyzją o przesunięciu mnie do rezerw. Uważam, że sportowo jestem ponad przeciętną tej drużyny i taka decyzja wygląda dla mnie jak odsunięcie bez jasnego uzasadnienia.',
+          '',
+          'Potrzebuję rozmowy i konkretnego wyjaśnienia, co muszę zrobić, żeby wrócić do pierwszego zespołu. W obecnej sytuacji bardzo trudno mi utrzymać normalne nastawienie do pracy.',
+          '',
+          `Jeśli do ${protestDeadline.toLocaleDateString('pl-PL')} sytuacja pozostanie bez reakcji, będę chciał porozmawiać o odejściu z klubu.`,
+          '',
+          playerName,
+        ].join('\n'),
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.STAFF,
+        priority: player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER' ? 5 : 4,
+      };
+      setMessages(prev => prev.some(mail => mail.id === protestMail.id) ? prev : [protestMail, ...prev]);
     }
     setReserves(prev => [...prev, updatedPlayer]);
   };
@@ -1125,6 +1173,7 @@ export const SquadView: React.FC = () => {
                 const minutesDemandUntil = moralePlayer.minutesDemandUntil ? new Date(moralePlayer.minutesDemandUntil) : null;
                 const roleDemandUntil = moralePlayer.roleDemandUntil ? new Date(moralePlayer.roleDemandUntil) : null;
                 const transferListDemandUntil = moralePlayer.transferListDemandUntil ? new Date(moralePlayer.transferListDemandUntil) : null;
+                const developmentExitDemandUntil = moralePlayer.developmentExitDemandUntil ? new Date(moralePlayer.developmentExitDemandUntil) : null;
                 return {
                   player: moralePlayer,
                   moraleInfo,
@@ -1134,6 +1183,7 @@ export const SquadView: React.FC = () => {
                   minutesDemandUntil,
                   roleDemandUntil,
                   transferListDemandUntil,
+                  developmentExitDemandUntil,
                   effectiveOverall: PlayerMoraleService.getEffectiveOverall(moralePlayer),
                   personalityLabel: PlayerMoraleService.getPersonalityLabel(moralePlayer.moralePersonality),
                 };
@@ -1141,7 +1191,7 @@ export const SquadView: React.FC = () => {
               .sort((a, b) => (a.player.morale ?? 50) - (b.player.morale ?? 50) || b.effectiveOverall - a.effectiveOverall);
             const lowMoraleCount = moraleRows.filter(row => (row.player.morale ?? 50) < 40).length;
             const talksReadyCount = moraleRows.filter(row => row.canTalkPlayer).length;
-            const activePromisesCount = moraleRows.filter(row => !!row.promisedMinutesUntil || !!row.minutesDemandUntil || !!row.roleDemandUntil || !!row.transferListDemandUntil).length;
+            const activePromisesCount = moraleRows.filter(row => !!row.promisedMinutesUntil || !!row.minutesDemandUntil || !!row.roleDemandUntil || !!row.transferListDemandUntil || !!row.developmentExitDemandUntil).length;
             return (
               <div className="shrink-0 flex flex-col gap-4">
 
@@ -1206,6 +1256,8 @@ export const SquadView: React.FC = () => {
                             ? `Status: ${row.player.requestedSquadRole === 'KEY_PLAYER' ? 'kluczowy' : 'starter'} do ${row.roleDemandUntil.toLocaleDateString('pl-PL')}`
                             : row.minutesDemandUntil
                               ? `Minuty do ${row.minutesDemandUntil.toLocaleDateString('pl-PL')}`
+                              : row.developmentExitDemandUntil
+                                ? `Odejście/wyp. do ${row.developmentExitDemandUntil.toLocaleDateString('pl-PL')}`
                               : row.transferListDemandUntil
                                 ? `Transfer do ${row.transferListDemandUntil.toLocaleDateString('pl-PL')}`
                               : row.promisedMinutesUntil
@@ -1252,7 +1304,7 @@ export const SquadView: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-5 py-3">
-                                <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.promisedMinutesUntil || row.minutesDemandUntil || row.roleDemandUntil || row.transferListDemandUntil ? 'text-yellow-300' : 'text-slate-600'}`}>{promiseText}</span>
+                                <span className={`text-[9px] font-black italic uppercase tracking-tighter ${row.promisedMinutesUntil || row.minutesDemandUntil || row.roleDemandUntil || row.transferListDemandUntil || row.developmentExitDemandUntil ? 'text-yellow-300' : 'text-slate-600'}`}>{promiseText}</span>
                               </td>
                             </tr>
                           );

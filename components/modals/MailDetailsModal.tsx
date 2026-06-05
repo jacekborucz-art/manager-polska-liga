@@ -482,6 +482,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     terminateLoanEarly,
     deleteMessage,
     navigateWithoutHistory,
+    viewPlayerDetails,
+    setPendingOpenRoleMindflow,
     setTransferNewsActiveTab,
     currentDate,
     clubs,
@@ -790,6 +792,19 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 className="mr-4 rounded-2xl bg-amber-500 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
                 Zobacz
+              </button>
+            )}
+
+            {mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && (
+              <button
+                onClick={() => {
+                  viewPlayerDetails(mail.metadata!.playerId);
+                  setPendingOpenRoleMindflow(mail.metadata!.requestType === 'ROLE' || mail.metadata!.requestType === 'ROLE_PLAYTIME');
+                  onClose();
+                }}
+                className="mr-4 rounded-2xl bg-violet-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+              >
+                {mail.metadata.requestType === 'ROLE' || mail.metadata.requestType === 'ROLE_PLAYTIME' ? 'Otwórz rozmowę' : 'Otwórz kartę'}
               </button>
             )}
 

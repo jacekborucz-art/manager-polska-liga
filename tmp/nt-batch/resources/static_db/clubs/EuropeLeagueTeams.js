@@ -122,7 +122,7 @@ exports.RAW_EUROPA_LEAGUE_CLUBS = [
     { name: "FK Liepāja", country: "LAT", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FFD700'], stadium: "Daugava Stadium Liepāja", capacity: 8000, reputation: 5 },
     // Litwa (LTU) – top A Lyga (po Žalgiris Wilno z CL – unikamy, reszta top)
     { name: "FK Kauno Žalgiris", country: "LTU", tier: 4, colors: ['#006633', '#FFFFFF', '#FFD700'], stadium: "Darius and Girėnas Stadium", capacity: 15315, reputation: 6 },
-    { name: "FK Žalgiris Vilnius", country: "LTU", tier: 4, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "LFF Stadium", capacity: 5400, reputation: 6 },
+ 
     { name: "FK Banga Gargždai", country: "LTU", tier: 4, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Gargždai Stadium", capacity: 2300, reputation: 6 },
     // Luksemburg (LUX) – top BGL Ligue (Differdange, Dudelange, UNA Strassen itp.)
     { name: "F91 Dudelange", country: "LUX", tier: 4, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Jos Nosbaum", capacity: 2550, reputation: 5 },

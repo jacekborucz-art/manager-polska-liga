@@ -861,6 +861,8 @@ interface GameContextType {
   setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
   pendingOpenTalk: boolean;
   setPendingOpenTalk: (v: boolean) => void;
+  pendingOpenRoleMindflow: boolean;
+  setPendingOpenRoleMindflow: (v: boolean) => void;
   pendingNegotiations: PendingNegotiation[];
 setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
   pendingFriendlyRequests: PendingFriendlyRequest[];
@@ -1035,6 +1037,7 @@ const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(Traini
 const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
 const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
  const [pendingOpenTalk, setPendingOpenTalk] = useState(false);
+ const [pendingOpenRoleMindflow, setPendingOpenRoleMindflow] = useState(false);
  const [completedPressConferenceFixtureIds, setCompletedPressConferenceFixtureIds] = useState<string[]>([]);
  const [pressConferenceEffects, setPressConferenceEffects] = useState<Record<string, PressConferenceMatchEffect>>({});
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
@@ -2746,8 +2749,13 @@ setMessages([welcomeMail, fanMail]);
             tier,
             userClub.country
           );
-          const reviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
+          const moraleReviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
+          const reserveProtestResult = PlayerMoraleService.processReserveProtestReviews(moraleReviewedReserves, currentDate, messages);
+          const reviewedReserves = reserveProtestResult.players;
           setReserves(reviewedReserves);
+          if (reserveProtestResult.mails.length > 0) {
+            prependUniqueMessages(reserveProtestResult.mails);
+          }
           if (reviewedReserves.length > 0) {
             const avgOvrRes = Math.round(
               reviewedReserves.reduce((sum, p) => sum + p.overallRating, 0) / reviewedReserves.length
@@ -2868,7 +2876,7 @@ setMessages([welcomeMail, fanMail]);
       const userClub = finalClubs.find(c => c.id === userTeamId);
       const userSquad = finalPlayers[userTeamId] || [];
       if (userClub && userSquad.length > 0) {
-        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages, allFixtures);
+        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages, allFixtures, finalClubs);
         finalPlayers = {
           ...finalPlayers,
           [userTeamId]: demandResult.players,
@@ -3771,28 +3779,70 @@ setMessages([welcomeMail, fanMail]);
   const resolvePlayerRoleConversation = useCallback((playerId: string, result: PlayerRoleConversationResult): void => {
     if (!userTeamId) return;
 
-    setPlayers(prev => ({
-      ...prev,
-      [userTeamId]: (prev[userTeamId] || []).map(player => {
-        if (player.id !== playerId) return player;
+    setPlayers(prev => {
+      const squad = prev[userTeamId] || [];
+      const targetPlayer = squad.find(player => player.id === playerId);
+      const leadership = targetPlayer?.attributes.leadership ?? 0;
+      const teamMoraleDelta = result.moraleDelta < 0 && leadership >= 75
+        ? (leadership >= 85 ? -2 : -1)
+        : 0;
+      const userClub = clubs.find(club => club.id === userTeamId);
+      const nextFixture = result.promisedNextMatch && userClub
+        ? allFixtures
+            .filter(f =>
+              f.status === MatchStatus.SCHEDULED &&
+              f.leagueId === userClub.leagueId &&
+              (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+              new Date(f.date).setHours(0, 0, 0, 0) >= new Date(currentDate).setHours(0, 0, 0, 0)
+            )
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+        : null;
 
-        const nextPlayer = PlayerMoraleService.withMoraleChange(
-          player,
-          result.moraleDelta,
-          result.outcome === 'CONVINCED'
-            ? 'Udana rozmowa o statusie w drużynie'
-            : result.outcome === 'IGNORED'
-              ? 'Trener przerwał rozmowę o statusie'
-              : 'Nieudana rozmowa o statusie w drużynie',
-          currentDate
-        );
+      const nextPromiseDeadline = nextFixture ? new Date(nextFixture.date) : null;
+      if (nextPromiseDeadline) nextPromiseDeadline.setDate(nextPromiseDeadline.getDate() + 1);
 
-        return result.outcome === 'CONVINCED'
-          ? { ...nextPlayer, roleDemandUntil: null, requestedSquadRole: null }
-          : nextPlayer;
-      }),
-    }));
-  }, [currentDate, userTeamId]);
+      return {
+        ...prev,
+        [userTeamId]: squad.map(player => {
+          if (player.id !== playerId) {
+            return teamMoraleDelta < 0
+              ? PlayerMoraleService.withMoraleChange(player, teamMoraleDelta, 'Napięcie w szatni po rozmowie o roli zawodnika', currentDate)
+              : player;
+          }
+
+          const nextPlayer = PlayerMoraleService.withMoraleChange(
+            player,
+            result.moraleDelta,
+            result.outcome === 'CONVINCED'
+              ? 'Udana rozmowa o statusie w drużynie'
+              : result.outcome === 'IGNORED'
+                ? 'Trener przerwał rozmowę o statusie'
+                : 'Nieudana rozmowa o statusie w drużynie',
+            currentDate
+          );
+
+          const playerAfterConversation = result.outcome === 'CONVINCED'
+            ? {
+                ...nextPlayer,
+                roleDemandUntil: null,
+                requestedSquadRole: null,
+                minutesDemandUntil: null,
+                minutesDemandBaseline: null,
+              }
+            : nextPlayer;
+
+          return result.promisedNextMatch && nextFixture && nextPromiseDeadline
+            ? {
+                ...playerAfterConversation,
+                promisedMinutesUntil: nextPromiseDeadline.toISOString(),
+                promisedMinutesBaseline: PlayerMoraleService.getTotalMinutesPlayed(playerAfterConversation),
+                promisedRoleNextMatchFixtureId: nextFixture.id,
+              }
+            : playerAfterConversation;
+        }),
+      };
+    });
+  }, [allFixtures, clubs, currentDate, userTeamId]);
 
   const resolvePlayerTransferConversation = useCallback((playerId: string, result: PlayerTransferConversationResult): void => {
     if (!userTeamId) return;
@@ -7761,6 +7811,7 @@ const finalResult: SimulationOutput = {
             newIncomingMails.push(MailService.generateIncomingOfferExpiredMail(
               player, buyerClub.name, userClub.name, nextDay
             ));
+            handleTemptingTransferOfferBlocked(off, player, buyerClub, userClub, 'EXPIRED', nextDay);
           } else if (action.type === 'PROCESS_AI_COUNTER') {
             const seed = nextDay.getTime() + off.id.charCodeAt(0);
             const result = IncomingTransferService.processAICounterResponse(off, seed);
@@ -7793,6 +7844,7 @@ const finalResult: SimulationOutput = {
               newIncomingMails.push(MailService.generateAIRejectedCounterMail(
                 player, buyerClub.name, userClub.name, nextDay
               ));
+              handleTemptingTransferOfferBlocked(off, player, buyerClub, userClub, 'CLUB_BLOCKED', nextDay);
             }
           } else if (action.type === 'RESOLVE_PLAYER_NEGOTIATION') {
             const seed = nextDay.getTime() + off.id.charCodeAt(1);
@@ -10269,10 +10321,19 @@ const finalResult: SimulationOutput = {
       let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
       if (isAddingToTransferList) {
         const hasRequestedTransferList = !!moraleAdjustedPlayer.transferListDemandUntil;
+        const hasRequestedDevelopmentExit = !!moraleAdjustedPlayer.developmentExitDemandUntil;
         if (hasRequestedTransferList) {
           moraleAdjustedPlayer = {
             ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 8, 'Trener zgodził się na listę transferową', currentDate),
             transferListDemandUntil: null,
+          };
+        } else if (hasRequestedDevelopmentExit) {
+          moraleAdjustedPlayer = {
+            ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 6, 'Trener zgodził się na transfer po braku minut', currentDate),
+            developmentExitDemandUntil: null,
+            developmentExitDemandBaseline: null,
+            unresolvedMinutesDemandDate: null,
+            unresolvedMinutesDemandBaseline: null,
           };
         } else {
           const personality = moraleAdjustedPlayer.moralePersonality ?? 'CALM';
@@ -10295,6 +10356,10 @@ const finalResult: SimulationOutput = {
         moralePersonality: moraleAdjustedPlayer.moralePersonality,
         moraleHistory: moraleAdjustedPlayer.moraleHistory,
         transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
+        developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
+        developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
+        unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
+        unresolvedMinutesDemandBaseline: moraleAdjustedPlayer.unresolvedMinutesDemandBaseline,
         squadRole: isAddingToTransferList ? null : player.squadRole,
         isUntouchable: isAddingToTransferList ? false : player.isUntouchable,
         isOnTransferList: !player.isOnTransferList,
@@ -10434,7 +10499,25 @@ const finalResult: SimulationOutput = {
       }
     }
 
+    let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+    if (isMakingAvailable && moraleAdjustedPlayer.developmentExitDemandUntil) {
+      moraleAdjustedPlayer = {
+        ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 6, 'Trener zgodził się na wypożyczenie po braku minut', currentDate),
+        developmentExitDemandUntil: null,
+        developmentExitDemandBaseline: null,
+        unresolvedMinutesDemandDate: null,
+        unresolvedMinutesDemandBaseline: null,
+      };
+    }
+
     updatePlayer(userTeamId, playerId, {
+      morale: moraleAdjustedPlayer.morale,
+      moralePersonality: moraleAdjustedPlayer.moralePersonality,
+      moraleHistory: moraleAdjustedPlayer.moraleHistory,
+      developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
+      developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
+      unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
+      unresolvedMinutesDemandBaseline: moraleAdjustedPlayer.unresolvedMinutesDemandBaseline,
       isAvailableForLoan: isMakingAvailable,
       isUntouchable: isMakingAvailable ? false : player.isUntouchable,
       squadRole: isMakingAvailable ? null : player.squadRole,
@@ -10767,6 +10850,172 @@ const finalResult: SimulationOutput = {
     navigateWithoutHistory(ViewState.DASHBOARD);
   };
 
+  function handleTemptingTransferOfferBlocked(
+    offer: IncomingTransferOffer,
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    reason: 'REJECTED' | 'EXPIRED' | 'CONFIRM_REJECTED' | 'CLUB_BLOCKED',
+    date: Date
+  ): void {
+    if (!userTeamId || (offer.kind ?? 'TRANSFER') !== 'TRANSFER') return;
+
+    const withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const dateKey = date.toISOString().split('T')[0];
+    const lastConflictDate = withMorale.lastTemptingOfferConflictDate
+      ? new Date(withMorale.lastTemptingOfferConflictDate)
+      : null;
+    if (lastConflictDate && !Number.isNaN(lastConflictDate.getTime())) {
+      const daysSince = Math.floor((date.getTime() - lastConflictDate.getTime()) / 86_400_000);
+      if (daysSince >= 0 && daysSince < 21) return;
+    }
+
+    const sellerTier = IncomingTransferService.getClubTier(sellerClub);
+    const marketValue = FinanceService.calculateMarketValue(
+      withMorale,
+      sellerClub.reputation,
+      sellerTier,
+      sellerClub.country
+    );
+    const fee = offer.aiCounterFee ?? offer.counterFee ?? offer.fee;
+    const feeRatio = marketValue > 0 ? fee / marketValue : 1;
+    const reputationDelta = buyerClub.reputation - sellerClub.reputation;
+    const personality = withMorale.moralePersonality ?? 'CALM';
+    const morale = withMorale.morale ?? 50;
+    const isInterestedInBuyer = !!withMorale.interestedClubs?.includes(buyerClub.id);
+    const alreadyWantsExit =
+      !!withMorale.isOnTransferList ||
+      !!withMorale.transferListDemandUntil ||
+      !!withMorale.developmentExitDemandUntil ||
+      !!withMorale.isNegotiationPermanentBlocked;
+    const temptingFinancially =
+      feeRatio >= 1.35 ||
+      offer.boardPressure ||
+      (feeRatio >= 1.12 && reputationDelta >= 2);
+    const temptingSportingly =
+      reputationDelta >= 3 ||
+      (reputationDelta >= 1 && isInterestedInBuyer) ||
+      (reputationDelta >= 2 && morale <= 45);
+    const wantsToListen =
+      alreadyWantsExit ||
+      isInterestedInBuyer ||
+      morale <= 38 ||
+      personality === 'AMBITIOUS' ||
+      personality === 'EGOIST' ||
+      (personality === 'CONFIDENT' && reputationDelta >= 2);
+
+    if (!wantsToListen || (!temptingFinancially && !temptingSportingly)) return;
+
+    const reasonPressure =
+      reason === 'CONFIRM_REJECTED' || reason === 'CLUB_BLOCKED'
+        ? 6
+        : reason === 'EXPIRED'
+          ? 4
+          : 3;
+    const personalityPressure =
+      personality === 'EGOIST' ? 7 :
+      personality === 'AMBITIOUS' ? 6 :
+      personality === 'CONFIDENT' ? 4 :
+      personality === 'LOYAL' ? -4 :
+      personality === 'PROFESSIONAL' ? -2 :
+      personality === 'CALM' ? -1 :
+      1;
+    const conflictScore =
+      Math.round((feeRatio - 1) * 10) +
+      Math.max(0, reputationDelta) * 3 +
+      (isInterestedInBuyer ? 5 : 0) +
+      (alreadyWantsExit ? 5 : 0) +
+      (morale <= 25 ? 6 : morale <= 40 ? 4 : morale <= 55 ? 1 : -2) +
+      personalityPressure +
+      reasonPressure;
+
+    if (conflictScore < 9) return;
+
+    const strongConflict = conflictScore >= 16 || reason === 'CONFIRM_REJECTED';
+    const deadline = new Date(date);
+    deadline.setDate(deadline.getDate() + 14);
+    const deadlineKey = deadline.toISOString().split('T')[0];
+    const moraleDelta =
+      strongConflict
+        ? (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -8 : personality === 'EGOIST' || personality === 'AMBITIOUS' ? -15 : -11)
+        : (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -4 : personality === 'EGOIST' || personality === 'AMBITIOUS' ? -9 : -6);
+
+    const managerActionText =
+      reason === 'EXPIRED'
+        ? 'nie doczekałem się żadnej reakcji klubu'
+        : reason === 'CONFIRM_REJECTED'
+          ? 'po mojej zgodzie klub zablokował odejście'
+          : reason === 'CLUB_BLOCKED'
+            ? 'klub zablokował rozmowy'
+            : 'klub odrzucił ofertę';
+    const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+    const bodyLines = strongConflict
+      ? [
+          'Trenerze,',
+          '',
+          `Oferta z ${buyerClub.name} była dla mnie poważnym sygnałem, że mogę zrobić kolejny krok. Tymczasem ${managerActionText}.`,
+          '',
+          'Nie chodzi mi o odejście za wszelką cenę, ale nie chcę mieć poczucia, że klub automatycznie zamyka mi drogę, gdy pojawia się realna szansa. Proszę o wystawienie mnie na listę transferową albo jasną deklarację, że przy podobnej ofercie klub podejdzie do sprawy inaczej.',
+          '',
+          `Proszę o decyzję do ${deadline.toLocaleDateString('pl-PL')}.`,
+          '',
+          playerName,
+        ]
+      : [
+          'Trenerze,',
+          '',
+          `Chciałbym wrócić do tematu oferty z ${buyerClub.name}. Rozumiem interes klubu, ale ta propozycja była dla mnie kusząca i ${managerActionText}.`,
+          '',
+          'Proszę, żeby przy kolejnych takich ofertach klub rozmawiał ze mną otwarcie. Ta sytuacja odbiła się na moim nastawieniu.',
+          '',
+          playerName,
+        ];
+
+    const mail: MailMessage = {
+      id: `PLAYER_TEMPTING_OFFER_CONFLICT_${withMorale.id}_${offer.id}_${dateKey}`,
+      sender: playerName,
+      role: 'Zawodnik',
+      subject: `Niezadowolenie po ofercie: ${withMorale.lastName}`,
+      body: bodyLines.join('\n'),
+      date: new Date(date),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: strongConflict ? 5 : 4,
+      metadata: strongConflict
+        ? {
+            type: 'PLAYER_MORALE_REQUEST',
+            playerId: withMorale.id,
+            requestType: 'TRANSFER_LIST',
+            responseDeadline: deadlineKey,
+          }
+        : undefined,
+    };
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(currentPlayer => {
+        if (currentPlayer.id !== withMorale.id) return currentPlayer;
+        const adjusted = PlayerMoraleService.withMoraleChange(
+          PlayerMoraleService.ensurePlayerState(currentPlayer),
+          moraleDelta,
+          strongConflict
+            ? 'Konflikt po zablokowaniu kuszącej oferty transferowej'
+            : 'Niezadowolenie po zignorowanej kuszącej ofercie transferowej',
+          date
+        );
+        return {
+          ...adjusted,
+          lastTemptingOfferConflictDate: dateKey,
+          transferListDemandUntil: strongConflict
+            ? adjusted.transferListDemandUntil ?? deadlineKey
+            : adjusted.transferListDemandUntil,
+          isUntouchable: strongConflict ? false : adjusted.isUntouchable,
+        };
+      }),
+    }));
+    prependUniqueMessages([mail]);
+  }
+
   const respondToIncomingOffer = (
     offerId: string,
     response: 'accept' | 'counter' | 'reject',
@@ -10935,6 +11184,7 @@ const finalResult: SimulationOutput = {
 
       if (response === 'reject') {
         updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_BY_MANAGER };
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'REJECTED', new Date(currentDate));
         if (offer.boardPressure) {
           const penaltyMail: MailMessage = {
             id: `board_reject_penalty_${Date.now()}`,
@@ -10986,6 +11236,7 @@ const finalResult: SimulationOutput = {
             updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
             setClubs(prevClubs => prevClubs.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
             if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
+            handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CLUB_BLOCKED', new Date(currentDate));
             showGameNotification({
               title: 'Transfer zawetowany',
               message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
@@ -11079,6 +11330,16 @@ const finalResult: SimulationOutput = {
       setIncomingOffers(prev => prev.map(o =>
         o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
       ));
+      let player: Player | undefined;
+      for (const cId in players) {
+        player = players[cId].find(p => p.id === offer.playerId);
+        if (player) break;
+      }
+      const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
+      const sellerClub = clubs.find(c => c.id === userTeamId);
+      if (player && buyerClub && sellerClub) {
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CONFIRM_REJECTED', new Date(currentDate));
+      }
       return;
     }
 
@@ -11119,6 +11380,7 @@ const finalResult: SimulationOutput = {
         ));
         setClubs(prev => prev.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
         if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CLUB_BLOCKED', new Date(currentDate));
         showGameNotification({
           title: 'Transfer zawetowany',
           message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
@@ -13023,7 +13285,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
-    pendingOpenTalk, setPendingOpenTalk,
+    pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
     applyWeeklyMotivation, completedPressConferenceFixtureIds, pressConferenceEffects, completePreMatchPressConference, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,

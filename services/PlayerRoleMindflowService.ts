@@ -1,4 +1,4 @@
-import { Player, PlayerMoralePersonality } from '../types';
+import { HealthStatus, Player, PlayerMoralePersonality } from '../types';
 
 export type PlayerRoleConversationMood = 'CALM' | 'UNEASY' | 'UPSET' | 'ANGRY';
 export type PlayerRoleConversationTone = 'EMPATHY' | 'HONESTY' | 'AUTHORITY';
@@ -10,6 +10,8 @@ export interface PlayerRoleConversationAnswer {
   tone: PlayerRoleConversationTone;
   points: number;
   reaction: string;
+  promisesNextMatch?: boolean;
+  restsNextMatch?: boolean;
 }
 
 export interface PlayerRoleConversationQuestion {
@@ -26,6 +28,7 @@ export interface PlayerRoleConversationSession {
   targetScore: number;
   answeredCount: number;
   lastReaction: string | null;
+  promisedNextMatch: boolean;
 }
 
 export interface PlayerRoleConversationResult {
@@ -35,6 +38,7 @@ export interface PlayerRoleConversationResult {
   moraleDelta: number;
   title: string;
   summary: string;
+  promisedNextMatch: boolean;
 }
 
 const QUESTION_POOL: PlayerRoleConversationQuestion[] = [
@@ -268,6 +272,90 @@ const getQuestionCount = (mood: PlayerRoleConversationMood, seed: number): numbe
   return Math.min(7, base + (seededRandom(seed + 19) > 0.62 ? 1 : 0));
 };
 
+const getCurrentRoleLabel = (player: Player): string =>
+  player.squadRole === 'KEY_PLAYER' ? 'kluczowego zawodnika' : 'zawodnika pierwszej jedenastki';
+
+const createRoleAssuranceQuestion = (player: Player): PlayerRoleConversationQuestion => {
+  const roleLabel = getCurrentRoleLabel(player);
+  return {
+    id: 'CURRENT_ROLE_CLARITY',
+    playerText: `Chcę wiedzieć wprost: czy trener nadal widzi mnie jako ${roleLabel}, czy moja rola w zespole faktycznie się zmieniła?`,
+    answers: [
+      {
+        id: 'CURRENT_ROLE_STILL_KEY',
+        tone: 'HONESTY',
+        points: 3,
+        text: `Nadal widzę cię jako ${roleLabel}. Brak minut nie oznacza, że przestałeś być ważny, ale muszę lepiej przełożyć to na decyzje meczowe.`,
+        reaction: 'Tego potrzebowałem. Jeśli nadal jestem ważny, chcę zobaczyć to również na boisku.',
+      },
+      {
+        id: 'CURRENT_ROLE_CHANGED',
+        tone: 'HONESTY',
+        points: -1,
+        text: 'Na dziś twoja rola jest mniej pewna niż wcześniej. Chcę być z tobą uczciwy: musisz ponownie wywalczyć miejsce w hierarchii.',
+        reaction: 'Doceniam szczerość, ale trudno mi to przyjąć, skoro wcześniej dostałem inną rolę.',
+      },
+      {
+        id: 'CURRENT_ROLE_PROMISE_NEXT',
+        tone: 'EMPATHY',
+        points: 2,
+        text: 'Dostaniesz szansę w najbliższym meczu, jeśli pozostaniesz zdrowy i gotowy do gry. Chcę, żebyś odpowiedział na boisku.',
+        reaction: 'W porządku. Będę gotowy, ale będę też oczekiwał, że ta deklaracja zostanie dotrzymana.',
+        promisesNextMatch: true,
+      },
+      {
+        id: 'CURRENT_ROLE_REST_NEXT',
+        tone: 'EMPATHY',
+        points: 0,
+        text: 'W następnym meczu chcę dać ci odpocząć. Widzę twoją rolę w zespole, ale nie chcę ryzykować zdrowia ani przeciążenia.',
+        reaction: 'Rozumiem troskę, ale potrzebuję wiedzieć, że odpoczynek nie oznacza odsunięcia mnie od drużyny.',
+        restsNextMatch: true,
+      },
+    ],
+  };
+};
+
+const getRestAnswerAdjustment = (
+  player: Player,
+  answer: PlayerRoleConversationAnswer
+): { points: number; reaction: string } => {
+  if (!answer.restsNextMatch) return { points: answer.points, reaction: answer.reaction };
+
+  const personality = player.moralePersonality ?? 'CALM';
+  const isAmbitionSensitive = personality === 'AMBITIOUS' || personality === 'EGOIST' || personality === 'CONFIDENT';
+  const fatigueRisk =
+    player.condition <= 82 ||
+    (player.fatigueDebt ?? 0) >= 35 ||
+    player.health.status !== HealthStatus.HEALTHY ||
+    ((player.health.injury?.daysRemaining ?? 99) <= 7);
+
+  if (fatigueRisk && isAmbitionSensitive) {
+    return {
+      points: 1,
+      reaction: 'Rozumiem argument zdrowia, ale chcę szybko wrócić do gry. Jeden mecz przerwy mogę zaakceptować, jeśli naprawdę nadal jestem w planie.',
+    };
+  }
+
+  if (fatigueRisk) {
+    return {
+      points: 3,
+      reaction: 'Dobrze, trenerze. Jeśli chodzi o zdrowie i świeżość, przyjmuję to. Chcę wrócić gotowy, a nie tylko obecny na boisku.',
+    };
+  }
+
+  if (isAmbitionSensitive) {
+    return {
+      points: -3,
+      reaction: 'Nie czuję, żebym potrzebował odpoczynku. Jeśli jestem gotowy, chcę grać, a taka decyzja wygląda dla mnie jak odsunięcie.',
+    };
+  }
+
+  return {
+    points: -1,
+    reaction: 'Przyjmuję to, ale chciałbym konkretnie wiedzieć, kiedy wrócę do gry. Bez tego trudno mi być spokojnym.',
+  };
+};
+
 export const PlayerRoleMindflowService = {
   getMoodLabel: (mood: PlayerRoleConversationMood): string => MOOD_LABELS[mood],
 
@@ -279,26 +367,32 @@ export const PlayerRoleMindflowService = {
 
     return {
       mood,
-      questions: shuffle(QUESTION_POOL, seed).slice(0, questionCount),
+      questions: [
+        createRoleAssuranceQuestion(player),
+        ...shuffle(QUESTION_POOL, seed).slice(0, Math.max(0, questionCount - 1)),
+      ],
       currentQuestionIndex: 0,
       score: 0,
       targetScore: Math.min(questionCount * 3, questionCount * 2 + moodDifficulty),
       answeredCount: 0,
       lastReaction: null,
+      promisedNextMatch: false,
     };
   },
 
   answer: (session: PlayerRoleConversationSession, player: Player, answer: PlayerRoleConversationAnswer): PlayerRoleConversationSession => {
     const personality = player.moralePersonality ?? 'CALM';
     const preferredTone = getPreferredTone(personality);
-    const toneBonus = answer.points > 0 && answer.tone === preferredTone ? 1 : 0;
+    const adjustedAnswer = getRestAnswerAdjustment(player, answer);
+    const toneBonus = adjustedAnswer.points > 0 && answer.tone === preferredTone ? 1 : 0;
 
     return {
       ...session,
-      score: session.score + answer.points + toneBonus,
+      score: session.score + adjustedAnswer.points + toneBonus,
       answeredCount: session.answeredCount + 1,
       currentQuestionIndex: session.currentQuestionIndex + 1,
-      lastReaction: answer.reaction,
+      lastReaction: adjustedAnswer.reaction,
+      promisedNextMatch: session.promisedNextMatch || !!answer.promisesNextMatch,
     };
   },
 
@@ -311,6 +405,7 @@ export const PlayerRoleMindflowService = {
         moraleDelta: -2,
         title: 'Rozmowa przerwana',
         summary: 'Zawodnik odebrał zakończenie rozmowy jako zlekceważenie problemu. Jego żądanie pozostaje aktywne.',
+        promisedNextMatch: session.promisedNextMatch,
       };
     }
 
@@ -323,6 +418,7 @@ export const PlayerRoleMindflowService = {
           moraleDelta: 3,
           title: 'Zawodnik przekonany',
           summary: 'Zawodnik zaakceptował wyjaśnienia trenera i wycofał żądanie natychmiastowej zmiany statusu.',
+          promisedNextMatch: session.promisedNextMatch,
         }
       : {
           outcome: 'NOT_CONVINCED',
@@ -331,6 +427,7 @@ export const PlayerRoleMindflowService = {
           moraleDelta: -4,
           title: 'Brak porozumienia',
           summary: 'Zawodnik nie przyjął argumentów trenera. Jego żądanie pozostaje aktywne.',
+          promisedNextMatch: session.promisedNextMatch,
         };
   },
 };

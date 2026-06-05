@@ -7,6 +7,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { ReserveScheduleModal } from '../modals/ReserveScheduleModal';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { TacticRepository } from '../../resources/tactics_db';
+import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -510,7 +511,19 @@ export const ReservesView: React.FC = () => {
       year,
       month
     );
-    const updatedPlayer = { ...player, history: newHistory };
+    const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+    const updatedPlayer = player.reserveProtestUntil
+      ? {
+          ...PlayerMoraleService.withMoraleChange(
+            moralePlayer,
+            5,
+            'Powrót do pierwszego zespołu po proteście',
+            currentDate
+          ),
+          history: newHistory,
+          reserveProtestUntil: null,
+        }
+      : { ...player, history: newHistory };
     setReserves(prev => prev.filter(p => p.id !== player.id));
     setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), updatedPlayer] }));
     const currentLineup = lineups[userTeamId];

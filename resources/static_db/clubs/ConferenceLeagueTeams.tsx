@@ -46,7 +46,7 @@ export const RAW_CONFERENCE_LEAGUE_CLUBS = [
   { name: "FK Metta", country: "LAT", tier: 4, colors: ['#FF0000', '#FFFFFF', '#000000'], stadium: "Daugava Stadium", capacity: 10800, reputation: 5 },
 
   // Litwa (LTU)
-  { name: "FC Banga Gargždai", country: "LTU", tier: 4, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Gargždai Stadium", capacity: 2300, reputation: 5 },
+ 
   { name: "FK Hegelmann", country: "LTU", tier: 4, colors: ['#FFD700', '#000000', '#FFFFFF'], stadium: "Hegelmann Arena", capacity: 3500, reputation: 5 },
   { name: "FK Džiugas Telšiai", country: "LTU", tier: 4, colors: ['#006633', '#FFFFFF', '#000000'], stadium: "Telšiai Central Stadium", capacity: 2400, reputation: 6 },
 

@@ -437,8 +437,9 @@ export interface MailMessage {
   } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
-    requestType: 'MINUTES' | 'ROLE' | 'TRANSFER_LIST';
+    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT';
     requestedRole?: 'STARTER' | 'KEY_PLAYER';
+    nextFixtureId?: string;
     responseDeadline: string;
   } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
@@ -1184,12 +1185,19 @@ export interface Player {
   lastIndividualTalkDate?: string | null;
   promisedMinutesUntil?: string | null;
   promisedMinutesBaseline?: number | null;
+  promisedRoleNextMatchFixtureId?: string | null;
   lastMoraleDemandDate?: string | null;
   minutesDemandUntil?: string | null;
   minutesDemandBaseline?: number | null;
+  unresolvedMinutesDemandDate?: string | null;
+  unresolvedMinutesDemandBaseline?: number | null;
+  developmentExitDemandUntil?: string | null;
+  developmentExitDemandBaseline?: number | null;
+  lastTemptingOfferConflictDate?: string | null;
   roleDemandUntil?: string | null;
   requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   transferListDemandUntil?: string | null;
+  reserveProtestUntil?: string | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;
   transferClubLockouts?: Record<string, string>;
