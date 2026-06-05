@@ -7865,6 +7865,11 @@ const finalResult: SimulationOutput = {
         contractEnd.setDate(contractEnd.getDate() + 1);
         return contractEnd.toISOString();
       };
+      const isElitePreContractWatchlistPlayer = (player: Player, daysLeft: number): boolean =>
+        player.overallRating >= 90 &&
+        player.isNegotiationPermanentBlocked &&
+        daysLeft > 0 &&
+        daysLeft <= 330;
       const queueIncomingMail = (mail: MailMessage) => {
         if (mail.metadata?.type !== 'INCOMING_TRANSFER_OFFER') {
           newIncomingMails.push(mail);
@@ -8113,10 +8118,12 @@ const finalResult: SimulationOutput = {
             if (aiPreContractSigned) return;
             if (p.transferPendingClubId) return;
             if (p.transferOfferBanUntil && nextDay < new Date(p.transferOfferBanUntil)) return;
-            if (!IncomingTransferService.isPlausibleBuyerForPlayer(p, aiClub, buyerSquad)) return;
 
             const contractDaysLeft = Math.floor((new Date(p.contractEndDate).getTime() - nextDay.getTime()) / 86_400_000);
             if (contractDaysLeft <= 0 || contractDaysLeft > 330) return;
+            const isEliteWatchlistOpportunity = isElitePreContractWatchlistPlayer(p, contractDaysLeft);
+            if (isEliteWatchlistOpportunity && aiClub.reputation < 17) return;
+            if (!isEliteWatchlistOpportunity && !IncomingTransferService.isPlausibleBuyerForPlayer(p, aiClub, buyerSquad)) return;
 
             const existingPreContract = transferOffers.some(offer =>
               offer.playerId === p.id &&
@@ -8132,7 +8139,9 @@ const finalResult: SimulationOutput = {
               ? samePosition.reduce((sum, player) => sum + player.overallRating, 0) / samePosition.length
               : IncomingTransferService.getSquadAverageOverall(buyerSquad);
             const sportingFit = p.overallRating >= positionAverage + 1;
-            if (!sportingFit && !isShortlisted && repDelta < 2) return;
+            if (isEliteWatchlistOpportunity) {
+              if (p.overallRating < positionAverage - 2) return;
+            } else if (!sportingFit && !isShortlisted && repDelta < 2) return;
 
             const interestedClubsForMindflow = (p.interestedClubs || [])
               .map(clubId => clubs.find(club => club.id === clubId))
@@ -8150,23 +8159,29 @@ const finalResult: SimulationOutput = {
             if (!contractMindflow.externalOfferGate.willListen) return;
             if (!contractMindflow.externalOfferGate.canSignPreContract) return;
 
-            let chance = contractDaysLeft <= 90 ? 0.055 : contractDaysLeft <= 180 ? 0.035 : 0.018;
+            let chance = isEliteWatchlistOpportunity
+              ? (contractDaysLeft <= 90 ? 0.28 : contractDaysLeft <= 180 ? 0.20 : 0.13)
+              : contractDaysLeft <= 90 ? 0.055 : contractDaysLeft <= 180 ? 0.035 : 0.018;
             if (isShortlisted) chance *= 2.5;
             if (repDelta >= 3) chance *= 1.8;
             else if (repDelta >= 1) chance *= 1.35;
             else if (repDelta < 0) chance *= 0.45;
-            if (p.squadRole === 'KEY_PLAYER' || p.isUntouchable) chance *= 0.55;
+            if (!isEliteWatchlistOpportunity && (p.squadRole === 'KEY_PLAYER' || p.isUntouchable)) chance *= 0.55;
             if (p.isNegotiationPermanentBlocked) chance *= 2.0;
             chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
 
-            if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(0.18, chance)) return;
+            if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(isEliteWatchlistOpportunity ? 0.60 : 0.18, chance)) return;
 
             const negotiation = IncomingTransferService.simulatePlayerNegotiation(p, aiClub, userClub, seed + 101, nextDay);
             if (negotiation !== 'accepted') return;
 
             const rawPreContractSalary = Math.max(
               FinanceService.getFairMarketSalary(p.overallRating),
-              Math.round(p.annualSalary * (repDelta >= 2 ? 1.20 : repDelta >= 0 ? 1.12 : 1.35) / 10000) * 10000
+              Math.round(p.annualSalary * (
+                isEliteWatchlistOpportunity
+                  ? (repDelta >= 2 ? 1.42 : repDelta >= 0 ? 1.32 : 1.55)
+                  : repDelta >= 2 ? 1.20 : repDelta >= 0 ? 1.12 : 1.35
+              ) / 10000) * 10000
             );
             const preContractSalaryCeiling = FinanceService.calculatePolishLeagueSalaryCeiling(
               FinanceService.getClubTier(aiClub),
@@ -8175,7 +8190,10 @@ const finalResult: SimulationOutput = {
             const salary = preContractSalaryCeiling
               ? Math.min(rawPreContractSalary, preContractSalaryCeiling)
               : rawPreContractSalary;
-            const bonus = Math.round(p.annualSalary * (p.age < 24 ? 0.35 : p.age <= 30 ? 0.55 : 0.75) / 10000) * 10000;
+            const bonusMultiplier = isEliteWatchlistOpportunity
+              ? (p.age < 24 ? 0.75 : p.age <= 30 ? 1.05 : p.age <= 34 ? 1.25 : 1.45)
+              : (p.age < 24 ? 0.35 : p.age <= 30 ? 0.55 : 0.75);
+            const bonus = Math.round(p.annualSalary * bonusMultiplier / 10000) * 10000;
             const years = p.age <= 27 ? 4 : p.age <= 31 ? 3 : p.age <= 34 ? 2 : 1;
             if (aiClub.transferBudget < salary * years + bonus) return;
 

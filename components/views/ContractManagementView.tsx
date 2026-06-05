@@ -218,7 +218,10 @@ export const ContractManagementView: React.FC = () => {
             negotiationLockoutUntil: lockoutDateStr,
             isNegotiationPermanentBlocked: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2
               ? true
-              : p.isNegotiationPermanentBlocked
+              : p.isNegotiationPermanentBlocked,
+            isUntouchable: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2
+              ? false
+              : p.isUntouchable
           }));
 
         setCounterOffer(nextStep >= 3 ? null : mindflowDecision.demands);
@@ -232,7 +235,7 @@ export const ContractManagementView: React.FC = () => {
       const playerDemand = FinanceService.calculatePlayerBonusDemand(player, offerSalary, club.reputation);
 
       if (FinanceService.isOfferInsulting(offerBonus, playerDemand)) {
-        updateContractPlayer(p => ({ ...p, isNegotiationPermanentBlocked: true }));
+        updateContractPlayer(p => ({ ...p, isNegotiationPermanentBlocked: true, isUntouchable: false }));
         setNegotiationMessage("Nie traktujecie mnie powaznie wiec nie będziemy o niczym rozmawiac. Do widzenia!");
         setCounterOffer(null);
         setIsProcessing(false);
@@ -283,11 +286,14 @@ export const ContractManagementView: React.FC = () => {
           d.setDate(d.getDate() + 14);
           lockoutDateStr = d.toISOString();
         }
+        const permanentBreakdown = !decision.demands || nextStep >= 3;
 
         updateContractPlayer(p => ({ 
             ...p, 
             negotiationStep: nextStep,
-            negotiationLockoutUntil: lockoutDateStr 
+            negotiationLockoutUntil: lockoutDateStr,
+            isNegotiationPermanentBlocked: permanentBreakdown ? true : p.isNegotiationPermanentBlocked,
+            isUntouchable: permanentBreakdown ? false : p.isUntouchable
           }));
 
         if (nextStep >= 3) {

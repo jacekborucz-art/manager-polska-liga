@@ -64,6 +64,8 @@ const BIG_CLUB_REPUTATION = 18;
 const VETERAN_STAR_MIN_AGE = 33;
 const VETERAN_STAR_MIN_OVR = 85;
 const GULF_MEGA_OFFER_ACCEPTANCE_CHANCE = 0.75;
+const ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR = 90;
+const ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION = 17;
 const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
   [PlayerPosition.GK]: 2,
   [PlayerPosition.DEF]: 6,
@@ -108,6 +110,16 @@ const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
 };
 
 const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
+const _isElitePreContractWatchlistPlayer = (player: Player, currentDate: Date): boolean => {
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+  return (
+    player.overallRating >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR &&
+    player.isNegotiationPermanentBlocked &&
+    daysLeft > 0 &&
+    daysLeft <= PRE_CONTRACT_PRIORITY_DAYS
+  );
+};
 
 const _getPreContractJoinDate = (player: Player): string => {
   const contractEnd = new Date(player.contractEndDate);
@@ -411,10 +423,13 @@ const _buildAiPreContractOffer = (
   player: Player,
   sellerClub: Club,
   buyerClub: Club,
-  currentDate: Date
+  currentDate: Date,
+  isEliteWatchlistOpportunity = false
 ): { salary: number; bonus: number; years: number } => {
   const repDelta = buyerClub.reputation - sellerClub.reputation;
-  const salaryMultiplier = repDelta >= 3 ? 1.24 : repDelta >= 1 ? 1.14 : repDelta === 0 ? 1.08 : 1.32;
+  const salaryMultiplier = isEliteWatchlistOpportunity
+    ? (repDelta >= 2 ? 1.42 : repDelta >= 0 ? 1.32 : 1.55)
+    : repDelta >= 3 ? 1.24 : repDelta >= 1 ? 1.14 : repDelta === 0 ? 1.08 : 1.32;
   const rawSalary = Math.max(
     FinanceLogic.getFairMarketSalary(player.overallRating),
     Math.round((player.annualSalary || FinanceLogic.getFairMarketSalary(player.overallRating)) * salaryMultiplier / 10_000) * 10_000
@@ -425,7 +440,9 @@ const _buildAiPreContractOffer = (
   );
   const salary = salaryCeiling ? Math.min(rawSalary, salaryCeiling) : rawSalary;
   const bonusBase = salaryCeiling ? Math.min(player.annualSalary || salary, salary) : (player.annualSalary || salary);
-  const bonusMultiplier = player.age < 24 ? 0.35 : player.age <= 30 ? 0.55 : player.age <= 34 ? 0.80 : 1.05;
+  const bonusMultiplier = isEliteWatchlistOpportunity
+    ? (player.age < 24 ? 0.75 : player.age <= 30 ? 1.05 : player.age <= 34 ? 1.25 : 1.45)
+    : player.age < 24 ? 0.35 : player.age <= 30 ? 0.55 : player.age <= 34 ? 0.80 : 1.05;
   const bonus = Math.round(bonusBase * bonusMultiplier / 10_000) * 10_000;
   const years = player.age <= 27 ? 4 : player.age <= 31 ? 3 : player.age <= 34 ? 2 : 1;
 
@@ -1676,13 +1693,17 @@ processAiRecruitment: (
 
         const daysLeft = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
         if (daysLeft <= 0 || daysLeft > PRE_CONTRACT_PRIORITY_DAYS) continue;
+        const isEliteWatchlistOpportunity = _isElitePreContractWatchlistPlayer(player, currentDate);
 
         const candidateBuyers = clubs
           .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
           .filter(buyer => {
             const buyerSquad = updatedPlayersMap[buyer.id] || [];
-            if (buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
-            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % 9 !== 0) return false;
+            const canMonitorEliteWatchlist = buyer.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION;
+            if (isEliteWatchlistOpportunity && !canMonitorEliteWatchlist) return false;
+            if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
+            const stagger = isEliteWatchlistOpportunity ? 3 : 9;
+            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
 
             const needs = _assessClubNeeds(buyer, buyerSquad, currentDate);
             const hasPosNeed = needs.some(need => need.position === player.position);
@@ -1691,12 +1712,15 @@ processAiRecruitment: (
             const sportingUpgrade = player.overallRating >= buyerPositionAverage + 1;
             const stepUp = buyer.reputation >= sellerClub.reputation + 1;
 
+            if (isEliteWatchlistOpportunity) return player.overallRating >= buyerPositionAverage - 2;
             return (hasPosNeed || isShortlisted || stepUp) && sportingUpgrade;
           })
           .sort((a, b) => {
             const aShortlisted = (player.interestedClubs || []).includes(a.id) ? 8 : 0;
             const bShortlisted = (player.interestedClubs || []).includes(b.id) ? 8 : 0;
-            return (b.reputation + bShortlisted) - (a.reputation + aShortlisted);
+            const aEliteBonus = isEliteWatchlistOpportunity && a.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
+            const bEliteBonus = isEliteWatchlistOpportunity && b.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
+            return (b.reputation + bShortlisted + bEliteBonus) - (a.reputation + aShortlisted + aEliteBonus);
           });
 
         for (const buyerClub of candidateBuyers) {
@@ -1717,19 +1741,21 @@ processAiRecruitment: (
           if (!contractMindflow.externalOfferGate.willListen) continue;
           if (!contractMindflow.externalOfferGate.canSignPreContract) continue;
 
-          let chance = daysLeft <= 90 ? 0.06 : daysLeft <= 180 ? 0.04 : 0.018;
+          let chance = isEliteWatchlistOpportunity
+            ? (daysLeft <= 90 ? 0.30 : daysLeft <= 180 ? 0.22 : 0.14)
+            : daysLeft <= 90 ? 0.06 : daysLeft <= 180 ? 0.04 : 0.018;
           if (isShortlisted) chance *= 2.4;
           if (repDelta >= 3) chance *= 1.8;
           else if (repDelta >= 1) chance *= 1.35;
           else if (repDelta < 0) chance *= 0.45;
-          if (player.squadRole === 'KEY_PLAYER' || player.isUntouchable) chance *= 0.60;
+          if (!isEliteWatchlistOpportunity && (player.squadRole === 'KEY_PLAYER' || player.isUntouchable)) chance *= 0.60;
           if (player.isNegotiationPermanentBlocked) chance *= 2.2;
           if (player.isOnTransferList) chance *= 1.35;
           chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
 
-          if (_seededRandom(`${seedBase}_ROLL`) >= Math.min(0.20, chance)) continue;
+          if (_seededRandom(`${seedBase}_ROLL`) >= Math.min(isEliteWatchlistOpportunity ? 0.65 : 0.20, chance)) continue;
 
-          const offer = _buildAiPreContractOffer(player, sellerClub, buyerClub, currentDate);
+          const offer = _buildAiPreContractOffer(player, sellerClub, buyerClub, currentDate, isEliteWatchlistOpportunity);
           if (buyerClub.budget < offer.bonus + offer.salary * offer.years) continue;
 
           const decision = TransferPlayerDecisionService.evaluateMove(

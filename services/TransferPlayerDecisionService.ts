@@ -23,6 +23,8 @@ const roundMoney = (value: number) => Math.max(50_000, Math.round(value / 5_000)
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
 const getReputationDrop = (currentClub: Club, targetClub: Club): number =>
   Math.max(0, currentClub.reputation - targetClub.reputation);
 
@@ -128,7 +130,7 @@ export const TransferPlayerDecisionService = {
     else if (player.age <= 34) desiredYears = 2;
     else desiredYears = 1;
 
-    if (daysLeft > 0 && daysLeft < 365) {
+    if (daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) {
       desiredYears = Math.max(2, desiredYears - 1);
     }
 
@@ -269,7 +271,9 @@ export const TransferPlayerDecisionService = {
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
-    const contractPressure = daysLeft > 0 && daysLeft < 365 ? 7 : 0;
+    const contractPressure = daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS ? 7 : 0;
+    const contractBreakdownPressure =
+      player.isNegotiationPermanentBlocked && daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS ? 24 : 0;
     const transferListPressure = player.isOnTransferList ? 10 : 0;
     const reputationScore = reputationDelta > 0 ? Math.min(22, reputationDelta * 7) : 0;
     const foreignBonus = reputationDelta === 0 && isForeignMove ? 6 : 0;
@@ -289,6 +293,7 @@ export const TransferPlayerDecisionService = {
       Math.min(16, Math.round(currentSalaryBase / 110_000)) +
       salarySatisfactionBonus -
       contractPressure -
+      contractBreakdownPressure -
       transferListPressure;
 
     const offerScore =
@@ -340,7 +345,8 @@ export const TransferPlayerDecisionService = {
     const financialChanceAdjustment = clamp((financialFit - 1) * 0.25, -0.22, 0.16);
     const situationChanceAdjustment =
       (player.isOnTransferList ? 0.08 : 0) +
-      (contractPressure > 0 ? 0.04 : 0);
+      (contractPressure > 0 ? 0.04 : 0) +
+      (contractBreakdownPressure > 0 ? 0.12 : 0);
     const finalAcceptanceChance = clamp(
       getBaseMoveAcceptanceChance(currentClub, targetClub) +
         roleChanceAdjustment +
