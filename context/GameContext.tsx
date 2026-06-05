@@ -711,6 +711,8 @@ interface SimulationOutput {
   aiTransferLogEntries?: AiTransferLogEntry[];
 }
 
+type SeasonCelebrationType = 'championship' | 'promotion-ekst' | 'promotion-1liga';
+
 type GameNotificationTone = 'success' | 'info' | 'warning' | 'error';
 
 interface GameNotificationState {
@@ -974,7 +976,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   clearSummerCampProgramPending: () => void;
   saveSummerCampLocation: (location: import('../types').SummerCampLocation | null, cost: number, spaOption: boolean) => void;
   saveSummerCampProgram: (program: import('../types').SummerCampProgram, intensity: import('../types').SummerCampIntensity) => void;
-  seasonCelebration: 'championship' | 'promotion-ekst' | 'promotion-1liga' | null;
+  seasonCelebration: SeasonCelebrationType | null;
   clearSeasonCelebration: () => void;
 }
 
@@ -1117,6 +1119,62 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   // Guard: zapobiega wielokrotnemu uruchomieniu processLeagueEvent dla tej samej daty
   const lastProcessedLeagueDateRef = React.useRef<string | null>(null);
   const celebrationAlreadyFiredRef = React.useRef(false);
+
+  // Helper do jednorazowego uruchamiania planszy za zapewnione mistrzostwo lub awans.
+  const triggerSeasonCelebrationIfClinched = useCallback((sourceClubs: Club[], sourceFixtures: Fixture[]) => {
+    if (!userTeamId || celebrationAlreadyFiredRef.current) return;
+
+    const userClub = sourceClubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const remaining = (leagueId: string, teamId: string) =>
+      sourceFixtures.filter(f =>
+        f.leagueId === leagueId &&
+        f.status === MatchStatus.SCHEDULED &&
+        (f.homeTeamId === teamId || f.awayTeamId === teamId)
+      ).length;
+
+    const hasClinchedAboveBoundary = (boundaryClub?: Club) => {
+      if (!boundaryClub) return false;
+
+      const boundaryRemaining = remaining(userClub.leagueId, boundaryClub.id);
+      const boundaryMaxPoints = boundaryClub.stats.points + boundaryRemaining * 3;
+      if (userClub.stats.points > boundaryMaxPoints) return true;
+
+      return boundaryRemaining === 0 && userClub.stats.points >= boundaryClub.stats.points;
+    };
+
+    let celebration: SeasonCelebrationType | null = null;
+
+    if (userClub.leagueId === 'L_PL_1') {
+      const sortedL1 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_1')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      if (sortedL1[0]?.id === userTeamId && hasClinchedAboveBoundary(sortedL1[1])) {
+        celebration = 'championship';
+      }
+    } else if (userClub.leagueId === 'L_PL_2') {
+      const sortedL2 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_2')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      const pos = sortedL2.findIndex(c => c.id === userTeamId);
+      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL2[2])) {
+        celebration = 'promotion-ekst';
+      }
+    } else if (userClub.leagueId === 'L_PL_3') {
+      const sortedL3 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_3')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      const pos = sortedL3.findIndex(c => c.id === userTeamId);
+      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL3[2])) {
+        celebration = 'promotion-1liga';
+      }
+    }
+
+    if (!celebration) return;
+    celebrationAlreadyFiredRef.current = true;
+    setSeasonCelebration(celebration);
+  }, [userTeamId]);
 
   // Helper do dodawania logów finansowych
   const addFinanceLog = useCallback((clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => {
@@ -1339,6 +1397,10 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     const allLeagueFixtures = Object.values(leagueSchedules).flatMap(s => s.matchdays.flatMap(m => m.fixtures));
     return [...allLeagueFixtures, ...globalFixtures];
   }, [leagueSchedules, globalFixtures]);
+
+  useEffect(() => {
+    triggerSeasonCelebrationIfClinched(clubs, allFixtures);
+  }, [allFixtures, clubs, triggerSeasonCelebrationIfClinched]);
 
 const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (players[clubId]) return players[clubId];
@@ -2493,8 +2555,6 @@ if (userTeamId) {
     winterCampProgramPending,
     summerCampInvitePending,
     summerCampProgramPending,
-    seasonCelebration,
-    clearSeasonCelebration,
     lastNTMatchResults,
     aiFriendlyPairs,
     aiFriendlyReports,
@@ -2943,6 +3003,8 @@ setMessages([welcomeMail, fanMail]);
       }
     }
 
+    triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures);
+
     setClubs(finalClubs);
 
     finalPlayers = Object.fromEntries(
@@ -3027,7 +3089,7 @@ setMessages([welcomeMail, fanMail]);
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail, triggerSeasonCelebrationIfClinched]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument
@@ -4039,7 +4101,7 @@ setMessages([welcomeMail, fanMail]);
 
   const clearSummerCampInvitePending = useCallback(() => setSummerCampInvitePending(false), []);
   const clearSummerCampProgramPending = useCallback(() => setSummerCampProgramPending(false), []);
-  const [seasonCelebration, setSeasonCelebration] = useState<'championship' | 'promotion-ekst' | 'promotion-1liga' | null>(null);
+  const [seasonCelebration, setSeasonCelebration] = useState<SeasonCelebrationType | null>(null);
   const clearSeasonCelebration = useCallback(() => setSeasonCelebration(null), []);
 
   const saveSummerCampLocation = useCallback((location: SummerCampLocation | null, cost: number, spaOption: boolean) => {
@@ -7487,6 +7549,34 @@ const finalResult: SimulationOutput = {
       });
       if (directorCommunication.length > 0) {
         prependUniqueMessages(directorCommunication, true);
+      }
+
+      const promotionMailAlreadySent = messages.some(m => m.id.startsWith('BOARD_PROMOTION_EKSTRAKLASA_'));
+      if (!promotionMailAlreadySent && userClub.leagueId === 'L_PL_2') {
+        const sortedL2 = [...finalResult.updatedClubs]
+          .filter(c => c.leagueId === 'L_PL_2')
+          .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const userIndexL2 = sortedL2.findIndex(c => c.id === userTeamId);
+        const thirdPlaceClub = sortedL2[2];
+        const maxThirdPoints = thirdPlaceClub ? thirdPlaceClub.stats.points + Math.max(0, 34 - thirdPlaceClub.stats.played) * 3 : 0;
+        const hasClinchedPromotion = userIndexL2 < 2 && thirdPlaceClub && (
+          userClub.stats.points > maxThirdPoints ||
+          (thirdPlaceClub.stats.played >= 34 && userClub.stats.points >= thirdPlaceClub.stats.points)
+        );
+        if (hasClinchedPromotion) {
+          const promotionMail: MailMessage = {
+            id: `BOARD_PROMOTION_EKSTRAKLASA_${dateToProcess.getTime()}`,
+            sender: 'Zarząd Klubu',
+            role: 'Prezes Zarządu',
+            subject: '[ OFICJALNIE ] Awans do Ekstraklasy – Gratulacje od Zarządu',
+            body: '',
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 100
+          };
+          prependUniqueMessages([promotionMail]);
+        }
       }
     }
 
@@ -13512,6 +13602,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     summerCampInvitePending, summerCampProgramPending,
     clearSummerCampInvitePending, clearSummerCampProgramPending,
     saveSummerCampLocation, saveSummerCampProgram,
+    seasonCelebration, clearSeasonCelebration,
     }}>
       {children}
     </GameContext.Provider>

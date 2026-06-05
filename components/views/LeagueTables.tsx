@@ -12,6 +12,21 @@ const _persisted = {
   selectedRound: 1 as number,
 };
 
+const LEAGUE_ROUNDS = 34;
+
+const getMaxPossiblePoints = (club: Club) =>
+  club.stats.points + Math.max(0, LEAGUE_ROUNDS - club.stats.played) * 3;
+
+const hasClinchedAboveBoundary = (club: Club, boundaryClub?: Club) => {
+  if (!boundaryClub) return false;
+
+  const boundaryMaxPoints = getMaxPossiblePoints(boundaryClub);
+  if (club.stats.points > boundaryMaxPoints) return true;
+
+  const boundaryCannotGainMorePoints = boundaryClub.stats.played >= LEAGUE_ROUNDS;
+  return boundaryCannotGainMorePoints && club.stats.points >= boundaryClub.stats.points;
+};
+
 export const LeagueTables: React.FC = () => {
   const { leagues, clubs, leagueSchedules, navigateTo, viewClubDetails, userTeamId, seasonTemplate } = useGame();
 
@@ -220,6 +235,16 @@ export const LeagueTables: React.FC = () => {
                             const isLeagueTwo = selectedLeagueId === 'L_PL_3';
                             const isLeagueTwoPlayoffPlace = isLeagueTwo && index >= 12 && index <= 13;
                             const isLeagueTwoRelegationPlace = isLeagueTwo && index >= 14;
+                            const isChampionClinched = selectedLeagueId === 'L_PL_1' &&
+                              index === 0 &&
+                              hasClinchedAboveBoundary(club, sortedClubs[1]);
+                            const isDirectPromotionClinched = (selectedLeagueId === 'L_PL_2' || selectedLeagueId === 'L_PL_3') &&
+                              index < 2 &&
+                              hasClinchedAboveBoundary(club, sortedClubs[2]);
+                            const isPromotionPlayoffClinched = (selectedLeagueId === 'L_PL_2' || selectedLeagueId === 'L_PL_3') &&
+                              index < 6 &&
+                              !isDirectPromotionClinched &&
+                              hasClinchedAboveBoundary(club, sortedClubs[6]);
                             const rowClassName = isUserTeam
                               ? 'bg-teal-500/20 border-l-4 border-teal-400 shadow-[0_0_30px_rgba(20,184,166,0.1)] z-30'
                               : (selectedLeagueId === 'L_PL_1' && index === 0)
@@ -261,8 +286,7 @@ export const LeagueTables: React.FC = () => {
                                        <div className="flex flex-col min-w-0">
                                          <span className="text-sm font-black text-white uppercase italic tracking-tight group-hover:text-blue-400 transition-colors truncate flex items-center gap-2">
                                             {club.name}
-                                            {selectedLeagueId === 'L_PL_1' && index === 0 && sortedClubs.length > 1 && 
-                                              club.stats.points > (sortedClubs[1].stats.points + (34 - sortedClubs[1].stats.played) * 3) && (
+                                            {isChampionClinched && (
                                               <div className="flex items-center gap-1.5 shrink-0">
                                                 <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]">⭐</span>
                                                 <span className="bg-yellow-400 text-slate-950 text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter leading-none shadow-lg">Mistrz Polski</span>
@@ -270,12 +294,15 @@ export const LeagueTables: React.FC = () => {
                                             )}
 
 
-{(selectedLeagueId === 'L_PL_2' || selectedLeagueId === 'L_PL_3') && 
-                                              index < 2 &&
-                                              sortedClubs[2] &&
-                                              club.stats.points > (sortedClubs[2].stats.points + (34 - sortedClubs[2].stats.played) * 3) && (
+                                            {isDirectPromotionClinched && (
                                               <div className="flex items-center gap-1.5 shrink-0">
                                                 <span className="bg-emerald-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter leading-none shadow-lg animate-pulse">AWANS</span>
+                                              </div>
+                                            )}
+
+                                            {isPromotionPlayoffClinched && (
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="bg-blue-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter leading-none shadow-lg animate-pulse">PLAYOFF</span>
                                               </div>
                                             )}
 

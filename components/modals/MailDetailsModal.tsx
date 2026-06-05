@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MailMessage, MailType, Newspaper, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
+import awansEkstraklasaImg from '../../Graphic/cup/awans-do-ekst.png';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
 import { MediaInterviewModal, MediaInterviewResult } from './MediaInterviewModal';
 import { MediaInterviewService } from '../../services/MediaInterviewService';
@@ -836,7 +837,9 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
 
         <div className={`custom-scrollbar flex-1 min-h-0 bg-[#071321] ${isTeamOfWeek ? 'overflow-hidden p-4' : 'overflow-y-auto px-9 py-8'}`}>
           <div className={`${mail.type === MailType.SCOUT || isTeamOfWeek ? 'prose prose-invert max-w-none' : ''}`}>
-            {mail.type === MailType.SCOUT ? (
+            {mail.id.startsWith('BOARD_PROMOTION_EKSTRAKLASA_') ? (
+              <img src={awansEkstraklasaImg} alt="Awans do Ekstraklasy" className="w-full object-contain" />
+            ) : mail.type === MailType.SCOUT ? (
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
             ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
               <TeamOfWeekPitch mail={mail} />

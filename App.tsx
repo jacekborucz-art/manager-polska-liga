@@ -86,6 +86,9 @@ import { ELQFDrawView } from './components/views/ELQFDrawView';
 import { ELSFDrawView } from './components/views/ELSFDrawView';
 import { ELFinalDrawView } from './components/views/ELFinalDrawView';
 import { GameNotification } from './components/ui/GameNotification';
+import winnerPolishImg from './Graphic/cup/winnerpolish.png';
+import awansEkstImg from './Graphic/cup/awans-do-ekst.png';
+import awans1LigiImg from './Graphic/cup/awans-do-1ligi.png';
 import { PlayoffDrawView } from './components/views/PlayoffDrawView';
 import { RelegationPlayoffMatch1View } from './components/views/RelegationPlayoffMatch1View';
 import { RelegationPlayoffMatch2View } from './components/views/RelegationPlayoffMatch2View';
@@ -164,6 +167,30 @@ const PreMatchPressConferenceGate: React.FC = () => {
   if (!userClub || !opponent) return null;
 
   return <PreMatchPressConferenceModal fixture={fixture} userClub={userClub} opponent={opponent} />;
+};
+
+const SeasonCelebrationOverlay: React.FC = () => {
+  const { seasonCelebration, clearSeasonCelebration } = useGame();
+
+  if (!seasonCelebration) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85" onClick={clearSeasonCelebration}>
+      <div className="relative" onClick={event => event.stopPropagation()}>
+        <img
+          src={seasonCelebration === 'championship' ? winnerPolishImg : seasonCelebration === 'promotion-ekst' ? awansEkstImg : awans1LigiImg}
+          alt="Obwieszczenie sezonu"
+          className="max-w-[520px] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+        />
+        <button
+          onClick={clearSeasonCelebration}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white text-xl font-black flex items-center justify-center hover:bg-black/90 transition-colors"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // Internal component to handle view switching
@@ -463,6 +490,7 @@ case ViewState.CL_GROUP_DRAW:
       <main>{renderView()}</main>
       <PreMatchPressConferenceGate />
       <GameNotification />
+      <SeasonCelebrationOverlay />
     </>
   );
 };
