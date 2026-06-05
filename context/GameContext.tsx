@@ -7508,6 +7508,14 @@ const finalResult: SimulationOutput = {
       setClubs(prev => {
         const userClub = prev.find(c => c.id === userTeamId);
         if (!userClub || !userClub.sportingDirector || userClub.leagueId === 'NONE') return prev;
+        const nextDayStart = new Date(nextDay).setHours(0, 0, 0, 0);
+        const hasUpcomingLeagueMatch = allFixtures.some(f =>
+          f.status === MatchStatus.SCHEDULED &&
+          f.leagueId === userClub.leagueId &&
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= nextDayStart
+        );
+        if (!hasUpcomingLeagueMatch) return prev;
 
         const leagueClubs = prev.filter(c => c.leagueId === userClub.leagueId);
         const review = SportingDirectorService.reviewManagerMonthly({

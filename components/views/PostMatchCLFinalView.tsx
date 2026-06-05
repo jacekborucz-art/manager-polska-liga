@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../../types';
 import { ChampionshipHistoryService } from '../../data/championship_history';
@@ -10,6 +10,8 @@ const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-tr
 export const PostMatchCLFinalView: React.FC = () => {
   const { fixtures, clubs, currentDate, navigateTo, advanceDay } = useGame();
   const savedMatchesRef = useRef<Set<string>>(new Set());
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [animated, setAnimated] = useState(false);
 
   const finalFixture = useMemo(() => {
     return fixtures.find(f =>
@@ -35,6 +37,9 @@ export const PostMatchCLFinalView: React.FC = () => {
     return null;
   };
 
+  const winnerId = getWinnerId();
+  const winnerClub = winnerId ? getClub(winnerId) : null;
+
   // Zapisz zwycięzcę finału Ligi Mistrzów do historii (tylko raz dla każdego meczu)
   useEffect(() => {
     if (finalFixture && !savedMatchesRef.current.has(finalFixture.id)) {
@@ -59,6 +64,12 @@ export const PostMatchCLFinalView: React.FC = () => {
     }
   }, [finalFixture, clubs, currentDate]);
 
+  useEffect(() => {
+    if (!finalFixture) return;
+    const t = setTimeout(() => setAnimated(true), 150);
+    return () => clearTimeout(t);
+  }, [finalFixture]);
+
   const handleContinue = () => {
     advanceDay();
     navigateTo(ViewState.DASHBOARD);
@@ -72,6 +83,47 @@ export const PostMatchCLFinalView: React.FC = () => {
         <img src={ligaMistrzowBg} alt="" className="w-full h-full object-cover opacity-30" />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/40 to-slate-950/90" />
       </div>
+
+      {/* OVERLAY ZWYCIĘZCY */}
+      {showOverlay && finalFixture && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+          style={{ background: 'rgba(2, 6, 23, 0.92)', backdropFilter: 'blur(16px)', opacity: animated ? 1 : 0, transition: 'opacity 0.7s ease' }}
+        >
+          <p
+            className="text-amber-400 font-black uppercase text-center"
+            style={{ fontSize: '0.625rem', letterSpacing: '0.5em', marginBottom: '2.5rem', opacity: animated ? 1 : 0, transform: animated ? 'translateY(0)' : 'translateY(-32px)', transition: 'opacity 0.5s ease, transform 0.5s ease' }}
+          >
+            ZWYCIĘZCA LIGI MISTRZÓW
+          </p>
+          <div style={{ transform: animated ? 'scale(1)' : 'scale(0)', opacity: animated ? 1 : 0, transition: 'transform 0.8s cubic-bezier(0.34,1.56,0.64,1) 0.15s, opacity 0.7s ease 0.15s' }}>
+            {winnerClub?.logoFile ? (
+              <img
+                src={new URL(`../../Graphic/logo/${winnerClub.logoFile}`, import.meta.url).href}
+                alt=""
+                className="w-64 h-64 object-contain"
+              />
+            ) : (
+              <div className="w-64 h-64 flex items-center justify-center" style={{ fontSize: '9rem' }}>🏆</div>
+            )}
+          </div>
+          {winnerClub && (
+            <h2
+              className="font-black italic uppercase text-white text-center"
+              style={{ fontSize: '3rem', letterSpacing: '-0.05em', marginTop: '2rem', opacity: animated ? 1 : 0, transform: animated ? 'translateY(0)' : 'translateY(32px)', transition: 'opacity 0.5s ease 0.4s, transform 0.5s ease 0.4s' }}
+            >
+              {winnerClub.name}
+            </h2>
+          )}
+          <button
+            onClick={() => setShowOverlay(false)}
+            className="mt-10 px-10 py-4 bg-white hover:bg-slate-100 text-slate-900 font-black italic uppercase tracking-widest rounded-2xl shadow-2xl text-sm"
+            style={{ opacity: animated ? 1 : 0, transition: 'opacity 0.5s ease 1s' }}
+          >
+            KONTYNUUJ →
+          </button>
+        </div>
+      )}
 
       <div className="relative z-10 flex flex-col h-full p-6 gap-4">
 

@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
+import { getClubLogo } from '../resources/ClubLogoAssets';
 import ligaMistrzowBg from '../Graphic/themes/CL_theme.png';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
 import { MatchReportModal } from '../components/modals/MatchReportModal';
@@ -11,6 +12,8 @@ const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-tr
 export const PostMatchCLStudioView: React.FC = () => {
   const { fixtures, clubs, currentDate, navigateTo, advanceDay } = useGame();
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [animated, setAnimated] = useState(false);
 
   const results = useMemo(() => {
     const dateStr = currentDate.toDateString();
@@ -80,6 +83,31 @@ export const PostMatchCLStudioView: React.FC = () => {
   const isCLFinal = results.length > 0 &&
     results[0].leagueId === CompetitionType.CL_FINAL;
 
+  const finalFixture = isCLFinal ? results.find(r => r.leagueId === CompetitionType.CL_FINAL) ?? null : null;
+
+  const getFinalWinnerId = () => {
+    if (!finalFixture) return null;
+    const h = finalFixture.homeScore ?? 0;
+    const a = finalFixture.awayScore ?? 0;
+    if (h > a) return finalFixture.homeTeamId;
+    if (a > h) return finalFixture.awayTeamId;
+    if (finalFixture.homePenaltyScore != null && finalFixture.awayPenaltyScore != null) {
+      return finalFixture.homePenaltyScore > finalFixture.awayPenaltyScore
+        ? finalFixture.homeTeamId
+        : finalFixture.awayTeamId;
+    }
+    return null;
+  };
+
+  const finalWinnerId = getFinalWinnerId();
+  const finalWinnerClub = finalWinnerId ? getClub(finalWinnerId) : null;
+
+  useEffect(() => {
+    if (!finalFixture) return;
+    const t = setTimeout(() => setAnimated(true), 150);
+    return () => clearTimeout(t);
+  }, [finalFixture]);
+
   // Dla rewanżu: oblicz agregat dla każdego meczu
   const getAggregate = (fixture: typeof results[0]) => {
     if (!isReturn) return null;
@@ -110,6 +138,46 @@ export const PostMatchCLStudioView: React.FC = () => {
         />
         <div className="absolute inset-0 bg-slate-950/60" />
       </div>
+
+      {/* OVERLAY ZWYCIĘZCY LIGI MISTRZÓW */}
+      {showOverlay && finalFixture && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4"
+          style={{ background: 'rgba(2, 6, 23, 0.65)', opacity: animated ? 1 : 0, transition: 'opacity 0.7s ease' }}
+        >
+          <p
+            className="text-amber-400 font-black uppercase text-center"
+            style={{ fontSize: '2rem', letterSpacing: '0.3em', opacity: animated ? 1 : 0, transform: animated ? 'translateY(0)' : 'translateY(-32px)', transition: 'opacity 0.5s ease, transform 0.5s ease' }}
+          >
+            ZWYCIĘZCA LIGI MISTRZÓW
+          </p>
+          <div style={{ transform: animated ? 'scale(1)' : 'scale(0.05)', opacity: animated ? 1 : 0, transition: 'transform 2.5s cubic-bezier(0.22,1,0.36,1) 0.15s, opacity 0.6s ease 0.15s' }}>
+            {finalWinnerClub ? (() => {
+              const logoUrl = getClubLogo(finalWinnerClub.id) ?? (finalWinnerClub.logoFile ? new URL(`../Graphic/logo/${finalWinnerClub.logoFile}`, import.meta.url).href : null);
+              return logoUrl
+                ? <img src={logoUrl} alt="" style={{ width: '42vmin', height: '42vmin', objectFit: 'contain' }} />
+                : <div style={{ width: '42vmin', height: '42vmin', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15vmin' }}>🏆</div>;
+            })() : (
+              <div style={{ width: '42vmin', height: '42vmin', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15vmin' }}>🏆</div>
+            )}
+          </div>
+          {finalWinnerClub && (
+            <h2
+              className="font-black italic uppercase text-white text-center"
+              style={{ fontSize: '6rem', letterSpacing: '-0.03em', opacity: animated ? 1 : 0, transform: animated ? 'translateY(0)' : 'translateY(32px)', transition: 'opacity 0.5s ease 0.4s, transform 0.5s ease 0.4s' }}
+            >
+              {finalWinnerClub.name}
+            </h2>
+          )}
+          <button
+            onClick={() => setShowOverlay(false)}
+            className="px-10 py-4 bg-white hover:bg-slate-100 text-slate-900 font-black italic uppercase tracking-widest rounded-2xl shadow-2xl text-sm"
+            style={{ opacity: animated ? 1 : 0, transition: 'opacity 0.5s ease 1s' }}
+          >
+            KONTYNUUJ →
+          </button>
+        </div>
+      )}
 
       <div className="relative z-10 flex flex-col h-full p-6 gap-4">
 
