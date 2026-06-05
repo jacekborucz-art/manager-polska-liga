@@ -5,7 +5,7 @@ import saWorldBgImg from '../../Graphic/themes/innekluby.png';
 import allTeamsBgImg from '../../Graphic/themes/allteams.png';
 import allCupsBgImg from '../../Graphic/themes/allcups.png';
 import { useGame } from '../../context/GameContext';
-import { ViewState, NationalTeam, Player, PlayerPosition, PlayerAttributes } from '../../types';
+import { ViewState, NationalTeam, Player, PlayerPosition, PlayerAttributes, WCQPlayoffState } from '../../types';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../../resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../../resources/static_db/clubs/EuropeLeagueTeams';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../../resources/static_db/clubs/ConferenceLeagueTeams';
@@ -16,6 +16,7 @@ import { generateSAClubId } from '../../resources/static_db/clubs/SouthamericanT
 import { CLUBS_AFRICAN, generateAfricanClubId } from '../../resources/static_db/clubs/african_teams';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
+import { WorldNationalFriendlyService } from '../../services/WorldNationalFriendlyService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { CLUBS_ASIAN, generateAsianClubId } from '../../resources/static_db/clubs/asian_teams';
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../../resources/static_db/clubs/northAME_teams';
@@ -632,7 +633,7 @@ const TacticalKitIcon: React.FC<{
   );
 };
 
-const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; clubColorsById: Record<string, string[]>; nationalTeamIdByName: Record<string, string>; currentDate: Date; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, clubColorsById, nationalTeamIdByName, currentDate, onPlayerClick }) => {
+const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; clubColorsById: Record<string, string[]>; nationalTeams: NationalTeam[]; nationalTeamIdByName: Record<string, string>; currentDate: Date; matchSimulationSeed: number; wcqPlayoffState: WCQPlayoffState | null; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, clubColorsById, nationalTeams, nationalTeamIdByName, currentDate, matchSimulationSeed, wcqPlayoffState, onPlayerClick }) => {
   const squad = team.squadPlayerIds.map(id => playerById[id]).filter(Boolean) as Player[];
 
   const POS_ORDER: Record<PlayerPosition, number> = {
@@ -736,12 +737,13 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
       MatchHistoryService.getTeamHistory(team.id).map(entry => [entry.matchId, entry] as const)
     );
 
-    return (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
-      .flatMap(matchDay => matchDay.matches
+    const toScheduleItems = (matchDay: (typeof NT_SCHEDULE_BY_YEAR)[number][number]): TeamScheduleItem[] => {
+      const matchYear = matchDay.month >= 6 ? seasonStartYear : seasonStartYear + 1;
+      const date = new Date(matchYear, matchDay.month, matchDay.day);
+
+      return matchDay.matches
         .filter(match => match.home === team.name || match.away === team.name)
         .map(match => {
-          const matchYear = matchDay.month >= 6 ? seasonStartYear : seasonStartYear + 1;
-          const date = new Date(matchYear, matchDay.month, matchDay.day);
           const homeId = nationalTeamIdByName[match.home];
           const awayId = nationalTeamIdByName[match.away];
           const matchId = homeId && awayId
@@ -760,9 +762,24 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
             result: historyEntry ? { homeGoals: historyEntry.homeScore, awayGoals: historyEntry.awayScore } : undefined,
             played: Boolean(historyEntry),
           };
-        }))
+        });
+    };
+
+    const baseMatchDays = NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [];
+    const worldFriendlyMatchDays = baseMatchDays
+      .map(matchDay => WorldNationalFriendlyService.generateMatchDay(matchDay, nationalTeams, seasonStartYear, matchSimulationSeed))
+      .filter((matchDay): matchDay is NonNullable<typeof matchDay> => Boolean(matchDay));
+    const playoffWindowFriendlyMatchDays = WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
+      .map(date => WorldNationalFriendlyService.generatePlayoffWindowMatchDay(date, nationalTeams, wcqPlayoffState, matchSimulationSeed))
+      .filter((matchDay): matchDay is NonNullable<typeof matchDay> => Boolean(matchDay));
+
+    return [
+      ...baseMatchDays.flatMap(toScheduleItems),
+      ...worldFriendlyMatchDays.flatMap(toScheduleItems),
+      ...playoffWindowFriendlyMatchDays.flatMap(toScheduleItems),
+    ]
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [currentDate, nationalTeamIdByName, team.id, team.name]);
+  }, [currentDate, matchSimulationSeed, nationalTeamIdByName, nationalTeams, team.id, team.name, wcqPlayoffState]);
 
   const filteredSchedule = useMemo(() => {
     const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).getTime();
@@ -1140,7 +1157,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 export const EuropeanClubsView: React.FC = () => {
   const { navigateTo, viewClubDetails, viewPlayerDetails, nationalTeams, coaches, players, clubs,
           europeanViewTab: activeTab, setEuropeanViewTab: setActiveTab,
-          selectedNTId, setSelectedNTId, previousViewState, currentDate } = useGame();
+          selectedNTId, setSelectedNTId, previousViewState, currentDate, matchSimulationSeed, wcqPlayoffState } = useGame();
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [activeContinent, setActiveContinent] = useState<string>('Europe');
   const [activeWorldRegion, setActiveWorldRegion] = useState<WorldRegionKey>('SA');
@@ -1565,8 +1582,11 @@ export const EuropeanClubsView: React.FC = () => {
                   playerById={playerById}
                   clubById={clubById}
                   clubColorsById={clubColorsById}
+                  nationalTeams={nationalTeams}
                   nationalTeamIdByName={nationalTeamIdByName}
                   currentDate={currentDate}
+                  matchSimulationSeed={matchSimulationSeed}
+                  wcqPlayoffState={wcqPlayoffState}
                   onPlayerClick={viewPlayerDetails}
                 />
               </div>

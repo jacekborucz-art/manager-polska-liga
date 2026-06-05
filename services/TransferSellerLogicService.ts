@@ -89,7 +89,7 @@ const applyInternationalAskingGuardrail = (
 
   let maxMarkup = player.isUntouchable ? 1.38 : 1.30;
   if (player.isOnTransferList) maxMarkup = Math.min(maxMarkup, 1.05);
-  else if (contractDaysLeft > 0 && contractDaysLeft < 365) maxMarkup = Math.min(maxMarkup, 1.15);
+  else if (contractDaysLeft > 0 && contractDaysLeft < PRE_CONTRACT_PRIORITY_DAYS) maxMarkup = Math.min(maxMarkup, 1.15);
   if (player.age >= 32) maxMarkup -= 0.05;
   else if (player.age >= 29) maxMarkup -= 0.02;
 
@@ -137,6 +137,8 @@ const getTimingLabel = (timing: TransferTiming): string => {
   }
 };
 
+const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
 export const TransferSellerLogicService = {
   generateNegotiationAttemptLimit: (): number => Math.floor(Math.random() * 7) + 1,
 
@@ -179,7 +181,15 @@ export const TransferSellerLogicService = {
     );
     const sellerNeedsCash = sellerClub.budget < Math.max(askingPrice * 0.7, 4_000_000);
 
-    if (timing === TransferTiming.CONTRACT_END && player.isNegotiationPermanentBlocked && daysLeft <= 365) {
+    if (timing !== TransferTiming.CONTRACT_END && daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) {
+      return {
+        allowTalks: false,
+        askingPrice: 0,
+        reason: `Kontrakt zawodnika wygasa za ${daysLeft} dni. Klub kupujący powinien rozmawiać z zawodnikiem o wolnym transferze po wygaśnięciu umowy.`
+      };
+    }
+
+    if (timing === TransferTiming.CONTRACT_END && player.isNegotiationPermanentBlocked && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) {
       return {
         allowTalks: true,
         askingPrice: 0,
@@ -196,7 +206,7 @@ export const TransferSellerLogicService = {
       protectedByCorePlan &&
       !player.isOnTransferList &&
       !sellerNeedsCash &&
-      daysLeft > 365 &&
+      daysLeft > PRE_CONTRACT_PRIORITY_DAYS &&
       blocksShortDelaySale &&
       reputationGap < 5
     ) {
@@ -209,7 +219,7 @@ export const TransferSellerLogicService = {
       };
     }
 
-    if (protectedByCorePlan && !player.isOnTransferList && daysLeft > 365) {
+    if (protectedByCorePlan && !player.isOnTransferList && daysLeft > PRE_CONTRACT_PRIORITY_DAYS) {
       const coreAskingPrice = applyTransferCap(askingPrice * (sellerNeedsCash ? 1.15 : 1.35), sellerClub, player);
       return {
         allowTalks: true,
@@ -224,7 +234,7 @@ export const TransferSellerLogicService = {
       !sellerNeedsCash &&
       (player.isUntouchable || isBestPlayer) &&
       reputationGap <= 1 &&
-      daysLeft > 365;
+      daysLeft > PRE_CONTRACT_PRIORITY_DAYS;
 
     if (protectedRivalSale && blocksShortDelaySale) {
       return {
@@ -240,7 +250,7 @@ export const TransferSellerLogicService = {
       !sellerNeedsCash &&
       isTopEleven &&
       reputationGap <= 0 &&
-      daysLeft > 365;
+      daysLeft > PRE_CONTRACT_PRIORITY_DAYS;
 
     if (protectedTopElevenSale && blocksShortDelaySale) {
       return {
@@ -307,8 +317,8 @@ export const TransferSellerLogicService = {
 
     if (player.isOnTransferList && !player.transferListPrice) multiplier -= 0.18;
     if (daysLeft > 0 && daysLeft < 180) multiplier -= 0.22;
-    else if (daysLeft > 0 && daysLeft < 365) multiplier -= 0.12;
-    else if (daysLeft >= 365 && daysLeft < 730) multiplier += 0.04;
+    else if (daysLeft > 0 && daysLeft < PRE_CONTRACT_PRIORITY_DAYS) multiplier -= 0.12;
+    else if (daysLeft >= PRE_CONTRACT_PRIORITY_DAYS && daysLeft < 730) multiplier += 0.04;
     else if (daysLeft >= 730) multiplier += 0.10;
 
     if (player.age <= 21) multiplier += 0.12;
@@ -337,7 +347,7 @@ export const TransferSellerLogicService = {
     if (financialPressure) multiplier -= 0.10;
 
     let minimumMultiplier = player.isOnTransferList ? 0.75 : 1.0;
-    if (daysLeft > 365 && !player.isOnTransferList) {
+    if (daysLeft > PRE_CONTRACT_PRIORITY_DAYS && !player.isOnTransferList) {
       minimumMultiplier = Math.max(minimumMultiplier, 1.02);
     }
 

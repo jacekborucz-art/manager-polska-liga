@@ -271,6 +271,17 @@ export const PlayerCard: React.FC = () => {
   const minutesDemandDeadline = playerMorale.minutesDemandUntil ? new Date(playerMorale.minutesDemandUntil) : null;
   const roleDemandDeadline = playerMorale.roleDemandUntil ? new Date(playerMorale.roleDemandUntil) : null;
   const transferListDemandDeadline = playerMorale.transferListDemandUntil ? new Date(playerMorale.transferListDemandUntil) : null;
+  const developmentExitDemandDeadline = playerMorale.developmentExitDemandUntil ? new Date(playerMorale.developmentExitDemandUntil) : null;
+  const playerMindset = playerMorale.playerMindset ?? PlayerMoraleService.getInitialMindset(playerMorale);
+  const mindsetRows = [
+    { label: 'Zaufanie', value: playerMindset.coachTrust, tone: playerMindset.coachTrust >= 60 ? 'good' : playerMindset.coachTrust <= 35 ? 'bad' : 'neutral' },
+    { label: 'Klub', value: playerMindset.clubHappiness, tone: playerMindset.clubHappiness >= 60 ? 'good' : playerMindset.clubHappiness <= 35 ? 'bad' : 'neutral' },
+    { label: 'Rola', value: playerMindset.roleClarity, tone: playerMindset.roleClarity >= 60 ? 'good' : playerMindset.roleClarity <= 35 ? 'bad' : 'neutral' },
+    { label: 'Minuty', value: playerMindset.playingTimeSatisfaction, tone: playerMindset.playingTimeSatisfaction >= 60 ? 'good' : playerMindset.playingTimeSatisfaction <= 35 ? 'bad' : 'neutral' },
+    { label: 'Rozwój', value: playerMindset.developmentSatisfaction, tone: playerMindset.developmentSatisfaction >= 60 ? 'good' : playerMindset.developmentSatisfaction <= 35 ? 'bad' : 'neutral' },
+    { label: 'Transfer', value: playerMindset.transferOpenness, tone: playerMindset.transferOpenness >= 65 ? 'bad' : playerMindset.transferOpenness <= 35 ? 'good' : 'neutral' },
+    { label: 'Konflikt', value: playerMindset.conflictLevel, tone: playerMindset.conflictLevel >= 60 ? 'bad' : playerMindset.conflictLevel <= 30 ? 'good' : 'neutral' },
+  ];
   const hasActiveTransferListDemand = !!transferListDemandDeadline && !Number.isNaN(transferListDemandDeadline.getTime());
   const activeFreeAgentLockoutUntil = useMemo(() => {
     return FreeAgentNegotiationService.getClubLockoutUntil(player, userTeamId, currentDate);
@@ -571,6 +582,13 @@ export const PlayerCard: React.FC = () => {
                     </span>
                   </div>
                 )}
+                {developmentExitDemandDeadline && !Number.isNaN(developmentExitDemandDeadline.getTime()) && (
+                  <div className="mt-2 rounded-[12px] border border-red-500/30 bg-red-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-red-300">
+                      Chce odejść albo iść na wypożyczenie do {developmentExitDemandDeadline.toLocaleDateString('pl-PL')}
+                    </span>
+                  </div>
+                )}
                 {roleDemandDeadline && !Number.isNaN(roleDemandDeadline.getTime()) && playerMorale.requestedSquadRole && (
                   <div className="mt-2 rounded-[12px] border border-violet-500/30 bg-violet-500/10 px-2 py-1.5">
                     <span className="block text-[7px] font-black italic uppercase tracking-tighter text-violet-300">
@@ -599,6 +617,39 @@ export const PlayerCard: React.FC = () => {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="p-3 bg-black/25 rounded-[20px] border border-white/5">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">Mindset zawodnika</span>
+                  <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                    {playerMindset.lastUpdatedAt ? `Akt. ${new Date(playerMindset.lastUpdatedAt).toLocaleDateString('pl-PL')}` : 'Start'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {mindsetRows.map(row => {
+                    const colorClass = row.tone === 'good'
+                      ? 'bg-emerald-400'
+                      : row.tone === 'bad'
+                        ? 'bg-red-500'
+                        : 'bg-amber-400';
+                    const textClass = row.tone === 'good'
+                      ? 'text-emerald-300'
+                      : row.tone === 'bad'
+                        ? 'text-red-300'
+                        : 'text-amber-300';
+
+                    return (
+                      <div key={row.label} className="grid grid-cols-[74px_1fr_30px] items-center gap-2">
+                        <span className="text-[7px] font-black italic uppercase tracking-tighter text-slate-400">{row.label}</span>
+                        <div className="h-1.5 rounded-full bg-black/40 overflow-hidden border border-white/5">
+                          <div className={`h-full ${colorClass}`} style={{ width: `${row.value}%` }} />
+                        </div>
+                        <span className={`text-right text-[8px] font-black italic uppercase tracking-tighter ${textClass}`}>{row.value}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {player.loan && (

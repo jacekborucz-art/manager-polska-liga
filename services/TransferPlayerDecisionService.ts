@@ -83,6 +83,16 @@ const getAgeFinancialWeights = (age: number) => {
   return { salary: 0.22, bonus: 0.28, years: 0.22, total: 0.28 };
 };
 
+const getAgeStayScore = (player: Player): number => {
+  if (player.age < 26) return 0;
+
+  const isEliteLatePrime = player.age >= 26 && player.overallRating >= 85;
+  if (player.age <= 28) return isEliteLatePrime ? 0 : 3;
+  if (player.age <= 31) return isEliteLatePrime ? 2 : 7;
+  if (player.age <= 34) return isEliteLatePrime ? 7 : 12;
+  return isEliteLatePrime ? 11 : 18;
+};
+
 export const TransferPlayerDecisionService = {
   buildNegotiationPlan: (
     player: Player,
@@ -104,8 +114,9 @@ export const TransferPlayerDecisionService = {
       !!targetClub.country &&
       currentClub.country !== targetClub.country;
     const isNotFirstTeamPlayer = currentRole === 'ROTATION' || currentRole === 'BACKUP';
-    const isVeteran = player.age >= 31;
-    const hasMoveSoftener = !!player.isOnTransferList || isNotFirstTeamPlayer || isVeteran;
+    const hasMoveSoftener = !!player.isOnTransferList || isNotFirstTeamPlayer;
+    const ageStayScore = getAgeStayScore(player);
+    const ageMovePremium = ageStayScore / 100;
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
@@ -132,6 +143,7 @@ export const TransferPlayerDecisionService = {
     if (isNotFirstTeamPlayer) salaryMultiplier -= 0.06;
     if (targetRoleLevel > currentRoleLevel) salaryMultiplier -= 0.06;
     if (targetRoleLevel < currentRoleLevel) salaryMultiplier += 0.10;
+    salaryMultiplier += ageMovePremium * 0.45;
 
     let bonusMultiplier = 0.35;
     if (player.age >= 24 && player.age <= 29) bonusMultiplier = 0.55;
@@ -141,6 +153,7 @@ export const TransferPlayerDecisionService = {
     if (reputationDrop > 0) bonusMultiplier += Math.min(0.45, reputationDrop * 0.07);
     else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.14;
     else if (reputationDelta === 0) bonusMultiplier += 0.08;
+    bonusMultiplier += ageMovePremium;
 
     const desiredSalary = roundMoney(currentSalaryBase * salaryMultiplier);
     const desiredBonus = roundMoney(currentSalaryBase * bonusMultiplier);
@@ -267,10 +280,12 @@ export const TransferPlayerDecisionService = {
 
     const roleUpgradeBonus = (currentRole === 'BACKUP' && roleLevel(negotiationPlan.targetRole) >= 3) ? 12 :
                              (currentRole === 'ROTATION' && roleLevel(negotiationPlan.targetRole) >= 4) ? 8 : 0;
+    const ageStayScore = getAgeStayScore(player);
 
     const stayScore =
       currentClub.reputation * 7 +
       roleScore(currentRole) +
+      ageStayScore +
       Math.min(16, Math.round(currentSalaryBase / 110_000)) +
       salarySatisfactionBonus -
       contractPressure -
@@ -325,8 +340,7 @@ export const TransferPlayerDecisionService = {
     const financialChanceAdjustment = clamp((financialFit - 1) * 0.25, -0.22, 0.16);
     const situationChanceAdjustment =
       (player.isOnTransferList ? 0.08 : 0) +
-      (contractPressure > 0 ? 0.04 : 0) +
-      (reputationDrop > 0 && player.age >= 31 ? 0.03 : 0);
+      (contractPressure > 0 ? 0.04 : 0);
     const finalAcceptanceChance = clamp(
       getBaseMoveAcceptanceChance(currentClub, targetClub) +
         roleChanceAdjustment +

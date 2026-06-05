@@ -1,4 +1,4 @@
-import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMoralePersonality, TrainingIntensity } from '../types';
+import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMindsetState, PlayerMoralePersonality, TrainingIntensity } from '../types';
 
 export interface PlayerMoraleInfo {
   label: string;
@@ -211,6 +211,23 @@ const isAvailableForMinutesDemand = (player: Player): boolean =>
   player.condition >= 75 &&
   (player.fatigueDebt ?? 0) <= 55;
 
+const getContractDaysLeft = (player: Player, currentDate: Date): number => {
+  if (!player.contractEndDate) return 9999;
+  const contractEnd = new Date(player.contractEndDate);
+  if (Number.isNaN(contractEnd.getTime())) return 9999;
+  return Math.floor((contractEnd.getTime() - currentDate.getTime()) / DAY_MS);
+};
+
+const getAgeTransferStabilityBias = (player: Player): number => {
+  const isEliteLatePrime = player.age >= 26 && player.overallRating >= 85;
+
+  if (player.age < 26) return 0;
+  if (player.age <= 28) return isEliteLatePrime ? -1 : -4;
+  if (player.age <= 31) return isEliteLatePrime ? -3 : -8;
+  if (player.age <= 34) return isEliteLatePrime ? -8 : -14;
+  return isEliteLatePrime ? -12 : -20;
+};
+
 type MinutesDemandApproach = 'PATIENT' | 'CALM' | 'ASSERTIVE' | 'BRAZEN';
 
 interface MinutesDemandMindset {
@@ -397,6 +414,18 @@ const isSameOrHigherRole = (
   return currentRole === 'KEY_PLAYER';
 };
 
+type PlayerMindsetKey =
+  | 'coachTrust'
+  | 'clubHappiness'
+  | 'squadBelonging'
+  | 'roleClarity'
+  | 'playingTimeSatisfaction'
+  | 'developmentSatisfaction'
+  | 'transferOpenness'
+  | 'conflictLevel';
+
+type PlayerMindsetDelta = Partial<Record<PlayerMindsetKey, number>>;
+
 export const PlayerMoraleService = {
   clamp: (morale: number): number => Math.max(0, Math.min(100, Math.round(morale))),
 
@@ -417,11 +446,136 @@ export const PlayerMoraleService = {
     return PERSONALITIES[index] ?? 'CALM';
   },
 
+  getInitialMindset: (player: Player): PlayerMindsetState => {
+    const morale = player.morale ?? PlayerMoraleService.getInitialMorale(player);
+    const personality = player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player);
+    const professionalBonus = personality === 'PROFESSIONAL' ? 6 : personality === 'LOYAL' ? 8 : personality === 'EGOIST' ? -8 : 0;
+    const ambitionPressure = personality === 'AMBITIOUS' || personality === 'EGOIST' ? 8 : personality === 'CALM' ? -4 : 0;
+    const hasRole = player.squadRole === 'STARTER' || player.squadRole === 'KEY_PLAYER';
+    const youngDevelopmentNeed = player.age <= 23 ? 5 : 0;
+    const ageStability = player.age >= 35 ? 16 : player.age >= 32 ? 11 : player.age >= 29 ? 7 : player.age >= 26 ? 3 : 0;
+
+    return {
+      coachTrust: PlayerMoraleService.clamp(morale + professionalBonus),
+      clubHappiness: PlayerMoraleService.clamp(morale + Math.round(professionalBonus * 0.5)),
+      squadBelonging: PlayerMoraleService.clamp(morale + (personality === 'LOYAL' ? 10 : 0) - (player.isOnTransferList ? 18 : 0)),
+      roleClarity: PlayerMoraleService.clamp(55 + (hasRole ? 12 : -4) + professionalBonus),
+      playingTimeSatisfaction: PlayerMoraleService.clamp(morale + (hasRole ? 5 : -4)),
+      developmentSatisfaction: PlayerMoraleService.clamp(morale - youngDevelopmentNeed + (player.trainingFocus ? 4 : 0)),
+      transferOpenness: PlayerMoraleService.clamp(45 - morale + ambitionPressure - ageStability + (player.isOnTransferList ? 35 : 0) + ((player.interestedClubs?.length ?? 0) * 5)),
+      conflictLevel: PlayerMoraleService.clamp(55 - morale + Math.max(0, ambitionPressure)),
+      lastUpdatedAt: undefined,
+      history: [],
+    };
+  },
+
+  normalizeMindset: (player: Player): PlayerMindsetState => {
+    const initial = PlayerMoraleService.getInitialMindset(player);
+    const existing = player.playerMindset;
+    if (!existing) return initial;
+
+    return {
+      coachTrust: PlayerMoraleService.clamp(existing.coachTrust ?? initial.coachTrust),
+      clubHappiness: PlayerMoraleService.clamp(existing.clubHappiness ?? initial.clubHappiness),
+      squadBelonging: PlayerMoraleService.clamp(existing.squadBelonging ?? initial.squadBelonging),
+      roleClarity: PlayerMoraleService.clamp(existing.roleClarity ?? initial.roleClarity),
+      playingTimeSatisfaction: PlayerMoraleService.clamp(existing.playingTimeSatisfaction ?? initial.playingTimeSatisfaction),
+      developmentSatisfaction: PlayerMoraleService.clamp(existing.developmentSatisfaction ?? initial.developmentSatisfaction),
+      transferOpenness: PlayerMoraleService.clamp(existing.transferOpenness ?? initial.transferOpenness),
+      conflictLevel: PlayerMoraleService.clamp(existing.conflictLevel ?? initial.conflictLevel),
+      lastUpdatedAt: existing.lastUpdatedAt,
+      history: existing.history ?? [],
+    };
+  },
+
+  inferMindsetDelta: (reason: string, moraleDelta: number): PlayerMindsetDelta => {
+    const text = reason.toLowerCase();
+    const impact = Math.max(1, Math.min(10, Math.abs(moraleDelta)));
+    const sign = moraleDelta >= 0 ? 1 : -1;
+    const deltas: PlayerMindsetDelta = {
+      clubHappiness: sign * Math.max(1, Math.round(impact * 0.7)),
+      conflictLevel: sign > 0 ? -Math.max(1, Math.round(impact * 0.6)) : Math.max(1, Math.round(impact * 0.8)),
+    };
+
+    const add = (key: PlayerMindsetKey, value: number) => {
+      deltas[key] = (deltas[key] ?? 0) + value;
+    };
+
+    if (text.includes('rozmow') || text.includes('trener') || text.includes('obietnic')) {
+      add('coachTrust', sign * Math.max(1, Math.round(impact * 0.9)));
+    }
+    if (text.includes('minut') || text.includes('występ') || text.includes('gry w następnym meczu')) {
+      add('playingTimeSatisfaction', sign * Math.max(2, impact));
+      add('coachTrust', sign * Math.max(1, Math.round(impact * 0.5)));
+    }
+    if (text.includes('rola') || text.includes('status') || text.includes('podstawowa') || text.includes('kluczowy')) {
+      add('roleClarity', sign * Math.max(2, impact));
+      add('coachTrust', sign * Math.max(1, Math.round(impact * 0.5)));
+    }
+    if (text.includes('rozw') || text.includes('wypożyczenie') || text.includes('braku minut')) {
+      add('developmentSatisfaction', sign * Math.max(2, impact));
+    }
+    if (text.includes('transfer') || text.includes('odej') || text.includes('sprzeda') || text.includes('ofert')) {
+      add('transferOpenness', sign > 0 ? -Math.max(1, Math.round(impact * 0.7)) : Math.max(2, impact));
+      add('coachTrust', sign * Math.max(1, Math.round(impact * 0.4)));
+    }
+    if (text.includes('rezerw')) {
+      add('squadBelonging', sign * Math.max(2, impact));
+      add('roleClarity', sign * Math.max(1, Math.round(impact * 0.6)));
+    }
+    if (text.includes('konflikt') || text.includes('zignorowan') || text.includes('odrzucon') || text.includes('niespełnion')) {
+      add('conflictLevel', Math.max(2, impact));
+      add('coachTrust', -Math.max(2, impact));
+    }
+    if (text.includes('naturalna stabilizacja')) {
+      return {
+        clubHappiness: sign,
+        conflictLevel: sign > 0 ? -1 : 1,
+      };
+    }
+
+    return deltas;
+  },
+
+  withMindsetChange: (player: Player, deltas: PlayerMindsetDelta, reason: string, date: Date): Player => {
+    const current = PlayerMoraleService.normalizeMindset(player);
+    const next: PlayerMindsetState = { ...current };
+    let changed = false;
+
+    (Object.entries(deltas) as Array<[PlayerMindsetKey, number]>).forEach(([key, delta]) => {
+      if (!delta) return;
+      const previousValue = next[key];
+      const nextValue = PlayerMoraleService.clamp(previousValue + delta);
+      if (nextValue === previousValue) return;
+      next[key] = nextValue;
+      changed = true;
+    });
+
+    if (!changed) return { ...player, playerMindset: current };
+
+    const entry = {
+      id: `MINDSET_${player.id}_${date.getTime()}_${stableHash(reason)}`,
+      date: toDateKey(date),
+      reason,
+      deltas,
+    };
+
+    return {
+      ...player,
+      playerMindset: {
+        ...next,
+        lastUpdatedAt: toDateKey(date),
+        history: [entry, ...(current.history ?? [])].slice(0, 16),
+      },
+    };
+  },
+
   ensurePlayerState: (player: Player): Player => ({
     ...player,
     morale: player.morale ?? PlayerMoraleService.getInitialMorale(player),
     moralePersonality: player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player),
     moraleHistory: player.moraleHistory ?? [],
+    playerMindset: PlayerMoraleService.normalizeMindset(player),
     lastIndividualTalkDate: player.lastIndividualTalkDate ?? null,
     promisedMinutesUntil: player.promisedMinutesUntil ?? null,
     promisedMinutesBaseline: player.promisedMinutesBaseline ?? null,
@@ -462,6 +616,18 @@ export const PlayerMoraleService = {
 
   applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
     ...player,
+    playerMindset: PlayerMoraleService.withMindsetChange(
+      PlayerMoraleService.ensurePlayerState(player),
+      {
+        coachTrust: 8,
+        clubHappiness: 6,
+        roleClarity: 4,
+        transferOpenness: -12,
+        conflictLevel: -12,
+      },
+      'Podpisanie kontraktu i wyciszenie żądań',
+      currentDate
+    ).playerMindset,
     moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
     lastMoraleDemandDate: null,
     promisedMinutesUntil: null,
@@ -493,8 +659,16 @@ export const PlayerMoraleService = {
       moraleAfter: nextMorale,
     };
 
+    const withUpdatedMindset = PlayerMoraleService.withMindsetChange(
+      withMorale,
+      PlayerMoraleService.inferMindsetDelta(reason, nextMorale - previousMorale),
+      reason,
+      date
+    );
+
     return {
       ...withMorale,
+      playerMindset: withUpdatedMindset.playerMindset,
       morale: nextMorale,
       moraleHistory: [entry, ...(withMorale.moraleHistory ?? [])].slice(0, 12),
     };
@@ -907,6 +1081,8 @@ export const PlayerMoraleService = {
       const hasSportingArgument = withMorale.overallRating >= squadAverage - 1 && (rank <= Math.max(8, Math.ceil(squad.length * 0.35)) || positionRank <= 2);
       const pressureBonus = personality === 'AMBITIOUS' || personality === 'EGOIST' || personality === 'CONFIDENT' ? 1 : 0;
       const ignoresStatusNoise = personality === 'LOYAL' || personality === 'CALM' || personality === 'PROFESSIONAL';
+      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+      const isContractEndingSoon = contractDaysLeft > 0 && contractDaysLeft <= 365;
 
       const roleExpectation: 'STARTER' | 'KEY_PLAYER' | null =
         rank <= 3 || (positionRank === 1 && withMorale.overallRating >= squadAverage + 3)
@@ -1020,6 +1196,13 @@ export const PlayerMoraleService = {
         personality === 'LOYAL' ? -9 :
         personality === 'CALM' ? -6 :
         -3;
+      const ageTransferStabilityBias = getAgeTransferStabilityBias(withMorale);
+      const eliteLatePrimeMoveBoost =
+        withMorale.age >= 26 &&
+        withMorale.overallRating >= 85 &&
+        club.reputation < 16
+          ? 7
+          : 0;
       const transferMoodPressure =
         (withMorale.morale ?? 50) <= 24 ? 12 :
         (withMorale.morale ?? 50) <= 39 ? 7 :
@@ -1043,21 +1226,23 @@ export const PlayerMoraleService = {
         isClearlyAboveSquadLevel &&
         hasExcellentForm &&
         club.reputation < 12 &&
-        reputationStepUpPressure + transferAmbitionBias + transferRandomFactor >= 13;
+        reputationStepUpPressure + transferAmbitionBias + ageTransferStabilityBias + eliteLatePrimeMoveBoost + transferRandomFactor >= 13;
       const wantsBreakoutSeasonMove =
         hasStandoutSeason &&
         club.reputation < 14 &&
         (withMorale.overallRating >= squadAverage + 2 || rank <= Math.max(8, Math.ceil(squad.length * 0.35))) &&
-        reputationStepUpPressure + transferAmbitionBias + transferRandomFactor + (hasHighReputationInterest ? 9 : 0) >= 10;
+        reputationStepUpPressure + transferAmbitionBias + ageTransferStabilityBias + eliteLatePrimeMoveBoost + transferRandomFactor + (hasHighReputationInterest ? 9 : 0) >= 10;
       const wantsHighReputationInterestMove =
         hasHighReputationInterest &&
         (isClearlyAboveSquadLevel || hasStandoutSeason || withMorale.overallRating >= squadAverage + 3) &&
-        highReputationInterestDelta * 3 + transferAmbitionBias + transferRandomFactor >= (personality === 'LOYAL' ? 13 : 9);
+        highReputationInterestDelta * 3 + transferAmbitionBias + ageTransferStabilityBias + eliteLatePrimeMoveBoost + transferRandomFactor >= (personality === 'LOYAL' ? 13 : 9);
       const protectedExitPressure =
         Math.round((withMorale.overallRating - squadAverage) * 2) +
         (rank <= 3 ? 10 : 4) +
         reputationStepUpPressure +
         transferAmbitionBias +
+        ageTransferStabilityBias +
+        eliteLatePrimeMoveBoost +
         transferMoodPressure +
         transferRandomFactor;
       const wantsProtectedExitConversation = !!withMorale.isUntouchable && protectedExitPressure >= 22;
@@ -1085,6 +1270,7 @@ export const PlayerMoraleService = {
         !demandCooldown &&
         !isDemandLockedAfterContract &&
         !hasActiveDemand &&
+        !isContractEndingSoon &&
         !withMorale.isOnTransferList &&
         !withMorale.transferPendingClubId &&
         !withMorale.transferListDemandUntil &&

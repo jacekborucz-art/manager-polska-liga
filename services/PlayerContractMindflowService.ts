@@ -97,6 +97,7 @@ export interface PlayerContractMindflow {
     marketOpenness: number;
     preContractReadiness: number;
     clubTrust: number;
+    activeExitDemand: boolean;
     explanation: string[];
   };
 }
@@ -524,7 +525,7 @@ const getTimePressure = (daysLeft: number): number => {
   if (daysLeft <= 30) return 78;
   if (daysLeft <= 90) return 55;
   if (daysLeft <= 180) return 32;
-  if (daysLeft <= 365) return 16;
+  if (daysLeft <= 330) return 16;
   return 0;
 };
 
@@ -539,12 +540,29 @@ const getMindset = (
   const frustration = negotiationMemory.frustration;
   const trust = negotiationMemory.trustInClub;
   const marketConfidence = marketSituation.marketConfidence;
+  const activeExitDemand =
+    !!player.transferListDemandUntil ||
+    !!player.developmentExitDemandUntil ||
+    player.isNegotiationPermanentBlocked;
+  const ageStayBias =
+    player.age >= 35 ? 18 :
+    player.age >= 32 ? 12 :
+    player.age >= 29 ? 7 :
+    player.age >= 26 && player.overallRating < 85 ? 3 :
+    0;
+  const eliteLatePrimeAmbition =
+    player.age >= 26 && player.overallRating >= 85
+      ? 8
+      : 0;
 
   const marketOpenness = clamp(
     18 +
     timePressure * 0.45 +
     frustration * 0.62 +
     marketConfidence * 0.40 -
+    ageStayBias +
+    eliteLatePrimeAmbition +
+    (activeExitDemand ? 34 : 0) -
     stayComfort * 0.42 -
     trust * 0.20,
     0,
@@ -555,6 +573,7 @@ const getMindset = (
     marketOpenness +
     timePressure * 0.42 +
     (negotiationMemory.permanentBreakdown ? 25 : 0) +
+    (activeExitDemand ? 24 : 0) +
     Math.max(0, marketSituation.bestSportingUpgrade) * 8 -
     (stayComfort >= 82 ? 22 : stayComfort >= 72 ? 12 : 0),
     0,
@@ -565,6 +584,8 @@ const getMindset = (
     stayComfort * 0.75 +
     trust * 0.35 -
     frustration * 0.28 -
+    (activeExitDemand ? 38 : 0) +
+    ageStayBias * 0.35 -
     timePressure * 0.12,
     0,
     100
@@ -575,6 +596,7 @@ const getMindset = (
   else if (stayComfort >= 76 && frustration <= 28 && marketOpenness <= 38) state = 'HAPPY_TO_STAY';
   else if (frustration <= 32 && renewalPriority >= 58) state = 'OPEN_TO_RENEWAL';
   else if (currentClubSituation.financialRespectFit < 68 && frustration < 58) state = 'EXPECTING_BETTER_TERMS';
+  else if (activeExitDemand) state = preContractReadiness >= 72 ? 'PRECONTRACT_READY' : 'READY_TO_LEAVE';
   else if (frustration >= 72 || negotiationMemory.permanentBreakdown) state = preContractReadiness >= 70 ? 'PRECONTRACT_READY' : 'READY_TO_LEAVE';
   else if (marketOpenness >= 68) state = preContractReadiness >= 72 ? 'PRECONTRACT_READY' : 'TESTING_MARKET';
   else if (frustration >= 48 || timePressure >= 55) state = 'LOSING_PATIENCE';
@@ -587,6 +609,9 @@ const getMindset = (
     marketSituation.hasInterest ? `Rynek jest aktywny: ${marketSituation.interestedClubCount} klub(y) obserwują sytuację.` : null,
     currentClubSituation.contractDaysLeft <= 180 ? 'Końcówka kontraktu zwiększa presję decyzyjną.' : null,
     player.squadRole === 'KEY_PLAYER' || player.isUntouchable ? 'Status w drużynie działa na korzyść obecnego klubu.' : null,
+    activeExitDemand ? 'Zawodnik aktywnie sygnalizuje chęć odejścia, więc zwykłe przedłużenie kontraktu będzie bardzo trudne.' : null,
+    ageStayBias > 0 && !activeExitDemand ? 'Wiek i stabilizacja kariery działają na korzyść pozostania w klubie.' : null,
+    eliteLatePrimeAmbition > 0 ? 'Elitarny poziom sportowy utrzymuje realną ambicję dużego ruchu mimo wieku.' : null,
   ].filter(Boolean) as string[];
 
   return {
@@ -595,6 +620,7 @@ const getMindset = (
     marketOpenness,
     preContractReadiness,
     clubTrust: trust,
+    activeExitDemand,
     explanation,
   };
 };
@@ -632,7 +658,7 @@ const getExternalOfferGate = (
   const canSignPreContract =
     willListen &&
     currentClubSituation.contractDaysLeft > 0 &&
-    currentClubSituation.contractDaysLeft <= 365 &&
+    currentClubSituation.contractDaysLeft <= 330 &&
     (
       mindset.state === 'PRECONTRACT_READY' ||
       negotiationMemory.permanentBreakdown ||
@@ -708,6 +734,7 @@ const evaluateRenewalOffer = (
   if (mindflow.marketSituation.marketConfidence >= 55) requiredScore += 0.03;
   if (mindflow.currentClubSituation.totalStayComfort >= 82) requiredScore -= 0.04;
   if (mindflow.negotiationMemory.rejectedOffers > 0) requiredScore += Math.min(0.06, mindflow.negotiationMemory.rejectedOffers * 0.02);
+  if (mindflow.mindset.activeExitDemand) requiredScore += 0.08;
   requiredScore = clamp(requiredScore, 0.86, 1.14);
 
   const salaryFloor =
@@ -739,6 +766,26 @@ const evaluateRenewalOffer = (
     salary: roundMoney(demandedSalary),
     bonus: roundMoney(demandedBonus),
   };
+
+  if (mindflow.mindset.activeExitDemand) {
+    const exitDemands = {
+      salary: roundMoney(Math.max(expectations.premiumSalary, expectations.expectedSalary * 1.18)),
+      bonus: roundMoney(Math.max(expectations.expectedBonus * 2.5, expectations.premiumSalary * 1.15, offer.salary * 1.5)),
+    };
+    const goldenHandcuffsMet =
+      offer.salary >= exitDemands.salary &&
+      offer.bonus >= exitDemands.bonus &&
+      offer.years >= expectations.minimumYears;
+
+    if (!goldenHandcuffsMet) {
+      return {
+        accepted: false,
+        reason: 'Zawodnik naprawdę chce odejść i nie traktuje zwykłego przedłużenia jako rozwiązania. Może wrócić do rozmów tylko przy wyjątkowej premii za podpis i pensji pokazującej, że klub bierze ten konflikt poważnie.',
+        demands: exitDemands,
+        offerQuality: 'WEAK',
+      };
+    }
+  }
 
   const isSalaryDisrespectful = offer.salary < salaryFloor;
   const isBonusDisrespectful = offer.bonus < bonusFloor && offer.salary < expectations.expectedSalary * 1.12;

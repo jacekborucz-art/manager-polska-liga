@@ -34,6 +34,9 @@ import { exportSaveToFile } from '../../services/SaveGameService';
 import edytorButton from '../../Graphic/buttons/edytor.png';
 import rezygnacjaButton from '../../Graphic/buttons/rezygnacja.png';
 import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
+import winnerPolishImg from '../../Graphic/cup/winnerpolish.png';
+import awansEkstImg from '../../Graphic/cup/awans-do-ekst.png';
+import awans1LigiImg from '../../Graphic/cup/awans-do-1ligi.png';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -82,6 +85,8 @@ export const Dashboard: React.FC = () => {
     saveSummerCampLocation,
     saveSummerCampProgram,
     wcState,
+    seasonCelebration,
+    clearSeasonCelebration,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1346,6 +1351,22 @@ const boardConfidence = useMemo(() => {
                 WYJDŹ
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {seasonCelebration && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85" onClick={clearSeasonCelebration}>
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <img
+              src={seasonCelebration === 'championship' ? winnerPolishImg : seasonCelebration === 'promotion-ekst' ? awansEkstImg : awans1LigiImg}
+              alt="Obwieszczenie sezonu"
+              className="max-w-[520px] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <button
+              onClick={clearSeasonCelebration}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white text-xl font-black flex items-center justify-center hover:bg-black/90 transition-colors"
+            >✕</button>
           </div>
         </div>
       )}

@@ -103,7 +103,8 @@ export const TransferOfferView: React.FC = () => {
     if (!contractEndDate) return 9999;
     return Math.floor((contractEndDate.getTime() - new Date(currentDate).getTime()) / 86_400_000);
   }, [contractEndDate, currentDate]);
-  const canSignPreContract = daysUntilContractEnd > 0 && daysUntilContractEnd <= 365;
+  const canSignPreContract = daysUntilContractEnd > 0 && daysUntilContractEnd <= 330;
+  const mustUsePreContract = canSignPreContract;
   const timingLabel = useMemo(() => {
     switch (timing) {
       case TransferTiming.IN_SIX_MONTHS:
@@ -157,6 +158,12 @@ export const TransferOfferView: React.FC = () => {
     setFee(Math.max(100_000, nextFee));
     setSubmissionFeedback(null);
   }, [player?.id, suggestedFee, latestOffer?.id, latestOffer?.status, latestOffer?.askingPrice, timing]);
+
+  useEffect(() => {
+    if (mustUsePreContract && timing !== TransferTiming.CONTRACT_END) {
+      setTiming(TransferTiming.CONTRACT_END);
+    }
+  }, [mustUsePreContract, timing]);
 
   if (!data || !player || !buyerClub || !sellerClub) {
     return null;
@@ -364,7 +371,7 @@ export const TransferOfferView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setTiming(TransferTiming.IMMEDIATE)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
+                    disabled={mustUsePreContract || hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IMMEDIATE
                         ? 'bg-white text-slate-900 border-white'
@@ -375,7 +382,7 @@ export const TransferOfferView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setTiming(TransferTiming.IN_SIX_MONTHS)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
+                    disabled={mustUsePreContract || hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IN_SIX_MONTHS
                         ? 'bg-white text-slate-900 border-white'
@@ -386,7 +393,7 @@ export const TransferOfferView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setTiming(TransferTiming.IN_TWELVE_MONTHS)}
-                    disabled={hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
+                    disabled={mustUsePreContract || hasAnyActiveAgreement || isTransferCompleted || isTransferOfferBanned || isPlayerOffendedByClub}
                     className={`py-3 rounded-[20px] border text-sm font-black transition-all ${
                       timing === TransferTiming.IN_TWELVE_MONTHS
                         ? 'bg-white text-slate-900 border-white'

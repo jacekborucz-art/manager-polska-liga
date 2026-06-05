@@ -56,15 +56,17 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
         // Logika emerytury: > 35 lat + losowa decyzja (0,1)
         if (player.age >= 35 && !retirementLocked && Math.random() < 0.5) {
           // Zawodnik odchodzi - generujemy Newgena na jego miejsce
+          const retPositions = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+          const retRandomPos = retPositions[Math.floor(Math.random() * retPositions.length)];
           const newgen = SeasonTransitionService.generateNewgen(
-            clubId, 
-            player.position, 
-            leagueTier, 
+            clubId,
+            retRandomPos,
+            leagueTier,
             club.reputation,
             club.budget,
             nextSquad.length,
             club.country,
-            
+            player.nationality
           );
           nextSquad.push(newgen);
           logs.push({
@@ -143,19 +145,20 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
    * Tworzy nowego, młodego zawodnika w miejsce emeryta.
    */
   generateNewgen: (
-    clubId: string, 
-    position: PlayerPosition, 
-    tier: number, 
+    clubId: string,
+    position: PlayerPosition,
+    tier: number,
     reputation: number,
     clubBudget: number,
     index: number,
-    clubCountry?: string
+    clubCountry?: string,
+    forceRegion?: Region
   ): Player => {
-    const region = Math.random() < 0.85 ? Region.POLAND : NameGeneratorService.getRandomForeignRegion();
+    const region = forceRegion ?? (Math.random() < 0.85 ? Region.POLAND : NameGeneratorService.getRandomForeignRegion());
     const namePair = NameGeneratorService.getRandomName(region);
-    
+
     // Nowe atrybuty w oparciu o poziom ligowy
-    const age = 16 + Math.floor(Math.random() * 6);
+    const age = 16 + Math.floor(Math.random() * 4);
     const genData = PlayerAttributesGenerator.generateAttributes(position, tier, reputation, age);
 
     const salary = FinanceService.calculateNewgenSalary(clubBudget, genData.overall, age);
@@ -267,6 +270,61 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       freeAgentClubLockouts: {},
       isOnTransferList: false
     };
+  },
+
+  cullAndRefreshFreeAgents: (freeAgents: Player[], seasonYear: number): { remaining: Player[], newYouth: Player[] } => {
+    const sorted = [...freeAgents].sort((a, b) => (a.overallRating || 0) - (b.overallRating || 0));
+    const count = 400 + Math.floor(Math.random() * 201);
+    const toRemove = sorted.slice(0, Math.min(count, sorted.length));
+    const remaining = sorted.slice(toRemove.length);
+    const positions = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+    const newYouth: Player[] = [];
+    toRemove.forEach((removed, idx) => {
+      const region = removed.nationality ?? (Math.random() < 0.7 ? Region.POLAND : NameGeneratorService.getRandomForeignRegion());
+      const namePair = NameGeneratorService.getRandomName(region);
+      const position = positions[Math.floor(Math.random() * positions.length)];
+      const age = 16 + Math.floor(Math.random() * 4);
+      const randomTier = Math.floor(Math.random() * 4) + 1;
+      const randomRep = Math.floor(Math.random() * 10) + 1;
+      const genData = PlayerAttributesGenerator.generateAttributes(position, randomTier, randomRep, age);
+      newYouth.push({
+        id: `FREE_YOUTH_${seasonYear}_${Date.now()}_${idx}`,
+        firstName: namePair.firstName,
+        lastName: namePair.lastName,
+        age: age,
+        fatigueDebt: 0,
+        clubId: 'FREE_AGENTS',
+        nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
+        position: position,
+        overallRating: genData.overall,
+        attributes: genData.attributes,
+        condition: 90,
+        suspensionMatches: 0,
+        annualSalary: 0,
+        contractEndDate: '',
+        marketValue: 0,
+        health: { status: HealthStatus.HEALTHY },
+        stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, ratingHistory: [], seasonalChanges: {} },
+        cupStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        euroStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        nationalStats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        cupSuspensionMatches: 0,
+        euroSuspensionMatches: 0,
+        nationalSuspensionMatches: 0,
+        history: [{ clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS', fromYear: seasonYear, fromMonth: 7, toYear: null, toMonth: null }],
+        boardLockoutUntil: null,
+        isUntouchable: false,
+        negotiationStep: 0,
+        negotiationLockoutUntil: null,
+        contractLockoutUntil: null,
+        isNegotiationPermanentBlocked: false,
+        transferLockoutUntil: null,
+        freeAgentLockoutUntil: null,
+        freeAgentClubLockouts: {}
+      });
+    });
+    return { remaining, newYouth };
   },
 
   processStaffRetirement: (

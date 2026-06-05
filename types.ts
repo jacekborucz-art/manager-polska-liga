@@ -452,6 +452,16 @@ export interface MailMessage {
       awayCountry?: string;
     }[];
   } | {
+    type: 'NATIONAL_TEAM_FRIENDLY_RESULTS';
+    matches?: {
+      homeName: string;
+      awayName: string;
+      homeScore: number;
+      awayScore: number;
+      homeCountry?: string;
+      awayCountry?: string;
+    }[];
+  } | {
     type: 'WCQ_PLAYOFF_POLAND';
     stage: 'SF' | 'FINAL';
     pathLabel: string;
@@ -757,6 +767,44 @@ export interface PlayerMoraleHistoryEntry {
   delta: number;
   reason: string;
   moraleAfter: number;
+}
+
+export interface PlayerMindsetHistoryEntry {
+  id: string;
+  date: string;
+  reason: string;
+  deltas: Partial<Record<
+    'coachTrust' |
+    'clubHappiness' |
+    'squadBelonging' |
+    'roleClarity' |
+    'playingTimeSatisfaction' |
+    'developmentSatisfaction' |
+    'transferOpenness' |
+    'conflictLevel',
+    number
+  >>;
+}
+
+export interface PlayerMindsetState {
+  /** Zaufanie do trenera i jego obietnic. */
+  coachTrust: number;
+  /** Ogólne samopoczucie w klubie, niezależnie od samej formy. */
+  clubHappiness: number;
+  /** Poczucie przynależności do szatni i projektu drużyny. */
+  squadBelonging: number;
+  /** Czy zawodnik rozumie swoją rolę i uważa ją za uczciwą. */
+  roleClarity: number;
+  /** Satysfakcja z minut i szans w meczach. */
+  playingTimeSatisfaction: number;
+  /** Poczucie, że klub pomaga mu się rozwijać. */
+  developmentSatisfaction: number;
+  /** Gotowość do słuchania ofert i myślenia o odejściu. */
+  transferOpenness: number;
+  /** Narastające napięcie/konflikt z klubem lub trenerem. */
+  conflictLevel: number;
+  lastUpdatedAt?: string;
+  history?: PlayerMindsetHistoryEntry[];
 }
 
 export type IndividualTalkType =
@@ -1182,6 +1230,7 @@ export interface Player {
   morale?: number;
   moralePersonality?: PlayerMoralePersonality;
   moraleHistory?: PlayerMoraleHistoryEntry[];
+  playerMindset?: PlayerMindsetState;
   lastIndividualTalkDate?: string | null;
   promisedMinutesUntil?: string | null;
   promisedMinutesBaseline?: number | null;

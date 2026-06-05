@@ -6,6 +6,23 @@ interface BuyerValidationResult {
   reason: string;
 }
 
+const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
+const getContractDaysLeft = (player: Player, currentDate?: Date): number => {
+  if (!currentDate || !player.contractEndDate) return 9999;
+  const contractEnd = new Date(player.contractEndDate);
+  if (Number.isNaN(contractEnd.getTime())) return 9999;
+  return Math.floor((contractEnd.getTime() - currentDate.getTime()) / 86_400_000);
+};
+
+const getDelayedEffectiveDate = (timing: TransferTiming, currentDate: Date): Date | null => {
+  if (timing !== TransferTiming.IN_SIX_MONTHS && timing !== TransferTiming.IN_TWELVE_MONTHS) return null;
+  const effectiveDate = new Date(currentDate);
+  if (timing === TransferTiming.IN_SIX_MONTHS) effectiveDate.setMonth(effectiveDate.getMonth() + 6);
+  else effectiveDate.setFullYear(effectiveDate.getFullYear() + 1);
+  return effectiveDate;
+};
+
 export const TransferBuyerLogicService = {
   validateClubBid: (
     player: Player,
@@ -23,29 +40,34 @@ export const TransferBuyerLogicService = {
     }
 
     if (offer.timing === TransferTiming.CONTRACT_END) {
-      const daysLeft = currentDate
-        ? Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000)
-        : 9999;
+      const daysLeft = getContractDaysLeft(player, currentDate);
 
       if (daysLeft <= 0) {
         return { approved: false, reason: 'Temu zawodnikowi niedługo kończy się kontrakt. Czy nie lepiej poczekać, aż będzie do wzięcia za darmo ?' };
       }
 
-      if (daysLeft > 365) {
+      if (daysLeft > PRE_CONTRACT_PRIORITY_DAYS) {
         return { approved: false, reason: 'Warunki można zaproponować dopiero w ostatnim roku kontraktu zawodnika.' };
       }
 
       return { approved: true, reason: '' };
     }
 
+    const daysLeft = getContractDaysLeft(player, currentDate);
+    if (daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) {
+      return {
+        approved: false,
+        reason: `Kontrakt zawodnika wygasa za ${daysLeft} dni. Nie ma sensu płacić odstępnego - użyj opcji "Po wygaśnięciu kontraktu" i rozmawiaj bezpośrednio z zawodnikiem.`
+      };
+    }
+
     if (
       (offer.timing === TransferTiming.IN_SIX_MONTHS || offer.timing === TransferTiming.IN_TWELVE_MONTHS)
       && currentDate
     ) {
-      const effectiveDate = new Date(currentDate);
-      effectiveDate.setMonth(effectiveDate.getMonth() + (offer.timing === TransferTiming.IN_SIX_MONTHS ? 6 : 12));
+      const effectiveDate = getDelayedEffectiveDate(offer.timing, currentDate)!;
       const contractEnd = new Date(player.contractEndDate);
-      if (contractEnd < effectiveDate) {
+      if (contractEnd <= effectiveDate) {
         return {
           approved: false,
           reason: `Kontrakt zawodnika wygasa ${contractEnd.toLocaleDateString('pl-PL')}, przed planowaną datą transferu. Skorzystaj z opcji "Po wygaśnięciu kontraktu".`

@@ -107,6 +107,30 @@ const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
   return Math.floor((endDate.getTime() - currentDate.getTime()) / 86_400_000);
 };
 
+const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
+const _getPreContractJoinDate = (player: Player): string => {
+  const contractEnd = new Date(player.contractEndDate);
+  if (Number.isNaN(contractEnd.getTime())) return player.contractEndDate;
+  contractEnd.setDate(contractEnd.getDate() + 1);
+  return contractEnd.toISOString();
+};
+
+const _shouldUsePreContractInsteadOfPaidTransfer = (
+  player: Player,
+  currentDate: Date,
+  paidTransferEffectiveDate?: Date
+): boolean => {
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+  if (daysLeft <= 0) return false;
+  if (daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) return true;
+  if (!paidTransferEffectiveDate || !player.contractEndDate) return false;
+
+  const contractEnd = new Date(player.contractEndDate);
+  if (Number.isNaN(contractEnd.getTime())) return false;
+  return contractEnd <= paidTransferEffectiveDate;
+};
+
 const _getTransferListPriority = (player: Player, squad: Player[], currentDate: Date): number => {
   const positionCount = squad.filter(p => p.position === player.position).length;
   const positionSurplus = Math.max(0, positionCount - MIN_SQUAD_POSITION_COUNTS[player.position]);
@@ -115,7 +139,7 @@ const _getTransferListPriority = (player: Player, squad: Player[], currentDate: 
   return (
     (player.isNegotiationPermanentBlocked ? 140 : 0) +
     (player.transferListDemandUntil ? 90 : 0) +
-    (daysLeft <= 365 ? 55 : daysLeft <= 730 ? 24 : 0) +
+    (daysLeft <= PRE_CONTRACT_PRIORITY_DAYS ? 55 : daysLeft <= 730 ? 24 : 0) +
     (positionSurplus * 9) +
     (player.squadRole === 'KEY_PLAYER' ? -120 : 0) +
     (player.isUntouchable ? -160 : 0) +
@@ -153,7 +177,7 @@ const _isExpiringBigClubVeteranStar = (
   return _isVeteranStar(player) &&
     sellerClub.reputation >= BIG_CLUB_REPUTATION &&
     daysLeft > 0 &&
-    daysLeft <= 365;
+    daysLeft <= PRE_CONTRACT_PRIORITY_DAYS;
 };
 
 const _buildGulfVeteranStarOffer = (player: Player, club: Club, currentDate: Date) => {
@@ -251,9 +275,9 @@ const _getCoreContractBonus = (player: Player, currentDate: Date): number => {
     ? Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000)
     : 0;
 
-  if (player.isNegotiationPermanentBlocked && daysLeft > 0 && daysLeft <= 365) return -8.0;
+  if (player.isNegotiationPermanentBlocked && daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) return -8.0;
   if (daysLeft > 730) return 2.0;
-  if (daysLeft > 365) return 0.8;
+  if (daysLeft > PRE_CONTRACT_PRIORITY_DAYS) return 0.8;
   if (daysLeft > 180) return -1.0;
   if (daysLeft > 0) return -3.0;
   return -6.0;
@@ -380,7 +404,7 @@ const _shouldAiTryRenewContract = (
   const monthKey = `${currentDate.getFullYear()}_${currentDate.getMonth()}`;
   const conservativeClub = club.reputation <= 7 && squadSize < 25;
   const depthChance = conservativeClub ? 0.55 : 0.25;
-  return daysLeft <= 365 && _seededRandom(`AI_RENEW_DEPTH_${club.id}_${player.id}_${monthKey}`) < depthChance;
+  return daysLeft <= PRE_CONTRACT_PRIORITY_DAYS && _seededRandom(`AI_RENEW_DEPTH_${club.id}_${player.id}_${monthKey}`) < depthChance;
 };
 
 const _buildAiPreContractOffer = (
@@ -710,7 +734,7 @@ export const AiContractService = {
       updatedPlayersMap[club.id] = squad.map(player => {
         const p = { ...player };
         
-        // 1. Sprawdzenie czy kontrakt wygasa (poniżej 365 dni)
+        // 1. Sprawdzenie czy kontrakt wygasa (poniżej 330 dni)
         const daysLeft = Math.floor((new Date(p.contractEndDate).getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
         
         if (daysLeft <= 0 || daysLeft > 425) return p;
@@ -1232,6 +1256,8 @@ processAiRecruitment: (
         if (p.clubId === club.id) return false;
         if (_hasActiveTransferLockout(p, currentDate)) return false;
         if (_hasActiveTransferOfferBan(p, currentDate)) return false;
+        const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
+        if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
         const needTL = needsTLMap.get(p.position);
         if (!needTL) return false;
 
@@ -1291,10 +1317,10 @@ processAiRecruitment: (
           const aSeller = sellerClubMap.get(a.clubId || '');
           const bSeller = sellerClubMap.get(b.clubId || '');
           const aVal = (a.isOnTransferList ? 20 : 0)
-            + (new Date(a.contractEndDate).getTime() - currentDate.getTime() < 365 * 86_400_000 ? 10 : 0)
+            + (new Date(a.contractEndDate).getTime() - currentDate.getTime() < PRE_CONTRACT_PRIORITY_DAYS * 86_400_000 ? 10 : 0)
             + (aSeller ? _getTransferListOpportunity(a, club, aSeller).scoreBonus : 0);
           const bVal = (b.isOnTransferList ? 20 : 0)
-            + (new Date(b.contractEndDate).getTime() - currentDate.getTime() < 365 * 86_400_000 ? 10 : 0)
+            + (new Date(b.contractEndDate).getTime() - currentDate.getTime() < PRE_CONTRACT_PRIORITY_DAYS * 86_400_000 ? 10 : 0)
             + (bSeller ? _getTransferListOpportunity(b, club, bSeller).scoreBonus : 0);
           return bVal - aVal || a.overallRating - b.overallRating;
         });
@@ -1474,6 +1500,8 @@ processAiRecruitment: (
           if (_hasActiveTransferLockout(p, currentDate)) return false;
           if (_hasActiveTransferOfferBan(p, currentDate)) return false;
           if (p.isOnTransferList || p.transferPendingClubId) return false;
+          const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
+          if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
 
           const sellerClub = sellerClubMap.get(p.clubId || '');
           const isGulfVeteranStarTarget = !!sellerClub &&
@@ -1647,7 +1675,7 @@ processAiRecruitment: (
         if (_hasActiveTransferOfferBan(player, currentDate)) continue;
 
         const daysLeft = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
-        if (daysLeft <= 0 || daysLeft > 365) continue;
+        if (daysLeft <= 0 || daysLeft > PRE_CONTRACT_PRIORITY_DAYS) continue;
 
         const candidateBuyers = clubs
           .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
@@ -1720,7 +1748,7 @@ processAiRecruitment: (
               ? {
                   ...p,
                   transferPendingClubId: buyerClub.id,
-                  transferReportDate: player.contractEndDate,
+                  transferReportDate: _getPreContractJoinDate(player),
                   transferPendingFee: 0,
                   transferPendingSalary: offer.salary,
                   transferPendingBonus: offer.bonus,
@@ -1770,9 +1798,7 @@ processAiRecruitment: (
     const today = currentDate.getTime();
 
     // Okno transferowe zamknięte — zawodnicy z tagiem TRSF czekają, nie są przenoszeni
-    if (!_isTransferWindowOpen(currentDate)) {
-      return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
-    }
+    const windowOpen = _isTransferWindowOpen(currentDate);
 
     for (const sellerClubId of Object.keys(updatedPlayersMap)) {
       if (sellerClubId === 'FREE_AGENTS') continue;
@@ -1781,6 +1807,7 @@ processAiRecruitment: (
       const due = squad.filter(p =>
         p.transferPendingClubId &&
         p.transferReportDate &&
+        (windowOpen || (p.transferPendingFee ?? 0) === 0) &&
         new Date(p.transferReportDate).getTime() <= today
       );
 

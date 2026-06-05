@@ -974,6 +974,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   clearSummerCampProgramPending: () => void;
   saveSummerCampLocation: (location: import('../types').SummerCampLocation | null, cost: number, spaOption: boolean) => void;
   saveSummerCampProgram: (program: import('../types').SummerCampProgram, intensity: import('../types').SummerCampIntensity) => void;
+  seasonCelebration: 'championship' | 'promotion-ekst' | 'promotion-1liga' | null;
+  clearSeasonCelebration: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -1114,6 +1116,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
 
   // Guard: zapobiega wielokrotnemu uruchomieniu processLeagueEvent dla tej samej daty
   const lastProcessedLeagueDateRef = React.useRef<string | null>(null);
+  const celebrationAlreadyFiredRef = React.useRef(false);
 
   // Helper do dodawania logów finansowych
   const addFinanceLog = useCallback((clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => {
@@ -1286,7 +1289,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
         else if (importantByRole || strongForTeam || usefulVeteran) recommendation = 'Przedłużyć możliwie szybko';
 
         const reasons = [
-          left <= 90 ? `zostało tylko ${left} dni kontraktu` : left <= 365 ? `kontrakt kończy się za ${Math.ceil(left / 30)} mies.` : `za około ${Math.ceil((left - 365) / 30)} mies. zacznie się ostatni rok kontraktu`,
+          left <= 90 ? `zostało tylko ${left} dni kontraktu` : left <= 330 ? `kontrakt kończy się za ${Math.ceil(left / 30)} mies.` : `za około ${Math.ceil((left - 330) / 30)} mies. zacznie się okno prekontraktu`,
           player.squadRole === 'KEY_PLAYER' ? 'status: kluczowy zawodnik' : player.squadRole === 'STARTER' ? 'status: pierwszy skład' : importantByRole ? 'jest w planach meczowych' : 'rola w kadrze jest mniejsza',
           `OVR ${player.overallRating}`,
           matchCount > 0 ? `${matchCount} mecz(e), śr. ocena ${rating ?? 'brak'}` : 'brak większej próbki meczowej',
@@ -1312,7 +1315,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     if (expiring.length === 0) return null;
 
     const dateKey = date.toISOString().split('T')[0];
-    const signature = expiring.map(entry => `${entry!.player.id}_${entry!.left <= 90 ? '90' : entry!.left <= 180 ? '180' : '365'}`).join('_');
+    const signature = expiring.map(entry => `${entry!.player.id}_${entry!.left <= 90 ? '90' : entry!.left <= 180 ? '180' : '330'}`).join('_');
     const lines = expiring.map(entry => {
       const item = entry!;
       return `- ${item.player.firstName} ${item.player.lastName} (${item.player.position}, ${item.player.age} lat): ${item.recommendation}. Powody: ${item.reasons.join(', ')}.`;
@@ -1323,7 +1326,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       sender: 'Sztab trenera',
       role: 'Asystent trenera',
       subject: 'Przegląd kontraktów: decyzje przed końcem umów',
-      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na 12 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
+      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na około 11 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
       date: new Date(date),
       isRead: false,
       type: MailType.STAFF,
@@ -1636,6 +1639,20 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     }
     const relegateFromL3Ids = [...new Set([...relegatedTeamsL3.map(c => c.id), ...playoffRelegatedL3Ids])]; // 15-18 + barażowi przegrani
     const promoteFromL4Ids = [...new Set([...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids])]; // losowi + barażowi zwycięzcy
+
+    if (userTeamId && !celebrationAlreadyFiredRef.current) {
+      if (champion?.id === userTeamId) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('championship');
+      } else if (promoteFromL2Ids.includes(userTeamId)) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('promotion-ekst');
+      } else if (promoteFromL3Ids.includes(userTeamId)) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('promotion-1liga');
+      }
+    }
+    celebrationAlreadyFiredRef.current = false;
 
     // 3. Budowa raportu
     const getAwards = (leagueId: string, leagueName: string) => {
@@ -2253,6 +2270,13 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       }
     }
 
+    // Koniec sezonu: czyszczenie i odświeżenie puli wolnych agentów
+    setPlayers(prev => {
+      const currentFreeAgents = prev['FREE_AGENTS'] || [];
+      const { remaining, newYouth } = SeasonTransitionService.cullAndRefreshFreeAgents(currentFreeAgents, seasonEndDate.getFullYear());
+      return { ...prev, 'FREE_AGENTS': [...remaining, ...newYouth] };
+    });
+
 if (userTeamId) {
       const myRetirements = transitionResult.retirementLogs.filter(log => log.clubId === userTeamId);
       const userClub = updatedClubs.find(c => c.id === userTeamId);
@@ -2415,6 +2439,8 @@ if (userTeamId) {
     winterCampProgramPending,
     summerCampInvitePending,
     summerCampProgramPending,
+    seasonCelebration,
+    clearSeasonCelebration,
     lastNTMatchResults,
     aiFriendlyPairs,
     aiFriendlyReports,
@@ -3959,6 +3985,8 @@ setMessages([welcomeMail, fanMail]);
 
   const clearSummerCampInvitePending = useCallback(() => setSummerCampInvitePending(false), []);
   const clearSummerCampProgramPending = useCallback(() => setSummerCampProgramPending(false), []);
+  const [seasonCelebration, setSeasonCelebration] = useState<'championship' | 'promotion-ekst' | 'promotion-1liga' | null>(null);
+  const clearSeasonCelebration = useCallback(() => setSeasonCelebration(null), []);
 
   const saveSummerCampLocation = useCallback((location: SummerCampLocation | null, cost: number, spaOption: boolean) => {
     if (!userTeamId) return;
@@ -4412,7 +4440,7 @@ Asystent`,
               sender: 'FIFA',
               role: 'Biuro Rozgrywek FIFA',
               subject: `MS ${wcYear} - Grupy kompletne!`,
-              body: `Zwyciezcy barazy UEFA i play-off FIFA uzupelnili wszystkie grupy Mistrzostw Swiata ${wcYear}. Sklad wszystkich 12 grup jest juz znany!`,
+              body: `Zwycięzcy baraży UEFA i play-off FIFA uzupełnili wszystkie grupy Mistrzostw Świata ${wcYear}. Skład wszystkich 12 grup jest już znany!`,
               date: new Date(dateToProcess),
               isRead: false,
               type: MailType.SYSTEM,
@@ -6394,7 +6422,13 @@ Asystent`,
             sentMailIdsRef.current.add(resultsMailKey);
             const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
             const dateLabel = `${dateToProcess.getDate()} ${monthNames[dateToProcess.getMonth()]}`;
-            const resultLines = friendlySimulation.results.map(result => `${result.home} ${result.homeGoals}-${result.awayGoals} ${result.away}`);
+            const friendlyResultMatches = friendlySimulation.results.map(result => ({
+              homeName: result.home,
+              awayName: result.away,
+              homeScore: result.homeGoals,
+              awayScore: result.awayGoals,
+            }));
+            const resultLines = friendlyResultMatches.map(match => `${match.homeName} ${match.homeScore}-${match.awayScore} ${match.awayName}`);
             const resultsMail: MailMessage = {
               id: resultsMailKey,
               sender: 'FIFA',
@@ -6405,6 +6439,7 @@ Asystent`,
               isRead: false,
               type: MailType.MEDIA,
               priority: 18,
+              metadata: { type: 'NATIONAL_TEAM_FRIENDLY_RESULTS', matches: friendlyResultMatches },
             };
             setMessages(prev => [resultsMail, ...prev]);
           }
@@ -6572,7 +6607,49 @@ Asystent`,
     }
 
     const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, playersAfterWorldCup, lineups, seasonNumber, coaches, matchSimulationSeed);
-    
+
+    if (userTeamId && !celebrationAlreadyFiredRef.current) {
+      const userClubNow = simulation.updatedClubs.find(c => c.id === userTeamId);
+      if (userClubNow) {
+        const remaining = (leagueId: string, teamId: string) =>
+          simulation.updatedFixtures.filter(f =>
+            f.leagueId === leagueId &&
+            f.status === MatchStatus.SCHEDULED &&
+            (f.homeTeamId === teamId || f.awayTeamId === teamId)
+          ).length;
+        if (userClubNow.leagueId === 'L_PL_1') {
+          const sortedL1 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_1')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const second = sortedL1[1];
+          if (sortedL1[0]?.id === userTeamId && second && second.stats.points + remaining('L_PL_1', second.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('championship');
+          }
+        } else if (userClubNow.leagueId === 'L_PL_2') {
+          const sortedL2 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_2')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const pos = sortedL2.findIndex(c => c.id === userTeamId);
+          const third = sortedL2[2];
+          if (pos <= 1 && third && third.stats.points + remaining('L_PL_2', third.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('promotion-ekst');
+          }
+        } else if (userClubNow.leagueId === 'L_PL_3') {
+          const sortedL3 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_3')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const pos = sortedL3.findIndex(c => c.id === userTeamId);
+          const third = sortedL3[2];
+          if (pos <= 1 && third && third.stats.points + remaining('L_PL_3', third.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('promotion-1liga');
+          }
+        }
+      }
+    }
+
     // 2. Obliczanie regeneracji kondycji i urazów
     const diffTime = Math.abs(dateToProcess.getTime() - lastRecoveryDate.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -7769,6 +7846,25 @@ const finalResult: SimulationOutput = {
       const newIncomingMails: MailMessage[] = [];
       const spontaneousInterestAdds = new Map<string, Set<string>>();
       const newOffersToAdd: IncomingTransferOffer[] = [];
+      const shouldUsePreContractInsteadOfPaidOffer = (player: Player, timing: TransferTiming): boolean => {
+        if (!player.contractEndDate) return false;
+        const contractEnd = new Date(player.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return false;
+        const daysLeft = Math.floor((contractEnd.getTime() - nextDay.getTime()) / 86_400_000);
+        if (daysLeft > 0 && daysLeft <= 330) return true;
+        if (timing === TransferTiming.IMMEDIATE) return false;
+
+        const effectiveDate = new Date(nextDay);
+        if (timing === TransferTiming.IN_SIX_MONTHS) effectiveDate.setMonth(effectiveDate.getMonth() + 6);
+        if (timing === TransferTiming.IN_TWELVE_MONTHS) effectiveDate.setFullYear(effectiveDate.getFullYear() + 1);
+        return contractEnd <= effectiveDate;
+      };
+      const getPreContractJoinDate = (player: Player): string => {
+        const contractEnd = new Date(player.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return player.contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
       const queueIncomingMail = (mail: MailMessage) => {
         if (mail.metadata?.type !== 'INCOMING_TRANSFER_OFFER') {
           newIncomingMails.push(mail);
@@ -7899,6 +7995,7 @@ const finalResult: SimulationOutput = {
             const { fee, aiMaxFee, aiUrgency, timing } = IncomingTransferService.calculateOffer(
               p, aiClub, userClub, isInsideWindow, seed
             );
+            if (shouldUsePreContractInsteadOfPaidOffer(p, timing)) return;
             if (fee <= 0 || fee > aiClub.budget) return;
             const boardPressure = IncomingTransferService.evaluateBoardPressure({ fee }, p, userClub, aiClub, seed);
             const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
@@ -8019,7 +8116,7 @@ const finalResult: SimulationOutput = {
             if (!IncomingTransferService.isPlausibleBuyerForPlayer(p, aiClub, buyerSquad)) return;
 
             const contractDaysLeft = Math.floor((new Date(p.contractEndDate).getTime() - nextDay.getTime()) / 86_400_000);
-            if (contractDaysLeft <= 0 || contractDaysLeft > 365) return;
+            if (contractDaysLeft <= 0 || contractDaysLeft > 330) return;
 
             const existingPreContract = transferOffers.some(offer =>
               offer.playerId === p.id &&
@@ -8083,6 +8180,7 @@ const finalResult: SimulationOutput = {
             if (aiClub.transferBudget < salary * years + bonus) return;
 
             const preContractId = `AI_PRECONTRACT_${p.id}_${aiClub.id}_${dateStr}`;
+            const preContractJoinDate = getPreContractJoinDate(p);
             const agreedOffer: TransferOffer = {
               id: preContractId,
               playerId: p.id,
@@ -8095,7 +8193,7 @@ const finalResult: SimulationOutput = {
               years,
               createdAt: dateStr,
               status: TransferOfferStatus.AGREED_PRECONTRACT,
-              effectiveDate: p.contractEndDate,
+              effectiveDate: preContractJoinDate,
               sellerReason: 'Zawodnik podpisał umowę obowiązującą od wygaśnięcia obecnego kontraktu.',
               playerReason: 'Zawodnik uznał, że to korzystny następny krok w karierze.',
               attemptNumber: 1,
@@ -8117,7 +8215,7 @@ const finalResult: SimulationOutput = {
                   ? {
                       ...player,
                       transferPendingClubId: aiClub.id,
-                      transferReportDate: p.contractEndDate,
+                      transferReportDate: preContractJoinDate,
                       transferPendingFee: 0,
                       transferPendingSalary: salary,
                       transferPendingBonus: bonus,
@@ -8137,7 +8235,7 @@ const finalResult: SimulationOutput = {
                 sender: `Agent gracza ${p.lastName}`,
                 role: 'Agencja menedżerska',
                 subject: `Prekontrakt podpisany: ${p.firstName} ${p.lastName}`,
-                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik dołączy do nich po wygaśnięciu obecnej umowy, czyli ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')}.\n\n`,
+                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik wypełni obecny kontrakt do ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')} i dołączy do nich ${new Date(preContractJoinDate).toLocaleDateString('pl-PL')}.\n\n`,
                 date: new Date(nextDay),
                 isRead: false,
                 type: MailType.STAFF,
@@ -10355,6 +10453,7 @@ const finalResult: SimulationOutput = {
         morale: moraleAdjustedPlayer.morale,
         moralePersonality: moraleAdjustedPlayer.moralePersonality,
         moraleHistory: moraleAdjustedPlayer.moraleHistory,
+        playerMindset: moraleAdjustedPlayer.playerMindset,
         transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
         developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
         developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
@@ -10514,6 +10613,7 @@ const finalResult: SimulationOutput = {
       morale: moraleAdjustedPlayer.morale,
       moralePersonality: moraleAdjustedPlayer.moralePersonality,
       moraleHistory: moraleAdjustedPlayer.moraleHistory,
+      playerMindset: moraleAdjustedPlayer.playerMindset,
       developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
       developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
       unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
@@ -11393,9 +11493,15 @@ const finalResult: SimulationOutput = {
     // Estymuj warunki kontraktu (negocjowane przez AI w tle)
     const estimatedSalary = Math.round(player.annualSalary * 1.15 / 10000) * 10000;
     const estimatedYears = player.age <= 27 ? 3 : player.age <= 32 ? 2 : 1;
+    const getPreContractJoinDate = (contractEndDate: string): string => {
+      const contractEnd = new Date(contractEndDate);
+      if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+      contractEnd.setDate(contractEnd.getDate() + 1);
+      return contractEnd.toISOString();
+    };
     const resolveEffectiveDate = (): string | undefined => {
       if (offer.timing === TransferTiming.IMMEDIATE) return undefined;
-      if (offer.timing === TransferTiming.CONTRACT_END) return player.contractEndDate;
+      if (offer.timing === TransferTiming.CONTRACT_END) return getPreContractJoinDate(player.contractEndDate);
 
       const effectiveDate = new Date(currentDate);
       if (offer.timing === TransferTiming.IN_SIX_MONTHS) {
@@ -11636,7 +11742,18 @@ const finalResult: SimulationOutput = {
       maxAttempts: latestClubOffer?.maxAttempts || TransferSellerLogicService.generateNegotiationAttemptLimit()
     };
 
+    const getPreContractJoinDate = (contractEndDate: string): string => {
+      const contractEnd = new Date(contractEndDate);
+      if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+      contractEnd.setDate(contractEnd.getDate() + 1);
+      return contractEnd.toISOString();
+    };
+
     const resolveEffectiveDate = () => {
+      if (offerInput.timing === TransferTiming.CONTRACT_END) {
+        return getPreContractJoinDate(targetPlayer.contractEndDate);
+      }
+
       const effectiveDate = new Date(currentDate);
 
       if (offerInput.timing === TransferTiming.IN_SIX_MONTHS) {
@@ -12443,10 +12560,19 @@ const finalResult: SimulationOutput = {
       : clubs;
 
     if (transferOffer.timing !== TransferTiming.IMMEDIATE) {
+      const getPreContractJoinDate = (contractEndDate: string): string => {
+        const contractEnd = new Date(contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
+      const agreedEffectiveDate = transferOffer.timing === TransferTiming.CONTRACT_END
+        ? getPreContractJoinDate(targetPlayer.contractEndDate)
+        : transferOffer.effectiveDate || targetPlayer.contractEndDate;
       const agreedOffer: TransferOffer = {
         ...finalReadyOffer,
         status: TransferOfferStatus.AGREED_PRECONTRACT,
-        effectiveDate: transferOffer.effectiveDate || targetPlayer.contractEndDate
+        effectiveDate: agreedEffectiveDate
       };
 
       if (directorPurchaseDecision?.relationDelta) {
@@ -12825,12 +12951,25 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       const targetPlayer = sellerSquad.find(player => player.id === offer.playerId);
 
       if (!sellerClub || !buyerClub || !targetPlayer) return;
+      const getPreContractJoinDate = (contractEndDate: string): string => {
+        const contractEnd = new Date(contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
+      const executionDate = offer.timing === TransferTiming.CONTRACT_END
+        ? getPreContractJoinDate(targetPlayer.contractEndDate)
+        : offer.effectiveDate || currentDate.toISOString();
+      if (
+        offer.timing === TransferTiming.CONTRACT_END &&
+        new Date(currentDate).setHours(0, 0, 0, 0) < new Date(executionDate).setHours(0, 0, 0, 0)
+      ) return;
 
       const execution = TransferExecutionService.finalizeTransfer(
         offer,
         nextClubs,
         nextPlayers,
-        new Date(offer.effectiveDate || currentDate)
+        new Date(executionDate)
       );
 
       nextClubs = execution.updatedClubs;
@@ -12863,7 +13002,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         sender: 'Centrum transferowe',
         role: 'System rejestracji transferow',
         subject: `Transfer wszedl w zycie: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
-        body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolaczyl do ${buyerClub.name} zgodnie z podpisana wczesniej umowa obowiazujaca od ${new Date(offer.effectiveDate || currentDate).toLocaleDateString('pl-PL')}.`,
+        body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolaczyl do ${buyerClub.name} zgodnie z podpisana wczesniej umowa obowiazujaca od ${new Date(executionDate).toLocaleDateString('pl-PL')}.`,
         date: new Date(currentDate),
         isRead: false,
         type: MailType.SYSTEM,

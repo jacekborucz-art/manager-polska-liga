@@ -1354,7 +1354,7 @@ export const SportingDirectorService = {
       influenceDelta = director.flexibility >= 14 || director.personality === 'PARTNER' ? 5 : 3;
       subject = 'Wsparcie pionu sportowego';
       body =
-        'Trenerze,\n\nprzekazalem zarzadowi, ze kierunek pracy sztabu jest spojny z planem sportowym klubu. Przy tej relacji masz u mnie wiecej przestrzeni na decyzje, nawet jesli pojedyncze wyniki beda nierowne.\n\n' +
+        'Trenerze,\n\nprzekazałem zarządowi, że kierunek pracy sztabu jest spójny z planem sportowym klubu. Przy tej relacji masz u mnie więcej przestrzeni na decyzje, nawet jeśli pojedyncze wyniki będą nierówne.\n\n' +
         'To nie jest czek in blanco, ale masz moje wsparcie.\n\n' +
         `${director.firstName} ${director.lastName}`;
       priority = 55;
@@ -2292,12 +2292,12 @@ export const SportingDirectorService = {
         club,
         director,
         date,
-        subject: 'Pochwala za ostatnia serie',
+        subject: 'Pochwała za ostatnią serię',
         body: [
           'Trenerze,',
           '',
-          'Dobra seria daje klubowi tlen i pokazuje, ze sztab ma druzyne pod kontrola.',
-          'W takich momentach latwiej mi bronic Twoich decyzji przed zarzadem i dawac Ci wiecej swobody na rynku.',
+          'Dobra seria daje klubowi tlen i pokazuje, że sztab ma drużynę pod kontrolą.',
+          'W takich momentach łatwiej mi bronić Twoich decyzji przed zarządem i dawać Ci więcej swobody na rynku.',
           '',
           `${director.firstName} ${director.lastName}`,
           `Dyrektor sportowy ${club.name}`,
