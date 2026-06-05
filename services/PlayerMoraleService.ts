@@ -956,6 +956,11 @@ export const PlayerMoraleService = {
 
       if (!expired) return withMorale;
 
+      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+      if (contractDaysLeft <= 365) {
+        return { ...withMorale, reserveProtestUntil: null };
+      }
+
       const personality = withMorale.moralePersonality ?? 'CALM';
       const penalty =
         personality === 'EGOIST' || personality === 'AMBITIOUS' ? -14 :
@@ -1082,7 +1087,7 @@ export const PlayerMoraleService = {
       const pressureBonus = personality === 'AMBITIOUS' || personality === 'EGOIST' || personality === 'CONFIDENT' ? 1 : 0;
       const ignoresStatusNoise = personality === 'LOYAL' || personality === 'CALM' || personality === 'PROFESSIONAL';
       const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
-      const isContractEndingSoon = contractDaysLeft > 0 && contractDaysLeft <= 365;
+      const isContractEndingSoon = contractDaysLeft <= 365;
 
       const roleExpectation: 'STARTER' | 'KEY_PLAYER' | null =
         rank <= 3 || (positionRank === 1 && withMorale.overallRating >= squadAverage + 3)
