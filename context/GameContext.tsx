@@ -9623,7 +9623,7 @@ const finalResult: SimulationOutput = {
   }, [currentDate, navigateTo]);
 
   const confirmSeasonEnd = useCallback(() => {
-    const nextSeasonYear = currentDate.getFullYear() + 1;
+    const nextSeasonYear = currentDate.getFullYear();
     // Uruchom nowy sezon i przesuń datę na 1 lipca
     // Przegląd składów AI zostanie wykonany automatycznie 2 lipca przez advanceDay
     startNextSeason(nextSeasonYear);
