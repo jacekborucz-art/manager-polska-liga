@@ -26,6 +26,23 @@ export interface MoraleDemandProcessResult {
   mails: MailMessage[];
 }
 
+export interface PlayerSeasonOutcomeMindflowInput {
+  club: Club;
+  isChampion?: boolean;
+  isPromoted?: boolean;
+  isRelegated?: boolean;
+  qualifiedForEurope?: boolean;
+  wonCup?: boolean;
+  squadAverage: number;
+  currentDate: Date;
+  createMail?: boolean;
+}
+
+export interface PlayerSeasonOutcomeMindflowResult {
+  player: Player;
+  mail: MailMessage | null;
+}
+
 export interface IndividualTalkOption {
   type: IndividualTalkType;
   title: string;
@@ -644,6 +661,169 @@ export const PlayerMoraleService = {
     transferListDemandUntil: null,
     reserveProtestUntil: null,
   }),
+
+  applySeasonOutcomeMindflow: (
+    player: Player,
+    input: PlayerSeasonOutcomeMindflowInput
+  ): PlayerSeasonOutcomeMindflowResult => {
+    const { club, currentDate, squadAverage } = input;
+    let withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const dateKey = toDateKey(currentDate);
+    const personality = withMorale.moralePersonality ?? 'CALM';
+    const seed = stableHash(`${withMorale.id}_${dateKey}_SEASON_OUTCOME`);
+    const roll = seededRng(seed, 71);
+
+    const stayReasonParts = [
+      input.isChampion ? 'mistrzostwo kraju' : null,
+      input.isPromoted ? 'awans do wyższej ligi' : null,
+      input.qualifiedForEurope ? 'gra w europejskich pucharach' : null,
+      input.wonCup ? 'zdobycie pucharu' : null,
+    ].filter(Boolean);
+
+    if (stayReasonParts.length > 0) {
+      const personalityStayBias =
+        personality === 'LOYAL' ? 0.18 :
+        personality === 'PROFESSIONAL' ? 0.12 :
+        personality === 'CALM' ? 0.08 :
+        personality === 'AMBITIOUS' ? -0.02 :
+        personality === 'EGOIST' ? -0.10 :
+        0;
+      const successScore =
+        (input.isChampion ? 0.24 : 0) +
+        (input.isPromoted ? 0.20 : 0) +
+        (input.qualifiedForEurope ? 0.22 : 0) +
+        (input.wonCup ? 0.16 : 0);
+      const roleBonus = withMorale.squadRole === 'KEY_PLAYER' || withMorale.isUntouchable ? 0.08 : withMorale.squadRole === 'STARTER' ? 0.04 : 0;
+      const stayChance = Math.max(0.18, Math.min(0.72, 0.24 + successScore + personalityStayBias + roleBonus));
+      const moraleBoost =
+        input.isChampion ? 8 :
+        input.isPromoted ? 7 :
+        input.qualifiedForEurope ? 6 :
+        5;
+      const reason = `Sukces klubu zmienia nastawienie: ${stayReasonParts.join(', ')}`;
+
+      withMorale = PlayerMoraleService.withMoraleChange(withMorale, moraleBoost, reason, currentDate);
+      withMorale = PlayerMoraleService.withMindsetChange(
+        withMorale,
+        {
+          clubHappiness: 8,
+          squadBelonging: 7,
+          developmentSatisfaction: input.qualifiedForEurope || input.isPromoted ? 6 : 3,
+          transferOpenness: -Math.round(10 + successScore * 20),
+          conflictLevel: -6,
+        },
+        reason,
+        currentDate
+      );
+
+      if (roll < stayChance) {
+        const nextIsOnTransferList = withMorale.isOnTransferList && roll < stayChance * 0.35
+          ? false
+          : withMorale.isOnTransferList;
+        withMorale = {
+          ...withMorale,
+          transferListDemandUntil: null,
+          developmentExitDemandUntil: null,
+          lastTemptingOfferConflictDate: null,
+          isOnTransferList: nextIsOnTransferList,
+          transferListPrice: nextIsOnTransferList ? withMorale.transferListPrice : undefined,
+        };
+      }
+
+      return { player: withMorale, mail: null };
+    }
+
+    if (!input.isRelegated) return { player: withMorale, mail: null };
+
+    const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+    const isGoodEnoughForBetterClub =
+      withMorale.overallRating >= Math.max(62, squadAverage + 5) &&
+      (
+        withMorale.overallRating >= 68 ||
+        withMorale.marketValue >= Math.max(400_000, (withMorale.annualSalary ?? 0) * 3) ||
+        hasStandoutSeasonOutput(withMorale, getSeasonOutputProfile(withMorale))
+      );
+    const careerStageCanMove = withMorale.age <= 32 || withMorale.overallRating >= squadAverage + 9;
+    const reputationCeilingPressure = Math.max(0, (withMorale.overallRating - 58) / 5 - club.reputation);
+    const personalityExitBias =
+      personality === 'EGOIST' ? 0.18 :
+      personality === 'AMBITIOUS' ? 0.14 :
+      personality === 'CONFIDENT' ? 0.08 :
+      personality === 'LOYAL' ? -0.18 :
+      personality === 'PROFESSIONAL' ? -0.06 :
+      0;
+    const exitChance = Math.max(
+      0.08,
+      Math.min(
+        0.68,
+        0.16 +
+        personalityExitBias +
+        Math.max(0, withMorale.overallRating - squadAverage) * 0.025 +
+        Math.min(0.16, reputationCeilingPressure * 0.04) +
+        (contractDaysLeft > 365 ? 0.06 : -0.08)
+      )
+    );
+
+    const relegationReason = 'Spadek drużyny zwiększa presję na odejście';
+    withMorale = PlayerMoraleService.withMoraleChange(withMorale, -4, relegationReason, currentDate);
+    withMorale = PlayerMoraleService.withMindsetChange(
+      withMorale,
+      {
+        clubHappiness: -9,
+        squadBelonging: -6,
+        developmentSatisfaction: -8,
+        transferOpenness: isGoodEnoughForBetterClub ? 18 : 7,
+        conflictLevel: isGoodEnoughForBetterClub ? 7 : 3,
+      },
+      relegationReason,
+      currentDate
+    );
+
+    if (!isGoodEnoughForBetterClub || !careerStageCanMove || withMorale.isOnTransferList || withMorale.transferPendingClubId || roll >= exitChance) {
+      return { player: withMorale, mail: null };
+    }
+
+    const deadline = new Date(currentDate);
+    deadline.setDate(deadline.getDate() + 45);
+    const deadlineKey = toDateKey(deadline);
+    const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+    const mail: MailMessage | null = input.createMail
+      ? {
+          id: `PLAYER_RELEGATION_EXIT_REQUEST_${withMorale.id}_${dateKey}`,
+          sender: playerName,
+          role: 'Zawodnik',
+          subject: `Prośba po spadku: ${withMorale.lastName}`,
+          body: [
+            'Trenerze,',
+            '',
+            'Po spadku drużyny muszę uczciwie spojrzeć na swoją przyszłość. Szanuję klub, ale czuję, że mój poziom sportowy pozwala mi dalej grać wyżej.',
+            '',
+            'Nie chcę odchodzić w konflikcie ani za wszelką cenę. Proszę jednak, żeby klub był gotowy rozmawiać przy odpowiedniej ofercie i nie blokował mi wcześniejszego odejścia, jeśli pojawi się rozsądna propozycja.',
+            '',
+            playerName,
+          ].join('\n'),
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 5,
+          metadata: {
+            type: 'PLAYER_MORALE_REQUEST',
+            playerId: withMorale.id,
+            requestType: 'TRANSFER_LIST',
+            responseDeadline: deadlineKey,
+          },
+        }
+      : null;
+
+    return {
+      player: {
+        ...withMorale,
+        lastMoraleDemandDate: dateKey,
+        transferListDemandUntil: deadlineKey,
+      },
+      mail,
+    };
+  },
 
   withMoraleChange: (player: Player, delta: number, reason: string, date: Date): Player => {
     const withMorale = PlayerMoraleService.ensurePlayerState(player);

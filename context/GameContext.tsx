@@ -2173,17 +2173,17 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (champion?.id) setCurrentPolishChampionId(champion.id);
 
     // Ustal kto idzie do LE R2Q: zwycięzca PP, chyba że jest też mistrzem — wtedy przegrany finału
-    if (cupWinnerId) {
-      const polishCupR2QId = (cupWinnerId === champion?.id && cupLoserId) ? cupLoserId : cupWinnerId;
-      setCurrentPolishCupWinnerId(polishCupR2QId);
+    const polishCupEuropeTeamId = cupWinnerId
+      ? ((cupWinnerId === champion?.id && cupLoserId) ? cupLoserId : cupWinnerId)
+      : undefined;
+    if (polishCupEuropeTeamId) {
+      setCurrentPolishCupWinnerId(polishCupEuropeTeamId);
     }
 
     // Ustal 2 polskie drużyny do CONF R2Q: 2. i 3. miejsce Ekstraklasy
     // Jeśli drużyna z 2. lub 3. miejsca wygrała PP (gra w LE), zastępujemy ją 4. miejscem
     {
-      const lePolishTeamId = cupWinnerId
-        ? ((cupWinnerId === champion?.id && cupLoserId) ? cupLoserId : cupWinnerId)
-        : null;
+      const lePolishTeamId = polishCupEuropeTeamId ?? null;
 
       const candidates: string[] = [];
       let replacementIndex = 3; // index 3 = 4. miejsce (0-based)
@@ -2210,7 +2210,61 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
         const seasonEndDate = new Date(newYear - 1, 5, 30); // 30 czerwca kończącego się sezonu
     const transitionResult = SeasonTransitionService.processSquadTransition(players, updatedClubs, seasonEndDate, userTeamId);
-    setPlayers(transitionResult.updatedPlayers);
+    const confEuropeTeamIds = (() => {
+      const lePolishTeamId = polishCupEuropeTeamId ?? null;
+      const candidates: string[] = [];
+      let replacementIndex = 3;
+
+      for (let i = 1; i < standingsL1.length && candidates.length < 2; i++) {
+        const candidateId = standingsL1[i].id;
+        if (candidateId === lePolishTeamId) {
+          const replacement = standingsL1[replacementIndex];
+          if (replacement && !candidates.includes(replacement.id) && replacement.id !== lePolishTeamId) {
+            candidates.push(replacement.id);
+            replacementIndex++;
+          }
+        } else {
+          candidates.push(candidateId);
+        }
+      }
+
+      return candidates.slice(0, 2);
+    })();
+    const europeanQualificationIds = new Set([
+      champion?.id,
+      polishCupEuropeTeamId,
+      ...confEuropeTeamIds,
+    ].filter((id): id is string => !!id));
+    const promotedIds = new Set([...promoteFromL2Ids, ...promoteFromL3Ids, ...promoteFromL4Ids]);
+    const relegatedIds = new Set([...relegateFromL1Ids, ...relegateFromL2Ids, ...relegateFromL3Ids]);
+    const seasonOutcomeMails: MailMessage[] = [];
+    const updatedPlayersWithSeasonMindflow = Object.fromEntries(
+      Object.entries(transitionResult.updatedPlayers).map(([clubId, squad]) => {
+        const club = updatedClubs.find(c => c.id === clubId);
+        if (!club || squad.length === 0) return [clubId, squad];
+        const squadAverage = squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+        const adjustedSquad = squad.map(player => {
+          const result = PlayerMoraleService.applySeasonOutcomeMindflow(player, {
+            club,
+            squadAverage,
+            currentDate: seasonEndDate,
+            createMail: clubId === userTeamId,
+            isChampion: champion?.id === clubId,
+            isPromoted: promotedIds.has(clubId),
+            isRelegated: relegatedIds.has(clubId),
+            qualifiedForEurope: europeanQualificationIds.has(clubId),
+            wonCup: cupWinnerId === clubId,
+          });
+          if (result.mail) seasonOutcomeMails.push(result.mail);
+          return result.player;
+        });
+        return [clubId, adjustedSquad];
+      })
+    ) as Record<string, Player[]>;
+    setPlayers(updatedPlayersWithSeasonMindflow);
+    if (seasonOutcomeMails.length > 0) {
+      setMessages(prev => [...seasonOutcomeMails, ...prev]);
+    }
 
     // Zwolnieni zawodnicy → wolni agenci
     if (transitionResult.releasedPlayers.length > 0) {
@@ -2222,7 +2276,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     // Wygasłe kontrakty w drużynie gracza → wolni agenci
     if (userTeamId) {
-      const userSquad = transitionResult.updatedPlayers[userTeamId] || [];
+      const userSquad = updatedPlayersWithSeasonMindflow[userTeamId] || [];
       const expiredUserPlayers = userSquad.filter(p =>
         p.contractEndDate &&
         new Date(p.contractEndDate) <= seasonEndDate &&
