@@ -1,5 +1,7 @@
 import { Club, CoachAttributes, CompetitionType, Fixture } from '../types';
 import type { BriefingEffect } from './PreMatchBriefingService';
+import { detectLeagueMotivationContext, getLeagueMotivationContextLabel } from './LeagueMotivationContextService';
+import type { LeagueMotivationContext } from './LeagueMotivationContextService';
 import { RivalryService } from './RivalryService';
 
 export type PressConferenceTone = 'CALM' | 'CONFIDENT' | 'MOTIVATING' | 'CAUTIOUS' | 'PROVOCATIVE';
@@ -15,7 +17,7 @@ export interface PressConferenceAnswer {
 
 export interface PressConferenceQuestion {
   id: string;
-  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT' | 'CUP_CONTEXT' | 'EUROPE_CONTEXT';
+  category: 'TABLE' | 'FORM' | 'OPPONENT' | 'MATCH_CONTEXT' | 'CUP_CONTEXT' | 'EUROPE_CONTEXT' | 'LEAGUE_STAKES';
   journalist: string;
   text: string;
   answers: PressConferenceAnswer[];
@@ -324,6 +326,194 @@ const getCupQuestions = (
   ];
 };
 
+const getLeagueStakesQuestionText = (
+  context: LeagueMotivationContext,
+  opponent: Club,
+): { headline: string; mainQuestion: string; pressureQuestion: string } => {
+  if (context === 'LAST_ROUND_GENERAL') {
+    return {
+      headline: 'Ostatni mecz sezonu',
+      mainQuestion: `Przed wami ostatni mecz sezonu z ${opponent.name}. Jak sprawić, żeby zespół potraktował go z pełną koncentracją niezależnie od układu tabeli?`,
+      pressureQuestion: 'Ostatnia kolejka często miesza emocje, zmęczenie i myślenie o przerwie. Jak utrzyma pan profesjonalizm do ostatniego gwizdka?',
+    };
+  }
+  if (context === 'TITLE_OR_PROMOTION_SECURED') {
+    return {
+      headline: 'Cel sezonu już osiągnięty',
+      mainQuestion: `Mistrzostwo lub awans są już zapewnione, a przed wami mecz z ${opponent.name}. Jak uniknąć rozluźnienia po tak dużym sukcesie?`,
+      pressureQuestion: 'Czy po osiągnięciu celu drużyna potrzebuje bardziej pochwały, czy przypomnienia, że standard nadal obowiązuje?',
+    };
+  }
+  if (context === 'TITLE_DECIDER') {
+    return {
+      headline: 'Mecz o mistrzostwo Polski',
+      mainQuestion: `To spotkanie z ${opponent.name} może dać mistrzostwo Polski. Jak przygotować zawodników na presję, która będzie równie ważna jak forma sportowa?`,
+      pressureQuestion: 'Jeśli remis może wystarczyć, czy drużyna powinna kalkulować, czy grać tak, jakby potrzebowała zwycięstwa?',
+    };
+  }
+  if (context === 'DIRECT_PROMOTION_DECIDER') {
+    return {
+      headline: 'Mecz o bezpośredni awans',
+      mainQuestion: `Wygrana może zapewnić bezpośredni awans. Jak sprawić, żeby zawodnicy potraktowali mecz z ${opponent.name} jako szansę, a nie ciężar?`,
+      pressureQuestion: 'Awans jest blisko, ale takie mecze potrafią paraliżować. Jaki impuls mentalny będzie dziś najważniejszy?',
+    };
+  }
+  if (context === 'PLAYOFF_PLACE_DECIDER') {
+    return {
+      headline: 'Mecz o miejsce w barażach',
+      mainQuestion: `Stawką meczu z ${opponent.name} może być miejsce dające grę w barażach. Jak przekona pan drużynę, że sezon może jeszcze potrwać?`,
+      pressureQuestion: 'Baraże oznaczają dodatkową szansę, ale też dodatkową presję. Jak znaleźć właściwy balans między odwagą i rozsądkiem?',
+    };
+  }
+  if (context === 'RELEGATION_DECIDER') {
+    return {
+      headline: 'Walka o utrzymanie',
+      mainQuestion: `To może być mecz o utrzymanie w lidze. Jak zamierza pan pomóc zawodnikom opanować napięcie przed spotkaniem z ${opponent.name}?`,
+      pressureQuestion: 'W takich chwilach zawodnicy mogą potrzebować dodatkowego impulsu. Co powie im pan, żeby nie grali ze strachem?',
+    };
+  }
+  if (context === 'EUROPE_PLACE_DECIDER') {
+    return {
+      headline: 'Mecz o europejskie puchary',
+      mainQuestion: `W Ekstraklasie walczycie o miejsce dające grę w europejskich pucharach. Jak przygotować drużynę na mecz z ${opponent.name}, który może otworzyć klubowi większą scenę?`,
+      pressureQuestion: 'Miejsca 2-4 oznaczają prestiż i nowe oczekiwania. Jak nie pozwolić, by ta wizja odciągnęła zespół od najbliższego zadania?',
+    };
+  }
+  return {
+    headline: 'Spadek już przesądzony',
+    mainQuestion: `Spadek jest już pewny, ale sezon jeszcze trwa. Jak znaleźć motywację przed meczem z ${opponent.name}, kiedy tabela nie zostawia złudzeń?`,
+    pressureQuestion: 'Czy w takiej sytuacji ważniejsza jest ochrona zawodników przed presją, czy wymaganie reakcji i walki o godność klubu?',
+  };
+};
+
+const getLeagueStakesAnswers = (
+  fixture: PressConferenceFixture,
+  context: LeagueMotivationContext,
+): PressConferenceAnswer[] => {
+  if (context === 'TITLE_OR_PROMOTION_SECURED') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Cel został osiągnięty, ale nasza odpowiedzialność wobec kibiców i siebie samych się nie kończy.',
+      'To jest drużyna, która zasłużyła na sukces. Teraz chcemy pokazać, że potrafimy utrzymać poziom.',
+      'Sukces ma nas napędzać, nie usypiać. Oczekuję energii od pierwszej minuty.',
+      'Najważniejsze jest, żeby emocje po sukcesie nie odebrały nam dyscypliny.',
+    );
+  }
+  if (context === 'TITLE_DECIDER') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Musimy zachować spokój. Mistrzostwo wygrywa się głową tak samo jak nogami.',
+      'To moment, na który pracowaliśmy cały sezon. Drużyna jest gotowa po niego sięgnąć.',
+      'Nie chcę kalkulacji. Chcę odwagi, tempa i mentalności mistrzów.',
+      'Nie możemy dać się ponieść. Każda decyzja musi być odpowiedzialna.',
+    );
+  }
+  if (context === 'DIRECT_PROMOTION_DECIDER') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Awans jest blisko, ale trzeba go domknąć spokojem i dobrą organizacją.',
+      'Wierzę w ten zespół. Zawodnicy wiedzą, że mogą zrobić dziś wielki krok.',
+      'To jest chwila, w której trzeba wyjść po swoje. Awans sam do nas nie przyjdzie.',
+      'Nie wolno nam grać samymi emocjami. Plan i cierpliwość będą kluczowe.',
+    );
+  }
+  if (context === 'PLAYOFF_PLACE_DECIDER') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Baraże są celem na dziś, ale zaczyna się od prostych decyzji i koncentracji.',
+      'Zespół wie, że może przedłużyć sezon. To powinno dodać nam energii.',
+      'Musimy wyrwać tę szansę. W takim meczu nie ma miejsca na półśrodki.',
+      'Presja baraży nie może zmienić nas w chaotyczną drużynę.',
+    );
+  }
+  if (context === 'RELEGATION_DECIDER') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Walka o utrzymanie wymaga spokoju, odpowiedzialności i wzajemnego wsparcia.',
+      'Wierzę, że presja może wyzwolić w nas dodatkową energię.',
+      'Nie zamierzamy się chować. To jest mecz, w którym trzeba pokazać charakter.',
+      'Nie możemy pozwolić, żeby strach podjął decyzje za zawodników.',
+    );
+  }
+  if (context === 'EUROPE_PLACE_DECIDER') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Europa wymaga dojrzałości. Najpierw musimy dobrze wykonać najbliższe zadanie.',
+      'Mamy prawo mieć ambicję. Chcemy udowodnić, że zasługujemy na puchary.',
+      'To jest mecz dla odważnych. Taka szansa powinna napędzać całą szatnię.',
+      'Nie możemy myśleć o losowaniach i wyjazdach. Liczy się najbliższe dziewięćdziesiąt minut.',
+    );
+  }
+  if (context === 'ALREADY_RELEGATED') {
+    return answers(
+      `${fixture.id}_LEAGUE_STAKES`,
+      'Spadek boli, ale musimy zachować godność i odpowiedzialność wobec klubu.',
+      'Ta drużyna nadal ma coś do udowodnienia sobie i kibicom.',
+      'Nie akceptuję odpuszczania. Nawet po spadku trzeba walczyć o herb.',
+      'Emocje są trudne, więc potrzebujemy prostego planu i chłodnej głowy.',
+    );
+  }
+  return answers(
+    `${fixture.id}_LEAGUE_STAKES`,
+    'Ostatni mecz sezonu wymaga profesjonalizmu i szacunku do całej pracy.',
+    'Chcemy zakończyć sezon mocnym akcentem i dać kibicom dobry sygnał.',
+    'Nie ma spaceru w ostatniej kolejce. Oczekuję intensywności do końca.',
+    'Najważniejsze, żeby zmęczenie sezonem nie odebrało nam koncentracji.',
+  );
+};
+
+const getLeagueStakesQuestions = (
+  fixture: PressConferenceFixture,
+  opponent: Club,
+  opponentStatement: string,
+  rivalryLabel: string | null,
+  context: LeagueMotivationContext,
+): PressConferenceQuestion[] => {
+  const texts = getLeagueStakesQuestionText(context, opponent);
+  const label = getLeagueMotivationContextLabel(context) ?? texts.headline;
+  const rivalryText = rivalryLabel ? ` ${rivalryLabel} jeszcze podnosi temperaturę tego spotkania.` : '';
+
+  return [
+    {
+      id: `${fixture.id}_LEAGUE_STAKES`,
+      category: 'LEAGUE_STAKES',
+      journalist: 'Dziennik Sportowy',
+      text: texts.mainQuestion,
+      answers: getLeagueStakesAnswers(fixture, context),
+    },
+    {
+      id: `${fixture.id}_LEAGUE_PRESSURE`,
+      category: 'LEAGUE_STAKES',
+      journalist: 'Gazeta Sportowa',
+      text: `${texts.pressureQuestion}${rivalryText}`,
+      answers: getLeagueStakesAnswers({ ...fixture, id: `${fixture.id}_PRESSURE` }, context),
+    },
+    {
+      id: `${fixture.id}_LEAGUE_OPPONENT`,
+      category: 'OPPONENT',
+      journalist: 'Futbol nad Wisłą',
+      text: `${opponentStatement} W kontekście "${label}" takie słowa mogą wybrzmieć mocniej. Jak pan odpowie?`,
+      answers: [
+        ...answers(
+          `${fixture.id}_LEAGUE_OPPONENT`,
+          'Szanujemy rywala, ale nie pozwolimy, żeby cudze słowa zmieniły nasze przygotowanie.',
+          'Niech mówią, co chcą. My mamy swoje zadanie i swoją jakość.',
+          'Jeśli te słowa mają nas dodatkowo pobudzić, to dobrze. Odpowiedź ma być na boisku.',
+          'Nie będziemy grać konferencji. Musimy zachować dyscyplinę i koncentrację.',
+        ),
+        {
+          id: `${fixture.id}_LEAGUE_OPPONENT_PROVOCATIVE`,
+          tone: 'PROVOCATIVE',
+          text: 'Jeżeli rywal myśli, że presja nas złamie, może się bardzo pomylić.',
+          moraleDelta: -1,
+          focusDelta: -2,
+          pressureDelta: 4,
+        },
+      ],
+    },
+  ];
+};
+
 type EuropeanCupStage = 'QUALIFYING' | 'GROUP_ENTRY' | 'GROUP_STAGE' | 'R16' | 'QF' | 'SF' | 'FINAL' | 'SUPER_CUP';
 
 interface EuropeanCupContext {
@@ -574,6 +764,7 @@ export const PreMatchPressConferenceService = {
     userClub: Club,
     opponent: Club,
     clubs: Club[],
+    fixtures: Fixture[] = [],
   ): PressConferenceData {
     const userRank = getRank(userClub, clubs);
     const opponentRank = getRank(opponent, clubs);
@@ -586,6 +777,16 @@ export const PreMatchPressConferenceService = {
     const opponentStatement = getOpponentStatement(fixture.id, opponent);
     const isDomesticCup = fixture.leagueId === CompetitionType.POLISH_CUP || fixture.leagueId === CompetitionType.SUPER_CUP;
     const europeanCupContext = getEuropeanCupContext(fixture);
+    const fullFixture = fixtures.find(item => item.id === fixture.id);
+    const leagueMotivationContext = fullFixture && typeof fullFixture.leagueId === 'string'
+      ? detectLeagueMotivationContext({
+          fixture: fullFixture,
+          userClub,
+          opponentClub: opponent,
+          standings: clubs.filter(club => club.leagueId === fullFixture.leagueId),
+          fixtures,
+        })
+      : null;
 
     if (isDomesticCup) {
       const competitionLabel = fixture.leagueId === CompetitionType.SUPER_CUP ? 'Superpuchar Polski' : 'Puchar Polski';
@@ -603,6 +804,16 @@ export const PreMatchPressConferenceService = {
         headline: `${europeanCupContext.competitionLabel}: ${europeanCupContext.stageLabel} przed meczem z ${opponent.name}`,
         opponentStatement,
         questions: getEuropeanCupQuestions(fixture, opponent, opponentStatement, rivalry.label ?? null, europeanCupContext),
+      };
+    }
+
+    if (leagueMotivationContext) {
+      const stakesText = getLeagueStakesQuestionText(leagueMotivationContext, opponent);
+      return {
+        fixtureId: fixture.id,
+        headline: `${stakesText.headline}: ${userClub.name} przed meczem z ${opponent.name}`,
+        opponentStatement,
+        questions: getLeagueStakesQuestions(fixture, opponent, opponentStatement, rivalry.label ?? null, leagueMotivationContext),
       };
     }
 

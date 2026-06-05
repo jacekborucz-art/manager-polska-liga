@@ -14,12 +14,12 @@ interface Props {
 }
 
 export const PreMatchPressConferenceModal: React.FC<Props> = ({ fixture, userClub, opponent }) => {
-  const { clubs, completePreMatchPressConference } = useGame();
+  const { clubs, fixtures, completePreMatchPressConference } = useGame();
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<PressConferenceAnswer[]>([]);
   const conference = useMemo(
-    () => PreMatchPressConferenceService.generate(fixture, userClub, opponent, clubs),
-    [clubs, fixture, opponent, userClub],
+    () => PreMatchPressConferenceService.generate(fixture, userClub, opponent, clubs, fixtures),
+    [clubs, fixture, fixtures, opponent, userClub],
   );
   const question = conference.questions[questionIndex];
 
