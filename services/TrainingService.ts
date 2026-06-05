@@ -20,6 +20,26 @@ const getMoraleTrainingModifier = (morale: number = 50): { growth: number; regre
   return { growth: 1.15, regression: 0.85 };
 };
 
+const getSeasonalRegressionUsed = (seasonalChanges: Record<string, number> = {}): number =>
+  Object.values(seasonalChanges).reduce((sum, change) => sum + Math.max(0, -change), 0);
+
+const getSeasonalRegressionCap = (player: Player): number => {
+  if (player.age >= 36) return 10;
+  if (player.age >= 35) return 8;
+  if (player.age >= 34) return 6;
+  if (player.age >= 33) return 5;
+  if (player.age >= 31) return 4;
+  if (player.age >= 28) return 3;
+  if (player.age >= 24) return 2;
+  return 1;
+};
+
+const getRegressionIntensityMultiplier = (intensity: TrainingIntensity): number => {
+  if (intensity === TrainingIntensity.LIGHT) return 0.70;
+  if (intensity === TrainingIntensity.HEAVY) return 1.15;
+  return 1.0;
+};
+
 const isWinterHoliday = (date: Date): boolean => {
   const month = date.getMonth();
   const day = date.getDate();
@@ -153,12 +173,14 @@ export const TrainingService = {
         seasonalChanges,
         stats.seasonalGrowthPoints
       );
+      let seasonalRegressionPoints = getSeasonalRegressionUsed(seasonalChanges);
+      const seasonalRegressionCap = getSeasonalRegressionCap(updated);
       const attributes = { ...updated.attributes };
       const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
       const performance =
-        lastMatchSummary?.homePlayers.find(p => p.name === player.lastName) ||
-        lastMatchSummary?.awayPlayers.find(p => p.name === player.lastName);
+        lastMatchSummary?.homePlayers.find(p => p.playerId === player.id || p.name === player.lastName) ||
+        lastMatchSummary?.awayPlayers.find(p => p.playerId === player.id || p.name === player.lastName);
 
       const playedThisRound = !!performance;
       const rating = performance?.rating || 0;
@@ -220,7 +242,6 @@ export const TrainingService = {
       attrKeys.forEach(key => {
         let pGrowth = 0.005;
 
-        pGrowth *= intensityMultiplier;
         if (hasGeneralPlan && cycle.primaryAttributes.includes(key)) pGrowth += 0.05;
         if (hasGeneralPlan && cycle.secondaryAttributes.includes(key)) pGrowth += 0.025;
         if (player.trainingFocus === key) pGrowth += 0.035;
@@ -236,7 +257,19 @@ export const TrainingService = {
           if (rating >= 9.0) pGrowth += 0.10;
         }
 
-        if (key === 'finishing' && (performance?.goals || 0) > 0) pGrowth += 0.05;
+        const goals = performance?.goals || 0;
+        const assists = performance?.assists || 0;
+        if (goals > 0) {
+          if (key === 'finishing') pGrowth += 0.05 + Math.min(0.04, (goals - 1) * 0.02);
+          if (key === 'attacking') pGrowth += 0.03 + Math.min(0.03, (goals - 1) * 0.015);
+          if (key === 'positioning' && player.position !== PlayerPosition.GK) pGrowth += 0.015;
+        }
+        if (assists > 0) {
+          if (key === 'passing') pGrowth += 0.04 + Math.min(0.03, (assists - 1) * 0.015);
+          if (key === 'vision') pGrowth += 0.03 + Math.min(0.03, (assists - 1) * 0.015);
+          if (key === 'crossing') pGrowth += 0.02;
+          if (key === 'attacking') pGrowth += 0.015;
+        }
         if (key === 'goalkeeping' && player.position === PlayerPosition.GK && performance && performance.fatigue > 0 && lastMatchSummary) {
           const teamGoalsAgainst =
             player.clubId === lastMatchSummary.homeClub.id ? lastMatchSummary.awayScore : lastMatchSummary.homeScore;
@@ -244,6 +277,7 @@ export const TrainingService = {
         }
 
         const talentMod = 0.70 + (player.attributes.talent / 100) * 0.60;
+        pGrowth *= intensityMultiplier;
         pGrowth *= talentMod;
         pGrowth *= moraleTrainingModifier.growth;
         pGrowth *= coachGrowthMult;
@@ -284,7 +318,7 @@ export const TrainingService = {
 
         if (!hasGeneralPlan) pRegress += 0.006;
         if (!player.trainingFocus) pRegress += 0.002;
-        if (!playedThisRound) pRegress += 0.005;
+        if (!playedThisRound && age >= 22) pRegress += 0.003;
 
         if (age >= 33) {
           const ageDeclineBase = age >= 36 ? 0.025 : age >= 35 ? 0.018 : age >= 34 ? 0.012 : 0.007;
@@ -300,13 +334,15 @@ export const TrainingService = {
         const talentProtection = playerTalent >= 80 ? 0.40 : playerTalent >= 65 ? 0.70 : 1.00;
         pRegress *= talentProtection;
         pRegress *= moraleTrainingModifier.regression;
+        pRegress *= getRegressionIntensityMultiplier(intensity);
         pRegress += coachDeficitRegressionChance;
 
         if (pRegress > 0 && Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
-          if (currentChange > -3 && attributes[key] > 10) {
+          if (seasonalRegressionPoints < seasonalRegressionCap && currentChange > -3 && attributes[key] > 10) {
             attributes[key] -= 1;
             seasonalChanges[key] = currentChange - 1;
+            seasonalRegressionPoints += 1;
           }
         }
       });
@@ -408,6 +444,8 @@ export const TrainingService = {
         seasonalChanges,
         stats.seasonalGrowthPoints
       );
+      let seasonalRegressionPoints = getSeasonalRegressionUsed(seasonalChanges);
+      const seasonalRegressionCap = getSeasonalRegressionCap(updated);
       const attributes = { ...updated.attributes };
       const moraleTrainingModifier = getMoraleTrainingModifier(updated.morale);
 
@@ -444,7 +482,7 @@ export const TrainingService = {
           }
         }
 
-        let pRegress = 0.003;
+        let pRegress = player.age >= 24 ? 0.0015 : 0;
         const age = player.age;
         if (age >= 36) pRegress += 0.100;
         else if (age >= 35) pRegress += 0.075;
@@ -453,19 +491,21 @@ export const TrainingService = {
         else if (age >= 32) pRegress += 0.022;
         else if (age >= 31) pRegress += 0.012;
         else if (age >= 30) pRegress += 0.006;
+        if (!effectiveFocus && age >= 20) pRegress += 0.001;
 
         const physicalAttrs = ['pace', 'stamina', 'strength'];
         const mentalAttrs = ['vision', 'leadership', 'mentality', 'workRate', 'positioning'];
         if (physicalAttrs.includes(key as string)) pRegress *= 1.5;
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
         pRegress *= moraleTrainingModifier.regression;
-        pRegress *= (1.55 - coachScore * 0.90);
+        pRegress *= Math.max(0.35, 1.25 - coachScore * 0.90);
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;
-          if (currentChange > -3 && attributes[key] > 10) {
+          if (seasonalRegressionPoints < seasonalRegressionCap && currentChange > -3 && attributes[key] > 10) {
             attributes[key] -= 1;
             seasonalChanges[key] = currentChange - 1;
+            seasonalRegressionPoints += 1;
           }
         }
       });

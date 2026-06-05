@@ -94,8 +94,8 @@ export const PlayerDevelopmentService = {
     if (destiny >= 0.94) score += 0.18;
     else if (destiny <= 0.06) score -= 0.18;
 
-    if (score >= 0.92) return 2;
-    if (score >= 0.18) return 1;
+    if (score >= 0.82) return 2;
+    if (score >= 0.08) return 1;
     return 0;
   },
 
