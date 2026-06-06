@@ -35,10 +35,17 @@ const shuffle = <T,>(items: T[], rng: Rng): T[] => {
   return copy;
 };
 
+const getPairKey = (firstTeam: string, secondTeam: string): string =>
+  [firstTeam, secondTeam].sort((a, b) => a.localeCompare(b)).join('|');
+
 const isWorldFriendlyDate = (matchDay: NTMatchDay): boolean =>
   [8, 9, 10].includes(matchDay.month) &&
   (matchDay.eventType === undefined || matchDay.eventType === 'GROUP_MATCH') &&
   matchDay.matches.length > 0;
+
+const isEarlierMatchDay = (candidate: NTMatchDay, current: NTMatchDay): boolean =>
+  candidate.month < current.month ||
+  (candidate.month === current.month && candidate.day < current.day);
 
 const getPlayoffTeamNames = (playoffState: WCQPlayoffState | null): Set<string> => new Set(
   (playoffState?.paths ?? []).flatMap(path => [
@@ -54,13 +61,15 @@ const buildReputationBalancedMatches = (
   pairLimit: number,
   group: string,
   label: string,
-  rng: Rng
+  rng: Rng,
+  usedPairKeys: Set<string> = new Set()
 ): NTGroupMatch[] => {
   const remaining = shuffle(teams, rng)
     .sort((a, b) => b.reputation - a.reputation || a.name.localeCompare(b.name));
   const matches: NTGroupMatch[] = [];
+  let stalledHomes = 0;
 
-  while (remaining.length >= 2 && matches.length < pairLimit) {
+  while (remaining.length >= 2 && matches.length < pairLimit && stalledHomes < remaining.length) {
     const home = remaining.shift();
     if (!home) break;
 
@@ -68,23 +77,34 @@ const buildReputationBalancedMatches = (
     let bestIndex = -1;
     let bestScore = Number.POSITIVE_INFINITY;
 
-    remaining.forEach((candidate, idx) => {
-      const gap = Math.abs(home.reputation - candidate.reputation);
-      if (gap > maxReputationGap) return;
-      const sameContinentBonus = home.continent === candidate.continent ? -0.35 : 0;
-      const score = gap + sameContinentBonus + rng.next() * 0.25;
-      if (score < bestScore) {
-        bestScore = score;
-        bestIndex = idx;
-      }
-    });
+    const findBestCandidate = (allowedReputationGap: number): void => {
+      remaining.forEach((candidate, idx) => {
+        if (usedPairKeys.has(getPairKey(home.name, candidate.name))) return;
+        const gap = Math.abs(home.reputation - candidate.reputation);
+        if (gap > allowedReputationGap) return;
+        const sameContinentBonus = home.continent === candidate.continent ? -0.35 : 0;
+        const score = gap + sameContinentBonus + rng.next() * 0.25;
+        if (score < bestScore) {
+          bestScore = score;
+          bestIndex = idx;
+        }
+      });
+    };
 
-    if (bestIndex === -1) {
-      remaining.unshift(home);
-      break;
+    findBestCandidate(maxReputationGap);
+    if (bestIndex === -1 && maxReputationGap !== Number.POSITIVE_INFINITY) {
+      findBestCandidate(Number.POSITIVE_INFINITY);
     }
 
+    if (bestIndex === -1) {
+      remaining.push(home);
+      stalledHomes++;
+      continue;
+    }
+
+    stalledHomes = 0;
     const [away] = remaining.splice(bestIndex, 1);
+    usedPairKeys.add(getPairKey(home.name, away.name));
     matches.push({
       home: home.name,
       away: away.name,
@@ -94,6 +114,57 @@ const buildReputationBalancedMatches = (
   }
 
   return matches;
+};
+
+const collectRegularFriendlyPairHistory = (
+  currentMatchDay: NTMatchDay,
+  nationalTeams: NationalTeam[],
+  seasonStartYear: number,
+  sessionSeed: number
+): Set<string> => {
+  const usedPairKeys = new Set<string>();
+  const eligibleTeams = nationalTeams.filter(team => team.continent !== 'Europe');
+
+  (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
+    .filter(isWorldFriendlyDate)
+    .filter(matchDay => isEarlierMatchDay(matchDay, currentMatchDay))
+    .forEach(matchDay => {
+      const rng = new Rng(hash(`${seasonStartYear}|${sessionSeed}|WORLD_NT_FRIENDLIES|${matchDay.month}|${matchDay.day}`));
+      buildReputationBalancedMatches(
+        eligibleTeams,
+        MAX_WORLD_FRIENDLY_PAIRS,
+        WORLD_FRIENDLY_GROUP,
+        WORLD_FRIENDLY_LABEL,
+        rng,
+        usedPairKeys
+      );
+    });
+
+  return usedPairKeys;
+};
+
+const collectMarchPlayoffFriendlyPairHistory = (
+  date: Date,
+  eligibleTeams: NationalTeam[],
+  sessionSeed: number
+): Set<string> => {
+  const usedPairKeys = new Set<string>();
+
+  WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
+    .filter(friendlyDate => friendlyDate.getTime() < date.getTime())
+    .forEach(friendlyDate => {
+      const rng = new Rng(hash(`2026|${sessionSeed}|MARCH_PLAYOFF_WORLD_NT_FRIENDLIES|${friendlyDate.getDate()}`));
+      buildReputationBalancedMatches(
+        eligibleTeams,
+        MARCH_PLAYOFF_FRIENDLY_PAIRS,
+        WORLD_FRIENDLY_GROUP,
+        WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL,
+        rng,
+        usedPairKeys
+      );
+    });
+
+  return usedPairKeys;
 };
 
 export const WorldNationalFriendlyService = {
@@ -108,7 +179,8 @@ export const WorldNationalFriendlyService = {
 
     const rng = new Rng(hash(`${seasonStartYear}|${sessionSeed}|WORLD_NT_FRIENDLIES|${matchDay.month}|${matchDay.day}`));
     const teams = nationalTeams.filter(team => team.continent !== 'Europe');
-    const matches = buildReputationBalancedMatches(teams, MAX_WORLD_FRIENDLY_PAIRS, WORLD_FRIENDLY_GROUP, WORLD_FRIENDLY_LABEL, rng);
+    const usedPairKeys = collectRegularFriendlyPairHistory(matchDay, nationalTeams, seasonStartYear, sessionSeed);
+    const matches = buildReputationBalancedMatches(teams, MAX_WORLD_FRIENDLY_PAIRS, WORLD_FRIENDLY_GROUP, WORLD_FRIENDLY_LABEL, rng, usedPairKeys);
 
     if (matches.length === 0) return null;
 
@@ -136,12 +208,14 @@ export const WorldNationalFriendlyService = {
     const playoffTeamNames = getPlayoffTeamNames(playoffState);
     const eligibleTeams = nationalTeams.filter(team => !playoffTeamNames.has(team.name));
     const rng = new Rng(hash(`2026|${sessionSeed}|MARCH_PLAYOFF_WORLD_NT_FRIENDLIES|${date.getDate()}`));
+    const usedPairKeys = collectMarchPlayoffFriendlyPairHistory(date, eligibleTeams, sessionSeed);
     const matches = buildReputationBalancedMatches(
       eligibleTeams,
       MARCH_PLAYOFF_FRIENDLY_PAIRS,
       WORLD_FRIENDLY_GROUP,
       WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL,
-      rng
+      rng,
+      usedPairKeys
     );
 
     if (matches.length === 0) return null;
