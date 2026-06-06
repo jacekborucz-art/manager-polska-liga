@@ -799,7 +799,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     managerName?: string,
     mediaRelationships: Record<string, number> = {},
     sentUnfriendlyPressMonths: string[] = [],
-    sentFriendlyPressMonths: string[] = []
+    sentFriendlyPressMonths: string[] = [],
+    seasonNumber = 1
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -1181,7 +1182,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     }
 
     // --- 3 LIPCA: Email z prośbą o wywiad (objęcie stanowiska) ---
-    if (month === 7 && day === 3) {
+    if (seasonNumber === 1 && month === 7 && day === 3) {
       const interviewMailId = `MEDIA_INTERVIEW_OBJECIE_${currentDate.getFullYear()}`;
       const alreadySent = existingMails.some(m => m.id === interviewMailId);
       if (!alreadySent) {

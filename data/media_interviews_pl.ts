@@ -2460,3 +2460,164 @@ export const INTERVIEW_POOL: NewspaperInterviewPool = {
     },
   ],
 };
+
+const seasonAnswerScores = {
+  balanced: {
+    relationshipDelta: 3,
+    score: { morale: 1, kibice: 1, zarzad: 1, zawodnicy: 1 },
+    profileScore: { optymizm: 1, realizm: 2, pewnoscSiebie: 0, dyplomacja: 1, presjaZespol: 0, presjaZarzad: 0, ambicja: 0, ryzykoKonfliktu: 0, zaufanieKibicow: 0, zaufanieSzatni: 1 },
+  },
+  ambitious: {
+    relationshipDelta: 4,
+    score: { morale: 2, kibice: 2, zarzad: 2, zawodnicy: 1 },
+    profileScore: { optymizm: 2, realizm: 0, pewnoscSiebie: 2, dyplomacja: 0, presjaZespol: 1, presjaZarzad: 1, ambicja: 2, ryzykoKonfliktu: 0, zaufanieKibicow: 1, zaufanieSzatni: 0 },
+  },
+  cautious: {
+    relationshipDelta: 2,
+    score: { morale: 0, kibice: 0, zarzad: 1, zawodnicy: 1 },
+    profileScore: { optymizm: 0, realizm: 3, pewnoscSiebie: 0, dyplomacja: 2, presjaZespol: 0, presjaZarzad: 0, ambicja: 0, ryzykoKonfliktu: 0, zaufanieKibicow: 0, zaufanieSzatni: 0 },
+  },
+  noComment: {
+    relationshipDelta: -5,
+    score: { morale: -1, kibice: -1, zarzad: -1, zawodnicy: -1 },
+    profileScore: { optymizm: -2, realizm: 0, pewnoscSiebie: -1, dyplomacja: -2, presjaZespol: 0, presjaZarzad: 0, ambicja: -1, ryzykoKonfliktu: 1, zaufanieKibicow: -2, zaufanieSzatni: -1 },
+  },
+};
+
+const makeSeasonQuestion = (
+  id: string,
+  situation: string,
+  question: string,
+  balanced: string,
+  ambitious: string,
+  cautious: string
+): InterviewQuestion => ({
+  id,
+  situation,
+  questionVariants: [question],
+  answers: [
+    { id: `${id}_BAL`, text: balanced, ...seasonAnswerScores.balanced },
+    { id: `${id}_AMB`, text: ambitious, ...seasonAnswerScores.ambitious },
+    { id: `${id}_CAU`, text: cautious, ...seasonAnswerScores.cautious },
+    { id: `${id}_NC`, text: 'Bez komentarza.', ...seasonAnswerScores.noComment },
+  ],
+});
+
+const NEXT_SEASON_INTERVIEWS: InterviewQuestion[] = [
+  makeSeasonQuestion(
+    'SEZON_AWANS_01',
+    'SEZON_AWANS',
+    'Po awansie do wyższej ligi oczekiwania wobec {clubName} mocno wzrosły. Jaki jest plan na nowy sezon?',
+    'Najpierw musimy ustabilizować drużynę i szybko dostosować się do wyższego poziomu.',
+    'Nie awansowaliśmy po to, żeby tylko się bronić. Chcemy pokazać, że zasługujemy na tę ligę.',
+    'Awans daje radość, ale też obowiązek rozsądnych decyzji. Każdy punkt będzie miał znaczenie.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_AWANS_02',
+    'SEZON_AWANS',
+    'Czy kadra {clubName} jest gotowa na większe wymagania po awansie?',
+    'Trzon zespołu zasłużył na zaufanie, ale musimy mądrze wzmocnić kilka pozycji.',
+    'Wierzę w tę grupę. Jeżeli zachowamy charakter, możemy sprawić w tej lidze sporo problemów.',
+    'Nie chcę składać wielkich deklaracji. Musimy pracować i reagować na to, co pokaże boisko.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_MISTRZ_01',
+    'SEZON_MISTRZ',
+    '{clubName} zdobył mistrzostwo Polski. Jak obronić pozycję najlepszej drużyny w kraju?',
+    'Najtrudniejsze jest utrzymanie standardów, dlatego zaczynamy od dyscypliny i codziennej pracy.',
+    'Chcemy dalej wygrywać. Tytuł nie zamyka projektu, tylko podnosi nasze ambicje.',
+    'Musimy pamiętać, że każdy będzie grał z mistrzem podwójnie zmotywowany.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_MISTRZ_02',
+    'SEZON_MISTRZ',
+    'Czy mistrzostwo zmienia presję wokół {clubName} przed startem nowego sezonu?',
+    'Presja jest większa, ale klub musi nauczyć się z nią funkcjonować.',
+    'Presja to przywilej najlepszych. Chcemy ją wykorzystać jako paliwo.',
+    'Nie możemy żyć poprzednim sezonem. Liczy się najbliższy mecz i forma drużyny.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_PUCHAR_01',
+    'SEZON_PUCHAR',
+    'Puchar Polski trafił do {clubName}. Co ten sukces znaczy dla drużyny przed nowym sezonem?',
+    'To ważny dowód, że potrafimy grać pod presją i wygrywać mecze o dużą stawkę.',
+    'Ten puchar ma być początkiem większych rzeczy. Drużyna zobaczyła, że stać ją na trofea.',
+    'Cieszymy się, ale puchar nie gwarantuje punktów w lidze. Trzeba zacząć od nowa.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_PUCHAR_02',
+    'SEZON_PUCHAR',
+    'Czy zdobycie Pucharu Polski podnosi oczekiwania wobec {clubName}?',
+    'Naturalnie, ale oczekiwania muszą iść w parze ze spokojem i planem.',
+    'Tak, i bardzo dobrze. Klub, który wygrywa puchar, powinien chcieć więcej.',
+    'Nie możemy dać się ponieść euforii. Sukces wymaga teraz potwierdzenia.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_DUBLET_01',
+    'SEZON_DUBLET',
+    'Mistrzostwo Polski i Puchar Polski w jednym sezonie. Jak utrzymać głód zwycięstw po dublecie?',
+    'Najważniejsze będzie odcięcie się od samozadowolenia i postawienie nowych celów.',
+    'Dublet pokazał siłę {clubName}. Chcemy zbudować drużynę, która będzie dominować dłużej.',
+    'To był wyjątkowy sezon, ale powtórzenie go będzie jeszcze trudniejsze.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_DUBLET_02',
+    'SEZON_DUBLET',
+    'Czy po dublecie {clubName} ma obowiązek celować jeszcze wyżej?',
+    'Obowiązkiem jest utrzymać profesjonalizm i nie zgubić fundamentów, które dały nam sukces.',
+    'Tak. Po takim sezonie nie można chować ambicji. Chcemy kolejnych trofeów.',
+    'Ambicja jest potrzebna, ale musimy pilnować równowagi i jakości kadry.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_BRAK_AWANSU_01',
+    'SEZON_BRAK_AWANSU',
+    '{clubName} nie wywalczył awansu. Co musi się zmienić, żeby kolejny sezon był lepszy?',
+    'Musimy poprawić regularność i lepiej reagować na trudne momenty w sezonie.',
+    'Cel pozostaje jasny. Chcemy wrócić silniejsi i od początku bić się o awans.',
+    'Nie wszystko da się naprawić jednym ruchem. Potrzebna jest cierpliwa korekta.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_BRAK_AWANSU_02',
+    'SEZON_BRAK_AWANSU',
+    'Czy brak awansu jest dla Pana osobistym rozczarowaniem?',
+    'Tak, ale rozczarowanie musi przełożyć się na konkretną pracę, a nie puste słowa.',
+    'Boli mnie to, bo wiem, że mogliśmy zrobić więcej. W nowym sezonie chcę innej energii.',
+    'Trzeba uczciwie przeanalizować sezon i wyciągnąć wnioski bez szukania wymówek.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_EUROPEJSKIE_PUCHARY_01',
+    'SEZON_EUROPEJSKIE_PUCHARY',
+    '{clubName} zajął miejsce dające udział w europejskich pucharach. Jak połączyć ligę z grą w Europie?',
+    'Kluczowa będzie głębia kadry, rotacja i dobre zarządzanie energią zawodników.',
+    'Europa to wielka szansa. Chcemy pokazać, że polski klub może grać odważnie.',
+    'Musimy zachować rozsądek, bo dodatkowe mecze szybko weryfikują organizację klubu.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_EUROPEJSKIE_PUCHARY_02',
+    'SEZON_EUROPEJSKIE_PUCHARY',
+    'Czy awans do pucharów europejskich zmienia cele {clubName}?',
+    'Zmienia skalę wyzwania, ale ligowa stabilność nadal będzie bardzo ważna.',
+    'Chcemy wykorzystać ten moment i zrobić krok naprzód sportowo oraz mentalnie.',
+    'Najpierw musimy dobrze przygotować zespół. Same puchary nie wygrają nam meczów.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_UNIWERSALNY_01',
+    'SEZON_UNIWERSALNY',
+    'Za {clubName} spokojniejszy sezon bez wielkich sukcesów i katastrof. Co jest priorytetem teraz?',
+    'Priorytetem jest konsekwentny rozwój drużyny i poprawa tych elementów, które kosztowały nas punkty.',
+    'Chcę, żebyśmy byli odważniejsi. Stabilność jest dobra, ale klub musi iść do przodu.',
+    'Najważniejsze będzie mądre przygotowanie i spokojne wejście w sezon.'
+  ),
+  makeSeasonQuestion(
+    'SEZON_UNIWERSALNY_02',
+    'SEZON_UNIWERSALNY',
+    'Czego kibice {clubName} mogą oczekiwać w nowym sezonie?',
+    'Drużyny bardziej uporządkowanej, lepiej przygotowanej i świadomej swoich celów.',
+    'Większej ambicji. Chcemy dać kibicom więcej powodów do dumy.',
+    'Nie obiecuję rewolucji. Obiecuję pracę i uczciwe podejście do każdego meczu.'
+  ),
+];
+
+Object.values(Newspaper).forEach(newspaper => {
+  INTERVIEW_POOL[newspaper].push(...NEXT_SEASON_INTERVIEWS);
+});

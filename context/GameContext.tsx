@@ -131,6 +131,7 @@ import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/Pzpn
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
+import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -2324,6 +2325,53 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       })
     ) as Record<string, Player[]>;
     setPlayers(updatedPlayersWithSeasonMindflow);
+
+    if (userTeamId) {
+      const previousUserClub = clubs.find(c => c.id === userTeamId);
+      const nextUserClub = updatedClubs.find(c => c.id === userTeamId);
+      const userSquad = updatedPlayersWithSeasonMindflow[userTeamId] || [];
+      const userWasPromoted = promotedIds.has(userTeamId);
+      const userWasRelegated = relegatedIds.has(userTeamId);
+      const userWonChampionship = champion?.id === userTeamId;
+      const userWonCup = cupWinnerId === userTeamId;
+      const userQualifiedForEurope = europeanQualificationIds.has(userTeamId);
+      const userWasChasingPromotion =
+        previousUserClub?.leagueId === 'L_PL_2' ||
+        previousUserClub?.leagueId === 'L_PL_3' ||
+        previousUserClub?.leagueId === 'L_PL_4';
+
+      let seasonInterviewSituation: SeasonInterviewSituation = 'SEZON_UNIWERSALNY';
+      if (userWonChampionship && userWonCup) {
+        seasonInterviewSituation = 'SEZON_DUBLET';
+      } else if (userWasPromoted) {
+        seasonInterviewSituation = 'SEZON_AWANS';
+      } else if (userWonChampionship) {
+        seasonInterviewSituation = 'SEZON_MISTRZ';
+      } else if (userWonCup) {
+        seasonInterviewSituation = 'SEZON_PUCHAR';
+      } else if (userQualifiedForEurope) {
+        seasonInterviewSituation = 'SEZON_EUROPEJSKIE_PUCHARY';
+      } else if (userWasChasingPromotion && !userWasPromoted && !userWasRelegated) {
+        seasonInterviewSituation = 'SEZON_BRAK_AWANSU';
+      }
+
+      if (nextUserClub && userSquad.length > 0) {
+        const interviewDate = new Date(newYear, 6, 1);
+        const seasonInterviewMail = MediaInterviewService.generateSeasonInterviewMail(
+          nextUserClub,
+          userSquad,
+          managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : `${nextUserClub.name} trener`,
+          interviewDate,
+          seasonInterviewSituation
+        );
+        setMessages(prev => (
+          prev.some(message => message.id === seasonInterviewMail.id)
+            ? prev
+            : [seasonInterviewMail, ...prev]
+        ));
+      }
+    }
+
     if (seasonOutcomeMails.length > 0) {
       setMessages(prev => [...seasonOutcomeMails, ...prev]);
     }
@@ -2471,7 +2519,7 @@ if (userTeamId) {
     setActiveConfGroupDraw(null);
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
-  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults]);
+  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile]);
 
   const getSaveState = (): SaveState => ({
     version: SAVE_VERSION,
@@ -2666,6 +2714,7 @@ if (userTeamId) {
 
 const selectUserTeam = (clubId: string) => {
     setUserTeamId(clubId);
+    setIsResigned(false);
     const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
     const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
@@ -2727,7 +2776,16 @@ const selectUserTeam = (clubId: string) => {
 
    const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate);
 const fanMail = MailService.generateFanWelcomeMail(selectedClub, squad, currentDate); // Tę funkcję zaraz dopiszemy
-setMessages([welcomeMail, fanMail]);
+const isNewJobAfterGameStart = seasonNumber > 1 || isResigned || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+const takingOverInterviewMail = isNewJobAfterGameStart
+  ? MediaInterviewService.generateTakingOverInterviewMail(
+      selectedClub,
+      squad,
+      managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : `${selectedClub.name} trener`,
+      currentDate
+    )
+  : null;
+setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fanMail] : [welcomeMail, fanMail]);
 
     navigateTo(ViewState.SQUAD_IMPORT);
   };
@@ -7517,7 +7575,7 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber);
       if (newMails.length > 0) {
         prependUniqueMessages(newMails);
         const sentUnfriendlyPressMonthKeys = newMails

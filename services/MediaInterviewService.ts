@@ -3,6 +3,15 @@ import { INTERVIEW_POOL, InterviewAnswer, InterviewQuestion, InterviewScore, Man
 import { PRESS_ARTICLES, PressArticleContext, PressVariant } from '../data/press_articles_pl';
 import { directRivalries, rivalryGroups } from './rivalries.data';
 
+export type SeasonInterviewSituation =
+  | 'SEZON_AWANS'
+  | 'SEZON_MISTRZ'
+  | 'SEZON_PUCHAR'
+  | 'SEZON_DUBLET'
+  | 'SEZON_BRAK_AWANSU'
+  | 'SEZON_EUROPEJSKIE_PUCHARY'
+  | 'SEZON_UNIWERSALNY';
+
 export const NEWSPAPER_DISPLAY_NAMES: Record<Newspaper, string> = {
   [Newspaper.GAZETA_SPORTOWA]: 'Gazeta Sportowa',
   [Newspaper.DWIE_BRAMKI]: 'Dwie Bramki',
@@ -179,6 +188,58 @@ export class MediaInterviewService {
       isRead: false,
       type: MailType.MEDIA,
       priority: 60,
+      metadata: {
+        type: 'INTERVIEW_REQUEST',
+        newspaper,
+        questionIds,
+        placeholders,
+        deadline: deadline.toISOString(),
+      },
+    };
+  }
+
+  static generateSeasonInterviewMail(
+    userClub: Club,
+    squad: Player[],
+    managerName: string,
+    currentDate: Date,
+    situation: SeasonInterviewSituation
+  ): MailMessage {
+    const newspapers = Object.values(Newspaper);
+    const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+    const displayName = NEWSPAPER_DISPLAY_NAMES[newspaper];
+
+    const pool = INTERVIEW_POOL[newspaper].filter(
+      q => q.situation === situation && q.answers.length > 0
+    );
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const questionIds = shuffled.slice(0, Math.min(pool.length, 6)).map(q => q.id);
+
+    const placeholders = MediaInterviewService.buildPlaceholders(userClub, squad, managerName);
+
+    const deadline = new Date(currentDate);
+    deadline.setDate(deadline.getDate() + 7);
+
+    const subjectBySituation: Record<SeasonInterviewSituation, string> = {
+      SEZON_AWANS: `Nowy sezon po awansie ${userClub.name}`,
+      SEZON_MISTRZ: `${userClub.name} zaczyna sezon jako mistrz Polski`,
+      SEZON_PUCHAR: `${userClub.name} po zdobyciu Pucharu Polski`,
+      SEZON_DUBLET: `${userClub.name} po historycznym dublecie`,
+      SEZON_BRAK_AWANSU: `${userClub.name} przed kolejną próbą awansu`,
+      SEZON_EUROPEJSKIE_PUCHARY: `${userClub.name} przed grą w Europie`,
+      SEZON_UNIWERSALNY: `${userClub.name} przed nowym sezonem`,
+    };
+
+    return {
+      id: `MEDIA_INTERVIEW_SEASON_${situation}_${currentDate.getFullYear()}_${userClub.id}`,
+      sender: displayName,
+      role: 'Dziennikarz',
+      subject: subjectBySituation[situation],
+      body: `Redakcja ${displayName} zwraca się z prośbą o udzielenie wywiadu przed startem nowego sezonu.\n\nTermin odpowiedzi: ${deadline.toLocaleDateString('pl-PL')}.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.MEDIA,
+      priority: 55,
       metadata: {
         type: 'INTERVIEW_REQUEST',
         newspaper,
