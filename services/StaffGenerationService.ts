@@ -15,6 +15,11 @@ const EUROPEAN_REGIONS: Region[] = [
   Region.ROMANIA,
 ];
 
+const ASIAN_REGIONS: Region[] = [Region.JAPAN, Region.KOREA, Region.ARABIA, Region.TURKEY, Region.KAZAKH, Region.AZERBAIJANI];
+const AFRICAN_REGIONS: Region[] = [Region.SSA, Region.ARABIA];
+const SOUTH_AMERICAN_REGIONS: Region[] = [Region.ARGENTINA, Region.BRAZIL, Region.SOUTH_AMERICAN, Region.IBERIA];
+const NORTH_AMERICAN_REGIONS: Region[] = [Region.NORTH_AMERICA, Region.MEXICO];
+
 export const STAFF_ROLE_ATTRS: Record<StaffRole, { key: string; label: string }[]> = {
   [StaffRole.ASSISTANT_COACH]: [
     { key: 'offensiveTactics',  label: 'Taktyka ofensywna' },
@@ -86,6 +91,14 @@ function pickFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function getRegionsForLeague(leagueId: string): Region[] {
+  if (leagueId === 'L_ASIA') return ASIAN_REGIONS;
+  if (leagueId === 'L_AFRICA') return AFRICAN_REGIONS;
+  if (leagueId === 'L_SA') return SOUTH_AMERICAN_REGIONS;
+  if (leagueId === 'L_NA') return NORTH_AMERICAN_REGIONS;
+  return EUROPEAN_REGIONS;
+}
+
 function buildAttributes(role: StaffRole, quality: number): Record<string, number> {
   const attrs = STAFF_ROLE_ATTRS[role];
   const result: Record<string, number> = {};
@@ -141,9 +154,10 @@ function createStaffMember(
   reputation: number,
   isPolish: boolean,
   clubId: string | null,
-  clubName: string | null
+  clubName: string | null,
+  regions: Region[] = EUROPEAN_REGIONS
 ): StaffMember {
-  const region = isPolish ? Region.POLAND : pickFrom(EUROPEAN_REGIONS);
+  const region = isPolish ? Region.POLAND : pickFrom(regions);
   const namePair = NameGeneratorService.getRandomName(region);
   const quality = qualityForReputation(reputation);
   const history: StaffHistoryEntry[] = clubId && clubName
@@ -236,13 +250,14 @@ function staffCountForReputation(reputation: number): StaffCount {
 
 function generateForClub(club: Club): StaffMember[] {
   const counts = staffCountForReputation(club.reputation);
-  const isPolishClub = club.leagueId !== 'L_CL' && club.leagueId !== 'L_EL' && club.leagueId !== 'L_CONF';
+  const isPolishClub = club.leagueId.startsWith('L_PL_');
+  const leagueRegions = getRegionsForLeague(club.leagueId);
   const result: StaffMember[] = [];
 
   const add = (role: StaffRole, n: number) => {
     for (let i = 0; i < n; i++) {
       const polish = isPolishClub ? Math.random() < 0.85 : false;
-      result.push(createStaffMember(role, club.reputation, polish, club.id, club.name));
+      result.push(createStaffMember(role, club.reputation, polish, club.id, club.name, leagueRegions));
     }
   };
 

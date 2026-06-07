@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Player, Club, Lineup, Tactic, NationalTeam } from '../../types';
+import { ViewState, Player, Club, Lineup, Tactic, NationalTeam, StaffRole } from '../../types';
 import { TacticRepository } from '../../resources/tactics_db';
 import { LineupService } from '../../services/LineupService';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
@@ -8,8 +8,26 @@ import { TeamResultsModal } from '../modals/TeamResultsModal';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import bojoPitch from '../../Graphic/themes/bojo.png';
 
+const ROLE_LABELS: Record<string, string> = {
+  [StaffRole.ASSISTANT_COACH]:  'Asystent trenera',
+  [StaffRole.GOALKEEPER_COACH]: 'Trener bramkarzy',
+  [StaffRole.FITNESS_COACH]:    'Trener fizyczny',
+  [StaffRole.VIDEO_ANALYST]:    'Analityk video',
+  [StaffRole.PHYSIOTHERAPIST]:  'Fizjoterapeuta',
+  [StaffRole.CLUB_DOCTOR]:      'Lekarz klubowy',
+};
+
+const STAFF_ROLE_ORDER: StaffRole[] = [
+  StaffRole.ASSISTANT_COACH,
+  StaffRole.GOALKEEPER_COACH,
+  StaffRole.FITNESS_COACH,
+  StaffRole.VIDEO_ANALYST,
+  StaffRole.PHYSIOTHERAPIST,
+  StaffRole.CLUB_DOCTOR,
+];
+
 export const ClubDetails: React.FC = () => {
-   const { viewedClubId, clubs, getOrGenerateSquad, lineups, updateLineup, navigateTo, viewPlayerDetails, coaches, viewCoachDetails, currentDate, previousViewState, nationalTeams } = useGame();
+   const { viewedClubId, clubs, getOrGenerateSquad, lineups, updateLineup, navigateTo, viewPlayerDetails, coaches, viewCoachDetails, currentDate, previousViewState, nationalTeams, staffMembers } = useGame();
   
   const [startingXI, setStartingXI] = useState<Player[]>([]);
   const [bench, setBench] = useState<Player[]>([]);
@@ -17,6 +35,7 @@ export const ClubDetails: React.FC = () => {
   const [currentTactic, setCurrentTactic] = useState<Tactic | null>(null);
   const [currentLineup, setCurrentLineup] = useState<Lineup | null>(null);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
 
   const nationalTeamByPlayerId = useMemo(() => {
     const map = new Map<string, NationalTeam>();
@@ -40,6 +59,11 @@ export const ClubDetails: React.FC = () => {
     if (!club || !club.coachId) return null;
     return coaches[club.coachId];
   }, [club, coaches]);
+
+  const clubStaff = useMemo(() => {
+    if (!club?.staffIds) return [];
+    return club.staffIds.map(id => staffMembers[id]).filter(Boolean);
+  }, [club, staffMembers]);
 
   useEffect(() => {
     if (viewedClubId) {
@@ -191,7 +215,7 @@ export const ClubDetails: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-3rem)] max-w-[1600px] mx-auto flex flex-col gap-4 animate-fade-in relative">
+    <div className="h-[calc(100vh-3rem)] max-w-[1600px] mx-auto flex flex-col gap-4 animate-fade-in relative" style={{ paddingTop: '80px' }}>
       
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
         <div 
@@ -210,7 +234,7 @@ export const ClubDetails: React.FC = () => {
                <img src={getClubLogo(club.id)} alt={club.name} className="w-[150px] h-[150px] object-contain transform -rotate-6 drop-shadow-2xl opacity-80" />
             </div>
          )}
-         <div className="flex items-center justify-between px-8 py-5 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-3xl shadow-2xl">
+         <div className="flex items-center justify-between px-8 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-3xl shadow-2xl" style={{ paddingTop: '28px', paddingBottom: '28px' }}>
          <div className="flex items-center">
             {!getClubLogo(club.id) && (
                <div className="relative z-10 shrink-0 mr-6">
@@ -256,6 +280,12 @@ export const ClubDetails: React.FC = () => {
               className="px-8 py-4 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-600/30 transition-all active:scale-95 shadow-lg"
             >
               📊 Wyniki
+            </button>
+            <button
+              onClick={() => setIsStaffModalOpen(true)}
+              className="px-8 py-4 rounded-2xl bg-yellow-600/10 border border-yellow-500/20 text-[10px] font-black uppercase tracking-widest text-yellow-400 hover:bg-yellow-600/20 transition-all active:scale-95 shadow-lg"
+            >
+              👥 Sztab
             </button>
             <button
               onClick={handleBack}
@@ -391,11 +421,105 @@ export const ClubDetails: React.FC = () => {
         </div>
       </div>
 
-      <TeamResultsModal 
-        isOpen={isResultsModalOpen} 
-        onClose={() => setIsResultsModalOpen(false)} 
-        club={club} 
+      <TeamResultsModal
+        isOpen={isResultsModalOpen}
+        onClose={() => setIsResultsModalOpen(false)}
+        club={club}
       />
+
+      {isStaffModalOpen && (() => {
+        const ROLE_COLORS: Record<string, string> = {
+          'Trener Główny':       'text-amber-400',
+          [ROLE_LABELS[StaffRole.ASSISTANT_COACH]]:  'text-blue-400',
+          [ROLE_LABELS[StaffRole.GOALKEEPER_COACH]]: 'text-emerald-400',
+          [ROLE_LABELS[StaffRole.FITNESS_COACH]]:    'text-orange-400',
+          [ROLE_LABELS[StaffRole.VIDEO_ANALYST]]:    'text-violet-400',
+          [ROLE_LABELS[StaffRole.PHYSIOTHERAPIST]]:  'text-cyan-400',
+          [ROLE_LABELS[StaffRole.CLUB_DOCTOR]]:      'text-rose-400',
+        };
+        const sections: { label: string; names: { id: string; firstName: string; lastName: string }[] }[] = [];
+        if (clubCoach) {
+          sections.push({
+            label: 'Trener Główny',
+            names: [{ id: clubCoach.id, firstName: clubCoach.firstName, lastName: clubCoach.lastName }],
+          });
+        }
+        STAFF_ROLE_ORDER.forEach(role => {
+          const members = clubStaff.filter(s => s.role === role);
+          if (members.length > 0) {
+            sections.push({
+              label: ROLE_LABELS[role],
+              names: members.map(m => ({ id: m.id, firstName: m.firstName, lastName: m.lastName })),
+            });
+          }
+        });
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 300, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '120px 32px 32px' }} onClick={() => setIsStaffModalOpen(false)}>
+            <div
+              style={{ position: 'relative', width: '100%', maxWidth: '576px', maxHeight: 'calc(100vh - 152px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              className="bg-slate-900/90 rounded-[40px] border border-white/10 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Glass gloss watermark */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.07] via-transparent to-transparent pointer-events-none z-0" />
+              <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none z-0" />
+
+              <div className="relative z-10 px-8 py-6 border-b border-white/5 bg-white/[0.03] shrink-0 text-center">
+                <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-white">Sztab Szkoleniowy</h2>
+                <div className="flex items-center justify-center gap-3 mt-2">
+                  {getClubLogo(club.id) && (
+                    <img src={getClubLogo(club.id)!} alt={club.name} className="w-10 h-10 object-contain drop-shadow-lg" />
+                  )}
+                  <p className="text-3xl font-black uppercase italic tracking-tighter text-white whitespace-nowrap">{club.name}</p>
+                </div>
+              </div>
+
+              <div className="relative z-10 flex-1 overflow-y-auto py-6 px-8">
+                {sections.length === 0 && (
+                  <p className="text-center text-[10px] font-black text-slate-600 uppercase tracking-widest py-8">Brak danych sztabu</p>
+                )}
+                {sections.map((section, sIdx) => {
+                  const rows: { id: string; firstName: string; lastName: string }[][] =
+                    section.names.length > 4
+                      ? [section.names.slice(0, Math.ceil(section.names.length / 2)), section.names.slice(Math.ceil(section.names.length / 2))]
+                      : [section.names];
+                  return (
+                    <React.Fragment key={section.label}>
+                      <div className="text-center">
+                        <div className="inline-flex flex-col items-center gap-1.5">
+                          <span className={`text-[12px] font-black uppercase tracking-[0.3em] ${ROLE_COLORS[section.label] ?? 'text-white/85'}`}>{section.label}</span>
+                          <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+                        </div>
+                        {rows.map((row, rIdx) => (
+                          <div key={rIdx} className="flex justify-center flex-wrap gap-x-5 mt-2">
+                            {row.map(person => (
+                              <span key={person.id} className="text-[13px] font-black uppercase italic text-white tracking-tight">
+                                {person.lastName} <span className="font-medium opacity-50 text-[11px]">{person.firstName}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                      {sIdx < sections.length - 1 && (
+                        <div className="h-px bg-yellow-500/30 my-4" />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              <div className="relative z-10 px-8 py-4 border-t border-white/5 shrink-0">
+                <button
+                  onClick={() => setIsStaffModalOpen(false)}
+                  className="w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all"
+                >
+                  Zamknij
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <style>{`
         .custom-scrollbar table thead th:nth-child(8) { display: none; }

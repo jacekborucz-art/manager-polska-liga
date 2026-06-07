@@ -7,6 +7,13 @@ const TACTICS_DEFENSIVE = ['5-4-1', '5-3-2 Blok', '4-4-2 Kontratak', 'Niski Blok
 
 const randomTactic = (list: string[]) => list[Math.floor(Math.random() * list.length)];
 
+const LEAGUE_PREFERRED_REGIONS: Partial<Record<string, Region[]>> = {
+  'L_ASIA':   [Region.JAPAN, Region.KOREA, Region.ARABIA, Region.TURKEY, Region.KAZAKH, Region.AZERBAIJANI],
+  'L_AFRICA': [Region.SSA, Region.ARABIA],
+  'L_SA':     [Region.ARGENTINA, Region.BRAZIL, Region.SOUTH_AMERICAN, Region.IBERIA],
+  'L_NA':     [Region.NORTH_AMERICA, Region.MEXICO],
+};
+
 export const CoachService = {
   generateInitialCoaches: (clubs: Club[]): { coaches: Record<string, Coach>, updatedClubs: Club[] } => {
     const coaches: Record<string, Coach> = {};
@@ -41,21 +48,31 @@ const updatedClubs = [...clubs];
     // Dla europejskich Tier 1 i 2 (reputacja >= 12) — trener nie może być Polakiem
       const excludePolish = (club.leagueId === 'L_CL' || club.leagueId === 'L_EL' || club.leagueId === 'L_CONF') && club.reputation >= 12;
 
-      const isPolishClub = club.leagueId !== 'L_CL' && club.leagueId !== 'L_EL' && club.leagueId !== 'L_CONF';
+      const isPolishClub = club.leagueId.startsWith('L_PL_');
+      const preferredRegions = LEAGUE_PREFERRED_REGIONS[club.leagueId];
       const polishCandidates = isPolishClub ? coachList.filter(c =>
         c.attributes.experience >= minExp &&
         c.attributes.experience <= maxExp &&
         c.currentClubId === null &&
         c.nationality === Region.POLAND
       ) : [];
+      const regionalCandidates = preferredRegions ? coachList.filter(c =>
+        c.attributes.experience >= minExp &&
+        c.attributes.experience <= maxExp &&
+        c.currentClubId === null &&
+        preferredRegions.includes(c.nationality as Region)
+      ) : [];
+      const generalCandidates = coachList.filter(c =>
+        c.attributes.experience >= minExp &&
+        c.attributes.experience <= maxExp &&
+        c.currentClubId === null &&
+        (!excludePolish || c.nationality !== Region.POLAND)
+      );
       const candidates = polishCandidates.length > 0
         ? polishCandidates
-        : coachList.filter(c =>
-            c.attributes.experience >= minExp &&
-            c.attributes.experience <= maxExp &&
-            c.currentClubId === null &&
-            (!excludePolish || c.nationality !== Region.POLAND)
-          );
+        : regionalCandidates.length > 0
+          ? regionalCandidates
+          : generalCandidates;
 
            // Jeśli nie znaleziono trenera — stopniowo obniżaj minExp o 5 aż do znalezienia
       let finalCandidates = candidates;
