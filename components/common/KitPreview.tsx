@@ -48,7 +48,7 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
           </pattern>
         )}
       </defs>
-      <path d={shirtPath} fill={shirt} stroke="rgba(255,255,255,0.28)" strokeWidth="1.4" />
+      <path d={shirtPath} fill={shirt} />
       {usesRepeatingPattern && <rect x="6" y="6" width="46" height="41" fill={`url(#${stripeId})`} clipPath={`url(#${shirtClipId})`} />}
       {pattern === 'diagonal_stripe' && (
         <path d="M8 42L42 6h10L17 46H8z" fill={stripeColor} fillOpacity="0.94" clipPath={`url(#${shirtClipId})`} />
@@ -59,7 +59,7 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
       {pattern === 'center_vertical_stripe' && (
         <rect x="24" y="6" width="10" height="41" fill={stripeColor} fillOpacity="0.94" clipPath={`url(#${shirtClipId})`} />
       )}
-      <path d="M25 11l4 5 4-5" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" />
+      <path d="M25 11l4 5 4-5" fill="none" strokeWidth="0" />
       {label !== undefined && (
         <text x="29" y="33" textAnchor="middle" fontSize="10" fontWeight="900" fontStyle="italic" fill={labelColor}>
           {label}
@@ -67,7 +67,7 @@ export const KitPreview: React.FC<KitPreviewProps> = ({
       )}
       {showShorts && (
         <>
-          <path d="M18 49h22l3 12H32l-3-7-3 7H15l3-12z" fill={shorts} stroke="rgba(255,255,255,0.24)" strokeWidth="1.4" />
+          <path d="M18 49h22l3 12H32l-3-7-3 7H15l3-12z" fill={shorts} />
           <path d="M17 61h9v3h-9v-3zm15 0h9v3h-9v-3z" fill={socks} />
         </>
       )}

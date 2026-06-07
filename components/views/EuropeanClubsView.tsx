@@ -20,6 +20,8 @@ import { WorldNationalFriendlyService } from '../../services/WorldNationalFriend
 import { TacticRepository } from '../../resources/tactics_db';
 import { CLUBS_ASIAN, generateAsianClubId } from '../../resources/static_db/clubs/asian_teams';
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../../resources/static_db/clubs/northAME_teams';
+import { KitPreview } from '../common/KitPreview';
+import { getActiveNationalTeamKits } from '../../resources/ClubKits';
 
 const FLAG_COLUMNS = 5;
 
@@ -923,6 +925,30 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
           );
         })}
           </div>
+        </div>
+      </div>
+
+      {/* ── Warianty koszulek ── */}
+      <div className="mt-5 rounded-xl border border-white/[0.08] overflow-hidden">
+        <div className="px-5 py-3 bg-slate-800/80 border-b border-white/[0.10]">
+          <div className={`text-[9px] ${T}`}>Oficjalne stroje reprezentacji</div>
+        </div>
+        <div className="flex gap-8 px-6 py-5">
+          {getActiveNationalTeamKits(team).map((kit) => (
+            <div key={kit.id} className="flex flex-col items-center gap-3">
+              <div className="flex flex-col items-center gap-2 bg-slate-800/60 border border-white/[0.08] rounded-xl px-8 pt-6 pb-4">
+                <KitPreview
+                  shirt={kit.shirt}
+                  shirtSecondary={kit.shirtSecondary}
+                  shorts={kit.shorts}
+                  socks={kit.socks}
+                  pattern={kit.pattern}
+                  className="h-48 w-48"
+                />
+                <div className={`text-[9px] ${T}`}>{kit.name}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       </div>
