@@ -196,6 +196,37 @@ const getClubDataExportEntry = (club: Club) => ({
   signingBonusPool: club.signingBonusPool,
 });
 
+const getPlayerSquadExportEntry = (p: Player) => ({
+  firstName: p.firstName,
+  lastName: p.lastName,
+  age: p.age,
+  clubId: p.clubId,
+  position: p.position,
+  secondaryPosition: p.secondaryPosition ?? null,
+  secondaryPositionRating: p.secondaryPositionRating ?? 0,
+  nationality: p.nationality,
+  nationalityCountry: p.nationalityCountry ?? '',
+  annualSalary: p.annualSalary,
+  marketValue: p.marketValue ?? 0,
+  contractEndDate: p.contractEndDate,
+  loan: p.loan ?? null,
+  transferPendingClubId: p.transferPendingClubId ?? '',
+  transferReportDate: p.transferReportDate ?? '',
+  transferPendingFee: p.transferPendingFee ?? 0,
+  transferPendingSalary: p.transferPendingSalary ?? 0,
+  transferPendingBonus: p.transferPendingBonus ?? 0,
+  transferPendingContractYears: p.transferPendingContractYears ?? 0,
+  isAvailableForLoan: !!p.isAvailableForLoan,
+  isOnTransferList: !!p.isOnTransferList,
+  isUntouchable: !!p.isUntouchable,
+  squadRole: p.squadRole ?? null,
+  attributes: { ...p.attributes },
+  nationalStats: {
+    matchesPlayed: p.nationalStats?.matchesPlayed ?? 0,
+    goals: p.nationalStats?.goals ?? 0,
+  },
+});
+
 const emptyStats = () => ({
   goals: 0,
   assists: 0,
@@ -288,13 +319,16 @@ export const EditorView: React.FC = () => {
       .filter((club, index, allClubs) => allClubs.findIndex(candidate => candidate.id === club.id) === index)
       .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
     if (continentClubs.length === 0) return;
-    const data = continentClubs.map(getClubDataExportEntry);
+    const data = continentClubs.map(club => ({
+      ...getClubDataExportEntry(club),
+      players: getOrGenerateSquad(club.id).map(getPlayerSquadExportEntry),
+    }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const fileScope = selectedContinents.map(continent => continent.label.toLowerCase().replace(/\s+/g, '_')).join('_');
-    a.download = `dane_klubow_${fileScope}.json`;
+    a.download = `kluby_i_sklady_${fileScope}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setIsClubContinentExportOpen(false);
@@ -748,36 +782,7 @@ export const EditorView: React.FC = () => {
       const squad = getOrGenerateSquad(clubId);
       return {
         clubId,
-        players: squad.map(p => ({
-          firstName: p.firstName,
-          lastName: p.lastName,
-          age: p.age,
-          clubId: p.clubId,
-          position: p.position,
-          secondaryPosition: p.secondaryPosition ?? null,
-          secondaryPositionRating: p.secondaryPositionRating ?? 0,
-          nationality: p.nationality,
-          nationalityCountry: p.nationalityCountry ?? '',
-          annualSalary: p.annualSalary,
-          marketValue: p.marketValue ?? 0,
-          contractEndDate: p.contractEndDate,
-          loan: p.loan ?? null,
-          transferPendingClubId: p.transferPendingClubId ?? '',
-          transferReportDate: p.transferReportDate ?? '',
-          transferPendingFee: p.transferPendingFee ?? 0,
-          transferPendingSalary: p.transferPendingSalary ?? 0,
-          transferPendingBonus: p.transferPendingBonus ?? 0,
-          transferPendingContractYears: p.transferPendingContractYears ?? 0,
-          isAvailableForLoan: !!p.isAvailableForLoan,
-          isOnTransferList: !!p.isOnTransferList,
-          isUntouchable: !!p.isUntouchable,
-          squadRole: p.squadRole ?? null,
-          attributes: { ...p.attributes },
-          nationalStats: {
-            matchesPlayed: p.nationalStats?.matchesPlayed ?? 0,
-            goals: p.nationalStats?.goals ?? 0,
-          },
-        })),
+        players: squad.map(getPlayerSquadExportEntry),
       };
     });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1821,7 +1826,7 @@ export const EditorView: React.FC = () => {
                   onClick={() => setIsClubContinentExportOpen(prev => !prev)}
                   className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black italic uppercase tracking-tighter text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-                  title="Wybierz kontynent lub kontynenty eksportowanych klubów."
+                  title="Wybierz kontynent lub kontynenty eksportowanych klubów razem ze składami."
                 >
                   Eksportuj drużyny z kontynentu
                 </button>
@@ -1845,7 +1850,7 @@ export const EditorView: React.FC = () => {
                       onClick={handleExportContinentClubData}
                       disabled={clubContinentExportSelected.size === 0}
                       className="w-full mt-2 px-3 py-1.5 rounded text-[10px] bg-cyan-900/70 hover:bg-cyan-700 text-cyan-200 hover:text-white transition-colors border border-cyan-800/40 disabled:opacity-30 disabled:cursor-not-allowed font-black italic uppercase tracking-tighter"
-                      title="Eksportuje dane klubów z zaznaczonych kontynentów. Eksport Europy pomija polskie drużyny."
+                      title="Eksportuje dane klubów i zawodników z zaznaczonych kontynentów. Eksport Europy pomija polskie drużyny."
                     >
                       Eksportuj zaznaczone
                     </button>
