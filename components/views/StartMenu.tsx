@@ -137,7 +137,7 @@ export const StartMenu: React.FC = () => {
                 <span className="text-4xl group-hover:scale-125 transition-transform duration-500">🏆</span>
                 <div className="text-center">
                   <span className="block text-[10px] font-black text-emerald-500 group-hover:text-emerald-100 uppercase tracking-widest mb-1">ROZPOCZNIJ</span>
-                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">NOWA GRA</span>
+                  <span className="text-2xl font-black italic uppercase tracking-tighter whitespace-nowrap text-white">NOWA GRA</span>
                 </div>
              </div>
           </button>
@@ -165,8 +165,8 @@ export const StartMenu: React.FC = () => {
              <div className="relative z-10 flex flex-col h-full items-center justify-between">
                 <span className="text-4xl group-hover:scale-125 transition-transform duration-500">📦</span>
                 <div className="text-center">
-                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 group-hover:text-emerald-100 mb-1">IMPORT</span>
-                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">FULL PACK</span>
+                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 group-hover:text-emerald-100 mb-1">ZAŁADUJ</span>
+                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">DATAPACK</span>
                 </div>
              </div>
           </button>

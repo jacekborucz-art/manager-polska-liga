@@ -437,8 +437,11 @@ export interface MailMessage {
   } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
-    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT';
+    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT' | 'RAISE';
     requestedRole?: 'STARTER' | 'KEY_PLAYER';
+    requestedSalary?: number;
+    requestedBonus?: number;
+    requestedYears?: number;
     nextFixtureId?: string;
     responseDeadline: string;
   } | {
@@ -1246,6 +1249,17 @@ export interface Player {
   roleDemandUntil?: string | null;
   requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   transferListDemandUntil?: string | null;
+  contractRaiseDemandUntil?: string | null;
+  contractRaiseRequest?: {
+    salary: number;
+    bonus: number;
+    years: number;
+    requestedAt: string;
+    deadline: string;
+  } | null;
+  contractRaiseReminderUntil?: string | null;
+  contractRaiseTeamMoraleDelta?: number | null;
+  contractRaiseTeamMoraleReason?: string | null;
   reserveProtestUntil?: string | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;

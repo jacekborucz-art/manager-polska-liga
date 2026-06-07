@@ -60,9 +60,10 @@ export const ContractManagementView: React.FC = () => {
   React.useEffect(() => {
     if (data?.player) {
       setManagementMode(contractManagementInitialMode);
-      setOfferSalary(data.player.annualSalary);
-      setOfferBonus(0);
-      setOfferYears(1);
+      const rememberedRaise = data.player.contractRaiseRequest;
+      setOfferSalary(rememberedRaise?.salary ?? data.player.annualSalary);
+      setOfferBonus(rememberedRaise?.bonus ?? 0);
+      setOfferYears(rememberedRaise?.years ?? 1);
       setNegotiationMessage(null);
       setCounterOffer(null);
       setIsOfferSent(false);

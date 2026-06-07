@@ -11417,6 +11417,7 @@ const finalResult: SimulationOutput = {
     const reputationDelta = buyerClub.reputation - sellerClub.reputation;
     const personality = withMorale.moralePersonality ?? 'CALM';
     const morale = withMorale.morale ?? 50;
+    const isDemandLockedAfterContract = PlayerMoraleService.isMoraleDemandLocked(withMorale, date);
     const isInterestedInBuyer = !!withMorale.interestedClubs?.includes(buyerClub.id);
     const alreadyWantsExit =
       !!withMorale.isOnTransferList ||
@@ -11466,7 +11467,7 @@ const finalResult: SimulationOutput = {
 
     if (conflictScore < 9) return;
 
-    const strongConflict = conflictScore >= 16 || reason === 'CONFIRM_REJECTED';
+    const strongConflict = !isDemandLockedAfterContract && (conflictScore >= 16 || reason === 'CONFIRM_REJECTED');
     const deadline = new Date(date);
     deadline.setDate(deadline.getDate() + 14);
     const deadlineKey = deadline.toISOString().split('T')[0];

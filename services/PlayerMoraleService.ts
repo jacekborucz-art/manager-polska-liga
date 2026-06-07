@@ -1,4 +1,5 @@
 import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMindsetState, PlayerMoralePersonality, TrainingIntensity } from '../types';
+import { FinanceService } from './FinanceService';
 
 export interface PlayerMoraleInfo {
   label: string;
@@ -132,6 +133,46 @@ const boardAttributeScore = (level: BoardAttributeLevel | undefined): number => 
 const roundTransferPrice = (value: number): number => {
   const step = value >= 10_000_000 ? 500_000 : value >= 1_000_000 ? 100_000 : 25_000;
   return Math.max(step, Math.ceil(value / step) * step);
+};
+
+const roundContractMoney = (value: number): number => {
+  const step = value >= 1_000_000 ? 100_000 : value >= 100_000 ? 10_000 : 5_000;
+  return Math.max(50_000, Math.ceil(value / step) * step);
+};
+
+const buildRaiseRequest = (player: Player, club: Club, squadAverage: number, rank: number) => {
+  const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+  const currentSalary = Math.max(50_000, player.annualSalary || 0);
+  const qualityPremium = Math.max(0, player.overallRating - squadAverage) * 0.025;
+  const rolePremium = rank <= 3 ? 0.22 : rank <= 6 ? 0.14 : 0.08;
+  const personalityPremium =
+    player.moralePersonality === 'EGOIST' ? 0.14 :
+    player.moralePersonality === 'AMBITIOUS' ? 0.10 :
+    player.moralePersonality === 'LOYAL' ? -0.05 :
+    0;
+  const reputationPremium = club.reputation >= 10 ? 0.08 : club.reputation <= 5 ? -0.04 : 0;
+  const expectedSalary = roundContractMoney(
+    Math.max(fairSalary, currentSalary * 1.18) *
+    (1.04 + qualityPremium + rolePremium + personalityPremium + reputationPremium)
+  );
+  const years =
+    player.age <= 23 ? 4 :
+    player.age <= 28 ? 4 :
+    player.age <= 32 ? 3 :
+    player.age <= 34 ? 2 :
+    1;
+  const bonusMultiplier =
+    player.age >= 33 ? 0.70 :
+    player.age >= 28 ? 0.58 :
+    player.age >= 24 ? 0.46 :
+    0.32;
+  const bonus = roundContractMoney(expectedSalary * bonusMultiplier);
+
+  return {
+    salary: expectedSalary,
+    bonus,
+    years,
+  };
 };
 
 const estimateProtectedExitPrice = (player: Player, club: Club, squadAverage: number): number => {
@@ -621,6 +662,11 @@ export const PlayerMoraleService = {
     roleDemandUntil: player.roleDemandUntil ?? null,
     requestedSquadRole: player.requestedSquadRole ?? null,
     transferListDemandUntil: player.transferListDemandUntil ?? null,
+    contractRaiseDemandUntil: player.contractRaiseDemandUntil ?? null,
+    contractRaiseRequest: player.contractRaiseRequest ?? null,
+    contractRaiseReminderUntil: player.contractRaiseReminderUntil ?? null,
+    contractRaiseTeamMoraleDelta: player.contractRaiseTeamMoraleDelta ?? null,
+    contractRaiseTeamMoraleReason: player.contractRaiseTeamMoraleReason ?? null,
     reserveProtestUntil: player.reserveProtestUntil ?? null,
     moraleDemandLockoutUntil: player.moraleDemandLockoutUntil ?? null,
   }),
@@ -642,6 +688,7 @@ export const PlayerMoraleService = {
     !!player.roleDemandUntil ||
     !!player.transferListDemandUntil ||
     !!player.developmentExitDemandUntil ||
+    !!player.contractRaiseDemandUntil ||
     !!player.reserveProtestUntil,
 
   applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
@@ -672,6 +719,11 @@ export const PlayerMoraleService = {
     roleDemandUntil: null,
     requestedSquadRole: null,
     transferListDemandUntil: null,
+    contractRaiseDemandUntil: null,
+    contractRaiseRequest: null,
+    contractRaiseReminderUntil: null,
+    contractRaiseTeamMoraleDelta: null,
+    contractRaiseTeamMoraleReason: null,
     reserveProtestUntil: null,
   }),
 
@@ -792,7 +844,14 @@ export const PlayerMoraleService = {
       currentDate
     );
 
-    if (!isGoodEnoughForBetterClub || !careerStageCanMove || withMorale.isOnTransferList || withMorale.transferPendingClubId || roll >= exitChance) {
+    if (
+      !isGoodEnoughForBetterClub ||
+      !careerStageCanMove ||
+      withMorale.isOnTransferList ||
+      withMorale.transferPendingClubId ||
+      PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate) ||
+      roll >= exitChance
+    ) {
       return { player: withMorale, mail: null };
     }
 
@@ -1107,8 +1166,8 @@ export const PlayerMoraleService = {
     return { player: withMorale, fulfilled: false, expired: false, moraleDelta: 0 };
   },
 
-  processPeriodicReview: (players: Player[], currentDate: Date): Player[] =>
-    players.map(player => {
+  processPeriodicReview: (players: Player[], currentDate: Date): Player[] => {
+    const reviewedPlayers = players.map(player => {
       const demandReview = PlayerMoraleService.reviewPlayerDemands(player, currentDate);
       const promiseReview = PlayerMoraleService.reviewMinutePromise(demandReview, currentDate);
       const drifted = PlayerMoraleService.applyNaturalDrift(promiseReview.player);
@@ -1116,7 +1175,33 @@ export const PlayerMoraleService = {
         return PlayerMoraleService.withMoraleChange(promiseReview.player, (drifted.morale ?? 50) - (promiseReview.player.morale ?? 50), 'Naturalna stabilizacja morale', currentDate);
       }
       return drifted;
-    }),
+    });
+    const teamMoraleEvents = reviewedPlayers
+      .filter(player => (player.contractRaiseTeamMoraleDelta ?? 0) < 0)
+      .map(player => ({
+        playerId: player.id,
+        delta: player.contractRaiseTeamMoraleDelta ?? 0,
+        reason: player.contractRaiseTeamMoraleReason ?? 'Napięcie w szatni po odrzuconej podwyżce lidera',
+      }));
+
+    if (teamMoraleEvents.length === 0) return reviewedPlayers;
+
+    return reviewedPlayers.map(player => {
+      let nextPlayer = player;
+      for (const event of teamMoraleEvents) {
+        if (event.playerId === nextPlayer.id) continue;
+        nextPlayer = PlayerMoraleService.withMoraleChange(nextPlayer, event.delta, event.reason, currentDate);
+      }
+      if ((nextPlayer.contractRaiseTeamMoraleDelta ?? 0) < 0) {
+        return {
+          ...nextPlayer,
+          contractRaiseTeamMoraleDelta: null,
+          contractRaiseTeamMoraleReason: null,
+        };
+      }
+      return nextPlayer;
+    });
+  },
 
   processReserveProtestReviews: (
     players: Player[],
@@ -1166,6 +1251,14 @@ export const PlayerMoraleService = {
         'Zignorowany protest po zesłaniu do rezerw',
         currentDate
       );
+
+      if (PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate)) {
+        return {
+          ...withMorale,
+          reserveProtestUntil: null,
+          lastMoraleDemandDate: dateKey,
+        };
+      }
 
       const mailId = `PLAYER_RESERVE_PROTEST_ESCALATION_${withMorale.id}_${dateKey}`;
       const hasDuplicateMail = existingMessages.some(mail => mail.id === mailId) || mails.some(mail => mail.id === mailId);
@@ -1238,7 +1331,7 @@ export const PlayerMoraleService = {
       byPosition.set(position, [...playersForPosition].sort((a, b) => b.overallRating - a.overallRating));
     });
 
-    const hasRecentMail = (player: Player, requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT'): boolean =>
+    const hasRecentMail = (player: Player, requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT' | 'RAISE'): boolean =>
       existingMessages.some(mail =>
         mail.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
         mail.metadata.playerId === player.id &&
@@ -1281,6 +1374,12 @@ export const PlayerMoraleService = {
       const ignoresStatusNoise = personality === 'LOYAL' || personality === 'CALM' || personality === 'PROFESSIONAL';
       const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
       const isContractEndingSoon = contractDaysLeft <= 365;
+      const fairSalary = FinanceService.getFairMarketSalary(withMorale.overallRating);
+      const financialRespectRatio = (withMorale.annualSalary || 0) / Math.max(1, fairSalary);
+      const salaryUnderpaid = financialRespectRatio < 0.86 || (rank <= 5 && financialRespectRatio < 1.02);
+      const contractRaiseRequest = buildRaiseRequest(withMorale, club, squadAverage, rank);
+      const reminderDate = withMorale.contractRaiseReminderUntil ? new Date(withMorale.contractRaiseReminderUntil) : null;
+      const raiseReminderCooldown = reminderDate && !Number.isNaN(reminderDate.getTime()) && dateOnly(currentDate).getTime() < dateOnly(reminderDate).getTime();
 
       const roleExpectation: 'STARTER' | 'KEY_PLAYER' | null =
         rank <= 3 || (positionRank === 1 && withMorale.overallRating >= squadAverage + 3)
@@ -1372,6 +1471,27 @@ export const PlayerMoraleService = {
         (
           totalMinutes <= (withMorale.unresolvedMinutesDemandBaseline ?? totalMinutes) ||
           minutesShare < Math.max(0.12, expectedShare * 0.45)
+        );
+
+      const shouldRequestRaise =
+        isHealthyEnough &&
+        hasSportingArgument &&
+        salaryUnderpaid &&
+        rank <= Math.max(8, Math.ceil(squad.length * 0.32)) &&
+        !demandCooldown &&
+        !isDemandLockedAfterContract &&
+        !hasActiveDemand &&
+        !raiseReminderCooldown &&
+        !withMorale.transferPendingClubId &&
+        !withMorale.contractRaiseDemandUntil &&
+        !withMorale.contractRaiseRequest &&
+        !hasRecentMail(withMorale, 'RAISE') &&
+        contractRaiseRequest.salary >= (withMorale.annualSalary || 0) * 1.12 &&
+        (
+          (withMorale.morale ?? 50) <= 62 ||
+          recentAverageRating !== null && recentAverageRating >= 6.95 ||
+          rank <= 4 ||
+          withMorale.squadRole === 'KEY_PLAYER'
         );
 
       const prominentRoleWithoutMinutes =
@@ -1559,6 +1679,52 @@ export const PlayerMoraleService = {
         };
       }
 
+      if (shouldRequestRaise) {
+        const mailId = `PLAYER_RAISE_REQUEST_${withMorale.id}_${dateKey}`;
+        const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+        createdMails.push({
+          id: mailId,
+          sender: playerName,
+          role: 'Zawodnik',
+          subject: `Prośba o podwyżkę: ${withMorale.lastName}`,
+          body: [
+            'Trenerze,',
+            '',
+            'Chciałbym porozmawiać o nowym kontrakcie. Moja pozycja w drużynie i obecna forma dają mi podstawy, żeby oczekiwać lepszych warunków.',
+            '',
+            `Oczekuję kontraktu na ${contractRaiseRequest.years} ${contractRaiseRequest.years === 1 ? 'rok' : 'lata'}: pensja ${contractRaiseRequest.salary.toLocaleString('pl-PL')} PLN rocznie oraz ${contractRaiseRequest.bonus.toLocaleString('pl-PL')} PLN za podpis.`,
+            '',
+            `Proszę o odpowiedź do ${deadline.toLocaleDateString('pl-PL')}. Jeśli klub nie widzi tematu teraz, będę musiał przemyśleć swoje nastawienie i przyszłość.`,
+            '',
+            playerName,
+          ].join('\n'),
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: rank <= 5 ? 5 : 4,
+          metadata: {
+            type: 'PLAYER_MORALE_REQUEST',
+            playerId: withMorale.id,
+            requestType: 'RAISE',
+            requestedSalary: contractRaiseRequest.salary,
+            requestedBonus: contractRaiseRequest.bonus,
+            requestedYears: contractRaiseRequest.years,
+            responseDeadline: deadlineKey,
+          },
+        });
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -1, 'Zawodnik oczekuje podwyżki', currentDate);
+        return {
+          ...withMorale,
+          lastMoraleDemandDate: dateKey,
+          contractRaiseDemandUntil: deadlineKey,
+          contractRaiseRequest: {
+            ...contractRaiseRequest,
+            requestedAt: dateKey,
+            deadline: deadlineKey,
+          },
+        };
+      }
+
       if (shouldRequestTransferList) {
         const mailId = `PLAYER_TRANSFER_LIST_REQUEST_${withMorale.id}_${dateKey}`;
         const transferDemandTrigger =
@@ -1703,6 +1869,76 @@ export const PlayerMoraleService = {
 
   reviewPlayerDemands: (player: Player, currentDate: Date): Player => {
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
+
+    if (withMorale.contractRaiseDemandUntil && withMorale.contractRaiseRequest) {
+      const deadline = new Date(withMorale.contractRaiseDemandUntil);
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const request = withMorale.contractRaiseRequest;
+      const fulfilled =
+        (withMorale.annualSalary || 0) >= request.salary &&
+        getContractDaysLeft(withMorale, currentDate) > 365;
+
+      if (fulfilled) {
+        withMorale = {
+          ...PlayerMoraleService.withMoraleChange(withMorale, 7, 'Klub spełnił prośbę o podwyżkę', currentDate),
+          contractRaiseDemandUntil: null,
+          contractRaiseRequest: null,
+          contractRaiseTeamMoraleDelta: null,
+          contractRaiseTeamMoraleReason: null,
+        };
+      } else if (expired) {
+        const personality = withMorale.moralePersonality ?? 'CALM';
+        const leadership = withMorale.attributes?.leadership ?? 50;
+        const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_RAISE_REJECTED`);
+        const roll = seededRng(seed, 19);
+        const frustrationScore =
+          (personality === 'EGOIST' ? 28 : personality === 'AMBITIOUS' ? 22 : personality === 'CONFIDENT' ? 15 : personality === 'LOYAL' ? -10 : personality === 'PROFESSIONAL' ? -4 : 0) +
+          Math.max(0, withMorale.overallRating - 66) +
+          Math.max(0, request.salary / Math.max(1, withMorale.annualSalary || 1) - 1) * 18 +
+          ((withMorale.morale ?? 50) <= 45 ? 8 : 0) +
+          roll * 18;
+
+        if (frustrationScore >= 34 && getContractDaysLeft(withMorale, currentDate) > 365) {
+          const transferDeadline = new Date(currentDate);
+          transferDeadline.setDate(transferDeadline.getDate() + 14);
+          withMorale = {
+            ...PlayerMoraleService.withMoraleChange(withMorale, -12, 'Odrzucona podwyżka eskaluje do żądania listy transferowej', currentDate),
+            contractRaiseDemandUntil: null,
+            contractRaiseRequest: null,
+            transferListDemandUntil: toDateKey(transferDeadline),
+            isUntouchable: false,
+          };
+        } else if (frustrationScore >= 18 || personality === 'SENSITIVE' || personality === 'NERVOUS') {
+          const ownPenalty =
+            personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -5 :
+            personality === 'EGOIST' || personality === 'AMBITIOUS' ? -12 :
+            -8;
+          const teamDelta =
+            leadership >= 82 ? -4 :
+            leadership >= 72 ? -3 :
+            leadership >= 62 ? -2 :
+            leadership >= 52 ? -1 :
+            0;
+          withMorale = {
+            ...PlayerMoraleService.withMoraleChange(withMorale, ownPenalty, 'Odrzucona prośba o podwyżkę', currentDate),
+            contractRaiseDemandUntil: null,
+            contractRaiseRequest: null,
+            contractRaiseTeamMoraleDelta: teamDelta,
+            contractRaiseTeamMoraleReason: teamDelta < 0 ? `Wpływ lidera po odrzuconej podwyżce: ${withMorale.firstName} ${withMorale.lastName}` : null,
+          };
+        } else {
+          const reminderUntil = new Date(currentDate);
+          reminderUntil.setMonth(reminderUntil.getMonth() + 3);
+          withMorale = {
+            ...withMorale,
+            contractRaiseDemandUntil: null,
+            contractRaiseRequest: null,
+            contractRaiseReminderUntil: toDateKey(reminderUntil),
+            lastMoraleDemandDate: toDateKey(currentDate),
+          };
+        }
+      }
+    }
 
     if (withMorale.transferListDemandUntil) {
       const deadline = new Date(withMorale.transferListDemandUntil);

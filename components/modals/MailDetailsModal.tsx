@@ -618,6 +618,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     deleteMessage,
     navigateWithoutHistory,
     viewPlayerDetails,
+    setContractManagementInitialMode,
     setPendingOpenRoleMindflow,
     setTransferNewsActiveTab,
     currentDate,
@@ -935,13 +936,23 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
             {mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && (
               <button
                 onClick={() => {
-                  viewPlayerDetails(mail.metadata!.playerId);
-                  setPendingOpenRoleMindflow(mail.metadata!.requestType === 'ROLE' || mail.metadata!.requestType === 'ROLE_PLAYTIME');
+                  if (mail.metadata!.requestType === 'RAISE') {
+                    viewPlayerDetails(mail.metadata!.playerId);
+                    setContractManagementInitialMode('NEGOTIATE');
+                    navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+                  } else {
+                    viewPlayerDetails(mail.metadata!.playerId);
+                    setPendingOpenRoleMindflow(mail.metadata!.requestType === 'ROLE' || mail.metadata!.requestType === 'ROLE_PLAYTIME');
+                  }
                   onClose();
                 }}
                 className="mr-4 rounded-2xl bg-violet-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
-                {mail.metadata.requestType === 'ROLE' || mail.metadata.requestType === 'ROLE_PLAYTIME' ? 'Otwórz rozmowę' : 'Otwórz kartę'}
+                {mail.metadata.requestType === 'RAISE'
+                  ? 'Otwórz kontrakt'
+                  : mail.metadata.requestType === 'ROLE' || mail.metadata.requestType === 'ROLE_PLAYTIME'
+                    ? 'Otwórz rozmowę'
+                    : 'Otwórz kartę'}
               </button>
             )}
 

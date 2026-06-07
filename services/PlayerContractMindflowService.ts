@@ -420,14 +420,37 @@ const buildExpectations = (
           ? { salary: 24, bonus: 20, years: 18, role: 16, playingTime: 12, ambition: 18, development: 5 }
           : { salary: 18, bonus: 26, years: 24, role: 10, playingTime: 8, ambition: 10, development: 2 };
 
+  const rememberedRaise = player.contractRaiseRequest;
+  const finalExpectedSalary = rememberedRaise
+    ? Math.max(expectedSalary, rememberedRaise.salary)
+    : expectedSalary;
+  const finalMinimumSalary = rememberedRaise
+    ? Math.max(minimumSalary, rememberedRaise.salary)
+    : minimumSalary;
+  const finalPremiumSalary = rememberedRaise
+    ? Math.max(premiumSalary, roundMoney(rememberedRaise.salary * 1.08))
+    : premiumSalary;
+  const finalExpectedBonus = rememberedRaise
+    ? Math.max(expectedBonus, rememberedRaise.bonus)
+    : expectedBonus;
+  const finalMinimumBonus = rememberedRaise
+    ? Math.max(minimumBonus, rememberedRaise.bonus)
+    : minimumBonus;
+  const finalMinimumYears = rememberedRaise
+    ? Math.max(player.age >= 34 ? 1 : 2, rememberedRaise.years)
+    : player.age >= 34 ? 1 : 2;
+  const finalPreferredYears = rememberedRaise
+    ? Math.max(preferredYears, rememberedRaise.years)
+    : preferredYears;
+
   return {
-    minimumSalary,
-    expectedSalary,
-    premiumSalary,
-    minimumBonus,
-    expectedBonus,
-    minimumYears: player.age >= 34 ? 1 : 2,
-    preferredYears,
+    minimumSalary: finalMinimumSalary,
+    expectedSalary: finalExpectedSalary,
+    premiumSalary: finalPremiumSalary,
+    minimumBonus: finalMinimumBonus,
+    expectedBonus: finalExpectedBonus,
+    minimumYears: finalMinimumYears,
+    preferredYears: finalPreferredYears,
     maximumYears: player.age >= 34 ? 2 : 5,
     expectedRole,
     priorities,
