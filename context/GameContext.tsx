@@ -798,6 +798,7 @@ interface GameContextType {
   startNewGame: () => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
+  importEditorFullPack: (data: unknown) => { success: boolean; message: string };
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   advanceDay: () => void;
@@ -2705,6 +2706,212 @@ if (userTeamId) {
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.restore(data.championshipHistory || []);
     setViewState(ViewState.DASHBOARD);
+  };
+
+  const importEditorFullPack = (data: unknown): { success: boolean; message: string } => {
+    const raw = data as any;
+    if (!raw || raw.type !== 'editor_full_pack' || !Array.isArray(raw.clubs)) {
+      return { success: false, message: 'Wybrany plik nie jest paczką full pack edytora.' };
+    }
+
+    const startYear = 2025;
+    const template = SeasonTemplateGenerator.generate(startYear);
+    const baseClubs = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
+    const baseClubMap = new Map(baseClubs.map(club => [club.id, club]));
+    const importedClubs = raw.clubs
+      .map((entry: any) => {
+        const clubId = typeof entry?.id === 'string' ? entry.id : typeof entry?.clubId === 'string' ? entry.clubId : '';
+        if (!clubId) return null;
+        const { players: _players, coach: _coach, staff: _staff, lineup: _lineup, ...clubFields } = entry;
+        const baseClub = baseClubMap.get(clubId);
+        return {
+          ...(baseClub ?? {}),
+          ...clubFields,
+          id: clubId,
+          board: clubFields.board ?? baseClub?.board ?? generateRandomBoard(),
+          stats: clubFields.stats ?? baseClub?.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+          rosterIds: Array.isArray(clubFields.rosterIds) ? clubFields.rosterIds : [],
+        } as Club;
+      })
+      .filter(Boolean) as Club[];
+
+    if (importedClubs.length === 0) {
+      return { success: false, message: 'Full pack nie zawiera poprawnych klubów.' };
+    }
+
+    const finalClubs = importedClubs.some(club => club.id === UNEMPLOYED_MANAGER_CLUB_ID)
+      ? importedClubs
+      : [...importedClubs, UNEMPLOYED_MANAGER_CLUB];
+    const importedCoaches = raw.coaches && typeof raw.coaches === 'object'
+      ? raw.coaches as Record<string, Coach>
+      : CoachService.generateInitialCoaches(finalClubs).coaches;
+    const importedStaffMembers = raw.staffMembers && typeof raw.staffMembers === 'object'
+      ? raw.staffMembers as Record<string, StaffMember>
+      : {};
+    const buildFullPackPlayer = (p: any, clubId: string, idx: number): Player => {
+      const attrs = p.attributes ?? {};
+      const position = p.position ?? PlayerPosition.MID;
+      const overall = typeof p.overallRating === 'number'
+        ? p.overallRating
+        : PlayerAttributesGenerator.calculateOverall(attrs, position);
+      return PlayerMoraleService.ensurePlayerState({
+        id: typeof p.id === 'string' ? p.id : `FULLPACK_${clubId}_${idx}_${Date.now()}`,
+        firstName: p.firstName ?? 'Zawodnik',
+        lastName: p.lastName ?? `Import ${idx + 1}`,
+        age: typeof p.age === 'number' ? p.age : 20,
+        clubId,
+        nationality: p.nationality ?? Region.POLAND,
+        nationalityCountry: p.nationalityCountry ?? pickNationalityForRegion(p.nationality ?? Region.POLAND),
+        position,
+        secondaryPosition: p.secondaryPosition ?? null,
+        secondaryPositionRating: p.secondaryPositionRating ?? undefined,
+        overallRating: overall,
+        attributes: attrs,
+        stats: p.stats ?? { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        nationalStats: p.nationalStats ?? { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        health: p.health ?? { status: HealthStatus.HEALTHY },
+        condition: p.condition ?? 80,
+        suspensionMatches: p.suspensionMatches ?? 0,
+        cupSuspensionMatches: p.cupSuspensionMatches ?? 0,
+        euroSuspensionMatches: p.euroSuspensionMatches ?? 0,
+        nationalSuspensionMatches: p.nationalSuspensionMatches ?? 0,
+        contractEndDate: p.contractEndDate ?? new Date(START_DATE.getFullYear() + 2, START_DATE.getMonth(), START_DATE.getDate()).toISOString(),
+        annualSalary: p.annualSalary ?? Math.round(overall * 800),
+        marketValue: p.marketValue ?? Math.round(overall * 3000),
+        loan: p.loan ?? null,
+        isAvailableForLoan: !!p.isAvailableForLoan,
+        isOnTransferList: !!p.isOnTransferList,
+        isUntouchable: !!p.isUntouchable,
+        squadRole: p.squadRole ?? null,
+        history: p.history ?? [],
+        boardLockoutUntil: p.boardLockoutUntil ?? null,
+        negotiationStep: p.negotiationStep ?? 0,
+        negotiationLockoutUntil: p.negotiationLockoutUntil ?? null,
+        contractLockoutUntil: p.contractLockoutUntil ?? null,
+        fatigueDebt: p.fatigueDebt ?? 0,
+        isNegotiationPermanentBlocked: !!p.isNegotiationPermanentBlocked,
+        transferLockoutUntil: p.transferLockoutUntil ?? null,
+        freeAgentLockoutUntil: p.freeAgentLockoutUntil ?? null,
+      } as Player);
+    };
+    const hasFullPlayerDump = raw.players && typeof raw.players === 'object';
+    const importedPlayers = hasFullPlayerDump
+      ? raw.players as Record<string, Player[]>
+      : raw.clubs.reduce((acc: Record<string, Player[]>, clubEntry: any) => {
+          const clubId = typeof clubEntry?.id === 'string' ? clubEntry.id : typeof clubEntry?.clubId === 'string' ? clubEntry.clubId : '';
+          if (clubId && Array.isArray(clubEntry.players)) {
+            acc[clubId] = clubEntry.players.map((player: any, idx: number) => buildFullPackPlayer(player, clubId, idx));
+          }
+          return acc;
+        }, {});
+    if (!Array.isArray(importedPlayers.FREE_AGENTS)) importedPlayers.FREE_AGENTS = FreeAgentService.generatePool(99);
+
+    const importedLineups = hasFullPlayerDump && raw.lineups && typeof raw.lineups === 'object'
+      ? raw.lineups as Record<string, Lineup>
+      : Object.fromEntries(Object.entries(importedPlayers)
+          .filter(([clubId, squad]) => clubId !== 'FREE_AGENTS' && Array.isArray(squad) && squad.length > 0)
+          .map(([clubId, squad]) => [
+            clubId,
+            LineupService.autoPickLineup(clubId, squad as Player[], '4-4-2', Object.values(importedCoaches).find(coach => coach.currentClubId === clubId) ?? null)
+          ]));
+    const defaultNationalTeams = NationalTeamService.initializeNationalTeams();
+    const defaultNTMap = new Map(defaultNationalTeams.map(team => [team.id, team]));
+    const importedNationalTeams = Array.isArray(raw.nationalTeams)
+      ? raw.nationalTeams.map((entry: any) => {
+          const teamId = typeof entry?.id === 'string' ? entry.id : typeof entry?.teamId === 'string' ? entry.teamId : '';
+          const baseTeam = defaultNTMap.get(teamId);
+          return {
+            ...(baseTeam ?? {}),
+            ...entry,
+            id: teamId || entry.name,
+            kits: Array.isArray(entry.kits) ? entry.kits : baseTeam?.kits,
+          } as NationalTeam;
+        }).filter((team: NationalTeam) => !!team.id)
+      : defaultNationalTeams;
+
+    setIsResigned(false);
+    MatchHistoryService.clear();
+    ChampionshipHistoryService.clear();
+    sentMailIdsRef.current = new Set();
+    lastProcessedLeagueDateRef.current = null;
+    setCurrentDate(START_DATE);
+    setSessionSeed(generateRuntimeSeed());
+    setRuntimeSimulationSeed(generateRuntimeSeed());
+    setClubs(finalClubs);
+    setLeagues(STATIC_LEAGUES);
+    setPlayers(importedPlayers);
+    setLineups(importedLineups);
+    setCoaches(importedCoaches);
+    setStaffMembers(importedStaffMembers);
+    setNationalTeams(importedNationalTeams);
+    setUserTeamId(null);
+    setManagerProfile(null);
+    setSeasonTemplate(template);
+    setSeasonNumber(1);
+    setLeagueSchedules(generateSchedules(template, finalClubs));
+    setLastRecoveryDate(START_DATE);
+    setMessages([]);
+    setMediaRelationships({});
+    setSentUnfriendlyPressMonths([]);
+    setSentFriendlyPressMonths([]);
+    setPendingPressArticles([]);
+    setCompletedPressConferenceFixtureIds([]);
+    setPressConferenceEffects({});
+    setActiveTrainingId(null);
+    setTrainingProgressHistory([]);
+    setReserveProgressHistory([]);
+    setRoundResults({});
+    setPendingNegotiations([]);
+    setPendingFriendlyRequests([]);
+    setActiveFriendlyFixtureId(null);
+    setActiveFriendlyConditions(null);
+    setTransferOffers([]);
+    setIncomingOffers([]);
+    setAiTransferLog([]);
+    setEuropeanStatus({});
+    setCupParticipants([]);
+    setActiveCupDraw(null);
+    setActiveGroupDraw(null);
+    setActivePlayoffDraw(null);
+    setRelegationPlayoffFirstLegResults(null);
+    setRelegationPlayoffFinalResult(null);
+    setPromotionPlayoffSemiResults(null);
+    setPromotionPlayoffFinalResults(null);
+    setActivePlayoffMatch(null);
+    setClGroups(null);
+    setActiveELGroupDraw(null);
+    setElGroups(null);
+    setActiveConfGroupDraw(null);
+    setConfGroups(null);
+    setElHistoryInitialRound(null);
+    setConfHistoryInitialRound(null);
+    setProcessedDrawIds([]);
+    setIsResigned(false);
+    setWinterCampInvitePending(false);
+    setWinterCampProgramPending(false);
+    setSummerCampInvitePending(false);
+    setSummerCampProgramPending(false);
+    setLastNTMatchResults(null);
+    setAiFriendlyPairs([]);
+    setAiFriendlyReports([]);
+    setPzpnDisciplinaryEvents([]);
+    setWcqPlayoffState(null);
+    setWcState(null);
+    setReserves([]);
+    setReserveCoachId(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
+    setAcademy(null);
+    setGlobalFixtures([
+      SuperCupService.generateFixture(2025, finalClubs),
+      UEFASuperCupService.generateFixture(2025, finalClubs),
+    ]);
+    navigateTo(ViewState.MANAGER_CREATION);
+
+    return {
+      success: true,
+      message: `Zaimportowano full pack: ${finalClubs.length} klubów i ${importedNationalTeams.length} reprezentacji.`,
+    };
   };
 
   const saveManagerProfile = (profile: ManagerProfile) => {
@@ -13625,7 +13832,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       lastRecoveryDate,
       managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
-      startNewGame, getSaveState, loadGameFromFile, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
+      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports,

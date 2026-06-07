@@ -6,7 +6,7 @@ import bgImg from '../../Graphic/themes/main_theme.png';
 import { importSaveFromFile } from '../../services/SaveGameService';
 import { useGameScaler } from '../GameScaler';
 export const StartMenu: React.FC = () => {
-  const { startNewGame, navigateTo, loadGameFromFile, showGameNotification } = useGame();
+  const { startNewGame, navigateTo, loadGameFromFile, importEditorFullPack, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
@@ -24,6 +24,7 @@ export const StartMenu: React.FC = () => {
   }, []);
   const { mobileMode, toggleMobile } = useGameScaler();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fullPackInputRef = useRef<HTMLInputElement>(null);
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -34,6 +35,27 @@ export const StartMenu: React.FC = () => {
       showGameNotification({
         title: 'Nieprawidłowy zapis',
         message: 'Wybrany plik nie wygląda jak prawidłowy zapis gry.',
+        tone: 'error'
+      });
+    }
+    e.target.value = '';
+  };
+
+  const handleFullPackLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      const result = importEditorFullPack(raw);
+      showGameNotification({
+        title: result.success ? 'Full pack zaimportowany' : 'Nieprawidłowy full pack',
+        message: result.message,
+        tone: result.success ? 'success' : 'error'
+      });
+    } catch {
+      showGameNotification({
+        title: 'Błąd importu',
+        message: 'Wybrany plik nie wygląda jak prawidłowy full pack edytora.',
         tone: 'error'
       });
     }
@@ -103,7 +125,7 @@ export const StartMenu: React.FC = () => {
       
 
         {/* Action Menu */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 w-full max-w-6xl mx-auto">
                                                                       
           
           <button 
@@ -130,6 +152,21 @@ export const StartMenu: React.FC = () => {
                 <div className="text-center">
                   <span className="block text-[10px] font-black text-blue-500 group-hover:text-blue-100 uppercase tracking-widest mb-1">GUIDE</span>
                   <span className="text-2xl font-black text-white italic uppercase tracking-tighter">INSTRUKCJA</span>
+                </div>
+             </div>
+          </button>
+
+          <input ref={fullPackInputRef} type="file" accept=".json" className="hidden" onChange={handleFullPackLoad} />
+          <button
+            onClick={() => fullPackInputRef.current?.click()}
+            className="group relative h-48 bg-emerald-900/20 border border-emerald-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-emerald-700 hover:border-emerald-300 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)] overflow-hidden"
+          >
+             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+             <div className="relative z-10 flex flex-col h-full items-center justify-between">
+                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">📦</span>
+                <div className="text-center">
+                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 group-hover:text-emerald-100 mb-1">IMPORT</span>
+                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">FULL PACK</span>
                 </div>
              </div>
           </button>

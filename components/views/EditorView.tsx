@@ -483,6 +483,7 @@ export const EditorView: React.FC = () => {
       currentDate: currentDate.toISOString(),
       clubs: clubs
         .map(club => ({
+          ...club,
           ...getClubDataExportEntry(club),
           shortName: club.shortName,
           leagueId: club.leagueId,
@@ -514,6 +515,7 @@ export const EditorView: React.FC = () => {
           kits: getNationalTeamKits(team),
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+      players,
       coaches,
       staffMembers,
       lineups,
