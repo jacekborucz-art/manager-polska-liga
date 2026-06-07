@@ -476,6 +476,57 @@ export const EditorView: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportEditorFullPack = () => {
+    const data = {
+      type: 'editor_full_pack',
+      exportedAt: new Date().toISOString(),
+      currentDate: currentDate.toISOString(),
+      clubs: clubs
+        .map(club => ({
+          ...getClubDataExportEntry(club),
+          shortName: club.shortName,
+          leagueId: club.leagueId,
+          tier: club.tier,
+          country: club.country ?? '',
+          colorPrimary: club.colorPrimary,
+          colorSecondary: club.colorSecondary,
+          logoFile: club.logoFile ?? '',
+          stadiumSeatColors: club.stadiumSeatColors ?? null,
+          coachId: club.coachId ?? '',
+          staffIds: club.staffIds ?? [],
+          coach: club.coachId ? coaches[club.coachId] ?? null : null,
+          staff: (club.staffIds ?? []).map(id => staffMembers[id]).filter(Boolean),
+          management: club.management ?? null,
+          sportingDirector: club.sportingDirector ?? null,
+          lineup: lineups[club.id] ?? null,
+          players: getOrGenerateSquad(club.id).map(getPlayerSquadExportEntry),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+      nationalTeams: nationalTeams
+        .map(team => ({
+          teamId: team.id,
+          name: team.name,
+          continent: team.continent,
+          stadiumName: team.stadiumName,
+          stadiumCapacity: team.stadiumCapacity,
+          reputation: team.reputation,
+          colorsHex: team.colorsHex,
+          kits: getNationalTeamKits(team),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+      coaches,
+      staffMembers,
+      lineups,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `full_pack_edytora_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImportNationalTeamData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1820,6 +1871,14 @@ export const EditorView: React.FC = () => {
                 style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
                 Eksportuj dane klubu
+              </button>
+              <button
+                onClick={handleExportEditorFullPack}
+                className="px-4 py-1.5 bg-emerald-900 rounded-[18px] text-[10px] font-black italic uppercase tracking-tighter text-emerald-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-700/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                title="Eksportuje pełny pakiet edytora: drużyny, detale, składy, stroje, sztaby, zarządy, ustawienia i reprezentacje."
+              >
+                Eksportuj full pack
               </button>
               <div className="relative">
                 <button
