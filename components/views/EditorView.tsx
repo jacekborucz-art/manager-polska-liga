@@ -180,6 +180,8 @@ const CLUB_CONTINENT_EXPORT_OPTIONS = [
   { value: 'South America', label: 'Ameryka Płd.',  leagueIds: ['L_SA'] },
 ] as const;
 
+type ClubContinentExportValue = typeof CLUB_CONTINENT_EXPORT_OPTIONS[number]['value'];
+
 const getClubDataExportEntry = (club: Club) => ({
   clubId: club.id,
   name: club.name,
@@ -237,7 +239,8 @@ export const EditorView: React.FC = () => {
 
   const clubImportRef = useRef<HTMLInputElement>(null);
   const [clubImportMsg, setClubImportMsg] = useState('');
-  const [clubContinentExport, setClubContinentExport] = useState('Europe');
+  const [isClubContinentExportOpen, setIsClubContinentExportOpen] = useState(false);
+  const [clubContinentExportSelected, setClubContinentExportSelected] = useState<Set<ClubContinentExportValue>>(new Set());
 
   const kitLeagueImportRef = useRef<HTMLInputElement>(null);
   const [kitImportMsg, setKitImportMsg] = useState('');
@@ -263,12 +266,26 @@ export const EditorView: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const toggleClubContinentExport = (continentValue: ClubContinentExportValue) => {
+    setClubContinentExportSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(continentValue)) {
+        next.delete(continentValue);
+      } else {
+        next.add(continentValue);
+      }
+      return next;
+    });
+  };
+
   const handleExportContinentClubData = () => {
-    const continent = CLUB_CONTINENT_EXPORT_OPTIONS.find(option => option.value === clubContinentExport);
-    if (!continent) return;
+    if (clubContinentExportSelected.size === 0) return;
+    const selectedContinents = CLUB_CONTINENT_EXPORT_OPTIONS.filter(option => clubContinentExportSelected.has(option.value));
+    const selectedLeagueIds = new Set<string>(selectedContinents.flatMap(continent => continent.leagueIds));
     const continentClubs = clubs
-      .filter(club => continent.leagueIds.some(leagueId => leagueId === club.leagueId))
-      .filter(club => continent.value !== 'Europe' || (!club.leagueId.startsWith('L_PL_') && club.country !== 'POL'))
+      .filter(club => selectedLeagueIds.has(club.leagueId))
+      .filter(club => !clubContinentExportSelected.has('Europe') || !['L_CL', 'L_EL', 'L_CONF'].includes(club.leagueId) || (!club.leagueId.startsWith('L_PL_') && club.country !== 'POL'))
+      .filter((club, index, allClubs) => allClubs.findIndex(candidate => candidate.id === club.id) === index)
       .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
     if (continentClubs.length === 0) return;
     const data = continentClubs.map(getClubDataExportEntry);
@@ -276,9 +293,11 @@ export const EditorView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dane_klubow_${continent.label.toLowerCase().replace(/\s+/g, '_')}.json`;
+    const fileScope = selectedContinents.map(continent => continent.label.toLowerCase().replace(/\s+/g, '_')).join('_');
+    a.download = `dane_klubow_${fileScope}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setIsClubContinentExportOpen(false);
   };
 
   const handleImportClubData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1797,24 +1816,42 @@ export const EditorView: React.FC = () => {
               >
                 Eksportuj dane klubu
               </button>
-              <select
-                value={clubContinentExport}
-                onChange={(e) => setClubContinentExport(e.target.value)}
-                className={`${selectCls} px-2 py-1.5`}
-                title="Wybierz kontynent eksportowanych klubów."
-              >
-                {CLUB_CONTINENT_EXPORT_OPTIONS.map(continent => (
-                  <option key={continent.value} value={continent.value}>{continent.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleExportContinentClubData}
-                className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
-                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-                title="Eksportuje dane klubów z wybranego kontynentu. Eksport Europy pomija polskie drużyny."
-              >
-                Eksportuj kontynent
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setIsClubContinentExportOpen(prev => !prev)}
+                  className="px-4 py-1.5 bg-slate-700 rounded-[18px] text-[10px] font-black italic uppercase tracking-tighter text-slate-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60"
+                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                  title="Wybierz kontynent lub kontynenty eksportowanych klubów."
+                >
+                  Eksportuj drużyny z kontynentu
+                </button>
+                {isClubContinentExportOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded border border-slate-700 bg-slate-950 shadow-2xl z-30 p-2 space-y-1">
+                    {CLUB_CONTINENT_EXPORT_OPTIONS.map(continent => (
+                      <label
+                        key={continent.value}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded text-[10px] text-slate-200 hover:bg-slate-800 cursor-pointer font-black italic uppercase tracking-tighter"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={clubContinentExportSelected.has(continent.value)}
+                          onChange={() => toggleClubContinentExport(continent.value)}
+                          className="accent-yellow-500"
+                        />
+                        <span>{continent.label}</span>
+                      </label>
+                    ))}
+                    <button
+                      onClick={handleExportContinentClubData}
+                      disabled={clubContinentExportSelected.size === 0}
+                      className="w-full mt-2 px-3 py-1.5 rounded text-[10px] bg-cyan-900/70 hover:bg-cyan-700 text-cyan-200 hover:text-white transition-colors border border-cyan-800/40 disabled:opacity-30 disabled:cursor-not-allowed font-black italic uppercase tracking-tighter"
+                      title="Eksportuje dane klubów z zaznaczonych kontynentów. Eksport Europy pomija polskie drużyny."
+                    >
+                      Eksportuj zaznaczone
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => { setClubImportMsg(''); clubImportRef.current?.click(); }}
                 className="px-4 py-1.5 bg-blue-900 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-blue-300 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-blue-400/60 border-x-blue-700/30 border-b-black/60"
