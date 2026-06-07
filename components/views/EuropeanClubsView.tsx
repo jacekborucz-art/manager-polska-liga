@@ -633,7 +633,7 @@ const TacticalKitIcon: React.FC<{
   );
 };
 
-const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; clubColorsById: Record<string, string[]>; nationalTeams: NationalTeam[]; nationalTeamIdByName: Record<string, string>; currentDate: Date; matchSimulationSeed: number; wcqPlayoffState: WCQPlayoffState | null; onPlayerClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, clubColorsById, nationalTeams, nationalTeamIdByName, currentDate, matchSimulationSeed, wcqPlayoffState, onPlayerClick }) => {
+const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById: Record<string, Player>; clubById: Record<string, string>; clubColorsById: Record<string, string[]>; nationalTeams: NationalTeam[]; nationalTeamIdByName: Record<string, string>; currentDate: Date; matchSimulationSeed: number; wcqPlayoffState: WCQPlayoffState | null; onPlayerClick: (id: string) => void; onCoachClick: (id: string) => void }> = ({ team, coachName, playerById, clubById, clubColorsById, nationalTeams, nationalTeamIdByName, currentDate, matchSimulationSeed, wcqPlayoffState, onPlayerClick, onCoachClick }) => {
   const squad = team.squadPlayerIds.map(id => playerById[id]).filter(Boolean) as Player[];
 
   const POS_ORDER: Record<PlayerPosition, number> = {
@@ -822,7 +822,10 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         <div className="flex border-t border-white/[0.06]">
           <div className="flex-1 px-5 py-2.5 border-r border-white/[0.06]">
             <div className={`text-[8px] tracking-widest mb-0.5 ${T}`}>Trener</div>
-            <div className={`text-xs truncate ${T}`}>{coachName || '—'}</div>
+            <div
+              className={`text-xs truncate ${T} ${coachName ? 'cursor-pointer hover:text-yellow-300 transition-colors' : ''}`}
+              onClick={() => team.coachId && onCoachClick(team.coachId)}
+            >{coachName || '—'}</div>
           </div>
           <div className="flex-1 px-5 py-2.5">
             <div className={`text-[8px] tracking-widest mb-0.5 ${T}`}>Taktyka</div>
@@ -1155,7 +1158,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 // ─── GŁÓWNY KOMPONENT ─────────────────────────────────────────────────────────
 
 export const EuropeanClubsView: React.FC = () => {
-  const { navigateTo, viewClubDetails, viewPlayerDetails, nationalTeams, coaches, players, clubs,
+  const { navigateTo, viewClubDetails, viewPlayerDetails, viewCoachDetails, nationalTeams, coaches, players, clubs,
           europeanViewTab: activeTab, setEuropeanViewTab: setActiveTab,
           selectedNTId, setSelectedNTId, previousViewState, currentDate, matchSimulationSeed, wcqPlayoffState } = useGame();
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -1588,6 +1591,7 @@ export const EuropeanClubsView: React.FC = () => {
                   matchSimulationSeed={matchSimulationSeed}
                   wcqPlayoffState={wcqPlayoffState}
                   onPlayerClick={viewPlayerDetails}
+                  onCoachClick={viewCoachDetails}
                 />
               </div>
             )}

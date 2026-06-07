@@ -255,6 +255,34 @@ export const NationalTeamService = {
     return pool[hash % pool.length].id;
   },
 
+  selectTacticForSquad: (squad: Player[], coach: Coach, teamId: string): string => {
+    const { experience, decisionMaking } = coach.attributes;
+    const { offensive, neutral, defensive } = coach.favoriteTactics;
+
+    const topAvg = (pos: PlayerPosition, n: number): number => {
+      const arr = squad.filter(p => p.position === pos).sort((a, b) => b.overallRating - a.overallRating).slice(0, n);
+      return arr.length > 0 ? arr.reduce((s, p) => s + p.overallRating, 0) / arr.length : 60;
+    };
+
+    const fwdAvg = topAvg(PlayerPosition.FWD, 3);
+    const defAvg = topAvg(PlayerPosition.DEF, 4);
+    const midAvg = topAvg(PlayerPosition.MID, 4);
+
+    const attackAdvantage = (fwdAvg - 65) * 1.2 - (defAvg - 65) * 0.8 + (midAvg - 65) * 0.3;
+    const idealTacticId = attackAdvantage > 5 ? offensive : attackAdvantage < -5 ? defensive : neutral;
+
+    if (experience >= 70 || decisionMaking >= 65) return idealTacticId;
+
+    const squadHash = squad.reduce((acc, p) => acc + p.overallRating, 0);
+    const seed = teamId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + squadHash;
+    const favorites = [offensive, neutral, defensive];
+
+    if (experience >= 40) {
+      return seed % 10 < 7 ? idealTacticId : favorites[seed % 3];
+    }
+    return favorites[seed % 3];
+  },
+
   // ─── 3. PRZYPISANIE TRENERÓW ─────────────────────────────────────────────────
 
   assignCoachesToNationalTeams: (
@@ -664,7 +692,19 @@ export const NationalTeamService = {
         changed = true;
       }
 
-      updatedTeams.push(changed ? { ...team, squadPlayerIds: squadIds } : team);
+      const ntCoach = team.coachId ? coaches[team.coachId] : null;
+      let finalTeam = changed ? { ...team, squadPlayerIds: squadIds } : team;
+      if (ntCoach) {
+        const newTacticId = NationalTeamService.selectTacticForSquad(
+          squadIds.map(id => playerMap[id]).filter((p): p is Player => !!p),
+          ntCoach,
+          team.id
+        );
+        if (newTacticId !== finalTeam.tacticId) {
+          finalTeam = { ...finalTeam, tacticId: newTacticId };
+        }
+      }
+      updatedTeams.push(finalTeam);
     }
 
     const updatedById = new Map(updatedTeams.map(team => [team.id, team]));

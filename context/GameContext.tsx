@@ -2827,6 +2827,12 @@ if (userTeamId) {
             kits: Array.isArray(entry.kits) ? entry.kits : baseTeam?.kits,
           } as NationalTeam;
         }).filter((team: NationalTeam) => !!team.id)
+          .map((team: NationalTeam) => {
+            if (team.coachId && !team.tacticId && importedCoaches[team.coachId]) {
+              return { ...team, tacticId: NationalTeamService.selectTacticForCoach(importedCoaches[team.coachId]) };
+            }
+            return team;
+          })
       : defaultNationalTeams;
 
     setIsResigned(false);

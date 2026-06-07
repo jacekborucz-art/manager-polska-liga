@@ -513,6 +513,8 @@ export const EditorView: React.FC = () => {
           reputation: team.reputation,
           colorsHex: team.colorsHex,
           kits: getNationalTeamKits(team),
+          coachId: team.coachId ?? null,
+          tacticId: team.tacticId ?? null,
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
       players,
