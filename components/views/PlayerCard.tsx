@@ -419,7 +419,7 @@ export const PlayerCard: React.FC = () => {
 
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 animate-fade-in overflow-y-auto custom-scrollbar" style={{ backgroundImage: "url('../Graphic/themes/playercard.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: '#020617' }}>
+    <div className="fixed inset-0 z-[200] flex items-start justify-center p-2 animate-fade-in overflow-y-auto custom-scrollbar" style={{ backgroundImage: "url('../Graphic/themes/playercard.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: '#020617', backgroundAttachment: 'fixed' }}>
       <div className="fixed inset-0 bg-black/70 pointer-events-none" />
 
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
@@ -427,7 +427,7 @@ export const PlayerCard: React.FC = () => {
         <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[120px] opacity-5" style={{ background: club.colorsHex[1] }} />
       </div>
 
-      <div className="relative w-fit bg-slate-900/[0.35] rounded-none border border-transparent overflow-hidden flex flex-col md:flex-row md:items-center" style={{maxHeight:'925px', zoom: 1.44}}>
+      <div className="relative w-fit bg-slate-900/[0.35] rounded-none border border-transparent overflow-hidden flex flex-col md:flex-row md:items-stretch" style={{maxHeight:'925px', zoom: 1.44}}>
         <button
           onClick={() => navigateWithoutHistory(closeTarget)}
           className="absolute left-3 top-3 z-50 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-900 text-lg font-black transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b border-t-white/80 border-x-white/40 border-b-slate-400/60"
@@ -619,6 +619,7 @@ export const PlayerCard: React.FC = () => {
                 )}
               </div>
 
+              {player.clubId === userTeamId && (
               <div className="p-3 bg-black/25 rounded-[20px] border border-white/5">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">Mindset zawodnika</span>
@@ -651,8 +652,9 @@ export const PlayerCard: React.FC = () => {
                   })}
                 </div>
               </div>
+              )}
 
-              {player.loan && (
+              {false && player.loan && (
                 <div className="p-3 bg-cyan-500/10 rounded-[20px] border border-cyan-500/25">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -682,7 +684,7 @@ export const PlayerCard: React.FC = () => {
           <div className="w-[480px] flex-shrink-0 flex flex-col gap-3 overflow-hidden">
 
             {/* BOX ATRYBUTÃ“W */}
-            <div className="flex-1 bg-transparent rounded-[24px] border border-white/5 p-5 flex flex-col justify-center">
+            <div className="flex-shrink-0 bg-transparent rounded-[24px] border border-white/5 p-5 flex flex-col justify-center">
               <div className="grid grid-cols-2 gap-x-8">
                 <div>
                   <AttrBar label="Szybkość" value={attrs.pace} change={seasonalChanges['pace']} />
