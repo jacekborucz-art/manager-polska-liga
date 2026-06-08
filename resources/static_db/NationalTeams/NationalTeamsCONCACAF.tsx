@@ -13,7 +13,7 @@ export const NATIONAL_TEAMS_CONCACAF = [
   { name: "Belize", continent: "North America", tier: 5, colors: ['#003F87','#FFFFFF','#CE1126'], stadium: "FFB Stadium", capacity: 5000, reputation: 4, region: Region.ENGLAND },
   { name: "Jamajka", continent: "North America", tier: 3, colors: ['#009B3A','#FED100','#000000'], stadium: "Independence Park", capacity: 35000, reputation: 10, region: Region.NORTH_AMERICA },
   { name: "Trynidad i Tobago", continent: "North America", tier: 3, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Hasely Crawford Stadium", capacity: 23000, reputation: 9, region: Region.ENGLAND },
-  { name: "Haiti", continent: "North America", tier: 4, colors: ['#00209F','#D21034','#FFFFFF'], stadium: "Stade Sylvio Cator", capacity: 15000, reputation: 9, region: Region.FRANCE },
+  { name: "Haiti", continent: "North America", tier: 3, colors: ['#00209F','#D21034','#FFFFFF'], stadium: "Stade Sylvio Cator", capacity: 15000, reputation: 9, region: Region.FRANCE },
   { name: "Curaçao", continent: "North America", tier: 5, colors: ['#0033A0','#FFD100','#CE1126'], stadium: "Ergilio Hato Stadium", capacity: 15000, reputation: 9, region: Region.BENELUX },
   { name: "Surinam", continent: "North America", tier: 5, colors: ['#377E3F','#FFFFFF','#B40A2D'], stadium: "André Kamperveen Stadium", capacity: 6000, reputation: 7, region: Region.BENELUX },
   { name: "Kuba", continent: "North America", tier: 5, colors: ['#002A8F','#FFFFFF','#CF142B'], stadium: "Estadio Pedro Marrero", capacity: 30000, reputation: 8, region: Region.IBERIA },
