@@ -571,7 +571,7 @@ export const NationalTeamService = {
     nationalTeams: NationalTeam[],
     coaches: Record<string, Coach>,
     allPlayers: Record<string, Player[]>
-  ): { updatedTeams: NationalTeam[]; playerUpdates: { id: string; assignedNationalTeamId: string | null }[]; calledUpFromClub: { playerId: string; teamName: string }[] } => {
+  ): { updatedTeams: NationalTeam[]; newPlayers: Player[]; playerUpdates: { id: string; assignedNationalTeamId: string | null }[]; calledUpFromClub: { playerId: string; teamName: string }[] } => {
     // Priorytet 1: zawodnicy klubowi (nie wolni agenci, nie generowani przez NT)
     const clubPlayersList = Object.entries(allPlayers)
       .filter(([key]) => key !== FREE_AGENT_CLUB_ID)
@@ -583,6 +583,7 @@ export const NationalTeamService = {
     Object.values(allPlayers).flat().forEach(p => { playerMap[p.id] = p; });
 
     const updatedTeams: NationalTeam[] = [];
+    const allNewPlayers: Player[] = [];
     const allPlayerUpdates: { id: string; assignedNationalTeamId: string | null }[] = [];
     const calledUpFromClub: { playerId: string; teamName: string }[] = [];
 
@@ -601,6 +602,8 @@ export const NationalTeamService = {
       const threshold = getThreshold(coachExp);
 
       const squadIds = [...team.squadPlayerIds];
+      let genIndex = team.squadPlayerIds.length;
+      const usedNames = new Set<string>();
       let changed = false;
 
       for (const pos of POSITIONS) {
@@ -646,6 +649,19 @@ export const NationalTeamService = {
             calledUpFromClub.push({ playerId: p.id, teamName: team.name });
             changed = true;
           });
+          const stillMissing = missing - acceptedFillers.length;
+          for (let i = 0; i < stillMissing; i++) {
+            const syntheticCap = selectedStarCount >= maxStars && getTeamRule(team)?.starThreshold !== undefined
+              ? Math.min(getTeamOvrCap(team), (getTeamRule(team)?.starThreshold ?? getTeamOvrCap(team)) - 1)
+              : getTeamOvrCap(team);
+            const np = NationalTeamService.generatePlayerForNT(
+              team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, syntheticCap
+            );
+            np.assignedNationalTeamId = team.id;
+            allNewPlayers.push(np);
+            squadIds.push(np.id);
+            changed = true;
+          }
         }
 
         if (squadAtPos.length === 0) continue;
@@ -710,6 +726,7 @@ export const NationalTeamService = {
     const updatedById = new Map(updatedTeams.map(team => [team.id, team]));
     return {
       updatedTeams: nationalTeams.map(team => updatedById.get(team.id) ?? team),
+      newPlayers: allNewPlayers,
       playerUpdates: allPlayerUpdates,
       calledUpFromClub
     };

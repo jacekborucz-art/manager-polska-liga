@@ -4608,6 +4608,12 @@ Asystent`,
         const ntMonthly = NationalTeamService.reviewMonthlySquad(nationalTeams, coaches, players);
         const monthlyAnyChanged = ntMonthly.updatedTeams.some((t, i) => t !== nationalTeams[i]);
         if (monthlyAnyChanged) setNationalTeams(ntMonthly.updatedTeams);
+        if (ntMonthly.newPlayers.length > 0) {
+          setPlayers(prev => ({
+            ...prev,
+            'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntMonthly.newPlayers]
+          }));
+        }
         if (ntMonthly.playerUpdates.length > 0) {
           const monthlyUpdateMap: Record<string, string | null> = {};
           ntMonthly.playerUpdates.forEach(u => { monthlyUpdateMap[u.id] = u.assignedNationalTeamId; });
@@ -10812,20 +10818,28 @@ const finalResult: SimulationOutput = {
     let currentPlayers = mergedPlayers;
     for (let i = 0; i < 8; i++) {
       const review = NationalTeamService.reviewMonthlySquad(currentTeams, coaches, currentPlayers);
-      const anyChanged = review.updatedTeams.some((t, idx) => t !== currentTeams[idx]) || review.playerUpdates.length > 0;
+      const anyChanged = review.updatedTeams.some((t, idx) => t !== currentTeams[idx]) || review.playerUpdates.length > 0 || review.newPlayers.length > 0;
       if (!anyChanged) break;
       currentTeams = review.updatedTeams;
+      let updatedPlayers: Record<string, Player[]> = currentPlayers;
+      if (review.newPlayers.length > 0) {
+        updatedPlayers = {
+          ...updatedPlayers,
+          'FREE_AGENTS': [...(updatedPlayers['FREE_AGENTS'] || []), ...review.newPlayers]
+        };
+      }
       if (review.playerUpdates.length > 0) {
         const updateMap: Record<string, string | null> = {};
         review.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
-        const updatedPlayers: Record<string, Player[]> = {};
-        for (const [clubId, squad] of Object.entries(currentPlayers)) {
-          updatedPlayers[clubId] = squad.map(p =>
+        const remapped: Record<string, Player[]> = {};
+        for (const [clubId, squad] of Object.entries(updatedPlayers)) {
+          remapped[clubId] = squad.map(p =>
             p.id in updateMap ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
           );
         }
-        currentPlayers = updatedPlayers;
+        updatedPlayers = remapped;
       }
+      currentPlayers = updatedPlayers;
     }
 
     setPlayers(currentPlayers);
