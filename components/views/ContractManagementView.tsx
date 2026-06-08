@@ -161,23 +161,23 @@ export const ContractManagementView: React.FC = () => {
     setTimeout(() => {
       // VETO ZARZĄDU przy przedłużeniu kontraktu
       const squad = isReserve ? reserves : (players[club.id] || []);
-      const directorCheck = club.sportingDirector
-        ? SportingDirectorService.evaluateContractRenewalDecision({
-            club,
-            player,
-            squad,
-            salary: offerSalary,
-            years: offerYears,
-            bonus: offerBonus,
-          })
-        : { blocked: false, reason: '' };
-      if (directorCheck.blocked) {
-        setIsProcessing(false);
-        setRenewalVeto(directorCheck.reason);
-        return;
-      }
       const hasExceptionalContractApproval = (club.boardExceptionalContractApprovals ?? 0) > 0;
       if (!hasExceptionalContractApproval) {
+        const directorCheck = club.sportingDirector
+          ? SportingDirectorService.evaluateContractRenewalDecision({
+              club,
+              player,
+              squad,
+              salary: offerSalary,
+              years: offerYears,
+              bonus: offerBonus,
+            })
+          : { blocked: false, reason: '' };
+        if (directorCheck.blocked) {
+          setIsProcessing(false);
+          setRenewalVeto(directorCheck.reason);
+          return;
+        }
         const boardCheck = FinanceService.evaluateRenewalBoardDecision(player, offerSalary, offerBonus, squad, club);
         if (!boardCheck.approved) {
           setIsProcessing(false);

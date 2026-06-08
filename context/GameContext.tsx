@@ -8137,7 +8137,8 @@ const finalResult: SimulationOutput = {
           f.leagueId === 'POLISH_CUP' ||
           f.leagueId === 'SUPER_CUP' ||
           (f.leagueId.startsWith('CL_') && !f.leagueId.endsWith('_DRAW')) ||
-          (f.leagueId.startsWith('EL_') && !f.leagueId.endsWith('_DRAW'))
+          (f.leagueId.startsWith('EL_') && !f.leagueId.endsWith('_DRAW')) ||
+          (f.leagueId.startsWith('CONF_') && !f.leagueId.endsWith('_DRAW'))
         ))
       );
 
@@ -8180,6 +8181,18 @@ const finalResult: SimulationOutput = {
               'EL_SF': 'Liga Europy - Półfinał',
               'EL_SF_RETURN': 'LE - Półfinał Rewanż',
               'EL_FINAL': 'Liga Europy - Finał',
+              'CONF_R1Q': 'PKonf - Kwalifikacje R1',
+              'CONF_R1Q_RETURN': 'PKonf - Kwalifikacje R1 Rewanż',
+              'CONF_R2Q': 'PKonf - Kwalifikacje R2',
+              'CONF_R2Q_RETURN': 'PKonf - Kwalifikacje R2 Rewanż',
+              'CONF_GROUP_STAGE': 'Puchar Konferencji - Faza Grupowa',
+              'CONF_R16': 'Puchar Konferencji - 1/8 Finału',
+              'CONF_R16_RETURN': 'PKonf - 1/8 Finału Rewanż',
+              'CONF_QF': 'Puchar Konferencji - Ćwierćfinał',
+              'CONF_QF_RETURN': 'PKonf - Ćwierćfinał Rewanż',
+              'CONF_SF': 'Puchar Konferencji - Półfinał',
+              'CONF_SF_RETURN': 'PKonf - Półfinał Rewanż',
+              'CONF_FINAL': 'Puchar Konferencji - Finał',
             };
             const leagueName = tomorrowFixture.leagueId === 'L_PL_1' ? 'Ekstraklasa'
               : tomorrowFixture.leagueId === 'L_PL_2' ? '1. Liga'
