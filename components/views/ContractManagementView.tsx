@@ -1185,18 +1185,6 @@ export const ContractManagementView: React.FC = () => {
                   <p className="text-white font-bold text-base italic leading-relaxed mt-2">"{youthInterviewResult.ownerMessage}"</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4 text-center">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">OCENA WYWIADU</p>
-                    <p className="text-2xl font-black text-white mt-1">{youthInterviewResult.quizScore}</p>
-                    <p className="text-[10px] text-slate-400 italic">{youthInterviewResult.scoreLabel}</p>
-                  </div>
-                  <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4 text-center">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SPÓJNOŚĆ OCENY</p>
-                    <p className="text-2xl font-black text-white mt-1">{youthInterviewResult.profile.spojnosc}%</p>
-                    <p className="text-[10px] text-slate-400 italic">{youthInterviewResult.profile.spojnosc >= 80 ? 'Bez sprzeczności' : youthInterviewResult.profile.spojnosc >= 60 ? 'Drobne niespójności' : 'Sprzeczne opinie'}</p>
-                  </div>
-                </div>
 
                 {!youthInterviewResult.approved && (
                   <p className="text-slate-500 text-xs text-center">Kolejna rozmowa z właścicielem o tym zawodniku możliwa za 6 miesięcy.</p>
