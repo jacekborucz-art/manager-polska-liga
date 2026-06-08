@@ -9,6 +9,13 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { SportingDirectorService } from '../../services/SportingDirectorService';
 import { PlayerContractMindflowService, ContractMindsetState } from '../../services/PlayerContractMindflowService';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
+import {
+  BoardYouthContractService,
+  YouthStage,
+  YouthStage1Result,
+  YouthQuizSession,
+  YouthQuizResult,
+} from '../../services/BoardYouthContractService';
 
 const MINDSET_LABELS: Record<ContractMindsetState, string> = {
   SUPER_HAPPY: 'BARDZO SZCZĘŚLIWY',
@@ -22,8 +29,8 @@ const MINDSET_LABELS: Record<ContractMindsetState, string> = {
 };
 
 export const ContractManagementView: React.FC = () => {
-  const { 
-    viewedPlayerId, players, reserves, clubs, navigateTo, 
+  const {
+    viewedPlayerId, players, reserves, clubs, navigateTo, coaches,
     currentDate, setPlayers, setReserves, setClubs, lineups, updateLineup, setMessages, addFinanceLog, contractManagementInitialMode
   } = useGame();
   
@@ -41,6 +48,12 @@ export const ContractManagementView: React.FC = () => {
   const [isOfferSent, setIsOfferSent] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [renewalVeto, setRenewalVeto] = useState<string | null>(null);
+
+  const [youthStage, setYouthStage] = useState<YouthStage>(null);
+  const [youthStage1Result, setYouthStage1Result] = useState<YouthStage1Result | null>(null);
+  const [youthInterviewSession, setYouthInterviewSession] = useState<YouthQuizSession | null>(null);
+  const [youthInterviewResult, setYouthInterviewResult] = useState<YouthQuizResult | null>(null);
+  const [pendingOfferSquad, setPendingOfferSquad] = useState<Player[] | null>(null);
 
   const data = useMemo(() => {
     if (!viewedPlayerId) return null;
@@ -162,6 +175,32 @@ export const ContractManagementView: React.FC = () => {
       // VETO ZARZĄDU przy przedłużeniu kontraktu
       const squad = isReserve ? reserves : (players[club.id] || []);
       const hasExceptionalContractApproval = (club.boardExceptionalContractApprovals ?? 0) > 0;
+
+      // --- SYSTEM AWANSU MŁODEGO ZAWODNIKA ---
+      const isYouthPromotion = !hasExceptionalContractApproval
+        && player.age <= 21
+        && player.annualSalary < 150_000
+        && offerSalary > player.annualSalary * 2;
+
+      if (isYouthPromotion) {
+        const coachExperience = club.coachId ? (coaches[club.coachId]?.attributes.experience ?? 10) : 10;
+        const stage1 = BoardYouthContractService.evaluateYouthInvestmentWorthiness(player, squad, club, coachExperience);
+
+        setIsProcessing(false);
+        setPendingOfferSquad(squad);
+        setYouthStage1Result(stage1);
+
+        if (!stage1.worthInvesting) {
+          const lockoutDate = new Date(currentDate);
+          lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+          updateContractPlayer(p => ({ ...p, boardYouthContractLockoutUntil: lockoutDate.toISOString() }));
+          setYouthStage('STAGE1_REJECT');
+        } else {
+          setYouthStage('STAGE1_PASSED');
+        }
+        return;
+      }
+
       if (!hasExceptionalContractApproval) {
         const directorCheck = club.sportingDirector
           ? SportingDirectorService.evaluateContractRenewalDecision({
@@ -306,6 +345,149 @@ export const ContractManagementView: React.FC = () => {
       }
       setIsProcessing(false);
     }, 1200);
+  };
+
+  const proceedWithYouthApprovedOffer = (squad: Player[]) => {
+    if (!data) return;
+    const { player, club } = data;
+    setYouthStage(null);
+    setYouthStage1Result(null);
+    setYouthInterviewSession(null);
+    setYouthInterviewResult(null);
+    setPendingOfferSquad(null);
+    setIsProcessing(true);
+
+    setTimeout(() => {
+      setIsOfferSent(true);
+
+      const freshMindflow = PlayerContractMindflowService.evaluate({
+        player,
+        currentClub: club,
+        currentSquad: squad,
+        currentDate,
+        interestedClubs: (player.interestedClubs || [])
+          .map(clubId => clubs.find(candidate => candidate.id === clubId))
+          .filter((candidate): candidate is typeof clubs[number] => !!candidate),
+      });
+      const mindflowDecision = PlayerContractMindflowService.evaluateRenewalOffer(freshMindflow, {
+        salary: offerSalary,
+        bonus: offerBonus,
+        years: offerYears,
+      });
+
+      if (!mindflowDecision.accepted) {
+        const nextStep = (player.negotiationStep || 0) + 1;
+        let lockoutDateStr: string | null = null;
+        if (!mindflowDecision.demands || nextStep >= 3) {
+          const d = new Date(currentDate);
+          d.setDate(d.getDate() + 14);
+          lockoutDateStr = d.toISOString();
+        }
+        updateContractPlayer(p => ({
+          ...p,
+          negotiationStep: nextStep,
+          negotiationLockoutUntil: lockoutDateStr,
+          isNegotiationPermanentBlocked: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2 ? true : p.isNegotiationPermanentBlocked,
+          isUntouchable: mindflowDecision.offerQuality === 'INSULTING' && nextStep >= 2 ? false : p.isUntouchable,
+        }));
+        setCounterOffer(nextStep >= 3 ? null : mindflowDecision.demands);
+        setNegotiationMessage(nextStep >= 3
+          ? 'Chyba się jednak nie dogadamy. Próbowaliśmy kilka razy, ale Twoje oferty są nieakceptowalne. Do widzenia.'
+          : mindflowDecision.reason);
+        setIsProcessing(false);
+        return;
+      }
+
+      const playerDemand = FinanceService.calculatePlayerBonusDemand(player, offerSalary, club.reputation);
+      if (FinanceService.isOfferInsulting(offerBonus, playerDemand)) {
+        updateContractPlayer(p => ({ ...p, isNegotiationPermanentBlocked: true, isUntouchable: false }));
+        setNegotiationMessage('Nie traktujecie mnie poważnie więc nie będziemy o niczym rozmawiać. Do widzenia!');
+        setCounterOffer(null);
+        setIsProcessing(false);
+        return;
+      }
+
+      const newEndDate = new Date(currentDate.getFullYear() + offerYears, 5, 30).toISOString();
+      const decision = FinanceService.evaluateContractLogic(
+        player, offerSalary, offerBonus, newEndDate, currentDate, club.reputation, FinanceService.getClubTier(club)
+      );
+
+      setCounterOffer(decision.demands);
+
+      if (decision.accepted) {
+        const lockoutDate = new Date(currentDate);
+        lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+        updateContractPlayer(p => ({
+          ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
+          annualSalary: offerSalary,
+          contractEndDate: newEndDate,
+          negotiationStep: 0,
+          contractLockoutUntil: lockoutDate.toISOString(),
+        }));
+        setClubs(prev => prev.map(c => c.id === club.id ? {
+          ...c,
+          budget: c.budget - offerBonus,
+          signingBonusPool: Math.max(0, c.signingBonusPool - offerBonus),
+        } : c));
+        setNegotiationMessage(decision.reason);
+        setShowSuccessModal(true);
+      } else {
+        const nextStep = (player.negotiationStep || 0) + 1;
+        let lockoutDateStr: string | null = null;
+        if (!decision.demands || nextStep >= 3) {
+          const d = new Date(currentDate);
+          d.setDate(d.getDate() + 14);
+          lockoutDateStr = d.toISOString();
+        }
+        const permanentBreakdown = !decision.demands || nextStep >= 3;
+        updateContractPlayer(p => ({
+          ...p,
+          negotiationStep: nextStep,
+          negotiationLockoutUntil: lockoutDateStr,
+          isNegotiationPermanentBlocked: permanentBreakdown ? true : p.isNegotiationPermanentBlocked,
+          isUntouchable: permanentBreakdown ? false : p.isUntouchable,
+        }));
+        setNegotiationMessage(nextStep >= 3
+          ? 'Chyba się jednak nie dogadamy. Próbowaliśmy kilka razy, ale Twoje oferty są nieakceptowalne. Do widzenia.'
+          : decision.reason);
+        if (nextStep >= 3) setCounterOffer(null);
+      }
+      setIsProcessing(false);
+    }, 800);
+  };
+
+  const handleYouthInterviewAnswer = (questionId: number, answerId: 'a' | 'b' | 'c') => {
+    if (!data || !youthInterviewSession) return;
+    const { player, club } = data;
+    const squad = pendingOfferSquad || [];
+
+    const updatedSession = BoardYouthContractService.submitAnswer(youthInterviewSession, questionId, answerId);
+    setYouthInterviewSession(updatedSession);
+
+    if (updatedSession.isComplete) {
+      const quizScore = BoardYouthContractService.calculateQuizScore(updatedSession, player, squad);
+      const probability = BoardYouthContractService.calculateApprovalProbability(player, squad, club, quizScore, updatedSession.profile);
+      const approved = probability >= 55;
+      const ownerMessage = BoardYouthContractService.buildOwnerMessage(approved, probability, updatedSession.profile);
+      const result: YouthQuizResult = {
+        quizScore,
+        scoreLabel: BoardYouthContractService.getScoreLabel(quizScore),
+        profile: updatedSession.profile,
+        approved,
+        approvalProbability: probability,
+        ownerMessage,
+      };
+      setYouthInterviewResult(result);
+
+      if (!approved) {
+        const lockoutDate = new Date(currentDate);
+        lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+        updateContractPlayer(p => ({ ...p, boardYouthContractLockoutUntil: lockoutDate.toISOString() }));
+        setYouthStage('INTERVIEW_REJECTED');
+      } else {
+        setYouthStage('INTERVIEW_APPROVED');
+      }
+    }
   };
 
   const handleReleasePlayer = () => {
@@ -813,6 +995,235 @@ export const ContractManagementView: React.FC = () => {
             >
               SKORYGUJ OFERTĘ
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* YOUTH STAGE1 REJECT */}
+      {youthStage === 'STAGE1_REJECT' && youthStage1Result && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in p-6">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-red-500/60 rounded-[40px] shadow-[0_0_80px_rgba(239,68,68,0.15)] p-10 flex flex-col gap-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-3xl mx-auto mb-4">🏛️</div>
+              <h3 className="text-xl font-black uppercase italic text-red-400 tracking-tighter">ZARZĄD ODMAWIA ROZMÓW</h3>
+              <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Brak rekomendacji dla inwestycji</p>
+            </div>
+            <div className="space-y-3">
+              <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-2">DYREKTOR SPORTOWY</p>
+                <p className="text-slate-300 text-sm italic leading-relaxed">"{youthStage1Result.directorNote}"</p>
+              </div>
+              <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">TRENER</p>
+                <p className="text-slate-300 text-sm italic leading-relaxed">"{youthStage1Result.coachNote}"</p>
+              </div>
+            </div>
+            <p className="text-slate-500 text-xs text-center">Kolejna rozmowa z zarządem o tym zawodniku możliwa za 6 miesięcy.</p>
+            <button
+              onClick={() => { setYouthStage(null); setYouthStage1Result(null); }}
+              className="w-full py-5 bg-red-600 text-white font-black uppercase rounded-2xl hover:bg-red-500 transition-all shadow-xl border-b-4 border-red-900 active:scale-95"
+            >
+              ROZUMIEM
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* YOUTH STAGE1 PASSED — pokaż opinie przed decyzją właściciela */}
+      {youthStage === 'STAGE1_PASSED' && youthStage1Result && data && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in p-6">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-cyan-500/40 rounded-[40px] shadow-[0_0_80px_rgba(6,182,212,0.1)] p-10 flex flex-col gap-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-3xl mx-auto mb-4">📋</div>
+              <h3 className="text-xl font-black uppercase italic text-cyan-400 tracking-tighter">OPINIA SZTABU</h3>
+              <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">Sztab rekomenduje inwestycję</p>
+            </div>
+            <div className="space-y-3">
+              <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-2">DYREKTOR SPORTOWY</p>
+                <p className="text-slate-300 text-sm italic leading-relaxed">"{youthStage1Result.directorNote}"</p>
+              </div>
+              <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">TRENER</p>
+                <p className="text-slate-300 text-sm italic leading-relaxed">"{youthStage1Result.coachNote}"</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const { player, club } = data;
+                const squad = pendingOfferSquad || [];
+                const preDecision = BoardYouthContractService.evaluateStage2PreDecision(player, squad, club);
+                if (preDecision === 'IMMEDIATE_APPROVE') {
+                  setYouthStage('STAGE2_APPROVE');
+                } else if (preDecision === 'IMMEDIATE_REJECT') {
+                  const lockoutDate = new Date(currentDate);
+                  lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+                  updateContractPlayer(p => ({ ...p, boardYouthContractLockoutUntil: lockoutDate.toISOString() }));
+                  setYouthStage('STAGE2_REJECT');
+                } else {
+                  const session = BoardYouthContractService.createQuizSession(player, squad);
+                  setYouthInterviewSession(session);
+                  setYouthStage('INTERVIEW');
+                }
+              }}
+              className="w-full py-5 bg-cyan-600 text-white font-black uppercase rounded-2xl hover:bg-cyan-500 transition-all shadow-xl border-b-4 border-cyan-800 active:scale-95"
+            >
+              PRZEJDŹ DO WŁAŚCICIELA →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* YOUTH STAGE2 IMMEDIATE APPROVE */}
+      {youthStage === 'STAGE2_APPROVE' && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in p-6">
+          <div className="max-w-md w-full bg-slate-900 border-2 border-emerald-500/50 rounded-[40px] shadow-[0_0_80px_rgba(16,185,129,0.15)] p-10 flex flex-col items-center gap-6 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-3xl">🏛️</div>
+            <h3 className="text-xl font-black uppercase italic text-emerald-400 tracking-tighter">WŁAŚCICIEL ZATWIERDZA</h3>
+            <p className="text-slate-300 italic leading-relaxed text-sm">Właściciel docenił potencjał zawodnika i zatwierdza kontrakt bez dodatkowego wywiadu.</p>
+            {youthStage1Result && (
+              <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4 w-full text-left">
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">OPINIA DS</p>
+                <p className="text-slate-400 text-xs italic">"{youthStage1Result.directorNote}"</p>
+              </div>
+            )}
+            <button
+              onClick={() => { if (pendingOfferSquad) proceedWithYouthApprovedOffer(pendingOfferSquad); }}
+              className="w-full py-5 bg-emerald-600 text-white font-black uppercase rounded-2xl hover:bg-emerald-500 transition-all shadow-xl border-b-4 border-emerald-800 active:scale-95"
+            >
+              ZŁÓŻ OFERTĘ ZAWODNIKOWI →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* YOUTH STAGE2 IMMEDIATE REJECT */}
+      {youthStage === 'STAGE2_REJECT' && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in p-6">
+          <div className="max-w-md w-full bg-slate-900 border-2 border-red-500/60 rounded-[40px] shadow-[0_0_80px_rgba(239,68,68,0.15)] p-10 flex flex-col items-center gap-6 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-3xl">🏛️</div>
+            <h3 className="text-xl font-black uppercase italic text-red-400 tracking-tighter">WŁAŚCICIEL ODRZUCA</h3>
+            <p className="text-slate-300 italic leading-relaxed text-sm">Właściciel po analizie sytuacji finansowej i sportowej postanowił nie zatwierdzać tak dużego kontraktu na tym etapie.</p>
+            <p className="text-slate-500 text-xs">Kolejna rozmowa z zarządem o tym zawodniku możliwa za 6 miesięcy.</p>
+            <button
+              onClick={() => { setYouthStage(null); setYouthStage1Result(null); }}
+              className="w-full py-5 bg-red-600 text-white font-black uppercase rounded-2xl hover:bg-red-500 transition-all shadow-xl border-b-4 border-red-900 active:scale-95"
+            >
+              ROZUMIEM
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* YOUTH INTERVIEW — QUIZ */}
+      {(youthStage === 'INTERVIEW' || youthStage === 'INTERVIEW_APPROVED' || youthStage === 'INTERVIEW_REJECTED') && youthInterviewSession && data && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in p-4">
+          <div className="max-w-xl w-full bg-slate-900 border border-white/10 rounded-[40px] shadow-2xl p-8 flex flex-col gap-6 max-h-[95vh] overflow-y-auto custom-scrollbar">
+
+            {/* Header */}
+            <div className="text-center">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WYWIAD Z WŁAŚCICIELEM</p>
+              <h3 className="text-2xl font-black italic text-white uppercase tracking-tighter mt-1">OCENA INWESTYCJI</h3>
+              {!youthInterviewResult && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-[10px] text-slate-600 mb-1">
+                    <span>PYTANIE {youthInterviewSession.currentIndex + 1} / {youthInterviewSession.selectedQuestions.length}</span>
+                    <span>{Math.round((youthInterviewSession.currentIndex / youthInterviewSession.selectedQuestions.length) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-white/5 rounded-full">
+                    <div
+                      className="h-1 bg-blue-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(youthInterviewSession.currentIndex / youthInterviewSession.selectedQuestions.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Stage1 context */}
+            {youthStage1Result && !youthInterviewResult && (
+              <div className="flex gap-3">
+                <div className="flex-1 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1">DS</p>
+                  <p className="text-slate-400 text-[11px] italic leading-snug line-clamp-2">"{youthStage1Result.directorNote}"</p>
+                </div>
+                <div className="flex-1 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">TRENER</p>
+                  <p className="text-slate-400 text-[11px] italic leading-snug line-clamp-2">"{youthStage1Result.coachNote}"</p>
+                </div>
+              </div>
+            )}
+
+            {/* Active question */}
+            {!youthInterviewResult && youthInterviewSession.currentIndex < youthInterviewSession.selectedQuestions.length && (() => {
+              const q = youthInterviewSession.selectedQuestions[youthInterviewSession.currentIndex];
+              return (
+                <div className="flex flex-col gap-4">
+                  <p className="text-white font-semibold text-base leading-relaxed">{q.text}</p>
+                  <div className="flex flex-col gap-3">
+                    {q.answers.map(answer => (
+                      <button
+                        key={answer.id}
+                        onClick={() => handleYouthInterviewAnswer(q.id, answer.id)}
+                        className="w-full py-4 px-5 text-left bg-slate-800/60 border border-white/10 rounded-2xl text-slate-300 text-sm font-medium hover:bg-slate-700/80 hover:border-blue-500/50 hover:text-white transition-all active:scale-[0.99]"
+                      >
+                        <span className="text-blue-400 font-black mr-2 uppercase">{answer.id})</span> {answer.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Interview result */}
+            {youthInterviewResult && (
+              <div className="flex flex-col gap-5">
+                <div className={`text-center p-6 rounded-3xl border-2 ${youthInterviewResult.approved ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-red-500/50 bg-red-500/5'}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: youthInterviewResult.approved ? '#34d399' : '#f87171' }}>
+                    {youthInterviewResult.approved ? 'WŁAŚCICIEL WYRAŻA ZGODĘ' : 'WŁAŚCICIEL ODMAWIA'}
+                  </p>
+                  <p className="text-white font-bold text-base italic leading-relaxed mt-2">"{youthInterviewResult.ownerMessage}"</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4 text-center">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">OCENA WYWIADU</p>
+                    <p className="text-2xl font-black text-white mt-1">{youthInterviewResult.quizScore}</p>
+                    <p className="text-[10px] text-slate-400 italic">{youthInterviewResult.scoreLabel}</p>
+                  </div>
+                  <div className="bg-slate-800/60 border border-white/5 rounded-2xl p-4 text-center">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SPÓJNOŚĆ OCENY</p>
+                    <p className="text-2xl font-black text-white mt-1">{youthInterviewResult.profile.spojnosc}%</p>
+                    <p className="text-[10px] text-slate-400 italic">{youthInterviewResult.profile.spojnosc >= 80 ? 'Bez sprzeczności' : youthInterviewResult.profile.spojnosc >= 60 ? 'Drobne niespójności' : 'Sprzeczne opinie'}</p>
+                  </div>
+                </div>
+
+                {!youthInterviewResult.approved && (
+                  <p className="text-slate-500 text-xs text-center">Kolejna rozmowa z właścicielem o tym zawodniku możliwa za 6 miesięcy.</p>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (youthInterviewResult.approved && pendingOfferSquad) {
+                      proceedWithYouthApprovedOffer(pendingOfferSquad);
+                    } else {
+                      setYouthStage(null);
+                      setYouthStage1Result(null);
+                      setYouthInterviewSession(null);
+                      setYouthInterviewResult(null);
+                      setPendingOfferSquad(null);
+                    }
+                  }}
+                  className={`w-full py-5 font-black uppercase rounded-2xl transition-all shadow-xl active:scale-95 border-b-4 ${
+                    youthInterviewResult.approved
+                      ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-800 text-white'
+                      : 'bg-red-600 hover:bg-red-500 border-red-900 text-white'
+                  }`}
+                >
+                  {youthInterviewResult.approved ? 'ZŁÓŻ OFERTĘ ZAWODNIKOWI →' : 'ROZUMIEM'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

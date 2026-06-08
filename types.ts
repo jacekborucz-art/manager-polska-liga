@@ -1227,6 +1227,7 @@ export interface Player {
   negotiationStep: number;           // Licznik prób (0-3)
   negotiationLockoutUntil: string | null; // Blokada czasowa negocjacji
   contractLockoutUntil: string | null;
+  boardYouthContractLockoutUntil?: string | null;
   /** Data ISO końca rocznego okresu bez nowych żądań po podpisaniu kontraktu. */
   moraleDemandLockoutUntil?: string | null;
   fatigueDebt: number; 
