@@ -445,6 +445,16 @@ export interface MailMessage {
     nextFixtureId?: string;
     responseDeadline: string;
   } | {
+    type: 'PLAYER_BOARD_APPEAL';
+    playerId: string;
+    appealType: 'RAISE' | 'TRANSFER';
+    decisionDeadline: string;
+  } | {
+    type: 'BOARD_APPEAL_DECISION';
+    playerId: string;
+    decision: 'SELL' | 'RAISE' | 'VETO';
+    appealType: 'RAISE' | 'TRANSFER';
+  } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
     matches?: {
       homeName: string;
@@ -1261,6 +1271,9 @@ export interface Player {
   contractRaiseReminderUntil?: string | null;
   contractRaiseTeamMoraleDelta?: number | null;
   contractRaiseTeamMoraleReason?: string | null;
+  boardAppealSentAt?: string | null;
+  boardAppealType?: 'RAISE' | 'TRANSFER' | null;
+  boardAppealDeadline?: string | null;
   reserveProtestUntil?: string | null;
   isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
   transferLockoutUntil: string | null;

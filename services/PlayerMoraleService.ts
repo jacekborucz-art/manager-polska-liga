@@ -689,7 +689,8 @@ export const PlayerMoraleService = {
     !!player.transferListDemandUntil ||
     !!player.developmentExitDemandUntil ||
     !!player.contractRaiseDemandUntil ||
-    !!player.reserveProtestUntil,
+    !!player.reserveProtestUntil ||
+    !!player.boardAppealDeadline,
 
   applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
     ...player,
@@ -1899,15 +1900,33 @@ export const PlayerMoraleService = {
           roll * 18;
 
         if (frustrationScore >= 34 && getContractDaysLeft(withMorale, currentDate) > 365) {
-          const transferDeadline = new Date(currentDate);
-          transferDeadline.setDate(transferDeadline.getDate() + 14);
-          withMorale = {
-            ...PlayerMoraleService.withMoraleChange(withMorale, -12, 'Odrzucona podwyżka eskaluje do żądania listy transferowej', currentDate),
-            contractRaiseDemandUntil: null,
-            contractRaiseRequest: null,
-            transferListDemandUntil: toDateKey(transferDeadline),
-            isUntouchable: false,
-          };
+          const boardLockoutActive = !!withMorale.boardLockoutUntil &&
+            dateOnly(currentDate).getTime() < dateOnly(new Date(withMorale.boardLockoutUntil)).getTime();
+          const appealCooldownOk = !withMorale.boardAppealSentAt ||
+            dayDiff(new Date(withMorale.boardAppealSentAt), currentDate) > 180;
+
+          if (boardLockoutActive && appealCooldownOk && !withMorale.boardAppealDeadline) {
+            const appealDeadline = new Date(currentDate);
+            appealDeadline.setDate(appealDeadline.getDate() + 14);
+            withMorale = {
+              ...PlayerMoraleService.withMoraleChange(withMorale, -6, 'Zablokowana podwyżka przez dyrektora — zawodnik apeluje do zarządu', currentDate),
+              contractRaiseDemandUntil: null,
+              contractRaiseRequest: null,
+              boardAppealSentAt: toDateKey(currentDate),
+              boardAppealType: 'RAISE' as const,
+              boardAppealDeadline: toDateKey(appealDeadline),
+            };
+          } else {
+            const transferDeadline = new Date(currentDate);
+            transferDeadline.setDate(transferDeadline.getDate() + 14);
+            withMorale = {
+              ...PlayerMoraleService.withMoraleChange(withMorale, -12, 'Odrzucona podwyżka eskaluje do żądania listy transferowej', currentDate),
+              contractRaiseDemandUntil: null,
+              contractRaiseRequest: null,
+              transferListDemandUntil: toDateKey(transferDeadline),
+              isUntouchable: false,
+            };
+          }
         } else if (frustrationScore >= 18 || personality === 'SENSITIVE' || personality === 'NERVOUS') {
           const ownPenalty =
             personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -5 :
@@ -2040,5 +2059,251 @@ export const PlayerMoraleService = {
     }
 
     return withMorale;
+  },
+
+  processBoardAppeals: (
+    club: Club,
+    squad: Player[],
+    currentDate: Date,
+    existingMessages: MailMessage[] = []
+  ): MoraleDemandProcessResult => {
+    if (squad.length === 0 || club.stats.played < 4 || currentDate.getDay() !== 1) {
+      return { players: squad, mails: [] };
+    }
+
+    const dateKey = toDateKey(currentDate);
+    const mails: MailMessage[] = [];
+    const squadAverage = squad.reduce((sum, p) => sum + p.overallRating, 0) / squad.length;
+    const sortedByQuality = [...squad].sort((a, b) => b.overallRating - a.overallRating);
+    const rankById = new Map(sortedByQuality.map((p, i) => [p.id, i + 1]));
+
+    const hasBoardAppealMail = (player: Player): boolean =>
+      existingMessages.some(m =>
+        m.metadata?.type === 'PLAYER_BOARD_APPEAL' &&
+        (m.metadata as Extract<typeof m.metadata, { type: 'PLAYER_BOARD_APPEAL' }>).playerId === player.id
+      );
+
+    const hasBoardDecisionMail = (player: Player): boolean =>
+      existingMessages.some(m =>
+        m.metadata?.type === 'BOARD_APPEAL_DECISION' &&
+        (m.metadata as Extract<typeof m.metadata, { type: 'BOARD_APPEAL_DECISION' }>).playerId === player.id &&
+        new Date(m.date).getTime() >= currentDate.getTime() - 60 * DAY_MS
+      );
+
+    const nextPlayers = squad.map(player => {
+      let withMorale = PlayerMoraleService.ensurePlayerState(player);
+      if (!withMorale.boardAppealSentAt || !withMorale.boardAppealDeadline) return withMorale;
+
+      const appealType = withMorale.boardAppealType ?? 'RAISE';
+      const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+
+      if (!hasBoardAppealMail(withMorale)) {
+        const subjectSuffix = appealType === 'RAISE' ? 'PODWYŻKA' : 'ZGODA NA ODEJŚCIE';
+        const bodyRaise = [
+          'Trenerze,',
+          '',
+          'Dyrektor sportowy zablokował negocjacje dotyczące mojego kontraktu.',
+          'Rozumiem strukturę decyzji w klubie, ale moje oczekiwania są uzasadnione',
+          'na tle mojego wkładu w grę zespołu.',
+          '',
+          'Zwróciłem się bezpośrednio do zarządu z prośbą o ponowne rozpatrzenie tej sprawy.',
+          'Poinformuję Pana o ich decyzji.',
+          '',
+          playerName,
+        ].join('\n');
+        const bodyTransfer = [
+          'Trenerze,',
+          '',
+          'Dyrektor sportowy nie pozwala mi odejść mimo moich wyraźnych oczekiwań.',
+          'Czuję, że moja przyszłość w tym klubie jest zablokowana decyzją jednej osoby.',
+          '',
+          'Postanowiłem zwrócić się bezpośrednio do zarządu z prośbą o zgodę na odejście.',
+          'Poinformuję Pana o ich odpowiedzi.',
+          '',
+          playerName,
+        ].join('\n');
+        mails.push({
+          id: `PLAYER_BOARD_APPEAL_${withMorale.id}_${dateKey}`,
+          sender: playerName,
+          role: 'Zawodnik',
+          subject: `APEL DO ZARZĄDU: ${withMorale.lastName} — ${subjectSuffix}`,
+          body: appealType === 'RAISE' ? bodyRaise : bodyTransfer,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 6,
+          metadata: {
+            type: 'PLAYER_BOARD_APPEAL',
+            playerId: withMorale.id,
+            appealType,
+            decisionDeadline: withMorale.boardAppealDeadline,
+          },
+        });
+      }
+
+      const decisionDeadlineDate = new Date(withMorale.boardAppealDeadline);
+      const decisionDue = !Number.isNaN(decisionDeadlineDate.getTime()) &&
+        dateOnly(currentDate).getTime() > dateOnly(decisionDeadlineDate).getTime();
+      if (!decisionDue || hasBoardDecisionMail(withMorale)) return withMorale;
+
+      const seed = stableHash(`${withMorale.id}_${dateKey}_BOARD_APPEAL`);
+      const rank = rankById.get(withMorale.id) ?? squad.length;
+      const marketValue = withMorale.marketValue ?? 0;
+      const annualSalary = withMorale.annualSalary ?? 0;
+      const raiseRequest = withMorale.contractRaiseRequest;
+
+      const sellScore =
+        boardAttributeScore(club.board?.chciwosc) * 2.5 +
+        (club.transferBudget < marketValue * 0.35 ? 4 : 0) +
+        (club.budget < marketValue * 0.2 ? 3 : 0) +
+        Math.min(4, marketValue / Math.max(1, annualSalary * 3)) +
+        seededRng(seed, 17) * 9 - 4.5;
+
+      const budgetCoversRaise = raiseRequest
+        ? club.budget >= raiseRequest.salary * 0.5
+        : club.budget >= annualSalary * 1.3;
+      const boardConfidence = club.boardConfidence ?? 60;
+      const managerBonus = (boardConfidence / 100) * seededRng(seed, 7) * 5;
+      const poorRelationBoost = boardConfidence < 40
+        ? (1 - boardConfidence / 100) * seededRng(seed, 89) * 4
+        : 0;
+
+      const raiseScore =
+        boardAttributeScore(club.board?.hojnosc) * 2.2 +
+        (budgetCoversRaise ? 3.5 : -2) +
+        (rank <= 3 ? 2.5 : rank <= 6 ? 1.5 : 0) +
+        managerBonus +
+        seededRng(seed, 31) * 7 - 3.5;
+
+      const directorPersonalityMod = (() => {
+        const p = club.sportingDirector?.personality;
+        if (p === 'CONTROLLER') return 3;
+        if (p === 'POLITICIAN') return 2;
+        if (p === 'ACCOUNTANT') return 1;
+        if (p === 'PARTNER') return -2;
+        if (p === 'TALENT_HUNTER') return -2;
+        return 0;
+      })();
+
+      const vetoScore =
+        boardAttributeScore(club.board?.cierpliwosc) * 2.0 +
+        ((club.sportingDirectorBoardInfluence ?? 50) / 100) * 6 +
+        (boardConfidence > 70 ? 2 : boardConfidence > 50 ? 0 : -2) +
+        directorPersonalityMod +
+        poorRelationBoost +
+        seededRng(seed, 53) * 6 - 3;
+
+      const decision: 'SELL' | 'RAISE' | 'VETO' =
+        sellScore > raiseScore && sellScore > vetoScore ? 'SELL' :
+        raiseScore > vetoScore ? 'RAISE' :
+        'VETO';
+
+      const ceoName = club.management?.ceo
+        ? `${club.management.ceo.firstName} ${club.management.ceo.lastName}`
+        : 'Zarząd Klubu';
+
+      const bodyDecision = (() => {
+        if (decision === 'SELL') {
+          const price = estimateProtectedExitPrice(withMorale, club, squadAverage);
+          return [
+            'Trenerze,',
+            '',
+            `Po analizie sytuacji zawodnika ${playerName}`,
+            `zarząd postanowił umieścić go na liście transferowej z ceną wywoławczą ${price.toLocaleString('pl-PL')} PLN.`,
+            '',
+            'Decyzja dyrektora sportowego została w tym przypadku nadpisana przez zarząd.',
+            '',
+            ceoName,
+            `Zarząd ${club.name}`,
+          ].join('\n');
+        }
+        if (decision === 'RAISE') {
+          return [
+            'Trenerze,',
+            '',
+            `Po przeanalizowaniu sprawy ${playerName}`,
+            'zarząd zdecydował się odblokować negocjacje kontraktowe.',
+            '',
+            'Może Pan ponownie przesłać ofertę kontraktową temu zawodnikowi.',
+            '',
+            ceoName,
+            `Zarząd ${club.name}`,
+          ].join('\n');
+        }
+        return [
+          'Trenerze,',
+          '',
+          `Po przeanalizowaniu sprawy zarząd podtrzymuje stanowisko dyrektora sportowego`,
+          `w kwestii ${playerName}.`,
+          '',
+          'Apel zawodnika został odrzucony.',
+          '',
+          ceoName,
+          `Zarząd ${club.name}`,
+        ].join('\n');
+      })();
+
+      const subjectDecision =
+        decision === 'SELL'
+          ? `ZARZĄD WYRAZIŁ ZGODĘ NA SPRZEDAŻ: ${withMorale.lastName}`
+          : decision === 'RAISE'
+            ? `ZARZĄD ODBLOKOWAŁ NEGOCJACJE KONTRAKTU: ${withMorale.lastName}`
+            : `ZARZĄD PODTRZYMAŁ DECYZJĘ DYREKTORA: ${withMorale.lastName}`;
+
+      mails.push({
+        id: `BOARD_APPEAL_DECISION_${withMorale.id}_${dateKey}`,
+        sender: ceoName,
+        role: 'Zarząd',
+        subject: subjectDecision,
+        body: bodyDecision,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 7,
+        metadata: {
+          type: 'BOARD_APPEAL_DECISION',
+          playerId: withMorale.id,
+          decision,
+          appealType,
+        },
+      });
+
+      if (decision === 'SELL') {
+        const askingPrice = estimateProtectedExitPrice(withMorale, club, squadAverage);
+        withMorale = {
+          ...PlayerMoraleService.withMoraleChange(withMorale, 6, 'Zarząd wyraził zgodę na sprzedaż po apelu zawodnika', currentDate),
+          isOnTransferList: true,
+          transferListPrice: askingPrice,
+          boardLockoutUntil: null,
+          boardAppealSentAt: null,
+          boardAppealType: null,
+          boardAppealDeadline: null,
+        };
+      } else if (decision === 'RAISE') {
+        withMorale = {
+          ...PlayerMoraleService.withMoraleChange(withMorale, 4, 'Zarząd odblokował negocjacje kontraktu po apelu zawodnika', currentDate),
+          boardLockoutUntil: null,
+          boardAppealSentAt: null,
+          boardAppealType: null,
+          boardAppealDeadline: null,
+        };
+      } else {
+        withMorale = {
+          ...PlayerMoraleService.withMindsetChange(
+            PlayerMoraleService.withMoraleChange(withMorale, -12, 'Zarząd podtrzymał decyzję dyrektora — apel odrzucony', currentDate),
+            { conflictLevel: 20, clubHappiness: -15 },
+            'Apel do zarządu odrzucony',
+            currentDate
+          ),
+          boardAppealSentAt: null,
+          boardAppealType: null,
+          boardAppealDeadline: null,
+        };
+      }
+
+      return withMorale;
+    });
+
+    return { players: nextPlayers, mails };
   },
 };

@@ -3297,6 +3297,14 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
         if (demandResult.mails.length > 0) {
           prependUniqueMessages(demandResult.mails);
         }
+        const appealResult = PlayerMoraleService.processBoardAppeals(userClub, finalPlayers[userTeamId], currentDate, messages);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: appealResult.players,
+        };
+        if (appealResult.mails.length > 0) {
+          prependUniqueMessages(appealResult.mails);
+        }
       }
     }
 
