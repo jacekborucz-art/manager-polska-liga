@@ -914,12 +914,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
         const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
 
-        // Krzywa kary: kondycja 100→0 | pow 75→0 | pow 60→-0.03 | pow 40→-0.07 | pow 20→-0.11
-        // Efekt jest widoczny dopiero poniżej 75 — im niżej tym boleśniej
+        // Krzywa kary: kondycja 85→0 | 78→-0.005 | 70→-0.015 | 65→-0.022 | 60→-0.031 | 55→-0.040
+        // ZMIANA (2026-06-09): próg podniesiony z 75 → 85, współczynnik z 0.14 → 0.17.
+        // Powód: poprzednie wartości były zbyt łagodne — drużyna z dobrą staminą (avg fatigue ~80)
+        // nie odczuwała żadnej kary za brak zmian (próg 75 nigdy nie był przekraczany).
+        // Teraz kara zaczyna się wcześniej (85) i jest bardziej odczuwalna, ale nadal lekka.
+        // Sprawiedliwość: drużyny z wysoką staminą kończą mecz na ~82 kondycji → kara -0.002 (pomijalna).
+        // Drużyny ze słabą staminą / bez zmian kończą na ~65-70 → kara -0.015 do -0.022 (odczuwalna).
+        // Mechanizm inicjatywy (fatInitiativeMod) jest już względny (różnica obu drużyn) — brak zmian
+        // tylko wtedy szkodzi, gdy rywal jest RELATYWNIE świeższy.
         const _fatiguePenalty = (avgFat: number): number => {
-          if (avgFat >= 75) return 0;
-          const depth = (75 - avgFat) / 75; // 0..1
-          return -(Math.pow(depth, 1.4) * 0.14);
+          if (avgFat >= 85) return 0;
+          const depth = (85 - avgFat) / 85; // 0..1
+          return -(Math.pow(depth, 1.4) * 0.17);
         };
         const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
         const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
