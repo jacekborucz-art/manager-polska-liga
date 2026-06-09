@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, Player, PlayerPosition, HealthStatus, InjurySeverity } from '../types';
 import { KitSelectionService } from '../services/KitSelectionService';
@@ -6,6 +6,8 @@ import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/st
 import { PlayerPresentationService } from '../services/PlayerPresentationService';
 import { TacticRepository } from '../resources/tactics_db';
 import { getClubLogo } from '../resources/ClubLogoAssets';
+import { KitPreview } from '../components/common/KitPreview';
+import { getActiveClubKits } from '../resources/ClubKits';
 
 import ligaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
 
@@ -22,6 +24,8 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
     lineups,
     currentDate,
   } = useGame();
+
+  const [selectedUserKitIndex, setSelectedUserKitIndex] = useState(0);
 
   const fixture = useMemo(() => {
     return fixtures.find(f =>
@@ -46,6 +50,13 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
 
   const homeClub = useMemo(() => fixture ? clubs.find(c => c.id === fixture.homeTeamId) : undefined, [fixture, clubs]);
   const awayClub = useMemo(() => fixture ? clubs.find(c => c.id === fixture.awayTeamId) : undefined, [fixture, clubs]);
+
+  const userKits = useMemo(() => {
+    if (!userTeamId) return [];
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return [];
+    return getActiveClubKits(userClub);
+  }, [userTeamId, clubs]);
 
   const weather = useMemo(() => {
     if (!homeClub || !fixture) return null;
@@ -97,8 +108,23 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
 
   const matchKits = useMemo(() => {
     if (!homeClub || !awayClub) return null;
-    return KitSelectionService.selectOptimalKits(homeClub, awayClub);
-  }, [homeClub, awayClub]);
+    const isUserHome = fixture?.homeTeamId === userTeamId;
+    const isUserAway = fixture?.awayTeamId === userTeamId;
+    if ((!isUserHome && !isUserAway) || userKits.length === 0) {
+      return KitSelectionService.selectOptimalKits(homeClub, awayClub);
+    }
+    const chosenKit = userKits[selectedUserKitIndex] ?? userKits[0];
+    const oppClub = isUserHome ? awayClub : homeClub;
+    const oppKitData = KitSelectionService.selectOpponentKit(chosenKit.shirt, oppClub);
+    const userKitData = {
+      primary: chosenKit.shirt,
+      shirtSecondary: chosenKit.shirtSecondary,
+      secondary: chosenKit.shorts,
+      pattern: chosenKit.pattern,
+      text: KitSelectionService.isColorLight(chosenKit.shirt) ? '#000000' : '#ffffff',
+    };
+    return isUserHome ? { home: userKitData, away: oppKitData } : { home: oppKitData, away: userKitData };
+  }, [homeClub, awayClub, fixture, userTeamId, userKits, selectedUserKitIndex]);
 
   const squadDetails = useMemo(() => {
     if (!fixture || !homeClub || !awayClub || !homeLineup || !awayLineup) return null;
@@ -239,6 +265,19 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
 
   const formatPlayerName = (p: Player) => `${p.firstName.charAt(0)}. ${p.lastName}`;
 
+  const formatClubName = (name: string): string => {
+    const parts = name.split(' ');
+    if (parts.length < 2 || name.length <= 13) return name;
+    return `${parts[0]} ${parts[1].slice(0, 2)}`;
+  };
+
+  const getOverallColor = (ov: number): string => {
+    if (ov >= 80) return 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300';
+    if (ov >= 70) return 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300';
+    if (ov >= 60) return 'bg-blue-500/20 border-blue-500/40 text-blue-300';
+    return 'bg-slate-600/20 border-slate-500/40 text-slate-400';
+  };
+
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden relative text-slate-100">
 
@@ -257,15 +296,10 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
           <div className={GLOSS_LAYER} />
           <div className="relative z-10 flex items-center justify-between">
             {/* Lewa — gospodarz */}
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center flex-1">
               {getClubLogo(homeClub.id) && (
                 <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
               )}
-              <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Gospodarz</p>
-                <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{homeClub.name}</h2>
-                <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">{homeTactic?.name || '—'}</p>
-              </div>
             </div>
 
             {/* Środek — tytuł */}
@@ -285,12 +319,7 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
             </div>
 
             {/* Prawa — gość */}
-            <div className="flex items-center gap-4 flex-1 justify-end text-right">
-              <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Gość</p>
-                <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{awayClub.name}</h2>
-                <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">{awayTactic?.name || '—'}</p>
-              </div>
+            <div className="flex items-center flex-1 justify-end">
               {getClubLogo(awayClub.id) && (
                 <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
               )}
@@ -305,12 +334,14 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
           <div className={GLASS_CARD + " w-64 p-5 flex flex-col shrink-0"}>
             <div className={GLOSS_LAYER} />
             <div className="relative z-10 flex flex-col h-full">
-              <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.4em] text-center mb-3">{homeClub.name} — Skład</p>
+              <p className="text-[9px] font-black text-white uppercase tracking-[0.4em] text-center mb-0.5">{homeClub.name}</p>
+              <p className="text-[8px] font-black text-emerald-400 uppercase tracking-[0.3em] text-center mb-3">{homeTactic?.name || '—'}</p>
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
                 {squadDetails.hXI.map(p => (
                   <div key={p.id} className="flex items-center gap-2 py-1 border-b border-white/[0.03]">
                     <span className={`font-mono font-black text-[9px] w-7 shrink-0 ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
-                    <span className="text-[11px] font-bold text-white uppercase italic truncate">{formatPlayerName(p)}</span>
+                    <span className="text-[11px] font-bold text-white uppercase italic truncate flex-1">{formatPlayerName(p)}</span>
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black border ${getOverallColor(p.overallRating)}`}>{p.overallRating}</span>
                   </div>
                 ))}
                 {squadDetails.hBench.length > 0 && (
@@ -319,7 +350,8 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
                     {squadDetails.hBench.map(p => (
                       <div key={p.id} className="flex items-center gap-2 py-0.5 opacity-45">
                         <span className="font-mono text-[9px] w-7 shrink-0 text-slate-500">{p.position}</span>
-                        <span className="text-[10px] text-slate-400 uppercase truncate">{formatPlayerName(p)}</span>
+                        <span className="text-[10px] text-slate-400 uppercase truncate flex-1">{formatPlayerName(p)}</span>
+                        <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black border border-slate-500/40 text-slate-400">{p.overallRating}</span>
                       </div>
                     ))}
                   </>
@@ -350,7 +382,7 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
               <div className={GLASS_CARD + " flex-[2] p-4"}>
                 <div className={GLOSS_LAYER} />
                 <div className="relative z-10 text-center">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-1">Miejsce Rozegrania</p>
+                  <p className="text-[9px] font-black text-cyan-400 uppercase tracking-[0.4em] mb-1">Stadion</p>
                   <p className="text-lg font-black text-white italic uppercase truncate">{homeClub.stadiumName}</p>
                   <p className="text-slate-400 text-[10px] capitalize">{homeClub.name}</p>
                 </div>
@@ -420,23 +452,77 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
               </div>
             </div>
 
+            <div className="w-full border-t border-yellow-400/20" />
+
             {/* ETYKIETA MECZU */}
             <div className="flex-1 flex flex-col items-center justify-center gap-5">
-              <div className="flex items-center gap-6">
+              <div className="flex items-start gap-6">
                 {getClubLogo(homeClub.id) && (
                   <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-20 h-20 object-contain drop-shadow-2xl opacity-90 transform -rotate-3" />
                 )}
-                <div className="text-center">
-                  <p className="text-emerald-400 text-[9px] font-black uppercase tracking-[0.6em]">UEFA Conference League</p>
-                  <h2 className="text-5xl font-black italic uppercase tracking-tighter text-white leading-none my-1">
-                    {homeClub.name} <span className="text-emerald-400">vs</span> {awayClub.name}
-                  </h2>
-                  <p className="text-slate-400 text-sm uppercase tracking-widest">{roundLabel}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-emerald-400 text-[9px] font-black uppercase tracking-[0.6em] text-center">UEFA Conference League</p>
+                  <div className="flex items-baseline gap-4 my-1">
+                    <span className="flex-1 text-right text-5xl font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap">{formatClubName(homeClub.name)}</span>
+                    <span className="shrink-0 text-5xl font-black italic text-emerald-400 leading-none">vs</span>
+                    <span className="flex-1 text-left text-5xl font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap">{formatClubName(awayClub.name)}</span>
+                  </div>
+                  <p className="text-slate-400 text-sm uppercase tracking-widest text-center">{roundLabel}</p>
+                  <div className="flex items-start justify-center gap-[400px] mt-3">
+                    <div className="flex items-center gap-2">
+                      <KitPreview
+                        shirt={matchKits.home.primary}
+                        shirtSecondary={matchKits.home.shirtSecondary}
+                        shorts={matchKits.home.secondary}
+                        socks={matchKits.home.secondary}
+                        pattern={matchKits.home.pattern}
+                        className={`h-40 w-[140px]${!KitSelectionService.isColorLight(matchKits.home.primary) ? ' drop-shadow-[0_0_16px_rgba(255,255,255,0.28)]' : ''}`}
+                      />
+                      {fixture.homeTeamId === userTeamId && userKits.length > 1 && (
+                        <div className="flex flex-col gap-1.5">
+                          {userKits.map((kit, i) => (
+                            <button
+                              key={kit.id}
+                              onClick={() => setSelectedUserKitIndex(i)}
+                              title={kit.name}
+                              className={`w-4 h-4 rounded-full border-2 transition-all ${i === selectedUserKitIndex ? 'border-emerald-400 scale-125 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'border-white/20 hover:border-white/50'}`}
+                              style={{ backgroundColor: kit.shirt }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {fixture.awayTeamId === userTeamId && userKits.length > 1 && (
+                        <div className="flex flex-col gap-1.5">
+                          {userKits.map((kit, i) => (
+                            <button
+                              key={kit.id}
+                              onClick={() => setSelectedUserKitIndex(i)}
+                              title={kit.name}
+                              className={`w-4 h-4 rounded-full border-2 transition-all ${i === selectedUserKitIndex ? 'border-emerald-400 scale-125 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'border-white/20 hover:border-white/50'}`}
+                              style={{ backgroundColor: kit.shirt }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <KitPreview
+                        shirt={matchKits.away.primary}
+                        shirtSecondary={matchKits.away.shirtSecondary}
+                        shorts={matchKits.away.secondary}
+                        socks={matchKits.away.secondary}
+                        pattern={matchKits.away.pattern}
+                        className={`h-40 w-[140px]${!KitSelectionService.isColorLight(matchKits.away.primary) ? ' drop-shadow-[0_0_16px_rgba(255,255,255,0.28)]' : ''}`}
+                      />
+                    </div>
+                  </div>
                 </div>
                 {getClubLogo(awayClub.id) && (
                   <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-20 h-20 object-contain drop-shadow-2xl opacity-90 transform rotate-3" />
                 )}
               </div>
+
+              <div className="w-full border-t border-yellow-400/20 my-1" />
 
               {showLineupWarning && (
                 <div className="w-full max-w-lg bg-red-950/60 border border-red-500/40 rounded-[24px] px-6 py-4 flex items-center gap-4 shadow-[0_0_30px_rgba(239,68,68,0.15)]">
@@ -459,7 +545,7 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
                 onClick={() => navigateTo(ViewState.MATCH_LIVE_CONF)}
                 className="px-20 py-5 rounded-[30px] bg-emerald-500 hover:bg-emerald-400 text-white font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(52,211,153,0.35)] border-b-4 border-emerald-700"
               >
-                ZAGRAJ NA ŻYWO 🟢
+                ROZPOCZNIJ MECZ 🟢
               </button>
               <button
                 onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
@@ -474,12 +560,14 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
           <div className={GLASS_CARD + " w-64 p-5 flex flex-col shrink-0"}>
             <div className={GLOSS_LAYER} />
             <div className="relative z-10 flex flex-col h-full">
-              <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.4em] text-center mb-3">{awayClub.name} — Skład</p>
+              <p className="text-[9px] font-black text-white uppercase tracking-[0.4em] text-center mb-0.5">{awayClub.name}</p>
+              <p className="text-[8px] font-black text-emerald-400 uppercase tracking-[0.3em] text-center mb-3">{awayTactic?.name || '—'}</p>
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 text-right">
                 {squadDetails.aXI.map(p => (
                   <div key={p.id} className="flex items-center gap-2 py-1 border-b border-white/[0.03] flex-row-reverse">
                     <span className={`font-mono font-black text-[9px] w-7 shrink-0 text-right ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
-                    <span className="text-[11px] font-bold text-white uppercase italic truncate">{formatPlayerName(p)}</span>
+                    <span className="text-[11px] font-bold text-white uppercase italic truncate flex-1">{formatPlayerName(p)}</span>
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black border ${getOverallColor(p.overallRating)}`}>{p.overallRating}</span>
                   </div>
                 ))}
                 {squadDetails.aBench.length > 0 && (
@@ -488,7 +576,8 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
                     {squadDetails.aBench.map(p => (
                       <div key={p.id} className="flex items-center gap-2 py-0.5 opacity-45 flex-row-reverse">
                         <span className="font-mono text-[9px] w-7 shrink-0 text-slate-500">{p.position}</span>
-                        <span className="text-[10px] text-slate-400 uppercase truncate">{formatPlayerName(p)}</span>
+                        <span className="text-[10px] text-slate-400 uppercase truncate flex-1">{formatPlayerName(p)}</span>
+                        <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black border border-slate-500/40 text-slate-400">{p.overallRating}</span>
                       </div>
                     ))}
                   </>

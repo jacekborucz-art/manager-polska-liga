@@ -9,6 +9,7 @@ import { KitSelectionService } from '../services/KitSelectionService';
 import ligaMistrzowBg from '../Graphic/themes/Liga_mistrzow.png';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
 import ligaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { getClubLogo } from '../resources/ClubLogoAssets';
 
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
@@ -279,10 +280,13 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-right break-words leading-none flex-1">
                 {homeClub.name}
               </h2>
-              <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform -rotate-3">
-                <div style={{ backgroundColor: homeClub.colorsHex[0] }} className="flex-1" />
-                <div style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} className="flex-1" />
-              </div>
+              {getClubLogo(homeClub.id)
+                ? <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-16 h-16 object-contain shrink-0 drop-shadow-2xl transform -rotate-3" />
+                : <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform -rotate-3">
+                    <div style={{ backgroundColor: homeClub.colorsHex[0] }} className="flex-1" />
+                    <div style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} className="flex-1" />
+                  </div>
+              }
             </div>
             {renderSideEvents('HOME')}
           </div>
@@ -300,10 +304,13 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
           {/* Away Side */}
           <div className="flex-1 flex flex-col items-start gap-3 min-w-0">
             <div className="flex items-center gap-6 justify-start w-full">
-              <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform rotate-3">
-                <div style={{ backgroundColor: awayClub.colorsHex[0] }} className="flex-1" />
-                <div style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} className="flex-1" />
-              </div>
+              {getClubLogo(awayClub.id)
+                ? <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-16 h-16 object-contain shrink-0 drop-shadow-2xl transform rotate-3" />
+                : <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform rotate-3">
+                    <div style={{ backgroundColor: awayClub.colorsHex[0] }} className="flex-1" />
+                    <div style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} className="flex-1" />
+                  </div>
+              }
               <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-left break-words leading-none flex-1">
                 {awayClub.name}
               </h2>
