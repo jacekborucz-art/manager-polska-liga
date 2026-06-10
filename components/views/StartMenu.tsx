@@ -10,6 +10,7 @@ export const StartMenu: React.FC = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  const [showResolutionNotice, setShowResolutionNotice] = useState(false);
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -78,7 +79,7 @@ export const StartMenu: React.FC = () => {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="relative max-w-3xl w-full mx-6 max-h-[80vh] overflow-y-auto bg-slate-900/40 border border-white/10 rounded-[24px] p-8">
             <button
-              onClick={() => setShowDisclaimer(false)}
+              onClick={() => { setShowDisclaimer(false); setShowResolutionNotice(true); }}
               className="absolute top-4 right-4 text-4xl text-white/40 hover:text-white transition-colors leading-none"
             >
               ✕
@@ -93,6 +94,30 @@ export const StartMenu: React.FC = () => {
               <p>Projekt nie generuje przychodów, nie zawiera płatnych funkcji, reklam ani elementów monetyzacji.</p>
               <p>Właściciele praw, którzy uważają, że określony element projektu narusza ich prawa, mogą skontaktować się z autorem w celu jego usunięcia lub zmiany.</p>
               <p className="text-white">Autor: JayJayBi &nbsp;|&nbsp; Data: marzec 2026</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESOLUTION NOTICE POPUP */}
+      {showResolutionNotice && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative max-w-xl w-full mx-6 bg-slate-900/40 border border-white/10 rounded-[24px] p-8">
+            <button
+              onClick={() => setShowResolutionNotice(false)}
+              className="absolute top-4 right-4 text-4xl text-white/40 hover:text-white transition-colors leading-none"
+            >
+              ✕
+            </button>
+            <p className="text-[13px] font-black text-amber-500 uppercase tracking-widest mb-4">WYMAGANIA EKRANU</p>
+            <div className="flex flex-col gap-3 text-[15px] font-black italic text-slate-300 tracking-wide leading-relaxed">
+              <p>Gra jest zoptymalizowana do rozdzielczości <span className="text-white">1920x1080</span>. Można grać przy wyższej rozdzielczości, jednak przy niższej układ grafiki może być nieprawidłowy.</p>
+              <p>Dla najlepszego doświadczenia przy rozdzielczości <span className="text-white">1920x1080</span> zalecamy włączenie trybu <span className="text-white">pełnoekranowego</span>.</p>
+              <p className="text-slate-400">Pełny ekran możesz włączyć:</p>
+              <ul className="flex flex-col gap-1 text-slate-300 pl-2">
+                <li>— klawiszem <span className="text-white">Fn + F11</span> na klawiaturze</li>
+                <li>— z menu głównego: <span className="text-white">OPCJE → WŁĄCZ PEŁNY EKRAN</span></li>
+              </ul>
             </div>
           </div>
         </div>
