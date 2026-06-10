@@ -225,6 +225,22 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     body: 'Niestety, badania potwierdziły uraz u zawodnika {PLAYER}. Przewidywany rozbrat z futbollem to około {DAYS} dni. To spore wyzwanie dla składu, ale rozpoczynamy intensywną rehabilitację.'
   },
   {
+    id: 'staff_emergency_gk_hired',
+    type: MailType.STAFF,
+    sender: 'Sztab Szkoleniowy',
+    role: 'Asystent Trenera',
+    subject: 'Awaryjny bramkarz: {PLAYER} dołączył do składu',
+    body: 'Trenerze, ze względu na brak dostępnych bramkarzy tymczasowo dołączyliśmy do składu juniora {PLAYER}. Będzie do dyspozycji do czasu powrotu podstawowego golkipera do pełnej sprawności.'
+  },
+  {
+    id: 'staff_emergency_gk_fired',
+    type: MailType.STAFF,
+    sender: 'Sztab Szkoleniowy',
+    role: 'Asystent Trenera',
+    subject: 'Powrót bramkarza — {PLAYER} odchodzi',
+    body: 'Trenerze, podstawowy bramkarz wrócił do pełnej sprawności. Awaryjny junior {PLAYER} opuścił skład i wrócił do akademii.'
+  },
+  {
     id: 'board_league_champion',
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',

@@ -102,19 +102,20 @@ export const StartMenu: React.FC = () => {
       {/* RESOLUTION NOTICE POPUP */}
       {showResolutionNotice && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="relative max-w-xl w-full mx-6 bg-slate-900/40 border border-white/10 rounded-[24px] p-8">
+          <div className="relative max-w-3xl w-full mx-6 bg-slate-900/40 border border-white/10 rounded-[24px] p-12">
             <button
               onClick={() => setShowResolutionNotice(false)}
               className="absolute top-4 right-4 text-4xl text-white/40 hover:text-white transition-colors leading-none"
             >
               ✕
             </button>
-            <p className="text-[13px] font-black text-amber-500 uppercase tracking-widest mb-4">WYMAGANIA EKRANU</p>
-            <div className="flex flex-col gap-3 text-[15px] font-black italic text-slate-300 tracking-wide leading-relaxed">
+            <p className="text-[22px] font-black text-amber-500 uppercase tracking-widest text-center mb-4">WYMAGANIA EKRANU</p>
+            <div className="w-full h-px bg-amber-500/30 mb-6" />
+            <div className="flex flex-col gap-5 text-[20px] font-black italic text-slate-300 tracking-wide leading-relaxed">
               <p>Gra jest zoptymalizowana do rozdzielczości <span className="text-white">1920x1080</span>. Można grać przy wyższej rozdzielczości, jednak przy niższej układ grafiki może być nieprawidłowy.</p>
               <p>Dla najlepszego doświadczenia przy rozdzielczości <span className="text-white">1920x1080</span> zalecamy włączenie trybu <span className="text-white">pełnoekranowego</span>.</p>
               <p className="text-slate-400">Pełny ekran możesz włączyć:</p>
-              <ul className="flex flex-col gap-1 text-slate-300 pl-2">
+              <ul className="flex flex-col gap-2 text-slate-300 pl-2">
                 <li>— klawiszem <span className="text-white">Fn + F11</span> na klawiaturze</li>
                 <li>— z menu głównego: <span className="text-white">OPCJE → WŁĄCZ PEŁNY EKRAN</span></li>
               </ul>
