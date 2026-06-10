@@ -29,7 +29,7 @@ const NT_MID = 8;
 const NT_FWD = 6;
 
 const NT_TIER_OVR_CAP: Record<number, number> = {
-  1: 99, 2: 87, 3: 77, 4: 67, 5: 57,
+  1: 99, 2: 95, 3: 90, 4: 80, 5: 70,
 };
 
 const KNOWN_CLUBS = [
@@ -79,13 +79,13 @@ const TEAM_SELECTION_RULES: Record<string, TeamSelectionRule> = {
   'San Marino': { maxOverall: 52, starThreshold: 52, maxStars: 0, fallbackMaxOverall: 52 },
   Luksemburg: { maxOverall: 55, starThreshold: 55, maxStars: 1 },
   Norwegia: { minStars: 3, maxStars: 5 },
-  Walia: { maxOverall: 75, starThreshold: 73, maxStars: 2 },
-  Irlandia: { maxOverall: 75, starThreshold: 73, maxStars: 2 },
+  Walia: { maxStars: 2 },
+  Irlandia: { maxStars: 2 },
   'Irlandia Północna': { maxOverall: 69, starThreshold: 68, maxStars: 1 },
-  Szkocja: { maxOverall: 79, starThreshold: 77, maxStars: 2 },
+  Szkocja: { maxStars: 2 },
   Jamajka: { maxOverall: 74, starThreshold: 72, maxStars: 2 },
   'Nowa Zelandia': { maxOverall: 72, starThreshold: 70, maxStars: 2 },
-  Iran: { maxOverall: 76, starThreshold: 75, maxStars: 1 },
+  Iran: { maxStars: 1 },
 };
 
 const sortTeamsByPriority = (teams: NationalTeam[]): NationalTeam[] =>
