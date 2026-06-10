@@ -14,6 +14,7 @@
     "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@types/three": "^0.184.1",
