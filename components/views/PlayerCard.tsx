@@ -8,6 +8,11 @@ import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { PlayerRoleMindflowModal } from '../modals/PlayerRoleMindflowModal';
 import { PlayerTransferMindflowModal } from '../modals/PlayerTransferMindflowModal';
+// ── Transfer Request Dialog ──────────────────────────────────────────────────
+// Modal dla 4 ścieżek rozmowy po prośbie o listę (nie isUntouchable).
+// Serwis: PlayerTransferRequestDialogService | Handler: resolvePlayerTransferRequestDialog
+import { PlayerTransferRequestModal } from '../modals/PlayerTransferRequestModal';
+import { TransferRequestDialogResult } from '../../services/PlayerTransferRequestDialogService';
 
 const COUNTRY_FLAG_CODES: Record<string, string> = {
   Albania: 'AL', Andora: 'AD', Armenia: 'AM', Austria: 'AT', Azerbejdżan: 'AZ',
@@ -125,7 +130,7 @@ const getCountryFlagCode = (country: string, region: Region): string | null => {
 };
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, submitLoanOffer, sessionSeed } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, submitLoanOffer, sessionSeed } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -139,6 +144,11 @@ export const PlayerCard: React.FC = () => {
   const [showAllCareer, setShowAllCareer] = useState(false);
   const [isRoleMindflowOpen, setIsRoleMindflowOpen] = useState(false);
   const [isTransferMindflowOpen, setIsTransferMindflowOpen] = useState(false);
+  // ── Transfer Request Dialog — stan modalu (4 ścieżki A/B/C/D) ───────────────
+  // Otwierany przez przycisk w sekcji transferListDemandDeadline (gdy !isUntouchable)
+  // lub przez MailDetailsModal (przycisk "Porozmawiaj").
+  // Serwis: PlayerTransferRequestDialogService
+  const [isTransferRequestDialogOpen, setIsTransferRequestDialogOpen] = useState(false);
   useEffect(() => {
     if (pendingOpenTalk) {
       setIsTalkPanelOpen(true);
@@ -151,6 +161,13 @@ export const PlayerCard: React.FC = () => {
       setPendingOpenRoleMindflow(false);
     }
   }, [pendingOpenRoleMindflow]);
+  // Otwiera Transfer Request Dialog po nawigacji z MailDetailsModal
+  useEffect(() => {
+    if (pendingOpenTransferRequestDialog) {
+      setIsTransferRequestDialogOpen(true);
+      setPendingOpenTransferRequestDialog(false);
+    }
+  }, [pendingOpenTransferRequestDialog]);
   const button3DStyle: React.CSSProperties = {
     boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
   };
@@ -613,6 +630,18 @@ export const PlayerCard: React.FC = () => {
                         className="mt-2 w-full rounded-[10px] border border-red-400/30 bg-red-500/15 px-2 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-red-100 transition-colors hover:bg-red-500/25"
                       >
                         Porozmawiaj o przyszłości
+                      </button>
+                    )}
+                    {!player.isUntouchable && (
+                      // ── Transfer Request Dialog (ścieżki A/B/C/D) ─────────────────────
+                      // Otwiera PlayerTransferRequestModal — 4 ścieżki rozmowy z zawodnikiem.
+                      // Serwis: PlayerTransferRequestDialogService
+                      // Handler: GameContext.resolvePlayerTransferRequestDialog
+                      <button
+                        onClick={() => setIsTransferRequestDialogOpen(true)}
+                        className="mt-2 w-full rounded-[10px] border border-orange-400/30 bg-orange-500/15 px-2 py-1.5 text-[8px] font-black italic uppercase tracking-tighter text-orange-100 transition-colors hover:bg-orange-500/25"
+                      >
+                        Porozmawiaj z zawodnikiem
                       </button>
                     )}
                   </div>
@@ -1597,6 +1626,20 @@ export const PlayerCard: React.FC = () => {
           sessionSeed={sessionSeed}
           onResolve={result => resolvePlayerTransferConversation(player.id, result)}
           onClose={() => setIsTransferMindflowOpen(false)}
+        />
+      )}
+
+      {isTransferRequestDialogOpen && (
+        // ── Transfer Request Dialog ────────────────────────────────────────────
+        // Ścieżki A/B/C/D: obietnica kontraktu, zgoda po sezonie, odmowa, brak rozmowy.
+        // Wynik trafia do GameContext.resolvePlayerTransferRequestDialog.
+        // Serwis: PlayerTransferRequestDialogService
+        <PlayerTransferRequestModal
+          player={playerMorale}
+          currentDate={currentDate}
+          sessionSeed={sessionSeed}
+          onResolve={(result: TransferRequestDialogResult) => resolvePlayerTransferRequestDialog(player.id, result)}
+          onClose={() => setIsTransferRequestDialogOpen(false)}
         />
       )}
 

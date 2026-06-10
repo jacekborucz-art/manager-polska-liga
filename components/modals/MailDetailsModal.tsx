@@ -620,6 +620,10 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     viewPlayerDetails,
     setContractManagementInitialMode,
     setPendingOpenRoleMindflow,
+    // ── Transfer Request Dialog ──────────────────────────────────────────────
+    // Flaga: PlayerCard wykrywa ją i otwiera PlayerTransferRequestModal.
+    // Logika: PlayerTransferRequestDialogService | Handler: resolvePlayerTransferRequestDialog
+    setPendingOpenTransferRequestDialog,
     setTransferNewsActiveTab,
     currentDate,
     clubs,
@@ -940,6 +944,15 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                     viewPlayerDetails(mail.metadata!.playerId);
                     setContractManagementInitialMode('NEGOTIATE');
                     navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+                  } else if (mail.metadata!.requestType === 'TRANSFER_LIST') {
+                    // ── Transfer Request Dialog ──────────────────────────────────────────
+                    // Otwiera PlayerTransferRequestModal przez PlayerCard.
+                    // setPendingOpenTransferRequestDialog ustawia flagę, którą PlayerCard
+                    // wykrywa w useEffect i otwiera modal (wzorzec identyczny jak ROLE).
+                    // Serwis: PlayerTransferRequestDialogService
+                    // ────────────────────────────────────────────────────────────────────
+                    viewPlayerDetails(mail.metadata!.playerId);
+                    setPendingOpenTransferRequestDialog(true);
                   } else {
                     viewPlayerDetails(mail.metadata!.playerId);
                     setPendingOpenRoleMindflow(mail.metadata!.requestType === 'ROLE' || mail.metadata!.requestType === 'ROLE_PLAYTIME');
@@ -952,7 +965,9 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                   ? 'Otwórz kontrakt'
                   : mail.metadata.requestType === 'ROLE' || mail.metadata.requestType === 'ROLE_PLAYTIME'
                     ? 'Otwórz rozmowę'
-                    : 'Otwórz kartę'}
+                    : mail.metadata.requestType === 'TRANSFER_LIST'
+                      ? 'Porozmawiaj'
+                      : 'Otwórz kartę'}
               </button>
             )}
 

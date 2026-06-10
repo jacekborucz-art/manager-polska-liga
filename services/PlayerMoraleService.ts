@@ -669,6 +669,11 @@ export const PlayerMoraleService = {
     contractRaiseTeamMoraleReason: player.contractRaiseTeamMoraleReason ?? null,
     reserveProtestUntil: player.reserveProtestUntil ?? null,
     moraleDemandLockoutUntil: player.moraleDemandLockoutUntil ?? null,
+    // ── Transfer Request Dialog (PlayerTransferRequestDialogService) ──────────
+    transferContractPromise: player.transferContractPromise ?? null,
+    transferAllowAfterSeason: player.transferAllowAfterSeason ?? false,
+    transferAllowAfterSeasonDeadline: player.transferAllowAfterSeasonDeadline ?? null,
+    transferRequestPendingResponse: player.transferRequestPendingResponse ?? null,
   }),
 
   getMoraleDemandLockoutUntil: (currentDate: Date): string => {
@@ -726,6 +731,13 @@ export const PlayerMoraleService = {
     contractRaiseTeamMoraleDelta: null,
     contractRaiseTeamMoraleReason: null,
     reserveProtestUntil: null,
+    // ── Transfer Request Dialog — czyść po podpisaniu kontraktu ──────────────
+    // Podpisanie kontraktu = obietnica A została spełniona (lub nieaktualna)
+    // PlayerTransferRequestDialogService zarządza tymi polami
+    transferContractPromise: null,
+    transferAllowAfterSeason: false,
+    transferAllowAfterSeasonDeadline: null,
+    transferRequestPendingResponse: null,
   }),
 
   applySeasonOutcomeMindflow: (

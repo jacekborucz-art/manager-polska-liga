@@ -521,6 +521,37 @@ export interface MailMessage {
     questionIds: string[];
     placeholders: Record<string, string>;
     deadline: string;
+  } | {
+    // ── Transfer Request Dialog — odpowiedź gracza po THINKING ──────────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewPendingResponse
+    // Obsługiwane przez: GameContext.resolvePlayerTransferRequestDialog
+    type: 'TRANSFER_REQUEST_PLAYER_RESPONSE';
+    playerId: string;
+    reaction: 'AGREED' | 'REFUSED';
+    managerChoice: 'PROMISE_CONTRACT' | 'ALLOW_END_OF_SEASON' | 'REFUSE_IMPORTANT';
+    /** % podwyżki wybrany przez gracza (ścieżka A); null dla B i C. */
+    promisedRaisePct: number | null;
+  } | {
+    // ── Przypomnienie o obietnicy kontraktowej (14 dni przed deadline) ───────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewContractPromise
+    // Wyświetlane w: MailDetailsModal — gracz powinien teraz negocjować kontrakt
+    type: 'TRANSFER_CONTRACT_PROMISE_REMINDER';
+    playerId: string;
+    salaryRaisePct: number;
+    deadlineAt: string;
+  } | {
+    // ── Złamana obietnica kontraktowa (deadline minął, brak podwyżki) ────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewContractPromise
+    // Skutki: conflictLevel +25, coachTrust −30, morale −8 (stosuje GameContext)
+    type: 'TRANSFER_CONTRACT_PROMISE_BROKEN';
+    playerId: string;
+    salaryRaisePct: number;
+  } | {
+    // ── Złamana obietnica odejścia po sezonie ─────────────────────────────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewAllowAfterSeason
+    // Skutki: conflictLevel +20, coachTrust −25, morale −6 (stosuje GameContext)
+    type: 'TRANSFER_AFTER_SEASON_BROKEN';
+    playerId: string;
   };
 }
 
@@ -1192,6 +1223,47 @@ export interface PlayerLoanInfo {
   monthlyReports?: PlayerLoanMonthlyReport[];
 }
 
+// ─── Transfer Request Dialog — nowe interfejsy ────────────────────────────────
+// Używane przez: PlayerTransferRequestDialogService.ts
+// Modal:        components/modals/PlayerTransferRequestModal.tsx
+// Handler:      GameContext.resolvePlayerTransferRequestDialog
+// Daily check:  GameContext (advanceDay) → PlayerTransferRequestDialogService.reviewContractPromise
+//               + PlayerTransferRequestDialogService.reviewAllowAfterSeason
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Obietnica kontraktowa złożona zawodnikowi po prośbie o listę transferową (ścieżka A).
+ *  Zapisywana na player.transferContractPromise.
+ *  Jeśli trener nie podpisze nowego kontraktu do deadlineAt:
+ *    conflictLevel +25, coachTrust −30, morale −8, mail TRANSFER_CONTRACT_PROMISE_BROKEN. */
+export interface TransferContractPromise {
+  /** ISO date złożenia obietnicy. */
+  madeAt: string;
+  /** ISO date deadline spełnienia (= koniec sezonu = 30 czerwca). */
+  deadlineAt: string;
+  /** % podwyżki wybrany losowo przez zawodnika z puli: 15 | 25 | 35 | 45 | 50 | 75 | 100.
+   *  PlayerContractMindflowService powinien sprawdzać to pole przy rozmowach kontraktowych. */
+  salaryRaisePct: number;
+  /** ISO date pierwszego przypomnienia wysłanego do managera; null = jeszcze nie wysłano.
+   *  Przypomnienie wysyłane 14 dni przed deadlineAt. */
+  reminderSentAt: string | null;
+  /** true = trener nie spełnił obietnicy — kary już zostały naliczone. */
+  broken: boolean;
+}
+
+/** Stan "gracz zastanawia się" — odpowie po 5–14 dniach od daty rozmowy.
+ *  Zapisywana na player.transferRequestPendingResponse.
+ *  Sprawdzana codziennie; po responseExpectedBy gracz daje ostateczną odpowiedź (AGREED / REFUSED). */
+export interface TransferRequestPendingResponse {
+  /** Ścieżka wybrana przez managera podczas rozmowy. */
+  managerChoice: 'PROMISE_CONTRACT' | 'ALLOW_END_OF_SEASON' | 'REFUSE_IMPORTANT';
+  /** ISO date — do kiedy gracz musi odpowiedzieć. */
+  responseExpectedBy: string;
+  /** Wynik sub-dialogu (suma punktów z pytań). Wpływa na szansę AGREED przy finalizacji. */
+  dialogScore: number;
+  /** Dla ścieżki PROMISE_CONTRACT: % podwyżki wybrany przez gracza; null dla B i C. */
+  promisedRaisePct: number | null;
+}
+
 export interface Player {
   id: string;
   firstName: string;
@@ -1260,6 +1332,19 @@ export interface Player {
   roleDemandUntil?: string | null;
   requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   transferListDemandUntil?: string | null;
+  // ─── Transfer Request Dialog (ścieżki A–D po prośbie o listę transferową) ────
+  // Serwis:    services/PlayerTransferRequestDialogService.ts
+  // Modal:     components/modals/PlayerTransferRequestModal.tsx
+  // Handler:   GameContext.resolvePlayerTransferRequestDialog
+  // Daily:     GameContext (advanceDay) → reviewContractPromise + reviewAllowAfterSeason
+  /** Obietnica kontraktowa złożona zawodnikowi (ścieżka A). Czyść po podpisaniu kontraktu. */
+  transferContractPromise?: TransferContractPromise | null;
+  /** true = manager zgodził się na odejście po sezonie (ścieżka B). */
+  transferAllowAfterSeason?: boolean;
+  /** ISO date końca sezonu — deadline dla wystawienia na listę transferową (ścieżka B). */
+  transferAllowAfterSeasonDeadline?: string | null;
+  /** Oczekująca odpowiedź gracza — "zastanawia się" 5–14 dni (THINKING state). */
+  transferRequestPendingResponse?: TransferRequestPendingResponse | null;
   contractRaiseDemandUntil?: string | null;
   contractRaiseRequest?: {
     salary: number;

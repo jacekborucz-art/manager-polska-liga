@@ -127,6 +127,10 @@ import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowService';
 import { PlayerTransferConversationResult } from '../services/PlayerTransferMindflowService';
+// ── Transfer Request Dialog ──────────────────────────────────────────────────
+// 4 ścieżki rozmowy po prośbie o listę transferową (A/B/C/D).
+// Modal: PlayerTransferRequestModal | Serwis: PlayerTransferRequestDialogService
+import { PlayerTransferRequestDialogService, TransferRequestDialogResult } from '../services/PlayerTransferRequestDialogService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
@@ -961,6 +965,12 @@ finalizeFreeAgentContract: (mailId: string) => void;
   conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
   resolvePlayerRoleConversation: (playerId: string, result: PlayerRoleConversationResult) => void;
   resolvePlayerTransferConversation: (playerId: string, result: PlayerTransferConversationResult) => void;
+  // ── Transfer Request Dialog ──────────────────────────────────────────────
+  // Stosuje wynik dialogu A/B/C/D (morale, mindset, obietnice, flagi).
+  // Serwis: PlayerTransferRequestDialogService | Modal: PlayerTransferRequestModal
+  resolvePlayerTransferRequestDialog: (playerId: string, result: TransferRequestDialogResult) => void;
+  pendingOpenTransferRequestDialog: boolean;
+  setPendingOpenTransferRequestDialog: (v: boolean) => void;
   fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
   extendStaffContract: (staffId: string, years: number) => void;
   negotiateStaffContract: (staffId: string, newSalary: number, years: number) => void;
@@ -1044,6 +1054,8 @@ const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>
 const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
  const [pendingOpenTalk, setPendingOpenTalk] = useState(false);
  const [pendingOpenRoleMindflow, setPendingOpenRoleMindflow] = useState(false);
+ // Flaga otwierająca PlayerTransferRequestModal przez PlayerCard po nawigacji z maila
+ const [pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog] = useState(false);
  const [completedPressConferenceFixtureIds, setCompletedPressConferenceFixtureIds] = useState<string[]>([]);
  const [pressConferenceEffects, setPressConferenceEffects] = useState<Record<string, PressConferenceMatchEffect>>({});
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
@@ -3305,6 +3317,41 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
         if (appealResult.mails.length > 0) {
           prependUniqueMessages(appealResult.mails);
         }
+
+        // ── Transfer Request Dialog checks ─────────────────────────────────────
+        // Trzy codzienne sprawdzenia dla systemu dialogu transferowego (A/B/C):
+        //   1. reviewPendingResponse — gracz w stanie THINKING odpowiada po X dniach
+        //   2. reviewContractPromise — przypomnienie / złamanie obietnicy kontraktowej (A)
+        //   3. reviewAllowAfterSeason — złamanie obietnicy odejścia po sezonie (B)
+        // Serwis: PlayerTransferRequestDialogService
+        // Typy maili: TRANSFER_REQUEST_PLAYER_RESPONSE, TRANSFER_CONTRACT_PROMISE_REMINDER,
+        //             TRANSFER_CONTRACT_PROMISE_BROKEN, TRANSFER_AFTER_SEASON_BROKEN
+        // ─────────────────────────────────────────────────────────────────────────
+        const transferRequestReviewedSquad: Player[] = [];
+        const transferRequestMails: MailMessage[] = [];
+
+        for (const squadPlayer of finalPlayers[userTeamId]) {
+          let reviewed = squadPlayer;
+
+          const pendingReview = PlayerTransferRequestDialogService.reviewPendingResponse(reviewed, currentDate, sessionSeed);
+          reviewed = pendingReview.player;
+          transferRequestMails.push(...pendingReview.mails);
+
+          const contractReview = PlayerTransferRequestDialogService.reviewContractPromise(reviewed, currentDate);
+          reviewed = contractReview.player;
+          transferRequestMails.push(...contractReview.mails);
+
+          const seasonReview = PlayerTransferRequestDialogService.reviewAllowAfterSeason(reviewed, currentDate);
+          reviewed = seasonReview.player;
+          transferRequestMails.push(...seasonReview.mails);
+
+          transferRequestReviewedSquad.push(reviewed);
+        }
+
+        finalPlayers = { ...finalPlayers, [userTeamId]: transferRequestReviewedSquad };
+        if (transferRequestMails.length > 0) {
+          prependUniqueMessages(transferRequestMails);
+        }
       }
     }
 
@@ -4287,6 +4334,84 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
         return result.outcome === 'ACCEPTED_PLAN'
           ? { ...nextPlayer, transferListDemandUntil: null }
           : nextPlayer;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // resolvePlayerTransferRequestDialog
+  //
+  // Stosuje pełny wynik dialogu A/B/C/D na zawodniku.
+  // Wywoływane przez PlayerCard po zamknięciu PlayerTransferRequestModal.
+  //
+  // Co robi:
+  //   1. Aplikuje zmianę morale (withMoraleChange)
+  //   2. Aplikuje delty mindset (withMindsetChange)
+  //   3. Zapisuje obietnicę kontraktową (ścieżka A) → player.transferContractPromise
+  //   4. Ustawia flagę odejścia po sezonie (ścieżka B) → player.transferAllowAfterSeason
+  //   5. Zapisuje oczekującą odpowiedź (THINKING) → player.transferRequestPendingResponse
+  //   6. Czyści transferListDemandUntil jeśli reakcja = AGREED
+  //
+  // Daily checks (reviewContractPromise, reviewAllowAfterSeason, reviewPendingResponse)
+  // są wywoływane w advanceDay niżej — szukaj komentarza "Transfer Request Dialog checks".
+  // ═══════════════════════════════════════════════════════════════════════════
+  const resolvePlayerTransferRequestDialog = useCallback((playerId: string, result: TransferRequestDialogResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        // 1. Zmiana morale
+        let updated = PlayerMoraleService.withMoraleChange(
+          player,
+          result.moraleDelta,
+          `Transfer Request Dialog — ścieżka ${result.managerChoice}, reakcja ${result.reaction}`,
+          currentDate
+        );
+
+        // 2. Delty mindset
+        if (Object.keys(result.mindsetDeltas).length > 0) {
+          updated = PlayerMoraleService.withMindsetChange(
+            updated,
+            result.mindsetDeltas,
+            `Transfer Request Dialog — ${result.managerChoice}`,
+            currentDate
+          );
+        }
+
+        // 3. Obietnica kontraktowa (ścieżka A, AGREED lub THINKING)
+        if (result.promiseMade) {
+          updated = { ...updated, transferContractPromise: result.promiseMade };
+        }
+
+        // 4. Flaga odejścia po sezonie (ścieżka B, AGREED lub THINKING)
+        if (result.allowAfterSeasonFlag) {
+          // Deadline = 30 czerwca bieżącego lub następnego roku (wzór identyczny jak computeSeasonEnd w modalu)
+          const month = currentDate.getMonth();
+          const year = currentDate.getFullYear();
+          const seasonEndDeadline = month < 6
+            ? new Date(year, 5, 30)
+            : new Date(year + 1, 5, 30);
+          updated = {
+            ...updated,
+            transferAllowAfterSeason: true,
+            transferAllowAfterSeasonDeadline: seasonEndDeadline.toISOString(),
+          };
+        }
+
+        // 5. Oczekująca odpowiedź (THINKING)
+        if (result.pendingResponse) {
+          updated = { ...updated, transferRequestPendingResponse: result.pendingResponse };
+        }
+
+        // 6. Wyczyść demand jeśli AGREED
+        if (result.reaction === 'AGREED') {
+          updated = { ...updated, transferListDemandUntil: null };
+        }
+
+        return updated;
       }),
     }));
   }, [currentDate, userTeamId]);
@@ -13902,6 +14027,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
+    pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, resolvePlayerTransferRequestDialog,
     applyWeeklyMotivation, completedPressConferenceFixtureIds, pressConferenceEffects, completePreMatchPressConference, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
