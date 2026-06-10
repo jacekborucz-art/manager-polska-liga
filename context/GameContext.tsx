@@ -64,7 +64,7 @@ import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_
 import { SeasonTemplateGenerator } from '../services/SeasonTemplateGenerator';
 import { LeagueScheduleGenerator } from '../services/LeagueScheduleGenerator';
 import { CalendarEngine } from '../services/CalendarEngine';
-import { SquadGeneratorService } from '../services/SquadGeneratorService';
+import { SquadGeneratorService, calcReputacja } from '../services/SquadGeneratorService';
 import { LineupService } from '../services/LineupService';
 import { BackgroundMatchProcessor } from '../services/BackgroundMatchProcessor';
 import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
@@ -162,6 +162,7 @@ export interface ImportedSquadPlayer {
   isUntouchable?: boolean;
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   nationalStats?: { matchesPlayed?: number; goals?: number };
+  reputacja?: number;
   attributes: {
     strength: number; stamina: number; pace: number; defending: number;
     passing: number; attacking: number; finishing: number; technique: number;
@@ -10875,6 +10876,7 @@ const finalResult: SimulationOutput = {
     const importedClubIds = new Set(entries.map(entry => entry.clubId));
     entries.forEach(({ clubId, players: imported }) => {
       const sourceClubName = clubs.find(c => c.id === clubId)?.name ?? clubId;
+      const importClubRep = clubs.find(c => c.id === clubId)?.reputation ?? 5;
       if (!newPlayersChunk[clubId]) newPlayersChunk[clubId] = [];
       imported.forEach((p, idx) => {
         const targetClubId = typeof p.clubId === 'string' && importedClubIds.has(p.clubId) ? p.clubId : clubId;
@@ -10927,6 +10929,7 @@ const finalResult: SimulationOutput = {
           squadRole: p.squadRole ?? null,
           negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
           fatigueDebt: 0, isNegotiationPermanentBlocked: false,
+          reputacja: p.reputacja ?? calcReputacja(overall, importClubRep),
           transferLockoutUntil: null, freeAgentLockoutUntil: null,
         } as Player);
         if (!newPlayersChunk[targetClubId]) newPlayersChunk[targetClubId] = [];

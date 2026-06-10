@@ -382,6 +382,7 @@ function normalizeSaveState(data: SaveState): SaveState {
           transferPendingContractYears: hasPendingTransfer ? asPositiveNumber(player.transferPendingContractYears) : undefined,
           freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
           freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
+          reputacja: player.reputacja ?? 50,
         };
       }),
     ])

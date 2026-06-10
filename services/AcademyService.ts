@@ -6,6 +6,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { calcReputacja } from './SquadGeneratorService';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -399,6 +400,7 @@ export const AcademyService = {
       contractLockoutUntil: null,
       moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
       fatigueDebt: 0,
+      reputacja: calcReputacja(overallRating, clubReputation),
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,
       freeAgentLockoutUntil: null,

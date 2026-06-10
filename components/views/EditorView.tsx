@@ -225,6 +225,7 @@ const getPlayerSquadExportEntry = (p: Player) => ({
     matchesPlayed: p.nationalStats?.matchesPlayed ?? 0,
     goals: p.nationalStats?.goals ?? 0,
   },
+  reputacja: p.reputacja ?? 50,
 });
 
 const emptyStats = () => ({
@@ -944,6 +945,7 @@ export const EditorView: React.FC = () => {
   const [squadRole, setSquadRole] = useState<'STARTER' | 'KEY_PLAYER' | null>(null);
   const [nationalMatchesPlayed, setNationalMatchesPlayed] = useState(0);
   const [nationalGoals, setNationalGoals] = useState(0);
+  const [reputacja, setReputacja] = useState<number>(50);
 
   const filteredClubs = useMemo(() => {
     const list = selectedTier === 'ALL'
@@ -1421,6 +1423,7 @@ export const EditorView: React.FC = () => {
     setIsAvailableForLoan(false);
     setNationalMatchesPlayed(0);
     setNationalGoals(0);
+    setReputacja(50);
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
     setContractEndDate(new Date(now.getFullYear() + 2, 5, 30).toISOString().substring(0, 10));
   };
@@ -1518,6 +1521,7 @@ export const EditorView: React.FC = () => {
         setSquadRole(p.squadRole ?? null);
         setNationalMatchesPlayed(p.nationalStats?.matchesPlayed ?? 0);
         setNationalGoals(p.nationalStats?.goals ?? 0);
+        setReputacja(p.reputacja ?? 50);
       }
     } else {
       resetPlayerForm();
@@ -1715,6 +1719,7 @@ export const EditorView: React.FC = () => {
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
         fatigueDebt: 0,
+        reputacja,
         isNegotiationPermanentBlocked: false,
         transferLockoutUntil: null,
         freeAgentLockoutUntil: null,
@@ -1755,6 +1760,7 @@ export const EditorView: React.FC = () => {
       isOnTransferList: hasPendingTransfer ? false : isOnTransferList,
       isAvailableForLoan: loan || hasPendingTransfer ? false : isAvailableForLoan,
       squadRole: squadRole,
+      reputacja,
       nationalStats: { ...(existingPlayer.nationalStats ?? emptyStats()), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals }
     };
     if (targetClubId !== selectedClubId) {
@@ -3023,6 +3029,12 @@ export const EditorView: React.FC = () => {
                 <div className={`${labelCls} mb-1`}>Reprez. bramki</div>
                 <input type="number" min={0} value={nationalGoals}
                   onChange={(e) => setNationalGoals(parseInt(e.target.value) || 0)}
+                  className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
+              </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Reputacja</div>
+                <input type="number" min={1} max={99} value={reputacja}
+                  onChange={(e) => setReputacja(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
                   className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
               </div>
             </div>

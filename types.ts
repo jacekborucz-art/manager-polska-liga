@@ -1395,6 +1395,7 @@ export interface Player {
   cupSuspensionMatches?: number;
   euroSuspensionMatches?: number;
   nationalSuspensionMatches?: number;
+  reputacja?: number;
 }
 
 export interface TeamStats {

@@ -2,6 +2,7 @@ import { Player, PlayerPosition, Region, HealthStatus } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { pickNationalityForRegion } from './NationalityService';
+import { calcReputacja } from './SquadGeneratorService';
 
 export const FreeAgentService = {
   /**
@@ -85,6 +86,7 @@ export const FreeAgentService = {
         negotiationStep: 0,
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
+        reputacja: calcReputacja(finalOverall, 1),
         isNegotiationPermanentBlocked: false,
         transferLockoutUntil: null,
         freeAgentLockoutUntil: null,
