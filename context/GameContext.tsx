@@ -8281,7 +8281,7 @@ const finalResult: SimulationOutput = {
           updatedCoaches[coach.id] = {
             ...coach,
             contractEndDate: CoachService.getDefaultContractEndDate(renewalDate),
-            annualSalary: CoachService.calculateAnnualSalaryForClub(club, coach),
+            annualSalary: CoachService.calculateRenewedAnnualSalary(coach),
           };
           return;
         }

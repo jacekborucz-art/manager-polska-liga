@@ -195,6 +195,13 @@ export const CoachService = {
     return roundSalary(base * 0.75 * coachQualityMultiplier(coach));
   },
 
+  calculateRenewedAnnualSalary: (coach: Coach): number => {
+    const currentSalary = typeof coach.annualSalary === 'number' && coach.annualSalary > 0
+      ? coach.annualSalary
+      : getFallbackSalary(coach);
+    return roundSalary(currentSalary * 1.10);
+  },
+
   shouldRefuseContractExtension: (coach: Coach, club: Club, renewalDate: Date): boolean => {
     if ((coach.expPoints ?? 1) <= 200) return false;
     if (club.reputation >= 17) return false;
