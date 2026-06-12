@@ -125,6 +125,98 @@ const StaffAttributeRadar: React.FC<{ values: { label: string; value: number }[]
   );
 };
 
+const PLAYER_ATTRIBUTE_RADAR_ITEMS: { key: keyof Player['attributes']; label: string; short: string }[] = [
+  { key: 'strength', label: 'Siła', short: 'SIŁ' },
+  { key: 'stamina', label: 'Kondycja', short: 'KON' },
+  { key: 'pace', label: 'Szybkość', short: 'SZY' },
+  { key: 'defending', label: 'Obrona', short: 'OBR' },
+  { key: 'passing', label: 'Podania', short: 'POD' },
+  { key: 'attacking', label: 'Atak', short: 'ATA' },
+  { key: 'finishing', label: 'Wykończenie', short: 'WYK' },
+  { key: 'technique', label: 'Technika', short: 'TEC' },
+  { key: 'vision', label: 'Wizja', short: 'WIZ' },
+  { key: 'dribbling', label: 'Drybling', short: 'DRY' },
+  { key: 'heading', label: 'Gra głową', short: 'GŁO' },
+  { key: 'positioning', label: 'Ustawianie', short: 'UST' },
+  { key: 'goalkeeping', label: 'Bramkarstwo', short: 'BRM' },
+  { key: 'freeKicks', label: 'Rzuty wolne', short: 'WOL' },
+  { key: 'penalties', label: 'Jedenastki', short: 'KAR' },
+  { key: 'corners', label: 'Rożne', short: 'ROŻ' },
+  { key: 'aggression', label: 'Agresja', short: 'AGR' },
+  { key: 'crossing', label: 'Dośrodkowania', short: 'DOŚ' },
+  { key: 'leadership', label: 'Przywództwo', short: 'LID' },
+  { key: 'mentality', label: 'Mentalność', short: 'MEN' },
+  { key: 'workRate', label: 'Pracowitość', short: 'PRA' },
+  { key: 'talent', label: 'Talent', short: 'TAL' },
+];
+
+const playerAttrColor = (v: number) =>
+  v >= 80 ? '#34d399' : v >= 65 ? '#22d3ee' : v >= 50 ? '#facc15' : v >= 35 ? '#fb923c' : '#fb7185';
+
+const PlayerAttributeRadar: React.FC<{ attributes: Player['attributes'] }> = ({ attributes }) => {
+  const C = 140;
+  const R = 88;
+  const LABEL_R = 118;
+  const count = PLAYER_ATTRIBUTE_RADAR_ITEMS.length;
+  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / count;
+  const point = (i: number, r: number) => ({
+    x: C + Math.cos(angle(i)) * r,
+    y: C + Math.sin(angle(i)) * r,
+  });
+  const pointString = (i: number, r: number) => {
+    const p = point(i, r);
+    return `${p.x},${p.y}`;
+  };
+  const values = PLAYER_ATTRIBUTE_RADAR_ITEMS.map(item => ({
+    ...item,
+    value: attributes[item.key] ?? 0,
+  }));
+  const polygon = values.map((v, i) => pointString(i, Math.max(0, Math.min(100, v.value)) / 100 * R)).join(' ');
+
+  return (
+    <svg viewBox="0 0 280 280" className="w-full h-full" aria-hidden>
+      <defs>
+        <linearGradient id="player-radar-fill" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#facc15" />
+          <stop offset="55%" stopColor="#22d3ee" />
+          <stop offset="100%" stopColor="#34d399" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75, 1].map(level => (
+        <polygon
+          key={level}
+          points={values.map((_, i) => pointString(i, R * level)).join(' ')}
+          fill="none"
+          stroke="#e8f5e9"
+          strokeOpacity={level === 1 ? 0.13 : 0.08}
+          strokeWidth="1"
+        />
+      ))}
+      {values.map((_, i) => {
+        const p = point(i, R);
+        return <line key={i} x1={C} y1={C} x2={p.x} y2={p.y} stroke="#e8f5e9" strokeOpacity="0.07" />;
+      })}
+      <polygon points={polygon} fill="url(#player-radar-fill)" fillOpacity="0.18" stroke="url(#player-radar-fill)" strokeWidth="2.4" strokeLinejoin="round" />
+      {values.map((v, i) => {
+        const p = point(i, Math.max(0, Math.min(100, v.value)) / 100 * R);
+        return (
+          <circle key={v.key} cx={p.x} cy={p.y} r="3.8" fill={playerAttrColor(v.value)} stroke="#06160f" strokeWidth="1.8">
+            <title>{`${v.label}: ${v.value}`}</title>
+          </circle>
+        );
+      })}
+      {values.map((v, i) => {
+        const p = point(i, LABEL_R);
+        return (
+          <text key={v.short} x={p.x} y={p.y + 2} textAnchor="middle" fontSize="7" fontWeight="900" fill="rgba(226,232,240,.58)">
+            {v.short}
+          </text>
+        );
+      })}
+    </svg>
+  );
+};
+
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
@@ -1005,10 +1097,7 @@ export const SquadView: React.FC = () => {
     if (!player) return;
 
     setReportPlayer(player);
-    setReportModalPos({
-      x: Math.max(0, window.innerWidth / 2 - 610),
-      y: Math.max(20, window.innerHeight / 2 - 320),
-    });
+    setReportModalPos({ x: 0, y: 0 });
     setContextMenu(null);
   };
 
@@ -2227,13 +2316,13 @@ export const SquadView: React.FC = () => {
         };
         const effColor = report.positionEffectivenessScore >= 78 ? 'text-emerald-400' : report.positionEffectivenessScore >= 68 ? 'text-amber-400' : 'text-rose-400';
         const seasonStats = [
-          { label: 'Mecze', value: String(reportPlayer.stats.matchesPlayed), color: 'text-white' },
-          { label: 'Minuty', value: String(reportPlayer.stats.minutesPlayed), color: 'text-white' },
-          { label: 'Bramki', value: String(reportPlayer.stats.goals), color: 'text-white' },
-          { label: 'Asysty', value: String(reportPlayer.stats.assists), color: 'text-white' },
-          { label: 'Żółte kartki', value: String(reportPlayer.stats.yellowCards), color: 'text-amber-400' },
-          { label: 'Czerwone kartki', value: String(reportPlayer.stats.redCards), color: 'text-rose-400' },
-          ...(reportPlayer.position === 'GK' ? [{ label: 'Czyste konta', value: String(reportPlayer.stats.cleanSheets), color: 'text-emerald-400' }] : []),
+          { label: 'Mecze', value: String(reportPlayer.stats.matchesPlayed), color: 'text-white', cardClass: '' },
+          { label: 'Minuty', value: String(reportPlayer.stats.minutesPlayed), color: 'text-white', cardClass: '' },
+          { label: 'Bramki', value: String(reportPlayer.stats.goals), color: 'text-white', cardClass: '' },
+          { label: 'Asysty', value: String(reportPlayer.stats.assists), color: 'text-white', cardClass: '' },
+          { label: 'Żółta kartka', value: String(reportPlayer.stats.yellowCards), color: 'text-amber-400', cardClass: 'bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.4)]' },
+          { label: 'Czerwona kartka', value: String(reportPlayer.stats.redCards), color: 'text-rose-400', cardClass: 'bg-rose-500 shadow-[0_0_14px_rgba(244,63,94,0.4)]' },
+          ...(reportPlayer.position === 'GK' ? [{ label: 'Czyste konta', value: String(reportPlayer.stats.cleanSheets), color: 'text-emerald-400', cardClass: '' }] : []),
         ];
 
         return (
@@ -2252,7 +2341,12 @@ export const SquadView: React.FC = () => {
           >
             <div
               className="assistant-report fixed flex flex-col w-[1780px] max-w-[calc(100vw-20px)] rounded-[40px] border border-emerald-400/15 bg-slate-950/90 backdrop-blur-2xl shadow-[0_0_80px_rgba(16,185,129,0.15),0_40px_120px_rgba(0,0,0,0.95)] overflow-hidden [font-family:Archive,Archivo,Inter,sans-serif]"
-              style={{ left: reportModalPos.x || 'max(10px, calc(50vw - 890px))', top: reportModalPos.y || 10, maxHeight: 'calc(100vh - 20px)' }}
+              style={{
+                left: reportModalPos.x || '50%',
+                top: reportModalPos.y || '50%',
+                transform: reportModalPos.x || reportModalPos.y ? 'none' : 'translate(-50%, -50%)',
+                maxHeight: 'calc(100vh - 20px)',
+              }}
               onClick={e => e.stopPropagation()}
             >
               <style>{`
@@ -2278,6 +2372,21 @@ export const SquadView: React.FC = () => {
                 .assistant-report [class*="tracking-[0.4em]"],
                 .assistant-report [class*="tracking-[0.35em]"] {
                   color: #eab308;
+                  position: relative;
+                  display: inline-flex;
+                  padding-bottom: .45rem;
+                }
+                .assistant-report [class*="tracking-[0.4em]"]::after,
+                .assistant-report [class*="tracking-[0.35em]"]::after {
+                  content: "";
+                  position: absolute;
+                  left: 0;
+                  bottom: .12rem;
+                  width: min(104px, 100%);
+                  height: 1px;
+                  background: linear-gradient(90deg, rgba(234,179,8,.82), rgba(234,179,8,.22), transparent);
+                  box-shadow: 0 0 10px rgba(234,179,8,.22);
+                  pointer-events: none;
                 }
                 .assistant-report [class*="bg-blue-950"] {
                   background: rgba(8,47,73,.32);
@@ -2307,6 +2416,10 @@ export const SquadView: React.FC = () => {
                 .assistant-report p {
                   line-height: 1.55 !important;
                 }
+                .report-soft-panels span,
+                .report-soft-panels p {
+                  font-weight: 400 !important;
+                }
                 .assistant-report [class~="p-2"] {
                   padding: .72rem !important;
                 }
@@ -2333,7 +2446,13 @@ export const SquadView: React.FC = () => {
                 style={{ cursor: reportDragging ? 'grabbing' : 'grab' }}
                 onMouseDown={e => {
                   e.preventDefault();
-                  setReportDragging({ startX: e.clientX, startY: e.clientY, originX: reportModalPos.x, originY: reportModalPos.y });
+                  const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+                  setReportDragging({
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    originX: rect?.left ?? reportModalPos.x,
+                    originY: rect?.top ?? reportModalPos.y,
+                  });
                 }}
               >
                 <div className="flex items-center gap-4">
@@ -2356,18 +2475,26 @@ export const SquadView: React.FC = () => {
               </div>
 
               {/* BODY — 4 kolumny */}
-              <div className="report-rise relative z-10 flex-1 grid grid-cols-[300px_minmax(0,1.35fr)_minmax(0,1.35fr)_340px] gap-5 p-6 overflow-hidden min-h-0" style={{ animationDelay: '120ms' }}>
+              <div className="report-rise relative z-10 flex-1 grid grid-cols-[360px_minmax(0,1.35fr)_minmax(0,1.35fr)_330px] gap-5 p-6 overflow-hidden min-h-0" style={{ animationDelay: '120ms' }}>
 
                 {/* KOL 1: Statystyki + Słabe/Mocne */}
-                <div className="flex flex-col gap-3 min-h-0">
-                  <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
+                <div className="report-soft-panels flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar pr-1">
+                  <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3 shrink-0">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
                     <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-2">Statystyki Sezonowe</span>
                     <div className="relative grid grid-cols-2 gap-1.5">
                       {seasonStats.map((s, i) => (
-                        <div key={i} className="bg-black/40 border border-white/[0.08] rounded-xl px-2.5 py-2 flex items-center justify-between gap-1">
-                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-tight">{s.label}</span>
-                          <span className={`text-[12px] font-black tabular-nums ${s.color}`}>{s.value}</span>
+                        <div key={i} className="bg-black/40 border border-white/[0.08] rounded-xl px-2.5 py-2 flex items-center justify-between gap-2 min-w-0">
+                          {s.cardClass ? (
+                            <span
+                              className={`w-3 h-4 shrink-0 rounded-[2px] border border-white/20 rotate-[-7deg] ${s.cardClass}`}
+                              title={s.label}
+                              aria-label={s.label}
+                            />
+                          ) : (
+                            <span className="min-w-0 truncate text-[8px] font-black text-slate-500 uppercase tracking-widest leading-tight">{s.label}</span>
+                          )}
+                          <span className={`shrink-0 text-[12px] font-black tabular-nums ${s.color}`}>{s.value}</span>
                         </div>
                       ))}
                     </div>
@@ -2379,7 +2506,7 @@ export const SquadView: React.FC = () => {
                     const rising = Object.entries(sc).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
                     if (dropping.length === 0 && rising.length === 0) return null;
                     return (
-                      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
+                      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3 shrink-0">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
                         <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-2">Trend Sezonu</span>
                         <div className="relative flex flex-col gap-0.5">
@@ -2399,28 +2526,46 @@ export const SquadView: React.FC = () => {
                       </div>
                     );
                   })()}
-                  <div className="relative overflow-hidden rounded-2xl border border-rose-500/20 bg-rose-950/30 p-3">
+                  <div className="relative overflow-hidden rounded-2xl border border-rose-500/20 bg-rose-950/30 p-3 shrink-0">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent pointer-events-none" />
                     <span className="relative text-[9px] font-black text-rose-400 uppercase tracking-[0.4em] block mb-1.5">Słabe Strony</span>
                     <div className="relative flex flex-col gap-1">
                       {report.weakAttributes.length > 0 ? report.weakAttributes.map(a => (
-                        <div key={a.attr} className="flex items-center justify-between">
-                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-rose-300">{a.label}</span>
-                          <span className="text-[12px] font-black tabular-nums text-rose-400">{a.value}</span>
+                        <div key={a.attr} className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate text-[11px] font-black italic uppercase tracking-tighter text-rose-300">{a.label}</span>
+                          <span className="shrink-0 text-[12px] font-black tabular-nums text-rose-400">{a.value}</span>
                         </div>
                       )) : <p className="text-[9px] font-normal italic uppercase tracking-tighter text-rose-300/50">Brak wyraźnych słabości</p>}
                     </div>
                   </div>
-                  <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-3">
+                  <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-3 shrink-0">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent pointer-events-none" />
                     <span className="relative text-[9px] font-black text-emerald-400 uppercase tracking-[0.4em] block mb-1.5">Mocne Strony</span>
                     <div className="relative flex flex-col gap-1">
                       {report.strongAttributes.length > 0 ? report.strongAttributes.map(a => (
-                        <div key={a.attr} className="flex items-center justify-between">
-                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-emerald-300">{a.label}</span>
-                          <span className="text-[12px] font-black tabular-nums text-emerald-400">{a.value}</span>
+                        <div key={a.attr} className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate text-[11px] font-black italic uppercase tracking-tighter text-emerald-300">{a.label}</span>
+                          <span className="shrink-0 text-[12px] font-black tabular-nums text-emerald-400">{a.value}</span>
                         </div>
                       )) : <p className="text-[9px] font-normal italic uppercase tracking-tighter text-emerald-300/50">Brak wyraźnych atutów</p>}
+                    </div>
+                  </div>
+                  <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-black/30 p-3 shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
+                    <span className="relative text-[9px] font-black text-amber-400 uppercase tracking-[0.4em] block mb-2">Atrybuty</span>
+                    <div className="relative h-[220px]">
+                      <PlayerAttributeRadar attributes={reportPlayer.attributes} />
+                    </div>
+                    <div className="relative mt-2 grid grid-cols-2 gap-1">
+                      {PLAYER_ATTRIBUTE_RADAR_ITEMS.map(attr => {
+                        const value = reportPlayer.attributes[attr.key] ?? 0;
+                        return (
+                          <div key={attr.key} className="flex items-center justify-between px-1 py-0.5">
+                            <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400 truncate">{attr.label}</span>
+                            <span className="text-[10px] font-black tabular-nums" style={{ color: playerAttrColor(value) }}>{value}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2475,7 +2620,7 @@ export const SquadView: React.FC = () => {
                   <div className="relative rounded-2xl border border-white/10 bg-black/30 p-4 min-h-[230px] overflow-visible">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
                     <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-3">Ocena Ogólna</span>
-                    <p className="relative text-[12px] font-normal italic uppercase tracking-tighter text-white leading-relaxed">{report.overallAssessment}</p>
+                    <p className="relative text-[12px] font-normal not-italic normal-case tracking-normal text-white leading-relaxed">{report.overallAssessment}</p>
                   </div>
                   <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
@@ -2542,7 +2687,7 @@ export const SquadView: React.FC = () => {
                   <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
                     <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-1.5">Ocena Asystenta</span>
-                    <p className="relative text-[11px] font-normal italic uppercase tracking-tighter text-white leading-relaxed">{report.trainingRecommendationText}</p>
+                    <p className="relative text-[11px] font-normal not-italic normal-case tracking-normal text-white leading-relaxed">{report.trainingRecommendationText}</p>
                   </div>
                   <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-950/30 p-3 flex flex-col gap-2">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />

@@ -22,6 +22,7 @@ export interface SeasonTransferPlan {
 // ─── Stałe ───────────────────────────────────────────────────────────────────
 
 const LINEUP_POSITIONS: ('DEF' | 'MID' | 'FWD')[] = ['DEF', 'MID', 'FWD'];
+const LAST_CONTRACT_YEAR_DAYS = 365;
 
 // ─── Pomocnicze funkcje prywatne ──────────────────────────────────────────────
 
@@ -42,6 +43,18 @@ const _perceptionError = (exp: number): number => {
 const _seededRandom = (seed: number): number => {
   const x = Math.sin(seed + 1) * 10000;
   return x - Math.floor(x);
+};
+
+const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
+  if (!player.contractEndDate) return Number.POSITIVE_INFINITY;
+  const endDate = new Date(player.contractEndDate);
+  if (Number.isNaN(endDate.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.floor((endDate.getTime() - currentDate.getTime()) / 86_400_000);
+};
+
+const _isInLastContractYear = (player: Player, currentDate: Date): boolean => {
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+  return daysLeft > 0 && daysLeft <= LAST_CONTRACT_YEAR_DAYS;
 };
 
 /**
@@ -118,7 +131,8 @@ const _selectWeakPositions = (
 const _pickPlayerForSale = (
   position: PlayerPosition,
   squad: Player[],
-  favoriteIds: Set<string>
+  favoriteIds: Set<string>,
+  currentDate: Date
 ): Player | null => {
   const MIN_DEPTH: Record<PlayerPosition, number> = { GK: 2, DEF: 4, MID: 3, FWD: 2 };
   const posGroup = squad.filter(p =>
@@ -126,7 +140,8 @@ const _pickPlayerForSale = (
     !p.isOnTransferList &&
     !p.isUntouchable &&
     p.squadRole !== 'KEY_PLAYER' &&
-    !favoriteIds.has(p.id)
+    !favoriteIds.has(p.id) &&
+    !_isInLastContractYear(p, currentDate)
   );
   if (posGroup.length <= MIN_DEPTH[position]) return null;
 
@@ -254,7 +269,7 @@ export const AiTransferDecisionService = {
       const updatedSquad = squad.map(p => ({ ...p }));
 
       for (const weak of weakPositions) {
-        const candidate = _pickPlayerForSale(weak.position as PlayerPosition, updatedSquad, favoriteIds);
+        const candidate = _pickPlayerForSale(weak.position as PlayerPosition, updatedSquad, favoriteIds, currentDate);
         if (!candidate) continue;
 
         const tier = FinanceService.getClubTier(club);

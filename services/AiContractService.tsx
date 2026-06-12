@@ -65,6 +65,7 @@ const GULF_STAR_HUNTER_COUNTRIES = new Set(['KSA', 'QAT', 'UAE']);
 const BIG_CLUB_REPUTATION = 18;
 const VETERAN_STAR_MIN_AGE = 33;
 const VETERAN_STAR_MIN_OVR = 85;
+const GULF_SHOWPIECE_STAR_MIN_REPUTATION = 80;
 const GULF_MEGA_OFFER_ACCEPTANCE_CHANCE = 0.75;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR = 90;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION = 17;
@@ -77,6 +78,8 @@ const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
 const AI_MAX_SQUAD_SIZE = 32;
 const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = 25;
 const TRANSFER_LIST_MAX_SHARE = 0.25;
+const HIGH_REPUTATION_RELEASE_THRESHOLD = 80;
+const HIGH_REPUTATION_RELEASE_CHANCE = 0.03;
 
 const _hasActiveTransferOfferBan = (player: Player, currentDate: Date): boolean => {
   return !!player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil);
@@ -104,6 +107,9 @@ const _getGulfOwnerShortfallCover = (club: Club, requiredCash: number): number =
 const _isVeteranStar = (player: Player): boolean =>
   player.age >= VETERAN_STAR_MIN_AGE && player.overallRating >= VETERAN_STAR_MIN_OVR;
 
+const _isGulfShowpieceStar = (player: Player): boolean =>
+  _getPlayerReputation(player) >= GULF_SHOWPIECE_STAR_MIN_REPUTATION;
+
 const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
   if (!player.contractEndDate) return Number.POSITIVE_INFINITY;
   const endDate = new Date(player.contractEndDate);
@@ -111,7 +117,13 @@ const _getContractDaysLeft = (player: Player, currentDate: Date): number => {
   return Math.floor((endDate.getTime() - currentDate.getTime()) / 86_400_000);
 };
 
+const LAST_CONTRACT_YEAR_DAYS = 365;
 const PRE_CONTRACT_PRIORITY_DAYS = 330;
+
+const _isInLastContractYear = (player: Player, currentDate: Date): boolean => {
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+  return daysLeft > 0 && daysLeft <= LAST_CONTRACT_YEAR_DAYS;
+};
 
 const _isElitePreContractWatchlistPlayer = (player: Player, currentDate: Date): boolean => {
   const daysLeft = _getContractDaysLeft(player, currentDate);
@@ -183,6 +195,9 @@ const _wasReleasedByBigClub = (player: Player, clubMap: Map<string, Club>): bool
   return (previousClubInfo?.reputation ?? 0) >= BIG_CLUB_REPUTATION;
 };
 
+const _isGulfMegaOfferTarget = (player: Player, clubMap: Map<string, Club>): boolean =>
+  _isGulfShowpieceStar(player) || (_isVeteranStar(player) && _wasReleasedByBigClub(player, clubMap));
+
 const _isExpiringBigClubVeteranStar = (
   player: Player,
   sellerClub: Club,
@@ -195,16 +210,41 @@ const _isExpiringBigClubVeteranStar = (
     daysLeft <= PRE_CONTRACT_PRIORITY_DAYS;
 };
 
-const _buildGulfVeteranStarOffer = (player: Player, club: Club, currentDate: Date) => {
+const _getGulfShowpieceSalaryFloor = (player: Player, club: Club): number => {
+  const reputation = _clamp(_getPlayerReputation(player), GULF_SHOWPIECE_STAR_MIN_REPUTATION, 100);
+  const reputationFactor = (reputation - GULF_SHOWPIECE_STAR_MIN_REPUTATION) / 20;
+  const countryFloor =
+    club.country === 'KSA' ? 4_000_000 :
+    club.country === 'QAT' ? 3_400_000 :
+    2_900_000;
+  const countryCeiling =
+    club.country === 'KSA' ? 9_000_000 :
+    club.country === 'QAT' ? 7_500_000 :
+    6_500_000;
+
+  return Math.round((countryFloor + (countryCeiling - countryFloor) * reputationFactor) / 100_000) * 100_000;
+};
+
+const _buildGulfStarOffer = (player: Player, club: Club, currentDate: Date) => {
   const countryPremium = club.country === 'KSA' ? 2.75 : club.country === 'QAT' ? 2.35 : 2.05;
   const reputationPremium = 1 + Math.max(0, club.reputation - 8) * 0.08;
+  const showpiecePremium = _isGulfShowpieceStar(player)
+    ? 1 + ((_getPlayerReputation(player) - GULF_SHOWPIECE_STAR_MIN_REPUTATION) * 0.025)
+    : 1;
   const ageBonusPremium = player.age >= 36 ? 1.75 : player.age >= 34 ? 1.45 : 1.25;
   const salaryBase = Math.max(
     FinanceLogic.getFairMarketSalary(player.overallRating),
+    _isGulfShowpieceStar(player) ? FinanceLogic.getFairMarketSalary(Math.max(player.overallRating, 90)) : 0,
     player.annualSalary || 0
   );
-  const proposedSalary = Math.round((salaryBase * countryPremium * reputationPremium) / 100_000) * 100_000;
-  const proposedBonus = Math.round((salaryBase * ageBonusPremium * countryPremium) / 100_000) * 100_000;
+  const proposedSalary = Math.max(
+    _isGulfShowpieceStar(player) ? _getGulfShowpieceSalaryFloor(player, club) : 0,
+    Math.round((salaryBase * countryPremium * reputationPremium * showpiecePremium) / 100_000) * 100_000
+  );
+  const proposedBonus = Math.max(
+    Math.round((salaryBase * ageBonusPremium * countryPremium * showpiecePremium) / 100_000) * 100_000,
+    _isGulfShowpieceStar(player) ? Math.round((proposedSalary * 1.15) / 100_000) * 100_000 : 0
+  );
   const contractYears = player.age >= 36 ? 1 : 2;
   const newEndDate = new Date(currentDate.getFullYear() + contractYears, 5, 30).toISOString();
 
@@ -245,6 +285,19 @@ const _getPlayerReputation = (player: Player): number => player.reputacja ?? 50;
 
 const _getPlayerReputationScore = (player: Player): number =>
   _clamp((_getPlayerReputation(player) - 50) / 10, -3, 5);
+
+const _canAiReleasePlayer = (
+  player: Player,
+  club: Club,
+  currentDate: Date,
+  reason: string
+): boolean => {
+  if (_getPlayerReputation(player) < HIGH_REPUTATION_RELEASE_THRESHOLD) return true;
+
+  return _seededRandom(
+    `AI_HIGH_REP_RELEASE_${reason}_${club.id}_${player.id}_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}`
+  ) < HIGH_REPUTATION_RELEASE_CHANCE;
+};
 
 const _getSquadReviewScore = (player: Player): number =>
   player.overallRating - (player.age - 18) * 1.5 + _getPlayerReputationScore(player);
@@ -471,10 +524,11 @@ const _buildAiPreContractOffer = (
   return { salary, bonus, years };
 };
 
-const _findWeakestSurplusPlayer = (squad: Player[]): Player | null => {
+const _findWeakestSurplusPlayer = (squad: Player[], skippedIds: Set<string> = new Set()): Player | null => {
   const counts = _countByPosition(squad);
   return [...squad]
     .filter(p =>
+      !skippedIds.has(p.id) &&
       !p.isUntouchable &&
       !p.loan &&
       !p.transferPendingClubId &&
@@ -702,9 +756,20 @@ export const AiContractService = {
       let squad = [...(updatedPlayersMap[club.id] || [])];
       if (squad.length === 0) continue;
 
+      const skippedReleaseIds = new Set<string>();
       while (squad.length >= AI_MAX_SQUAD_SIZE && _hasCriticalDepthShortage(squad)) {
-        const playerToRelease = _findWeakestSurplusPlayer(squad);
+        const playerToRelease = _findWeakestSurplusPlayer(squad, skippedReleaseIds);
         if (!playerToRelease) break;
+
+        if (!_canAiReleasePlayer(playerToRelease, club, currentDate, 'SQUAD_DEPTH')) {
+          skippedReleaseIds.add(playerToRelease.id);
+          if (!_isInLastContractYear(playerToRelease, currentDate)) {
+            squad = squad.map(p =>
+              p.id === playerToRelease.id ? { ...p, isOnTransferList: true } : p
+            );
+          }
+          continue;
+        }
 
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
@@ -804,7 +869,7 @@ export const AiContractService = {
           contractMindflow.mindset.state === 'READY_TO_LEAVE' ||
           contractMindflow.mindset.state === 'PRECONTRACT_READY'
         ) {
-          return { ...p, isOnTransferList: true };
+          return _isInLastContractYear(p, currentDate) ? p : { ...p, isOnTransferList: true };
         }
 
         const isLocked = p.negotiationLockoutUntil && currentDate < new Date(p.negotiationLockoutUntil);
@@ -902,23 +967,26 @@ processAiRecruitment: (
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
       const needsFA = _assessClubNeeds(club, squad, currentDate, aiStrategy);
       const hasCriticalShortage = needsFA.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
-      const gulfVeteranStarCandidate = _isGulfStarHunterClub(club)
+      const gulfStarCandidate = _isGulfStarHunterClub(club)
         ? (updatedPlayersMap['FREE_AGENTS'] || [])
             .filter(fa =>
-              _isVeteranStar(fa) &&
+              _isGulfMegaOfferTarget(fa, clubMap) &&
               !fa.aiNegotiationClubId &&
-              _wasReleasedByBigClub(fa, clubMap) &&
               !FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)
             )
-            .sort((a, b) => b.overallRating - a.overallRating || b.age - a.age)[0]
+            .sort((a, b) =>
+              _getPlayerReputation(b) - _getPlayerReputation(a) ||
+              b.overallRating - a.overallRating ||
+              b.age - a.age
+            )[0]
         : null;
-      if (needsFA.length === 0 && !gulfVeteranStarCandidate) return club;
+      if (needsFA.length === 0 && !gulfStarCandidate) return club;
 
       // OGRANICZENIE CZĘSTOTLIWOŚCI: klub może mieć tylko 1 aktywną negocjację z wolnym agentem
       const alreadyNegotiating = freeAgents.some(fa => fa.aiNegotiationClubId === club.id);
       if (alreadyNegotiating) return club;
 
-      if (club.budget <= 250_000 && !hasCriticalShortage) return club;
+      if (club.budget <= 250_000 && !hasCriticalShortage && !gulfStarCandidate) return club;
 
       // Szukanie kandydata: pasująca pozycja, OVR w zasięgu, nie jest już w negocjacji z innym AI, brak blokady
       // Używamy updatedPlayersMap zamiast freeAgents — freeAgents to stary snapshot sprzed pętli.
@@ -945,15 +1013,15 @@ processAiRecruitment: (
         const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
         return scoreB - scoreA || a.age - b.age;
       });
-      const candidate = gulfVeteranStarCandidate || freeAgentCandidates[0];
+      const candidate = gulfStarCandidate || freeAgentCandidates[0];
 
       if (!candidate) return club;
 
       // Oznacz wolnego agenta jako "w negocjacji" — okno 4 dni dla gracza na kontr-ofertę
       const responseDate = new Date(currentDate);
-      responseDate.setDate(responseDate.getDate() + (gulfVeteranStarCandidate ? 2 : 4));
-      const gulfVeteranStarOffer = candidate === gulfVeteranStarCandidate
-        ? _buildGulfVeteranStarOffer(candidate, club, currentDate)
+      responseDate.setDate(responseDate.getDate() + (gulfStarCandidate ? 2 : 4));
+      const gulfStarOffer = candidate === gulfStarCandidate
+        ? _buildGulfStarOffer(candidate, club, currentDate)
         : null;
 
       const faList = updatedPlayersMap['FREE_AGENTS'];
@@ -966,7 +1034,7 @@ processAiRecruitment: (
         );
       }
 
-      if (gulfVeteranStarOffer) {
+      if (gulfStarOffer) {
         const previousClub = _getGulfMegaOfferPreviousClub(candidate, clubMap);
         logEntries.push({
           id: `GULF_FA_OFFER_${candidate.id}_${club.id}_${currentDate.getTime()}`,
@@ -982,9 +1050,9 @@ processAiRecruitment: (
           fromClubId: previousClub?.id,
           toClubId: club.id,
           isGulfMegaOffer: true,
-          salary: gulfVeteranStarOffer.proposedSalary,
-          bonus: gulfVeteranStarOffer.proposedBonus,
-          contractYears: gulfVeteranStarOffer.contractYears,
+          salary: gulfStarOffer.proposedSalary,
+          bonus: gulfStarOffer.proposedBonus,
+          contractYears: gulfStarOffer.contractYears,
         });
       }
 
@@ -1034,12 +1102,12 @@ processAiRecruitment: (
         continue;
       }
 
-      const gulfVeteranStarOffer = _isGulfStarHunterClub(aiClub) && _isVeteranStar(fa) && _wasReleasedByBigClub(fa, clubMap)
-        ? _buildGulfVeteranStarOffer(fa, aiClub, currentDate)
+      const gulfStarOffer = _isGulfStarHunterClub(aiClub) && _isGulfMegaOfferTarget(fa, clubMap)
+        ? _buildGulfStarOffer(fa, aiClub, currentDate)
         : null;
-      const proposedSalary = gulfVeteranStarOffer?.proposedSalary ?? FinanceLogic.getFairMarketSalary(fa.overallRating);
-      const proposedBonus = gulfVeteranStarOffer?.proposedBonus ?? Math.floor(proposedSalary * 0.4);
-      const newEndDate = gulfVeteranStarOffer?.newEndDate ?? new Date(currentDate.getFullYear() + 2, 5, 30).toISOString();
+      const proposedSalary = gulfStarOffer?.proposedSalary ?? FinanceLogic.getFairMarketSalary(fa.overallRating);
+      const proposedBonus = gulfStarOffer?.proposedBonus ?? Math.floor(proposedSalary * 0.4);
+      const newEndDate = gulfStarOffer?.newEndDate ?? new Date(currentDate.getFullYear() + 2, 5, 30).toISOString();
 
       const gulfOwnerShortfallCover = _getGulfOwnerShortfallCover(aiClub, proposedBonus + proposedSalary);
 
@@ -1060,7 +1128,7 @@ processAiRecruitment: (
       }
 
       const result = FinanceLogic.evaluateContractLogic(fa, proposedSalary, proposedBonus, newEndDate, currentDate, aiClub.reputation, FinanceLogic.getClubTier(aiClub));
-      const accepted = gulfVeteranStarOffer
+      const accepted = gulfStarOffer
         ? Math.random() < GULF_MEGA_OFFER_ACCEPTANCE_CHANCE
         : result.accepted;
 
@@ -1090,7 +1158,7 @@ processAiRecruitment: (
           isOnTransferList: false,
           history: updatedHistory,
           transferLockoutUntil: _buildTransferLockoutUntil(currentDate),
-          retirementLockUntil: gulfVeteranStarOffer ? newEndDate : fa.retirementLockUntil
+          retirementLockUntil: gulfStarOffer ? newEndDate : fa.retirementLockUntil
         };
 
         updatedPlayersMap[aiClub.id] = [...(updatedPlayersMap[aiClub.id] || []), signedPlayer];
@@ -1099,7 +1167,7 @@ processAiRecruitment: (
           c.id === aiClub.id ? { ...c, budget: c.budget - proposedBonus } : c
         );
 
-        if (gulfVeteranStarOffer) {
+        if (gulfStarOffer) {
           const previousClub = _getGulfMegaOfferPreviousClub(fa, clubMap);
           logEntries.push({
             id: `GULF_FA_SIGN_${fa.id}_${aiClub.id}_${currentDate.getTime()}`,
@@ -1117,7 +1185,7 @@ processAiRecruitment: (
             isGulfMegaOffer: true,
             salary: proposedSalary,
             bonus: proposedBonus,
-            contractYears: gulfVeteranStarOffer.contractYears,
+            contractYears: gulfStarOffer.contractYears,
           });
         }
       } else {
@@ -1205,6 +1273,7 @@ processAiRecruitment: (
           !p.isOnTransferList &&
           !p.loan &&
           !p.transferPendingClubId &&
+          !_isInLastContractYear(p, currentDate) &&
           squad.filter(s => s.position === p.position).length > minCounts[p.position]
         )
         .sort((a, b) => {
@@ -1639,7 +1708,7 @@ processAiRecruitment: (
       const repDeltaIT = club.reputation - sellerClub.reputation;
       const salaryMultAI_IT = repDeltaIT <= -2 ? 1.40 : repDeltaIT === -1 ? 1.25 : 1.12;
       const gulfVeteranStarOffer = isGulfVeteranStarTarget
-        ? _buildGulfVeteranStarOffer(target, club, currentDate)
+        ? _buildGulfStarOffer(target, club, currentDate)
         : null;
       const proposedSalaryIT = gulfVeteranStarOffer?.proposedSalary ?? Math.max(FinanceLogic.getFairMarketSalary(target.overallRating), Math.round(target.annualSalary * salaryMultAI_IT));
       const ageBonusMult_IT = target.age < 24 ? 0.40 : target.age <= 29 ? 0.65 : target.age <= 33 ? 1.00 : 1.30;
@@ -2149,6 +2218,7 @@ processAiRecruitment: (
         const strategyAggression = (aiStrategy.budgetAggression - 1) * 0.16;
         const listingChance = _clamp(0.30 + (club.reputation / 100) * 0.20 - reputationPatience - strategyPatience + strategyAggression, 0.08, 0.62);
         if (chance > listingChance) return player;
+        if (_isInLastContractYear(player, currentDate)) return player;
 
         // Wystawiamy na listę transferową
         counts[posKey]--;
@@ -2208,8 +2278,9 @@ performSeasonSquadReview: (
 
         if (canRemove) {
           const decision = FinanceLogic.evaluateReleaseVsList(candidate);
+          let actionTaken = false;
           
-          if (decision === 'RELEASE') {
+          if (decision === 'RELEASE' && _canAiReleasePlayer(candidate, club, currentDate, 'SEASON_SQUAD_REVIEW')) {
             const cost = candidate.annualSalary * 0.4;
             if (currentClub.budget >= cost) {
               const currentYear = currentDate.getFullYear();
@@ -2240,13 +2311,17 @@ performSeasonSquadReview: (
               currentClub.budget -= cost;
               finalSquad = finalSquad.filter(p => p.id !== candidate.id);
               updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+              actionTaken = true;
             }
-          } else {
+          } else if (!_isInLastContractYear(candidate, currentDate)) {
             finalSquad = finalSquad.map(p => p.id === candidate.id ? { ...p, isOnTransferList: true } : p);
+            actionTaken = true;
           }
-          
-          counts[candidate.position as keyof typeof counts]--;
-          removedCount++;
+
+          if (actionTaken) {
+            counts[candidate.position as keyof typeof counts]--;
+            removedCount++;
+          }
         }
       }
 
@@ -2335,7 +2410,7 @@ performSeasonSquadReview: (
               : p
           );
         } else {
-          if (Math.random() < 0.5) {
+          if (Math.random() < 0.5 && _canAiReleasePlayer(player, club, currentDate, 'WEAK_CONTRACT_CUT')) {
             const releaseCost = Math.floor(player.annualSalary * 0.4);
             const posCountAfter = finalSquad.filter(p => p.position === player.position && p.id !== player.id).length;
             const canRelease = currentClubCopy.budget >= releaseCost && posCountAfter >= (minDepth[player.position] || 3);
@@ -2367,12 +2442,12 @@ performSeasonSquadReview: (
               finalSquad = finalSquad.filter(p => p.id !== player.id);
               updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
               currentClubCopy.budget -= releaseCost;
-            } else {
+            } else if (!_isInLastContractYear(player, currentDate)) {
               finalSquad = finalSquad.map(p =>
                 p.id === player.id ? { ...p, isOnTransferList: true } : p
               );
             }
-          } else {
+          } else if (!_isInLastContractYear(player, currentDate)) {
             finalSquad = finalSquad.map(p =>
               p.id === player.id ? { ...p, isOnTransferList: true } : p
             );
