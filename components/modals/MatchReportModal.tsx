@@ -1,5 +1,6 @@
 
 import React, { useMemo } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { PlayerPosition, Player, ClubKitPattern } from '../../types';
@@ -164,6 +165,7 @@ const getCompetitionName = (comp: string) => {
 };
 
 export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, players } = useGame();
 
   const match = useMemo(
@@ -550,7 +552,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     : '–';
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={onClose}>
+    <div className={`fixed inset-0 z-[400] flex items-center justify-center bg-black/50 p-4 ${exitClass}`} onClick={closeModal}>
       <div
         className={`${GLASS_PANEL} w-full max-w-6xl max-h-[96vh] rounded-[40px] flex flex-col overflow-hidden`}
         onClick={e => e.stopPropagation()}

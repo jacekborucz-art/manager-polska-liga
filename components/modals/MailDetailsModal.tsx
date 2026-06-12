@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { MailMessage, MailType, Newspaper, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import awansEkstraklasaImg from '../../Graphic/cup/awans-do-ekst.png';
@@ -637,6 +638,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     addPendingPressArticle,
   } = useGame();
 
+  const { closeModal, exitClass } = useModalClose(onClose);
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
 
@@ -795,7 +797,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     .toUpperCase();
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/[0.82] p-6 animate-fade-in backdrop-blur-[2px]">
+    <div className={`fixed inset-0 z-[1000] flex items-center justify-center bg-black/[0.82] p-6 ${exitClass} backdrop-blur-[2px]`}>
       <div
         className={`${
           mail.type === MailType.SCOUT ? 'max-w-[1693px] w-[88vw] h-[86vh]' : isTeamOfWeek ? 'max-w-[1500px] w-[82vw] h-[90vh]' : 'max-w-4xl max-h-[92vh]'
@@ -832,7 +834,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
             </div>
 
             <button
-              onClick={onClose}
+              onClick={closeModal}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-transparent text-lg font-light text-sky-100 shadow-lg transition-all hover:scale-110 hover:bg-white/10 hover:text-white active:scale-95"
             >
               x
@@ -1085,7 +1087,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
             )}
 
             <button
-              onClick={onClose}
+              onClick={closeModal}
               className={`${isTeamOfWeek ? 'px-8 py-3' : 'px-10 py-4'} rounded-2xl bg-white text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95`}
             >
               Zamknij wiadomosc

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { CalendarSlot, CompetitionType, Club, PendingFriendlyRequest, AiFriendlyPair } from '../../types';
 
 interface FriendlySchedulerModalProps {
@@ -94,6 +95,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   onConfirmFriendly,
   aiFriendlyPairs,
 }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const today = useMemo(() => new Date(currentDate), [currentDate]);
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
 
@@ -264,8 +266,8 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   // ---------- render ----------
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className={`fixed inset-0 z-50 flex items-center justify-center ${exitClass}`}
+      onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
     >
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
 

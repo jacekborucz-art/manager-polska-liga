@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { AiFriendlyMatchReport, PlayerPosition, InjurySeverity, Player } from '../../types';
 import { useGame } from '../../context/GameContext';
 import { KitSelectionService } from '../../services/KitSelectionService';
@@ -71,6 +72,7 @@ const POS_ORDER: Partial<Record<string, number>> = {
 };
 
 export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, players } = useGame();
 
   const homeClub = clubs.find(c => c.id === report.homeTeamId);
@@ -186,8 +188,8 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
 
   return (
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className={`fixed inset-0 z-[1100] flex items-center justify-center p-4 ${exitClass}`}
+      onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
     >
       <div className="relative w-full max-w-[76vw] max-h-[90vh] bg-slate-950/80 backdrop-blur-md border border-white/10 rounded-[32px] shadow-2xl overflow-hidden flex flex-col font-black italic uppercase tracking-tighter">
 

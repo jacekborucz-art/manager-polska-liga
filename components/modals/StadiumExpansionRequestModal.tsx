@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Club, StadiumStand } from '../../types';
 import { StadiumExpansionService, STAND_OPTIONS } from '../../services/StadiumExpansionService';
 
@@ -16,6 +17,7 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
   onClose,
   onSubmit,
 }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const [selected, setSelected] = useState<StadiumStand | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
@@ -28,7 +30,7 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
 
   if (submitted) {
     return (
-      <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" onClick={onClose}>
+      <div className={`fixed inset-0 z-[500] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
         <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
         <div
           className="relative w-full max-w-md rounded-[36px] border border-white/10 bg-slate-950/95 p-8 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
@@ -41,7 +43,7 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
             przekazany do zarządu. Zarząd zapozna się z wnioskiem w ciągu najbliższych tygodni.
           </p>
           <button
-            onClick={onClose}
+            onClick={closeModal}
             className="mt-6 w-full rounded-[16px] border border-emerald-400/25 bg-emerald-500/10 py-3 text-sm font-black italic uppercase tracking-tighter text-emerald-300 hover:bg-emerald-500/15 transition-all"
           >
             Zamknij
@@ -52,14 +54,14 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
   }
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 z-[500] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div
         className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[36px] border border-white/10 bg-slate-950/95 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
         onClick={e => e.stopPropagation()}
       >
         <button
-          onClick={onClose}
+          onClick={closeModal}
           className="absolute top-5 right-5 z-20 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all text-sm font-black"
         >
           ✕

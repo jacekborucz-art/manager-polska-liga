@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Club } from '../../types';
 import { WEEKLY_MOTIVATION_TALKS, MotivationTalkOption } from '../../data/weekly_motivation_talks_pl';
 import { WeeklyMotivationService, MotivationTalkResult } from '../../services/WeeklyMotivationService';
@@ -39,6 +40,7 @@ const getFormSummary = (form: ('W' | 'R' | 'P')[]): { text: string; color: strin
 };
 
 export const WeeklyMotivationModal: React.FC<Props> = ({ club, leaguePosition, teamCount, seed, onConfirm, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const [selectedTalk, setSelectedTalk] = useState<MotivationTalkOption | null>(null);
   const [result, setResult] = useState<MotivationTalkResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -76,7 +78,7 @@ export const WeeklyMotivationModal: React.FC<Props> = ({ club, leaguePosition, t
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm ${exitClass}`}>
       <div className="relative w-[900px] max-h-[90vh] flex flex-col bg-slate-950 border border-white/10 rounded-[40px] shadow-[0_40px_120px_rgba(0,0,0,0.8)] overflow-hidden">
 
         {/* HEADER */}
@@ -86,7 +88,7 @@ export const WeeklyMotivationModal: React.FC<Props> = ({ club, leaguePosition, t
               <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500 mb-1">ROZMOWA TYGODNIOWA</div>
               <h2 className="text-3xl font-black italic uppercase tracking-tight text-white">Motywacja Drużyny</h2>
             </div>
-            <button onClick={onClose} className="text-slate-600 hover:text-white transition-colors text-2xl font-black leading-none mt-1">✕</button>
+            <button onClick={closeModal} className="text-slate-600 hover:text-white transition-colors text-2xl font-black leading-none mt-1">✕</button>
           </div>
 
           {/* SYTUACJA DRUŻYNY */}

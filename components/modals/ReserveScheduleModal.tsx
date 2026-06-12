@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { useGame } from '../../context/GameContext';
 import { Player, PlayerPosition, ReserveFixture, ReserveMatchPlayerEntry, ReserveMatchResult, Club } from '../../types';
 
@@ -41,6 +42,7 @@ type MatchTeamId = 'HOME' | 'AWAY';
 type EventKind = 'goal' | 'yellow' | 'red' | 'sub' | 'injury' | 'missed_penalty';
 
 const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, clubs, userTeamId, fixture, onClose }) => {
+  const { closeModal: closeMatchDetail, exitClass: matchDetailExitClass } = useModalClose(onClose);
   const userTeamSide: MatchTeamId = result.isUserHome ? 'HOME' : 'AWAY';
   const userClub = clubs.find(c => c.id === userTeamId);
   const userFullName = userClub ? `${userClub.name} II` : (result.isUserHome ? result.homeTeamName : result.awayTeamName);
@@ -335,7 +337,7 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
   const displayScore = getDisplayScore(result);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }} onClick={onClose}>
+    <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 ${matchDetailExitClass}`} style={{ backgroundColor: 'rgba(0,0,0,0.35)' }} onClick={closeMatchDetail}>
       <div
         className="w-full max-w-[96vw] max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-600/70 backdrop-blur-sm p-5 shadow-2xl font-black italic uppercase tracking-tighter"
         style={{ backgroundColor: 'rgba(16,24,39,0.30)' }}
@@ -346,7 +348,7 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Raport meczowy rezerw</div>
             <h2 className="mt-1 text-2xl font-black text-white">Raport meczowy</h2>
           </div>
-          <button onClick={onClose} className="rounded-lg border border-white/10 px-3 py-1.5 text-lg text-gray-300 hover:border-white/25 hover:text-white">x</button>
+          <button onClick={closeMatchDetail} className="rounded-lg border border-white/10 px-3 py-1.5 text-lg text-gray-300 hover:border-white/25 hover:text-white">x</button>
         </div>
 
         <div className="mb-5 overflow-hidden rounded-2xl border border-white/10" style={{ background: 'linear-gradient(to bottom, #0f172a, #1e293b)' }}>
@@ -419,6 +421,7 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
 };
 
 export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { reserveFixtures, reserveMatchResults, reserves, seasonNumber, clubs, userTeamId } = useGame();
   const [selectedResult, setSelectedResult] = useState<ReserveMatchResult | null>(null);
   const [selectedFixture, setSelectedFixture] = useState<ReserveFixture | null>(null);
@@ -455,14 +458,14 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80" onClick={onClose}>
+      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 ${exitClass}`} onClick={closeModal}>
         <div
           className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto p-5"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-white text-lg italic uppercase tracking-tighter">Terminarz Rezerw - Sezon {seasonNumber}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">x</button>
+            <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl">x</button>
           </div>
 
           {seasonFixtures.length === 0 && (

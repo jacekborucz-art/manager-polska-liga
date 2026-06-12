@@ -56,7 +56,7 @@ export const SummerCampLocationModal: React.FC<SummerCampLocationModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-2xl mx-4 rounded-2xl border border-green-500/30 bg-slate-900/95 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-green-500/20 bg-green-900/20">
@@ -237,7 +237,7 @@ export const SummerCampProgramModal: React.FC<SummerCampProgramModalProps> = ({
   const [selectedIntensity, setSelectedIntensity] = useState<SummerCampIntensity>('moderate');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-2xl mx-4 rounded-2xl border border-green-500/30 bg-slate-900/95 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-green-500/20 bg-green-900/15">

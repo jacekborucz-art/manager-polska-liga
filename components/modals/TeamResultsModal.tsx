@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { Club, CompetitionType, MatchStatus } from '../../types';
@@ -11,6 +12,7 @@ interface TeamResultsModalProps {
 }
 
 export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onClose, club }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, fixtures, currentDate, leagues, seasonNumber } = useGame();
 
   const neutralTypes: string[] = [
@@ -148,14 +150,14 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md p-6 animate-fade-in">
+    <div className={`fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md p-6 ${exitClass}`}>
       <div className="max-w-3xl w-full border border-white/10 rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative">
         <div className="border-b border-white/5 p-6 flex justify-between items-center bg-white/5">
           <div>
             <h2 className="text-xl font-black italic text-white uppercase tracking-tighter">Terminarz</h2>
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{club.name}</p>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">&times;</button>
+          <button onClick={closeModal} className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">&times;</button>
         </div>
 
         {availableSeasons.length > 0 && (
@@ -264,7 +266,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="p-6 text-center border-t border-white/5">
-          <button onClick={onClose} className="px-10 py-3 bg-white text-slate-900 font-black italic uppercase tracking-widest text-xs rounded-xl hover:scale-105 transition-all shadow-xl">Zamknij</button>
+          <button onClick={closeModal} className="px-10 py-3 bg-white text-slate-900 font-black italic uppercase tracking-widest text-xs rounded-xl hover:scale-105 transition-all shadow-xl">Zamknij</button>
         </div>
       </div>
     </div>

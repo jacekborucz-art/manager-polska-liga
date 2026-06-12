@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Club } from '../../types';
 import { Stadium3DViewer } from '../stadium/Stadium3DViewer';
 import { StadiumExpansionService } from '../../services/StadiumExpansionService';
@@ -58,6 +59,7 @@ const PHASE_COLOR: Record<string, string> = {
 };
 
 export const StadiumModal: React.FC<StadiumModalProps> = ({ club, onClose, onRequestExpansion }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const activeProjects = (club.stadiumExpansionProjects ?? []).filter(
     p => p.phase !== 'COMPLETED' && p.phase !== 'REJECTED'
   );
@@ -68,14 +70,14 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({ club, onClose, onReq
   const stands = getStandsBreakdown(club.stadiumCapacity);
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 z-[400] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div
         className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-[36px] border border-white/10 bg-slate-950/95 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
         onClick={e => e.stopPropagation()}
       >
         <button
-          onClick={onClose}
+          onClick={closeModal}
           className="absolute top-5 right-5 z-20 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all text-sm font-black"
         >
           ✕

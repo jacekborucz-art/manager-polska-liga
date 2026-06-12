@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { BoardClubRequestType, Club } from '../../types';
 
 interface BoardRequestModalProps {
@@ -67,10 +68,11 @@ const toneClasses: Record<string, { border: string; bg: string; text: string }> 
 };
 
 export const BoardRequestModal: React.FC<BoardRequestModalProps> = ({ club, onClose, onSelectStadium, onSelectRequest }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const reserveBudget = Math.max(0, club.reserveBudget ?? 0);
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 z-[400] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div
         className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-[36px] border border-white/10 bg-slate-950/95 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"

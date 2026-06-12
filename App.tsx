@@ -106,6 +106,7 @@ import { FriendlyMatchesRaportView } from './components/views/FriendlyMatchesRap
 import { Analytics } from "@vercel/analytics/react";
 import { GameScaler } from './components/GameScaler';
 import { PreMatchPressConferenceModal } from './components/modals/PreMatchPressConferenceModal';
+import { ChalkTrail } from './components/ui/ChalkTrail';
 
 const PRESS_CONFERENCE_VIEWS = new Set<ViewState>([
   ViewState.PRE_MATCH_STUDIO,
@@ -498,6 +499,7 @@ case ViewState.CL_GROUP_DRAW:
 const App: React.FC = () => {
   return (
     <GameProvider>
+      <ChalkTrail />
       <GameScaler>
         <AppContent />
         <Analytics />

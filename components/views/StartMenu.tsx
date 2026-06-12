@@ -77,7 +77,7 @@ export const StartMenu: React.FC = () => {
       {/* DISCLAIMER POPUP */}
       {showDisclaimer && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="relative max-w-3xl w-full mx-6 max-h-[80vh] overflow-y-auto bg-slate-900/40 border border-white/10 rounded-[24px] p-8">
+          <div className="relative max-w-3xl w-full mx-6 max-h-[80vh] overflow-y-auto bg-slate-900/40 border border-white/10 rounded-[24px] p-8" style={{ fontFamily: "'Archivo', sans-serif" }}>
             <button
               onClick={() => { setShowDisclaimer(false); setShowResolutionNotice(true); }}
               className="absolute top-4 right-4 text-4xl text-white/40 hover:text-white transition-colors leading-none"

@@ -28,6 +28,7 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 import React, { useState } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Player } from '../../types';
 import {
   PlayerTransferRequestDialogService,
@@ -125,6 +126,7 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
   onResolve,
   onClose,
 }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const [step, setStep] = useState<ModalStep>('STEP_CHOICE');
   const [session, setSession] = useState<TransferRequestDialogSession | null>(null);
   const [result, setResult] = useState<TransferRequestDialogResult | null>(null);
@@ -217,7 +219,7 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
     : false;
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+    <div className={`fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md ${exitClass}`}>
       <div className="relative flex max-h-[92vh] w-full max-w-[900px] flex-col overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/70 shadow-[0_50px_100px_rgba(0,0,0,0.9)]">
 
         {/* Linia gradientu u góry */}
@@ -305,7 +307,7 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
               {/* Przycisk anulowania bez konsekwencji (tylko gdy gracz ma niskie napięcie) */}
               <div className="mt-6 border-t border-white/5 pt-4">
                 <button
-                  onClick={onClose}
+                  onClick={closeModal}
                   className="mx-auto block w-full max-w-[420px] rounded-2xl border-x border-b border-t border-x-white/10 border-b-black/60 border-t-white/20 bg-transparent py-3 text-xs font-black italic uppercase tracking-tighter text-slate-500 transition-all duration-150 hover:bg-white/5 hover:text-slate-300 active:translate-y-[2px]"
                   style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
                 >
@@ -459,7 +461,7 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
 
               {/* Przycisk zamknięcia */}
               <button
-                onClick={onClose}
+                onClick={closeModal}
                 className={`w-full rounded-2xl border-x border-b border-t px-6 py-4 text-sm font-black italic uppercase tracking-tighter text-white transition-all duration-200 active:translate-y-[2px] ${
                   isPositive
                     ? 'border-x-emerald-500/30 border-b-black/60 border-t-emerald-400/60 bg-emerald-600/80 hover:bg-emerald-500'

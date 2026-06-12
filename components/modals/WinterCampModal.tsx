@@ -53,7 +53,7 @@ export const WinterCampLocationModal: React.FC<WinterCampLocationModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-2xl mx-4 rounded-2xl border border-amber-500/30 bg-slate-900/95 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-900/20">
@@ -233,7 +233,7 @@ export const WinterCampProgramModal: React.FC<WinterCampProgramModalProps> = ({
   const [selectedIntensity, setSelectedIntensity] = useState<WinterCampIntensity>('moderate');
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-2xl mx-4 rounded-2xl border border-blue-500/30 bg-slate-900/95 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-blue-500/20 bg-blue-900/15">

@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { PlayerPosition, Player, ClubKitPattern, NationalTeam } from '../../types';
@@ -190,6 +191,7 @@ const getCompetitionName = (comp: string) => {
 };
 
 export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, onClose, teamType = 'club' }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, players, nationalTeams } = useGame();
 
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -648,7 +650,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
     : '–';
 
   return (
-    <div className="fixed inset-0 z-[400] bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+    <div className={`fixed inset-0 z-[400] bg-black/50 backdrop-blur-sm ${exitClass}`} onClick={closeModal}>
       <div
         className={`${GLASS_PANEL} w-full max-w-6xl max-h-[96vh] rounded-[40px] flex flex-col overflow-hidden`}
         style={{

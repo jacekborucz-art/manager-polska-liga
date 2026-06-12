@@ -130,7 +130,7 @@ export const PreMatchBriefingModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 backdrop-blur-md">
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-[1080px] mx-4 bg-slate-900/70 border border-white/10 rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
 
         {/* GRADIENT BAR */}

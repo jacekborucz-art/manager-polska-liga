@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Club, BoardAttributeLevel, ClubBoard, ClubOwner, ClubCEO, ClubCFO, ClubCOO, ClubMarketingDirector, ClubAcademyDirector, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality, StadiumStand } from '../../types';
 import { ManagementMemberModal, MemberEntry } from './ManagementMemberModal';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
@@ -535,6 +536,7 @@ const getObjectivePanelData = (
 };
 
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion, submitBoardClubRequest } = useGame();
   const [isDirectorModalOpen, setIsDirectorModalOpen] = useState(false);
   const [isBoardRequestOpen, setIsBoardRequestOpen] = useState(false);
@@ -627,7 +629,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
   const confidenceTextColor = confidence > 70 ? 'text-emerald-400' : confidence > 40 ? 'text-amber-400' : 'text-red-500';
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
       <div

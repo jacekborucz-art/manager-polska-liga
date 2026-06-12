@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import {
   ClubAcademyDirector,
   ClubCEO,
@@ -48,6 +49,7 @@ const attrColor = (v: number): string => {
 };
 
 export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ member, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const { data, role } = member;
 
   const attrs = Object.entries(data)
@@ -56,8 +58,8 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
+      className={`absolute inset-0 z-50 flex items-center justify-center p-4 ${exitClass}`}
+      onClick={closeModal}
     >
       <div
         className="relative w-full max-w-sm rounded-[28px] border border-white/10 bg-slate-950/95 p-6 shadow-2xl backdrop-blur-md"
@@ -65,7 +67,7 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
       >
         <button
           type="button"
-          onClick={onClose}
+          onClick={closeModal}
           className="absolute right-4 top-4 text-slate-400 transition-colors hover:text-white"
         >
           ✕

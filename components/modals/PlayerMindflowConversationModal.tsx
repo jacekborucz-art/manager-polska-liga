@@ -1,4 +1,5 @@
 import React from 'react';
+import { useModalClose } from '../ui/useModalClose';
 
 export type PlayerMindflowTheme = 'ROLE' | 'TRANSFER';
 
@@ -79,10 +80,11 @@ export const PlayerMindflowConversationModal: React.FC<PlayerMindflowConversatio
   onEndConversation,
   onClose,
 }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const accent = THEMES[theme];
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+    <div className={`fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md ${exitClass}`}>
       <div className="relative flex max-h-[92vh] w-full max-w-[900px] flex-col overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/70 shadow-[0_50px_100px_rgba(0,0,0,0.9)]">
         <div className={`absolute left-0 top-0 h-[2px] w-full bg-gradient-to-r from-transparent ${accent.gradient} to-transparent`} />
         <div
@@ -140,7 +142,7 @@ export const PlayerMindflowConversationModal: React.FC<PlayerMindflowConversatio
                 </p>
               </div>
               <button
-                onClick={onClose}
+                onClick={closeModal}
                 className={`w-full rounded-2xl border-x border-b border-t px-6 py-4 text-sm font-black italic uppercase tracking-tighter text-white transition-all duration-200 active:translate-y-[2px] ${
                   result.isPositive
                     ? 'border-x-emerald-500/30 border-b-black/60 border-t-emerald-400/60 bg-emerald-600/80 hover:bg-emerald-500'

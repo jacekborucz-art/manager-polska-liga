@@ -1,4 +1,5 @@
 import React from 'react';
+import { useModalClose } from '../ui/useModalClose';
 import { Club } from '../../types';
 
 interface LeagueFinanceReportModalProps {
@@ -8,13 +9,14 @@ interface LeagueFinanceReportModalProps {
 }
 
 export const LeagueFinanceReportModal: React.FC<LeagueFinanceReportModalProps> = ({ leagueName, clubs, onClose }) => {
+  const { closeModal, exitClass } = useModalClose(onClose);
   const sorted = [...clubs].sort((a, b) => b.budget - a.budget);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 }).format(n);
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 p-6">
+    <div className={`fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 p-6 ${exitClass}`}>
       <div className="w-full max-w-lg rounded-[32px] border border-white/10 bg-slate-900/80 backdrop-blur-2xl shadow-2xl flex flex-col overflow-hidden">
         <div className="border-b border-white/5 bg-white/5 px-8 py-6 flex items-center justify-between">
           <div>
@@ -22,7 +24,7 @@ export const LeagueFinanceReportModal: React.FC<LeagueFinanceReportModalProps> =
             <h2 className="mt-1 text-xl font-black italic uppercase tracking-tight text-white">{leagueName}</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeModal}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/8 text-slate-300 hover:bg-white/20 hover:text-white transition-all"
           >
             x
@@ -54,7 +56,7 @@ export const LeagueFinanceReportModal: React.FC<LeagueFinanceReportModalProps> =
 
         <div className="border-t border-white/5 bg-black/20 px-8 py-5 flex justify-end">
           <button
-            onClick={onClose}
+            onClick={closeModal}
             className="rounded-2xl bg-white px-8 py-3 text-xs font-black italic uppercase tracking-widest text-slate-900 shadow-xl transition-all hover:scale-105 active:scale-95"
           >
             Zamknij

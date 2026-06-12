@@ -34,7 +34,7 @@ export const PreMatchPressConferenceModal: React.FC<Props> = ({ fixture, userClu
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-5 backdrop-blur-md">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-5 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-5xl overflow-hidden rounded-[34px] border border-white/10 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.75)]">
         <header className="border-b border-white/10 bg-gradient-to-r from-blue-950/80 via-slate-950 to-slate-950 px-8 py-6">
           <div className="text-[10px] font-black italic uppercase tracking-tighter text-blue-300">Konferencja prasowa przed meczem</div>
