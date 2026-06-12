@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ImportedSquadPlayer } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, Club, ClubManagement, ClubKit } from '../../types';
+import { ViewState, PlayerPosition, Region, PlayerAttributes, Player, PlayerLoanInfo, HealthStatus, Club, ClubManagement, ClubKit, Coach } from '../../types';
 import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
@@ -1123,6 +1123,52 @@ export const EditorView: React.FC = () => {
     setEditTrenerExpPoints(String(coach.expPoints ?? 1));
   };
 
+  const handleCreateTrener = () => {
+    const hiredDate = currentDate instanceof Date ? currentDate.toISOString() : new Date(currentDate).toISOString();
+    const baseCoach = CoachService.createRandomCoach(true);
+    const newCoach: Coach = {
+      ...baseCoach,
+      id: `COACH_EDITOR_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      firstName: 'Nowy',
+      lastName: 'Trener',
+      age: 45,
+      nationality: Region.POLAND,
+      nationalityFlag: baseCoach.nationalityFlag,
+      currentClubId: null,
+      currentNationalTeamId: null,
+      isNationalTeamCoach: false,
+      hiredDate,
+      contractEndDate: CoachService.getDefaultContractEndDate(hiredDate),
+      annualSalary: 100_000,
+      expPoints: 1,
+      blacklist: {},
+      attributes: {
+        experience: 50,
+        decisionMaking: 50,
+        motivation: 50,
+        training: 50,
+      },
+      history: [],
+      seasonStats: [],
+    };
+
+    setCoaches(prev => ({ ...prev, [newCoach.id]: newCoach }));
+    setTrenerzySearch(`${newCoach.firstName} ${newCoach.lastName}`);
+    setTrenerzySelectedId(newCoach.id);
+    setEditTrenerFirstName(newCoach.firstName);
+    setEditTrenerLastName(newCoach.lastName);
+    setEditTrenerAge(String(newCoach.age));
+    setEditTrenerNationality(getDefaultCountryForRegion(Region.POLAND));
+    setEditTrenerAttrs({ ...newCoach.attributes });
+    setEditTrenerTacticOffensive(newCoach.favoriteTactics.offensive);
+    setEditTrenerTacticNeutral(newCoach.favoriteTactics.neutral);
+    setEditTrenerTacticDefensive(newCoach.favoriteTactics.defensive);
+    setEditTrenerAnnualSalary(String(newCoach.annualSalary));
+    setEditTrenerContractEnd(newCoach.contractEndDate.substring(0, 10));
+    setEditTrenerExpPoints(String(newCoach.expPoints));
+    showGameNotification({ title: 'Trener stworzony', message: 'Nowy trener został dodany do gry jako wolny trener.', tone: 'success' });
+  };
+
   const handleTrenerSave = () => {
     if (!trenerzySelectedId) return;
     const age = parseInt(editTrenerAge, 10);
@@ -2138,6 +2184,13 @@ export const EditorView: React.FC = () => {
           {/* LEWA — szukajka + lista */}
           <div className="w-[480px] flex-shrink-0 flex flex-col border-r border-slate-800 overflow-hidden">
             <div className="px-4 pt-4 pb-3 flex-shrink-0">
+              <button
+                onClick={handleCreateTrener}
+                className="mb-3 px-4 py-1.5 bg-emerald-800 rounded-[18px] text-[10px] font-black uppercase italic tracking-widest text-emerald-200 hover:text-white transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-400/60 border-x-emerald-600/30 border-b-black/60"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+              >
+                Stwórz trenera
+              </button>
               <input
                 type="text"
                 value={trenerzySearch}
