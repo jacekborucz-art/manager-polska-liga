@@ -9,6 +9,7 @@ import { rollInjuryBySeverity } from './InjuryCatalog';
 import { KitSelectionService } from './KitSelectionService';
 import { MatchHistoryService } from './MatchHistoryService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
 
 interface PlayoffEngineResult {
   homeScore: number;
@@ -90,7 +91,7 @@ const simulatePlayoffMatchEngine = (
     const teamMultiplier =
       clamp(0.94 + coachScore / 850, 0.96, 1.06) *
       clamp(1 + formScore * 0.018, 0.92, 1.09) *
-      clamp(0.94 + ((club.morale ?? 50) / 50) * 0.06, 0.94, 1.06);
+      CoachPreMatchMoraleService.getPreMatchMoraleMultiplier(club, coach);
     const att = active.reduce((s, p) => s + effectiveAttribute(p, (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3), 0) / active.length * teamMultiplier;
     const def = active.reduce((s, p) => s + effectiveAttribute(p, (p.attributes.defending + p.attributes.stamina) / 2), 0) / active.length * teamMultiplier;
     const gkPlayer = players.find(p => p.id === xi[0]);

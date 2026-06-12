@@ -6,6 +6,8 @@ import { FreeAgentNegotiationService } from './FreeAgentNegotiationService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerContractMindflowService } from './PlayerContractMindflowService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
+import { AiClubTransferStrategy, AiClubTransferStrategyService } from './AiClubTransferStrategyService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -158,7 +160,8 @@ const _getTransferListPriority = (player: Player, squad: Player[], currentDate: 
     (player.loan ? -100 : 0) +
     Math.max(0, 90 - player.overallRating) +
     Math.max(0, player.age - 28) * 2 -
-    Math.max(0, (player.attributes?.talent ?? player.overallRating) - player.overallRating) * 2
+    Math.max(0, (player.attributes?.talent ?? player.overallRating) - player.overallRating) * 2 -
+    _getPlayerReputationScore(player) * 4
   );
 };
 
@@ -237,6 +240,24 @@ const _getPositionAverageOverall = (squad: Player[], position: PlayerPosition): 
 
 const _clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
+
+const _getPlayerReputation = (player: Player): number => player.reputacja ?? 50;
+
+const _getPlayerReputationScore = (player: Player): number =>
+  _clamp((_getPlayerReputation(player) - 50) / 10, -3, 5);
+
+const _getSquadReviewScore = (player: Player): number =>
+  player.overallRating - (player.age - 18) * 1.5 + _getPlayerReputationScore(player);
+
+const _getRecruitmentReputationBonus = (
+  player: Player,
+  strategy: number,
+  need?: ClubNeedAssessment
+): number => {
+  const strategyMultiplier = strategy === 2 ? 1.15 : strategy === 1 ? 0.55 : strategy === 0 ? 0.45 : 0.75;
+  const urgencyMultiplier = need?.urgency === 'LOW' ? 0.65 : need?.urgency === 'CRITICAL' ? 0.50 : 1.0;
+  return _getPlayerReputationScore(player) * strategyMultiplier * urgencyMultiplier;
+};
 
 const _hashToUnit = (seed: string): number => _seededRandom(seed);
 
@@ -339,6 +360,7 @@ const _scoreCorePlayer = (
     _getAgeProfileBonus(player) +
     _getRecentFormBonus(player) +
     _getCoreContractBonus(player, currentDate) +
+    _getPlayerReputationScore(player) * 0.8 +
     leadershipBonus +
     continuityBonus +
     starterBonus -
@@ -459,8 +481,8 @@ const _findWeakestSurplusPlayer = (squad: Player[]): Player | null => {
       counts[p.position] > MIN_SQUAD_POSITION_COUNTS[p.position]
     )
     .sort((a, b) => {
-      const scoreA = a.overallRating - (a.annualSalary / 100_000) - (a.age >= 32 ? 4 : 0);
-      const scoreB = b.overallRating - (b.annualSalary / 100_000) - (b.age >= 32 ? 4 : 0);
+      const scoreA = a.overallRating - (a.annualSalary / 100_000) - (a.age >= 32 ? 4 : 0) + _getPlayerReputationScore(a);
+      const scoreB = b.overallRating - (b.annualSalary / 100_000) - (b.age >= 32 ? 4 : 0) + _getPlayerReputationScore(b);
       return scoreA - scoreB;
     })[0] || null;
 };
@@ -535,7 +557,8 @@ interface ClubNeedAssessment {
 const _assessClubNeeds = (
   club: Club,
   squad: Player[],
-  currentDate: Date
+  currentDate: Date,
+  aiStrategy?: AiClubTransferStrategy
 ): ClubNeedAssessment[] => {
   const monthKey = currentDate.getFullYear() * 100 + currentDate.getMonth();
   const clubHash = Math.abs(club.id.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0));
@@ -552,7 +575,7 @@ const _assessClubNeeds = (
   // FORM_PANIC: ≥3 strat z ostatnich 5 → losuje się JEDNA pozycja "winna" serii
   const recentForm = (club.stats as any)?.form as string[] | undefined || [];
   const recentLosses = recentForm.slice(-5).filter(r => r === 'P').length;
-  const panicPosition: PlayerPosition | null = recentLosses >= 3
+  const panicPosition: PlayerPosition | null = recentLosses >= 3 && (seededRand(12345) < (aiStrategy?.panicBuyChance ?? 0.20))
     ? positions[Math.floor(seededRand(9999) * positions.length)]
     : null;
 
@@ -599,7 +622,8 @@ const _assessClubNeeds = (
     }
 
     // TRIGGER 5: QUALITY_GAP (MEDIUM) — z szumem: różne kluby reagują przy różnych progach
-    const ovrGap = (idealOvr - bestOvr) * urgencyNoise;
+    const patienceFactor = 1.14 - (aiStrategy?.patience ?? 0.5) * 0.28;
+    const ovrGap = (idealOvr - bestOvr) * urgencyNoise * patienceFactor;
     if (ovrGap > 8) {
       results.push({
         position: pos,
@@ -612,13 +636,15 @@ const _assessClubNeeds = (
 
     // TRIGGER 6: IMPULSE (LOW) — "trener chciał" — bogaty klub ma wyższy próg
     const budgetAggression = club.budget > FinanceLogic.getFairMarketSalary(idealOvr) * 18 ? 2.0 : 1.0;
-    if (seededRand(i * 113 + 7) < 0.06 * budgetAggression) {
+    const impulseMultiplier = aiStrategy ? Math.max(0.55, aiStrategy.budgetAggression) : 1.0;
+    if (seededRand(i * 113 + 7) < 0.06 * budgetAggression * impulseMultiplier) {
       results.push({ position: pos, urgency: 'LOW', reason: 'IMPULSE', starterRequired: false });
     }
   }
 
   // "Reluctant buyer": 10% szansy że klub z MEDIUM/LOW potrzebami odpuszcza w tym miesiącu
-  if (seededRand(42) < 0.10) {
+  const reluctantChance = aiStrategy ? 0.06 + (aiStrategy.patience * 0.12) - Math.max(0, aiStrategy.budgetAggression - 1) * 0.08 : 0.10;
+  if (seededRand(42) < _clamp(reluctantChance, 0.02, 0.18)) {
     return results.filter(r => r.urgency === 'CRITICAL' || r.urgency === 'HIGH');
   }
 
@@ -873,7 +899,8 @@ processAiRecruitment: (
       const squad = updatedPlayersMap[club.id] || [];
       const minCounts = MIN_SQUAD_POSITION_COUNTS;
       const idealOvr = 30 + club.reputation * 4.5;
-      const needsFA = _assessClubNeeds(club, squad, currentDate);
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
+      const needsFA = _assessClubNeeds(club, squad, currentDate, aiStrategy);
       const hasCriticalShortage = needsFA.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const gulfVeteranStarCandidate = _isGulfStarHunterClub(club)
         ? (updatedPlayersMap['FREE_AGENTS'] || [])
@@ -896,7 +923,7 @@ processAiRecruitment: (
       // Szukanie kandydata: pasująca pozycja, OVR w zasięgu, nie jest już w negocjacji z innym AI, brak blokady
       // Używamy updatedPlayersMap zamiast freeAgents — freeAgents to stary snapshot sprzed pętli.
       // Bez tego kilka klubów może w jednej iteracji zgłosić się do tego samego agenta.
-      const candidate = gulfVeteranStarCandidate || (updatedPlayersMap['FREE_AGENTS'] || []).find(fa => {
+      const freeAgentCandidates = (updatedPlayersMap['FREE_AGENTS'] || []).filter(fa => {
         const needFA = needsFA.find(n => n.position === fa.position);
         if (!needFA) return false;
         const faMinOvr = needFA.reason === 'SHORTAGE' ? idealOvr - 30 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
@@ -911,7 +938,14 @@ processAiRecruitment: (
         const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
 
         return hasShortage || isUpgrade;
+      }).sort((a, b) => {
+        const needA = needsFA.find(n => n.position === a.position);
+        const needB = needsFA.find(n => n.position === b.position);
+        const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
+        const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
+        return scoreB - scoreA || a.age - b.age;
       });
+      const candidate = gulfVeteranStarCandidate || freeAgentCandidates[0];
 
       if (!candidate) return club;
 
@@ -1174,8 +1208,8 @@ processAiRecruitment: (
           squad.filter(s => s.position === p.position).length > minCounts[p.position]
         )
         .sort((a, b) => {
-          const scoreA = a.overallRating - (a.annualSalary / 100_000);
-          const scoreB = b.overallRating - (b.annualSalary / 100_000);
+          const scoreA = a.overallRating - (a.annualSalary / 100_000) + _getPlayerReputationScore(a);
+          const scoreB = b.overallRating - (b.annualSalary / 100_000) + _getPlayerReputationScore(b);
           return scoreA - scoreB;
         })[0];
 
@@ -1258,11 +1292,12 @@ processAiRecruitment: (
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(squad)) continue;
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
       if (club.budget <= 250_000) continue;
 
       const minCounts = MIN_SQUAD_POSITION_COUNTS;
       const idealOvr = 30 + club.reputation * 4.5;
-      const needsTL = _assessClubNeeds(club, squad, currentDate);
+      const needsTL = _assessClubNeeds(club, squad, currentDate, aiStrategy);
       if (needsTL.length === 0) continue;
       const hasCriticalShortageTL = needsTL.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const needsTLMap = new Map(needsTL.map(n => [n.position as string, n]));
@@ -1303,13 +1338,24 @@ processAiRecruitment: (
         const askingPrice = TransferSellerLogicService.estimateAskingPrice(p, sellerClub, sellerSquad, currentDate);
         const proposedSalary = FinanceLogic.getFairMarketSalary(p.overallRating);
 
-        const budgetCapNormal = hasCriticalShortageTL
+        const budgetCapNormalBase = hasCriticalShortageTL
           ? 0.90
           : Math.min(0.78, (clubStrategy === 2 ? 0.65 : 0.50) + marketOpportunity.budgetBoost);
-        const budgetCapBargain = Math.min(0.60, (clubStrategy === 2 ? 0.45 : 0.35) + marketOpportunity.budgetBoost);
+        const budgetCapBargainBase = Math.min(0.60, (clubStrategy === 2 ? 0.45 : 0.35) + marketOpportunity.budgetBoost);
+        const budgetCapNormal = AiClubTransferStrategyService.budgetCap(budgetCapNormalBase, aiStrategy, {
+          needUrgency: needTL.urgency,
+          isShortage: needTL.reason === 'SHORTAGE',
+          askingPrice
+        });
+        const budgetCapBargain = AiClubTransferStrategyService.budgetCap(budgetCapBargainBase, aiStrategy, {
+          needUrgency: needTL.urgency,
+          isShortage: needTL.reason === 'SHORTAGE',
+          isTransferListed: true,
+          askingPrice
+        });
         if (bargainRange && askingPrice > club.budget * budgetCapBargain) return false;
         if (normalRange && askingPrice > club.budget * budgetCapNormal) return false;
-        if (!hasCriticalShortageTL && clubStrategy === 1 && p.age > 26) return false;
+        if (!hasCriticalShortageTL && clubStrategy === 1 && p.age > 26 && aiStrategy.ageProfile === 'YOUTH') return false;
         if (club.budget < askingPrice + proposedSalary * 0.5) return false;
 
         return true;
@@ -1326,19 +1372,29 @@ processAiRecruitment: (
           const bSeller = sellerClubMap.get(b.clubId || '');
           const aBonus = aSeller ? _getTransferListOpportunity(a, club, aSeller).scoreBonus : 0;
           const bBonus = bSeller ? _getTransferListOpportunity(b, club, bSeller).scoreBonus : 0;
-          return a.age - b.age || (b.overallRating + bBonus) - (a.overallRating + aBonus);
+          const aNeed = needsTLMap.get(a.position);
+          const bNeed = needsTLMap.get(b.position);
+          const aScore = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: aNeed?.urgency, isTransferListed: true }) + aBonus + _getRecruitmentReputationBonus(a, clubStrategy, aNeed);
+          const bScore = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: bNeed?.urgency, isTransferListed: true }) + bBonus + _getRecruitmentReputationBonus(b, clubStrategy, bNeed);
+          return a.age - b.age || bScore - aScore;
         });
       } else if (clubStrategy === 0) {
         // Bargain hunter: lista transferowa i wygasające kontrakty najpierw, potem tańszy OVR
         sortedCandidates.sort((a, b) => {
           const aSeller = sellerClubMap.get(a.clubId || '');
           const bSeller = sellerClubMap.get(b.clubId || '');
+          const aNeed = needsTLMap.get(a.position);
+          const bNeed = needsTLMap.get(b.position);
           const aVal = (a.isOnTransferList ? 20 : 0)
             + (new Date(a.contractEndDate).getTime() - currentDate.getTime() < PRE_CONTRACT_PRIORITY_DAYS * 86_400_000 ? 10 : 0)
-            + (aSeller ? _getTransferListOpportunity(a, club, aSeller).scoreBonus : 0);
+            + (aSeller ? _getTransferListOpportunity(a, club, aSeller).scoreBonus : 0)
+            + _getRecruitmentReputationBonus(a, clubStrategy, aNeed)
+            + AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: aNeed?.urgency, isTransferListed: true }) * 0.25;
           const bVal = (b.isOnTransferList ? 20 : 0)
             + (new Date(b.contractEndDate).getTime() - currentDate.getTime() < PRE_CONTRACT_PRIORITY_DAYS * 86_400_000 ? 10 : 0)
-            + (bSeller ? _getTransferListOpportunity(b, club, bSeller).scoreBonus : 0);
+            + (bSeller ? _getTransferListOpportunity(b, club, bSeller).scoreBonus : 0)
+            + _getRecruitmentReputationBonus(b, clubStrategy, bNeed)
+            + AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: bNeed?.urgency, isTransferListed: true }) * 0.25;
           return bVal - aVal || a.overallRating - b.overallRating;
         });
       } else {
@@ -1348,7 +1404,11 @@ processAiRecruitment: (
           const bSeller = sellerClubMap.get(b.clubId || '');
           const aBonus = aSeller ? _getTransferListOpportunity(a, club, aSeller).scoreBonus : 0;
           const bBonus = bSeller ? _getTransferListOpportunity(b, club, bSeller).scoreBonus : 0;
-          return (b.overallRating + bBonus) - (a.overallRating + aBonus);
+          const aNeed = needsTLMap.get(a.position);
+          const bNeed = needsTLMap.get(b.position);
+          const aScore = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: aNeed?.urgency, isTransferListed: true }) + aBonus + _getRecruitmentReputationBonus(a, clubStrategy, aNeed);
+          const bScore = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: bNeed?.urgency, isTransferListed: true }) + bBonus + _getRecruitmentReputationBonus(b, clubStrategy, bNeed);
+          return bScore - aScore;
         });
       }
       const best = sortedCandidates[0];
@@ -1494,6 +1554,7 @@ processAiRecruitment: (
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(squad)) continue;
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       // Jeden aktywny zakup na raz
       const alreadyBuying = Object.values(updatedPlayersMap)
@@ -1503,7 +1564,7 @@ processAiRecruitment: (
 
       const idealOvr = 30 + club.reputation * 4.5;
       const isGulfStarHunter = _isGulfStarHunterClub(club);
-      const needsIT = _assessClubNeeds(club, squad, currentDate);
+      const needsIT = _assessClubNeeds(club, squad, currentDate, aiStrategy);
       if (needsIT.length === 0 && !isGulfStarHunter) continue;
       const hasCriticalShortageIT = needsIT.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const needsITMap = new Map(needsIT.map(n => [n.position as string, n]));
@@ -1537,7 +1598,10 @@ processAiRecruitment: (
 
       if (targets.length === 0) continue;
 
-      const target = [...targets].sort((a, b) => b.overallRating - a.overallRating)[0];
+      const target = [...targets].sort((a, b) =>
+        (AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needsITMap.get(b.position)?.urgency }) + _getRecruitmentReputationBonus(b, 2, needsITMap.get(b.position))) -
+        (AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needsITMap.get(a.position)?.urgency }) + _getRecruitmentReputationBonus(a, 2, needsITMap.get(a.position)))
+      )[0];
       const sellerClub = sellerClubMap.get(target.clubId || '');
       if (!sellerClub) continue;
 
@@ -1549,7 +1613,11 @@ processAiRecruitment: (
 
       if (club.budget < askingPrice + proposedSalary * 0.5) continue;
       // Bogatsze kluby mogą przeznaczyć większy % budżetu na jeden transfer: rep=10→60%, rep=15→67.5%, rep=20→70%
-      const budgetCapIT = isGulfVeteranStarTarget ? 0.88 : hasCriticalShortageIT ? 0.90 : Math.min(0.70, 0.45 + club.reputation * 0.015);
+      const budgetCapIT = AiClubTransferStrategyService.budgetCap(
+        isGulfVeteranStarTarget ? 0.88 : hasCriticalShortageIT ? 0.90 : Math.min(0.70, 0.45 + club.reputation * 0.015),
+        aiStrategy,
+        { needUrgency: needsITMap.get(target.position)?.urgency, askingPrice }
+      );
       if (askingPrice > club.budget * budgetCapIT) continue;
 
       // Poza oknem: timing IN_SIX_MONTHS — poprawna premia cenowa i klasyfikacja ochrony rywala.
@@ -1699,13 +1767,14 @@ processAiRecruitment: (
           .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
           .filter(buyer => {
             const buyerSquad = updatedPlayersMap[buyer.id] || [];
+            const buyerStrategy = AiClubTransferStrategyService.buildStrategy(buyer);
             const canMonitorEliteWatchlist = buyer.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION;
             if (isEliteWatchlistOpportunity && !canMonitorEliteWatchlist) return false;
             if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
             const stagger = isEliteWatchlistOpportunity ? 3 : 9;
             if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
 
-            const needs = _assessClubNeeds(buyer, buyerSquad, currentDate);
+            const needs = _assessClubNeeds(buyer, buyerSquad, currentDate, buyerStrategy);
             const hasPosNeed = needs.some(need => need.position === player.position);
             const isShortlisted = (player.interestedClubs || []).includes(buyer.id);
             const buyerPositionAverage = _getPositionAverageOverall(buyerSquad, player.position);
@@ -1916,7 +1985,7 @@ processAiRecruitment: (
           player.transferPendingFee
         );
 
-        const transferredPlayer: Player = {
+        const transferredPlayerBase: Player = {
           ...PlayerMoraleService.applyContractSigningMindflowReset(
             PlayerCareerService.resetClubStatsForNewEntry(player),
             currentDate
@@ -1936,6 +2005,11 @@ processAiRecruitment: (
           transferLockoutUntil: _buildTransferLockoutUntil(currentDate),
           transferOfferBanUntil: _buildTransferOfferBanUntil(currentDate)
         };
+        const transferredPlayer = PlayerReputationGrowthService.applyTransferUpgrade(
+          transferredPlayerBase,
+          sellerClub.reputation,
+          buyerClub.reputation
+        );
 
         // Przenieś zawodnika
         updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).filter(p => p.id !== player.id);
@@ -2012,6 +2086,7 @@ processAiRecruitment: (
       if (club.id === userTeamId) continue;
       const squad = updatedPlayersMap[club.id];
       if (!squad || squad.length === 0) continue;
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       // Liczniki głębokości składu (ochrona minimalna)
       const counts = {
@@ -2069,7 +2144,10 @@ processAiRecruitment: (
         );
         const rand = (Math.sin(seed) * 10000);
         const chance = rand - Math.floor(rand);
-        const listingChance = 0.30 + (club.reputation / 100) * 0.20; // 30–50%
+        const reputationPatience = _getPlayerReputationScore(player) * 0.03;
+        const strategyPatience = (aiStrategy.patience - 0.5) * 0.18;
+        const strategyAggression = (aiStrategy.budgetAggression - 1) * 0.16;
+        const listingChance = _clamp(0.30 + (club.reputation / 100) * 0.20 - reputationPatience - strategyPatience + strategyAggression, 0.08, 0.62);
         if (chance > listingChance) return player;
 
         // Wystawiamy na listę transferową
@@ -2098,6 +2176,7 @@ performSeasonSquadReview: (
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length === 0) return club;
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       const counts = {
         GK: squad.filter(p => p.position === 'GK').length,
@@ -2107,8 +2186,8 @@ performSeasonSquadReview: (
       };
 
       const rankedSquad = [...squad].sort((a, b) => {
-        const scoreA = a.overallRating - (a.age - 18) * 1.5;
-        const scoreB = b.overallRating - (b.age - 18) * 1.5;
+        const scoreA = _getSquadReviewScore(a) - AiClubTransferStrategyService.outgoingScore(a, club, aiStrategy) * 0.25;
+        const scoreB = _getSquadReviewScore(b) - AiClubTransferStrategyService.outgoingScore(b, club, aiStrategy) * 0.25;
         return scoreA - scoreB;
       });
 
@@ -2212,6 +2291,7 @@ performSeasonSquadReview: (
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length < 12) continue;
+      const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       const eligible = squad.filter(p =>
         !p.isOnTransferList &&
@@ -2224,8 +2304,8 @@ performSeasonSquadReview: (
       if (eligible.length === 0) continue;
 
       const ranked = [...eligible].sort((a, b) => {
-        const scoreA = a.overallRating - (a.age - 18) * 1.5;
-        const scoreB = b.overallRating - (b.age - 18) * 1.5;
+        const scoreA = _getSquadReviewScore(a) - AiClubTransferStrategyService.outgoingScore(a, club, aiStrategy) * 0.25;
+        const scoreB = _getSquadReviewScore(b) - AiClubTransferStrategyService.outgoingScore(b, club, aiStrategy) * 0.25;
         return scoreA - scoreB;
       });
 

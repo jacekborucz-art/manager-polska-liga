@@ -5,6 +5,7 @@ import { GoalAttributionService } from './GoalAttributionService';
 import { getAIFocusLambdaBoost } from './MatchPrepFocusService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { NEUTRAL_PRESSURE_PROFILE, type MatchPressureContext } from './MatchPressureService';
+import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
 
 export interface BackgroundMatchResultV2 {
   homeScore: number;
@@ -115,6 +116,8 @@ const calculateFormBoost = (form: ('W' | 'R' | 'P')[]): number => {
     };
     const hMoraleDebuff = calcMoraleDebuff(homePlayers, homeLineup);
     const aMoraleDebuff = calcMoraleDebuff(awayPlayers, awayLineup);
+    const hClubMoraleMult = CoachPreMatchMoraleService.getPreMatchMoraleMultiplier(_homeClub, homeCoach);
+    const aClubMoraleMult = CoachPreMatchMoraleService.getPreMatchMoraleMultiplier(_awayClub, awayCoach);
 
 const allPlayedIds = new Set<string>([
       ...homeLineup.startingXI.filter(id => id !== null),
@@ -405,8 +408,8 @@ const allPlayedIds = new Set<string>([
       const aTacticMod = getEffectivenessMult(Math.round(aBaseScore + aMinuteChaos));
 
       // APLIKACJA LAMBDA GENROWANIE SYTUACJI BRAMKOWYCH 
-     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * shortHandedGoalChance(homeRedCount) * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier * hMoraleDebuff;
-      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * shortHandedGoalChance(awayRedCount) * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier * aMoraleDebuff;
+     hGoalLambda *= (1 + globalChaos)  * weatherFinMod * homeRedPenalty * shortHandedGoalChance(homeRedCount) * hSatiety * homeFieldBonus * hTacticMod * hGkPanic * homeFormBoost * homePrepBoost * crowdPressureMod * hPressureAttackMod * rivalryMultiplier * hMoraleDebuff * hClubMoraleMult;
+      aGoalLambda *= (1 + globalChaos) * weatherFinMod * awayRedPenalty * shortHandedGoalChance(awayRedCount) * aSatiety * aTacticMod * aGkPanic * awayFormBoost * awayPrepBoost * aPressureAttackMod * rivalryMultiplier * aMoraleDebuff * aClubMoraleMult;
 
       // LOSOWANIE BRAMEK (Bernoulli) ***************************************************************************************
     if (seededRng(minute + 100) < hGoalLambda) {

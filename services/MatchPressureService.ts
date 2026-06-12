@@ -3,6 +3,7 @@ import type { BriefingEffect } from './PreMatchBriefingService';
 import type { TalkEffect } from './HalftimeTalkService';
 import type { DebriefEffect } from './PostMatchDebriefService';
 import { RivalryService } from './RivalryService';
+import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
 
 export type MatchStakes = 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
 
@@ -85,7 +86,7 @@ const buildPressureProfile = (
 ): TeamPressureProfile => {
   const stakes = isLateSeason ? getStakes(rank, roundNumber) : 'MID_TABLE';
   const phase = isLateSeason ? clamp((roundNumber - 25) / 9, 0, 1) : 0;
-  const morale = club.morale ?? 50;
+  const morale = CoachPreMatchMoraleService.getEffectivePreMatchMorale(club, coach);
   const coachControl = clamp(((getCoachAttr(coach, 'motivation') + getCoachAttr(coach, 'experience')) / 2 - 50) / 50, -1, 1);
   const directRival = Math.abs(rank - opponentRank) <= 2 ? 1 : 0;
   const homeComposure = isHomeSide ? 0.006 : -0.004;

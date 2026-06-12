@@ -8,6 +8,7 @@ import { KitSelectionService } from './KitSelectionService';
 import { MatchHistoryService } from './MatchHistoryService';
 import { PolandWeatherService } from './PolandWeatherService';
 import { RefereeService } from './RefereeService';
+import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
 
 // ── SYMULATOR BARAŻÓW O UTRZYMANIE (2. Liga vs 3. Liga) ──────────────────────
 // Osobny silnik dla meczów rozgrywanych w tle. Korzysta z pełnych kadr,
@@ -133,7 +134,7 @@ const getTeamProfile = (
     tacticDefenceMultiplier: clamp(1 + (tactic.defenseBias - 50) / 500, 0.90, 1.10),
     coachMultiplier: clamp(0.94 + coachScore / 850, 0.96, 1.06),
     formMultiplier: clamp(1 + formScore * 0.018, 0.92, 1.09),
-    clubMoraleMultiplier: clamp(0.94 + ((club.morale ?? 50) / 50) * 0.06, 0.94, 1.06),
+    clubMoraleMultiplier: CoachPreMatchMoraleService.getPreMatchMoraleMultiplier(club, coach),
     reputationMultiplier: clamp(0.92 + club.reputation * 0.016, 0.94, 1.08),
     completenessMultiplier: starters.length > 0 ? clamp(starters.length / 11, 0.55, 1) : 1,
   };

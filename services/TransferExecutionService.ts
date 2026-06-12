@@ -2,6 +2,7 @@ import { Club, Player, TransferOffer } from '../types';
 import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
 
 interface TransferExecutionResult {
   updatedClubs: Club[];
@@ -61,7 +62,7 @@ export const TransferExecutionService = {
       offer.fee
     );
 
-    const transferredPlayer: Player = {
+    const transferredPlayerBase: Player = {
       ...PlayerMoraleService.applyContractSigningMindflowReset(
         PlayerCareerService.resetClubStatsForNewEntry(player),
         currentDate
@@ -81,6 +82,11 @@ export const TransferExecutionService = {
       transferLockoutUntil: transferLockoutDate.toISOString(),
       transferOfferBanUntil: transferOfferBanDate.toISOString()
     };
+    const transferredPlayer = PlayerReputationGrowthService.applyTransferUpgrade(
+      transferredPlayerBase,
+      sellerClub.reputation,
+      buyerClub.reputation
+    );
 
     const updatedPlayers: Record<string, Player[]> = {
       ...playersMap,

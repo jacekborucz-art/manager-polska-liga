@@ -79,6 +79,7 @@ import { TrainingAssistantService } from '../services/TrainingAssistantService';
 import { AiWeeklyTrainingService } from '../services/AiWeeklyTrainingService';
 import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
+import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
 import { BoardFinanceMonitorService } from '../services/BoardFinanceMonitorService';
@@ -2286,7 +2287,13 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
 
         const seasonEndDate = new Date(newYear - 1, 5, 30); // 30 czerwca kończącego się sezonu
-    const transitionResult = SeasonTransitionService.processSquadTransition(players, updatedClubs, seasonEndDate, userTeamId);
+    const playersAfterReputationGrowth = PlayerReputationGrowthService.applySeasonEndGrowth(
+      players,
+      clubs,
+      MatchHistoryService.getAll(),
+      seasonNumber
+    );
+    const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationGrowth, updatedClubs, seasonEndDate, userTeamId);
     const confEuropeTeamIds = (() => {
       const lePolishTeamId = polishCupEuropeTeamId ?? null;
       const candidates: string[] = [];

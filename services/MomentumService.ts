@@ -2,6 +2,7 @@ import { MatchContext, MatchLiveState, Player, MatchEventType } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { analyzeClubFormImpact } from './MatchFormService';
 import { applyFocusToFormImpact } from './MatchPrepFocusService';
+import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
 
 export const MomentumService = {
   /**
@@ -68,8 +69,10 @@ export const MomentumService = {
     const awayFormImpact = applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1);
     target += homeFormImpact.momentumBonus - awayFormImpact.momentumBonus;
 
-    const homeMoraleBonus = ((ctx.homeClub.morale ?? 50) - 50) / 50 * 6;
-    const awayMoraleBonus = ((ctx.awayClub.morale ?? 50) - 50) / 50 * 6;
+    const homeMorale = CoachPreMatchMoraleService.getEffectivePreMatchMorale(ctx.homeClub, ctx.homeCoach);
+    const awayMorale = CoachPreMatchMoraleService.getEffectivePreMatchMorale(ctx.awayClub, ctx.awayCoach);
+    const homeMoraleBonus = (homeMorale - 50) / 50 * 6;
+    const awayMoraleBonus = (awayMorale - 50) / 50 * 6;
     target += homeMoraleBonus - awayMoraleBonus;
 
     const homeDeepSlump = homeFormImpact.isDeepSlump;
