@@ -8383,9 +8383,176 @@ const finalResult: SimulationOutput = {
       return { updatedCoaches, updatedClubs, changed };
     };
 
+    const processVacantCoachHiring = (
+      baseCoaches: Record<string, Coach>,
+      baseClubs: Club[]
+    ): { updatedCoaches: Record<string, Coach>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedCoaches = { ...baseCoaches };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || club.leagueId === 'NONE') return;
+
+        const currentCoach = club.coachId ? updatedCoaches[club.coachId] : null;
+        if (currentCoach?.currentClubId === club.id) return;
+
+        const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, club.coachId);
+        if (!replacement) {
+          if (club.coachId) {
+            club.coachId = undefined;
+            changed = true;
+          }
+          return;
+        }
+
+        const replacementHiredDate = nextDay.toISOString();
+        updatedCoaches[replacement.id] = {
+          ...replacement,
+          currentClubId: club.id,
+          hiredDate: replacementHiredDate,
+          contractEndDate: CoachService.getDefaultContractEndDate(replacementHiredDate),
+          annualSalary: CoachService.calculateAnnualSalaryForClub(club, replacement),
+          favoritePlayerIds: undefined,
+          history: [
+            ...(replacement.history ?? []),
+            {
+              clubId: club.id,
+              clubName: club.name,
+              fromYear: nextDay.getFullYear(),
+              fromMonth: nextDay.getMonth() + 1,
+              toYear: null,
+              toMonth: null,
+            },
+          ],
+        };
+        club.coachId = replacement.id;
+        changed = true;
+      });
+
+      return { updatedCoaches, updatedClubs, changed };
+    };
+
+    const processVacantStaffHiring = (
+      baseStaffMembers: Record<string, StaffMember>,
+      baseClubs: Club[]
+    ): { updatedStaffMembers: Record<string, StaffMember>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedStaffMembers = { ...baseStaffMembers };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      const getLeagueTier = (club: Club): number => {
+        const fromLeagueId = parseInt((club.leagueId as string).split('_')[2] || '', 10);
+        if (Number.isFinite(fromLeagueId)) return fromLeagueId;
+        return club.tier ?? 1;
+      };
+
+      const getStaffAvg = (member: StaffMember): number => {
+        const values = Object.values(member.attributes ?? {});
+        return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+      };
+
+      const getAnnualStaffCost = (club: Club): number =>
+        (club.staffIds ?? []).reduce((sum, staffId) => sum + (updatedStaffMembers[staffId]?.salary ?? 0), 0);
+
+      const canAffordOptionalStaff = (club: Club, member: StaffMember): boolean => {
+        const budget = Math.max(0, club.budget ?? 0);
+        if (budget <= 0) return false;
+
+        const annualStaffCost = getAnnualStaffCost(club);
+        const optionalBudgetShare = getLeagueTier(club) >= 4 ? 0.05 : 0.07;
+        return annualStaffCost + member.salary <= budget * optionalBudgetShare;
+      };
+
+      const findStaffReplacement = (club: Club, role: StaffRole, optional: boolean): StaffMember | undefined => {
+        const candidates = Object.values(updatedStaffMembers)
+          .filter(member => member.currentClubId === null && member.role === role)
+          .filter(member => !optional || canAffordOptionalStaff(club, member));
+
+        if (candidates.length === 0) return undefined;
+
+        return [...candidates].sort((a, b) =>
+          getStaffAvg(b) - getStaffAvg(a) ||
+          (b.attributes.experience ?? 0) - (a.attributes.experience ?? 0) ||
+          a.salary - b.salary
+        )[0];
+      };
+
+      const hireStaffForClub = (club: Club, member: StaffMember): void => {
+        const hireDate = nextDay.toISOString();
+        const contractEnd = new Date(nextDay);
+        contractEnd.setFullYear(contractEnd.getFullYear() + (getLeagueTier(club) >= 3 ? 1 : 2));
+
+        updatedStaffMembers[member.id] = {
+          ...member,
+          currentClubId: club.id,
+          hiredDate: hireDate,
+          contractEndDate: contractEnd.toISOString(),
+          history: [
+            ...(member.history ?? []),
+            {
+              clubId: club.id,
+              clubName: club.name,
+              fromYear: nextDay.getFullYear(),
+              fromMonth: nextDay.getMonth() + 1,
+              toYear: null,
+              toMonth: null,
+            },
+          ],
+          lastNegotiationDate: null,
+        };
+
+        club.staffIds = [...(club.staffIds ?? []), member.id];
+        changed = true;
+      };
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || club.leagueId === 'NONE') return;
+
+        const validStaffIds = (club.staffIds ?? []).filter(staffId => updatedStaffMembers[staffId]?.currentClubId === club.id);
+        if (validStaffIds.length !== (club.staffIds ?? []).length) {
+          club.staffIds = validStaffIds;
+          changed = true;
+        }
+
+        const leagueTier = getLeagueTier(club);
+        const requiredRoles = leagueTier >= 3
+          ? [StaffRole.ASSISTANT_COACH, StaffRole.CLUB_DOCTOR]
+          : [
+              StaffRole.ASSISTANT_COACH,
+              StaffRole.GOALKEEPER_COACH,
+              StaffRole.FITNESS_COACH,
+              StaffRole.PHYSIOTHERAPIST,
+              StaffRole.CLUB_DOCTOR,
+            ];
+        const optionalRoles = leagueTier >= 3
+          ? [StaffRole.GOALKEEPER_COACH, StaffRole.FITNESS_COACH, StaffRole.PHYSIOTHERAPIST]
+          : [];
+
+        const hasRole = (role: StaffRole): boolean =>
+          (club.staffIds ?? []).some(staffId => updatedStaffMembers[staffId]?.role === role);
+
+        requiredRoles.forEach(role => {
+          if (hasRole(role)) return;
+          const replacement = findStaffReplacement(club, role, false);
+          if (replacement) hireStaffForClub(club, replacement);
+        });
+
+        optionalRoles.forEach(role => {
+          if (hasRole(role)) return;
+          const replacement = findStaffReplacement(club, role, true);
+          if (replacement) hireStaffForClub(club, replacement);
+        });
+      });
+
+      return { updatedStaffMembers, updatedClubs, changed };
+    };
+
     let coachClubStateChanged = false;
     let nextCoachesState = coaches;
     let nextClubsState = clubs;
+    let staffClubStateChanged = false;
+    let nextStaffMembersState = staffMembers;
 
     if (isBoardMeeting) {
       const updatedCoaches = { ...coaches };
@@ -8469,8 +8636,23 @@ const finalResult: SimulationOutput = {
       coachClubStateChanged = true;
     }
 
-    if (coachClubStateChanged) {
+    const vacantCoachHiring = processVacantCoachHiring(nextCoachesState, nextClubsState);
+    if (vacantCoachHiring.changed) {
+      nextCoachesState = vacantCoachHiring.updatedCoaches;
+      nextClubsState = vacantCoachHiring.updatedClubs;
+      coachClubStateChanged = true;
+    }
+
+    const vacantStaffHiring = processVacantStaffHiring(nextStaffMembersState, nextClubsState);
+    if (vacantStaffHiring.changed) {
+      nextStaffMembersState = vacantStaffHiring.updatedStaffMembers;
+      nextClubsState = vacantStaffHiring.updatedClubs;
+      staffClubStateChanged = true;
+    }
+
+    if (coachClubStateChanged || staffClubStateChanged) {
       setCoaches(nextCoachesState);
+      if (staffClubStateChanged) setStaffMembers(nextStaffMembersState);
       setClubs(nextClubsState);
     }
 

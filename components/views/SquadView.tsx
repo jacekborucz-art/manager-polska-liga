@@ -3489,22 +3489,23 @@ export const SquadView: React.FC = () => {
                   <button onClick={() => setIsStaffOpen(false)} className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
                 </div>
 
-                {coachName && (
-                  <div
-                    className="w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 cursor-pointer hover:from-yellow-800/60 hover:to-yellow-900/40 transition-colors"
-                    onClick={() => {
-                      if (isUserClub && safeManagerProfile) setIsManagerProfileOpen(true);
-                      else if (myClub.coachId) {
-                        setIsStaffOpen(false);
-                        setSelectedStaffId(null);
-                        viewCoachDetails(myClub.coachId);
-                      }
-                    }}
-                  >
-                    <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Trener</span>
-                    <span className="text-[28px] font-black italic uppercase tracking-tighter text-yellow-100 mt-1">{coachName}</span>
-                  </div>
-                )}
+                <div
+                  className={`w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 transition-colors ${coachName ? 'cursor-pointer hover:from-yellow-800/60 hover:to-yellow-900/40' : 'cursor-default'}`}
+                  onClick={() => {
+                    if (!coachName) return;
+                    if (isUserClub && safeManagerProfile) setIsManagerProfileOpen(true);
+                    else if (myClub.coachId) {
+                      setIsStaffOpen(false);
+                      setSelectedStaffId(null);
+                      viewCoachDetails(myClub.coachId);
+                    }
+                  }}
+                >
+                  <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Trener główny</span>
+                  <span className={`text-[28px] font-black italic uppercase tracking-tighter mt-1 ${coachName ? 'text-yellow-100' : 'text-slate-500'}`}>
+                    {coachName ?? 'Wakat'}
+                  </span>
+                </div>
 
                 {assistants.length > 0 && (
                   <Band label="Asystent trenera" labelColor="text-slate-300" nameColor="text-slate-100" bg="bg-gradient-to-b from-slate-700/40 to-slate-800/30">
