@@ -54,6 +54,77 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   'Węgry': 'hu', 'Wielka Brytania': 'gb', 'Włochy': 'it',
 };
 
+const staffAttrColor = (v: number) =>
+  v >= 17 ? '#34d399' : v >= 13 ? '#60a5fa' : v >= 9 ? '#facc15' : v >= 5 ? '#fb923c' : '#fb7185';
+
+const StaffChalkboardBackdrop: React.FC = () => (
+  <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 700" aria-hidden>
+    <defs>
+      <radialGradient id="staff-board" cx="50%" cy="35%" r="90%">
+        <stop offset="0%" stopColor="#10362a" />
+        <stop offset="60%" stopColor="#0b2820" />
+        <stop offset="100%" stopColor="#06160f" />
+      </radialGradient>
+      <filter id="staff-chalk" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" />
+      </filter>
+    </defs>
+    <rect width="1000" height="700" fill="url(#staff-board)" />
+    <g stroke="#e8f5e9" strokeOpacity="0.07" strokeWidth="3" fill="none" filter="url(#staff-chalk)">
+      <rect x="60" y="40" width="880" height="620" rx="4" />
+      <line x1="60" y1="350" x2="940" y2="350" />
+      <circle cx="500" cy="350" r="95" />
+      <rect x="330" y="40" width="340" height="120" />
+      <rect x="330" y="540" width="340" height="120" />
+      <rect x="410" y="40" width="180" height="50" />
+      <rect x="410" y="610" width="180" height="50" />
+    </g>
+    <g stroke="#e8f5e9" strokeOpacity="0.05" strokeWidth="3" fill="none" strokeLinecap="round" filter="url(#staff-chalk)">
+      <path d="M150 560 C 240 480, 300 470, 380 410" />
+      <path d="M380 410 l -18 2 m 18 -2 l -6 17" />
+      <path d="M820 180 C 740 240, 700 260, 640 330" />
+      <path d="M640 330 l 17 -4 m -17 4 l 4 -17" />
+      <path d="M200 160 l 26 26 m 0 -26 l -26 26" />
+      <path d="M790 520 l 26 26 m 0 -26 l -26 26" />
+      <circle cx="265" cy="300" r="14" />
+      <circle cx="730" cy="430" r="14" />
+    </g>
+  </svg>
+);
+
+const StaffAttributeRadar: React.FC<{ values: { label: string; value: number }[] }> = ({ values }) => {
+  const C = 100;
+  const R = 78;
+  const count = values.length || 1;
+  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / count;
+  const pt = (i: number, r: number) => `${C + Math.cos(angle(i)) * r},${C + Math.sin(angle(i)) * r}`;
+  const poly = values.map((v, i) => pt(i, (v.value / 20) * R)).join(' ');
+
+  return (
+    <svg viewBox="0 0 200 200" className="w-full h-full" aria-hidden>
+      <defs>
+        <linearGradient id="staff-radar" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="100%" stopColor="#34d399" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75, 1].map((g) => (
+        <polygon key={g} points={values.map((_, i) => pt(i, R * g)).join(' ')} fill="none" stroke="#e8f5e9" strokeOpacity="0.1" strokeWidth="1" />
+      ))}
+      {values.map((_, i) => {
+        const [x, y] = pt(i, R).split(',').map(Number);
+        return <line key={i} x1={C} y1={C} x2={x} y2={y} stroke="#e8f5e9" strokeOpacity="0.08" />;
+      })}
+      <polygon points={poly} fill="url(#staff-radar)" fillOpacity="0.25" stroke="url(#staff-radar)" strokeWidth="2.5" strokeLinejoin="round" />
+      {values.map((v, i) => {
+        const [x, y] = pt(i, (v.value / 20) * R).split(',').map(Number);
+        return <circle key={v.label} cx={x} cy={y} r="4.5" fill={staffAttrColor(v.value)} stroke="#06160f" strokeWidth="2" />;
+      })}
+    </svg>
+  );
+};
+
 export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
@@ -70,6 +141,7 @@ export const SquadView: React.FC = () => {
   const [reportModalPos, setReportModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [reportDragging, setReportDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ id: string | null, index?: number, loc: 'START' | 'BENCH' | 'RES' } | null>(null);
+  const [draggedPitchSlot, setDraggedPitchSlot] = useState<{ id: string | null, index: number } | null>(null);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isMotivationOpen, setIsMotivationOpen] = useState(false);
   const [roleSubmenuOpen, setRoleSubmenuOpen] = useState(false);
@@ -532,6 +604,30 @@ export const SquadView: React.FC = () => {
 
   const handlePlayerDoubleClick = (playerId: string) => {
     viewPlayerDetails(playerId);
+  };
+
+  const handlePitchDragStart = (playerId: string | null, index: number) => {
+    if (!playerId) return;
+    setDraggedPitchSlot({ id: playerId, index });
+  };
+
+  const handlePitchDrop = (targetPlayerId: string | null, targetIndex: number) => {
+    if (!myLineup || !userTeamId || !draggedPitchSlot || draggedPitchSlot.index === targetIndex) {
+      setDraggedPitchSlot(null);
+      return;
+    }
+
+    const newLineup = LineupService.swapPlayers(
+      myLineup,
+      draggedPitchSlot.id,
+      targetPlayerId,
+      draggedPitchSlot.index,
+      targetIndex
+    );
+    updateLineup(userTeamId, newLineup);
+    fixSpecialRoles(newLineup.startingXI);
+    setDraggedPitchSlot(null);
+    setSelectedSlot(null);
   };
 
   const handleTacticChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -1045,6 +1141,8 @@ export const SquadView: React.FC = () => {
                 const playerId = myLineup.startingXI[idx];
                 const player = getPlayerById(playerId);
                 const isSelected = selectedSlot?.loc === 'START' && selectedSlot.index === idx;
+                const isDragged = draggedPitchSlot?.index === idx;
+                const isDropTarget = draggedPitchSlot !== null && draggedPitchSlot.index !== idx;
                 const positionPenaltyFactor = player ? PlayerPositionFitService.getPenaltyFactor(player, slot.role, true) : 0;
                 const isSecondaryPosition = !!player && PlayerPositionFitService.hasSecondaryPosition(player, slot.role) && positionPenaltyFactor > 0;
                 const isOutOfPosition = !!player && positionPenaltyFactor >= 1;
@@ -1052,8 +1150,15 @@ export const SquadView: React.FC = () => {
                 return (
                   <div 
                      key={idx}
+                     draggable={!!playerId}
                      onClick={() => handlePlayerClick(playerId, 'START', idx)}
-                     className="absolute flex flex-col items-center justify-center cursor-pointer transition-all duration-700 hover:scale-125 z-20"
+                     onDragStart={() => handlePitchDragStart(playerId, idx)}
+                     onDragOver={(e) => { if (draggedPitchSlot) e.preventDefault(); }}
+                     onDrop={() => handlePitchDrop(playerId, idx)}
+                     onDragEnd={() => setDraggedPitchSlot(null)}
+                     className={`pitch-player-token absolute flex flex-col items-center justify-center cursor-pointer transition-all duration-700 z-20
+                       ${isDragged ? 'opacity-40' : ''}
+                     `}
                      style={{ 
                         left: `${slot.x * 100}%`, 
                         top: `${slot.y * 100}%`, 
@@ -1079,8 +1184,9 @@ export const SquadView: React.FC = () => {
 
                     {/* Tactical Node */}
                     <div
-                       className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl border-[3px] transition-all duration-500 overflow-hidden
+                       className={`pitch-player-node relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl border-[3px] transition-all duration-500 overflow-hidden
                          ${isSelected ? 'scale-110' : ''}
+                         ${isDropTarget ? 'ring-2 ring-white/40 ring-offset-2 ring-offset-transparent' : ''}
                          ${!player ? 'border-dashed border-rose-500/40 bg-rose-950/20' : ''}
                          ${isSecondaryPosition && !isSelected ? 'border-amber-300/60 shadow-[0_0_18px_rgba(251,191,36,0.24)]' : ''}
                          ${isOutOfPosition && !isSelected ? 'border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.3)]' : ''}
@@ -2789,11 +2895,27 @@ export const SquadView: React.FC = () => {
 
             {selectedMember && (
               <div
-                className="relative w-[460px] bg-slate-950/70 rounded-[32px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                className="relative w-full max-w-4xl h-[860px] max-h-[92vh] rounded-[40px] border border-emerald-400/15 shadow-[0_0_80px_rgba(16,185,129,0.15)] flex overflow-hidden bg-slate-950/90 font-black italic uppercase tracking-tighter"
                 onClick={e => e.stopPropagation()}
               >
+                <style>{`
+                  @keyframes staff-card-in { from { transform: scale(.94) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+                  @keyframes staff-rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                  @keyframes staff-spin { to { transform: rotate(360deg); } }
+                  @keyframes staff-shine-sweep { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(220%) skewX(-20deg); } }
+                  .staff-rise { animation: staff-rise 600ms cubic-bezier(.2,.9,.3,1) both; }
+                  .staff-ring { animation: staff-spin 24s linear infinite; transform-origin: center; }
+                  .staff-shine { background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%); transform: translateX(-120%) skewX(-20deg); }
+                  .group\\/staff-stat:hover .staff-shine, .staff-info-card:hover .staff-shine { animation: staff-shine-sweep 900ms ease; }
+                  .staff-row { transition: background 200ms ease, transform 200ms ease; }
+                  .staff-row:hover { background: rgba(255,255,255,.06) !important; transform: translateX(3px); }
+                  @media (prefers-reduced-motion: reduce) {
+                    .staff-rise, .staff-ring { animation: none !important; }
+                  }
+                `}</style>
+                <StaffChalkboardBackdrop />
                 {/* nagłówek karty */}
-                <div className="flex flex-col items-center pt-8 pb-6 px-8 bg-slate-900/40 border-b border-white/6 relative">
+                <div className="w-1/3 relative z-10 bg-black/35 backdrop-blur-sm p-8 flex flex-col items-center border-r border-white/10">
                   {/* dropdown menu */}
                   <div className="absolute left-6 top-6">
                     <button
@@ -2850,8 +2972,19 @@ export const SquadView: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-500">{ROLE_LABELS[selectedMember.role]}</span>
-                  <span className="text-[24px] font-black italic uppercase tracking-tighter text-white mt-1 whitespace-nowrap">{selectedMember.firstName} {selectedMember.lastName}</span>
+                  <div className="staff-rise relative w-36 h-36 flex items-center justify-center mt-10" style={{ animationDelay: '80ms' }}>
+                    <svg viewBox="0 0 144 144" className="absolute inset-0 staff-ring" aria-hidden>
+                      <circle cx="72" cy="72" r="66" fill="none" stroke="#34d399" strokeOpacity="0.5" strokeWidth="2" strokeDasharray="10 14" strokeLinecap="round" />
+                    </svg>
+                    <svg viewBox="0 0 144 144" className="absolute inset-0" aria-hidden>
+                      <circle cx="72" cy="72" r="58" fill="none" stroke="#facc15" strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 6" />
+                    </svg>
+                    <div className="w-28 h-28 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border-2 border-white/10 flex items-center justify-center text-5xl shadow-inner not-italic">
+                      {selectedMember.role === StaffRole.CLUB_DOCTOR ? '⚕' : selectedMember.role === StaffRole.PHYSIOTHERAPIST ? '+' : '👨‍💼'}
+                    </div>
+                  </div>
+                  <span className="staff-rise text-[11px] text-yellow-500 tracking-[0.35em] mt-5 text-center" style={{ animationDelay: '150ms' }}>{ROLE_LABELS[selectedMember.role]}</span>
+                  <span className="staff-rise text-[25px] text-white mt-2 text-center leading-tight" style={{ animationDelay: '190ms' }}>{selectedMember.firstName}<br />{selectedMember.lastName}</span>
                   <span className="text-[12px] text-slate-400 mt-0.5">{REGION_LABELS[selectedMember.nationality] ?? selectedMember.nationality} · {selectedMember.age} lat</span>
                   <button onClick={() => { setSelectedStaffId(null); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }} className="absolute right-6 top-6 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
                   {/* komunikat akcji */}
@@ -2860,24 +2993,69 @@ export const SquadView: React.FC = () => {
                       {staffActionMsg.text}
                     </div>
                   )}
-                </div>
-                {/* atrybuty */}
-                <div className="px-8 pt-5 pb-3 bg-gradient-to-br from-amber-950/50 via-stone-900/60 to-orange-950/40">
-                  <div className="flex flex-col gap-2">
-                    {STAFF_ROLE_ATTRS[selectedMember.role].map(({ key, label }) => {
-                      const val = selectedMember.attributes[key] ?? 0;
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 w-52 shrink-0">{label}</span>
-                          <div className="flex-1 h-2 bg-white/8 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-cyan-400" style={{ width: `${(val / 20) * 100}%` }} />
-                          </div>
-                          <span className="text-[13px] font-black italic text-white w-6 text-right">{val}</span>
-                        </div>
-                      );
-                    })}
+                  <div className="staff-rise staff-info-card mt-8 w-full p-5 bg-white/5 rounded-3xl border border-white/10 flex flex-col gap-3 relative overflow-hidden hover:border-emerald-400/40 hover:bg-white/[0.08] transition-all duration-300" style={{ animationDelay: '330ms' }}>
+                    <div className="staff-shine absolute inset-0 pointer-events-none" />
+                    <div className="relative flex items-center gap-3">
+                      <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                        <rect x="3" y="5" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="16" y1="3" x2="16" y2="7" />
+                      </svg>
+                      <div>
+                        <span className="block text-[8px] text-slate-500 tracking-[0.3em]">Kontrakt do</span>
+                        <span className="text-sm text-white tabular-nums">{(() => { const d = new Date(selectedMember.contractEndDate); return `${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`; })()}</span>
+                      </div>
+                    </div>
+                    <div className="relative flex items-center gap-3">
+                      <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                        <circle cx="12" cy="12" r="9" /><path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.1 0-2-.4-2.5-1.2M12 6.5v11" />
+                      </svg>
+                      <div>
+                        <span className="block text-[8px] text-slate-500 tracking-[0.3em]">Pensja roczna</span>
+                        <span className="text-sm text-emerald-400 tabular-nums">{selectedMember.salary.toLocaleString('pl-PL')} PLN / rok</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+                {/* atrybuty */}
+                <div className="flex-1 relative z-10 p-9 overflow-y-auto custom-scrollbar bg-black/20 backdrop-blur-[2px]">
+                  <div className="staff-rise" style={{ animationDelay: '200ms' }}>
+                    <h3 className="text-xs text-yellow-500 tracking-[0.4em] mb-6 flex items-center gap-3">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                        <polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" />
+                      </svg>
+                      Atrybuty sztabu
+                    </h3>
+                    <div className="flex gap-8 items-center">
+                      <div className="w-44 h-44 shrink-0">
+                        <StaffAttributeRadar values={STAFF_ROLE_ATTRS[selectedMember.role].map(({ key, label }) => ({ label, value: selectedMember.attributes[key] ?? 0 }))} />
+                      </div>
+                      <div className="flex-1 grid grid-cols-1 gap-x-10">
+                        {STAFF_ROLE_ATTRS[selectedMember.role].map(({ key, label }) => {
+                          const val = selectedMember.attributes[key] ?? 0;
+                          const color = staffAttrColor(val);
+                          return (
+                            <div key={key} className="mb-4 cursor-default group/staff-stat">
+                              <div className="flex justify-between mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/staff-stat:text-white transition-colors">
+                                <span>{label}</span>
+                                <span style={{ color }} className="tabular-nums">{val}</span>
+                              </div>
+                              <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
+                                <div
+                                  className="h-full rounded-full relative overflow-hidden"
+                                  style={{
+                                    width: `${(val / 20) * 100}%`,
+                                    background: `linear-gradient(90deg, ${color}88, ${color})`,
+                                    boxShadow: `0 0 10px ${color}55`,
+                                  }}
+                                >
+                                  <div className="staff-shine absolute inset-0" />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 {/* zarobki + kontrakt */}
                 <div className="px-8 pt-4 pb-4 mt-2 bg-gradient-to-br from-yellow-900/60 via-yellow-800/40 to-amber-900/50 border-t border-yellow-600/30">
                   <div className="text-[11px] font-black italic uppercase tracking-tighter text-yellow-400/80 mb-2 text-center">Informacje o kontrakcie</div>
@@ -2913,6 +3091,7 @@ export const SquadView: React.FC = () => {
                       ))}
                     </div>
                   )}
+                </div>
                 </div>
                 {/* modal potwierdzenia zwolnienia */}
                 {staffFireConfirmOpen && (
@@ -3367,6 +3546,15 @@ export const SquadView: React.FC = () => {
 
         @keyframes ticker { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .animate-ticker { animation: ticker 20s linear infinite; }
+
+        @keyframes squad-player-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.12); }
+        }
+        .pitch-player-token:hover .pitch-player-node {
+          animation: squad-player-pulse 0.75s ease-in-out infinite;
+          filter: drop-shadow(0 0 12px rgba(255,255,255,0.35));
+        }
 
         .clip-path-arc-top { clip-path: inset(50% 0 0 0); }
       `}</style>
