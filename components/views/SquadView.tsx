@@ -2219,6 +2219,12 @@ export const SquadView: React.FC = () => {
           : reportPlayer.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
           : reportPlayer.position === 'MID' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
           : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
+        const reportPositionLabel: Record<PlayerPosition, string> = {
+          [PlayerPosition.GK]: 'BRAMKARZ',
+          [PlayerPosition.DEF]: 'OBROŃCA',
+          [PlayerPosition.MID]: 'POMOCNIK',
+          [PlayerPosition.FWD]: 'NAPASTNIK',
+        };
         const effColor = report.positionEffectivenessScore >= 78 ? 'text-emerald-400' : report.positionEffectivenessScore >= 68 ? 'text-amber-400' : 'text-rose-400';
         const seasonStats = [
           { label: 'Mecze', value: String(reportPlayer.stats.matchesPlayed), color: 'text-white' },
@@ -2232,7 +2238,7 @@ export const SquadView: React.FC = () => {
 
         return (
           <div
-            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-sm font-black italic uppercase tracking-tighter"
             onClick={() => { if (!reportDragging) setReportPlayer(null); }}
             onMouseMove={e => {
               if (!reportDragging) return;
@@ -2245,13 +2251,76 @@ export const SquadView: React.FC = () => {
             onMouseLeave={() => setReportDragging(null)}
           >
             <div
-              className="fixed flex flex-col w-[1420px] max-w-[calc(100vw-32px)] rounded-[36px] border border-white/15 bg-slate-950/70 backdrop-blur-2xl shadow-[0_40px_120px_rgba(0,0,0,0.9)] overflow-hidden"
-              style={{ left: reportModalPos.x || 'calc(50vw - 710px)', top: reportModalPos.y || 16, maxHeight: 'calc(100vh - 32px)' }}
+              className="assistant-report fixed flex flex-col w-[1780px] max-w-[calc(100vw-20px)] rounded-[40px] border border-emerald-400/15 bg-slate-950/90 backdrop-blur-2xl shadow-[0_0_80px_rgba(16,185,129,0.15),0_40px_120px_rgba(0,0,0,0.95)] overflow-hidden [font-family:Archive,Archivo,Inter,sans-serif]"
+              style={{ left: reportModalPos.x || 'max(10px, calc(50vw - 890px))', top: reportModalPos.y || 10, maxHeight: 'calc(100vh - 20px)' }}
               onClick={e => e.stopPropagation()}
             >
+              <style>{`
+                @keyframes report-rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                @keyframes report-shine-sweep { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(220%) skewX(-20deg); } }
+                .report-rise { animation: report-rise 600ms cubic-bezier(.2,.9,.3,1) both; }
+                .report-shine { background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%); transform: translateX(-120%) skewX(-20deg); }
+                .group\\/report-card:hover .report-shine { animation: report-shine-sweep 900ms ease; }
+                .report-card { transition: border-color 220ms ease, background 220ms ease, transform 220ms ease, box-shadow 220ms ease; }
+                .report-card:hover { border-color: rgba(52,211,153,.34); background: rgba(255,255,255,.055); box-shadow: 0 16px 40px -28px rgba(52,211,153,.8); transform: translateY(-2px); }
+                .assistant-report [class*="rounded-2xl"][class*="border"] {
+                  border-color: rgba(255,255,255,.1);
+                  background: rgba(0,0,0,.34);
+                  box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+                  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+                }
+                .assistant-report [class*="rounded-2xl"][class*="border"]:hover {
+                  border-color: rgba(52,211,153,.3);
+                  background: rgba(255,255,255,.055);
+                  box-shadow: 0 18px 44px -34px rgba(52,211,153,.9), inset 0 1px 0 rgba(255,255,255,.08);
+                  transform: translateY(-2px);
+                }
+                .assistant-report [class*="tracking-[0.4em]"],
+                .assistant-report [class*="tracking-[0.35em]"] {
+                  color: #eab308;
+                }
+                .assistant-report [class*="bg-blue-950"] {
+                  background: rgba(8,47,73,.32);
+                  border-color: rgba(96,165,250,.22);
+                }
+                .assistant-report [class*="bg-amber-950"] {
+                  background: rgba(69,39,7,.32);
+                  border-color: rgba(245,158,11,.22);
+                }
+                .assistant-report [class*="bg-emerald-950"] {
+                  background: rgba(6,78,59,.28);
+                  border-color: rgba(52,211,153,.22);
+                }
+                .assistant-report [class*="bg-rose-950"] {
+                  background: rgba(76,5,25,.28);
+                  border-color: rgba(251,113,133,.22);
+                }
+                .assistant-report [class~="text-[7px]"] { font-size: 10px !important; }
+                .assistant-report [class~="text-[8px]"] { font-size: 11px !important; }
+                .assistant-report [class~="text-[9px]"] { font-size: 12px !important; }
+                .assistant-report [class~="text-[10px]"] { font-size: 13px !important; }
+                .assistant-report [class~="text-[11px]"] { font-size: 14px !important; }
+                .assistant-report [class~="text-[12px]"] { font-size: 15px !important; }
+                .assistant-report [class~="text-[13px]"] { font-size: 16px !important; }
+                .assistant-report [class~="text-[14px]"] { font-size: 17px !important; }
+                .assistant-report [class~="text-xl"] { font-size: 28px !important; }
+                .assistant-report p {
+                  line-height: 1.55 !important;
+                }
+                .assistant-report [class~="p-2"] {
+                  padding: .72rem !important;
+                }
+                .assistant-report [class~="p-3"] {
+                  padding: 1rem !important;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                  .report-rise { animation: none !important; }
+                }
+              `}</style>
+              <StaffChalkboardBackdrop />
               {/* GLOSS */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent pointer-events-none z-0" />
-              <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none z-0" />
+              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none z-0" />
+              <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-b from-white/[0.035] to-transparent pointer-events-none z-0" />
               <div className="absolute -inset-full bg-gradient-to-tr from-transparent via-white/[0.025] to-transparent rotate-45 pointer-events-none z-0" />
               {/* ZNAK WODNY */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0">
@@ -2260,7 +2329,7 @@ export const SquadView: React.FC = () => {
 
               {/* HEADER */}
               <div
-                className="relative z-10 flex items-center justify-between select-none border-b border-white/10 px-6 py-3 shrink-0"
+                className="relative z-10 flex items-center justify-between select-none border-b border-white/10 bg-black/35 px-7 py-4 shrink-0"
                 style={{ cursor: reportDragging ? 'grabbing' : 'grab' }}
                 onMouseDown={e => {
                   e.preventDefault();
@@ -2268,10 +2337,9 @@ export const SquadView: React.FC = () => {
                 }}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-[14px] bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-2xl shrink-0">🧠</div>
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${posColor}`}>{reportPlayer.position}</span>
+                      <span className={`text-[9px] font-black italic uppercase tracking-tighter px-2 py-0.5 rounded-full border ${posColor}`}>{reportPositionLabel[reportPlayer.position]}</span>
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">OVR {reportPlayer.overallRating}</span>
                       <span className="text-slate-700">•</span>
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{reportPlayer.age} lat</span>
@@ -2288,7 +2356,7 @@ export const SquadView: React.FC = () => {
               </div>
 
               {/* BODY — 4 kolumny */}
-              <div className="relative z-10 flex-1 grid grid-cols-[220px_1fr_1fr_260px] gap-3 p-4 overflow-hidden min-h-0">
+              <div className="report-rise relative z-10 flex-1 grid grid-cols-[300px_minmax(0,1.35fr)_minmax(0,1.35fr)_340px] gap-5 p-6 overflow-hidden min-h-0" style={{ animationDelay: '120ms' }}>
 
                 {/* KOL 1: Statystyki + Słabe/Mocne */}
                 <div className="flex flex-col gap-3 min-h-0">
@@ -2404,10 +2472,10 @@ export const SquadView: React.FC = () => {
                       </div>
                     );
                   })()}
-                  <div className="relative rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[130px] overflow-y-auto custom-scrollbar">
+                  <div className="relative rounded-2xl border border-white/10 bg-black/30 p-4 min-h-[230px] overflow-visible">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
-                    <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-1.5">Ocena Ogólna</span>
-                    <p className="relative text-[11px] font-normal italic uppercase tracking-tighter text-white leading-relaxed">{report.overallAssessment}</p>
+                    <span className="relative text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] block mb-3">Ocena Ogólna</span>
+                    <p className="relative text-[12px] font-normal italic uppercase tracking-tighter text-white leading-relaxed">{report.overallAssessment}</p>
                   </div>
                   <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
