@@ -886,7 +886,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 );
               })()
             ) : (
-              <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif]">
+              <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Archivo,sans-serif]">
                 {mail.body}
               </p>
             )}

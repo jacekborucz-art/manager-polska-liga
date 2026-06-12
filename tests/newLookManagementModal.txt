@@ -9,6 +9,14 @@ import {
   ClubOwner,
 } from '../../types';
 
+/* ============================================================
+   ManagementMemberModal 2.0 — "Gabinet Zarządu"
+   Spójny z kartą trenera (tablica taktyczna): tło SVG ze
+   schematem hierarchii klubu, radar atrybutów (skala 1–20),
+   animowane paski, liczniki i kaskadowe wejście.
+   Zmienne, typy i logika danych bez zmian.
+   ============================================================ */
+
 export type MemberEntry =
   | { role: 'Właściciel';           data: ClubOwner }
   | { role: 'Prezes';               data: ClubCEO }
@@ -47,45 +55,32 @@ const attrColor = (v: number): string => {
   return '#ef4444';
 };
 
-const ROLE_ICON: Record<MemberEntry['role'], React.ReactNode> = {
+/** Ikona roli (SVG) */
+const ROLE_ICON: Record<string, React.ReactNode> = {
   'Właściciel': (
     <path d="M3 17h18M4 17l1.5-8L10 12l2-6 2 6 4.5-3L20 17" />
   ),
   'Prezes': (
-    <>
-      <circle cx="12" cy="7" r="3.5" />
-      <path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" />
-      <path d="M12 14l-1.5 3h3L12 20" />
-    </>
+    <><circle cx="12" cy="7" r="3.5" /><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" /><path d="M12 14l-1.5 3h3L12 20" /></>
   ),
   'Dyrektor finansowy': (
-    <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M14.5 9.4c-.5-.7-1.4-1.1-2.5-1.1-1.6 0-2.8.8-2.8 1.8s1.2 1.5 2.8 1.8 2.8.8 2.8 1.8-1.2 1.9-2.8 1.9c-1.1 0-2-.4-2.5-1.1M12 7v10" />
-    </>
+    <><circle cx="12" cy="12" r="8.5" /><path d="M14.5 9.4c-.5-.7-1.4-1.1-2.5-1.1-1.6 0-2.8.8-2.8 1.8s1.2 1.5 2.8 1.8 2.8.8 2.8 1.8-1.2 1.9-2.8 1.9c-1.1 0-2-.4-2.5-1.1M12 7v10" /></>
   ),
   'Dyrektor operacyjny': (
-    <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
-    </>
+    <><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" /></>
   ),
   'Dyrektor marketingu': (
-    <>
-      <path d="M3 11v2l11 5V6L3 11z" />
-      <path d="M14 8.5c2 .5 3.5 1.8 3.5 3.5s-1.5 3-3.5 3.5M7 13.5V18c0 .8.7 1.5 1.5 1.5S10 18.8 10 18v-3" />
-    </>
+    <><path d="M3 11v2l11 5V6L3 11z" /><path d="M14 8.5c2 .5 3.5 1.8 3.5 3.5s-1.5 3-3.5 3.5M7 13.5V18c0 .8.7 1.5 1.5 1.5S10 18.8 10 18v-3" /></>
   ),
   'Dyrektor akademii': (
-    <>
-      <path d="M12 4 2.5 9 12 14l9.5-5L12 4z" />
-      <path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M21.5 9v5" />
-    </>
+    <><path d="M12 4 2.5 9 12 14l9.5-5L12 4z" /><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M21.5 9v5" /></>
   ),
 };
 
+/* ---------- SVG: tło — schemat hierarchii klubu ---------- */
+
 const HierarchyBackdrop: React.FC = () => (
-  <svg className="absolute inset-0 h-full w-full rounded-[28px]" preserveAspectRatio="xMidYMid slice" viewBox="0 0 400 560" aria-hidden>
+  <svg className="absolute inset-0 w-full h-full rounded-[28px]" preserveAspectRatio="xMidYMid slice" viewBox="0 0 400 560" aria-hidden>
     <defs>
       <radialGradient id="mm-bg" cx="50%" cy="20%" r="100%">
         <stop offset="0%" stopColor="#13233a" />
@@ -94,6 +89,7 @@ const HierarchyBackdrop: React.FC = () => (
       </radialGradient>
     </defs>
     <rect width="400" height="560" fill="url(#mm-bg)" />
+    {/* schemat organizacyjny: węzły i połączenia */}
     <g stroke="#7dd3fc" strokeOpacity="0.06" strokeWidth="1.5" fill="none">
       <rect x="170" y="40" width="60" height="26" rx="6" />
       <rect x="60" y="120" width="60" height="26" rx="6" />
@@ -115,9 +111,10 @@ const HierarchyBackdrop: React.FC = () => (
   </svg>
 );
 
+/* ---------- animowany licznik ---------- */
+
 const CountUp: React.FC<{ value: number; duration?: number }> = ({ value, duration = 900 }) => {
   const [n, setN] = useState(0);
-
   useEffect(() => {
     let raf = 0;
     const start = performance.now();
@@ -129,33 +126,32 @@ const CountUp: React.FC<{ value: number; duration?: number }> = ({ value, durati
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
-
   return <>{Math.round(n)}</>;
 };
+
+/* ---------- SVG: radar atrybutów (skala 1–20, N osi) ---------- */
 
 const AttrRadar: React.FC<{
   attrs: { key: string; value: number }[];
   hovered: string | null;
 }> = ({ attrs, hovered }) => {
   const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 200);
     return () => clearTimeout(t);
   }, []);
 
   const n = attrs.length;
-  if (n < 3) return null;
+  if (n < 3) return null; // radar ma sens od 3 osi
 
-  const C = 80;
-  const R = 62;
+  const C = 80, R = 62;
   const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
   const px = (i: number, r: number) => C + Math.cos(angle(i)) * r;
   const py = (i: number, r: number) => C + Math.sin(angle(i)) * r;
   const poly = attrs.map((a, i) => `${px(i, (a.value / 20) * R)},${py(i, (a.value / 20) * R)}`).join(' ');
 
   return (
-    <svg viewBox="0 0 160 160" className="h-full w-full" aria-hidden>
+    <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden>
       <defs>
         <linearGradient id="mm-radar" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#facc15" />
@@ -166,10 +162,7 @@ const AttrRadar: React.FC<{
         <polygon
           key={g}
           points={attrs.map((_, i) => `${px(i, R * g)},${py(i, R * g)}`).join(' ')}
-          fill="none"
-          stroke="#e0f2fe"
-          strokeOpacity="0.1"
-          strokeWidth="1"
+          fill="none" stroke="#e0f2fe" strokeOpacity="0.1" strokeWidth="1"
         />
       ))}
       {attrs.map((_, i) => (
@@ -194,28 +187,7 @@ const AttrRadar: React.FC<{
   );
 };
 
-const AttrBarFill: React.FC<{ value: number; delay: number }> = ({ value, delay }) => {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
-
-  const color = attrColor(value);
-
-  return (
-    <div
-      className="h-full rounded-full"
-      style={{
-        width: mounted ? `${(value / 20) * 100}%` : '0%',
-        background: `linear-gradient(90deg, ${color}99, ${color})`,
-        boxShadow: `0 0 8px ${color}66`,
-        transition: 'width 900ms cubic-bezier(.25,1,.3,1)',
-      }}
-    />
-  );
-};
+/* ============================================================ */
 
 export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ member, onClose }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
@@ -226,7 +198,7 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
     .filter(([k, v]) => !SKIP_FIELDS.has(k) && typeof v === 'number')
     .map(([key, value]) => ({ key, value: value as number }));
 
-  const initials = `${data.firstName?.[0] ?? '?'}${data.lastName?.[0] ?? '?'}`.toUpperCase();
+  const initials = `${(data.firstName || '?')[0] || ''}${(data.lastName || '?')[0] || ''}`.toUpperCase();
 
   return (
     <div
@@ -253,7 +225,7 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
       `}</style>
 
       <div
-        className="mm-in relative w-full max-w-sm overflow-hidden rounded-[28px] border border-sky-400/15 shadow-[0_0_60px_rgba(56,189,248,0.12)] backdrop-blur-md"
+        className="mm-in relative w-full max-w-sm rounded-[28px] border border-sky-400/15 shadow-[0_0_60px_rgba(56,189,248,0.12)] overflow-hidden backdrop-blur-md"
         onClick={e => e.stopPropagation()}
       >
         <HierarchyBackdrop />
@@ -262,24 +234,24 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
           <button
             type="button"
             onClick={closeModal}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-slate-400 transition-all duration-300 hover:rotate-90 hover:border-white/30 hover:text-white"
-            aria-label="Zamknij"
+            className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-slate-400 transition-all hover:text-white hover:border-white/30 hover:rotate-90 duration-300"
           >
-            ×
+            ✕
           </button>
 
+          {/* nagłówek: monogram + rola + nazwisko */}
           <div className="mb-5 flex flex-col items-center text-center">
-            <div className="mm-rise relative flex h-20 w-20 items-center justify-center" style={{ animationDelay: '60ms' }}>
-              <svg viewBox="0 0 80 80" className="mm-ring absolute inset-0" aria-hidden>
+            <div className="mm-rise relative w-20 h-20 flex items-center justify-center" style={{ animationDelay: '60ms' }}>
+              <svg viewBox="0 0 80 80" className="absolute inset-0 mm-ring" aria-hidden>
                 <circle cx="40" cy="40" r="37" fill="none" stroke="#facc15" strokeOpacity="0.45" strokeWidth="1.5" strokeDasharray="7 11" strokeLinecap="round" />
               </svg>
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-slate-700 to-slate-900 shadow-inner">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border border-white/10 flex items-center justify-center shadow-inner">
                 <span className="text-xl font-black italic tracking-tighter text-white">{initials}</span>
               </div>
             </div>
 
             <p className="mm-rise mt-3 flex items-center gap-2 text-xs font-black italic uppercase tracking-[0.3em] text-yellow-400" style={{ animationDelay: '140ms' }}>
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 {ROLE_ICON[role]}
               </svg>
               {role}
@@ -294,17 +266,19 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
             <div className="mm-underline mt-3 h-px w-40 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
           </div>
 
+          {/* radar (gdy ≥ 3 atrybuty) */}
           {attrs.length >= 3 && (
-            <div className="mm-rise mx-auto mb-4 h-36 w-36" style={{ animationDelay: '300ms' }}>
+            <div className="mm-rise mx-auto mb-4 w-36 h-36" style={{ animationDelay: '300ms' }}>
               <AttrRadar attrs={attrs} hovered={hoveredAttr} />
             </div>
           )}
 
+          {/* atrybuty (skala 1–20) */}
           <div className="space-y-2">
             {attrs.map(({ key, value }, i) => (
               <div
                 key={key}
-                className="mm-attr mm-rise relative cursor-default overflow-hidden rounded-xl border border-white/5 bg-black/25 px-3 py-2"
+                className="mm-attr mm-rise relative overflow-hidden rounded-xl border border-white/5 bg-black/25 px-3 py-2 cursor-default"
                 style={{ animationDelay: `${340 + i * 70}ms` }}
                 onMouseEnter={() => setHoveredAttr(key)}
                 onMouseLeave={() => setHoveredAttr(null)}
@@ -319,7 +293,8 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
                     <span className="text-slate-600">/20</span>
                   </p>
                 </div>
-                <div className="relative h-1 overflow-hidden rounded-full bg-white/5">
+                <div className="relative h-1 rounded-full bg-white/5 overflow-hidden">
+                  {/* znaczniki progów 7 / 12 / 17 */}
                   {[7, 12, 17].map((t) => (
                     <div key={t} className="absolute top-0 h-full w-px bg-white/10" style={{ left: `${(t / 20) * 100}%` }} />
                   ))}
@@ -331,5 +306,26 @@ export const ManagementMemberModal: React.FC<ManagementMemberModalProps> = ({ me
         </div>
       </div>
     </div>
+  );
+};
+
+/** Pasek atrybutu z animowanym wypełnieniem */
+const AttrBarFill: React.FC<{ value: number; delay: number }> = ({ value, delay }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+  const color = attrColor(value);
+  return (
+    <div
+      className="h-full rounded-full"
+      style={{
+        width: mounted ? `${(value / 20) * 100}%` : '0%',
+        background: `linear-gradient(90deg, ${color}99, ${color})`,
+        boxShadow: `0 0 8px ${color}66`,
+        transition: 'width 900ms cubic-bezier(.25,1,.3,1)',
+      }}
+    />
   );
 };

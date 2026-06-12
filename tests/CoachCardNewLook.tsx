@@ -2,6 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 
+/* ============================================================
+   CoachCard 2.0 — "Tablica Taktyczna"
+   Cała karta stylizowana na trenerską tablicę taktyczną:
+   kredowe boisko w tle, animowany radar atrybutów,
+   interaktywne mini-boiska taktyk, liczniki i animacje wejścia.
+   Wszystkie zmienne / pola danych pozostały bez zmian.
+   ============================================================ */
+
 const FORMATION_MAP: Record<string, number[]> = {
   '4-3-3 Atak':          [4, 3, 3],
   '3-4-3':               [3, 4, 3],
@@ -22,9 +30,12 @@ const FORMATION_MAP: Record<string, number[]> = {
   '3-6-1':               [3, 6, 1],
 };
 
+/* ---------- pomocnicze ---------- */
+
 const attrColor = (v: number) =>
   v >= 80 ? '#34d399' : v >= 60 ? '#60a5fa' : v >= 40 ? '#facc15' : '#fb7185';
 
+/** Animowany licznik (count-up) */
 const CountUp: React.FC<{ value: number; duration?: number; format?: (n: number) => string }> = ({
   value,
   duration = 1100,
@@ -46,6 +57,8 @@ const CountUp: React.FC<{ value: number; duration?: number; format?: (n: number)
   return <>{format(n)}</>;
 };
 
+/* ---------- SVG: kredowe boisko w tle karty ---------- */
+
 const ChalkboardBackdrop: React.FC = () => (
   <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 700" aria-hidden>
     <defs>
@@ -60,6 +73,7 @@ const ChalkboardBackdrop: React.FC = () => (
       </filter>
     </defs>
     <rect width="1000" height="700" fill="url(#cc-board)" />
+    {/* kredowe linie boiska */}
     <g stroke="#e8f5e9" strokeOpacity="0.07" strokeWidth="3" fill="none" filter="url(#cc-chalk)">
       <rect x="60" y="40" width="880" height="620" rx="4" />
       <line x1="60" y1="350" x2="940" y2="350" />
@@ -69,6 +83,7 @@ const ChalkboardBackdrop: React.FC = () => (
       <rect x="410" y="40" width="180" height="50" />
       <rect x="410" y="610" width="180" height="50" />
     </g>
+    {/* kredowe notatki trenera: strzałki i znaki */}
     <g stroke="#e8f5e9" strokeOpacity="0.05" strokeWidth="3" fill="none" strokeLinecap="round" filter="url(#cc-chalk)">
       <path d="M150 560 C 240 480, 300 470, 380 410" />
       <path d="M380 410 l -18 2 m 18 -2 l -6 17" />
@@ -82,6 +97,8 @@ const ChalkboardBackdrop: React.FC = () => (
   </svg>
 );
 
+/* ---------- SVG: radar 4 atrybutów ---------- */
+
 const AttributeRadar: React.FC<{
   values: { label: string; value: number }[];
   hovered: number | null;
@@ -93,6 +110,7 @@ const AttributeRadar: React.FC<{
   }, []);
 
   const C = 100, R = 78;
+  // 4 osie: góra, prawo, dół, lewo
   const angle = (i: number) => -Math.PI / 2 + (i * Math.PI) / 2;
   const pt = (i: number, r: number) => `${C + Math.cos(angle(i)) * r},${C + Math.sin(angle(i)) * r}`;
   const poly = values.map((v, i) => pt(i, (v.value / 100) * R)).join(' ');
@@ -141,6 +159,8 @@ const AttributeRadar: React.FC<{
   );
 };
 
+/* ---------- SVG: mini-boisko taktyki ---------- */
+
 const TacticPitch: React.FC<{ tactic: string; accent: string; delay: number }> = ({ tactic, accent, delay }) => {
   const rows = FORMATION_MAP[tactic] || [4, 4, 2];
   const W = 120, H = 160;
@@ -149,6 +169,7 @@ const TacticPitch: React.FC<{ tactic: string; accent: string; delay: number }> =
   const rowCount = rows.length;
   const rowStep = rowCount > 1 ? (gkY - 26 - topY) / (rowCount - 1) : 0;
 
+  // pozycje zawodników (do narysowania linii podań na hover)
   const players: { x: number; y: number }[] = [{ x: W / 2, y: gkY }];
   rows.forEach((count, rowIndex) => {
     const y = gkY - 26 - rowIndex * rowStep;
@@ -165,9 +186,11 @@ const TacticPitch: React.FC<{ tactic: string; accent: string; delay: number }> =
         </linearGradient>
       </defs>
       <rect width={W} height={H} rx="10" fill={`url(#cc-grass-${accent.replace('#', '')})`} />
+      {/* pasy trawy */}
       {[0, 1, 2, 3].map((i) => (
         <rect key={i} x="0" y={i * (H / 4)} width={W} height={H / 8} fill="#ffffff" opacity="0.025" />
       ))}
+      {/* linie boiska */}
       <g stroke="#ffffff" strokeOpacity="0.22" strokeWidth="1.2" fill="none">
         <rect x="6" y="6" width={W - 12} height={H - 12} rx="6" />
         <line x1="6" y1={H / 2} x2={W - 6} y2={H / 2} />
@@ -175,8 +198,11 @@ const TacticPitch: React.FC<{ tactic: string; accent: string; delay: number }> =
         <rect x={W / 2 - 26} y={H - 26} width="52" height="20" />
         <rect x={W / 2 - 26} y="6" width="52" height="20" />
       </g>
+      {/* linia podań — rysuje się po najechaniu (sterowane klasą grupy) */}
       <path d={path} fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" strokeDasharray="500" strokeDashoffset="500" className="cc-passline" />
+      {/* bramkarz */}
       <circle cx={W / 2} cy={gkY} r="5" fill="#facc15" stroke="#06160f" strokeWidth="1.5" className="cc-player" style={{ animationDelay: `${delay}ms` }} />
+      {/* zawodnicy */}
       {rows.flatMap((count, rowIndex) => {
         const y = gkY - 26 - rowIndex * rowStep;
         const r = count >= 6 ? 4 : 5;
@@ -197,6 +223,8 @@ const TacticPitch: React.FC<{ tactic: string; accent: string; delay: number }> =
     </svg>
   );
 };
+
+/* ---------- pasek atrybutu ---------- */
 
 const StatBar: React.FC<{
   label: string;
@@ -238,6 +266,8 @@ const StatBar: React.FC<{
     </div>
   );
 };
+
+/* ============================================================ */
 
 const CoachCardContent: React.FC<{
   coach: any;
@@ -290,6 +320,7 @@ const CoachCardContent: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 font-black italic uppercase tracking-tighter">
+      {/* lokalne style animacji */}
       <style>{`
         @keyframes cc-pop { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.3); } 100% { transform: scale(1); opacity: 1; } }
         @keyframes cc-rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -301,7 +332,7 @@ const CoachCardContent: React.FC<{
         .cc-card-in { animation: cc-card-in 520ms cubic-bezier(.2,.9,.3,1) both; }
         .cc-ring { animation: cc-spin 24s linear infinite; transform-origin: center; }
         .cc-shine { background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%); transform: translateX(-120%) skewX(-20deg); }
-        .group\/stat:hover .cc-shine, .cc-logo-card:hover .cc-shine { animation: cc-shine-sweep 900ms ease; }
+        .group\\/stat:hover .cc-shine, .cc-logo-card:hover .cc-shine { animation: cc-shine-sweep 900ms ease; }
         .cc-tactic:hover .cc-passline { transition: stroke-dashoffset 1100ms ease; stroke-dashoffset: 0 !important; }
         .cc-tactic .cc-passline { transition: stroke-dashoffset 300ms ease; }
         .cc-row { transition: background 200ms ease, transform 200ms ease; }
@@ -312,14 +343,16 @@ const CoachCardContent: React.FC<{
         }
       `}</style>
 
+      {/* tło: tablica taktyczna */}
       <div className="absolute inset-0 bg-black/85" />
 
-      <div className="cc-card-in max-w-4xl w-full rounded-[40px] border border-emerald-400/15 shadow-[0_0_80px_rgba(16,185,129,0.15)] flex overflow-hidden h-[860px] relative z-10">
+      <div className="cc-card-in max-w-4xl w-full rounded-[40px] border border-emerald-400/15 shadow-[0_0_80px_rgba(16,185,129,0.15)] flex overflow-hidden h-[700px] relative z-10">
         <ChalkboardBackdrop />
 
-        {/* LEWA KOLUMNA — PROFIL */}
+        {/* ===== LEWA KOLUMNA — PROFIL ===== */}
         <div className="w-1/3 relative z-10 bg-black/35 backdrop-blur-sm p-8 flex flex-col items-center border-r border-white/10">
 
+          {/* avatar z animowanym pierścieniem */}
           <div className="cc-rise relative w-36 h-36 flex items-center justify-center" style={{ animationDelay: '80ms' }}>
             <svg viewBox="0 0 144 144" className="absolute inset-0 cc-ring" aria-hidden>
               <circle cx="72" cy="72" r="66" fill="none" stroke="#34d399" strokeOpacity="0.5" strokeWidth="2" strokeDasharray="10 14" strokeLinecap="round" />
@@ -327,7 +360,7 @@ const CoachCardContent: React.FC<{
             <svg viewBox="0 0 144 144" className="absolute inset-0" aria-hidden>
               <circle cx="72" cy="72" r="58" fill="none" stroke="#facc15" strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 6" />
             </svg>
-            <div className="w-28 h-28 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border-2 border-white/10 flex items-center justify-center text-5xl shadow-inner not-italic">
+            <div className="w-28 h-28 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border-2 border-white/10 flex items-center justify-center text-5xl shadow-inner">
               👨‍💼
             </div>
           </div>
@@ -335,16 +368,15 @@ const CoachCardContent: React.FC<{
           <h2 className="cc-rise text-2xl text-white text-center mt-5 leading-tight" style={{ animationDelay: '160ms' }}>
             {coach.firstName}<br />{coach.lastName}
           </h2>
-          <span className="cc-rise text-slate-300 mt-2 text-[10px] tracking-[0.25em]" style={{ animationDelay: '200ms' }}>
-            {coach.nationality}
-          </span>
-          <span className="cc-rise text-emerald-400 mt-1 text-xs tracking-[0.25em]" style={{ animationDelay: '220ms' }}>
-            {coach.age} lat
+          <span className="cc-rise text-emerald-400 mt-2 text-xs tracking-[0.25em]" style={{ animationDelay: '220ms' }}>
+            {coach.nationalityFlag} • {coach.age} lat
           </span>
 
+          {/* klub */}
           <div className="cc-rise cc-logo-card mt-8 w-full p-5 bg-white/5 rounded-3xl border border-white/10 flex flex-col items-center gap-3 relative overflow-hidden hover:border-emerald-400/40 hover:bg-white/[0.08] transition-all duration-300"
             style={{ animationDelay: '300ms' }}>
             <div className="cc-shine absolute inset-0 pointer-events-none" />
+            <span className="block text-[8px] text-emerald-400/70 tracking-[0.35em] self-start">Obecny Klub</span>
             {clubLogoUrl
               ? <img src={clubLogoUrl} alt="" className="w-16 h-16 object-contain drop-shadow-[0_0_14px_rgba(255,255,255,0.25)]" />
               : <div className="w-16 h-16 flex items-center justify-center text-3xl">🏟️</div>
@@ -352,6 +384,7 @@ const CoachCardContent: React.FC<{
             <span className="text-sm text-white text-center">{currentClub?.name || currentNT?.name || 'Bezrobotny'}</span>
           </div>
 
+          {/* kontrakt / pensja / exp */}
           <div className="cc-rise mt-4 w-full p-5 bg-white/5 rounded-3xl border border-white/10 flex flex-col gap-3" style={{ animationDelay: '380ms' }}>
             <div className="flex items-center gap-3">
               <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -397,9 +430,10 @@ const CoachCardContent: React.FC<{
           </button>
         </div>
 
-        {/* PRAWA KOLUMNA — STATYSTYKI */}
+        {/* ===== PRAWA KOLUMNA — STATYSTYKI ===== */}
         <div className="flex-1 relative z-10 p-9 overflow-y-auto custom-scrollbar bg-black/20 backdrop-blur-[2px]">
 
+          {/* atrybuty + radar */}
           <div className="cc-rise" style={{ animationDelay: '200ms' }}>
             <h3 className="text-xs text-yellow-500 tracking-[0.4em] mb-6 flex items-center gap-3">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
@@ -419,6 +453,7 @@ const CoachCardContent: React.FC<{
             </div>
           </div>
 
+          {/* taktyki */}
           <div className="cc-rise" style={{ animationDelay: '320ms' }}>
             <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-6 flex items-center gap-3">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -431,6 +466,7 @@ const CoachCardContent: React.FC<{
                 <div
                   key={label}
                   className="cc-tactic group p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col items-center gap-3 transition-all duration-300 hover:-translate-y-1.5 hover:bg-white/[0.08] cursor-default"
+                  style={{ ['--accent' as any]: accent }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 32px -8px ${accent}40, 0 0 0 1px ${accent}50`; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = ''; }}
                 >
@@ -442,6 +478,7 @@ const CoachCardContent: React.FC<{
             </div>
           </div>
 
+          {/* historia kariery */}
           <div className="cc-rise" style={{ animationDelay: '420ms' }}>
             <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-4 flex items-center gap-3">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -484,6 +521,7 @@ const CoachCardContent: React.FC<{
             </div>
           </div>
 
+          {/* statystyki sezonów */}
           {coach.seasonStats && coach.seasonStats.length > 0 && (
             <div className="cc-rise" style={{ animationDelay: '500ms' }}>
               <h3 className="text-xs text-yellow-500 tracking-[0.4em] mt-12 mb-4 flex items-center gap-3">

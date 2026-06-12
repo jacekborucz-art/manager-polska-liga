@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useModalClose } from '../ui/useModalClose';
 import { Club, BoardAttributeLevel, ClubBoard, ClubOwner, ClubCEO, ClubCFO, ClubCOO, ClubMarketingDirector, ClubAcademyDirector, CompetitionType, MatchStatus, Fixture, Player, SportingDirectorObjective, SportingDirectorPersonality, StadiumStand } from '../../types';
 import { ManagementMemberModal, MemberEntry } from './ManagementMemberModal';
@@ -535,6 +535,99 @@ const getObjectivePanelData = (
   }
 };
 
+const directorAttrColor = (v: number): string => {
+  if (v >= 17) return '#34d399';
+  if (v >= 12) return '#4ade80';
+  if (v >= 7) return '#facc15';
+  if (v >= 4) return '#fb923c';
+  return '#ef4444';
+};
+
+const DirectorBackdrop: React.FC = () => (
+  <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 900 720" aria-hidden>
+    <defs>
+      <radialGradient id="sd-bg" cx="52%" cy="18%" r="92%">
+        <stop offset="0%" stopColor="#15233d" />
+        <stop offset="56%" stopColor="#071225" />
+        <stop offset="100%" stopColor="#030713" />
+      </radialGradient>
+      <linearGradient id="sd-line" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.2" />
+        <stop offset="100%" stopColor="#facc15" stopOpacity="0.12" />
+      </linearGradient>
+    </defs>
+    <rect width="900" height="720" fill="url(#sd-bg)" />
+    <g fill="none" stroke="url(#sd-line)" strokeWidth="1.5">
+      <path d="M70 210 C 240 250, 330 320, 470 420 S 680 545, 835 505" opacity="0.14" />
+      <path d="M120 520 C 255 430, 420 430, 520 340 S 685 210, 820 245" opacity="0.09" />
+      <path d="M145 145h210v70H145zM545 118h210v70H545zM365 510h170v58H365z" opacity="0.09" />
+      <path d="M250 215l140 295M650 188l-150 322M355 180h190M535 540h150" opacity="0.07" />
+    </g>
+    <g fill="#e0f2fe" opacity="0.055">
+      <circle cx="270" cy="290" r="4" />
+      <circle cx="498" cy="382" r="4" />
+      <circle cx="700" cy="298" r="4" />
+      <circle cx="610" cy="535" r="4" />
+    </g>
+  </svg>
+);
+
+const DirectorCountUp: React.FC<{ value: number; duration?: number }> = ({ value, duration = 900 }) => {
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min((t - start) / duration, 1);
+      setN(value * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <>{Math.round(n)}</>;
+};
+
+const DirectorAttrBar: React.FC<{ label: string; value: number; index: number }> = ({ label, value, index }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 320 + index * 70);
+    return () => clearTimeout(t);
+  }, [index]);
+
+  const color = directorAttrColor(value);
+
+  return (
+    <div className="sd-attr sd-rise relative overflow-hidden rounded-xl border border-white/5 bg-black/20 px-3 py-2" style={{ animationDelay: `${280 + index * 60}ms` }}>
+      <div className="sd-shine pointer-events-none absolute inset-0" />
+      <div className="mb-1 flex items-center justify-between gap-4">
+        <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{label}</p>
+        <p className="text-[10px] font-black italic uppercase tracking-tighter tabular-nums" style={{ color }}>
+          <DirectorCountUp value={value} />
+          <span className="text-slate-600">/20</span>
+        </p>
+      </div>
+      <div className="relative h-1 overflow-hidden rounded-full bg-white/5">
+        {[7, 12, 17].map((t) => (
+          <div key={t} className="absolute top-0 h-full w-px bg-white/10" style={{ left: `${(t / 20) * 100}%` }} />
+        ))}
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: mounted ? `${(value / 20) * 100}%` : '0%',
+            background: `linear-gradient(90deg, ${color}99, ${color})`,
+            boxShadow: `0 0 8px ${color}66`,
+            transition: 'width 900ms cubic-bezier(.25,1,.3,1)',
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
   const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion, submitBoardClubRequest } = useGame();
@@ -997,7 +1090,225 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
         </div>
       </div>
 
-      {sportingDirector && isDirectorModalOpen && (
+      {isDirectorModalOpen && sportingDirector && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4" onClick={() => setIsDirectorModalOpen(false)}>
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
+          <div
+            className="sd-in relative z-10 w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-[32px] border border-sky-400/15 shadow-[0_0_70px_rgba(56,189,248,0.14),0_30px_70px_rgba(0,0,0,0.65)]"
+            onClick={e => e.stopPropagation()}
+          >
+            <style>{`
+              @keyframes sd-in { from { transform: scale(.94) translateY(18px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+              @keyframes sd-rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+              @keyframes sd-spin { to { transform: rotate(360deg); } }
+              @keyframes sd-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+              @keyframes sd-shine-sweep { from { transform: translateX(-130%) skewX(-20deg); } to { transform: translateX(230%) skewX(-20deg); } }
+              .sd-in { animation: sd-in 420ms cubic-bezier(.2,.9,.3,1) both; }
+              .sd-rise { animation: sd-rise 480ms cubic-bezier(.2,.9,.3,1) both; }
+              .sd-ring { animation: sd-spin 28s linear infinite; transform-origin: center; }
+              .sd-underline { animation: sd-underline 620ms 240ms cubic-bezier(.2,.9,.3,1) both; transform-origin: center; }
+              .sd-shine { background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.38) 50%, transparent 70%); transform: translateX(-130%) skewX(-20deg); }
+              .sd-attr:hover .sd-shine, .sd-policy-card:hover .sd-shine { animation: sd-shine-sweep 800ms ease; }
+              .sd-attr, .sd-policy-card { transition: background 200ms ease, border-color 200ms ease, transform 200ms ease; }
+              .sd-attr:hover, .sd-policy-card:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); transform: translateX(3px); }
+              @media (prefers-reduced-motion: reduce) {
+                .sd-in, .sd-rise, .sd-ring, .sd-underline { animation: none !important; }
+              }
+            `}</style>
+
+            <DirectorBackdrop />
+
+            <button
+              type="button"
+              onClick={() => setIsDirectorModalOpen(false)}
+              className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 transition-all duration-300 hover:rotate-90 hover:border-white/30 hover:bg-white/10 hover:text-white"
+              aria-label="Zamknij"
+            >
+              ×
+            </button>
+
+            <div className="relative z-10 max-h-[88vh] overflow-y-auto p-6 custom-scrollbar">
+              <div className="mb-5 text-center">
+                <div className="sd-rise mx-auto mb-3 flex h-20 w-20 items-center justify-center" style={{ animationDelay: '60ms' }}>
+                  <svg viewBox="0 0 80 80" className="sd-ring absolute h-20 w-20" aria-hidden>
+                    <circle cx="40" cy="40" r="37" fill="none" stroke="#facc15" strokeOpacity="0.45" strokeWidth="1.5" strokeDasharray="7 11" strokeLinecap="round" />
+                  </svg>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-slate-700 to-slate-900 shadow-inner">
+                    <svg viewBox="0 0 24 24" className="h-8 w-8 text-sky-200" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M4 18V7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5V18" />
+                      <path d="M8 5V3h8v2" />
+                      <path d="M3 18h18" />
+                      <path d="M7 10h10M7 14h6" />
+                    </svg>
+                  </div>
+                </div>
+
+                <p className="sd-rise text-xs font-black italic uppercase tracking-[0.3em] text-yellow-400" style={{ animationDelay: '120ms' }}>
+                  Dyrektor sportowy
+                </p>
+                <h3 className="sd-rise mt-1 text-3xl font-black italic uppercase tracking-tighter text-white" style={{ animationDelay: '180ms' }}>
+                  {sportingDirector.firstName} {sportingDirector.lastName}
+                </h3>
+                <p className="sd-rise mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-400" style={{ animationDelay: '240ms' }}>
+                  {sportingDirector.age} lat, {sportingDirector.nationalityCountry}
+                </p>
+                <div className="sd-underline mx-auto mt-3 h-px w-48 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
+              </div>
+
+              <div className="sd-rise mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3" style={{ animationDelay: '280ms' }}>
+                <div className="rounded-2xl border border-white/5 bg-black/24 px-4 py-3">
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Styl pracy</p>
+                  <p className="mt-1 text-xs font-black italic uppercase tracking-tighter text-sky-200">{getDirectorPersonalityLabel(sportingDirector.personality)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/24 px-4 py-3">
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z trenerem</p>
+                  <p className={`mt-1 text-xs font-black italic uppercase tracking-tighter ${getDirectorRelationshipColor(sportingDirector.relationshipWithManager)}`}>
+                    {getDirectorRelationshipLabel(sportingDirector.relationshipWithManager)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/24 px-4 py-3">
+                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Wpływ w zarządzie</p>
+                  <p className={`mt-1 text-xs font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
+                    {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-3">
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Cierpliwość', value: sportingDirector.patience },
+                      { label: 'Kontrola', value: sportingDirector.control },
+                      { label: 'Elastyczność', value: sportingDirector.flexibility },
+                      { label: 'Ambicja', value: sportingDirector.ambition },
+                      { label: 'Wiedza', value: sportingDirector.footballKnowledge },
+                      { label: 'Negocjacje', value: sportingDirector.negotiation },
+                      { label: 'Finanse', value: sportingDirector.financialDiscipline },
+                      { label: 'Rozwój', value: sportingDirector.developmentVision },
+                    ].map((stat, index) => (
+                      <DirectorAttrBar key={stat.label} label={stat.label} value={stat.value} index={index} />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Polityka sportowa</p>
+                  {directorPolicy ? (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-xs font-black italic uppercase tracking-tighter leading-relaxed text-slate-300">{directorPolicy.summary}</p>
+                      {directorPolicy.budgetDirective && (
+                        <p className="rounded-xl border border-yellow-400/10 bg-yellow-400/5 px-3 py-2 text-[10px] font-black italic uppercase tracking-tighter leading-snug text-yellow-200">
+                          {directorPolicy.budgetDirective}
+                        </p>
+                      )}
+                      {[
+                        { title: 'Chronieni', items: directorPolicy.protectedPlayers },
+                        { title: 'Do sprzedaży', items: directorPolicy.sellCandidates },
+                        { title: 'Do rozwoju', items: directorPolicy.developmentPlayers },
+                      ].map(group => (
+                        <div key={group.title}>
+                          <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-300/80">{group.title}</p>
+                          <div className="mt-1 space-y-1">
+                            {group.items.length > 0 ? group.items.slice(0, 2).map(item => (
+                              <div key={item.playerId} className="sd-policy-card relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                                <div className="sd-shine pointer-events-none absolute inset-0" />
+                                <p className="text-[11px] font-black italic uppercase tracking-tighter text-white">{item.playerName}</p>
+                                <p className="mt-0.5 text-[10px] font-black italic uppercase tracking-tighter leading-snug text-slate-500">{item.note}</p>
+                              </div>
+                            )) : (
+                              <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Brak wskazań.</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
+                      Polityka sportowa pojawi się przed najbliższym oknem transferowym.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                  <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Cel dyrektora</p>
+                  {directorObjective ? (
+                    <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-black italic uppercase tracking-tighter text-white">{directorObjective.title.replace('Cel dyrektora: ', '')}</p>
+                        <span className={`shrink-0 rounded-full border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${getObjectiveStatusClasses(directorObjective.status)}`}>
+                          {getObjectiveStatusLabel(directorObjective.status)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">{directorObjective.description}</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+                          <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">{objectivePanelData?.summaryLabel ?? 'Status'}</p>
+                          <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">{objectivePanelData?.summaryValue ?? 'Czekamy na aktualizację'}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+                          <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Termin</p>
+                          <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">{new Date(directorObjective.dueAt).toLocaleDateString('pl-PL')}</p>
+                        </div>
+                      </div>
+                      {objectivePanelData && (
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between gap-4">
+                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Postęp zadania</p>
+                            <p className="text-right text-[9px] font-black italic uppercase tracking-tighter text-slate-300">{objectivePanelData.progressLabel}</p>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-black/50">
+                            <div className={`h-full rounded-full transition-all duration-500 ${getObjectiveProgressClasses(directorObjective.status)}`} style={{ width: `${objectivePanelData.progressPercent}%` }} />
+                          </div>
+                        </div>
+                      )}
+                      {directorObjective.managerResponse && (
+                        <p className="mt-3 text-[9px] font-black italic uppercase tracking-tighter text-sky-300">
+                          Odpowiedź sztabu: {directorObjective.managerResponse === 'ACCEPTED' ? 'Akceptacja' : directorObjective.managerResponse === 'NEGOTIATED' ? 'Negocjacja' : 'Sprzeciw'}
+                        </p>
+                      )}
+                      {directorObjective.resultNote && (
+                        <p className="mt-2 text-[11px] font-black italic uppercase tracking-tighter leading-snug text-slate-300">{directorObjective.resultNote}</p>
+                      )}
+                      {directorObjective.status === 'ACTIVE' && (
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <button
+                            disabled={directorObjective.managerResponse === 'ACCEPTED'}
+                            onClick={() => respondToSportingDirectorObjective('ACCEPT')}
+                            className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[9px] font-black italic uppercase tracking-tighter text-emerald-200 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Akceptuj cel
+                          </button>
+                          <button
+                            disabled={!!directorObjective.renegotiated}
+                            onClick={() => respondToSportingDirectorObjective('NEGOTIATE')}
+                            className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-[9px] font-black italic uppercase tracking-tighter text-sky-200 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Negocjuj warunki
+                          </button>
+                          <button
+                            disabled={directorObjective.managerResponse === 'CHALLENGED'}
+                            onClick={() => respondToSportingDirectorObjective('CHALLENGE')}
+                            className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[9px] font-black italic uppercase tracking-tighter text-red-200 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Zakwestionuj cel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
+                      Dyrektor nie wyznaczył jeszcze konkretnego celu dla sztabu.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {false && sportingDirector && isDirectorModalOpen && (
         <div className="absolute inset-0 z-30 flex items-center justify-center p-4" onClick={() => setIsDirectorModalOpen(false)}>
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div
