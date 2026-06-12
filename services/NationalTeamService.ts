@@ -19,6 +19,7 @@ import {
   STATIC_SA_CLUBS
 } from '../constants';
 import { NameGeneratorService } from './NameGeneratorService';
+import { CoachService } from './CoachService';
 import { PlayerAttributesGenerator, REGION_PROFILE } from './PlayerAttributesGenerator';
 import { createDefaultNationalTeamKits } from '../resources/ClubKits';
 
@@ -340,10 +341,16 @@ export const NationalTeamService = {
 
       if (coach) {
         coachesMap[coach.id].currentNationalTeamId = team.id;
+        coachesMap[coach.id].contractEndDate = coachesMap[coach.id].contractEndDate || CoachService.getDefaultContractEndDate(coachesMap[coach.id].hiredDate);
+        coachesMap[coach.id].annualSalary = CoachService.calculateAnnualSalaryForNationalTeam(team, coachesMap[coach.id]);
         team.coachId = coach.id;
         team.tacticId = NationalTeamService.selectTacticForCoach(coach);
       }
     }
+
+    Object.keys(coachesMap).forEach(id => {
+      coachesMap[id] = CoachService.normalizeCoachContract(coachesMap[id], null, null);
+    });
 
     return { updatedTeams, updatedCoaches: coachesMap };
   },

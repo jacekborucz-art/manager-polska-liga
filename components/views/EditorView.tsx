@@ -7,6 +7,7 @@ import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenera
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
 import { NameGeneratorService } from '../../services/NameGeneratorService';
 import { FinanceService } from '../../services/FinanceService';
+import { CoachService } from '../../services/CoachService';
 import { LineupService } from '../../services/LineupService';
 import { SquadGeneratorService } from '../../services/SquadGeneratorService';
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
@@ -592,7 +593,13 @@ export const EditorView: React.FC = () => {
         const raw = JSON.parse(ev.target?.result as string);
         let updated = 0;
         if (raw.coach && typeof raw.coach === 'object' && raw.coach.id) {
-          setCoaches(prev => ({ ...prev, [raw.coach.id]: { ...prev[raw.coach.id], ...raw.coach } }));
+          setCoaches(prev => {
+            const mergedCoach = { ...prev[raw.coach.id], ...raw.coach };
+            const coachClub = mergedCoach.currentClubId
+              ? clubs.find(club => club.id === mergedCoach.currentClubId) ?? null
+              : null;
+            return { ...prev, [raw.coach.id]: CoachService.normalizeCoachContract(mergedCoach, coachClub, null) };
+          });
           updated++;
         }
         if (Array.isArray(raw.staff)) {
@@ -867,6 +874,9 @@ export const EditorView: React.FC = () => {
   const [editTrenerTacticOffensive, setEditTrenerTacticOffensive] = useState('');
   const [editTrenerTacticNeutral, setEditTrenerTacticNeutral] = useState('');
   const [editTrenerTacticDefensive, setEditTrenerTacticDefensive] = useState('');
+  const [editTrenerAnnualSalary, setEditTrenerAnnualSalary] = useState('');
+  const [editTrenerContractEnd, setEditTrenerContractEnd] = useState('');
+  const [editTrenerExpPoints, setEditTrenerExpPoints] = useState('');
 
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [teamSearchClubId, setTeamSearchClubId] = useState('');
@@ -901,6 +911,7 @@ export const EditorView: React.FC = () => {
   const [editSztabAttrs, setEditSztabAttrs] = useState<Record<string, number>>({});
   const [editSztabSalary, setEditSztabSalary] = useState('');
   const [editSztabContractEnd, setEditSztabContractEnd] = useState('');
+  const [editSztabExpPoints, setEditSztabExpPoints] = useState('');
 
   const [zarzadLeagueFilter, setZarzadLeagueFilter] = useState('');
   const [zarzadSearchQuery, setZarzadSearchQuery] = useState('');
@@ -1107,12 +1118,20 @@ export const EditorView: React.FC = () => {
     setEditTrenerTacticOffensive(coach.favoriteTactics.offensive);
     setEditTrenerTacticNeutral(coach.favoriteTactics.neutral);
     setEditTrenerTacticDefensive(coach.favoriteTactics.defensive);
+    setEditTrenerAnnualSalary(String(coach.annualSalary ?? 0));
+    setEditTrenerContractEnd(coach.contractEndDate ? coach.contractEndDate.substring(0, 10) : '');
+    setEditTrenerExpPoints(String(coach.expPoints ?? 1));
   };
 
   const handleTrenerSave = () => {
     if (!trenerzySelectedId) return;
     const age = parseInt(editTrenerAge, 10);
     if (isNaN(age)) return;
+    const annualSalary = Math.max(0, parseInt(editTrenerAnnualSalary, 10) || 0);
+    const expPoints = Math.max(1, parseFloat(editTrenerExpPoints) || 1);
+    const contractEndDate = editTrenerContractEnd
+      ? new Date(editTrenerContractEnd).toISOString()
+      : coaches[trenerzySelectedId]?.contractEndDate ?? new Date().toISOString();
     setCoaches(prev => ({
       ...prev,
       [trenerzySelectedId]: {
@@ -1122,6 +1141,9 @@ export const EditorView: React.FC = () => {
         age,
         nationality: editTrenerNationality,
         attributes: editTrenerAttrs as any,
+        annualSalary,
+        contractEndDate,
+        expPoints,
         favoriteTactics: {
           offensive: editTrenerTacticOffensive,
           neutral: editTrenerTacticNeutral,
@@ -1322,8 +1344,9 @@ export const EditorView: React.FC = () => {
       setEditSztabLastName(c.lastName);
       setEditSztabAge(String(c.age));
       setEditSztabAttrs({ ...c.attributes } as Record<string, number>);
-      setEditSztabSalary('');
-      setEditSztabContractEnd('');
+      setEditSztabSalary(String(c.annualSalary ?? 0));
+      setEditSztabContractEnd(c.contractEndDate ? c.contractEndDate.substring(0, 10) : '');
+      setEditSztabExpPoints(String(c.expPoints ?? 1));
     } else {
       const s = staffMembers[id];
       if (!s) return;
@@ -1333,6 +1356,7 @@ export const EditorView: React.FC = () => {
       setEditSztabAttrs({ ...s.attributes });
       setEditSztabSalary(String(s.salary ?? ''));
       setEditSztabContractEnd(s.contractEndDate ? s.contractEndDate.substring(0, 10) : '');
+      setEditSztabExpPoints('');
     }
   };
 
@@ -1341,6 +1365,8 @@ export const EditorView: React.FC = () => {
     const age = parseInt(editSztabAge, 10);
     if (Number.isNaN(age)) return;
     if (sztabPersonType === 'coach') {
+      const annualSalary = Math.max(0, parseInt(editSztabSalary, 10) || 0);
+      const expPoints = Math.max(1, parseFloat(editSztabExpPoints) || 1);
       setCoaches(prev => ({
         ...prev,
         [sztabPersonId]: {
@@ -1349,6 +1375,9 @@ export const EditorView: React.FC = () => {
           lastName: editSztabLastName,
           age,
           attributes: editSztabAttrs as unknown as typeof prev[string]['attributes'],
+          annualSalary,
+          expPoints,
+          ...(editSztabContractEnd ? { contractEndDate: new Date(editSztabContractEnd).toISOString() } : {}),
         },
       }));
     } else {
@@ -2129,6 +2158,7 @@ export const EditorView: React.FC = () => {
                       <th className="text-left py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Wiek</th>
                       <th className="text-left py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Klub</th>
                       <th className="text-right py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">Dośw.</th>
+                      <th className="text-right py-2 px-2 text-slate-400 font-black uppercase tracking-tighter">EXP</th>
                       <th className="text-right py-2 pl-2 pr-4 text-slate-400 font-black uppercase tracking-tighter">Trening</th>
                     </tr>
                   </thead>
@@ -2151,6 +2181,7 @@ export const EditorView: React.FC = () => {
                           <td className="py-2 px-2 text-slate-300">{coach.age}</td>
                           <td className="py-2 px-2 text-emerald-400">{clubName}</td>
                           <td className="py-2 px-2 text-right text-yellow-400 tabular-nums">{coach.attributes.experience}</td>
+                          <td className="py-2 px-2 text-right text-cyan-300 tabular-nums">{(coach.expPoints ?? 1).toLocaleString('pl-PL', { maximumFractionDigits: 1 })}</td>
                           <td className="py-2 pl-2 pr-4 text-right text-slate-300 tabular-nums">{coach.attributes.training}</td>
                         </tr>
                       );
@@ -2249,6 +2280,43 @@ export const EditorView: React.FC = () => {
                         />
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Kontrakt i EXP */}
+                <div className="mb-5">
+                  <div className={`${labelCls} mb-2`}>Kontrakt i EXP</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Pensja roczna</div>
+                      <input
+                        type="number"
+                        min={0}
+                        value={editTrenerAnnualSalary}
+                        onChange={(e) => setEditTrenerAnnualSalary(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Koniec kontraktu</div>
+                      <input
+                        type="date"
+                        value={editTrenerContractEnd}
+                        onChange={(e) => setEditTrenerContractEnd(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
+                    <div>
+                      <div className={`${labelCls} text-[10px] mb-1`}>Punkty EXP</div>
+                      <input
+                        type="number"
+                        min={1}
+                        step={0.5}
+                        value={editTrenerExpPoints}
+                        onChange={(e) => setEditTrenerExpPoints(e.target.value)}
+                        className={`${inputCls} px-2 py-1 w-full`}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -3617,42 +3685,52 @@ export const EditorView: React.FC = () => {
                       <input
                         type="number"
                         min={1}
-                        max={20}
+                        max={sztabPersonType === 'coach' ? 99 : 20}
                         className={`${inputCls} px-2 py-0.5 w-16 text-center`}
                         value={editSztabAttrs[key] ?? 1}
-                        onChange={e => setEditSztabAttrs(prev => ({ ...prev, [key]: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)) }))}
+                        onChange={e => {
+                          const maxValue = sztabPersonType === 'coach' ? 99 : 20;
+                          setEditSztabAttrs(prev => ({ ...prev, [key]: Math.max(1, Math.min(maxValue, parseInt(e.target.value, 10) || 1)) }));
+                        }}
                       />
                     </div>
                   ))}
                 </div>
 
                 <div className="text-xs text-yellow-400 mb-3">Kontrakt</div>
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="grid grid-cols-3 gap-3 mb-6">
                   <div>
-                    <div className={labelCls + ' mb-1'}>Wynagrodzenie (mies.)</div>
-                    {sztabPersonType === 'staff' ? (
-                      <input
-                        type="number"
-                        min={0}
-                        className={`${inputCls} px-2 py-1.5 w-full`}
-                        value={editSztabSalary}
-                        onChange={e => setEditSztabSalary(e.target.value)}
-                      />
-                    ) : (
-                      <div className="text-xs text-slate-500 italic py-1.5">brak danych</div>
-                    )}
+                    <div className={labelCls + ' mb-1'}>{sztabPersonType === 'coach' ? 'Pensja roczna' : 'Wynagrodzenie (mies.)'}</div>
+                    <input
+                      type="number"
+                      min={0}
+                      className={`${inputCls} px-2 py-1.5 w-full`}
+                      value={editSztabSalary}
+                      onChange={e => setEditSztabSalary(e.target.value)}
+                    />
                   </div>
                   <div>
                     <div className={labelCls + ' mb-1'}>Koniec kontraktu</div>
-                    {sztabPersonType === 'staff' ? (
+                    <input
+                      type="date"
+                      className={`${inputCls} px-2 py-1.5 w-full`}
+                      value={editSztabContractEnd}
+                      onChange={e => setEditSztabContractEnd(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <div className={labelCls + ' mb-1'}>Punkty EXP</div>
+                    {sztabPersonType === 'coach' ? (
                       <input
-                        type="date"
+                        type="number"
+                        min={1}
+                        step={0.5}
                         className={`${inputCls} px-2 py-1.5 w-full`}
-                        value={editSztabContractEnd}
-                        onChange={e => setEditSztabContractEnd(e.target.value)}
+                        value={editSztabExpPoints}
+                        onChange={e => setEditSztabExpPoints(e.target.value)}
                       />
                     ) : (
-                      <div className="text-xs text-slate-500 italic py-1.5">brak danych</div>
+                      <div className="text-xs text-slate-500 italic py-1.5">dotyczy trenerów</div>
                     )}
                   </div>
                 </div>

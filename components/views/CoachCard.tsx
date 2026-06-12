@@ -71,6 +71,17 @@ export const CoachCard: React.FC = () => {
   const clubLogoUrl = currentClub?.logoFile
     ? new URL(`../../Graphic/logo/${currentClub.logoFile}`, import.meta.url).href
     : null;
+  const contractEnd = coach.contractEndDate ? new Date(coach.contractEndDate) : null;
+  const contractEndLabel = contractEnd && !Number.isNaN(contractEnd.getTime())
+    ? contractEnd.toLocaleDateString('pl-PL')
+    : 'Brak danych';
+  const annualSalaryLabel = typeof coach.annualSalary === 'number' && coach.annualSalary > 0
+    ? `${coach.annualSalary.toLocaleString('pl-PL')} PLN / rok`
+    : 'Brak danych';
+  const expPointsLabel = (typeof coach.expPoints === 'number' ? coach.expPoints : 1).toLocaleString('pl-PL', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  });
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in font-black italic uppercase tracking-tighter" style={{ backgroundImage: "url('../Graphic/themes/trener.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -90,6 +101,21 @@ export const CoachCard: React.FC = () => {
               : <div className="w-16 h-16 flex items-center justify-center text-3xl">🏟️</div>
             }
             <span className="text-sm text-white text-center">{currentClub?.name || currentNT?.name || 'Bezrobotny'}</span>
+          </div>
+
+          <div className="mt-4 w-full p-5 bg-white/5 rounded-3xl border border-white/5 flex flex-col gap-3">
+            <div>
+              <span className="block text-[8px] text-slate-500 tracking-[0.3em]">Kontrakt do</span>
+              <span className="text-sm text-white">{contractEndLabel}</span>
+            </div>
+            <div>
+              <span className="block text-[8px] text-slate-500 tracking-[0.3em]">Pensja roczna</span>
+              <span className="text-sm text-emerald-400">{annualSalaryLabel}</span>
+            </div>
+            <div>
+              <span className="block text-[8px] text-slate-500 tracking-[0.3em]">Punkty EXP</span>
+              <span className="text-sm text-yellow-400">{expPointsLabel}</span>
+            </div>
           </div>
 
           <button

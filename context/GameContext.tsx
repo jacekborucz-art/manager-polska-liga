@@ -2627,6 +2627,16 @@ if (userTeamId) {
 
   const loadGameFromFile = (data: SaveState): void => {
     const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
+    const loadedClubById = new Map(loadedClubs.map(club => [club.id, club]));
+    const loadedNtByCoachId = new Map((data.nationalTeams ?? []).filter(team => team.coachId).map(team => [team.coachId!, team]));
+    const loadedCoaches = Object.fromEntries(Object.entries(data.coaches ?? {}).map(([id, coach]) => [
+      id,
+      CoachService.normalizeCoachContract(
+        coach,
+        coach.currentClubId ? loadedClubById.get(coach.currentClubId) ?? null : null,
+        coach.currentNationalTeamId ? loadedNtByCoachId.get(coach.id) ?? null : null
+      ),
+    ])) as Record<string, Coach>;
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
@@ -2648,7 +2658,7 @@ if (userTeamId) {
     setSeasonTemplate(data.seasonTemplate);
     setLeagueSchedules(data.leagueSchedules);
     setLastRecoveryDate(data.lastRecoveryDate);
-    setCoaches(data.coaches);
+    setCoaches(loadedCoaches);
     setStaffMembers(data.staffMembers ?? {});
     setRoundResults(data.roundResults);
     setManagerProfile(data.managerProfile);
@@ -2755,9 +2765,18 @@ if (userTeamId) {
     const finalClubs = importedClubs.some(club => club.id === UNEMPLOYED_MANAGER_CLUB_ID)
       ? importedClubs
       : [...importedClubs, UNEMPLOYED_MANAGER_CLUB];
-    const importedCoaches = raw.coaches && typeof raw.coaches === 'object'
+    const importedCoachesRaw = raw.coaches && typeof raw.coaches === 'object'
       ? raw.coaches as Record<string, Coach>
       : CoachService.generateInitialCoaches(finalClubs).coaches;
+    const importedClubById = new Map(finalClubs.map(club => [club.id, club]));
+    const importedCoaches = Object.fromEntries(Object.entries(importedCoachesRaw).map(([id, coach]) => [
+      id,
+      CoachService.normalizeCoachContract(
+        coach,
+        coach.currentClubId ? importedClubById.get(coach.currentClubId) ?? null : null,
+        null
+      ),
+    ])) as Record<string, Coach>;
     const importedStaffMembers = raw.staffMembers && typeof raw.staffMembers === 'object'
       ? raw.staffMembers as Record<string, StaffMember>
       : {};
@@ -2961,7 +2980,14 @@ const selectUserTeam = (clubId: string) => {
     // Generuj trenera rezerw: 75% szansy na Polaka, 25% na zagranicznego
     const isPolish = Math.random() < 0.75;
     const newReserveCoach = CoachService.createRandomCoach(isPolish);
-    const reserveCoachWithClub = { ...newReserveCoach, currentClubId: clubId };
+    const reserveHiredDate = currentDate.toISOString();
+    const reserveCoachWithClub = {
+      ...newReserveCoach,
+      currentClubId: clubId,
+      hiredDate: reserveHiredDate,
+      contractEndDate: CoachService.getDefaultContractEndDate(reserveHiredDate),
+      annualSalary: CoachService.calculateAnnualSalaryForClub(club, newReserveCoach),
+    };
     setCoaches(prev => ({ ...prev, [newReserveCoach.id]: reserveCoachWithClub }));
     setReserveCoachId(newReserveCoach.id);
 
@@ -3288,6 +3314,13 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     }
 
     triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures);
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      finalClubs,
+      simulation.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
 
     setClubs(finalClubs);
 
@@ -3416,7 +3449,7 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
       if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
       return updated;
     }));
-  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail, triggerSeasonCelebrationIfClinched]);
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail, triggerSeasonCelebrationIfClinched, allFixtures]);
 
   const processBackgroundCupMatches = useCallback(() => {
     // Added sessionSeed as the 7th argument
@@ -3426,7 +3459,14 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     setPlayers(result.updatedPlayers);
     setLineups(result.updatedLineups);
     setClubs(result.updatedClubs);
-  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed]);
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      result.updatedClubs,
+      result.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber]);
 
   const processCLMatchDay = useCallback(() => {
     // null zamiast userTeamId — gracz kliknął "Symuluj", więc symulujemy WSZYSTKIE mecze
@@ -3451,8 +3491,15 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
       });
     });
     setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      clubs,
+      clResult.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
-  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed]);
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches]);
 
     const processNegotiationResponses = (simDate: Date) => {
     const today = new Date(simDate).setHours(0,0,0,0);
@@ -5817,6 +5864,13 @@ Asystent`,
             });
           });
           setPlayers(prev => ({ ...prev, ...uefaScResult.updatedPlayers }));
+          setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+            prev,
+            clubs,
+            uefaScResult.updatedFixtures,
+            allFixtures,
+            userTeamId
+          ));
           uefaScResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
           const uefaEntry = uefaScResult.matchHistoryEntries.find(e => e.competition === CompetitionType.UEFA_SUPER_CUP);
           if (uefaEntry) setLastUEFASuperCupResult(uefaEntry);
@@ -7073,6 +7127,7 @@ Asystent`,
           : ntSimulation.matchHistoryEntries;
         setPlayers(finalNTPlayers);
         finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+        setCoaches(prev => CoachService.applyNationalTeamExpForResults(prev, nationalTeams, finalNTResults));
         setLastNTMatchResults(finalNTResults);
         // ── Po ostatniej kolejce fazy grupowej MŚ (17 listopada) → email-podsumowanie ──
         if (dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
@@ -7810,6 +7865,15 @@ const finalResult: SimulationOutput = {
         });
       }
     }
+    if (!isUEFASuperCupDay) {
+      setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+        prev,
+        clubs,
+        clResult.updatedFixtures,
+        allFixtures,
+        userTeamId
+      ));
+    }
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
 
     // Przetwarzanie bonusów za Superpuchar Polski
@@ -8192,6 +8256,87 @@ const finalResult: SimulationOutput = {
                            (nextDay.getMonth() === 2 && nextDay.getDate() === 1) ||  // 1 Marca
                            (nextDay.getMonth() === 5 && nextDay.getDate() === 1);   // 1 Czerwca
 
+    const processCoachContractRenewals = (
+      baseCoaches: Record<string, Coach>,
+      baseClubs: Club[]
+    ): { updatedCoaches: Record<string, Coach>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedCoaches = { ...baseCoaches };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || !club.coachId) return;
+        const coach = updatedCoaches[club.coachId];
+        if (!coach?.contractEndDate) return;
+
+        const contractEnd = new Date(coach.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return;
+        if (contractEnd.setHours(0, 0, 0, 0) > new Date(nextDay).setHours(0, 0, 0, 0)) return;
+
+        changed = true;
+        const renewalDate = nextDay.toISOString();
+        const refusesExtension = CoachService.shouldRefuseContractExtension(coach, club, nextDay);
+
+        if (!refusesExtension) {
+          updatedCoaches[coach.id] = {
+            ...coach,
+            contractEndDate: CoachService.getDefaultContractEndDate(renewalDate),
+            annualSalary: CoachService.calculateAnnualSalaryForClub(club, coach),
+          };
+          return;
+        }
+
+        const leavingCoach: Coach = {
+          ...coach,
+          currentClubId: null,
+          favoritePlayerIds: undefined,
+          blacklist: {
+            ...(coach.blacklist ?? {}),
+            [club.id]: nextDay.getFullYear() + 2,
+          },
+          history: (coach.history ?? []).map((entry, index, list) =>
+            index === list.length - 1 && entry.toYear === null
+              ? { ...entry, toYear: nextDay.getFullYear(), toMonth: nextDay.getMonth() + 1 }
+              : entry
+          ),
+        };
+        updatedCoaches[coach.id] = leavingCoach;
+
+        const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, leavingCoach.id);
+
+        if (!replacement) {
+          club.coachId = undefined;
+          return;
+        }
+
+        const replacementHistory = {
+          clubId: club.id,
+          clubName: club.name,
+          fromYear: nextDay.getFullYear(),
+          fromMonth: nextDay.getMonth() + 1,
+          toYear: null,
+          toMonth: null,
+        };
+
+        updatedCoaches[replacement.id] = {
+          ...replacement,
+          currentClubId: club.id,
+          hiredDate: renewalDate,
+          contractEndDate: CoachService.getDefaultContractEndDate(renewalDate),
+          annualSalary: CoachService.calculateAnnualSalaryForClub(club, replacement),
+          favoritePlayerIds: undefined,
+          history: [...(replacement.history ?? []), replacementHistory],
+        };
+        club.coachId = replacement.id;
+      });
+
+      return { updatedCoaches, updatedClubs, changed };
+    };
+
+    let coachClubStateChanged = false;
+    let nextCoachesState = coaches;
+    let nextClubsState = clubs;
+
     if (isBoardMeeting) {
       const updatedCoaches = { ...coaches };
       const updatedClubsList = [...clubs];
@@ -8241,13 +8386,14 @@ const finalResult: SimulationOutput = {
           coach.history[coach.history.length-1].toYear = nextDay.getFullYear();
           coach.history[coach.history.length-1].toMonth = nextDay.getMonth()+1;
           // Szukanie następcy
-          const candidates = Object.values(updatedCoaches).filter(c => 
-            !c.currentClubId && (!c.blacklist[club.id] || c.blacklist[club.id] <= nextDay.getFullYear())
-          );
-          const replacement = candidates.sort((a,b) => b.attributes.experience - a.attributes.experience)[0];
+          const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, coach.id);
           
           if (replacement) {
+            const replacementHiredDate = nextDay.toISOString();
             replacement.currentClubId = club.id;
+            replacement.hiredDate = replacementHiredDate;
+            replacement.contractEndDate = CoachService.getDefaultContractEndDate(replacementHiredDate);
+            replacement.annualSalary = CoachService.calculateAnnualSalaryForClub(club, replacement);
             replacement.favoritePlayerIds = undefined;
             replacement.history.push({
               clubId: club.id, clubName: club.name,
@@ -8255,12 +8401,27 @@ const finalResult: SimulationOutput = {
               toYear: null, toMonth: null
             });
             club.coachId = replacement.id;
+          } else {
+            club.coachId = undefined;
           }
         }
       });
         if (newMails.length > 0) setMessages(prev => [...newMails, ...prev]);
-      setCoaches(updatedCoaches);
-      setClubs(updatedClubsList);
+      nextCoachesState = updatedCoaches;
+      nextClubsState = updatedClubsList;
+      coachClubStateChanged = true;
+    }
+
+    const coachContractRenewals = processCoachContractRenewals(nextCoachesState, nextClubsState);
+    if (coachContractRenewals.changed) {
+      nextCoachesState = coachContractRenewals.updatedCoaches;
+      nextClubsState = coachContractRenewals.updatedClubs;
+      coachClubStateChanged = true;
+    }
+
+    if (coachClubStateChanged) {
+      setCoaches(nextCoachesState);
+      setClubs(nextClubsState);
     }
 
 

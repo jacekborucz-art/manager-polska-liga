@@ -815,8 +815,8 @@ export const BackgroundMatchUEFASuperCup = {
       usedRefereeIds.add(referee.id);
 
       const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
-      const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
-      const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
 
       // Superpuchar Europy — neutralny stadion, rotacja co sezon
       const venueIndex = ((seasonNumber - 1) % SUPER_CUP_VENUES.length + SUPER_CUP_VENUES.length) % SUPER_CUP_VENUES.length;

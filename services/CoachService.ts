@@ -1,4 +1,4 @@
-import { Coach, Region, Club, MatchHistoryEntry, CoachHistoryEntry } from '../types';
+import { Coach, Region, Club, MatchHistoryEntry, CoachHistoryEntry, Fixture, MatchStatus, NationalTeam, NTMatchResult } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 
 const TACTICS_OFFENSIVE = ['4-3-3 Atak', '3-4-3', 'Wysoki Pressing', 'Total Football', '4-1-2-1-2'];
@@ -6,6 +6,127 @@ const TACTICS_NEUTRAL   = ['4-4-2', '4-3-3 Zrównoważona', '3-5-2', '4-5-1', '4
 const TACTICS_DEFENSIVE = ['5-4-1', '5-3-2 Blok', '4-4-2 Kontratak', 'Niski Blok', '4-5-1 Defensywna', '3-6-1'];
 
 const randomTactic = (list: string[]) => list[Math.floor(Math.random() * list.length)];
+const DEFAULT_HIRED_DATE = new Date('2025-07-01').toISOString();
+const DEFAULT_CONTRACT_YEARS = 2;
+
+const addYears = (dateIso: string, years: number): string => {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return new Date(2027, 6, 1).toISOString();
+  date.setFullYear(date.getFullYear() + years);
+  return date.toISOString();
+};
+
+const roundSalary = (value: number): number => Math.max(50_000, Math.round(value / 10_000) * 10_000);
+
+const coachQualityMultiplier = (coach: Coach): number => {
+  const attrs = coach.attributes;
+  const avg = (attrs.experience * 1.25 + attrs.decisionMaking + attrs.motivation * 0.85 + attrs.training * 0.7) / 3.8;
+  return 0.72 + Math.max(0, Math.min(99, avg)) / 99 * 0.72;
+};
+
+const getClubSalaryBase = (club: Pick<Club, 'reputation'>): number => {
+  const rep = club.reputation;
+  if (rep >= 18) return 5_500_000;
+  if (rep >= 15) return 3_000_000;
+  if (rep >= 12) return 1_500_000;
+  if (rep >= 9) return 850_000;
+  if (rep >= 7) return 480_000;
+  if (rep >= 4) return 220_000;
+  return 90_000;
+};
+
+const getLeagueSalaryMultiplier = (leagueId: string): number => {
+  if (leagueId === 'L_CL') return 1.35;
+  if (leagueId === 'L_EL') return 1.15;
+  if (leagueId === 'L_CONF') return 0.95;
+  if (leagueId === 'L_PL_1') return 1.00;
+  if (leagueId === 'L_PL_2') return 0.55;
+  if (leagueId === 'L_PL_3') return 0.32;
+  if (leagueId === 'L_PL_4') return 0.18;
+  if (leagueId === 'L_SA') return 1.05;
+  if (leagueId === 'L_ASIA') return 0.90;
+  if (leagueId === 'L_NA') return 0.80;
+  if (leagueId === 'L_AFRICA') return 0.45;
+  return 0.70;
+};
+
+const getFallbackSalary = (coach: Coach): number => {
+  const attrs = coach.attributes;
+  const avg = (attrs.experience + attrs.decisionMaking + attrs.motivation + attrs.training) / 4;
+  return roundSalary(60_000 + avg * 8_500);
+};
+
+const stableHash = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const isPolishClub = (club: Club): boolean =>
+  club.country === 'POL' || club.leagueId.startsWith('L_PL_') || club.id.startsWith('PL_');
+
+const getFixtureOutcome = (fixture: Fixture, clubId: string): 'WIN' | 'DRAW' | 'LOSS' | null => {
+  if (fixture.homeScore === null || fixture.awayScore === null) return null;
+  const isHome = fixture.homeTeamId === clubId;
+  const isAway = fixture.awayTeamId === clubId;
+  if (!isHome && !isAway) return null;
+
+  const goalsFor = isHome ? fixture.homeScore : fixture.awayScore;
+  const goalsAgainst = isHome ? fixture.awayScore : fixture.homeScore;
+  if (goalsFor > goalsAgainst) return 'WIN';
+  if (goalsFor < goalsAgainst) return 'LOSS';
+
+  const homePens = fixture.homePenaltyScore;
+  const awayPens = fixture.awayPenaltyScore;
+  if (typeof homePens === 'number' && typeof awayPens === 'number' && homePens !== awayPens) {
+    const wonPens = isHome ? homePens > awayPens : awayPens > homePens;
+    return wonPens ? 'WIN' : 'LOSS';
+  }
+
+  return 'DRAW';
+};
+
+const getExpDelta = (club: Club, outcome: 'WIN' | 'DRAW' | 'LOSS', userTeamId?: string | null): number => {
+  const polish = isPolishClub(club);
+  if (polish && club.id === userTeamId) return 0;
+
+  if (!polish) {
+    if (outcome === 'WIN') return 5;
+    if (outcome === 'DRAW') return 1;
+    return -1;
+  }
+
+  if (outcome === 'WIN') return 1;
+  if (outcome === 'DRAW') return 0.5;
+  return -0.5;
+};
+
+const getNationalTeamExpDelta = (team: NationalTeam, outcome: 'WIN' | 'DRAW' | 'LOSS'): number => {
+  const polish = team.region === Region.POLAND || team.name === 'Polska';
+  if (!polish) {
+    if (outcome === 'WIN') return 5;
+    if (outcome === 'DRAW') return 1;
+    return -1;
+  }
+
+  if (outcome === 'WIN') return 1;
+  if (outcome === 'DRAW') return 0.5;
+  return -0.5;
+};
+
+const getNationalTeamOutcome = (result: NTMatchResult, teamId: string): 'WIN' | 'DRAW' | 'LOSS' | null => {
+  const isHome = result.homeTeamId === teamId;
+  const isAway = result.awayTeamId === teamId;
+  if (!isHome && !isAway) return null;
+
+  const goalsFor = isHome ? result.homeGoals : result.awayGoals;
+  const goalsAgainst = isHome ? result.awayGoals : result.homeGoals;
+  if (goalsFor > goalsAgainst) return 'WIN';
+  if (goalsFor < goalsAgainst) return 'LOSS';
+  return 'DRAW';
+};
 
 const LEAGUE_PREFERRED_REGIONS: Partial<Record<string, Region[]>> = {
   'L_ASIA':   [Region.JAPAN, Region.KOREA, Region.ARABIA, Region.TURKEY, Region.KAZAKH, Region.AZERBAIJANI],
@@ -14,7 +135,207 @@ const LEAGUE_PREFERRED_REGIONS: Partial<Record<string, Region[]>> = {
   'L_NA':     [Region.NORTH_AMERICA, Region.MEXICO],
 };
 
+const EUROPEAN_COACH_REGIONS = new Set<Region>([
+  Region.BALKANS,
+  Region.CZ_SK,
+  Region.IBERIA,
+  Region.SWEDEN,
+  Region.SCANDINAVIA,
+  Region.EX_USSR,
+  Region.SPAIN,
+  Region.ENGLAND,
+  Region.GERMANY,
+  Region.ITALY,
+  Region.FRANCE,
+  Region.TURKEY,
+  Region.FINLAND,
+  Region.GEORGIA,
+  Region.ARMENIA,
+  Region.ALBANIA,
+  Region.ROMANIA,
+  Region.BALTIC,
+  Region.BENELUX,
+  Region.HUNGARIAN,
+  Region.MALTESE,
+  Region.GREEK,
+  Region.AZERBAIJANI,
+  Region.KAZAKH,
+]);
+
+const getCoachExpPoints = (coach: Coach): number => Math.max(1, typeof coach.expPoints === 'number' ? coach.expPoints : 1);
+
+const randomIntInclusive = (min: number, max: number): number =>
+  min + Math.floor(Math.random() * (max - min + 1));
+
+const getInitialCoachExpForClub = (club: Pick<Club, 'reputation'>): number => {
+  if (club.reputation >= 18) return randomIntInclusive(100, 200);
+  if (club.reputation >= 15) return randomIntInclusive(75, 100);
+  if (club.reputation >= 11) return randomIntInclusive(50, 75);
+  return randomIntInclusive(1, 50);
+};
+
+const sortByCoachExp = (a: Coach, b: Coach): number =>
+  getCoachExpPoints(b) - getCoachExpPoints(a) ||
+  b.attributes.experience - a.attributes.experience ||
+  b.attributes.decisionMaking - a.attributes.decisionMaking;
+
+const isPreferredEuropeanCoach = (coach: Coach): boolean =>
+  EUROPEAN_COACH_REGIONS.has(coach.nationality as Region);
+
 export const CoachService = {
+  getDefaultContractEndDate: (hiredDate: string = DEFAULT_HIRED_DATE): string => addYears(hiredDate, DEFAULT_CONTRACT_YEARS),
+
+  calculateAnnualSalaryForClub: (club: Club, coach: Coach): number => {
+    const base = getClubSalaryBase(club) * getLeagueSalaryMultiplier(club.leagueId);
+    return roundSalary(base * coachQualityMultiplier(coach));
+  },
+
+  calculateAnnualSalaryForNationalTeam: (team: Pick<Club, 'reputation'>, coach: Coach): number => {
+    const base = getClubSalaryBase(team);
+    return roundSalary(base * 0.75 * coachQualityMultiplier(coach));
+  },
+
+  shouldRefuseContractExtension: (coach: Coach, club: Club, renewalDate: Date): boolean => {
+    if ((coach.expPoints ?? 1) <= 200) return false;
+    if (club.reputation >= 17) return false;
+
+    const renewalKey = renewalDate.toISOString().split('T')[0];
+    return stableHash(`${coach.id}|${club.id}|${renewalKey}|contract-renewal`) % 2 === 0;
+  },
+
+  findReplacementCoach: (
+    coaches: Record<string, Coach>,
+    club: Club,
+    hireDate: Date,
+    excludedCoachId?: string
+  ): Coach | undefined => {
+    const hireKey = hireDate.toISOString().split('T')[0];
+    const candidates = Object.values(coaches).filter(coach =>
+      !coach.currentClubId &&
+      coach.id !== excludedCoachId &&
+      (!coach.blacklist?.[club.id] || coach.blacklist[club.id] <= hireDate.getFullYear())
+    );
+
+    if (candidates.length === 0) return undefined;
+
+    if (club.reputation < 12) {
+      return candidates.sort((a, b) => b.attributes.experience - a.attributes.experience)[0];
+    }
+
+    const shouldSearchEurope = stableHash(`${club.id}|${hireKey}|coach-market-region`) % 100 < 99;
+    const preferredCandidates = candidates.filter(isPreferredEuropeanCoach);
+    const alternativeCandidates = candidates.filter(candidate => !isPreferredEuropeanCoach(candidate));
+    const pool = shouldSearchEurope
+      ? (preferredCandidates.length > 0 ? preferredCandidates : candidates)
+      : (alternativeCandidates.length > 0 ? alternativeCandidates : candidates);
+    const sorted = [...pool].sort(sortByCoachExp);
+
+    if (club.reputation >= 17) {
+      return sorted[0];
+    }
+
+    return sorted.find(candidate =>
+      stableHash(`${candidate.id}|${club.id}|${hireKey}|coach-hire-agreement`) % 2 === 0
+    );
+  },
+
+  normalizeCoachContract: (coach: Coach, club?: Club | null, nationalTeam?: Pick<Club, 'reputation'> | null): Coach => {
+    const hiredDate = coach.hiredDate || DEFAULT_HIRED_DATE;
+    const annualSalary = typeof coach.annualSalary === 'number' && coach.annualSalary > 0
+      ? coach.annualSalary
+      : club
+        ? CoachService.calculateAnnualSalaryForClub(club, coach)
+        : nationalTeam
+          ? CoachService.calculateAnnualSalaryForNationalTeam(nationalTeam, coach)
+          : getFallbackSalary(coach);
+
+    return {
+      ...coach,
+      hiredDate,
+      contractEndDate: coach.contractEndDate || CoachService.getDefaultContractEndDate(hiredDate),
+      annualSalary,
+      expPoints: Math.max(1, typeof coach.expPoints === 'number' ? coach.expPoints : 1),
+    };
+  },
+
+  applyMatchExpForFinishedFixtures: (
+    coaches: Record<string, Coach>,
+    clubs: Club[],
+    updatedFixtures: Fixture[],
+    previousFixtures: Fixture[],
+    userTeamId?: string | null
+  ): Record<string, Coach> => {
+    const previousById = new Map(previousFixtures.map(fixture => [fixture.id, fixture]));
+    const clubById = new Map(clubs.map(club => [club.id, club]));
+    let nextCoaches = coaches;
+
+    const applyForClub = (fixture: Fixture, clubId: string): void => {
+      const club = clubById.get(clubId);
+      if (!club?.coachId) return;
+
+      const coach = nextCoaches[club.coachId];
+      if (!coach) return;
+
+      const outcome = getFixtureOutcome(fixture, clubId);
+      if (!outcome) return;
+
+      const delta = getExpDelta(club, outcome, userTeamId);
+      if (delta === 0) return;
+
+      if (nextCoaches === coaches) nextCoaches = { ...coaches };
+      nextCoaches[coach.id] = {
+        ...coach,
+        expPoints: Math.max(1, (typeof coach.expPoints === 'number' ? coach.expPoints : 1) + delta),
+      };
+    };
+
+    updatedFixtures.forEach(fixture => {
+      const previous = previousById.get(fixture.id);
+      if (fixture.status !== MatchStatus.FINISHED || previous?.status === MatchStatus.FINISHED) return;
+      applyForClub(fixture, fixture.homeTeamId);
+      applyForClub(fixture, fixture.awayTeamId);
+    });
+
+    return nextCoaches;
+  },
+
+  applyNationalTeamExpForResults: (
+    coaches: Record<string, Coach>,
+    nationalTeams: NationalTeam[],
+    results: NTMatchResult[]
+  ): Record<string, Coach> => {
+    const teamById = new Map(nationalTeams.map(team => [team.id, team]));
+    let nextCoaches = coaches;
+
+    const applyForTeam = (result: NTMatchResult, teamId?: string): void => {
+      if (!teamId) return;
+      const team = teamById.get(teamId);
+      if (!team?.coachId) return;
+
+      const coach = nextCoaches[team.coachId];
+      if (!coach) return;
+
+      const outcome = getNationalTeamOutcome(result, team.id);
+      if (!outcome) return;
+
+      const delta = getNationalTeamExpDelta(team, outcome);
+      if (delta === 0) return;
+
+      if (nextCoaches === coaches) nextCoaches = { ...coaches };
+      nextCoaches[coach.id] = {
+        ...coach,
+        expPoints: Math.max(1, (typeof coach.expPoints === 'number' ? coach.expPoints : 1) + delta),
+      };
+    };
+
+    results.forEach(result => {
+      applyForTeam(result, result.homeTeamId);
+      applyForTeam(result, result.awayTeamId);
+    });
+
+    return nextCoaches;
+  },
+
   generateInitialCoaches: (clubs: Club[]): { coaches: Record<string, Coach>, updatedClubs: Club[] } => {
     const coaches: Record<string, Coach> = {};
     const coachList: Coach[] = [];
@@ -91,7 +412,12 @@ const updatedClubs = [...clubs];
         ? finalCandidates[Math.floor(Math.random() * finalCandidates.length)]
         : coachList.find(c => c.currentClubId === null);
           if (coach) {
+        const hiredDate = DEFAULT_HIRED_DATE;
         coach.currentClubId = club.id;
+        coach.hiredDate = hiredDate;
+        coach.contractEndDate = CoachService.getDefaultContractEndDate(hiredDate);
+        coach.annualSalary = CoachService.calculateAnnualSalaryForClub(club, coach);
+        coach.expPoints = getInitialCoachExpForClub(club);
         coach.history.push({
           clubId: club.id, clubName: club.name,
           fromYear: 2025, fromMonth: 7, toYear: null, toMonth: null
@@ -110,6 +436,10 @@ const updatedClubs = [...clubs];
         }
       }
     });
+    coachList.forEach(coach => {
+      if (!coach.contractEndDate) coach.contractEndDate = CoachService.getDefaultContractEndDate(coach.hiredDate);
+      if (!coach.annualSalary || coach.annualSalary <= 0) coach.annualSalary = getFallbackSalary(coach);
+    });
     return { coaches, updatedClubs };
   },
 
@@ -126,7 +456,10 @@ createRandomCoach: (isPolish: boolean): Coach => {
       currentClubId: null,
       currentNationalTeamId: null,
       isNationalTeamCoach: false,
-      hiredDate: new Date('2025-07-01').toISOString(), // Domyślna data startu sezonu
+      hiredDate: DEFAULT_HIRED_DATE, // Domyślna data startu sezonu
+      contractEndDate: CoachService.getDefaultContractEndDate(DEFAULT_HIRED_DATE),
+      annualSalary: 0,
+      expPoints: 1,
       blacklist: {},
       attributes: {
         experience: 20 + Math.floor(Math.random() * 75),
@@ -170,7 +503,10 @@ createRandomCoach: (isPolish: boolean): Coach => {
           currentClubId: null,
           currentNationalTeamId: null,
           isNationalTeamCoach: true,
-          hiredDate: new Date('2025-07-01').toISOString(),
+          hiredDate: DEFAULT_HIRED_DATE,
+          contractEndDate: CoachService.getDefaultContractEndDate(DEFAULT_HIRED_DATE),
+          annualSalary: 0,
+          expPoints: 1,
           blacklist: {},
           attributes: {
             experience: exp,

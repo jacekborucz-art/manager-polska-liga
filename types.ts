@@ -334,6 +334,9 @@ export interface Coach {
   currentNationalTeamId?: string | null;
   isNationalTeamCoach?: boolean;
   hiredDate: string; // ISO Date String
+  contractEndDate: string; // ISO Date String
+  annualSalary: number;    // Kwota roczna w PLN
+  expPoints: number;
    blacklist: Record<string, number>;
   favoriteTactics: {
     offensive: string;
