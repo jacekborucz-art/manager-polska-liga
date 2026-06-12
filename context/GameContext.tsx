@@ -2772,17 +2772,33 @@ if (userTeamId) {
     const finalClubs = importedClubs.some(club => club.id === UNEMPLOYED_MANAGER_CLUB_ID)
       ? importedClubs
       : [...importedClubs, UNEMPLOYED_MANAGER_CLUB];
-    const importedCoachesRaw = raw.coaches && typeof raw.coaches === 'object'
+    const hasImportedCoaches = raw.coaches && typeof raw.coaches === 'object';
+    const importedCoachesRaw = hasImportedCoaches
       ? raw.coaches as Record<string, Coach>
       : CoachService.generateInitialCoaches(finalClubs).coaches;
     const importedClubById = new Map(finalClubs.map(club => [club.id, club]));
+    const importedClubByCoachId = new Map(finalClubs
+      .filter(club => !!club.coachId)
+      .map(club => [club.coachId as string, club])
+    );
     const importedCoaches = Object.fromEntries(Object.entries(importedCoachesRaw).map(([id, coach]) => [
       id,
-      CoachService.normalizeCoachContract(
-        coach,
-        coach.currentClubId ? importedClubById.get(coach.currentClubId) ?? null : null,
-        null
-      ),
+      (() => {
+        const coachClub = coach.currentClubId
+          ? importedClubById.get(coach.currentClubId) ?? importedClubByCoachId.get(id) ?? null
+          : importedClubByCoachId.get(id) ?? null;
+        const normalizedCoach = CoachService.normalizeCoachContract(
+          coach,
+          coachClub,
+          null
+        );
+        return hasImportedCoaches && coach.expPoints === 1
+          ? {
+              ...normalizedCoach,
+              expPoints: CoachService.generateInitialExpPointsForImportedCoach(normalizedCoach, coachClub),
+            }
+          : normalizedCoach;
+      })()
     ])) as Record<string, Coach>;
     const importedStaffMembers = raw.staffMembers && typeof raw.staffMembers === 'object'
       ? raw.staffMembers as Record<string, StaffMember>
@@ -2833,9 +2849,36 @@ if (userTeamId) {
         freeAgentLockoutUntil: p.freeAgentLockoutUntil ?? null,
       } as Player);
     };
+    const normalizeFullPackPlayerDump = (source: Record<string, Player[]>): Record<string, Player[]> => {
+      const clubRepMap = new Map(finalClubs.map(club => [club.id, club.reputation ?? 5]));
+      return Object.fromEntries(Object.entries(source).map(([clubId, squad]) => [
+        clubId,
+        Array.isArray(squad)
+          ? squad.map((p: any, idx: number) => {
+              const position = p.position ?? PlayerPosition.MID;
+              const attrs = p.attributes ?? {};
+              const overall = typeof p.overallRating === 'number'
+                ? p.overallRating
+                : PlayerAttributesGenerator.calculateOverall(attrs, position);
+              return PlayerMoraleService.ensurePlayerState({
+                ...p,
+                id: typeof p.id === 'string' ? p.id : `FULLPACK_${clubId}_${idx}_${Date.now()}`,
+                clubId: typeof p.clubId === 'string' ? p.clubId : clubId,
+                position,
+                attributes: attrs,
+                overallRating: overall,
+                history: p.history ?? [],
+                boardLockoutUntil: p.boardLockoutUntil ?? null,
+                reputacja: p.reputacja ?? calcReputacja(overall, clubRepMap.get(clubId) ?? 5),
+              } as Player);
+            })
+          : []
+      ]));
+    };
+
     const hasFullPlayerDump = raw.players && typeof raw.players === 'object';
     const importedPlayers = hasFullPlayerDump
-      ? raw.players as Record<string, Player[]>
+      ? normalizeFullPackPlayerDump(raw.players as Record<string, Player[]>)
       : raw.clubs.reduce((acc: Record<string, Player[]>, clubEntry: any) => {
           const clubId = typeof clubEntry?.id === 'string' ? clubEntry.id : typeof clubEntry?.clubId === 'string' ? clubEntry.clubId : '';
           if (clubId && Array.isArray(clubEntry.players)) {

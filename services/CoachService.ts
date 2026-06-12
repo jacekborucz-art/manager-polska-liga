@@ -167,11 +167,27 @@ const getCoachExpPoints = (coach: Coach): number => Math.max(1, typeof coach.exp
 const randomIntInclusive = (min: number, max: number): number =>
   min + Math.floor(Math.random() * (max - min + 1));
 
+const getInitialCoachExpRangeForClub = (club?: Pick<Club, 'reputation'> | null): { min: number; max: number } => {
+  const reputation = club?.reputation ?? 5;
+  if (reputation >= 18) return { min: 100, max: 200 };
+  if (reputation >= 15) return { min: 75, max: 100 };
+  if (reputation >= 11) return { min: 50, max: 75 };
+  return { min: 1, max: 50 };
+};
+
 const getInitialCoachExpForClub = (club: Pick<Club, 'reputation'>): number => {
-  if (club.reputation >= 18) return randomIntInclusive(100, 200);
-  if (club.reputation >= 15) return randomIntInclusive(75, 100);
-  if (club.reputation >= 11) return randomIntInclusive(50, 75);
-  return randomIntInclusive(1, 50);
+  const range = getInitialCoachExpRangeForClub(club);
+  return randomIntInclusive(range.min, range.max);
+};
+
+const getInitialCoachExpForImportedCoach = (coach: Coach, club?: Pick<Club, 'reputation'> | null): number => {
+  const range = getInitialCoachExpRangeForClub(club);
+  const width = range.max - range.min;
+  const experience = Math.max(20, Math.min(99, coach.attributes?.experience ?? 50));
+  const experienceRatio = (experience - 20) / 79;
+  const jitter = Math.max(1, Math.round(width * 0.10));
+  const value = Math.round(range.min + width * experienceRatio) + randomIntInclusive(-jitter, jitter);
+  return Math.max(range.min, Math.min(range.max, value));
 };
 
 const sortByCoachExp = (a: Coach, b: Coach): number =>
@@ -184,6 +200,9 @@ const isPreferredEuropeanCoach = (coach: Coach): boolean =>
 
 export const CoachService = {
   getDefaultContractEndDate: (hiredDate: string = DEFAULT_HIRED_DATE): string => addYears(hiredDate, DEFAULT_CONTRACT_YEARS),
+
+  generateInitialExpPointsForImportedCoach: (coach: Coach, club?: Pick<Club, 'reputation'> | null): number =>
+    getInitialCoachExpForImportedCoach(coach, club),
 
   calculateAnnualSalaryForClub: (club: Club, coach: Coach): number => {
     const base = getClubSalaryBase(club) * getLeagueSalaryMultiplier(club.leagueId);
