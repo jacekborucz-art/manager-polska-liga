@@ -15,10 +15,86 @@ import { PendingNegotiation } from '@/types';
 import { AiScoutingService } from './AiScoutingService';
 import { buildMatchPressureContext } from './MatchPressureService';
 import { SeasonTransitionService } from './SeasonTransitionService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
   return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
+const clampAiMatchMoraleDelta = (delta: number): number => Math.max(-10, Math.min(10, delta));
+
+const applyAiMatchMoraleToClub = (
+  playersMap: Record<string, Player[]>,
+  clubId: string,
+  initialSquad: Player[],
+  playedPlayerIds: string[],
+  scorers: { playerId: string; assistId?: string; isMiss?: boolean }[],
+  cards: { playerId: string; type: MatchEventType }[],
+  ratings: Record<string, number>,
+  resultChar: 'W' | 'R' | 'P',
+  scoreDiff: number,
+  coach: Coach,
+  currentDate: Date
+): Record<string, Player[]> => {
+  const squad = playersMap[clubId] || [];
+  if (squad.length === 0) return playersMap;
+
+  const playedIds = new Set(playedPlayerIds.filter(id => initialSquad.some(player => player.id === id)));
+  const motivation = coach?.attributes?.motivation ?? 50;
+  const motivationModifier = Math.max(-2, Math.min(2, Math.round((motivation - 50) / 25)));
+  const baseDelta = resultChar === 'W'
+    ? (scoreDiff >= 2 ? 5 : 3)
+    : resultChar === 'P'
+      ? (scoreDiff <= -3 ? -6 : -3)
+      : 0;
+  const teamDelta = baseDelta === 0
+    ? Math.round(motivationModifier * 0.35)
+    : baseDelta + motivationModifier;
+
+  const nextSquad = squad.map(player => {
+    const withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const played = playedIds.has(player.id);
+    const rating = ratings[player.id];
+    const goals = scorers.filter(goal => goal.playerId === player.id && !goal.isMiss).length;
+    const missedPenalties = scorers.filter(goal => goal.playerId === player.id && goal.isMiss).length;
+    const assists = scorers.filter(goal => goal.assistId === player.id && !goal.isMiss).length;
+    const playerCards = cards.filter(card => card.playerId === player.id);
+    const yellowCards = playerCards.filter(card => card.type === MatchEventType.YELLOW_CARD).length;
+    const redCards = playerCards.filter(card => card.type === MatchEventType.RED_CARD).length;
+
+    let delta = played ? teamDelta : Math.round(teamDelta * 0.35);
+
+    if (typeof rating === 'number') {
+      if (rating >= 8.0) delta += 3;
+      else if (rating >= 7.0) delta += 1;
+      else if (rating <= 4.5) delta -= 4;
+      else if (rating <= 5.5) delta -= 2;
+    }
+
+    delta += goals * 3;
+    delta += assists * 2;
+    delta -= missedPenalties * 3;
+    delta -= yellowCards;
+    delta -= redCards * 4;
+
+    if (!played && player.squadRole === 'KEY_PLAYER') delta -= 2;
+    else if (!played && player.squadRole === 'STARTER') delta -= 1;
+
+    delta = clampAiMatchMoraleDelta(delta);
+    const reason = resultChar === 'W'
+      ? 'Mecz AI: zwycięstwo i występ zawodnika'
+      : resultChar === 'P'
+        ? 'Mecz AI: porażka i występ zawodnika'
+        : 'Mecz AI: remis i występ zawodnika';
+
+    return PlayerMoraleService.withMoraleChange(withMorale, delta, reason, currentDate);
+  });
+
+  return {
+    ...playersMap,
+    [clubId]: nextSquad,
+  };
 };
 
 const ensureEmergencyGoalkeepers = (
@@ -599,6 +675,35 @@ if (todayFixtures.length === 0) {
       result.cards.forEach(card => {
         currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type);
       });
+
+      const homeResultChar: 'W' | 'R' | 'P' = result.homeScore > result.awayScore ? 'W' : result.homeScore === result.awayScore ? 'R' : 'P';
+      const awayResultChar: 'W' | 'R' | 'P' = result.awayScore > result.homeScore ? 'W' : result.homeScore === result.awayScore ? 'R' : 'P';
+      currentPlayers = applyAiMatchMoraleToClub(
+        currentPlayers,
+        home.id,
+        hPlayers,
+        result.playedPlayerIds,
+        result.scorers,
+        result.cards,
+        result.ratings,
+        homeResultChar,
+        result.homeScore - result.awayScore,
+        hCoach as Coach,
+        currentDate
+      );
+      currentPlayers = applyAiMatchMoraleToClub(
+        currentPlayers,
+        away.id,
+        aPlayers,
+        result.playedPlayerIds,
+        result.scorers,
+        result.cards,
+        result.ratings,
+        awayResultChar,
+        result.awayScore - result.homeScore,
+        aCoach as Coach,
+        currentDate
+      );
 
       if (result.awayScore === 0) {
         const homeGKs = hPlayers.filter(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id)).map(p => p.id);

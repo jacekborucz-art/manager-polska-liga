@@ -501,10 +501,22 @@ export const PlayerMoraleService = {
   clamp: (morale: number): number => Math.max(0, Math.min(100, Math.round(morale))),
 
   getInitialMorale: (player: Pick<Player, 'id' | 'age' | 'attributes'>): number => {
-    const base = 52 + Math.round(((player.attributes.mentality ?? 50) - 50) * 0.10);
-    const ageBonus = player.age <= 21 ? 3 : player.age >= 31 ? 1 : 0;
-    const variation = Math.floor(seededRng(stableHash(player.id), 3) * 17) - 6;
-    return PlayerMoraleService.clamp(base + ageBonus + variation);
+    const seed = stableHash(player.id);
+    const mentality = player.attributes.mentality ?? 50;
+    const ageBias = player.age <= 21 ? 0.04 : player.age >= 31 ? 0.02 : 0;
+    const mentalityBias = (mentality - 50) / 500;
+    const roll = Math.max(0, Math.min(0.999, seededRng(seed, 3) + ageBias + mentalityBias));
+    const stars = roll < 0.16 ? 1 : roll < 0.36 ? 2 : roll < 0.66 ? 3 : roll < 0.88 ? 4 : 5;
+    const ranges: Record<number, [number, number]> = {
+      1: [10, 20],
+      2: [25, 35],
+      3: [45, 64],
+      4: [68, 79],
+      5: [84, 95],
+    };
+    const [min, max] = ranges[stars] ?? ranges[3];
+    const variation = Math.floor(seededRng(seed, 11) * (max - min + 1));
+    return PlayerMoraleService.clamp(min + variation);
   },
 
   getInitialPersonality: (player: Pick<Player, 'id' | 'attributes'>): PlayerMoralePersonality => {
