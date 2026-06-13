@@ -24,6 +24,7 @@ import { RefereeService } from './RefereeService';
 import { TacticRepository } from '../resources/tactics_db';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { KitSelectionService } from './KitSelectionService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 export interface NationalTeamMatchDaySimulation {
   results: NTMatchResult[];
@@ -127,6 +128,7 @@ const fallbackCoach = (teamId: string): Coach => ({
 });
 
 const activePlayers = (lt: LiveTeam) => lt.activeXI.map(id => lt.squad.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+const moraleMul = (p: Player): number => PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(p));
 const slotIndex = (lt: LiveTeam, playerId: string) => lt.activeXI.findIndex(id => id === playerId);
 const slotRole = (lt: LiveTeam, playerId: string) => {
   const idx = slotIndex(lt, playerId);
@@ -152,18 +154,19 @@ const metrics = (lt: LiveTeam): Metrics => {
   act.forEach(p => {
     const f = lt.fatigue[p.id] ?? p.condition ?? 100;
     const m = fatMul(f);
+    const morale = moraleMul(p);
     const role = slotRole(lt, p.id);
     const ra = role === PlayerPosition.FWD ? 1.2 : role === PlayerPosition.MID ? 1.0 : role === PlayerPosition.DEF ? 0.72 : 0.18;
     const rd = role === PlayerPosition.DEF ? 1.2 : role === PlayerPosition.MID ? 0.96 : role === PlayerPosition.FWD ? 0.62 : 0.4;
     const rm = role === PlayerPosition.MID ? 1.18 : role === PlayerPosition.DEF ? 0.82 : role === PlayerPosition.FWD ? 0.88 : 0.25;
-    att += (p.attributes.attacking * 0.19 + p.attributes.finishing * 0.23 + p.attributes.positioning * 0.14 + p.attributes.technique * 0.11 + p.attributes.dribbling * 0.1 + p.attributes.pace * 0.08 + p.attributes.heading * 0.07 + p.attributes.passing * 0.04 + p.attributes.vision * 0.04) * m * ra;
-    build += (p.attributes.passing * 0.2 + p.attributes.vision * 0.18 + p.attributes.technique * 0.16 + p.attributes.dribbling * 0.1 + p.attributes.workRate * 0.11 + p.attributes.stamina * 0.08 + p.attributes.crossing * 0.08 + p.attributes.mentality * 0.09) * m * rm;
-    create += (p.attributes.vision * 0.2 + p.attributes.technique * 0.17 + p.attributes.passing * 0.16 + p.attributes.dribbling * 0.13 + p.attributes.attacking * 0.09 + p.attributes.crossing * 0.1 + p.attributes.mentality * 0.08 + p.attributes.workRate * 0.07) * m * rm;
-    def += (p.attributes.defending * 0.24 + p.attributes.positioning * 0.18 + p.attributes.strength * 0.11 + p.attributes.stamina * 0.1 + p.attributes.heading * 0.08 + p.attributes.pace * 0.08 + p.attributes.aggression * 0.08 + p.attributes.mentality * 0.08 + p.attributes.workRate * 0.05) * m * rd;
-    press += (p.attributes.workRate * 0.22 + p.attributes.stamina * 0.18 + p.attributes.aggression * 0.17 + p.attributes.pace * 0.14 + p.attributes.mentality * 0.13 + p.attributes.leadership * 0.08 + p.attributes.strength * 0.08) * m;
-    if (role === PlayerPosition.GK || p.position === PlayerPosition.GK) gk += (p.attributes.goalkeeping * 0.62 + p.attributes.positioning * 0.18 + p.attributes.mentality * 0.1 + p.attributes.passing * 0.1) * m;
-    ment += (p.attributes.mentality * 0.58 + p.attributes.leadership * 0.22 + p.attributes.workRate * 0.2) * m;
-    aggr += p.attributes.aggression * m;
+    att += (p.attributes.attacking * 0.19 + p.attributes.finishing * 0.23 + p.attributes.positioning * 0.14 + p.attributes.technique * 0.11 + p.attributes.dribbling * 0.1 + p.attributes.pace * 0.08 + p.attributes.heading * 0.07 + p.attributes.passing * 0.04 + p.attributes.vision * 0.04) * m * morale * ra;
+    build += (p.attributes.passing * 0.2 + p.attributes.vision * 0.18 + p.attributes.technique * 0.16 + p.attributes.dribbling * 0.1 + p.attributes.workRate * 0.11 + p.attributes.stamina * 0.08 + p.attributes.crossing * 0.08 + p.attributes.mentality * 0.09) * m * morale * rm;
+    create += (p.attributes.vision * 0.2 + p.attributes.technique * 0.17 + p.attributes.passing * 0.16 + p.attributes.dribbling * 0.13 + p.attributes.attacking * 0.09 + p.attributes.crossing * 0.1 + p.attributes.mentality * 0.08 + p.attributes.workRate * 0.07) * m * morale * rm;
+    def += (p.attributes.defending * 0.24 + p.attributes.positioning * 0.18 + p.attributes.strength * 0.11 + p.attributes.stamina * 0.1 + p.attributes.heading * 0.08 + p.attributes.pace * 0.08 + p.attributes.aggression * 0.08 + p.attributes.mentality * 0.08 + p.attributes.workRate * 0.05) * m * morale * rd;
+    press += (p.attributes.workRate * 0.22 + p.attributes.stamina * 0.18 + p.attributes.aggression * 0.17 + p.attributes.pace * 0.14 + p.attributes.mentality * 0.13 + p.attributes.leadership * 0.08 + p.attributes.strength * 0.08) * m * morale;
+    if (role === PlayerPosition.GK || p.position === PlayerPosition.GK) gk += (p.attributes.goalkeeping * 0.62 + p.attributes.positioning * 0.18 + p.attributes.mentality * 0.1 + p.attributes.passing * 0.1) * m * morale;
+    ment += (p.attributes.mentality * 0.58 + p.attributes.leadership * 0.22 + p.attributes.workRate * 0.2) * m * morale;
+    aggr += p.attributes.aggression * m * morale;
     fat += f;
   });
   const missingPlayers = Math.max(0, 11 - act.length);
@@ -199,19 +202,19 @@ const goalEntry = (scorer: Player, teamId: string, minute: number, isPenalty: bo
 const pickCreator = (lt: LiveTeam, rng: Rng) => weighted(activePlayers(lt).filter(p => p.position !== PlayerPosition.GK), rng, p => {
   const role = slotRole(lt, p.id);
   const rb = role === PlayerPosition.MID ? 1.18 : role === PlayerPosition.FWD ? 1.08 : 0.9;
-  return (p.attributes.passing * 1.45 + p.attributes.vision * 1.4 + p.attributes.technique * 1.25 + p.attributes.dribbling * 0.95 + p.attributes.crossing * 0.82 + p.attributes.attacking * 0.7 + p.attributes.workRate * 0.45) * fatMul(lt.fatigue[p.id] ?? 100) * rb;
+  return (p.attributes.passing * 1.45 + p.attributes.vision * 1.4 + p.attributes.technique * 1.25 + p.attributes.dribbling * 0.95 + p.attributes.crossing * 0.82 + p.attributes.attacking * 0.7 + p.attributes.workRate * 0.45) * fatMul(lt.fatigue[p.id] ?? 100) * moraleMul(p) * rb;
 });
 const pickShooter = (lt: LiveTeam, rng: Rng) => weighted(activePlayers(lt).filter(p => p.position !== PlayerPosition.GK), rng, p => {
   const role = slotRole(lt, p.id);
   const rb = role === PlayerPosition.FWD ? 1.22 : role === PlayerPosition.MID ? 0.95 : 0.7;
-  return (p.attributes.finishing * 1.65 + p.attributes.attacking * 1.35 + p.attributes.positioning * 1.15 + p.attributes.technique * 0.9 + p.attributes.heading * 0.7 + p.attributes.pace * 0.55 + p.attributes.mentality * 0.45) * fatMul(lt.fatigue[p.id] ?? 100) * rb;
+  return (p.attributes.finishing * 1.65 + p.attributes.attacking * 1.35 + p.attributes.positioning * 1.15 + p.attributes.technique * 0.9 + p.attributes.heading * 0.7 + p.attributes.pace * 0.55 + p.attributes.mentality * 0.45) * fatMul(lt.fatigue[p.id] ?? 100) * moraleMul(p) * rb;
 });
-const pickDefender = (lt: LiveTeam, rng: Rng) => weighted(activePlayers(lt).filter(p => p.position !== PlayerPosition.GK), rng, p => (p.attributes.defending * 1.45 + p.attributes.positioning * 1.2 + p.attributes.strength * 0.8 + p.attributes.pace * 0.72 + p.attributes.aggression * 0.68 + p.attributes.heading * 0.55 + p.attributes.mentality * 0.55) * fatMul(lt.fatigue[p.id] ?? 100));
+const pickDefender = (lt: LiveTeam, rng: Rng) => weighted(activePlayers(lt).filter(p => p.position !== PlayerPosition.GK), rng, p => (p.attributes.defending * 1.45 + p.attributes.positioning * 1.2 + p.attributes.strength * 0.8 + p.attributes.pace * 0.72 + p.attributes.aggression * 0.68 + p.attributes.heading * 0.55 + p.attributes.mentality * 0.55) * fatMul(lt.fatigue[p.id] ?? 100) * moraleMul(p));
 const pickKeeper = (lt: LiveTeam) => lt.squad.find(p => p.id === lt.activeXI[0]) ?? null;
 const pickPenalty = (lt: LiveTeam, rng: Rng) => {
   const act = activePlayers(lt).filter(p => p.position !== PlayerPosition.GK);
   const fixed = lt.penaltyTakerId ? act.find(p => p.id === lt.penaltyTakerId) ?? null : null;
-  return fixed ?? weighted(act, rng, p => (p.attributes.penalties * 2.2 + p.attributes.finishing * 1.1 + p.attributes.technique * 0.9 + p.attributes.mentality * 0.8) * fatMul(lt.fatigue[p.id] ?? 100));
+  return fixed ?? weighted(act, rng, p => (p.attributes.penalties * 2.2 + p.attributes.finishing * 1.1 + p.attributes.technique * 0.9 + p.attributes.mentality * 0.8) * fatMul(lt.fatigue[p.id] ?? 100) * moraleMul(p));
 };
 
 const removeFromPitch = (lt: LiveTeam, playerId: string) => { lt.activeXI = lt.activeXI.map(id => id === playerId ? null : id); };
@@ -371,8 +374,9 @@ const maybeCardOrPenalty = (att: LiveTeam, def: LiveTeam, minute: number, weathe
   const defenderFatigue = def.fatigue[defender.id] ?? 100;
   const defTrailing = def.side === 'HOME' ? homeRef.value < awayRef.value : awayRef.value < homeRef.value;
   const lateChasing = defTrailing && minute >= 65;
-  const creatorCtl = creator.attributes.dribbling * 1.12 + creator.attributes.technique * 1.02 + creator.attributes.pace * 0.82 + creator.attributes.attacking * 0.7 + creator.attributes.mentality * 0.45;
-  const defenderCtl = defender.attributes.defending * 1.1 + defender.attributes.positioning * 0.95 + defender.attributes.aggression * 0.42 + defender.attributes.strength * 0.58 + defender.attributes.mentality * 0.44;
+  const creatorCtl = (creator.attributes.dribbling * 1.12 + creator.attributes.technique * 1.02 + creator.attributes.pace * 0.82 + creator.attributes.attacking * 0.7 + creator.attributes.mentality * 0.45) * moraleMul(creator);
+  const defenderMorale = moraleMul(defender);
+  const defenderCtl = (defender.attributes.defending * 1.1 + defender.attributes.positioning * 0.95 + defender.attributes.aggression * 0.42 + defender.attributes.strength * 0.58 + defender.attributes.mentality * 0.44) * defenderMorale;
   const alreadyBooked = (def.yellows[defender.id] ?? 0) > 0;
   const duelEdge = clamp((creatorCtl - defenderCtl) / 180, -0.18, 0.32);
   const fatigueRisk = clamp((72 - defenderFatigue) / 90, 0, 0.32);
@@ -380,6 +384,7 @@ const maybeCardOrPenalty = (att: LiveTeam, def: LiveTeam, minute: number, weathe
     (defender.attributes.aggression / 100) * 0.36 +
     ((100 - defender.attributes.mentality) / 100) * 0.24 +
     ((100 - defender.attributes.defending) / 100) * 0.08 +
+    Math.max(0, 1 - defenderMorale) * 0.18 +
     fatigueRisk +
     weatherInt * 0.1 +
     (lateChasing ? 0.06 : 0),
@@ -438,7 +443,7 @@ const maybeCardOrPenalty = (att: LiveTeam, def: LiveTeam, minute: number, weathe
   const keeper = pickKeeper(def);
   if (!taker || !keeper) return;
   if (rng.next() > shortHandedGoalChance(att.sentOff.size)) return;
-  const scoreChance = clamp(0.63 + ((taker.attributes.penalties * 1.6 + taker.attributes.finishing * 0.8 + taker.attributes.mentality * 0.7 + taker.attributes.technique * 0.55) - (keeper.attributes.goalkeeping * 1.42 + keeper.attributes.positioning * 0.82 + keeper.attributes.mentality * 0.56)) / 360 + (att.side === 'HOME' ? 0.02 : 0) - weatherInt * 0.03, 0.48, 0.9);
+  const scoreChance = clamp(0.63 + (((taker.attributes.penalties * 1.6 + taker.attributes.finishing * 0.8 + taker.attributes.mentality * 0.7 + taker.attributes.technique * 0.55) * moraleMul(taker)) - ((keeper.attributes.goalkeeping * 1.42 + keeper.attributes.positioning * 0.82 + keeper.attributes.mentality * 0.56) * moraleMul(keeper))) / 360 + (att.side === 'HOME' ? 0.02 : 0) - weatherInt * 0.03, 0.12, 0.9);
   eventPush(timeline, minute, att.side, MatchEventType.PENALTY_AWARDED, `Penalty for ${att.team.name}`, taker.id, defender.id);
   if (rng.next() < scoreChance) {
     goals.push(goalEntry(taker, att.team.id, minute, true));
@@ -455,8 +460,8 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   const defender = pickDefender(def, rng);
   const keeper = pickKeeper(def);
   if (!creator || !shooter || !defender || !keeper) return;
-  const prog = creator.attributes.passing * 0.78 + creator.attributes.vision * 0.74 + creator.attributes.technique * 0.64 + creator.attributes.dribbling * 0.58 + attM.build * 0.018 + attM.create * 0.016 + (att.coach?.attributes.decisionMaking ?? 50) * 0.18;
-  const disrupt = defender.attributes.defending * 0.72 + defender.attributes.positioning * 0.68 + defender.attributes.pace * 0.42 + defM.def * 0.02 + defM.press * 0.01 + (def.coach?.attributes.decisionMaking ?? 50) * 0.16;
+  const prog = (creator.attributes.passing * 0.78 + creator.attributes.vision * 0.74 + creator.attributes.technique * 0.64 + creator.attributes.dribbling * 0.58) * moraleMul(creator) + attM.build * 0.018 + attM.create * 0.016 + (att.coach?.attributes.decisionMaking ?? 50) * 0.18;
+  const disrupt = (defender.attributes.defending * 0.72 + defender.attributes.positioning * 0.68 + defender.attributes.pace * 0.42) * moraleMul(defender) + defM.def * 0.02 + defM.press * 0.01 + (def.coach?.attributes.decisionMaking ?? 50) * 0.16;
   const numbersAdvantage = def.sentOff.size - att.sentOff.size;
   const overallAtt = attM.att + attM.build + attM.create + attM.def + attM.press;
   const overallDef = defM.att + defM.build + defM.create + defM.def + defM.press;
@@ -464,8 +469,8 @@ const maybeGoal = (att: LiveTeam, def: LiveTeam, minute: number, weatherInt: num
   const attackShortHanded = shortHandedGoalChance(att.sentOff.size);
   const phaseChance = clamp(0.14 + (prog - disrupt) / 980 + (att.side === 'HOME' ? 0.015 : 0) - weatherInt * 0.025, 0.07, 0.28) * att.redCardPenalty * attackShortHanded + Math.max(0, numbersAdvantage) * 0.03 * dominanceFactor;
   if (rng.next() >= phaseChance) return;
-  const shot = shooter.attributes.finishing * 0.92 + shooter.attributes.attacking * 0.75 + shooter.attributes.positioning * 0.65 + shooter.attributes.technique * 0.56 + shooter.attributes.heading * 0.26 + creator.attributes.vision * 0.18 + creator.attributes.passing * 0.18 + attM.att * 0.022 + attM.create * 0.015 + (att.coach?.attributes.motivation ?? 50) * 0.18;
-  const prev = keeper.attributes.goalkeeping * 0.94 + keeper.attributes.positioning * 0.58 + defM.def * 0.022 + defender.attributes.defending * 0.32 + defender.attributes.positioning * 0.22 + weatherInt * 4;
+  const shot = (shooter.attributes.finishing * 0.92 + shooter.attributes.attacking * 0.75 + shooter.attributes.positioning * 0.65 + shooter.attributes.technique * 0.56 + shooter.attributes.heading * 0.26) * moraleMul(shooter) + (creator.attributes.vision * 0.18 + creator.attributes.passing * 0.18) * moraleMul(creator) + attM.att * 0.022 + attM.create * 0.015 + (att.coach?.attributes.motivation ?? 50) * 0.18;
+  const prev = (keeper.attributes.goalkeeping * 0.94 + keeper.attributes.positioning * 0.58) * moraleMul(keeper) + defM.def * 0.022 + (defender.attributes.defending * 0.32 + defender.attributes.positioning * 0.22) * moraleMul(defender) + weatherInt * 4;
   const onTarget = clamp(0.2 + (shot - prev) / 920 + Math.max(0, 100 - (att.fatigue[shooter.id] ?? 100)) * -0.001 - weatherInt * 0.035, 0.1, 0.42);
   if (rng.next() >= onTarget) return;
   const goalChance = clamp(0.1 + (shot - prev) / 760 + (att.side === 'HOME' ? 0.01 : 0) - weatherInt * 0.02, 0.05, 0.24) * att.redCardPenalty * attackShortHanded + Math.max(0, numbersAdvantage) * 0.04 * dominanceFactor;

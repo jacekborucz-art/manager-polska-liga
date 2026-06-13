@@ -189,7 +189,7 @@ export const LineupService = {
     const attr = player.attributes;
     const isGkPlayer = player.position === PlayerPosition.GK;
     const isGkRole = role === PlayerPosition.GK;
-    const moraleFit = (PlayerMoraleService.getMatchMultiplier(PlayerMoraleService.ensurePlayerState(player)) - 1) * 8;
+    const moraleFit = (PlayerMoraleService.getLineupReadinessMultiplier(PlayerMoraleService.ensurePlayerState(player)) - 1) * 45;
     const positionFitBonus = PlayerPositionFitService.getFitScoreBonus(player, role, options.useSecondaryPositions ?? false);
 
     if ((isGkPlayer && !isGkRole) || (!isGkPlayer && isGkRole)) {

@@ -1,6 +1,7 @@
 import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, SubstitutionRecord, InjurySeverity, Coach } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService } from './LineupService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 const MAX_LEAGUE_SUBS = 5;
 
@@ -50,10 +51,21 @@ const getPlayer = (players: Player[], id: string | null): Player | null => {
   return players.find(p => p.id === id) ?? null;
 };
 
+const getReadinessOverall = (player: Player): number =>
+  PlayerMoraleService.getEffectiveOverall(PlayerMoraleService.ensurePlayerState(player));
+
+const getReadinessMultiplier = (player: Player): number =>
+  PlayerMoraleService.getLineupReadinessMultiplier(PlayerMoraleService.ensurePlayerState(player));
+
 const getEmergencyFieldScore = (player: Player, role: PlayerPosition): number => {
   if (player.position !== PlayerPosition.GK) return LineupService.calculateFitScore(player, role);
   if (role === PlayerPosition.GK) return LineupService.calculateFitScore(player, role);
-  return player.overallRating * 0.35 + player.attributes.positioning * 0.25 + player.attributes.strength * 0.2 + player.attributes.mentality * 0.2;
+  return (
+    player.overallRating * 0.35 +
+    player.attributes.positioning * 0.25 +
+    player.attributes.strength * 0.2 +
+    player.attributes.mentality * 0.2
+  ) * getReadinessMultiplier(player);
 };
 
 const getLineupFitScore = (lineupIds: (string | null)[], tacticId: string, players: Player[]): number => {
@@ -70,8 +82,8 @@ const pickBestFieldPlayerForGoal = (lineup: Lineup, players: Player[]): { player
     .map((id, index) => ({ id, index, player: getPlayer(players, id) }))
     .filter((entry): entry is { id: string; index: number; player: Player } => entry.index !== 0 && !!entry.player)
     .sort((a, b) => {
-      const scoreA = a.player.attributes.positioning + a.player.attributes.strength + a.player.attributes.mentality * 0.6;
-      const scoreB = b.player.attributes.positioning + b.player.attributes.strength + b.player.attributes.mentality * 0.6;
+      const scoreA = (a.player.attributes.positioning + a.player.attributes.strength + a.player.attributes.mentality * 0.6) * getReadinessMultiplier(a.player);
+      const scoreB = (b.player.attributes.positioning + b.player.attributes.strength + b.player.attributes.mentality * 0.6) * getReadinessMultiplier(b.player);
       return scoreB - scoreA;
     });
   return candidates.length > 0 ? { player: candidates[0].player, index: candidates[0].index } : null;
@@ -272,7 +284,7 @@ const getLineupAverageRating = (lineupIds: (string | null)[], players: Player[])
     .filter((p): p is Player => !!p);
 
   if (activePlayers.length === 0) return 60;
-  return activePlayers.reduce((sum, player) => sum + player.overallRating, 0) / activePlayers.length;
+  return activePlayers.reduce((sum, player) => sum + getReadinessOverall(player), 0) / activePlayers.length;
 };
 
 const assessHalftimeStatus = (
@@ -793,7 +805,7 @@ export const AiMatchDecisionService = {
       const benchPool = getAvailableBench(newLineup, myPlayers, mySubsHistory);
       const bestGkOnBench = benchPool
         .filter(p => p.position === PlayerPosition.GK)
-        .sort((a, b) => b.overallRating - a.overallRating)[0];
+        .sort((a, b) => getReadinessOverall(b) - getReadinessOverall(a))[0];
 
       if (bestGkOnBench && currentSubsCount < MAX_LEAGUE_SUBS) {
         let fieldPlayerIdx = -1;
@@ -841,7 +853,7 @@ export const AiMatchDecisionService = {
         if (newSubsCount < MAX_LEAGUE_SUBS) {
           const bestDefOnBench = getAvailableBench(newLineup, myPlayers, mySubsHistory)
             .filter(p => p.position === PlayerPosition.DEF)
-            .sort((a, b) => b.overallRating - a.overallRating)[0];
+            .sort((a, b) => getReadinessOverall(b) - getReadinessOverall(a))[0];
 
           if (bestDefOnBench) {
             let sacrificeIdx = -1;
@@ -870,7 +882,10 @@ export const AiMatchDecisionService = {
             .filter((item): item is { id: string; idx: number; player: Player } =>
               !!item.player && tactic.slots[item.idx].role !== PlayerPosition.DEF && tactic.slots[item.idx].role !== PlayerPosition.GK
             )
-            .sort((a, b) => b.player.attributes.defending - a.player.attributes.defending)[0];
+            .sort((a, b) =>
+              (b.player.attributes.defending * getReadinessMultiplier(b.player)) -
+              (a.player.attributes.defending * getReadinessMultiplier(a.player))
+            )[0];
 
           if (bestInternalCover) {
             newLineup.startingXI[emptyDefIdx] = bestInternalCover.id;
@@ -1183,7 +1198,7 @@ export const AiMatchDecisionService = {
             .filter((id): id is string => id !== null)
             .map(id => getPlayer(myPlayers, id))
             .filter((p): p is Player => !!p)
-            .sort((a, b) => a.overallRating - b.overallRating);
+            .sort((a, b) => getReadinessOverall(a) - getReadinessOverall(b));
 
           if (fieldPlayers.length > 0) {
             playerOutId = fieldPlayers[0].id;

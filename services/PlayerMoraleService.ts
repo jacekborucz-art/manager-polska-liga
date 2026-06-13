@@ -1097,8 +1097,26 @@ export const PlayerMoraleService = {
     return 1.06;
   },
 
+  getMatchContributionMultiplier: (player: Player): number => {
+    const morale = player.morale ?? 50;
+    if (morale <= 19) return 0.22;
+    if (morale <= 39) return 0.55;
+    if (morale <= 59) return 1.00;
+    if (morale <= 79) return 1.18;
+    return 1.35;
+  },
+
+  getLineupReadinessMultiplier: (player: Player): number => {
+    const morale = player.morale ?? 50;
+    if (morale <= 19) return 0.80;
+    if (morale <= 39) return 0.92;
+    if (morale <= 59) return 1.00;
+    if (morale <= 79) return 1.06;
+    return 1.12;
+  },
+
   getEffectiveOverall: (player: Player): number =>
-    Math.round(player.overallRating * PlayerMoraleService.getMatchMultiplier(player)),
+    Math.round(player.overallRating * PlayerMoraleService.getLineupReadinessMultiplier(player)),
 
   applyNaturalDrift: (player: Player): Player => {
     const morale = player.morale ?? PlayerMoraleService.getInitialMorale(player);

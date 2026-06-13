@@ -1,6 +1,7 @@
 
 import { Club, Player, PlayerPosition, Lineup, HealthStatus, Coach } from '../types';
 import { LineupService } from './LineupService';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 export const AiMatchPreparationService = {
 
@@ -85,11 +86,15 @@ determineBestStartingTactic: (club: Club, players: Player[]): string => {
   calculateTopLineStrength: (players: Player[], pos: PlayerPosition, topN: number): number => {
     const linePlayers = players
       .filter(p => p.position === pos)
-      .sort((a, b) => b.overallRating - a.overallRating)
+      .sort((a, b) =>
+        PlayerMoraleService.getEffectiveOverall(PlayerMoraleService.ensurePlayerState(b)) -
+        PlayerMoraleService.getEffectiveOverall(PlayerMoraleService.ensurePlayerState(a))
+      )
       .slice(0, topN);
 
     if (linePlayers.length === 0) return 0;
-    const total = linePlayers.reduce((sum, p) => sum + p.overallRating, 0);
+    const total = linePlayers.reduce((sum, p) =>
+      sum + PlayerMoraleService.getEffectiveOverall(PlayerMoraleService.ensurePlayerState(p)), 0);
     return total / linePlayers.length;
   }
 };

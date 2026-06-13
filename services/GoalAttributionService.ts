@@ -1,5 +1,6 @@
 
 import { Player, PlayerPosition } from '../types';
+import { PlayerMoraleService } from './PlayerMoraleService';
 
 export const GoalAttributionService = {
   /**
@@ -18,8 +19,10 @@ export const GoalAttributionService = {
       const f = Math.max(0, Math.min(100, fatigue)) / 100;
       return Math.max(0.45, 1.0 - Math.pow(1 - f, 2) * 0.55);
     };
-    const attMod = progressiveMod(scorerLiveFatigue) * scorerFitMod;
-    const gkMod  = progressiveMod(gkLiveFatigue)    * gkFitMod;
+    const attMoraleMod = PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(attacker));
+    const gkMoraleMod = PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(goalkeeper));
+    const attMod = progressiveMod(scorerLiveFatigue) * scorerFitMod * attMoraleMod;
+    const gkMod  = progressiveMod(gkLiveFatigue)    * gkFitMod * gkMoraleMod;
 
     if (isPenalty) {
       // 5% szansa na dramatyczne pudło niezależnie od statystyk (słupek, nad bramką)
@@ -30,7 +33,7 @@ export const GoalAttributionService = {
       const keeperScore = (goalkeeper.attributes.goalkeeping * 0.50 + goalkeeper.attributes.defending * 0.20 + goalkeeper.attributes.mentality * 0.30) * gkMod;
       // Baza ~76% (real-world skuteczność karnych), zakres 50%–95%
       const statInfluence = (attackerScore - keeperScore) / 200;
-      return rng() < Math.max(0.50, Math.min(0.95, 0.76 + statInfluence));
+      return rng() < Math.max(0.12, Math.min(0.95, 0.76 + statInfluence));
     }
 
     // 2. Standardowa siła ataku
@@ -51,7 +54,8 @@ export const GoalAttributionService = {
     const avgDef = topDefenders.length > 0 
       ? topDefenders.reduce((acc, d) => {
           const defFatigue = defFatigueMap[d.id] ?? 100;
-          return acc + d.attributes.defending * progressiveMod(defFatigue);
+          const defMoraleMod = PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(d));
+          return acc + d.attributes.defending * progressiveMod(defFatigue) * defMoraleMod;
         }, 0) / topDefenders.length
       : 0;
 
@@ -108,8 +112,9 @@ export const GoalAttributionService = {
         formMod = 1.0 - Math.min(0.15, (6.5 - avgRating) * 0.10);
       }
       w *= formMod;
+      w *= PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(p));
 
-      return Math.max(0.05, w);
+      return Math.max(0.01, w);
     });
 
     return GoalAttributionService.weightedRandom(candidates, weights, rng);
@@ -129,7 +134,8 @@ export const GoalAttributionService = {
         case PlayerPosition.GK: w = 0.1; break;
       }
       w *= (p.attributes.passing / 50) * (p.attributes.vision / 50) * Math.pow(p.attributes.crossing / 50, 0.5);
-      return Math.max(0.05, w);
+      w *= PlayerMoraleService.getMatchContributionMultiplier(PlayerMoraleService.ensurePlayerState(p));
+      return Math.max(0.01, w);
     });
 
     return GoalAttributionService.weightedRandom(candidates, weights, rng);

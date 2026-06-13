@@ -1520,6 +1520,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
   const startNewGame = () => {
     const startYear = 2025;
+    const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     setIsResigned(false);
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
@@ -1532,7 +1533,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
    
 
 
- const initialFreeAgents = FreeAgentService.generatePool(99);
+ const initialFreeAgents = withMoraleState(FreeAgentService.generatePool(99));
     setPlayers(prev => ({ ...prev, 'FREE_AGENTS': initialFreeAgents }));
 
 
@@ -1545,31 +1546,31 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const europeanPlayers: Record<string, Player[]> = {};
     RAW_CHAMPIONS_LEAGUE_CLUBS.forEach(club => {
       const clubId = generateEuropeanClubId(club.name);
-            europeanPlayers[clubId] = SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country);
+            europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
     });
     RAW_EUROPA_LEAGUE_CLUBS.forEach(club => {
       const clubId = generateELClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
     });
     RAW_CONFERENCE_LEAGUE_CLUBS.forEach(club => {
       const clubId = generateCONFClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
     });
     CLUBS_SOUTH_AMERICA.forEach(club => {
       const clubId = generateSAClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateSouthAmericanSquad(clubId, club.tier, club.reputation, club.country);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateSouthAmericanSquad(clubId, club.tier, club.reputation, club.country));
     });
     CLUBS_ASIAN.forEach(club => {
       const clubId = generateAsianClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Asia');
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Asia'));
     });
     CLUBS_AFRICAN.forEach(club => {
       const clubId = generateAfricanClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Africa');
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Africa'));
     });
     CLUBS_NORTH_AMERICA.forEach(club => {
       const clubId = generateNorthAmericaClubId(club.name);
-      europeanPlayers[clubId] = SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'North America');
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'North America'));
     });
     setPlayers(prev => ({ ...prev, ...europeanPlayers }));
 
@@ -1580,7 +1581,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       NationalTeamService.assignCoachesToNationalTeams(allNationalTeams, ntCoachList);
     const polishPlayers: Record<string, Player[]> = {};
     STATIC_CLUBS.forEach(club => {
-      polishPlayers[club.id] = SquadGeneratorService.generateSquadForClub(club.id);
+      polishPlayers[club.id] = withMoraleState(SquadGeneratorService.generateSquadForClub(club.id));
     });
     setPlayers(prev => ({ ...prev, ...polishPlayers }));
 
@@ -1595,7 +1596,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (ntSquadResult.newPlayers.length > 0) {
       setPlayers(prev => ({
         ...prev,
-        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntSquadResult.newPlayers]
+        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...withMoraleState(ntSquadResult.newPlayers)]
       }));
     }
     if (ntSquadResult.playerUpdates.length > 0) {
@@ -2886,7 +2887,9 @@ if (userTeamId) {
           }
           return acc;
         }, {});
-    if (!Array.isArray(importedPlayers.FREE_AGENTS)) importedPlayers.FREE_AGENTS = FreeAgentService.generatePool(99);
+    if (!Array.isArray(importedPlayers.FREE_AGENTS)) {
+      importedPlayers.FREE_AGENTS = FreeAgentService.generatePool(99).map(PlayerMoraleService.ensurePlayerState);
+    }
 
     const importedLineups = hasFullPlayerDump && raw.lineups && typeof raw.lineups === 'object'
       ? raw.lineups as Record<string, Lineup>
@@ -4816,7 +4819,7 @@ Asystent`,
       if (ntReview.newPlayers.length > 0) {
         setPlayers(prev => ({
           ...prev,
-          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntReview.newPlayers]
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntReview.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
         }));
       }
       if (ntReview.playerUpdates.length > 0) {
@@ -4842,7 +4845,7 @@ Asystent`,
         if (ntMonthly.newPlayers.length > 0) {
           setPlayers(prev => ({
             ...prev,
-            'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntMonthly.newPlayers]
+            'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntMonthly.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
           }));
         }
         if (ntMonthly.playerUpdates.length > 0) {
@@ -11354,7 +11357,7 @@ const finalResult: SimulationOutput = {
       if (review.newPlayers.length > 0) {
         updatedPlayers = {
           ...updatedPlayers,
-          'FREE_AGENTS': [...(updatedPlayers['FREE_AGENTS'] || []), ...review.newPlayers]
+          'FREE_AGENTS': [...(updatedPlayers['FREE_AGENTS'] || []), ...review.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
         };
       }
       if (review.playerUpdates.length > 0) {
