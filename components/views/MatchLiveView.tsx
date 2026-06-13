@@ -131,6 +131,61 @@ const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { pri
   </div>
 );
 
+const PitchBroadcastOverlay = ({
+  homeColor,
+  awayColor,
+  activeSide,
+  eventType,
+  momentum,
+}: {
+  homeColor: string;
+  awayColor: string;
+  activeSide?: 'HOME' | 'AWAY';
+  eventType?: MatchEventType;
+  momentum: number;
+}) => {
+  const activeColor = activeSide === 'AWAY' ? awayColor : activeSide === 'HOME' ? homeColor : '#ffffff';
+  const isMajorEvent = eventType === MatchEventType.GOAL || eventType === MatchEventType.SHOT_ON_TARGET || eventType === MatchEventType.PENALTY_GOAL;
+  void momentum;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <svg className="absolute inset-0 w-full h-full live-pitch-svg" viewBox="0 0 100 150" preserveAspectRatio="none" aria-hidden>
+        <defs>
+          <filter id="live-pitch-glow">
+            <feGaussianBlur stdDeviation="1.8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <g filter="url(#live-pitch-glow)" opacity={activeSide ? 1 : 0.2}>
+          <path
+            d={activeSide === 'AWAY'
+              ? 'M 50 20 C 70 34, 72 54, 55 72 S 31 104, 50 132'
+              : 'M 50 130 C 30 116, 28 96, 45 78 S 69 46, 50 18'}
+            fill="none"
+            stroke={activeColor}
+            strokeWidth={isMajorEvent ? 1.7 : 1.1}
+            strokeLinecap="round"
+            strokeDasharray="4 5"
+            className="live-action-path"
+          />
+          <circle
+            cx="50"
+            cy={activeSide === 'AWAY' ? 20 : 130}
+            r={isMajorEvent ? 3.3 : 2.4}
+            fill={activeColor}
+            className="live-action-dot"
+          />
+        </g>
+      </svg>
+    </div>
+  );
+};
+
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const getRefereeDecisionQuality = (referee: Referee) =>
@@ -3253,15 +3308,21 @@ const summary: MatchSummary = {
 
 const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side: 'HOME' | 'AWAY', lineup: (string | null)[], players: Player[], fatigue: Record<string, number>, injs: Record<string, InjurySeverity>, subsHistory: SubstitutionRecord[] }) => (
     <div
-      className="w-96 shrink-0  p-4 rounded-[40px] border border-white/10 flex flex-col gap-2 overflow-hidden h-full shadow-2xl relative"
-      style={{ backgroundColor: kitColors ? (side === 'HOME' ? hexToRgba(kitColors.home.primary, 0.12) : hexToRgba(kitColors.away.primary, 0.12)) : 'rgba(15,23,42,0.20)'}}
+      className="group/squad w-96 shrink-0 p-4 rounded-[32px] border border-white/10 flex flex-col gap-2 overflow-hidden h-full shadow-[0_35px_90px_rgba(0,0,0,0.55)] relative backdrop-blur-xl transition-all duration-300 hover:border-white/20 hover:shadow-[0_45px_110px_rgba(0,0,0,0.68)]"
+      style={{ backgroundColor: kitColors ? (side === 'HOME' ? hexToRgba(kitColors.home.primary, 0.16) : hexToRgba(kitColors.away.primary, 0.16)) : 'rgba(15,23,42,0.28)'}}
     >
       <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: side === 'HOME' ? kitColors!.home.primary : kitColors!.away.primary }} />
-       <h4 className="text-[10px] font-black text-slate-100 uppercase tracking-[0.3em] mb-4 text-center">
+      <svg className="absolute inset-0 w-full h-full opacity-45 pointer-events-none transition-opacity duration-300 group-hover/squad:opacity-70" viewBox="0 0 100 180" preserveAspectRatio="none" aria-hidden>
+        <path d={side === 'HOME' ? 'M 4 18 C 30 8, 42 38, 64 30 S 78 74, 96 66' : 'M 96 18 C 70 8, 58 38, 36 30 S 22 74, 4 66'} fill="none" stroke={side === 'HOME' ? kitColors!.home.primary : kitColors!.away.primary} strokeWidth="0.55" strokeLinecap="round" className="live-squad-signal" />
+        <path d={side === 'HOME' ? 'M 8 118 C 28 98, 44 138, 62 120 S 78 148, 94 132' : 'M 92 118 C 72 98, 56 138, 38 120 S 22 148, 6 132'} fill="none" stroke="#ffffff" strokeOpacity="0.16" strokeWidth="0.4" strokeLinecap="round" className="live-squad-signal live-squad-signal-slow" />
+        <rect x="0" y="0" width="100" height="180" fill="none" stroke="#ffffff" strokeOpacity="0.035" strokeWidth="0.5" />
+      </svg>
+      <div className="absolute inset-x-4 bottom-0 h-24 rounded-full blur-3xl opacity-25" style={{ backgroundColor: side === 'HOME' ? kitColors!.home.primary : kitColors!.away.primary }} />
+       <h4 className="relative z-10 text-[10px] font-black text-slate-100 uppercase tracking-[0.3em] mb-4 text-center">
         {TacticRepository.getById(side === 'HOME' ? matchState!.homeLineup.tacticId : matchState!.awayLineup.tacticId).name}
       </h4>
       
-      <div className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 px-4 mb-2 text-[8px] font-black text-slate-600 uppercase tracking-widest`}>
+      <div className={`relative z-10 grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 px-4 mb-2 text-[8px] font-black text-slate-500 uppercase tracking-widest`}>
         {side === 'HOME' ? (
           <><span>Zawodnik</span><span className="text-center">Rtg</span><span className="text-center">Gol</span><span className="text-center">Asist</span></>
         ) : (
@@ -3269,7 +3330,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
+      <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar space-y-1">
         {lineup.map((pid, idx) => {
           if (!pid) return <div key={`empty-${idx}`} className="h-10 bg-red-950/10 rounded-xl border border-dashed border-red-500/20 flex items-center justify-center text-[7px] text-red-500/40 font-black uppercase">Luka</div>;
           const p = players.find(px => px.id === pid);
@@ -3291,7 +3352,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
 
           return (
-            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all cursor-pointer ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-400/40 hover:bg-orange-500/30' : 'bg-white/[0.05] border-white/[0.01] hover:border-white/20 hover:bg-white/[0.01]'}`}>
+            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`group/playerrow relative overflow-hidden grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.28)] ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-400/40 hover:bg-orange-500/30' : 'bg-white/[0.055] border-white/[0.025] hover:border-white/20 hover:bg-white/[0.09]'}`}>
               {side === 'HOME' ? (
                 <>
                   <div className="min-w-0 flex items-center gap-3">
@@ -3363,6 +3424,73 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       </div>
     </div>
   );
+
+  const renderTacticalButton = <T extends string,>({
+    value,
+    label,
+    current,
+    locked,
+    accent,
+    onPick,
+    compact = false,
+  }: {
+    value: T;
+    label: string;
+    current: T;
+    locked: boolean;
+    accent: string;
+    onPick: (value: T) => void;
+    compact?: boolean;
+  }) => {
+    const active = current === value;
+    return (
+      <button
+        key={value}
+        onClick={() => onPick(value)}
+        disabled={locked}
+        className={`group/tacticbtn relative h-7 ${compact ? 'min-w-[46px]' : 'min-w-[68px]'} overflow-hidden rounded-[9px] border px-2 transition-all duration-200 active:translate-y-[1px] ${locked ? 'cursor-not-allowed' : 'hover:-translate-y-0.5 hover:brightness-125'} ${active ? 'text-white' : 'text-slate-300 hover:text-white'}`}
+        style={{
+          backgroundColor: active ? hexToRgba(accent, 0.24) : 'rgba(15, 23, 42, 0.72)',
+          borderColor: active ? hexToRgba(accent, 0.72) : 'rgba(255, 255, 255, 0.14)',
+          boxShadow: active
+            ? `0 0 18px ${hexToRgba(accent, 0.28)}, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 18px rgba(0,0,0,0.34)`
+            : 'inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -9px 15px rgba(0,0,0,0.35)',
+        }}
+      >
+        <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden>
+          <path
+            d="M 0 1 H 88 L 100 10 V 31 H 12 L 0 22 Z"
+            fill={active ? accent : '#ffffff'}
+            opacity={active ? 0.18 : 0.035}
+          />
+          <path
+            d="M 5 25 C 23 8, 46 27, 68 10 S 91 9, 98 15"
+            fill="none"
+            stroke={active ? accent : '#ffffff'}
+            strokeOpacity={active ? 0.72 : 0.18}
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            className="live-tactical-button-line"
+          />
+          <rect
+            x="-34"
+            y="0"
+            width="24"
+            height="32"
+            fill="#ffffff"
+            opacity={active ? 0.16 : 0.07}
+            className="live-tactical-button-scan"
+          />
+        </svg>
+        <span
+          className="relative z-10 block text-[8px] font-black italic uppercase tracking-tighter leading-none"
+          style={{ textShadow: active ? `0 0 10px ${hexToRgba(accent, 0.9)}` : '0 1px 4px rgba(0,0,0,0.75)' }}
+        >
+          {label}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
@@ -3576,7 +3704,14 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       )}
 
 
-      <header className="flex items-stretch justify-between h-36 bg-slate-900/60 rounded-[45px] overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.5)] border border-white/10 shrink-0">
+      <header className="group/header relative flex items-stretch justify-between h-36 bg-black/45 backdrop-blur-xl rounded-[36px] overflow-hidden shadow-[0_35px_110px_rgba(0,0,0,0.68)] border border-white/10 shrink-0 transition-all duration-300 hover:border-white/20">
+         <svg className="absolute inset-0 w-full h-full opacity-50 pointer-events-none transition-opacity duration-300 group-hover/header:opacity-80" viewBox="0 0 1000 144" preserveAspectRatio="none" aria-hidden>
+            <path d="M 0 126 C 110 72, 210 128, 330 74 S 552 16, 672 64 S 866 118, 1000 40" fill="none" stroke={kitColors.home.primary} strokeWidth="1.4" strokeLinecap="round" className="live-header-signal" />
+            <path d="M 1000 118 C 870 64, 760 132, 620 84 S 420 20, 300 76 S 118 122, 0 38" fill="none" stroke={kitColors.away.primary} strokeWidth="1.4" strokeLinecap="round" className="live-header-signal live-header-signal-alt" />
+            <rect x="-120" y="0" width="80" height="144" fill="#ffffff" opacity="0.10" className="live-panel-scan" />
+            <line x1="500" y1="0" x2="500" y2="144" stroke="#ffffff" strokeOpacity="0.08" />
+         </svg>
+         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
          <div className="flex-1 flex flex-col justify-center px-12 relative overflow-hidden group">
             <div className="absolute inset-0 opacity-10" style={{ backgroundColor: kitColors.home.primary }} />
 
@@ -3590,11 +3725,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
             </div>
             <div className="relative z-10 pl-24">{renderTicker('HOME')}</div>
          </div>
-        <div className="w-72 flex flex-col items-center justify-center border-x border-white/5 relative overflow-hidden"
-              style={{ background: `linear-gradient(180deg, ${kitColors.home.primary}33 0%, #0a0a0f 35%, #0a0a0f 65%, ${kitColors.away.primary}33 100%)` }}>
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-            {getClubLogo(ctx.homeClub.id) && <img src={getClubLogo(ctx.homeClub.id)} alt={ctx.homeClub.name} className="absolute left-2 w-[50px] h-[50px] object-contain pointer-events-none" style={{ top: 'calc(50% + 40px)', transform: 'translateY(-50%)' }} />}
-            {getClubLogo(ctx.awayClub.id) && <img src={getClubLogo(ctx.awayClub.id)} alt={ctx.awayClub.name} className="absolute right-2 w-[50px] h-[50px] object-contain pointer-events-none" style={{ top: 'calc(50% + 40px)', transform: 'translateY(-50%)' }} />}
+        <div className="w-72 flex flex-col items-center justify-center border-x border-white/10 relative overflow-hidden">
             {isCelebratingGoal ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-yellow-500/20 animate-pulse-gold">
                   <span className="text-8xl font-black italic text-yellow-400 tracking-tighter drop-shadow-[0_0_30px_rgba(250,204,21,1)]">GOL!</span>
@@ -3651,20 +3782,26 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
 <div className="flex-1 relative p-2 overflow-visible">
   <div 
-    className="w-full max-w-[475px] h-[420px] mx-auto bg-emerald-950/20 border-4 border-emerald-900/30 relative overflow-visible"
+    className="w-full max-w-[475px] h-[420px] mx-auto bg-emerald-950/20 border border-emerald-300/20 relative overflow-visible shadow-[0_70px_120px_rgba(0,0,0,0.75),0_0_65px_rgba(16,185,129,0.14)]"
     style={{
       aspectRatio: '105 / 68',
       transform: 'perspective(950px) rotateX(24deg) scale(1.19)',
       transformOrigin: 'top center',
-      transformStyle: 'preserve-3d'
+      transformStyle: 'preserve-3d',
+      background: '#0f6b3d'
     }}
   >
     {/* Tło trawy */}
     <div 
-      className="absolute inset-0 bg-[#064c2f] opacity-55"
-      style={{ 
-        backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 12%, rgba(255,255,255,0.015) 12%, rgba(255,255,255,0.015) 24%)' 
-      }}
+      className="absolute inset-0 bg-[#0f6b3d]"
+    />
+
+    <PitchBroadcastOverlay
+      homeColor={kitColors.home.primary}
+      awayColor={kitColors.away.primary}
+      activeSide={matchState.logs[0]?.teamSide}
+      eventType={matchState.logs[0]?.type}
+      momentum={matchState.momentum}
     />
 
     {/* Linie boiska */}
@@ -3851,7 +3988,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         <div
   key={`h-${p.id}`}
   onClick={() => handleOpenPlayerCard(p.id)}
-  className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
+  className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer group/live-player"
   style={{
     left: `${slot.x * 100}%`,
     top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.FWD ? -31 : slot.role === PlayerPosition.MID ? -29 : slot.role === PlayerPosition.DEF ? -10 : slot.role === PlayerPosition.GK ? 6 : 0}px)`,
@@ -3865,14 +4002,21 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           )}
           <div className="relative group/player">
             <div
-              className={`w-5 h-5 rounded-2xl border-2 border-white/50 shadow-2xl flex flex-col overflow-hidden transform -rotate-3 transition-transform group-hover/player:rotate-0 group-hover/player:scale-110 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+              className="absolute inset-[-12px] rounded-full blur-xl opacity-0 group-hover/live-player:opacity-65 transition-opacity duration-300"
               style={{ backgroundColor: kitColors.home.primary }}
+            />
+            <div
+              className={`relative w-6 h-6 rounded-full border-2 border-white/55 shadow-[0_8px_14px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.35)] flex flex-col overflow-hidden transform -rotate-3 transition-all duration-300 group-hover/player:rotate-0 group-hover/player:scale-115 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+              style={{ backgroundColor: kitColors.home.primary, borderColor: kitColors.home.secondary }}
             >
-              <div className="flex-1 flex items-center justify-center text-[8px] font-black" style={{ color: kitColors.home.text }}>
+              <div className="absolute inset-x-0 top-0 h-[68%]" style={{ backgroundColor: kitColors.home.primary }} />
+              <div className="absolute inset-x-0 bottom-0 h-[32%]" style={{ backgroundColor: kitColors.home.secondary }} />
+              <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/35" />
+              <div className="relative flex-1 flex items-center justify-center text-[8px] font-black italic uppercase tracking-tighter" style={{ color: kitColors.home.text, textShadow: '0 2px 5px rgba(0,0,0,0.85)' }}>
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-yellow-400 rounded-sm shadow-lg" />}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg rotate-6" />}
           </div>
           {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '19px', right: 'calc(50% - 18px)' }}>✚</div>}
           <div 
@@ -3897,7 +4041,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
     <div
       key={`a-${p.id}`}
       onClick={() => handleOpenPlayerCard(p.id)}
-      className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
+      className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer group/live-player"
       style={{
         left: `calc(${slot.x * 100}% + ${slot.role === PlayerPosition.MID ? (slot.x < 0.5 ? -4 : slot.x > 0.5 ? 4 : 0) : 0}px)`,
         top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 18 : slot.role === PlayerPosition.MID ? 27 : slot.role === PlayerPosition.DEF ? 6 : slot.role === PlayerPosition.GK ? -16 : 0}px)`,
@@ -3911,14 +4055,21 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       )}
       <div className="relative group/player">
         <div
-          className={`w-5 h-5 rounded-2xl border-2 border-white/50 shadow-2xl flex flex-col overflow-hidden transform rotate-3 transition-transform group-hover/player:rotate-0 group-hover/player:scale-110 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+          className="absolute inset-[-12px] rounded-full blur-xl opacity-0 group-hover/live-player:opacity-65 transition-opacity duration-300"
           style={{ backgroundColor: kitColors.away.primary }}
+        />
+        <div
+          className={`relative w-6 h-6 rounded-full border-2 border-white/55 shadow-[0_8px_14px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.35)] flex flex-col overflow-hidden transform rotate-3 transition-all duration-300 group-hover/player:rotate-0 group-hover/player:scale-115 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+          style={{ backgroundColor: kitColors.away.primary, borderColor: kitColors.away.secondary }}
         >
-          <div className="flex-1 flex items-center justify-center text-[7px] font-black" style={{ color: kitColors.away.text }}>
+          <div className="absolute inset-x-0 top-0 h-[68%]" style={{ backgroundColor: kitColors.away.primary }} />
+          <div className="absolute inset-x-0 bottom-0 h-[32%]" style={{ backgroundColor: kitColors.away.secondary }} />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/35" />
+          <div className="relative flex-1 flex items-center justify-center text-[8px] font-black italic uppercase tracking-tighter" style={{ color: kitColors.away.text, textShadow: '0 2px 5px rgba(0,0,0,0.85)' }}>
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg" />}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg -rotate-6" />}
       </div>
       {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '-2px', left: 'calc(50% - 18px)' }}>✚</div>}
       <div className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`} style={{ marginTop: '-2px', textShadow: '0 2px 8px rgba(0, 0, 0, 0.65)' }}>
@@ -3952,8 +4103,13 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
   ) : (
     <>
       {/* ── GÓRNY BOX: Tempo / Postawa / Styl gry ── */}
-      <div className="flex gap-3 justify-center py-1.5 px-6 bg-black-400 border-5 border-white/50 rounded-[24px] shadow-4xl relative overflow-hidden">
-        <div className="absolute inset-0 rounded-[7px] pointer-events-none" style={{boxShadow:'inset 0 2px 2px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px 0 rgba(255,255,255,0.10)'}} />
+      <div className="group/tactics flex gap-3 justify-center py-2 px-6 bg-black/65 border border-white/15 rounded-[22px] shadow-[0_20px_70px_rgba(0,0,0,0.65)] relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:border-white/25 hover:bg-black/70">
+        <svg className="absolute inset-0 w-full h-full opacity-50 pointer-events-none transition-opacity duration-300 group-hover/tactics:opacity-80" viewBox="0 0 900 72" preserveAspectRatio="none" aria-hidden>
+          <path d="M 0 52 C 88 16, 178 58, 270 28 S 438 16, 548 44 S 732 60, 900 20" fill="none" stroke={kitColors.home.primary} strokeOpacity="0.7" strokeWidth="1.2" strokeLinecap="round" className="live-tactics-wave" />
+          <path d="M 0 18 C 116 46, 228 18, 340 42 S 548 56, 664 24 S 802 18, 900 48" fill="none" stroke={kitColors.away.primary} strokeOpacity="0.7" strokeWidth="1.2" strokeLinecap="round" className="live-tactics-wave live-tactics-wave-alt" />
+          <rect x="-80" y="0" width="50" height="72" fill="#ffffff" opacity="0.10" className="live-panel-scan" />
+        </svg>
+        <div className="absolute inset-0 rounded-[22px] pointer-events-none" style={{boxShadow:'inset 0 2px 2px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 16px 0 rgba(255,255,255,0.08)'}} />
       {/* ── TEMPO ── */}
       {(() => {
         const cd = matchState.userInstructions.tempoCooldown;
@@ -3970,25 +4126,18 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, tempo: val, tempoExpiry: -1, tempoCooldown: cooldown, tempoResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Tempo – blokada ${remaining}'` : 'Tempo'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'SLOW' as InstructionTempo,   label: 'Wolno',     activeClass: 'bg-blue-600/50 text-blue-200 border-blue-500/50' },
-                { val: 'NORMAL' as InstructionTempo, label: 'Normalnie', activeClass: 'bg-white/20 text-white border-white/20' },
-                { val: 'FAST' as InstructionTempo,   label: 'Szybko',    activeClass: 'bg-orange-600/50 text-orange-200 border-orange-500/50' },
-              ] as { val: InstructionTempo; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'SLOW' as InstructionTempo, label: 'Wolno', accent: '#3b82f6' },
+                { val: 'NORMAL' as InstructionTempo, label: 'Normalnie', accent: '#e2e8f0' },
+                { val: 'FAST' as InstructionTempo, label: 'Szybko', accent: '#f97316' },
+              ] as { val: InstructionTempo; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick })
+              )}
             </div>
           </div>
         );
@@ -4010,25 +4159,18 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, mindset: val, mindsetExpiry: -1, mindsetCooldown: cooldown, mindsetResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Postawa – blokada ${remaining}'` : 'Postawa'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'DEFENSIVE' as InstructionMindset, label: 'Defensywna', activeClass: 'bg-emerald-600/50 text-emerald-200 border-emerald-500/50' },
-                { val: 'NEUTRAL' as InstructionMindset,   label: 'Neutralna',  activeClass: 'bg-white/20 text-white border-white/20' },
-                { val: 'OFFENSIVE' as InstructionMindset, label: 'Ofensywna',  activeClass: 'bg-red-600/50 text-red-200 border-red-500/50' },
-              ] as { val: InstructionMindset; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'DEFENSIVE' as InstructionMindset, label: 'Defensywna', accent: '#10b981' },
+                { val: 'NEUTRAL' as InstructionMindset, label: 'Neutralna', accent: '#e2e8f0' },
+                { val: 'OFFENSIVE' as InstructionMindset, label: 'Ofensywna', accent: '#ef4444' },
+              ] as { val: InstructionMindset; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick })
+              )}
             </div>
           </div>
         );
@@ -4050,25 +4192,18 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, intensity: val, intensityExpiry: -1, intensityCooldown: cooldown, intensityResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Styl gry – blokada ${remaining}'` : 'Styl gry'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'CAUTIOUS' as InstructionIntensity,   label: 'Ostrożnie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
-                { val: 'NORMAL' as InstructionIntensity,     label: 'Normalnie',  activeClass: 'bg-white/20 text-white border-white/20' },
-                { val: 'AGGRESSIVE' as InstructionIntensity, label: 'Agresywnie', activeClass: 'bg-red-600/50 text-red-200 border-red-500/50' },
-              ] as { val: InstructionIntensity; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'CAUTIOUS' as InstructionIntensity, label: 'Ostrożnie', accent: '#14b8a6' },
+                { val: 'NORMAL' as InstructionIntensity, label: 'Normalnie', accent: '#e2e8f0' },
+                { val: 'AGGRESSIVE' as InstructionIntensity, label: 'Agresywnie', accent: '#ef4444' },
+              ] as { val: InstructionIntensity; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick })
+              )}
             </div>
           </div>
         );
@@ -4090,25 +4225,18 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, passing: val, passingCooldown: cooldown, passingResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Podania – blokada ${remaining}'` : 'Podania'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'SHORT' as InstructionPassing, label: 'Krótkie',  activeClass: 'bg-teal-600/50 text-teal-200 border-teal-500/50' },
-                { val: 'MIXED' as InstructionPassing, label: 'Mieszane', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
-                { val: 'LONG'  as InstructionPassing, label: 'Długie',   activeClass: 'bg-orange-600/50 text-orange-200 border-orange-500/50' },
-              ] as { val: InstructionPassing; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'SHORT' as InstructionPassing, label: 'Krótkie', accent: '#14b8a6' },
+                { val: 'MIXED' as InstructionPassing, label: 'Mieszane', accent: '#e2e8f0' },
+                { val: 'LONG' as InstructionPassing, label: 'Długie', accent: '#f97316' },
+              ] as { val: InstructionPassing; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick })
+              )}
             </div>
           </div>
         );
@@ -4130,24 +4258,17 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, pressing: val, pressingCooldown: cooldown, pressingResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Pressing – blokada ${remaining}'` : 'Pressing'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'NORMAL'   as InstructionPressing, label: 'Normalnie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
-                { val: 'PRESSING' as InstructionPressing, label: 'Pressing',  activeClass: 'bg-purple-600/50 text-purple-200 border-purple-500/50' },
-              ] as { val: InstructionPressing; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'NORMAL' as InstructionPressing, label: 'Normalnie', accent: '#e2e8f0' },
+                { val: 'PRESSING' as InstructionPressing, label: 'Pressing', accent: '#a855f7' },
+              ] as { val: InstructionPressing; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick })
+              )}
             </div>
           </div>
         );
@@ -4167,24 +4288,17 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           return { ...s, userInstructions: { ...s.userInstructions, counterAttack: val, counterAttackCooldown: cooldown, counterAttackResponseFactor: rf } };
         });
         return (
-          <div className={`flex flex-col items-center gap-0.5 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`relative flex flex-col items-center gap-0.5 rounded-[12px] border border-white/10 bg-white/[0.035] px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:bg-white/[0.08] hover:border-white/20 ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
             <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-semibold">
               {locked ? `Kontra - blokada ${remaining}'` : 'Kontra'}
             </span>
-            <div className="flex rounded-md overflow-hidden border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60" style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+            <div className="flex gap-1 rounded-[12px] border border-white/10 bg-black/45 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.32)]">
               {([
-                { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie', activeClass: 'bg-slate-500/60 text-white border-slate-400/50' },
-                { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak', activeClass: 'bg-cyan-600/50 text-cyan-200 border-cyan-500/50' },
-              ] as { val: InstructionCounterAttack; label: string; activeClass: string }[]).map(({ val, label, activeClass }) => (
-                <button
-                  key={val}
-                  onClick={() => pick(val)}
-                  disabled={locked}
-                  className={`px-2 py-1.5 text-[8px] font-bold uppercase tracking-wide transition-colors border-r last:border-r-0 border-white/10 ${
-                    cur === val ? activeClass : 'bg-white/5 text-amber-500 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >{label}</button>
-              ))}
+                { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie', accent: '#e2e8f0' },
+                { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak', accent: '#22d3ee' },
+              ] as { val: InstructionCounterAttack; label: string; accent: string }[]).map(({ val, label, accent }) =>
+                renderTacticalButton({ value: val, label, current: cur, locked, accent, onPick: pick, compact: true })
+              )}
             </div>
           </div>
         );
@@ -4192,11 +4306,16 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       </div>
 
       {/* ── DOLNY BOX: Start / Taktyka / Prędkość / Przebieg ── */}
-      <div className={`flex gap-3 justify-center py-3 px-8 bg-white/5 border border-white/10 rounded-[28px] shadow-2xl${showBriefing ? ' pointer-events-none opacity-40' : ''}`}>
+      <div className={`group/controlbar relative flex gap-3 justify-center py-3 px-8 bg-black/55 border border-white/15 rounded-[24px] shadow-[0_22px_80px_rgba(0,0,0,0.62)] overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:border-white/25${showBriefing ? ' pointer-events-none opacity-40' : ''}`}>
+        <svg className="absolute inset-0 w-full h-full opacity-45 pointer-events-none transition-opacity duration-300 group-hover/controlbar:opacity-75" viewBox="0 0 760 78" preserveAspectRatio="none" aria-hidden>
+          <path d="M 16 54 C 92 24, 162 54, 238 30 S 374 18, 462 42 S 620 62, 744 22" fill="none" stroke="#ffffff" strokeOpacity="0.18" strokeWidth="1" strokeLinecap="round" className="live-tactics-wave live-tactics-wave-alt" />
+          <rect x="-80" y="0" width="48" height="78" fill="#ffffff" opacity="0.09" className="live-panel-scan" />
+        </svg>
+        <div className="absolute inset-0 rounded-[24px] pointer-events-none" style={{boxShadow:'inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -18px 45px rgba(255,255,255,0.04)'}} />
         <button
           disabled={hasMandatorySub}
           onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, period: 2, minute: 45, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))), halftimeMomentumBonus: 0, oppHalftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
-          className={`min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b
+          className={`relative min-w-[170px] py-3 px-7 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b
             ${hasMandatorySub
               ? 'bg-red-600/20 border-t-red-400/40 border-x-red-500/20 border-b-black/60 text-red-500 hover:bg-red-600/30'
               : matchState.isPaused || matchState.isHalfTime
@@ -4211,7 +4330,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
 
         <button
           onClick={() => { setIsTacticsOpen(true); setMatchState(s => s ? {...s, isPaused: true} : s); }}
-          className="min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          className="relative min-w-[110px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
           style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           ⚙ TAKTYKA
@@ -4223,7 +4342,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
             const next = s.speed === 1 ? 2.5 : s.speed === 2.5 ? 3.5 : s.speed === 3.5 ? 5 : 1;
             return { ...s, speed: next };
           })}
-          className="min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          className="relative min-w-[90px] py-3 px-5 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
           style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           {matchState.speed === 5 ? '⏩ x5' : matchState.speed === 3.5 ? '⏩ x3.5' : matchState.speed === 2.5 ? '⏩ x2.5' : '⏪ x1'}
@@ -4231,7 +4350,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
 
         <button
           onClick={() => setShowCommentHistory(!showCommentHistory)}
-          className="min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
+          className="relative min-w-[60px] py-3 px-6 rounded-xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2"
           style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
         >
           PRZEBIEG MECZU
@@ -4312,6 +4431,36 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
         @keyframes slide-up { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes live-action-dash { from { stroke-dashoffset: 80; opacity: 0.15; } 35% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 0.35; } }
+        @keyframes live-action-dot { 0% { transform: scale(0.7); opacity: 0.2; } 45% { transform: scale(1.7); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.45; } }
+        @keyframes live-signal-flow { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
+        @keyframes live-panel-sweep { from { transform: translateX(-15%); opacity: 0; } 28% { opacity: 0.45; } 66% { opacity: 0.12; } to { transform: translateX(135%); opacity: 0; } }
+        @keyframes live-tactical-button-sweep { from { transform: translateX(-40%); opacity: 0; } 35% { opacity: 0.55; } to { transform: translateX(170%); opacity: 0; } }
+        .live-action-path { stroke-dashoffset: 80; animation: live-action-dash 1.55s cubic-bezier(.2,.9,.2,1) infinite; }
+        .live-action-dot { transform-origin: center; transform-box: fill-box; animation: live-action-dot 1.55s cubic-bezier(.2,.9,.2,1) infinite; }
+        .live-header-signal, .live-tactics-wave, .live-squad-signal {
+          stroke-dasharray: 10 12;
+          animation: live-signal-flow 5.4s linear infinite;
+        }
+        .live-tactical-button-line {
+          stroke-dasharray: 8 10;
+          animation: live-signal-flow 4.8s linear infinite;
+        }
+        .live-tactical-button-scan {
+          animation: live-tactical-button-sweep 4.2s ease-in-out infinite;
+        }
+        .live-header-signal-alt, .live-tactics-wave-alt, .live-squad-signal-slow {
+          animation-duration: 7.2s;
+          animation-direction: reverse;
+        }
+        .live-panel-scan {
+          animation: live-panel-sweep 5.5s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .live-action-path, .live-action-dot, .live-header-signal, .live-tactics-wave, .live-squad-signal, .live-panel-scan, .live-tactical-button-line, .live-tactical-button-scan {
+            animation: none !important;
+          }
+        }
       `}</style>
     </div>
 
