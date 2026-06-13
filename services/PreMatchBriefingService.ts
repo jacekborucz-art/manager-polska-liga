@@ -501,7 +501,8 @@ export const calculateAiCoachBriefingEffect = (
   opponentRep: number,
   coachAttributes: CoachAttributes | null | undefined,
   seed: number,
-  matchStage: BriefingMatchStage = 'LEAGUE'
+  matchStage: BriefingMatchStage = 'LEAGUE',
+  leagueMotivationContext?: LeagueMotivationContext | null
 ): BriefingEffect => {
   const motivation = coachAttributes?.motivation ?? 50;
   const decisionMaking = coachAttributes?.decisionMaking ?? 50;
@@ -525,7 +526,7 @@ export const calculateAiCoachBriefingEffect = (
     ? realScenario
     : scenarios[Math.floor(rngContext * scenarios.length)];
 
-  const options = getBriefingsForScenario(selectedScenario, matchStage);
+  const options = getBriefingsForScenario(selectedScenario, matchStage, leagueMotivationContext);
   if (options.length === 0) return getSilenceEffect();
 
   const pressureBias = (motivation - 50) / 50;

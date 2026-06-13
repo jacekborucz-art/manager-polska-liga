@@ -442,13 +442,17 @@ const isPausedForSevereInjury = useMemo(() => {
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
       );
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
-      const aiBriefingEffect = adjustBriefingEffectForPressure(
-        PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, calculateAiCoachBriefingEffect(
+      const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, calculateAiCoachBriefingEffect(
           aiClubInit.reputation,
           userClubInit.reputation,
           aiCoachInit?.attributes,
-          sessionSeed + 17
-        )),
+          sessionSeed + 17,
+          'LEAGUE',
+          leagueMotivationContext
+        ));
+      const aiRivalryBriefingEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(aiBaseBriefingEffect, rivalryContext) : aiBaseBriefingEffect;
+      const aiBriefingEffect = adjustBriefingEffectForPressure(
+        aiRivalryBriefingEffect,
         aiPressureProfile
       );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
@@ -522,7 +526,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
