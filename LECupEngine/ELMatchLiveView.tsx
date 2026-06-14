@@ -72,6 +72,7 @@ import { PreMatchPressConferenceService } from '../services/PreMatchPressConfere
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
+import { BroadcastMomentumBar, MatchLiveBroadcastStyles, PitchBroadcastOverlay } from '../components/match/MatchLiveBroadcastChrome';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.EL_R1Q, CompetitionType.EL_R1Q_RETURN,
@@ -2328,7 +2329,7 @@ const summary: MatchSummary = {
 
 const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side: 'HOME' | 'AWAY', lineup: (string | null)[], players: Player[], fatigue: Record<string, number>, injs: Record<string, InjurySeverity>, subsHistory: SubstitutionRecord[] }) => (
     <div
-      className="w-96 shrink-0  p-4 rounded-[40px] border border-white/10 flex flex-col gap-2 overflow-hidden h-full shadow-2xl relative"
+      className="group/squad w-96 shrink-0 p-4 rounded-[32px] border border-white/10 flex flex-col gap-2 overflow-hidden h-[calc(100%+64px)] min-h-0 self-start shadow-[0_30px_85px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.08)] relative backdrop-blur-xl transition-all duration-300 hover:border-white/20"
       style={{ backgroundColor: kitColors ? (side === 'HOME' ? hexToRgba(kitColors.home.primary, 0.12) : hexToRgba(kitColors.away.primary, 0.12)) : 'rgba(15,23,42,0.20)'}}
     >
       <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: side === 'HOME' ? kitColors!.home.primary : kitColors!.away.primary }} />
@@ -2426,7 +2427,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
+    <div className="h-screen min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
      {/* BACKGROUND (STADION) */}
 <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
   {/* obraz stadionu */}
@@ -2438,18 +2439,9 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
   {/* przyciemnienie żeby UI było czytelne */}
   <div className="absolute inset-0 bg-slate-950/85" />
 
-  {/* opcjonalnie delikatny grid */}
-  <div
-    className="absolute inset-0 opacity-[0.04]"
-    style={{
-      backgroundImage:
-        "linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px)",
-      backgroundSize: "60px 60px",
-    }}
-  />
 </div>
    {/* CONTENT (WSZYSTKO NAD TŁEM) */}
-    <div className="relative z-10 flex flex-col gap-6">
+    <div className="relative z-10 flex h-full min-h-0 flex-col gap-6">
 
       {activePenalty && (
         <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-xl flex items-center justify-center p-10 animate-fade-in">
@@ -2549,7 +2541,11 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       )}
 
 
-      <header className="flex items-stretch justify-between h-36 bg-slate-900/60 rounded-[45px] overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.5)] border border-white/10 shrink-0">
+      <header className="group/header relative flex items-stretch justify-between h-36 bg-black/45 backdrop-blur-xl rounded-[36px] overflow-hidden shadow-[0_35px_110px_rgba(0,0,0,0.68)] border border-white/10 shrink-0 transition-all duration-300 hover:border-white/20">
+         <svg className="absolute inset-0 h-full w-full pointer-events-none opacity-80" viewBox="0 0 1200 144" preserveAspectRatio="none" aria-hidden>
+            <path d="M 0 44 C 162 92, 286 28, 428 72 S 724 100, 880 50 S 1054 38, 1200 84" fill="none" stroke={kitColors.home.primary} strokeOpacity="0.38" strokeWidth="1.2" strokeLinecap="round" className="live-header-signal" />
+            <path d="M 1200 38 C 1018 88, 894 22, 710 68 S 448 98, 302 48 S 118 36, 0 82" fill="none" stroke={kitColors.away.primary} strokeOpacity="0.38" strokeWidth="1.2" strokeLinecap="round" className="live-header-signal" />
+         </svg>
          <div className="flex-1 flex flex-col justify-center px-12 relative overflow-hidden group">
             <div className="absolute inset-0 opacity-10" style={{ backgroundColor: kitColors.home.primary }} />
 
@@ -2563,9 +2559,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
             </div>
             <div className="relative z-10 pl-24">{renderTicker('HOME')}</div>
          </div>
-        <div className="w-72 flex flex-col items-center justify-center border-x border-white/5 relative overflow-hidden"
-              style={{ background: `linear-gradient(180deg, ${kitColors.home.primary}33 0%, #0a0a0f 35%, #0a0a0f 65%, ${kitColors.away.primary}33 100%)` }}>
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+        <div className="w-72 flex flex-col items-center justify-center border-x border-white/10 relative overflow-hidden">
             {isCelebratingGoal ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-yellow-500/20 animate-pulse-gold">
                   <span className="text-8xl font-black italic text-yellow-400 tracking-tighter drop-shadow-[0_0_30px_rgba(250,204,21,1)]">GOL!</span>
@@ -2593,51 +2587,32 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
          </div>
       </header>
 
-      <div className="flex-1 flex gap-8 min-h-0">
+      <div className="flex-1 flex gap-8 min-h-0 overflow-visible">
       <SquadList side="HOME" lineup={matchState.homeLineup.startingXI} players={ctx.homePlayers} fatigue={matchState.homeFatigue} injs={matchState.homeInjuries} subsHistory={matchState.homeSubsHistory} />
         <div className="flex-1 flex flex-col gap-6 min-w-0 max-w-5xl mx-auto">
            
-           <div className={`h-6 w-full bg-black/40 rounded-full overflow-hidden border border-white/10 flex shadow-2xl shrink-0 p-0.5 backdrop-blur-xl relative transition-all duration-200
-              ${Math.abs(matchState.momentum) > 85 ? 'animate-shake' : ''}
-           `}>
-              <div 
-                className="h-full transition-all duration-300 flex items-center justify-end pr-4 text-[9px] font-black rounded-l-full shadow-[inset_-10px_0_20px_rgba(0,0,0,0.3)] relative" 
-                style={{ 
-                  backgroundColor: kitColors.home.primary, width: `${50 + matchState.momentum / 2}%`, color: kitColors.home.text,
-                  boxShadow: matchState.momentum > 75 ? `0 0 25px ${kitColors.home.primary}CC` : 'none'
-                }}
-              >
-                 <div className={`absolute inset-0 bg-white/20 opacity-0 ${Math.abs(matchState.momentum - (matchState.logs[0]?.type === MatchEventType.GOAL ? 40 : 0)) > 10 ? 'animate-ping' : ''}`} />
-                 {Math.round(50 + matchState.momentum / 2)}%
-              </div>
-              <div className="h-full transition-all duration-300 flex items-center justify-start pl-4 text-[9px] font-black rounded-r-full shadow-[inset_10px_0_20px_rgba(0,0,0,0.3)]" 
-                style={{ backgroundColor: kitColors.away.primary, flex: 1, color: kitColors.away.text,
-                  boxShadow: matchState.momentum < -75 ? `0 0 25px ${kitColors.away.primary}CC` : 'none'
-                }}
-              >
-                 {Math.round(50 - matchState.momentum / 2)}%
-              </div>
-           </div>
+           <BroadcastMomentumBar momentum={matchState.momentum} homeKit={kitColors.home} awayKit={kitColors.away} />
 
 
 
 
 <div className="flex-1 relative p-2 overflow-visible">
-  <div 
-    className="w-full max-w-[475px] h-[420px] mx-auto bg-emerald-950/20 border-4 border-emerald-900/30 relative overflow-hidden"
+  <div
+    className="w-full max-w-[475px] h-[420px] mx-auto bg-emerald-950/20 border border-emerald-300/20 relative overflow-visible shadow-[0_70px_120px_rgba(0,0,0,0.75),0_0_65px_rgba(16,185,129,0.14)]"
     style={{
       aspectRatio: '105 / 68',
       transform: 'perspective(950px) rotateX(24deg) scale(1.19)',
       transformOrigin: 'top center',
-      transformStyle: 'preserve-3d'
+      transformStyle: 'preserve-3d',
+      background: '#0f6b3d'
     }}
   >
-    {/* Tło trawy */}
-    <div 
-      className="absolute inset-0 bg-[#064c2f] opacity-55"
-      style={{ 
-        backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 12%, rgba(255,255,255,0.015) 12%, rgba(255,255,255,0.015) 24%)' 
-      }}
+    <div className="absolute inset-0 bg-[#0f6b3d]" />
+    <PitchBroadcastOverlay
+      homeColor={kitColors.home.primary}
+      awayColor={kitColors.away.primary}
+      activeSide={matchState.logs[0]?.teamSide}
+      eventType={matchState.logs[0]?.type}
     />
 
     {/* Linie boiska */}
@@ -2928,8 +2903,13 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
   ) : (
     <>
       {/* ── GÓRNY BOX: Tempo / Postawa / Styl gry ── */}
-      <div className="flex gap-3 justify-center py-1.5 px-6 bg-black-400 border-5 border-white/50 rounded-[24px] shadow-4xl relative overflow-hidden">
-        <div className="absolute inset-0 rounded-[7px] pointer-events-none" style={{boxShadow:'inset 0 2px 2px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px 0 rgba(255,255,255,0.10)'}} />
+      <div className="group/tactics flex gap-3 justify-center py-2 px-6 bg-black/65 border border-white/15 rounded-[22px] shadow-[0_20px_70px_rgba(0,0,0,0.65)] relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:border-white/25 hover:bg-black/70">
+        <svg className="absolute inset-0 w-full h-full opacity-50 pointer-events-none transition-opacity duration-300 group-hover/tactics:opacity-80" viewBox="0 0 900 72" preserveAspectRatio="none" aria-hidden>
+          <path d="M 0 52 C 88 16, 178 58, 270 28 S 438 16, 548 44 S 732 60, 900 20" fill="none" stroke={kitColors.home.primary} strokeOpacity="0.7" strokeWidth="1.2" strokeLinecap="round" className="live-tactics-wave" />
+          <path d="M 0 18 C 116 46, 228 18, 340 42 S 548 56, 664 24 S 802 18, 900 48" fill="none" stroke={kitColors.away.primary} strokeOpacity="0.7" strokeWidth="1.2" strokeLinecap="round" className="live-tactics-wave live-tactics-wave-alt" />
+          <rect x="-80" y="0" width="50" height="72" fill="#ffffff" opacity="0.10" className="live-panel-scan" />
+        </svg>
+        <div className="absolute inset-0 rounded-[22px] pointer-events-none" style={{boxShadow:'inset 0 2px 2px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 16px 0 rgba(255,255,255,0.08)'}} />
       {/* ── TEMPO ── */}
       {(() => {
         const cd = matchState.userInstructions.tempoCooldown;
@@ -3272,6 +3252,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       )}
 
       <MatchTacticsModal isOpen={isTacticsOpen} onClose={handleTacticsClose} club={userSide === 'HOME' ? ctx.homeClub : ctx.awayClub} lineup={userSide === 'HOME' ? matchState.homeLineup : matchState.awayLineup} players={userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers} fatigue={userSide === 'HOME' ? matchState.homeFatigue : matchState.awayFatigue} subsCount={userSide === 'HOME' ? matchState.subsCountHome : matchState.subsCountAway} subsHistory={userSide === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory} minute={matchState.minute} sentOffIds={matchState.sentOffIds} injs={userSide === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries} />
+      <MatchLiveBroadcastStyles />
       <style>{`
         @keyframes shine { from { left: -150%; } to { left: 150%; } }
         .animate-shine { animation: shine 3s infinite linear; }

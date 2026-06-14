@@ -319,11 +319,11 @@ export const PostMatchStudioView: React.FC = () => {
           <div className="h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mt-2" />
 
           {/* TABELA */}
-          <div className="h-[30px] shrink-0" />
+          <div className="h-[8px] shrink-0" />
           {standings.length > 0 && (
             <div>
-              <p className="text-[11px] font-black italic uppercase tracking-tighter text-slate-200 text-center mb-1 rounded-md py-[2px]" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef444420, #ffffff15, #ef444420, transparent)' }}>Tabela</p>
-              <div className="h-px mb-2" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef4444aa, #ffffffaa, #ef4444aa, transparent)' }} />
+              <p className="text-[11px] font-black italic uppercase tracking-tighter text-slate-200 text-center mb-0 rounded-md py-[1px]" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef444420, #ffffff15, #ef444420, transparent)' }}>Tabela</p>
+              <div className="h-px mb-1" style={{ backgroundImage: 'linear-gradient(to right, transparent, #ef4444aa, #ffffffaa, #ef4444aa, transparent)' }} />
               <div className="flex text-[7px] font-black italic uppercase tracking-tighter text-white px-2 mb-1">
                 <span className="w-6 shrink-0 whitespace-nowrap">#</span>
                 <span className="flex-1 min-w-0">Drużyna</span>
@@ -355,7 +355,7 @@ export const PostMatchStudioView: React.FC = () => {
                   rowClass = club.id === userTeamId ? 'bg-white/5 text-white' : 'text-slate-400';
                 }
                 return (
-                <div key={club.id} className={`flex items-center text-[12px] font-black italic uppercase tracking-tighter px-2 py-[2px] rounded-lg ${rowClass} ${club.id === userTeamId ? '!text-amber-400' : ''}`}>
+                <div key={club.id} className={`flex items-center text-[12px] font-black italic uppercase tracking-tighter px-2 py-[1px] rounded-lg ${rowClass} ${club.id === userTeamId ? '!text-amber-400' : ''}`}>
                   <span className="w-6 shrink-0 whitespace-nowrap">{idx + 1}</span>
                   <span className="flex-1 min-w-0 truncate">{club.name}</span>
                   <span className="w-7 shrink-0 text-center whitespace-nowrap">{club.stats.played}</span>
@@ -523,9 +523,9 @@ export const PostMatchStudioView: React.FC = () => {
   );
 
   const renderPage2 = () => (
-    <div className="animate-fade-in flex flex-col gap-6 w-full h-full min-h-0 relative">
+    <div className="animate-fade-in flex flex-col gap-4 w-full h-full min-h-0 relative">
        {/* 1. ROUND HEADER */}
-       <div className="bg-slate-900/40 border border-white/10 rounded-[45px] py-4 px-8 backdrop-blur-3xl shadow-2xl flex items-center justify-center relative shrink-0">
+       <div className="bg-slate-900/40 border border-white/10 rounded-[45px] py-3 px-8 backdrop-blur-3xl shadow-2xl flex items-center justify-center relative shrink-0">
           <button
             onClick={() => setPageIndex(1)}
             className="absolute left-6 px-6 py-2 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-[10px] transition-all hover:bg-white/10 hover:text-white active:scale-95 active:translate-y-[2px]"

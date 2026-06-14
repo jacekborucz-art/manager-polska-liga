@@ -3308,7 +3308,7 @@ const summary: MatchSummary = {
 
 const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side: 'HOME' | 'AWAY', lineup: (string | null)[], players: Player[], fatigue: Record<string, number>, injs: Record<string, InjurySeverity>, subsHistory: SubstitutionRecord[] }) => (
     <div
-      className="group/squad w-96 shrink-0 p-4 rounded-[32px] border border-white/10 flex flex-col gap-2 overflow-hidden h-full shadow-[0_35px_90px_rgba(0,0,0,0.55)] relative backdrop-blur-xl transition-all duration-300 hover:border-white/20 hover:shadow-[0_45px_110px_rgba(0,0,0,0.68)]"
+      className="group/squad w-96 shrink-0 p-4 rounded-[32px] border border-white/10 flex flex-col gap-2 overflow-hidden h-[calc(100%+64px)] min-h-0 self-start shadow-[0_35px_90px_rgba(0,0,0,0.55)] relative backdrop-blur-xl transition-all duration-300 hover:border-white/20 hover:shadow-[0_45px_110px_rgba(0,0,0,0.68)]"
       style={{ backgroundColor: kitColors ? (side === 'HOME' ? hexToRgba(kitColors.home.primary, 0.16) : hexToRgba(kitColors.away.primary, 0.16)) : 'rgba(15,23,42,0.28)'}}
     >
       <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: side === 'HOME' ? kitColors!.home.primary : kitColors!.away.primary }} />
@@ -3330,7 +3330,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
         )}
       </div>
 
-      <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar space-y-1">
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-1">
         {lineup.map((pid, idx) => {
           if (!pid) return <div key={`empty-${idx}`} className="h-10 bg-red-950/10 rounded-xl border border-dashed border-red-500/20 flex items-center justify-center text-[7px] text-red-500/40 font-black uppercase">Luka</div>;
           const p = players.find(px => px.id === pid);
@@ -3493,7 +3493,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
+    <div className="h-screen min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
      {/* BACKGROUND (STADION) */}
 <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
   {/* obraz stadionu */}
@@ -3516,7 +3516,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
   />
 </div>
    {/* CONTENT (WSZYSTKO NAD TŁEM) */}
-    <div className="relative z-10 flex flex-col gap-6">
+    <div className="relative z-10 flex h-full min-h-0 flex-col gap-6">
 
       {activePenaltyReview && (
         <div className="fixed inset-0 z-[560] bg-black/80 backdrop-blur-xl flex items-center justify-center p-10 animate-fade-in">
@@ -3751,29 +3751,38 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
          </div>
       </header>
 
-      <div className="flex-1 flex gap-8 min-h-0">
+      <div className="flex-1 flex gap-8 min-h-0 overflow-visible">
       <SquadList side="HOME" lineup={matchState.homeLineup.startingXI} players={ctx.homePlayers} fatigue={matchState.homeFatigue} injs={matchState.homeInjuries} subsHistory={matchState.homeSubsHistory} />
         <div className="flex-1 flex flex-col gap-6 min-w-0 max-w-5xl mx-auto">
            
-           <div className={`h-6 w-full bg-black/40 rounded-full overflow-hidden border border-white/10 flex shadow-2xl shrink-0 p-0.5 backdrop-blur-xl relative transition-all duration-200
+           <div className={`group/momentum h-8 w-full bg-black/55 rounded-[18px] overflow-hidden border border-white/15 flex shadow-[0_22px_70px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.16)] shrink-0 p-1 backdrop-blur-xl relative transition-all duration-200
               ${Math.abs(matchState.momentum) > 85 ? 'animate-shake' : ''}
            `}>
+              <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60 transition-opacity duration-300 group-hover/momentum:opacity-90" viewBox="0 0 1000 32" preserveAspectRatio="none" aria-hidden>
+                <path d="M 0 24 C 96 8, 174 28, 270 12 S 468 24, 572 10 S 764 8, 1000 22" fill="none" stroke={kitColors.home.primary} strokeOpacity="0.62" strokeWidth="1.2" strokeLinecap="round" className="live-momentum-signal" />
+                <path d="M 1000 9 C 872 26, 762 7, 650 20 S 428 24, 316 10 S 110 7, 0 20" fill="none" stroke={kitColors.away.primary} strokeOpacity="0.62" strokeWidth="1.2" strokeLinecap="round" className="live-momentum-signal live-momentum-signal-alt" />
+                <rect x="-110" y="0" width="70" height="32" fill="#ffffff" opacity="0.10" className="live-momentum-scan" />
+              </svg>
+              <div className="absolute left-1/2 top-1 bottom-1 w-px -translate-x-1/2 bg-white/45 shadow-[0_0_14px_rgba(255,255,255,0.55)] z-20" />
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
               <div 
-                className="h-full transition-all duration-300 flex items-center justify-end pr-4 text-[9px] font-black rounded-l-full shadow-[inset_-10px_0_20px_rgba(0,0,0,0.3)] relative" 
+                className="h-full transition-all duration-300 flex items-center justify-end pr-4 text-[9px] font-black italic uppercase tracking-tighter rounded-l-full shadow-[inset_-10px_0_20px_rgba(0,0,0,0.3)] relative overflow-hidden z-10" 
                 style={{ 
                   backgroundColor: kitColors.home.primary, width: `${50 + matchState.momentum / 2}%`, color: kitColors.home.text,
                   boxShadow: matchState.momentum > 75 ? `0 0 25px ${kitColors.home.primary}CC` : 'none'
                 }}
               >
+                 <div className="absolute inset-0 opacity-35 live-momentum-fill" />
                  <div className={`absolute inset-0 bg-white/20 opacity-0 ${Math.abs(matchState.momentum - (matchState.logs[0]?.type === MatchEventType.GOAL ? 40 : 0)) > 10 ? 'animate-ping' : ''}`} />
-                 {Math.round(50 + matchState.momentum / 2)}%
+                 <span className="relative z-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]">{Math.round(50 + matchState.momentum / 2)}%</span>
               </div>
-              <div className="h-full transition-all duration-300 flex items-center justify-start pl-4 text-[9px] font-black rounded-r-full shadow-[inset_10px_0_20px_rgba(0,0,0,0.3)]" 
+              <div className="h-full transition-all duration-300 flex items-center justify-start pl-4 text-[9px] font-black italic uppercase tracking-tighter rounded-r-full shadow-[inset_10px_0_20px_rgba(0,0,0,0.3)] relative overflow-hidden z-10" 
                 style={{ backgroundColor: kitColors.away.primary, flex: 1, color: kitColors.away.text,
                   boxShadow: matchState.momentum < -75 ? `0 0 25px ${kitColors.away.primary}CC` : 'none'
                 }}
               >
-                 {Math.round(50 - matchState.momentum / 2)}%
+                 <div className="absolute inset-0 opacity-35 live-momentum-fill live-momentum-fill-alt" />
+                 <span className="relative z-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]">{Math.round(50 - matchState.momentum / 2)}%</span>
               </div>
            </div>
 
@@ -4436,11 +4445,20 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         @keyframes live-signal-flow { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
         @keyframes live-panel-sweep { from { transform: translateX(-15%); opacity: 0; } 28% { opacity: 0.45; } 66% { opacity: 0.12; } to { transform: translateX(135%); opacity: 0; } }
         @keyframes live-tactical-button-sweep { from { transform: translateX(-40%); opacity: 0; } 35% { opacity: 0.55; } to { transform: translateX(170%); opacity: 0; } }
+        @keyframes live-momentum-fill { from { background-position: 0 0; } to { background-position: 42px 0; } }
         .live-action-path { stroke-dashoffset: 80; animation: live-action-dash 1.55s cubic-bezier(.2,.9,.2,1) infinite; }
         .live-action-dot { transform-origin: center; transform-box: fill-box; animation: live-action-dot 1.55s cubic-bezier(.2,.9,.2,1) infinite; }
-        .live-header-signal, .live-tactics-wave, .live-squad-signal {
+        .live-header-signal, .live-tactics-wave, .live-squad-signal, .live-momentum-signal {
           stroke-dasharray: 10 12;
           animation: live-signal-flow 5.4s linear infinite;
+        }
+        .live-momentum-signal {
+          stroke-dasharray: 14 14;
+          animation-duration: 4.6s;
+        }
+        .live-momentum-signal-alt {
+          animation-direction: reverse;
+          animation-duration: 5.8s;
         }
         .live-tactical-button-line {
           stroke-dasharray: 8 10;
@@ -4448,6 +4466,17 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
         }
         .live-tactical-button-scan {
           animation: live-tactical-button-sweep 4.2s ease-in-out infinite;
+        }
+        .live-momentum-scan {
+          animation: live-panel-sweep 4.8s ease-in-out infinite;
+        }
+        .live-momentum-fill {
+          background-image: repeating-linear-gradient(115deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 14px);
+          background-size: 42px 100%;
+          animation: live-momentum-fill 1.9s linear infinite;
+        }
+        .live-momentum-fill-alt {
+          animation-direction: reverse;
         }
         .live-header-signal-alt, .live-tactics-wave-alt, .live-squad-signal-slow {
           animation-duration: 7.2s;
@@ -4457,7 +4486,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
           animation: live-panel-sweep 5.5s ease-in-out infinite;
         }
         @media (prefers-reduced-motion: reduce) {
-          .live-action-path, .live-action-dot, .live-header-signal, .live-tactics-wave, .live-squad-signal, .live-panel-scan, .live-tactical-button-line, .live-tactical-button-scan {
+          .live-action-path, .live-action-dot, .live-header-signal, .live-tactics-wave, .live-squad-signal, .live-panel-scan, .live-tactical-button-line, .live-tactical-button-scan, .live-momentum-signal, .live-momentum-scan, .live-momentum-fill {
             animation: none !important;
           }
         }

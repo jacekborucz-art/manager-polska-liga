@@ -48,6 +48,7 @@ import { PolishCupVenueService } from '../services/PolishCupVenueService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 import { LineupService } from '../services/LineupService';
 import { LiveMatchInstructionBalanceService } from '../services/LiveMatchInstructionBalanceService';
+import { BroadcastMomentumBar, MatchLiveBroadcastStyles, PitchBroadcastOverlay } from '../components/match/MatchLiveBroadcastChrome';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -3785,7 +3786,11 @@ if (activePlayerTempo === 'SLOW') {
         <div className="absolute inset-0 backdrop-blur-[2px] bg-slate-950/20" />
       </div>
 
-      <header className="flex items-center justify-between h-32 backdrop-blur-3xl rounded-[40px] border border-white/10 px-12 shadow-2xl shrink-0" style={{ background: `linear-gradient(to right, ${kitColors.home.primary}99 0%, #0f172a 40%, #0f172a 60%, ${kitColors.away.primary}99 100%)` }}>
+      <header className="group/header relative flex items-center justify-between h-32 bg-black/45 backdrop-blur-3xl rounded-[36px] border border-white/10 px-12 shadow-[0_35px_110px_rgba(0,0,0,0.68)] shrink-0 overflow-hidden transition-all duration-300 hover:border-white/20">
+         <svg className="absolute inset-0 h-full w-full pointer-events-none opacity-80" viewBox="0 0 1200 128" preserveAspectRatio="none" aria-hidden>
+            <path d="M 0 42 C 160 82, 280 26, 430 66 S 730 92, 882 48 S 1058 36, 1200 76" fill="none" stroke={kitColors.home.primary} strokeOpacity="0.42" strokeWidth="1.2" strokeLinecap="round" className="live-header-signal" />
+            <path d="M 1200 34 C 1016 76, 892 20, 710 62 S 446 90, 300 46 S 118 32, 0 76" fill="none" stroke={kitColors.away.primary} strokeOpacity="0.42" strokeWidth="1.2" strokeLinecap="round" className="live-header-signal" />
+         </svg>
          <div className="flex-1 flex flex-col justify-center">
             <div className="flex items-center gap-3">
               {getClubLogo(ctx.homeClub.id)
@@ -3869,21 +3874,8 @@ if (activePlayerTempo === 'SLOW') {
 
       <div className="flex-1 flex flex-col gap-2 min-w-0 relative">
          
-         <div className="h-7 w-full max-w-4xl mx-auto bg-black/40 rounded-full overflow-hidden border border-white/10 flex shadow-2xl shrink-0 p-0.5 backdrop-blur-xl relative">
-            <div 
-              className="h-full transition-all duration-500 flex items-center justify-end pr-2 text-[11px] font-black rounded-l-full relative overflow-hidden" 
-              style={{ backgroundColor: kitColors.home.primary, width: `${50 + matchState.momentum / 2}%`, color: kitColors.home.text }}
-            >
-               <div className="absolute inset-0 bg-white/10 opacity-20 animate-pulse" />
-               {Math.round(50 + matchState.momentum / 2)}%
-            </div>
-            <div 
-              className="h-full transition-all duration-500 flex items-center justify-start pl-4 text-[9px] font-black rounded-r-full relative overflow-hidden" 
-              style={{ backgroundColor: kitColors.away.primary, flex: 1, color: kitColors.away.text }}
-            >
-               <div className="absolute inset-0 bg-white/10 opacity-20 animate-pulse" />
-               {Math.round(50 - matchState.momentum / 2)}%
-            </div>
+         <div className="w-full max-w-4xl mx-auto">
+            <BroadcastMomentumBar momentum={matchState.momentum} homeKit={kitColors.home} awayKit={kitColors.away} />
          </div>
 
          <div className="flex-1 flex gap-3 min-h-0 relative z-10">
@@ -4019,14 +4011,29 @@ if (activePlayerTempo === 'SLOW') {
 <div className="w-full h-full rounded-[0px] border-1 border-emerald-900/1 relative flex items-center justify-center" style={{ transform: 'scale(0.7) translateY(-200px)' }}>
   <div className="absolute inset-0 rounded-[0.7px]"
     style={{
-      background: '#064c2f',
-      backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 5%, rgba(255,255,255,0.015) 12%, rgba(255,255,255,0.015) 24%)',
+      background: '#0f6b3d',
       transform: 'perspective(950px) rotateX(24deg)',
       transformOrigin: 'center center',
       transformStyle: 'preserve-3d',
-      opacity: 0.5  
+      opacity: 0.68
     }}
   ></div>
+  <div
+    className="absolute inset-0 pointer-events-none"
+    style={{
+      transform: 'perspective(950px) rotateX(24deg)',
+      transformOrigin: 'center center',
+      transformStyle: 'preserve-3d',
+      opacity: 0.82
+    }}
+  >
+    <PitchBroadcastOverlay
+      homeColor={kitColors.home.primary}
+      awayColor={kitColors.away.primary}
+      activeSide={matchState.logs[0]?.teamSide}
+      eventType={matchState.logs[0]?.type}
+    />
+  </div>
   
   <div className="absolute inset-0 pointer-events-none opacity-50 rounded-[36px]" 
     style={{ 
@@ -4923,6 +4930,7 @@ if (activePlayerTempo === 'SLOW') {
         />
       )}
 
+      <MatchLiveBroadcastStyles />
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
