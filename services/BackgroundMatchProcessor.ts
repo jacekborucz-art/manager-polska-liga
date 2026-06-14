@@ -16,6 +16,7 @@ import { AiScoutingService } from './AiScoutingService';
 import { buildMatchPressureContext } from './MatchPressureService';
 import { SeasonTransitionService } from './SeasonTransitionService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
@@ -320,7 +321,15 @@ if (todayFixtures.length === 0) {
     
     let currentFixtures = [...fixtures];
     let currentClubs = [...clubs];
-    let currentPlayers = { ...playersAfterEmergencyGoalkeepers };
+    let currentPlayers = ThirdLeagueBackgroundService.simulateMatchday(
+      currentDate,
+      currentClubs,
+      playersAfterEmergencyGoalkeepers,
+      newLineups,
+      coaches,
+      weather,
+      sessionSeed
+    );
 
     const roundResults: LeagueRoundResults = {
       dateKey: dateStr,
