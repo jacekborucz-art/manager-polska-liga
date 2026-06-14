@@ -201,8 +201,7 @@ const amplifyDistanceFromOne = (value: number, amp: number, min: number, max: nu
 export const getLivePressureModifiers = (
   profile: TeamPressureProfile,
   scoreDiff: number,
-  minute: number,
-  isUserSide: boolean
+  minute: number
 ): LivePressureModifiers => {
   const weight = getPressureWeight(profile);
   if (weight <= 0) return NEUTRAL_LIVE_PRESSURE_MODIFIERS;
@@ -213,9 +212,6 @@ export const getLivePressureModifiers = (
   const chaseBoost = isChasing
     ? 1 + lateGamePressure * profile.lateChaseMultiplier * Math.min(1.2, Math.abs(scoreDiff) * 0.55)
     : 1;
-  const userAutoShare = isUserSide ? 0.45 : 1;
-  const soften = (value: number) => 1 + (value - 1) * userAutoShare;
-
   const initiativeBase = profile.intensityMultiplier * chaseBoost * collapse;
   const shotBase = profile.intensityMultiplier * profile.composureMultiplier * chaseBoost * collapse;
   const cardBase = profile.cardMultiplier * (isChasing ? 1 + lateGamePressure * profile.lateChaseMultiplier * 0.75 : 1);
@@ -225,12 +221,12 @@ export const getLivePressureModifiers = (
   );
 
   return {
-    initiativeMultiplier: clamp(soften(initiativeBase), 0.96, 1.10),
-    shotMultiplier: clamp(soften(shotBase), 0.92, 1.14),
-    cardMultiplier: clamp(soften(cardBase), 0.95, 1.22),
-    penaltyMultiplier: clamp(soften(1 + (cardBase - 1) * 0.45), 0.97, 1.12),
-    injuryMultiplier: clamp(soften(1 + fatigueExtraBase * 1.8), 1, 1.10),
-    fatigueDrainExtra: clamp(fatigueExtraBase * userAutoShare, 0, 0.010),
+    initiativeMultiplier: clamp(initiativeBase, 0.96, 1.10),
+    shotMultiplier: clamp(shotBase, 0.92, 1.14),
+    cardMultiplier: clamp(cardBase, 0.95, 1.22),
+    penaltyMultiplier: clamp(1 + (cardBase - 1) * 0.45, 0.97, 1.12),
+    injuryMultiplier: clamp(1 + fatigueExtraBase * 1.8, 1, 1.10),
+    fatigueDrainExtra: clamp(fatigueExtraBase, 0, 0.010),
   };
 };
 

@@ -63,6 +63,17 @@ export const MomentumService = {
     if (awayTactic.attackBias > 65 && techGap > 8) target += techGap > 15 ? 12 : 6;
     if (awayTactic.defenseBias > 65 && techGap > 8) target += techGap > 15 ? -8 : -4;
 
+    const homeRedCount = state.sentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+    const awayRedCount = state.sentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+    const getRedCardMomentumPenalty = (redCount: number, tactic: ReturnType<typeof TacticRepository.getById>): number => {
+      if (redCount <= 0) return 0;
+      const overreach = Math.max(0, Math.min(1, (tactic.attackBias - 50) / 45));
+      const defensiveCover = tactic.defenseBias >= 68 && tactic.attackBias <= 50 ? 0.65 : 1;
+      return redCount * (10 + overreach * 8) * defensiveCover;
+    };
+    target -= getRedCardMomentumPenalty(homeRedCount, homeTactic);
+    target += getRedCardMomentumPenalty(awayRedCount, awayTactic);
+
     const matchDateStr = ctx.fixture.date instanceof Date ? ctx.fixture.date.toISOString().split('T')[0] : String(ctx.fixture.date);
     const matchSeed = new Date(matchDateStr).getTime() / 100000;
     const homeFormImpact = applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed);

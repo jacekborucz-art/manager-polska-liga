@@ -1256,14 +1256,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const hLivePressure = getLivePressureModifiers(
           getPressureProfileForSide(livePressureContext, 'HOME'),
           homeScoreDiff,
-          nextMinute,
-          userSide === 'HOME'
+          nextMinute
         );
         const aLivePressure = getLivePressureModifiers(
           getPressureProfileForSide(livePressureContext, 'AWAY'),
           awayScoreDiff,
-          nextMinute,
-          userSide === 'AWAY'
+          nextMinute
         );
 
         const getMidfieldControl = (
@@ -1294,6 +1292,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
         const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
+        const getGoalkeeperCrisisInitiativePenalty = (lineup: Lineup, players: Player[]): number => {
+          const keeper = lineup.startingXI[0] ? players.find(p => p.id === lineup.startingXI[0]) : null;
+          if (!keeper) return 0.040;
+          if (keeper.position === PlayerPosition.GK) return 0;
+          const emergencyRead =
+            keeper.attributes.goalkeeping * 0.35 +
+            keeper.attributes.positioning * 0.25 +
+            keeper.attributes.mentality * 0.22 +
+            keeper.attributes.strength * 0.18;
+          return 0.018 + Math.max(0, Math.min(1, (62 - emergencyRead) / 45)) * 0.018;
+        };
+        const goalkeeperCrisisInitiativeMod =
+          getGoalkeeperCrisisInitiativePenalty(nextAwayLineup, ctx.awayPlayers) -
+          getGoalkeeperCrisisInitiativePenalty(nextHomeLineup, ctx.homePlayers);
         const homeAttackChance = Math.min(
           0.92,
           Math.max(
@@ -1303,7 +1315,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               fatInitiativeMod +
               pressureInitiativeMod +
               formInitiativeMod +
-              midfieldInitiativeMod
+              midfieldInitiativeMod +
+              goalkeeperCrisisInitiativeMod
           )
         );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
@@ -1331,7 +1344,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const rf = prev.userInstructions.counterAttackResponseFactor ?? 1.0;
           const counterChance = Math.max(
             0,
-            Math.min(0.16, (0.025 + pressureFactor * 0.060 + shapeFactor * 0.025 + opponentRiskFactor * 0.025 + scoreFactor) * rf)
+            Math.min(0.14, (0.023 + pressureFactor * 0.054 + shapeFactor * 0.022 + opponentRiskFactor * 0.022 + scoreFactor) * rf)
           );
 
           if (seededRng(currentSeed, nextMinute, 631) < counterChance) {
@@ -1345,7 +1358,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             );
             counterAttackShotBonus = Math.max(
               0.006,
-              Math.min(0.032, 0.012 + pressureFactor * 0.010 + opponentRiskFactor * 0.006 + counterQualityModifier)
+              Math.min(0.028, 0.011 + pressureFactor * 0.009 + opponentRiskFactor * 0.005 + counterQualityModifier)
             );
           }
         }
@@ -1372,7 +1385,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const userRiskFactor = Math.max(0, Math.min(1, (opponentCounterTactic.attackBias - 50) / 45));
           const aiCounterChance = Math.max(
             0,
-            Math.min(0.10, 0.015 + userPressFactor * 0.040 + aiShapeFactor * 0.020 + userRiskFactor * 0.015)
+            Math.min(0.12, 0.018 + userPressFactor * 0.046 + aiShapeFactor * 0.022 + userRiskFactor * 0.018)
           );
           if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
             activeSide = aiSideForCounter;
@@ -1385,7 +1398,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             );
             aiCounterAttackShotBonus = Math.max(
               0.004,
-              Math.min(0.024, 0.008 + userPressFactor * 0.007 + userRiskFactor * 0.004 + aiCounterQualityModifier)
+              Math.min(0.026, 0.009 + userPressFactor * 0.008 + userRiskFactor * 0.005 + aiCounterQualityModifier)
             );
           }
         }
@@ -1414,9 +1427,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const defendingXI2 = activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const defendingTeamPlayers2 = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
         const slotZeroPlayer = defendingXI2[0] !== null ? defendingTeamPlayers2.find(p => p.id === defendingXI2[0]) : null;
+        const getEmergencyKeeperRead = (player: Player | null | undefined): number => {
+          if (!player) return 0;
+          return (
+            player.attributes.goalkeeping * 0.35 +
+            player.attributes.positioning * 0.25 +
+            player.attributes.mentality * 0.22 +
+            player.attributes.strength * 0.18
+          );
+        };
         const noGkBonus = defendingXI2[0] === null
           ? 0.055  // pusty slot = otwarta bramka
-          : (slotZeroPlayer?.position !== PlayerPosition.GK ? 0.028 : 0); // nie-GK w bramce
+          : (slotZeroPlayer?.position !== PlayerPosition.GK
+              ? 0.031 + Math.max(0, Math.min(1, (62 - getEmergencyKeeperRead(slotZeroPlayer)) / 45)) * 0.017
+              : 0); // nie-GK w bramce
 
         // Bonus za jakość napastnika (znormalizowany do polskiej ligi: zakres finishing 55-77)
         const attackingTeamPlayers2 = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
@@ -1460,6 +1484,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const attackingTacticObj = TacticRepository.getById(
           activeSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId
         );
+        const attackingXIForGk = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+        const attackingTeamForGk = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+        const attackingSlotZeroPlayer = attackingXIForGk[0] !== null ? attackingTeamForGk.find(p => p.id === attackingXIForGk[0]) : null;
+        const attackingGoalkeeperCrisis =
+          attackingXIForGk[0] === null || (!!attackingSlotZeroPlayer && attackingSlotZeroPlayer.position !== PlayerPosition.GK);
+        const defendingSentOff = nextSentOffIds.filter(id =>
+          (activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers).some(p => p.id === id)
+        ).length;
+        const attackingSentOff = nextSentOffIds.filter(id =>
+          (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)
+        ).length;
 
         // Bonus dla atakującego jeśli broniący ma dziury defensywne (brakujący gracz + ofensywna taktyka)
         // Broniący grał ofensywnie i stracił zawodnika → otwarte plecy
@@ -1471,6 +1506,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (defendingMissing >= 2) openBacksBonus *= 1.6;
         }
 
+        // Czerwona kartka powinna wymuszać ostrożniejszą grę.
+        // Jeśli osłabiona drużyna dalej gra wysoko/ofensywnie, przeciwnik łatwiej dochodzi do sytuacji.
+        let redCardTacticalExposure = 0;
+        if (defendingSentOff > 0) {
+          const lackOfCaution = Math.max(0, Math.min(1, (defendingTacticObj.attackBias - 50) / 45));
+          const weakBlock = Math.max(0, Math.min(1, (62 - defendingTacticObj.defenseBias) / 42));
+          redCardTacticalExposure = defendingSentOff * (0.006 + lackOfCaution * 0.016 + weakBlock * 0.006);
+          if (defendingTacticObj.defenseBias >= 70 && defendingTacticObj.attackBias <= 45) redCardTacticalExposure *= 0.55;
+          if (defendingSentOff >= 2) redCardTacticalExposure *= 1.35;
+        }
+
         // Kara dla atakującego jeśli SAM ma dziury i gra ofensywnie (ryzyko kontry zostało już wyżej,
         // ale tu karzymy też jego własne możliwości — mniej nóg na boisku = mniej akcji)
         let ownShortHandedPenalty = 0;
@@ -1480,14 +1526,37 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           ownShortHandedPenalty = attackingMissing * 0.016 * offensiveRisk;
         }
 
+        // Osłabiona drużyna ma też mniejszą jakość własnych ataków, zwłaszcza gdy nie cofa ustawienia.
+        let redCardAttackingDrag = 0;
+        if (attackingSentOff > 0) {
+          const overreach = Math.max(0, Math.min(1, (attackingTacticObj.attackBias - 55) / 35));
+          redCardAttackingDrag = attackingSentOff * (0.007 + overreach * 0.014);
+          if (attackingTacticObj.defenseBias >= 65 && attackingTacticObj.attackBias <= 50) redCardAttackingDrag *= 0.65;
+          if (attackingSentOff >= 2) redCardAttackingDrag *= 1.35;
+        }
+
+        // Gracz z pola w bramce zmienia zachowanie całej drużyny.
+        // Kara jest mała przy niskim bloku i kontrataku, większa gdy zespół nadal gra otwarcie.
+        let goalkeeperCrisisAttackDrag = 0;
+        if (attackingGoalkeeperCrisis) {
+          const overreach = Math.max(0, Math.min(1, (attackingTacticObj.attackBias - 52) / 38));
+          const cautiousBlock = attackingTacticObj.defenseBias >= 62 && attackingTacticObj.attackBias <= 48;
+          const keeperRead = getEmergencyKeeperRead(attackingSlotZeroPlayer);
+          const panicFactor = attackingXIForGk[0] === null
+            ? 1.25
+            : 0.85 + Math.max(0, Math.min(1, (60 - keeperRead) / 42)) * 0.30;
+          goalkeeperCrisisAttackDrag = (0.006 + overreach * 0.012) * panicFactor;
+          if (cautiousBlock) goalkeeperCrisisAttackDrag *= 0.45;
+          if ((counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide)) {
+            goalkeeperCrisisAttackDrag *= 0.55;
+          }
+        }
+
         // ─── BOOST: CZERWONA KARTKA + DEFENSYWNA TAKTYKA ──────────────────────
         // Broniący grał defensywnie (attackBias ≤ 60) po czerwonej kartce → brak kary "otwarte plecy",
         // ale i tak jest luka w obronie. Przeciwnik dostaje losowy boost do akcji podbramkowych.
         // Skala progresywna: 1 kartka [0.006–0.015] | 2 kartki ×1.7 [0.010–0.026] | 3+ ×1.7^(n-1)
         let redCardDefensiveBoost = 0;
-        const defendingSentOff = nextSentOffIds.filter(id =>
-          (activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers).some(p => p.id === id)
-        ).length;
         if (defendingSentOff > 0 && defendingTacticObj.attackBias <= 60) {
           const baseBoost = 0.006 + seededRng(currentSeed, nextMinute, 777) * 0.009;
           redCardDefensiveBoost = baseBoost * Math.pow(1.7, defendingSentOff - 1);
@@ -1517,7 +1586,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             + activeFormImpact.shotModifier * activeFormStacking
             - defendingFormImpact.shotResistanceModifier * defendingFormStacking
             + openBacksBonus
+            + redCardTacticalExposure
             - ownShortHandedPenalty
+            - redCardAttackingDrag
+            - goalkeeperCrisisAttackDrag
             + noGkBonus
             + redCardDefensiveBoost
             - criticalFatPenalty
@@ -2071,7 +2143,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             const defendingTactic = TacticRepository.getById(defendingLineup.tacticId);
             const scorerSlotIdx   = attackingLineup.startingXI.indexOf(scorer.id);
             const scorerSlotRole  = scorerSlotIdx !== -1 ? attackingTactic.slots[scorerSlotIdx].role : scorer.position;
-            const scorerFitMod    = computePosFitMod(scorer, scorerSlotRole, activeSide === userSide);
+            const scorerFitMod    = computePosFitMod(scorer, scorerSlotRole, true);
            // Brak bramkarza (pusty slot 0): gkFitMod 0.01 = niemal pewny gol
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
            const scorerBriefingFatigue = activeSide === userSide
@@ -2374,28 +2446,52 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
         }
 
-        const accidentalInjuryRoll = seededRng(currentSeed, nextMinute, 4500);
-        const matchPressureInjuryMod = Math.max(hLivePressure.injuryMultiplier, aLivePressure.injuryMultiplier);
-        const uInjuryThreshold = 0.0064 * ((uInjuryMod + 1.0) / 2) * matchPressureInjuryMod;
-        if (accidentalInjuryRoll < uInjuryThreshold) {
-           const side: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 4600) < 0.5 ? 'HOME' : 'AWAY';
-           const pool = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-           const lineup = side === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
-           const activeInjMap = side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
-           const healthyOnPitch = pool.filter(p => lineup.includes(p.id) && !activeInjMap[p.id]);
+        const accidentalInjurySides: Array<{
+          side: 'HOME' | 'AWAY';
+          pressure: typeof hLivePressure;
+          instructionInjuryMod: number;
+          rollOffset: number;
+          pickOffset: number;
+          severityOffset: number;
+        }> = [
+          {
+            side: 'HOME',
+            pressure: hLivePressure,
+            instructionInjuryMod: userSide === 'HOME' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            rollOffset: 4500,
+            pickOffset: 4700,
+            severityOffset: 4800,
+          },
+          {
+            side: 'AWAY',
+            pressure: aLivePressure,
+            instructionInjuryMod: userSide === 'AWAY' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            rollOffset: 4550,
+            pickOffset: 4750,
+            severityOffset: 4850,
+          },
+        ];
 
-           if (healthyOnPitch.length > 0) {
-              const victim = healthyOnPitch[Math.floor(seededRng(currentSeed, nextMinute, 4700) * healthyOnPitch.length)];
-              const isSevere = seededRng(currentSeed, nextMinute, 4800) < 0.15;
-              processInjury({
-                 minute: nextMinute,
-                 teamSide: side,
-                 type: isSevere ? MatchEventType.INJURY_SEVERE : MatchEventType.INJURY_LIGHT,
-                 primaryPlayerId: victim.id,
-                 text: victim.lastName
-              } as MatchEvent);
-           }
-        }
+        accidentalInjurySides.forEach(({ side, pressure, instructionInjuryMod, rollOffset, pickOffset, severityOffset }) => {
+          const threshold = 0.0032 * ((instructionInjuryMod + 1.0) / 2) * pressure.injuryMultiplier;
+          if (seededRng(currentSeed, nextMinute, rollOffset) >= threshold) return;
+
+          const pool = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+          const lineup = side === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+          const activeInjMap = side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
+          const healthyOnPitch = pool.filter(p => lineup.includes(p.id) && !activeInjMap[p.id]);
+          if (healthyOnPitch.length === 0) return;
+
+          const victim = healthyOnPitch[Math.floor(seededRng(currentSeed, nextMinute, pickOffset) * healthyOnPitch.length)];
+          const isSevere = seededRng(currentSeed, nextMinute, severityOffset) < 0.15;
+          processInjury({
+            minute: nextMinute,
+            teamSide: side,
+            type: isSevere ? MatchEventType.INJURY_SEVERE : MatchEventType.INJURY_LIGHT,
+            primaryPlayerId: victim.id,
+            text: victim.lastName
+          } as MatchEvent);
+        });
 
         // --- Progresywne ryzyko kontuzji na podstawie kondycji (poniżej 70%) ---
         const staminaInjurySides: Array<{ side: 'HOME' | 'AWAY', lineup: (string | null)[], injuries: Record<string, InjurySeverity>, fatMap: Record<string, number>, pool: Player[] }> = [

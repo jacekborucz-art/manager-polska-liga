@@ -405,6 +405,99 @@ const chooseScoreTacticResponse = (
   return best.score >= requiredScore ? best.tacticId : null;
 };
 
+const hasReliableGoalkeeper = (lineup: Lineup, players: Player[]): boolean => {
+  const keeper = getPlayer(players, lineup.startingXI[0]);
+  return keeper?.position === PlayerPosition.GK;
+};
+
+const getCounterThreatScore = (lineup: Lineup, players: Player[]): number => {
+  const active = lineup.startingXI
+    .map(id => getPlayer(players, id))
+    .filter((p): p is Player => !!p && p.position !== PlayerPosition.GK);
+  const forwards = active.filter(p => p.position === PlayerPosition.FWD);
+  const mids = active.filter(p => p.position === PlayerPosition.MID);
+  const paceFinish = [...forwards, ...mids]
+    .map(p => (
+      p.attributes.pace * 0.34 +
+      p.attributes.finishing * 0.24 +
+      p.attributes.dribbling * 0.18 +
+      p.attributes.passing * 0.12 +
+      p.attributes.vision * 0.12
+    ) * getReadinessMultiplier(p))
+    .sort((a, b) => b - a)
+    .slice(0, 4);
+  if (paceFinish.length === 0) return 45;
+  return paceFinish.reduce((sum, value) => sum + value, 0) / paceFinish.length;
+};
+
+const chooseOpponentGoalkeeperCrisisResponse = (
+  lineup: Lineup,
+  players: Player[],
+  oppLineup: Lineup,
+  oppPlayers: Player[],
+  scoreDiff: number,
+  coachQuality: number
+): { tacticId: string; reason: 'smart_pressure' | 'reckless_push' } | null => {
+  if (hasReliableGoalkeeper(oppLineup, oppPlayers)) return null;
+
+  const currentTactic = TacticRepository.getById(lineup.tacticId);
+  const currentFit = getLineupFitScore(lineup.startingXI, lineup.tacticId, players);
+  const counterThreat = getCounterThreatScore(oppLineup, oppPlayers);
+  const coachControl = Math.max(0, Math.min(1, (coachQuality - 45) / 35));
+  const chaseNeed = scoreDiff < 0 ? Math.min(1, Math.abs(scoreDiff) / 2) : 0;
+  const protectionNeed = scoreDiff > 0 ? Math.min(1, scoreDiff / 2) : 0;
+  const riskTolerance = Math.max(0.18, Math.min(0.88, 0.38 + coachControl * 0.28 + chaseNeed * 0.20 - protectionNeed * 0.18));
+
+  const smartPool = ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '4-3-3-F9', '4-4-2'];
+  const recklessPool = ['4-2-4', '3-4-3', '3-4-2-1', '4-4-2-OFF'];
+  const pool = coachQuality >= 62 || counterThreat >= 68 ? smartPool : recklessPool;
+
+  const candidates = Array.from(new Set(pool))
+    .filter(tacticId => tacticId !== lineup.tacticId)
+    .map(tacticId => {
+      const tactic = TacticRepository.getById(tacticId);
+      const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players);
+      if (!assignedXI) return null;
+      const fit = getLineupFitScore(assignedXI, tacticId, players);
+      const fitLoss = Math.max(0, currentFit - fit);
+      const attackGain = Math.max(0, tactic.attackBias - currentTactic.attackBias) * 0.42;
+      const pressureGain = Math.max(0, tactic.pressingIntensity - currentTactic.pressingIntensity) * 0.20;
+      const counterExposure = Math.max(0, tactic.attackBias - 62) * Math.max(0, counterThreat - 58) * 0.020;
+      const defensiveLoss = Math.max(0, currentTactic.defenseBias - tactic.defenseBias) * 0.14;
+      const counterRiskWeight = 0.95 + coachControl * 0.55 - riskTolerance * 0.45;
+      const controlledPressureBonus =
+        tactic.attackBias >= 58 && tactic.attackBias <= 74 && tactic.defenseBias >= 42
+          ? coachControl * 4
+          : 0;
+      const recklessBonus =
+        coachQuality < 56 && tactic.attackBias >= 78 && scoreDiff <= 0
+          ? 5
+          : 0;
+      const score =
+        attackGain +
+        pressureGain +
+        controlledPressureBonus +
+        recklessBonus -
+        counterExposure * counterRiskWeight -
+        defensiveLoss * (0.25 + protectionNeed) -
+        fitLoss * 0.18;
+      return { tacticId, score, attackBias: tactic.attackBias };
+    })
+    .filter((entry): entry is { tacticId: string; score: number; attackBias: number } => !!entry)
+    .sort((a, b) => b.score - a.score);
+
+  const best = candidates[0];
+  if (!best) return null;
+
+  const requiredScore = Math.max(4, 11 - coachQuality * 0.07 - chaseNeed * 3 + protectionNeed * 2);
+  if (best.score < requiredScore) return null;
+
+  return {
+    tacticId: best.tacticId,
+    reason: best.attackBias >= 78 && coachQuality < 60 ? 'reckless_push' : 'smart_pressure'
+  };
+};
+
 const chooseHalftimeTacticResponse = (
   lineup: Lineup,
   players: Player[],
@@ -617,6 +710,7 @@ export const AiMatchDecisionService = {
     const scoreDiff = myScore - oppScore;
     const oppLineup = isHome ? state.awayLineup : state.homeLineup;
     const halftimeAssessment = assessHalftimeStatus(currentLineup, oppLineup, myPlayers, oppPlayers, scoreDiff);
+    const opponentGoalkeeperCrisis = !hasReliableGoalkeeper(oppLineup, oppPlayers);
     const isFinalPhase = state.minute >= 76;
     const aiStakes = lateMatchContext?.aiStakes ?? 'MID_TABLE';
     const userStakes = lateMatchContext?.userStakes ?? 'MID_TABLE';
@@ -637,6 +731,7 @@ export const AiMatchDecisionService = {
     } else {
       reactionChance = isPriority ? 1.0 : (state.minute < 45 ? 0.30 : (state.minute < 75 ? 0.75 : 0.95));
       if (scoreDiff < 0) reactionChance += 0.20;
+      if (opponentGoalkeeperCrisis) reactionChance += coachQuality >= 60 ? 0.28 : 0.16;
       if (isFinalPhase && (mustProtectLate || mustChaseLate)) reactionChance += 0.08 + lateSeasonDrama * 0.08;
       if (isFinalPhase && aiStakes === 'LOW_STAKES' && scoreDiff === 0) reactionChance -= 0.12;
     }
@@ -1045,6 +1140,27 @@ export const AiMatchDecisionService = {
         subRecord = { playerOutId: protectSub.playerOutId, playerInId: protectSub.playerIn.id, minute: state.minute };
         markSubAction();
         logs.push(`${state.minute}' ${protectSub.playerIn.lastName} zastępuje ${pOut?.lastName} (${protectSub.reason}).`);
+      }
+    }
+
+    if (!newTacticId && opponentGoalkeeperCrisis && canChangeTacticNow && canUsePlannedLateTactic) {
+      const goalkeeperCrisisResponse = chooseOpponentGoalkeeperCrisisResponse(
+        newLineup,
+        myPlayers,
+        oppLineup,
+        oppPlayers,
+        scoreDiff,
+        coachQuality
+      );
+
+      if (goalkeeperCrisisResponse) {
+        newTacticId = goalkeeperCrisisResponse.tacticId;
+        markFormationAction(goalkeeperCrisisResponse.reason === 'reckless_push' ? 6 : 10);
+        logs.push(
+          goalkeeperCrisisResponse.reason === 'reckless_push'
+            ? `${state.minute}' Trener widzi problem z bramkarzem rywala i każe mocno zaatakować: ${newTacticId}.`
+            : `${state.minute}' Trener wykorzystuje kryzys bramkarski rywala, ale zostawia zabezpieczenie przed kontrą: ${newTacticId}.`
+        );
       }
     }
 
