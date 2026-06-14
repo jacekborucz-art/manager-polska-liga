@@ -13,26 +13,11 @@ import { SummerCampLocationModal, SummerCampProgramModal } from '../modals/Summe
 import { getAssistantSuggestion } from '../../services/WinterCampService';
 import { getSummerAssistantSuggestion } from '../../services/SummerCampService';
 import { WinterCampLocation, WinterCampProgram, WinterCampIntensity, SummerCampLocation, SummerCampProgram, SummerCampIntensity } from '../../types';
-import { FinanceService } from '../../services/FinanceService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
-import treningButton from '../../Graphic/buttons/trening.png';
-import plannerButton from '../../Graphic/buttons/planner.png';
-import kadraButton from '../../Graphic/buttons/kadra.png';
-import europaSwiatButton from '../../Graphic/buttons/europa_swiat.png';
-import rozgrywkiButton from '../../Graphic/buttons/rozgrywki.png';
-import statsButton from '../../Graphic/buttons/stats.png';
-import historiaButton from '../../Graphic/buttons/historia.png';
-import rynekPracyButton from '../../Graphic/buttons/rynek_pracy.png';
-import finanseButton from '../../Graphic/buttons/finanse.png';
-import trustButton from '../../Graphic/buttons/trust.png';
-import managementButton from '../../Graphic/buttons/management.png';
-import rezerwyButton from '../../Graphic/buttons/rezerwy.png';
-import akademiaButton from '../../Graphic/buttons/akademia.png';
-import szpitalButton from '../../Graphic/buttons/szpital.png';
 import saveButton from '../../Graphic/buttons/save.png';
 import { exportSaveToFile } from '../../services/SaveGameService';
+import { MatchHistoryService } from '../../services/MatchHistoryService';
 import edytorButton from '../../Graphic/buttons/edytor.png';
-import rezygnacjaButton from '../../Graphic/buttons/rezygnacja.png';
 import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
 import winnerPolishImg from '../../Graphic/cup/winnerpolish.png';
 import awansEkstImg from '../../Graphic/cup/awans-do-ekst.png';
@@ -152,6 +137,22 @@ export const Dashboard: React.FC = () => {
     return sorted.findIndex(c => c.id === userTeamId) + 1;
   }, [clubs, userTeamId, myClub]);
 
+  const sortedLeague = useMemo(() => {
+    if (!myClub) return [];
+    return [...clubs.filter(c => c.leagueId === myClub.leagueId)].sort((a, b) =>
+      b.stats.points - a.stats.points ||
+      b.stats.goalDifference - a.stats.goalDifference ||
+      b.stats.goalsFor - a.stats.goalsFor
+    );
+  }, [clubs, myClub]);
+
+  const lastMatches = useMemo(() => {
+    if (!userTeamId) return [];
+    return MatchHistoryService.getTeamHistory(userTeamId)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+  }, [userTeamId, lastMatchSummary]);
+
 const boardConfidence = useMemo(() => {
     if (!myClub) return 50;
     const resultScore = (myClub.stats.wins * 4) - (myClub.stats.losses * 6);
@@ -164,14 +165,6 @@ const boardConfidence = useMemo(() => {
     const total = 75 + resultScore + rankImpact - (myClub.reputation * 2) + (myClub.europeanBonusPoints ?? 0) + (myClub.sportingDirectorBoardInfluence ?? 0);
     return Math.min(100, Math.max(5, total));
   }, [myClub, userRank]);
-
-  // TUTAJ WSTAW TEN KOD (Pobieranie realnego budżetu z obiektu klubu)
- const currentBudget = useMemo(() => {
-     if (!myClub || !userTeamId) return "0";
-     const squad = players[userTeamId] || [];
-     const netFunds = FinanceService.calculateAvailableFunds(myClub.budget, squad);
-     return netFunds.toLocaleString('pl-PL');
-  }, [myClub, players, userTeamId]);
 
   const isTransferWindowOpen = useMemo(() => {
     if (!myClub) return false;
@@ -625,57 +618,262 @@ const boardConfidence = useMemo(() => {
   const unreadMainMessagesCount = mainMessages.filter(mail => !mail.isRead).length;
   const unreadTransferMessagesCount = transferMessages.filter(mail => !mail.isRead).length;
   const unreadActiveMailboxMessagesCount = activeMailboxMessages.filter(mail => !mail.isRead).length;
+  const clubPrimary = myClub?.colorsHex[0] ?? '#2563eb';
+  const clubSecondary = myClub?.colorsHex[1] ?? '#0f172a';
 
-  type TileButtonProps = {
+  type DashboardActionIcon =
+    | 'squad'
+    | 'reserves'
+    | 'training'
+    | 'competitions'
+    | 'calendar'
+    | 'hospital'
+    | 'stats'
+    | 'world'
+    | 'history'
+    | 'academy'
+    | 'jobs'
+    | 'finance'
+    | 'board'
+    | 'editor'
+    | 'save'
+    | 'manual'
+    | 'resign'
+    | 'exit';
+
+  type DashboardSvgButtonProps = {
     label: string;
-    icon?: React.ReactNode;
-    graphicSrc?: string;
+    icon: DashboardActionIcon;
     onClick: () => void;
-    primary?: boolean;
     disabled?: boolean;
-    badge?: React.ReactNode;
+    tone?: string;
+    size?: 'large' | 'wide' | 'small';
   };
 
-  const TileButton = ({ label, icon, graphicSrc, onClick, primary = false, disabled = false, badge = null }: TileButtonProps) => (
-    <button 
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={`
-        relative group flex flex-col items-center justify-center rounded-2xl transition-all duration-300 overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.28)] hover:shadow-[0_16px_40px_rgba(0,0,0,0.4)]
-        ${graphicSrc
-          ? 'bg-transparent border-transparent'
-          : primary
-            ? 'bg-white/5 border border-white/10 hover:border-white/20'
-            : 'bg-black/20 border border-white/5 hover:border-white/10'}
-        hover:-translate-y-1 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed
-      `}
-    >
-      <div 
-        className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity"
-        style={{ background: `radial-gradient(circle at center, ${myClub?.colorsHex[0]}, transparent 70%)` }}
-      />
-      {graphicSrc ? (
-        <>
-          <div className="relative z-10 flex w-full h-full items-center justify-center p-0">
-            <img
-              src={graphicSrc}
-              alt={label}
-              className="w-full h-full object-contain transform group-hover:scale-[1.03] transition-transform pointer-events-none drop-shadow-[0_10px_22px_rgba(0,0,0,0.45)]"
-            />
+  const renderDashboardActionIcon = (icon: DashboardActionIcon, color: string) => {
+    const common = {
+      fill: 'none',
+      stroke: color,
+      strokeLinecap: 'round' as const,
+      strokeLinejoin: 'round' as const,
+      strokeWidth: 2.4,
+    };
+
+    switch (icon) {
+      case 'squad':
+        return (
+          <>
+            <circle cx="18" cy="31" r="7" {...common} fill={color} fillOpacity="0.25" />
+            <path d="M8 61 Q8 41 14 41 Q18 45 22 41 Q28 41 28 61 Z" {...common} fill={color} fillOpacity="0.20" />
+            <circle cx="48" cy="31" r="7" {...common} fill={color} fillOpacity="0.25" />
+            <path d="M38 61 Q38 41 44 41 Q48 45 52 41 Q58 41 58 61 Z" {...common} fill={color} fillOpacity="0.20" />
+            <circle cx="79" cy="31" r="7" {...common} fill={color} fillOpacity="0.25" />
+            <path d="M69 61 Q69 41 75 41 Q79 45 83 41 Q89 41 89 61 Z" {...common} fill={color} fillOpacity="0.20" />
+          </>
+        );
+      case 'reserves':
+        return (
+          <>
+            <path d="M21 21l9-6 7 5 7-5 9 6-4 11-5-2v24H30V30l-5 2-4-11z" {...common} />
+            <path d="M48 35l8-5 7 5 8-5 6 8-3 8-5-2v19H55V44l-4 2-3-11z" stroke={color} strokeOpacity="0.48" fill="none" strokeWidth="2" />
+          </>
+        );
+      case 'training':
+        return (
+          <>
+            <path d="M27 24l10 28h20l10-28" {...common} />
+            <path d="M34 38h26M29 52h36" {...common} />
+            <path d="M66 17l9 9M74 16l-9 10" stroke={color} strokeOpacity="0.55" strokeWidth="2" />
+          </>
+        );
+      case 'competitions':
+        return (
+          <>
+            <path d="M31 18h34v9c0 14-8 23-17 23s-17-9-17-23v-9z" {...common} />
+            <path d="M31 25H20c1 11 6 17 14 19M65 25h11c-1 11-6 17-14 19M48 50v10M38 62h20" {...common} />
+          </>
+        );
+      case 'calendar':
+        return (
+          <>
+            <rect x="20" y="22" width="56" height="44" rx="8" {...common} />
+            <path d="M30 16v12M66 16v12M21 36h54" {...common} />
+            <path d="M34 49h8M47 49h8M60 49h4M34 59h8M47 59h8" stroke={color} strokeOpacity="0.55" strokeWidth="2" />
+          </>
+        );
+      case 'hospital':
+        return (
+          <>
+            <path d="M48 18l26 12v16c0 15-11 24-26 30-15-6-26-15-26-30V30l26-12z" {...common} />
+            <path d="M48 34v22M37 45h22" {...common} />
+            <path d="M23 61c7-9 12 10 19 0s11 9 19 0 10 4 12 1" stroke={color} strokeOpacity="0.45" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'stats':
+        return (
+          <>
+            <path d="M20 65h56" {...common} />
+            <path d="M28 57V41M42 57V30M56 57V37M70 57V23" {...common} />
+            <path d="M25 34l15-10 16 8 18-15" stroke={color} strokeOpacity="0.55" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'world':
+        return (
+          <>
+            <circle cx="48" cy="43" r="25" {...common} />
+            <path d="M23 43h50M48 18c8 8 11 40 0 50M48 18c-8 8-11 40 0 50" {...common} />
+            <path d="M68 23l6-6M75 16l2 8-8-2" stroke={color} strokeOpacity="0.55" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'history':
+        return (
+          <>
+            <path d="M25 28c7-8 18-12 30-8 14 4 22 19 18 33S54 75 40 71c-8-2-14-7-18-13" {...common} />
+            <path d="M22 28v17h17M48 33v16l13 8" {...common} />
+          </>
+        );
+      case 'academy':
+        return (
+          <>
+            <path d="M48 18l25 13-25 13-25-13 25-13z" {...common} />
+            <path d="M31 41v14c8 9 26 9 34 0V41" {...common} />
+            <path d="M70 34v18M64 62l6-10 6 10" stroke={color} strokeOpacity="0.50" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'jobs':
+        return (
+          <>
+            <rect x="20" y="28" width="56" height="38" rx="8" {...common} />
+            <path d="M37 28v-7h22v7M20 43h56M43 47h10" {...common} />
+          </>
+        );
+      case 'finance':
+        return (
+          <>
+            <ellipse cx="40" cy="34" rx="18" ry="9" {...common} />
+            <path d="M22 34v20c0 5 8 9 18 9s18-4 18-9V34M22 44c0 5 8 9 18 9s18-4 18-9" {...common} />
+            <path d="M62 58l8-11 8 5" stroke={color} strokeOpacity="0.55" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'board':
+        return (
+          <>
+            <path d="M48 17l27 13v8H21v-8l27-13zM27 38v27M42 38v27M57 38v27M72 38v27M20 65h56" {...common} />
+            <path d="M48 26h.1" stroke={color} strokeWidth="5" />
+          </>
+        );
+      case 'editor':
+        return (
+          <>
+            <path d="M59 21L66 28L32 62L22 67L25 55Z" {...common} fill={color} fillOpacity="0.12" />
+            <path d="M59 21L66 28L62 24Z" {...common} fill={color} fillOpacity="0.30" />
+            <path d="M56 24L30 58" stroke={color} strokeOpacity="0.30" strokeWidth="1.5" fill="none" />
+            <path d="M72 20l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" stroke={color} strokeOpacity="0.55" strokeWidth="1.5" fill={color} fillOpacity="0.15" />
+          </>
+        );
+      case 'save':
+        return (
+          <>
+            <path d="M20 18H66L76 28V70H20Z" {...common} fill={color} fillOpacity="0.08" />
+            <rect x="26" y="18" width="34" height="22" rx="1" {...common} fill={color} fillOpacity="0.15" />
+            <rect x="52" y="21" width="5" height="10" rx="1" {...common} fill={color} fillOpacity="0.35" />
+            <rect x="28" y="50" width="40" height="14" rx="2" {...common} fill={color} fillOpacity="0.15" />
+            <path d="M34 57h12" stroke={color} strokeOpacity="0.45" strokeWidth="2" fill="none" />
+          </>
+        );
+      case 'manual':
+        return (
+          <>
+            <path d="M48 22C44 20 32 18 18 22V68C32 64 44 66 48 68Z" {...common} fill={color} fillOpacity="0.10" />
+            <path d="M48 22C52 20 64 18 78 22V68C64 64 52 66 48 68Z" {...common} fill={color} fillOpacity="0.10" />
+            <path d="M48 22V68" {...common} />
+            <path d="M18 68C32 64 44 66 48 68C52 66 64 68 78 68" {...common} />
+            <path d="M24 32h18M24 40h18M24 48h14" stroke={color} strokeOpacity="0.38" strokeWidth="1.5" fill="none" />
+            <path d="M54 32h18M54 40h18M54 48h14" stroke={color} strokeOpacity="0.38" strokeWidth="1.5" fill="none" />
+          </>
+        );
+      case 'resign':
+        return (
+          <>
+            <path d="M32 70V16" {...common} />
+            <path d="M32 16C52 13 64 20 70 26C62 34 50 37 32 36Z" {...common} fill={color} fillOpacity="0.15" />
+            <path d="M36 22C50 20 62 24 68 26" stroke={color} strokeOpacity="0.35" strokeWidth="1.5" fill="none" />
+          </>
+        );
+      case 'exit':
+        return (
+          <>
+            <path d="M60 30A22 22 0 1 1 36 30" {...common} />
+            <path d="M48 14V40" {...common} />
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const DashboardSvgButton = ({ label, icon, onClick, disabled = false, tone, size = 'small' }: DashboardSvgButtonProps) => {
+    const accent = tone ?? clubPrimary;
+    const sizeClass =
+      size === 'large'
+        ? 'col-span-3 h-[108px]'
+        : size === 'wide'
+          ? 'col-span-2 h-[92px]'
+          : 'h-[92px]';
+    const labelClass = size === 'small' ? 'text-[10px]' : 'text-[13px]';
+    const iconBoxClass = size === 'small' ? 'w-14 h-14' : 'w-20 h-20';
+
+    return (
+      <div className={`group relative ${sizeClass}`}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          relative w-full h-full overflow-hidden rounded-[22px] border border-white/[0.08] bg-slate-950/58 text-left shadow-[0_14px_34px_rgba(0,0,0,0.34)] transition-all duration-300
+          hover:-translate-y-1 hover:border-white/20 hover:bg-slate-900/70 hover:shadow-[0_22px_52px_rgba(0,0,0,0.54)]
+          active:translate-y-0 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-30
+        `}
+      >
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          <path d="M0 18 Q0 0 18 0 H82 Q100 0 100 18 V82 Q100 100 82 100 H18 Q0 100 0 82 Z" fill="#020617" fillOpacity="0.84" />
+          <path d="M0 18 Q0 0 18 0 H82 Q100 0 100 18 V82 Q100 100 82 100 H18 Q0 100 0 82 Z" fill={accent} fillOpacity="0.10" />
+          <path d="M0 64 C22 50 42 51 62 40 C78 31 88 22 100 18 V100 H0 Z" fill={accent} fillOpacity="0.12" />
+          <path d="M7 24 C29 10 67 12 93 26" fill="none" stroke={accent} strokeOpacity="0.42" strokeWidth="1.4" strokeDasharray="8 8" className="dashboard-action-signal" />
+          <path d="M10 78 C31 90 69 90 90 73" fill="none" stroke="#ffffff" strokeOpacity="0.08" strokeWidth="1" />
+          <rect x="4" y="4" width="92" height="92" rx="17" fill="none" stroke="#ffffff" strokeOpacity="0.08" />
+        </svg>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.09] via-transparent to-black/35 opacity-70 transition-opacity group-hover:opacity-100" />
+        <div className="absolute left-4 right-4 top-2 h-px opacity-70" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <div className={`${iconBoxClass} shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-2`}>
+            <svg viewBox="0 0 96 84" className="h-full w-full drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)]" aria-hidden>
+              <rect x="5" y="5" width="86" height="74" rx="20" fill="#020617" fillOpacity="0.42" stroke={accent} strokeOpacity="0.25" />
+              {renderDashboardActionIcon(icon, accent)}
+            </svg>
           </div>
-          <span className="sr-only">{label}</span>
-        </>
-      ) : (
-        <>
-          <span className="text-[26px] mb-1.5 transform group-hover:scale-110 group-hover:rotate-3 transition-transform">{icon}</span>
-          <span className="font-black text-[9px] uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors text-center">{label}</span>
-        </>
-      )}
-      {badge && <div className="absolute top-2 right-2">{badge}</div>}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-1 rounded-t-full opacity-0 group-hover:opacity-100 transition-all" style={{ backgroundColor: myClub?.colorsHex[0] }} />
-    </button>
-  );
+        </div>
+      </button>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 pointer-events-none z-[200] opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200">
+        <div
+          className="relative px-4 py-2.5 rounded-2xl border whitespace-nowrap"
+          style={{
+            background: 'linear-gradient(135deg, rgba(2,6,23,0.97) 0%, rgba(15,23,42,0.95) 100%)',
+            borderColor: `${accent}70`,
+            boxShadow: `0 8px 32px rgba(0,0,0,0.7), 0 0 18px ${accent}30`,
+          }}
+        >
+          <div className="absolute inset-x-3 top-0 h-px rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+          <span className="text-xs font-black italic uppercase tracking-tighter text-white drop-shadow">
+            {label}
+          </span>
+          <div className="mt-1.5 h-[2px] w-full rounded-full" style={{ background: `linear-gradient(90deg, ${accent}cc, transparent)` }} />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0" style={{ borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `5px solid ${accent}70` }} />
+        </div>
+      </div>
+      </div>
+    );
+  };
+
 
   return (
     <>
@@ -790,7 +988,8 @@ const boardConfidence = useMemo(() => {
         />
       )}
 
-      <div className="flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl">
+      <div className="relative flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl overflow-hidden">
+         <div className="absolute inset-y-0 w-1/3 separator-scan pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent)' }} />
          <div className="flex items-center gap-5">
             <div className="flex items-center gap-3">
               <span className="text-lg font-black italic uppercase tracking-tighter text-white leading-none">
@@ -912,11 +1111,6 @@ const boardConfidence = useMemo(() => {
               <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-none drop-shadow-2xl">
                  {formatDate(currentDate)}
               </h2>
-              <div className="flex items-center gap-5 mt-2">
-                <p className="text-slate-400 font-bold uppercase tracking-[0.4em] text-[11px] opacity-60">
-                   {myClub?.name} <span className="mx-2 text-white">/</span> GŁÓWNY MANAGER
-                </p>
-              </div>
            </div>
 
            {nextEvent && nextEvent.opponentClubId && (() => {
@@ -1066,145 +1260,193 @@ const boardConfidence = useMemo(() => {
       </div>
 
       <div className="flex-1 flex gap-6 min-h-0 z-0">
-        <div className="w-80 flex flex-col gap-5 shrink-0 rounded-[12px] bg-slate-950/55 border border-white/5 backdrop-blur-md p-4 shadow-[0_22px_60px_rgba(0,0,0,0.4)]">
-           <Card className="rounded-[35px] border-none bg-slate-900/40 backdrop-blur-2xl relative group shrink-0 overflow-hidden shadow-2xl">
-              <div className="absolute top-0 left-0 w-full h-2" style={{ backgroundColor: myClub?.colorsHex[0] }} />
-              <div className="absolute left-[-10px] top-4 text-8xl font-black italic text-white/[0.02] select-none pointer-events-none">
-                 {myClub?.shortName}
-              </div>
-              <div className="py-3 px-6 relative z-10">
-                 <div className="flex items-center gap-3 mb-1">
-                    {isResigned ? (
-                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-800 border border-white/10 shadow-2xl text-2xl shrink-0">👨‍💼</div>
-                    ) : getClubLogo(myClub?.id || '') ? (
-                      <div className="relative z-50 w-14 h-14 shrink-0 transform -rotate-3 group-hover:rotate-0 transition-transform">
-                        <img
-                          src={getClubLogo(myClub?.id || '')}
-                          alt={myClub?.name}
-                          className="w-full h-full object-contain drop-shadow-2xl"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-14 h-14 rounded-2xl flex flex-col overflow-hidden border border-white/20 shadow-2xl transform -rotate-3 group-hover:rotate-0 transition-transform">
-                        <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[0] }} />
-                        <div className="flex-1" style={{ backgroundColor: myClub?.colorsHex[1] }} />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                       <h3 className="text-lg font-black italic uppercase tracking-tighter text-white leading-tight">{isResigned ? 'BEZ KLUBU' : myClub?.name}</h3>
-                       {isResigned && (
-                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">Obserwator</p>
-                       )}
-                    </div>
-                 </div>
-                 {!isResigned && (
-                    <div
-                      onClick={() => setIsFinanceModalOpen(true)}
-                      className="hidden w-full bg-white/5 p-5 rounded-[28px] border border-white/5 flex flex-col gap-3 backdrop-blur-md hover:border-white/10 hover:bg-white/5 transition-all group shadow-xl cursor-pointer"
-                    >
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl group-hover:scale-110 transition-transform">💰</span>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em]">Finanse</span>
-                        </div>
-                    </div>
-                 )}
-              </div>
-           </Card>
-
-           {!isResigned && (
-            <div className="relative overflow-hidden rounded-[24px] border border-white/5 backdrop-blur-md hover:border-white/10 transition-all group shadow-xl shrink-0 bg-slate-950/40 cursor-pointer min-h-[65px] -mt-[30px]" onClick={() => setIsBoardModalOpen(true)}>
-              <img
-                src={managementButton}
-                alt="Zarząd Klubu"
-                className="w-full h-full object-cover"
-              />
+        <div className="w-80 flex flex-col gap-4 shrink-0 rounded-[26px] bg-slate-950/50 border border-white/[0.06] backdrop-blur-md p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] relative">
+          <Card className="rounded-[28px] border border-white/[0.08] bg-slate-950/48 backdrop-blur-2xl relative group shrink-0 overflow-hidden shadow-2xl">
+            <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: clubPrimary }} />
+            <div className="absolute right-[-8px] bottom-[-22px] text-8xl font-black italic text-white/[0.025] select-none pointer-events-none">
+              {myClub?.shortName}
             </div>
-           )}
+            <div className="relative z-10 p-2">
+              <div className="flex flex-col items-center gap-1">
+                <h3 className="text-base text-white leading-tight truncate font-black italic uppercase tracking-tighter text-center w-full">
+                  {isResigned ? 'BEZ KLUBU' : myClub?.name}
+                </h3>
+                {isResigned ? (
+                  <div className="w-16 h-16 flex items-center justify-center text-2xl">👨‍💼</div>
+                ) : getClubLogo(myClub?.id || '') ? (
+                  <div className="w-16 h-16 shrink-0 transition-transform group-hover:-rotate-2">
+                    <img
+                      src={getClubLogo(myClub?.id || '')}
+                      alt={myClub?.name}
+                      className="w-full h-full object-contain drop-shadow-2xl"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-[22px] flex flex-col overflow-hidden border border-white/20 shadow-2xl shrink-0">
+                    <div className="flex-1" style={{ backgroundColor: clubPrimary }} />
+                    <div className="flex-1" style={{ backgroundColor: clubSecondary }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
 
-           {!isResigned && (
-           <div className="hidden space-y-4 shrink-0">
-              {[
-                { label: 'Budżet Transferowy', value: `${currentBudget} PLN`, color: 'text-blue-400', icon: '💰', p: 80, onClick: () => setIsFinanceModalOpen(true) },
-                { label: 'Zaufanie Zarządu', value: `${boardConfidence}%`, color: boardConfidence > 70 ? 'text-emerald-400' : (boardConfidence > 40 ? 'text-amber-400' : 'text-red-500'), icon: '📈', p: boardConfidence },
-              ].filter(stat => !stat.onClick).map((stat) => (
-                <div
-                  key={stat.label}
-                  onClick={stat.onClick}
-                  className={`bg-slate-900/40 p-5 rounded-[28px] border border-white/5 flex flex-col gap-3 backdrop-blur-md hover:border-white/10 transition-all group shadow-xl ${stat.onClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
-                >
-                   <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl group-hover:scale-110 transition-transform">{stat.icon}</span>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em]">{stat.label}</span>
-                      </div>
-                      <span className={`text-sm font-black italic ${stat.color}`}>{stat.value}</span>
-                   </div>
-                   <div className="h-1 w-full bg-black/40 rounded-full overflow-hidden">
-                      <div className="h-full transition-all duration-1000" style={{ width: `${stat.p}%`, backgroundColor: boardConfidence > 70 ? '#34d399' : (boardConfidence > 40 ? '#fbbf24' : '#ef4444') }} />
-                   </div>
-                </div>
-              ))}
-           </div>
-           )}
-
-       <div className="w-full grid grid-cols-3 gap-x-[1px] gap-y-0 -mt-[20px]">
-              <TileButton label="KADRA" graphicSrc={kadraButton} onClick={() => navigateTo(ViewState.SQUAD_VIEW)} disabled={isJumping || isResigned} />
-              <TileButton label="REZERWY" graphicSrc={rezerwyButton} onClick={() => navigateTo(ViewState.RESERVES_VIEW)} disabled={isJumping || isResigned} />
-              <TileButton label="TRENING" graphicSrc={treningButton} onClick={() => navigateTo(ViewState.TRAINING_VIEW)} primary disabled={isJumping || isResigned} />
-              <TileButton label="ROZGRYWKI" graphicSrc={rozgrywkiButton} onClick={() => navigateTo(ViewState.LEAGUE_TABLES)} disabled={isJumping} />
-              <TileButton label="KALENDARZ" graphicSrc={plannerButton} onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)} disabled={isJumping || isResigned} />
-              <TileButton label="SZPITAL" graphicSrc={szpitalButton} onClick={() => navigateTo(ViewState.HOSPITAL_VIEW)} disabled={isJumping || isResigned} />
-              <TileButton label="STATYSTYKI" graphicSrc={statsButton} onClick={() => navigateTo(ViewState.LEAGUE_STATS)} disabled={isJumping} />
-              <TileButton 
-                 label="EUROPA I ŚWIAT" 
-                 graphicSrc={europaSwiatButton}
-                 onClick={() => navigateTo(ViewState.EUROPEAN_CLUBS)} 
-                 disabled={isJumping}
-              />
-              <TileButton label="HISTORIA" graphicSrc={historiaButton} onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)} disabled={isJumping} />
-              <TileButton label="AKADEMIA PILKARSKA" graphicSrc={akademiaButton} onClick={() => navigateTo(ViewState.ACADEMY_VIEW)} disabled={isJumping || isResigned} />
-              <TileButton label="RYNEK PRACY" graphicSrc={rynekPracyButton} onClick={() => navigateTo(ViewState.JOB_MARKET)} disabled={isJumping} />
-              <TileButton
-                label="FINANSE KLUBOWE"
-                graphicSrc={finanseButton}
-                onClick={() => setIsFinanceModalOpen(true)}
-                disabled={isJumping || isResigned}
-              />
-           </div>
+          <div className="relative z-10 grid w-full grid-cols-3 gap-2">
+            <DashboardSvgButton
+              label="Kadra"
+              icon="squad"
+              size="large"
+              tone={clubPrimary}
+              onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Trening"
+              icon="training"
+              tone="#38bdf8"
+              onClick={() => navigateTo(ViewState.TRAINING_VIEW)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Rezerwy"
+              icon="reserves"
+              tone="#818cf8"
+              onClick={() => navigateTo(ViewState.RESERVES_VIEW)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Zarząd"
+              icon="board"
+              tone="#f59e0b"
+              onClick={() => setIsBoardModalOpen(true)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Szpital"
+              icon="hospital"
+              tone="#fb7185"
+              onClick={() => navigateTo(ViewState.HOSPITAL_VIEW)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Akademia"
+              icon="academy"
+              tone="#a3e635"
+              onClick={() => navigateTo(ViewState.ACADEMY_VIEW)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Rozgrywki"
+              icon="competitions"
+              tone="#facc15"
+              onClick={() => navigateTo(ViewState.LEAGUE_TABLES)}
+              disabled={isJumping}
+            />
+            <DashboardSvgButton
+              label="Kalendarz"
+              icon="calendar"
+              tone="#22d3ee"
+              onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)}
+              disabled={isJumping || isResigned}
+            />
+            <DashboardSvgButton
+              label="Statystyki"
+              icon="stats"
+              tone="#60a5fa"
+              onClick={() => navigateTo(ViewState.LEAGUE_STATS)}
+              disabled={isJumping}
+            />
+            <DashboardSvgButton
+              label="Europa"
+              icon="world"
+              tone="#f87171"
+              onClick={() => navigateTo(ViewState.EUROPEAN_CLUBS)}
+              disabled={isJumping}
+            />
+            <DashboardSvgButton
+              label="Historia"
+              icon="history"
+              tone="#c084fc"
+              onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)}
+              disabled={isJumping}
+            />
+            <DashboardSvgButton
+              label="Rynek pracy"
+              icon="jobs"
+              tone="#f97316"
+              onClick={() => navigateTo(ViewState.JOB_MARKET)}
+              disabled={isJumping}
+            />
+            <DashboardSvgButton
+              label="Finanse"
+              icon="finance"
+              tone="#2dd4bf"
+              onClick={() => setIsFinanceModalOpen(true)}
+              disabled={isJumping || isResigned}
+            />
+            <div className="col-span-3 relative h-px my-1 overflow-hidden">
+              <div className="absolute inset-0 bg-yellow-400/25" />
+              <div className="absolute inset-y-0 w-1/3 separator-scan" style={{ background: 'linear-gradient(90deg, transparent, rgba(250,204,21,0.85), transparent)' }} />
+            </div>
+            <DashboardSvgButton
+              label="Edytor"
+              icon="editor"
+              tone="#a78bfa"
+              onClick={() => navigateTo(ViewState.EDITOR)}
+            />
+            <DashboardSvgButton
+              label="Zapis gry"
+              icon="save"
+              tone="#4ade80"
+              onClick={handleSaveGame}
+            />
+            <DashboardSvgButton
+              label="Instrukcja"
+              icon="manual"
+              tone="#fb923c"
+              onClick={() => navigateTo(ViewState.GAME_MANUAL)}
+            />
+          </div>
         </div>
 
-<div className="flex-1 flex flex-col min-w-0 min-h-0 h-[800px]">
-
-           <Card className="flex-1 rounded-[40px] border-white/10 bg-slate-950/30 flex flex-col overflow-hidden backdrop-blur-md shadow-2xl relative h-full">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 h-[800px]">
+          <Card className="flex-1 rounded-[32px] border border-white/[0.08] bg-slate-950/48 flex flex-col overflow-hidden backdrop-blur-xl shadow-[0_28px_80px_rgba(0,0,0,0.55)] relative h-full">
             {/* Internal Glass Gloss Background for Mailbox */}
               <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-                 <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1551290464-67296061329c?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-[0.02] mix-blend-overlay grayscale" />
-                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent z-10" />
-                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,transparent_60%,rgba(2,6,23,0.1)_100%)]" />
+                 <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1551290464-67296061329c?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-[0.025] mix-blend-overlay grayscale" />
+                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent z-10" />
+                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,transparent_50%,rgba(2,6,23,0.34)_100%)]" />
+                 <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+                   <path d="M2 12 C25 4 70 5 98 16" fill="none" stroke={clubPrimary} strokeOpacity="0.28" strokeWidth="0.35" strokeDasharray="4 4" />
+                   <path d="M0 88 C32 95 68 95 100 86" fill="none" stroke={clubSecondary} strokeOpacity="0.25" strokeWidth="0.35" strokeDasharray="4 4" />
+                 </svg>
               </div>
 
               
               <div className="relative z-10 flex flex-col h-full min-h-0">
-                 <div className="px-8 py-5 border-b border-white/5 bg-white/5 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-xs font-black uppercase tracking-[0.4em] text-white">Skrzynka pocztowa</h3>
-                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 p-1">
+                 <div className="px-7 py-5 border-b border-white/[0.07] bg-black/20 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="block text-[8px] text-emerald-300/70 font-black italic uppercase tracking-tighter">Centrum wiadomości</span>
+                    <h3 className="text-sm text-white font-black italic uppercase tracking-tighter">Skrzynka pocztowa</h3>
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-[16px] border border-white/[0.08] bg-slate-950/55 p-1 shadow-inner">
                     <button
                       onClick={() => setActiveMailboxTab('main')}
-                      className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter ${
                         activeMailboxTab === 'main'
-                          ? 'bg-white text-slate-900 shadow-lg'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-white text-slate-950 shadow-lg'
+                          : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
                     >
-                      Glowna ({unreadMainMessagesCount})
+                      Główna ({unreadMainMessagesCount})
                     </button>
                     <button
                       onClick={() => setActiveMailboxTab('transfers')}
-                      className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter ${
                         activeMailboxTab === 'transfers'
                           ? 'bg-amber-400 text-slate-950 shadow-lg'
-                          : 'text-slate-400 hover:text-white'
+                          : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
                     >
                       Transfery ({unreadTransferMessagesCount})
@@ -1212,39 +1454,43 @@ const boardConfidence = useMemo(() => {
                   </div>
                 </div>
                 {unreadActiveMailboxMessagesCount > 0 && (
-                   <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-inner">
+                   <span className="text-[9px] text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-inner font-black italic uppercase tracking-tighter">
                      {unreadActiveMailboxMessagesCount} NOWE
                    </span>
                 )}
               </div>
               
-               <div className="h-[700px] overflow-y-auto custom-scrollbar p-6 space-y-4">
+               <div className="h-[700px] overflow-y-auto custom-scrollbar p-5 space-y-2.5">
                  {activeMailboxMessages.length > 0 ? (
                    activeMailboxMessages.map(mail => (
                     <div 
                       key={mail.id}
                       onClick={() => setSelectedMail(mail)}
-                      className={`group relative p-6 rounded-[32px] border transition-all cursor-pointer overflow-hidden shadow-lg
-                        ${mail.isRead ? 'bg-white/[0.02] border-white/5 opacity-60' : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'}
+                      className={`group relative min-h-[84px] p-4 rounded-[22px] border transition-all cursor-pointer overflow-hidden shadow-lg
+                        ${mail.isRead ? 'bg-white/[0.025] border-white/[0.05] opacity-65' : 'bg-white/[0.055] border-white/[0.10] hover:border-white/20 hover:bg-white/[0.085]'}
                       `}
                     >
-                       <div className="absolute right-[-20px] bottom-[-20px] text-7xl opacity-[0.03] rotate-12 group-hover:rotate-0 transition-transform">
+                       <svg className="absolute inset-0 h-full w-full opacity-0 transition-opacity group-hover:opacity-100" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+                         <path d="M2 25 C28 11 71 11 98 26" fill="none" stroke={mail.isRead ? '#ffffff' : clubPrimary} strokeOpacity="0.20" strokeWidth="0.6" strokeDasharray="5 5" />
+                         <path d="M4 96 H96" stroke={mail.isRead ? '#ffffff' : clubPrimary} strokeOpacity="0.20" strokeWidth="0.8" />
+                       </svg>
+                       <div className="absolute right-[-18px] bottom-[-24px] text-7xl opacity-[0.025] rotate-12 group-hover:rotate-0 transition-transform">
                          {getMailIcon(mail.type)}
                        </div>
-                       <div className="flex items-start gap-6 relative z-10">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border shrink-0 shadow-inner group-hover:scale-110 transition-transform ${getMailColor(mail.type)}`}>
+                       <div className="flex items-center gap-4 relative z-10">
+                          <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center text-xl border shrink-0 shadow-inner group-hover:scale-105 transition-transform ${getMailColor(mail.type)}`}>
                              {getMailIcon(mail.type)}
                           </div>
                           <div className="flex-1 min-w-0">
-                             <div className="flex justify-between items-center mb-1">
-                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${mail.isRead ? 'text-slate-500' : 'text-blue-400'}`}>
+                             <div className="flex justify-between items-center gap-4 mb-1">
+                                <span className={`text-[9px] truncate font-black italic uppercase tracking-tighter ${mail.isRead ? 'text-slate-500' : 'text-blue-300'}`}>
                                    {mail.sender.toUpperCase()}
                                 </span>
-                                <span className="text-[9px] font-black text-slate-600 uppercase">
+                                <span className="text-[8px] text-slate-600 shrink-0 font-black italic uppercase tracking-tighter">
                                    {mail.date.toLocaleDateString()}
                                 </span>
                              </div>
-                             <h4 className={`text-sm font-black text-white mb-2 uppercase italic tracking-tight truncate ${mail.isRead ? 'font-bold' : 'font-black'}`}>
+                             <h4 className={`text-sm text-white mb-1 truncate font-black italic uppercase tracking-tighter ${mail.isRead ? 'opacity-75' : ''}`}>
                                 {mail.subject}
                              </h4>
                              <p className="text-[11px] text-slate-400 leading-relaxed font-medium line-clamp-1 italic">
@@ -1252,7 +1498,7 @@ const boardConfidence = useMemo(() => {
                              </p>
                           </div>
                           {!mail.isRead && (
-                             <div className="w-2 h-2 rounded-full bg-blue-500 mt-6 shadow-[0_0_10px_rgba(59,130,246,1)]" />
+                             <div className="w-2 h-12 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,1)]" />
                           )}
                        </div>
                     </div>
@@ -1260,7 +1506,7 @@ const boardConfidence = useMemo(() => {
                  ) : (
                    <div className="h-full flex flex-col items-center justify-center opacity-10 py-20">
                       <span className="text-6xl mb-4">📭</span>
-                      <p className="text-sm font-black uppercase tracking-[0.3em] italic text-center">Twoja skrzynka pocztowa jest obecnie pusta</p>
+                      <p className="text-sm text-center font-black italic uppercase tracking-tighter">Twoja skrzynka pocztowa jest obecnie pusta</p>
                    </div>
                  )}
          </div>
@@ -1268,33 +1514,104 @@ const boardConfidence = useMemo(() => {
            </Card>
         </div>
 
-        <div className="w-[123px] flex flex-col gap-3 shrink-0">
-          <button onClick={() => navigateTo(ViewState.EDITOR)}
-            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
-            <img src={edytorButton} alt="EDYTOR" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
-          </button>
-          <button onClick={handleSaveGame}
-            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
-            <img src={saveButton} alt="ZAPIS GRY" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
-          </button>
-          <button onClick={() => navigateTo(ViewState.GAME_MANUAL)}
-            className="relative group w-full overflow-hidden rounded-[24px] transition-all">
-            <img src={instrukcjaButton} alt="INSTRUKCJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
-          </button>
-          <button
-            onClick={() => !isResigned && setShowResignConfirm(true)}
-            disabled={isResigned}
-            className={`relative group w-full overflow-hidden rounded-[24px] transition-all
-              ${isResigned
-                ? 'opacity-30 cursor-not-allowed'
-                : ''}`}>
-            <img src={rezygnacjaButton} alt="REZYGNACJA" className="w-full object-contain group-hover:scale-[1.03] transition-transform pointer-events-none" />
-          </button>
-          <div className="flex-1" />
-          <button onClick={() => setShowExitConfirm(true)}
-            className="w-full py-4 rounded-[24px] bg-red-600 border border-red-500 hover:bg-red-500 transition-all">
-            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white">ZAKOŃCZ GRĘ</span>
-          </button>
+        <div className="w-[320px] flex flex-col gap-3 shrink-0 rounded-[28px] border border-white/[0.08] bg-slate-950/55 p-3 backdrop-blur-xl shadow-[0_24px_65px_rgba(0,0,0,0.48)]">
+          <div className="flex flex-col overflow-hidden rounded-[20px] border border-white/[0.06] bg-black/20">
+            <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">
+              <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300/80 block text-center">Tabela ligowa</span>
+            </div>
+            <div className="grid grid-cols-[22px_1fr_28px_36px_36px] gap-x-1 px-2 py-1 border-b border-white/[0.04] shrink-0">
+              <span className="text-[9px] font-black text-slate-600 text-center">#</span>
+              <span className="text-[9px] font-black text-slate-600">Klub</span>
+              <span className="text-[9px] font-black text-slate-600 text-center">M</span>
+              <span className="text-[9px] font-black text-slate-600 text-center">+/-</span>
+              <span className="text-[9px] font-black text-slate-600 text-center">PKT</span>
+            </div>
+            <div>
+              {(() => {
+                const lid = myClub?.leagueId ?? '';
+                const seps: { afterIdx: number; color: string }[] =
+                  lid === 'L_PL_1'
+                    ? [{ afterIdx: 0, color: '#facc15' }, { afterIdx: 14, color: '#f87171' }]
+                    : lid === 'L_PL_2'
+                    ? [{ afterIdx: 1, color: '#60a5fa' }, { afterIdx: 5, color: '#60a5fa' }, { afterIdx: 14, color: '#f87171' }]
+                    : lid === 'L_PL_3'
+                    ? [{ afterIdx: 1, color: '#60a5fa' }, { afterIdx: 5, color: '#60a5fa' }, { afterIdx: 11, color: '#60a5fa' }, { afterIdx: 13, color: '#f87171' }]
+                    : [];
+                return sortedLeague.map((club, idx) => {
+                  const isUser = club.id === userTeamId;
+                  const gd = club.stats.goalDifference;
+                  const sep = seps.find(s => s.afterIdx === idx);
+                  return (
+                    <React.Fragment key={club.id}>
+                      <div className={`grid grid-cols-[22px_1fr_28px_36px_36px] gap-x-1 px-2 py-1 items-center border-b border-white/[0.03] ${isUser ? 'bg-emerald-500/15 border-l-2 border-l-emerald-400' : ''}`}>
+                        <span className="text-[9px] font-black text-slate-500 text-center">{idx + 1}</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: club.colorsHex[0] }} />
+                          <span className={`text-[10px] font-black italic uppercase truncate ${isUser ? 'text-emerald-300' : 'text-white/80'}`}>{(() => { const p = club.name.split(' '); return p.length > 1 ? `${p[0]} ${p[1].slice(0, 3)}` : p[0]; })()}</span>
+                        </div>
+                        <span className="text-[9px] font-black text-slate-400 text-center">{club.stats.played}</span>
+                        <span className={`text-[9px] font-black text-center ${gd > 0 ? 'text-emerald-400' : gd < 0 ? 'text-red-400' : 'text-slate-400'}`}>{gd > 0 ? `+${gd}` : gd}</span>
+                        <span className={`text-[11px] font-black text-center ${isUser ? 'text-emerald-300' : 'text-white'}`}>{club.stats.points}</span>
+                      </div>
+                      {sep && (
+                        <div className="h-px mx-2 my-0.5 rounded-full" style={{ backgroundColor: sep.color, opacity: 0.35 }} />
+                      )}
+                    </React.Fragment>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-yellow-400/[0.12] bg-slate-800/30 overflow-hidden">
+            <div className="px-3 py-2 border-b border-white/[0.06]">
+              <span className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-400/90 block text-center">Ostatnie mecze</span>
+            </div>
+            <div>
+              {lastMatches.length === 0 ? (
+                <div className="text-[9px] text-slate-600 italic text-center py-3">Brak rozegranych meczów</div>
+              ) : lastMatches.map((m) => {
+                const isHome = m.homeTeamId === userTeamId;
+                const userGoals = isHome ? m.homeScore : m.awayScore;
+                const oppGoals = isHome ? m.awayScore : m.homeScore;
+                const oppId = isHome ? m.awayTeamId : m.homeTeamId;
+                const oppClub = clubs.find(c => c.id === oppId);
+                const oppName = oppClub?.name ?? oppId;
+                const oppDisplay = oppName;
+                let result: 'W' | 'R' | 'P';
+                let rowCls: string;
+                let bgCls: string;
+                if (userGoals > oppGoals) { result = 'W'; rowCls = 'text-emerald-400'; bgCls = 'bg-emerald-500/[0.08]'; }
+                else if (userGoals < oppGoals) { result = 'P'; rowCls = 'text-red-400'; bgCls = 'bg-red-500/[0.08]'; }
+                else { result = 'R'; rowCls = 'text-white/70'; bgCls = ''; }
+                return (
+                  <div key={m.matchId} className={`grid grid-cols-[20px_1fr_32px] items-center gap-1 px-3 py-0.5 border-b border-white/[0.03] ${rowCls} ${bgCls}`}>
+                    <span className="text-[9px] font-black italic">({result})</span>
+                    <span className="text-[9px] font-black italic uppercase truncate">{oppDisplay}</span>
+                    <span className="text-[9px] font-black italic text-right">{userGoals}-{oppGoals}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex gap-2 mt-auto">
+            <div className="flex-1 min-w-0">
+              <DashboardSvgButton
+                label="Rezygnacja"
+                icon="resign"
+                tone="#f59e0b"
+                onClick={() => !isResigned && setShowResignConfirm(true)}
+                disabled={isResigned}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DashboardSvgButton
+                label="Zakończ grę"
+                icon="exit"
+                tone="#ef4444"
+                onClick={() => setShowExitConfirm(true)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1309,6 +1626,10 @@ const boardConfidence = useMemo(() => {
         .animate-slide-up { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes pulse-slow { 0%, 100% { opacity: 0.1; transform: scale(1); } 50% { opacity: 0.2; transform: scale(1.1); } }
         .animate-pulse-slow { animation: pulse-slow 8s infinite ease-in-out; }
+        @keyframes dashboard-signal-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -32; } }
+        .group:hover .dashboard-action-signal { animation: dashboard-signal-flow 1.2s linear infinite; }
+        @keyframes separator-scan-kf { 0% { left: -34%; } 100% { left: 120%; } }
+        .separator-scan { position: absolute; top: 0; bottom: 0; width: 34%; animation: separator-scan-kf 2.6s ease-in-out infinite; }
       `}</style>
 
       {showResignConfirm && (
