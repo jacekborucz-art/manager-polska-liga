@@ -23,6 +23,7 @@ export const NEWSPAPER_DISPLAY_NAMES: Record<Newspaper, string> = {
 export const INITIAL_RELATIONSHIP = 50;
 export const MIN_RELATIONSHIP = 0;
 export const MAX_RELATIONSHIP = 100;
+const MIN_PRESS_SURNAME_LENGTH = 3;
 const DENIED_PRESS_OUTCOMES: { variant: PressVariant; relationshipDelta: number; weight: number }[] = [
   { variant: 'ODMOWA_NEGATYWNA', relationshipDelta: -12, weight: 70 },
   { variant: 'ODMOWA_NEUTRALNA', relationshipDelta: -6, weight: 15 },
@@ -58,6 +59,18 @@ export interface MediaDeclineOutcome {
 }
 
 export class MediaInterviewService {
+  static getPressManagerLabel(managerName?: string): string {
+    const normalized = managerName?.trim().replace(/\s+/g, ' ');
+    if (!normalized) return 'nowego trenera';
+
+    const parts = normalized.split(' ');
+    const lastPart = parts[parts.length - 1] ?? '';
+    if (lastPart.length >= MIN_PRESS_SURNAME_LENGTH) return lastPart;
+    if (parts.length > 1) return normalized;
+
+    return 'nowego trenera';
+  }
+
   static initRelationships(): Record<string, number> {
     const result: Record<string, number> = {};
     for (const newspaper of Object.values(Newspaper)) {

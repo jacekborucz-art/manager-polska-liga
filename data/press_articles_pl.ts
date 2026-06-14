@@ -23,6 +23,7 @@ export type PressVariant =
 export interface PressArticleContext {
   opponentName?: string;
   venueLabel?: string;
+  latestResultType?: 'WIN' | 'DRAW' | 'LOSS';
 }
 
 export interface PressArticle {
@@ -107,9 +108,14 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
       `Lepszego początku trudno było sobie wymarzyć. ${c} pod wodzą ${m} rozpoczęła nowy etap od zwycięstwa nad ${context?.opponentName ?? 'rywalem'} ${context?.venueLabel ?? 'w lidze'}, a wokół zespołu wyraźnie poprawiły się nastroje.\n\nChoć to dopiero pierwszy ważniejszy sprawdzian nowego szkoleniowca, kibice mają powody do umiarkowanego optymizmu. Drużyna wyglądała na dobrze przygotowaną, zaangażowaną i przede wszystkim pewną swoich założeń.\n\nSam trener studzi emocje, ale trudno nie zauważyć, że pierwsze tygodnie pracy w ${c} mogą budować solidny fundament pod dalszy rozwój.`,
   },
   PRZYCHYLNE_DOBRA_FORMA: {
-    headline: (m, _c, context) => `${m} łapie rytm. Wygrana z ${context?.opponentName ?? 'rywalem'} wzmacnia wiarę kibiców`,
+    headline: (m, _c, context) =>
+      context?.latestResultType === 'WIN'
+        ? `${m} łapie rytm. Wygrana z ${context?.opponentName ?? 'rywalem'} wzmacnia wiarę kibiców`
+        : `${m} łapie rytm. Wynik z ${context?.opponentName ?? 'rywalem'} potwierdza stabilizację`,
     body: (m, c, context) =>
-      `${c} pod wodzą ${m} dopisała kolejne ważne zwycięstwo, pokonując ${context?.opponentName ?? 'rywala'} ${context?.venueLabel ?? 'w lidze'}. Po wielu tygodniach pracy coraz wyraźniej widać, że zespół ma własny rytm i coraz lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`,
+      context?.latestResultType === 'WIN'
+        ? `${c} pod wodzą ${m} dopisała kolejne ważne zwycięstwo, pokonując ${context?.opponentName ?? 'rywala'} ${context?.venueLabel ?? 'w lidze'}. Po wielu tygodniach pracy coraz wyraźniej widać, że zespół ma własny rytm i coraz lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`
+        : `${c} pod wodzą ${m} utrzymała pozytywny rytm w meczu z ${context?.opponentName ?? 'rywalem'} ${context?.venueLabel ?? 'w lidze'}. Choć tym razem nie udało się dopisać kompletu punktów, po wielu tygodniach pracy coraz wyraźniej widać, że zespół lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik nie zamyka dyskusji, ale daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`,
   },
   PRZYCHYLNE_SZATNIA: {
     headline: (m, c) => `Piłkarze po stronie ${m}. W ${c} mówi się o bardzo dobrej atmosferze`,

@@ -979,12 +979,14 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const recentWins = recentLeagueFixtures.filter(isUserWin).length;
             const recentLosses = recentLeagueFixtures.filter(isUserLoss).length;
             const latestWasWin = isUserWin(latestLeagueFixture);
+            const latestWasLoss = isUserLoss(latestLeagueFixture);
+            const latestResultType = latestWasWin ? 'WIN' : latestWasLoss ? 'LOSS' : 'DRAW';
             const hasGoodResults = latestWasWin || recentWins >= 2 || recentLosses === 0;
             const isEarlyLeagueSeason = userLeagueFixtures.length <= 5;
             const friendlyMailId = `PRESS_FRIENDLY_START_${friendlyPressMonthKey}_${latestLeagueFixture.id}_${friendlyNewspaper}`;
             const alreadySentFriendly = existingMails.some(m => m.id === friendlyMailId);
             if (!alreadySentFriendly) {
-              const managerLastName = managerName?.trim().split(/\s+/).slice(-1)[0] ?? 'nowego trenera';
+              const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
               const opponentId = latestLeagueFixture.homeTeamId === userClub.id
                 ? latestLeagueFixture.awayTeamId
                 : latestLeagueFixture.homeTeamId;
@@ -1001,7 +1003,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
                 managerLastName,
                 userClub.name,
                 currentDate,
-                { opponentName, venueLabel }
+                { opponentName, venueLabel, latestResultType }
               );
               friendlyMail.id = friendlyMailId;
               friendlyMail.date = new Date(currentDate);
@@ -1046,7 +1048,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const criticalMailId = `PRESS_UNFRIENDLY_LOSS_${unfriendlyPressMonthKey}_${latestLeagueFixture.id}_${unfriendlyNewspaper}`;
             const alreadySentCritical = existingMails.some(m => m.id === criticalMailId);
             if (!alreadySentCritical) {
-              const managerLastName = managerName?.trim().split(/\s+/).slice(-1)[0] ?? 'nowego trenera';
+              const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
               const variant = MediaInterviewService.determineUnfriendlySeasonPressVariant();
               const criticalMail = MediaInterviewService.generatePressArticleMail(
                 variant,
