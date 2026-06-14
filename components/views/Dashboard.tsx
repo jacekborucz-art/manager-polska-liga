@@ -42,7 +42,7 @@ export const Dashboard: React.FC = () => {
     seasonTemplate,
     messages,
     markMessageRead,
-    lastMatchSummary,
+
    processBackgroundCupMatches,
    processCLMatchDay,
    coaches,
@@ -149,9 +149,9 @@ export const Dashboard: React.FC = () => {
   const lastMatches = useMemo(() => {
     if (!userTeamId) return [];
     return MatchHistoryService.getTeamHistory(userTeamId)
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
-  }, [userTeamId, lastMatchSummary]);
+  }, [userTeamId, currentDate]);
 
 const boardConfidence = useMemo(() => {
     if (!myClub) return 50;
@@ -1577,6 +1577,8 @@ const boardConfidence = useMemo(() => {
                 const oppClub = clubs.find(c => c.id === oppId);
                 const oppName = oppClub?.name ?? oppId;
                 const oppDisplay = oppName;
+                const d = new Date(m.date);
+                const dateStr = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}`;
                 let result: 'W' | 'R' | 'P';
                 let rowCls: string;
                 let bgCls: string;
@@ -1584,7 +1586,8 @@ const boardConfidence = useMemo(() => {
                 else if (userGoals < oppGoals) { result = 'P'; rowCls = 'text-red-400'; bgCls = 'bg-red-500/[0.08]'; }
                 else { result = 'R'; rowCls = 'text-white/70'; bgCls = ''; }
                 return (
-                  <div key={m.matchId} className={`grid grid-cols-[20px_1fr_32px] items-center gap-1 px-3 py-0.5 border-b border-white/[0.03] ${rowCls} ${bgCls}`}>
+                  <div key={m.matchId} className={`grid grid-cols-[44px_14px_1fr_32px] items-center gap-1 px-3 py-0.5 border-b border-white/[0.03] ${rowCls} ${bgCls}`}>
+                    <span className="text-[9px] font-black italic text-slate-500">{dateStr}</span>
                     <span className="text-[9px] font-black italic">({result})</span>
                     <span className="text-[9px] font-black italic uppercase truncate">{oppDisplay}</span>
                     <span className="text-[9px] font-black italic text-right">{userGoals}-{oppGoals}</span>
