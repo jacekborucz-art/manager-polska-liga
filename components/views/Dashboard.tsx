@@ -990,8 +990,10 @@ const boardConfidence = useMemo(() => {
         />
       )}
 
-      <div className="relative flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl overflow-hidden">
-         <div className="absolute inset-y-0 w-1/3 separator-scan pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent)' }} />
+      <div className="relative flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-2xl shrink-0 z-[100] shadow-2xl">
+         <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+           <div className="absolute inset-y-0 w-1/3 separator-scan" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent)' }} />
+         </div>
          <div className="flex items-center gap-5">
             <div className="flex items-center gap-3">
               <span className="text-lg font-black italic uppercase tracking-tighter text-white leading-none">
