@@ -63,6 +63,10 @@ export const StartMenu: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleNewGameClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    startNewGame(event.shiftKey ? 2026 : 2025);
+  };
+
   return (
     <div className="h-screen w-full flex flex-col items-center justify-end bg-slate-950 overflow-hidden relative">
 
@@ -155,7 +159,7 @@ export const StartMenu: React.FC = () => {
                                                                       
           
           <button 
-            onClick={startNewGame}
+            onClick={handleNewGameClick}
             className="group relative h-48 bg-emerald-600/10 border border-emerald-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-emerald-600 hover:border-emerald-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)] overflow-hidden"
           >
              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

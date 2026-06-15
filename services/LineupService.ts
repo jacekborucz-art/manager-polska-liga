@@ -5,10 +5,15 @@ import { PlayerPositionFitService } from './PlayerPositionFitService';
 
 type AutoPickOptions = {
   useSecondaryPositions?: boolean;
+  competitionId?: string;
 };
 
 type FitScoreOptions = {
   useSecondaryPositions?: boolean;
+};
+
+type LineupAvailabilityOptions = {
+  competitionId?: string;
 };
 
 const FAVORITE_TACTIC_MAP: Record<string, string> = {
@@ -55,21 +60,50 @@ const getSelectionScore = (player: Player): number => {
   return moraleScore + roleBonus;
 };
 
-const isUnavailableForLineup = (player: Player): boolean => {
+const isEuropeanCompetition = (competitionId?: string): boolean => {
+  if (!competitionId) return false;
+  return (
+    competitionId === 'EURO_CUP' ||
+    competitionId === 'UEFA_SUPER_CUP' ||
+    competitionId.startsWith('CL_') ||
+    competitionId.startsWith('EL_') ||
+    competitionId.startsWith('CONF_')
+  );
+};
+
+const getSuspensionMatchesForCompetition = (player: Player, competitionId?: string): number => {
+  if (competitionId === 'POLISH_CUP' || competitionId === 'SUPER_CUP') {
+    return player.cupSuspensionMatches ?? 0;
+  }
+
+  if (isEuropeanCompetition(competitionId)) {
+    return player.euroSuspensionMatches ?? 0;
+  }
+
+  return player.suspensionMatches ?? 0;
+};
+
+const isUnavailableForLineup = (player: Player, competitionId?: string): boolean => {
   const injuryDays = player.health.injury?.daysRemaining ?? 0;
   return (
-    (player.suspensionMatches || 0) > 0 ||
+    getSuspensionMatchesForCompetition(player, competitionId) > 0 ||
     (player.health.status === HealthStatus.INJURED &&
       (player.health.injury?.severity === InjurySeverity.SEVERE || injuryDays > 2))
   );
 };
 
 export const LineupService = {
+  getSuspensionMatchesForCompetition,
+
+  isUnavailableForLineup: (player: Player, options: LineupAvailabilityOptions = {}): boolean =>
+    isUnavailableForLineup(player, options.competitionId),
+
   /**
    * Deterministyczny wybór składu.
    */
   autoPickLineup: (clubId: string, players: Player[], tacticId: string = '4-4-2', coach: Coach | null = null, options: AutoPickOptions = {}): Lineup => {
     const useSecondaryPositions = options.useSecondaryPositions ?? false;
+    const competitionId = options.competitionId;
     // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive)
     if (coach?.favoriteTactics) {
       const preferred = [
@@ -89,7 +123,7 @@ export const LineupService = {
     
     // Na start wybieramy tylko tych, którzy są w stanie grać (nie SEVERE, nie zawieszeni, daysRemaining <= 2, kondycja >= 60)
     const availablePlayers = players.filter(p =>
-      !isUnavailableForLineup(p) &&
+      !isUnavailableForLineup(p, competitionId) &&
       p.condition >= 60 &&
       (p.health.status === HealthStatus.HEALTHY || (p.health.injury?.daysRemaining ?? 0) <= 2)
     );
@@ -214,10 +248,10 @@ export const LineupService = {
    * Naprawia skład używając Systemu Kaskadowego (Stage 1 PRO).
    * Priorytet: Świeżość > Pozycja > Rating.
    */
-repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
+repairLineup: (lineup: Lineup, players: Player[], options: LineupAvailabilityOptions = {}): Lineup => {
     const AI_FRESH_THRESHOLD = 87;
     const tactic = TacticRepository.getById(lineup.tacticId);
-    const canPlay = (p: Player) => !isUnavailableForLineup(p) && p.condition >= 60;
+    const canPlay = (p: Player) => !isUnavailableForLineup(p, options.competitionId) && p.condition >= 60;
     
     const allAvailable = players.filter(canPlay);
     const freshPool = allAvailable.filter(p => p.condition >= AI_FRESH_THRESHOLD).sort((a,b) => getSelectionScore(b) - getSelectionScore(a));
@@ -287,12 +321,12 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     return { ...lineup, startingXI: newXI, bench: newBench, reserves: newReserves };
   },
 
-  evictSuspendedPlayers: (lineup: Lineup, players: Player[]): Lineup => {
+  evictSuspendedPlayers: (lineup: Lineup, players: Player[], options: LineupAvailabilityOptions = {}): Lineup => {
     const newLineup = { ...lineup, startingXI: [...lineup.startingXI], bench: [...lineup.bench], reserves: [...lineup.reserves] };
     const isRestricted = (id: string) => {
       const p = players.find(x => x.id === id);
       if (!p) return false;
-      return isUnavailableForLineup(p);
+      return isUnavailableForLineup(p, options.competitionId);
     };
     newLineup.startingXI = newLineup.startingXI.map(id => {
       if (id && isRestricted(id)) {
@@ -311,14 +345,14 @@ repairLineup: (lineup: Lineup, players: Player[]): Lineup => {
     return newLineup;
   },
 
-  validateLineup: (lineup: Lineup, allClubPlayers: Player[]): { valid: boolean; error?: string } => {
+  validateLineup: (lineup: Lineup, allClubPlayers: Player[], options: LineupAvailabilityOptions = {}): { valid: boolean; error?: string } => {
     const missingCount = lineup.startingXI.filter(id => id === null).length;
     if (missingCount > 0) return { valid: false, error: `Skład niekompletny! Brakuje ${missingCount} zawodników.` };
     if (lineup.bench.length > 9) return { valid: false, error: "Zbyt wielu zawodników na ławce" };
     const startPlayers = allClubPlayers.filter(p => lineup.startingXI.includes(p.id));
     const hasGK = startPlayers.some(p => p.position === PlayerPosition.GK);
     if (!hasGK) return { valid: false, error: "Brak bramkarza w podstawowej jedenastce!" };
-    if (startPlayers.some(p => (p.suspensionMatches || 0) > 0)) return { valid: false, error: "W wyjściowym składzie znajduje się zawieszony zawodnik!" };
+    if (startPlayers.some(p => getSuspensionMatchesForCompetition(p, options.competitionId) > 0)) return { valid: false, error: "W wyjściowym składzie znajduje się zawieszony zawodnik!" };
     if (startPlayers.some(p => p.health.status === HealthStatus.INJURED && (p.health.injury?.severity === InjurySeverity.SEVERE || (p.health.injury?.daysRemaining ?? 0) > 2))) return { valid: false, error: "W wyjściowym składzie znajduje się kontuzjowany zawodnik!" };
     return { valid: true };
   },

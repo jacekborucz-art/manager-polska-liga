@@ -1,11 +1,53 @@
-import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach } from '../types';
+import { Fixture, Club, Player, PlayerPosition, Lineup, MatchStatus, CompetitionType, InjurySeverity, MatchHistoryEntry, MatchEventType, Referee, Coach, PlayerStats } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
 import { EuropeanWeatherService } from './EuropeanWeatherService';
-import { PlayerStatsService } from './PlayerStatsService';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+
+const emptyEuroStats = (): PlayerStats => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: []
+});
+
+const applyEuropeanCard = (
+  playersMap: Record<string, Player[]>,
+  playerId: string,
+  type: MatchEventType
+): Record<string, Player[]> => {
+  const updated = { ...playersMap };
+
+  for (const clubId in updated) {
+    updated[clubId] = updated[clubId].map(player => {
+      if (player.id !== playerId) return player;
+
+      const euroStats = { ...(player.euroStats ?? emptyEuroStats()) };
+      let euroSuspensionMatches = player.euroSuspensionMatches ?? 0;
+
+      if (type === MatchEventType.YELLOW_CARD) {
+        euroStats.yellowCards += 1;
+        if (euroStats.yellowCards % 4 === 0) euroSuspensionMatches += 1;
+      }
+
+      if (type === MatchEventType.RED_CARD) {
+        euroStats.redCards += 1;
+        euroSuspensionMatches += 2;
+      }
+
+      return { ...player, euroStats, euroSuspensionMatches };
+    });
+  }
+
+  return updated;
+};
 
 // ============================================================
 //  WYNIK MECZU CL â€” rozszerzony o zdarzenia z zawodnikami
@@ -798,8 +840,8 @@ export const BackgroundMatchUEFASuperCup = {
 
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
-      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers);
-      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers);
+      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
+      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
 
       // Superpuchar Europy: zawsze mecz finaÅ‚owy, brak rewanÅ¼u
       const isFinal = true;
@@ -877,7 +919,7 @@ export const BackgroundMatchUEFASuperCup = {
         const eventType = card.type === 'RED' || card.type === 'SECOND_YELLOW'
           ? MatchEventType.RED_CARD
           : MatchEventType.YELLOW_CARD;
-        updatedPlayersMap = PlayerStatsService.applyCard(updatedPlayersMap, card.playerId, eventType);
+        updatedPlayersMap = applyEuropeanCard(updatedPlayersMap, card.playerId, eventType);
       });
 
       const yellowsInMatch = result.cards.filter(c => c.type === 'YELLOW' || c.type === 'SECOND_YELLOW').length;

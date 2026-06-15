@@ -2607,6 +2607,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       awayColor={kitColors.away.primary}
       activeSide={matchState.logs[0]?.teamSide}
       eventType={matchState.logs[0]?.type}
+      momentum={matchState.momentum}
     />
 
     {/* Linie boiska */}
@@ -2793,38 +2794,42 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         <div
   key={`h-${p.id}`}
   onClick={() => handleOpenPlayerCard(p.id)}
-  className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
+  className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer group/live-player"
   style={{
     left: `${slot.x * 100}%`,
-    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.GK ? '7px' : slot.role === PlayerPosition.FWD ? '-30px' : slot.role === PlayerPosition.DEF ? '-3px' : slot.role === PlayerPosition.MID ? '-20px' : '0px'})`,
-
-    transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.15)'
+    top: `calc(${(slot.y * 0.42 + 0.54) * 100}% + ${slot.role === PlayerPosition.FWD ? -31 : slot.role === PlayerPosition.MID ? -29 : slot.role === PlayerPosition.DEF ? -10 : slot.role === PlayerPosition.GK ? 6 : 0}px)`,
+    transform: 'translate(-50%, -50%) scale(1.265)'
   }}
         >
+          {hasScored && (
+            <div className="absolute w-2 h-2 bg-white rounded-full flex items-center justify-center text-[8px] shadow-lg border border-black z-30" style={{ top: '-5px', left: 'calc(50% - 13px)' }}>
+              ⚽
+            </div>
+          )}
           <div className="relative group/player">
             <div
-              className={`w-5 h-5 rounded-2xl border-2 border-white/50 shadow-2xl flex flex-col overflow-hidden transform -rotate-3 transition-transform group-hover/player:rotate-0 group-hover/player:scale-110 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+              className="absolute inset-[-12px] rounded-full blur-xl opacity-0 group-hover/live-player:opacity-65 transition-opacity duration-300"
               style={{ backgroundColor: kitColors.home.primary }}
+            />
+            <div
+              className={`relative w-6 h-6 rounded-full border-2 border-white/55 shadow-[0_8px_14px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.35)] flex flex-col overflow-hidden transform -rotate-3 transition-all duration-300 group-hover/player:rotate-0 group-hover/player:scale-115 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+              style={{ backgroundColor: kitColors.home.primary, borderColor: kitColors.home.secondary }}
             >
-              <div className="flex-1 flex items-center justify-center text-[8px] font-black" style={{ color: kitColors.home.text }}>
+              <div className="absolute inset-x-0 top-0 h-[68%]" style={{ backgroundColor: kitColors.home.primary }} />
+              <div className="absolute inset-x-0 bottom-0 h-[32%]" style={{ backgroundColor: kitColors.home.secondary }} />
+              <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/35" />
+              <div className="relative flex-1 flex items-center justify-center text-[8px] font-black italic uppercase tracking-tighter" style={{ color: kitColors.home.text, textShadow: '0 2px 5px rgba(0,0,0,0.85)' }}>
                 {p.overallRating}
               </div>
             </div>
-            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
-
- {hasScored && (
-              <div className="absolute -top-2 -left-2 text-[10px] z-30">
-                ⚽
-              </div>
-            )}
-
-            {injury && <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
+            {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -right-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg rotate-6" />}
           </div>
-         <div
-  className={`text-[9px] font-black mt-0 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`}
-  style={{ transform: 'rotateX(-24deg) scale(1.15)', textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 2px 2px 0 #000' }}
->
-  {p.firstName.charAt(0)}. {p.lastName}
+          {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '19px', right: 'calc(50% - 18px)' }}>✚</div>}
+          <div
+            className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`}
+            style={{ marginTop: '-2px', textShadow: '0 3px 10px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.8)' }}
+          >
+            {p.firstName.charAt(0)}. {p.lastName}
           </div>
         </div>
       );
@@ -2842,33 +2847,38 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
     <div
       key={`a-${p.id}`}
       onClick={() => handleOpenPlayerCard(p.id)}
-      className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer"
+      className="absolute flex flex-col items-center z-20 transition-all duration-1000 cursor-pointer group/live-player"
       style={{
-        left: `${slot.x * 100}%`,
-        top: `calc(${(0.48 - slot.y * 0.42) * 100}% - ${slot.role === PlayerPosition.GK ? '20px' : slot.role === PlayerPosition.FWD ? '-30px' : slot.role === PlayerPosition.MID ? '-15px' : '0px'})`,
-        transform: 'translate(-50%, -50%) rotateX(-24deg) scale(1.4)'
+        left: `calc(${slot.x * 100}% + ${slot.role === PlayerPosition.MID ? (slot.x < 0.5 ? -4 : slot.x > 0.5 ? 4 : 0) : 0}px)`,
+        top: `calc(${(0.48 - slot.y * 0.42) * 100}% + ${slot.role === PlayerPosition.FWD ? 18 : slot.role === PlayerPosition.MID ? 27 : slot.role === PlayerPosition.DEF ? 6 : slot.role === PlayerPosition.GK ? -16 : 0}px)`,
+        transform: 'translate(-50%, -50%) scale(1.4)'
       }}
     >
+      {hasScored && (
+        <div className="absolute w-2 h-2 bg-white rounded-full flex items-center justify-center text-[8px] shadow-lg border border-black z-30" style={{ top: '-5px', right: 'calc(50% - 12px)' }}>
+          ⚽
+        </div>
+      )}
       <div className="relative group/player">
         <div
-          className={`w-5 h-5 rounded-2xl border-2 border-white/50 shadow-2xl flex flex-col overflow-hidden transform rotate-3 transition-transform group-hover/player:rotate-0 group-hover/player:scale-110 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+          className="absolute inset-[-12px] rounded-full blur-xl opacity-0 group-hover/live-player:opacity-65 transition-opacity duration-300"
           style={{ backgroundColor: kitColors.away.primary }}
+        />
+        <div
+          className={`relative w-6 h-6 rounded-full border-2 border-white/55 shadow-[0_8px_14px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.35)] flex flex-col overflow-hidden transform rotate-3 transition-all duration-300 group-hover/player:rotate-0 group-hover/player:scale-115 ${injury === InjurySeverity.SEVERE ? 'grayscale opacity-50' : ''}`}
+          style={{ backgroundColor: kitColors.away.primary, borderColor: kitColors.away.secondary }}
         >
-          <div className="flex-1 flex items-center justify-center text-[7px] font-black" style={{ color: kitColors.away.text }}>
+          <div className="absolute inset-x-0 top-0 h-[68%]" style={{ backgroundColor: kitColors.away.primary }} />
+          <div className="absolute inset-x-0 bottom-0 h-[32%]" style={{ backgroundColor: kitColors.away.secondary }} />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/35" />
+          <div className="relative flex-1 flex items-center justify-center text-[8px] font-black italic uppercase tracking-tighter" style={{ color: kitColors.away.text, textShadow: '0 2px 5px rgba(0,0,0,0.85)' }}>
             {p.overallRating}
           </div>
         </div>
-        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-yellow-400 rounded-md shadow-lg" />}
-
- {hasScored && (
-          <div className="absolute -top-2 -right-2 text-[10px] z-30">
-            ⚽
-          </div>
-        )}
-
-        {injury && <div className={`absolute -bottom-1.5 -left-1.5 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] shadow-lg ${injury === InjurySeverity.SEVERE ? 'bg-red-600 animate-bounce' : 'bg-slate-600 animate-pulse'}`}>✚</div>}
+        {matchState.playerYellowCards[p.id] > 0 && <div className="absolute -top-1.5 -left-1.5 w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-lg -rotate-6" />}
       </div>
-      <div className={`text-[8px] font-black mt-1 whitespace-nowrap italic tracking-tighter ${injury ? 'text-red-400' : 'text-white'}`} style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 2px 2px 0 #000', position: 'relative', top: '-5px' }}>
+      {injury && <div className={`absolute flex items-center justify-center text-[12px] z-30 ${injury === InjurySeverity.SEVERE ? 'text-red-400 animate-bounce' : 'text-white animate-pulse'}`} style={{ bottom: '-2px', left: 'calc(50% - 18px)' }}>✚</div>}
+      <div className={`text-[8px] font-black whitespace-nowrap italic tracking-tighter z-50 relative ${injury ? 'text-red-400' : 'text-white'}`} style={{ marginTop: '-2px', textShadow: '0 2px 8px rgba(0, 0, 0, 0.65)' }}>
         {p.firstName.charAt(0)}. {p.lastName}
       </div>
     </div>

@@ -3,7 +3,6 @@ import { TacticRepository } from '../resources/tactics_db';
 import { GoalAttributionService } from './GoalAttributionService';
 import { LineupService } from './LineupService';
 import { EuropeanWeatherService } from './EuropeanWeatherService';
-import { PlayerStatsService } from './PlayerStatsService';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 
@@ -1111,8 +1110,8 @@ export const BackgroundMatchProcessorCL = {
       // Pobierz lub wygeneruj składy
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
-      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers);
-      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers);
+      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
+      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
 
       const isReturnLeg = fixture.leagueId === CompetitionType.CL_R1Q_RETURN
                        || fixture.leagueId === CompetitionType.CL_R2Q_RETURN

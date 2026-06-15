@@ -698,8 +698,8 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
   useEffect(() => {
    if (ctx && (!matchState || matchState.fixtureId !== ctx.fixture.id)) {
       const cupSessionSeed = Date.now();
-      const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
-      const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
+      const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers, '4-4-2', null, { competitionId: ctx.fixture.leagueId as string });
+      const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers, '4-4-2', null, { competitionId: ctx.fixture.leagueId as string });
       const userClubInit = userSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
       const aiClubInit = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
       const userPlayersInit = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;

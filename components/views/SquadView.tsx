@@ -444,6 +444,21 @@ export const SquadView: React.FC = () => {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [fixtures, userTeamId]);
 
+  const lineupCompetitionId = useMemo(() => {
+    const currentTime = new Date(currentDate).getTime();
+    const nextFixture = mySchedule.find(f =>
+      f.status === MatchStatus.SCHEDULED &&
+      new Date(f.date).getTime() >= currentTime
+    );
+    return nextFixture?.leagueId as string | undefined;
+  }, [currentDate, mySchedule]);
+
+  const isSuspendedForLineup = (player: Player): boolean =>
+    LineupService.getSuspensionMatchesForCompetition(player, lineupCompetitionId) > 0;
+
+  const isUnavailableForLineup = (player: Player): boolean =>
+    LineupService.isUnavailableForLineup(player, { competitionId: lineupCompetitionId });
+
   const allMatchHistory = useMemo(() => MatchHistoryService.getAll(), [seasonNumber]);
 
   const pastScheduleSeasons = useMemo(() => {
@@ -527,7 +542,7 @@ export const SquadView: React.FC = () => {
         .map(id => myPlayers.find(p => p.id === id))
         .filter((p): p is Player =>
           !!p &&
-          (p.suspensionMatches || 0) === 0 &&
+          !isUnavailableForLineup(p) &&
           !(p.health.status === HealthStatus.INJURED &&
             (p.health.injury?.severity === InjurySeverity.SEVERE ||
               (p.health.injury?.daysRemaining ?? 0) > 2)) &&
@@ -629,7 +644,7 @@ export const SquadView: React.FC = () => {
       const clickedPlayer = pId ? myPlayers.find(p => p.id === pId) : null;
       if (clickedPlayer && loc === 'RES') {
          // Sprawdź zawieszenia
-         if ((clickedPlayer.suspensionMatches || 0) > 0) {
+         if (isSuspendedForLineup(clickedPlayer)) {
             return;
          }
          // Sprawdź kontuzje (SEVERE lub daysRemaining > 2)
@@ -647,7 +662,7 @@ export const SquadView: React.FC = () => {
       
       // Walidacja przy wstawianiu zawodnika z Rezerw do składu
       if (sourcePlayer && selectedSlot.loc === 'RES' && loc !== 'RES') {
-         if ((sourcePlayer.suspensionMatches || 0) > 0) {
+         if (isSuspendedForLineup(sourcePlayer)) {
             setSelectedSlot(null);
             return;
          }
@@ -665,7 +680,7 @@ export const SquadView: React.FC = () => {
       if (loc === 'RES' && selectedSlot.loc !== 'RES') {
          const clickedTarget = pId ? myPlayers.find(p => p.id === pId) : null;
          if (clickedTarget) {
-            if ((clickedTarget.suspensionMatches || 0) > 0) {
+            if (isSuspendedForLineup(clickedTarget)) {
                setSelectedSlot(null);
                return;
             }
@@ -751,7 +766,7 @@ export const SquadView: React.FC = () => {
   const handleAutoPick = () => {
     if(!userTeamId) return;
     if (!hasAssistant) return;
-    const newLineup = { ...LineupService.autoPickLineup(userTeamId, myPlayers, currentTactic.id, null, { useSecondaryPositions: true }) };
+    const newLineup = { ...LineupService.autoPickLineup(userTeamId, myPlayers, currentTactic.id, null, { useSecondaryPositions: true, competitionId: lineupCompetitionId }) };
     updateLineup(userTeamId, newLineup);
     fixSpecialRoles(newLineup.startingXI);
   };
@@ -788,7 +803,7 @@ export const SquadView: React.FC = () => {
     const isSelected = selectedSlot?.loc === loc && (loc === 'START' ? selectedSlot.index === index : selectedSlot.id === pId);
     const selectedRole = selectedSlot?.loc === 'START' && selectedSlot.index !== undefined ? currentTactic.slots[selectedSlot.index]?.role : null;
     const isHighlighted = !isSelected && selectedRole && (loc === 'BENCH' || loc === 'RES') && player
-      && !(( player.suspensionMatches || 0) > 0)
+      && !isSuspendedForLineup(player)
       && !(player.health.status === HealthStatus.INJURED && (player.health.injury?.severity === InjurySeverity.SEVERE || (player.health.injury?.daysRemaining ?? 0) > 2))
       && !(player.condition < 60)
       && PlayerPositionFitService.matchesRole(player, selectedRole, true);
@@ -825,7 +840,7 @@ export const SquadView: React.FC = () => {
       : player.transferPendingFee
         ? `Kwota: ${player.transferPendingFee.toLocaleString('pl-PL')} PLN`
         : 'Transfer uzgodniony';
-    const isSuspended = (player.suspensionMatches || 0) > 0;
+    const isSuspended = isSuspendedForLineup(player);
     const isSevereInjured = player.health.status === HealthStatus.INJURED && player.health.injury?.severity === InjurySeverity.SEVERE;
     const isOverfatigued = player.condition < 60;
     const slotRole = loc === 'START' && index !== undefined ? currentTactic.slots[index]?.role : null;

@@ -120,6 +120,7 @@ import { UefaNationalRankingService } from '../services/UefaNationalRankingServi
 import { getNTMatchDayForDate, NTMatchDay } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
+import { WorldCupHistoryBackfillService } from '../services/WorldCupHistoryBackfillService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
@@ -809,7 +810,7 @@ interface GameContextType {
   trainingProgressHistory: number[];
   reserveProgressHistory: ReserveProgressPoint[];
 
-  startNewGame: () => void;
+  startNewGame: (careerStartYear?: number) => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
   importEditorFullPack: (data: unknown) => { success: boolean; message: string };
@@ -1544,14 +1545,19 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     return schedules;
   };
 
-  const startNewGame = () => {
-    const startYear = 2025;
+  const startNewGame = (careerStartYear = 2025) => {
+    const startYear = careerStartYear;
+    const careerStartDate = new Date(startYear, 6, 1);
+    const newSessionSeed = generateRuntimeSeed();
+    const newRuntimeSimulationSeed = generateRuntimeSeed();
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     setIsResigned(false);
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
-    setSessionSeed(generateRuntimeSeed());
-    setRuntimeSimulationSeed(generateRuntimeSeed());
+    setCurrentDate(careerStartDate);
+    setLastRecoveryDate(careerStartDate);
+    setSessionSeed(newSessionSeed);
+    setRuntimeSimulationSeed(newRuntimeSimulationSeed);
     const template = SeasonTemplateGenerator.generate(startYear);
     // -> tutaj wstaw kod
     const coachData = CoachService.generateInitialCoaches([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
@@ -1640,25 +1646,58 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     }
     setCoaches(prev => ({ ...prev, ...assignedNtCoaches }));
     setNationalTeams(ntSquadResult.updatedTeams);
-    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams));
-    setNationsLeagueState(null);
+    const initialUefaRankingState = UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams);
+    setUefaNationalRankingState(initialUefaRankingState);
+    const initialNationsLeagueState = NationsLeagueService.isNationsLeagueSeason(startYear)
+      ? NationsLeagueService.createInitialState(
+        ntSquadResult.updatedTeams,
+        startYear,
+        initialUefaRankingState,
+        null
+      )
+      : null;
+    setNationsLeagueState(initialNationsLeagueState);
     setNationsLeagueArchive([]);
     setEuroHostAnnouncements([]);
     setEuroQualifiersState(null);
+    const worldCupBackfill = WorldCupHistoryBackfillService.simulateSkippedWorldCups(
+      startYear,
+      ntSquadResult.updatedTeams,
+      newSessionSeed,
+    );
+    setWcqPlayoffState(null);
+    setWcState(worldCupBackfill.latestWorldCupState);
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
-    setMessages([]);
+    const initialNationsLeagueMail: MailMessage | null = initialNationsLeagueState
+      ? {
+        id: `UNL_DRAW_${initialNationsLeagueState.editionStartYear}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: `Liga Narodów UEFA ${initialNationsLeagueState.editionLabel} - grupy i terminarz`,
+        body: `Kariera rozpoczyna się już po technicznym przygotowaniu edycji Ligi Narodów UEFA ${initialNationsLeagueState.editionLabel}. Grupy zostały rozlosowane na podstawie rankingu UEFA reprezentacji, a terminarz fazy ligowej jest gotowy dla wrześniowego, październikowego i listopadowego okna reprezentacyjnego.`,
+        date: careerStartDate,
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      }
+      : null;
+    const initialMessages = [
+      ...(initialNationsLeagueMail ? [initialNationsLeagueMail] : []),
+      ...worldCupBackfill.messages,
+    ];
+    setMessages(initialMessages);
     setSentUnfriendlyPressMonths([]);
     setSentFriendlyPressMonths([]);
     setCompletedPressConferenceFixtureIds([]);
     setPressConferenceEffects({});
     setActiveTrainingId(null);
     setTrainingProgressHistory([]);
-    sentMailIdsRef.current = new Set();
+    sentMailIdsRef.current = new Set(initialMessages.map(message => message.id));
     setPzpnDisciplinaryEvents([]);
-    setProcessedDrawIds([]);
-    const initialSuperCup = SuperCupService.generateFixture(2025, STATIC_CLUBS);
-    const initialUEFASuperCup = UEFASuperCupService.generateFixture(2025, STATIC_CLUBS);
+    setProcessedDrawIds(initialNationsLeagueState ? [`UNL_DRAW_${initialNationsLeagueState.editionStartYear}`] : []);
+    const initialSuperCup = SuperCupService.generateFixture(startYear, STATIC_CLUBS);
+    const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, STATIC_CLUBS);
     setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
     const finalClubs = [...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
     const staffData = StaffGenerationService.generateInitialStaff(finalClubs);
