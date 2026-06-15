@@ -117,6 +117,7 @@ export enum ViewState {
   WCQ_PLAYOFF_RESULTS_SF = 'WCQ_PLAYOFF_RESULTS_SF',       // 17 marca — wyniki półfinałów
   WCQ_PLAYOFF_RESULTS_FINAL = 'WCQ_PLAYOFF_RESULTS_FINAL', // 20 marca — wyniki finałów + kwalifikacja
   // ── MISTRZOSTWA ŚWIATA ───────────────────────────────────────────────────
+  NATIONS_LEAGUE = 'NATIONS_LEAGUE',
   NATIONS_LEAGUE_DRAW = 'NATIONS_LEAGUE_DRAW',
   WC_DRAW = 'WC_DRAW',
   WORLD_CUP = 'WORLD_CUP',
@@ -2394,10 +2395,15 @@ export interface NTMatchResult {
   timeline?: MatchEvent[];
   refereeName?: string;
   kits?: MatchHistoryEntry['kits'];
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  penaltyWinner?: string;
 }
 
 export type NationsLeagueTier = 'A' | 'B' | 'C' | 'D';
-export type NationsLeagueStage = 'LEAGUE_PHASE' | 'QUARTER_FINALS' | 'FINALS' | 'COMPLETE';
+export type NationsLeagueStage = 'LEAGUE_PHASE' | 'QUARTER_FINALS' | 'PLAYOFFS' | 'FINALS' | 'COMPLETE';
+export type NationsLeaguePlayoffLevel = 'AB' | 'BC' | 'CD';
 
 export interface NationsLeagueTeamStanding {
   teamName: string;
@@ -2428,10 +2434,26 @@ export interface NationsLeagueFixture {
   away: string;
   groupId?: string;
   tier?: NationsLeagueTier;
+  playoffTieId?: string;
+  playoffLevel?: NationsLeaguePlayoffLevel;
   played?: boolean;
   matchId?: string;
   homeGoals?: number;
   awayGoals?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+}
+
+export interface NationsLeaguePlayoffTie {
+  id: string;
+  level: NationsLeaguePlayoffLevel;
+  highLeagueTeam: string;
+  lowLeagueTeam: string;
+  firstLegId: string;
+  secondLegId: string;
+  winner?: string;
+  loser?: string;
 }
 
 export interface NationsLeagueFinalsState {
@@ -2450,12 +2472,15 @@ export interface NationsLeagueState {
   stage: NationsLeagueStage;
   groups: NationsLeagueGroup[];
   fixtures: NationsLeagueFixture[];
+  playoffs: NationsLeaguePlayoffTie[];
   quarterFinalists: string[];
   semiFinalists: string[];
   finals: NationsLeagueFinalsState | null;
   completed: boolean;
   lastUpdatedIso?: string;
 }
+
+export interface NationsLeagueArchiveEntry extends NationsLeagueState {}
 
 export interface UefaNationalRankingEntry {
   teamName: string;
@@ -2464,6 +2489,15 @@ export interface UefaNationalRankingEntry {
   previousRank?: number;
   leagueTier?: NationsLeagueTier;
   lastDelta?: number;
+  rankingBasis?: 'ACCESS_LIST' | 'LEAGUE_PHASE' | 'FINAL';
+  groupPosition?: number;
+  played?: number;
+  wins?: number;
+  draws?: number;
+  losses?: number;
+  goalsFor?: number;
+  goalsAgainst?: number;
+  goalDifference?: number;
 }
 
 export interface UefaNationalRankingState {

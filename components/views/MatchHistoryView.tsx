@@ -218,11 +218,38 @@ function NationsLeagueArchive({
         <div className="text-right">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</p>
           <p className="text-sm font-black uppercase text-white">
-            {state.completed ? 'Zakończona' : state.stage === 'LEAGUE_PHASE' ? 'Faza ligowa' : state.stage === 'QUARTER_FINALS' ? 'Ćwierćfinały' : 'Finały'}
+            {state.completed ? 'Zakończona' : state.stage === 'LEAGUE_PHASE' ? 'Faza ligowa' : state.stage === 'QUARTER_FINALS' ? 'Ćwierćfinały i baraże' : state.stage === 'PLAYOFFS' ? 'Baraże' : 'Finały'}
           </p>
           {state.finals?.champion && <p className="text-xs font-bold text-amber-300 mt-1">Zwycięzca: {state.finals.champion}</p>}
         </div>
       </div>
+
+      {(state.playoffs ?? []).length > 0 && (
+        <div>
+          <div className="flex items-center gap-6 mb-5 px-2">
+            <span className="text-[10px] font-black text-amber-400 uppercase tracking-[0.5em] whitespace-nowrap">Baraże</span>
+            <div className="h-px bg-white/10 flex-1" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {(state.playoffs ?? []).map(tie => (
+              <div key={tie.id} className="rounded-3xl border border-white/10 bg-slate-900/40 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xl font-black italic uppercase tracking-tight text-white">Baraż {tie.level}</h3>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${tie.winner ? 'text-emerald-300' : 'text-white/30'}`}>
+                    {tie.winner ? `Wyżej: ${tie.winner}` : 'Nierozstrzygnięty'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[1fr_44px_1fr] items-center gap-3 text-sm">
+                  <span className="truncate text-right font-black uppercase text-white/75">{tie.highLeagueTeam}</span>
+                  <span className="text-center font-black text-sky-300">vs</span>
+                  <span className="truncate font-black uppercase text-white/75">{tie.lowLeagueTeam}</span>
+                </div>
+                {tie.loser && <p className="mt-3 text-xs font-bold uppercase tracking-widest text-white/35">Niżej: {tie.loser}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center gap-6 mb-5 px-2">
@@ -346,7 +373,7 @@ function UefaNationalRankingArchive({
           <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">Europa</h2>
         </div>
         <div className="text-right max-w-xl">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Źródło startowe</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Podstawa rankingu</p>
           <p className="text-xs font-bold text-white/60">{ranking.source}</p>
         </div>
       </div>
@@ -357,8 +384,8 @@ function UefaNationalRankingArchive({
           <span>Reprezentacja</span>
           <span className="text-center">Zmiana</span>
           <span className="text-center">Liga</span>
-          <span className="text-right">Punkty</span>
-          <span className="text-right">Ostatnio</span>
+          <span className="text-right">Pkt fazy</span>
+          <span className="text-right">Ruch</span>
         </div>
         <div className="divide-y divide-white/5">
           {ranking.entries.map(entry => {
@@ -384,8 +411,8 @@ function UefaNationalRankingArchive({
                   <span className="inline-flex min-w-8 justify-center rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-black text-cyan-300">{entry.leagueTier ?? '-'}</span>
                 </span>
                 <span className="text-right font-mono text-white">{entry.points}</span>
-                <span className={`text-right font-mono ${entry.lastDelta ? 'text-emerald-300' : 'text-white/25'}`}>
-                  {entry.lastDelta ? `+${entry.lastDelta}` : '0'}
+                <span className={`text-right font-mono ${(entry.lastDelta ?? 0) > 0 ? 'text-emerald-300' : (entry.lastDelta ?? 0) < 0 ? 'text-rose-300' : 'text-white/25'}`}>
+                  {(entry.lastDelta ?? 0) > 0 ? `+${entry.lastDelta}` : entry.lastDelta ?? 0}
                 </span>
               </div>
             );

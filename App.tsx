@@ -58,6 +58,7 @@ import { EuropeanClubsView } from './components/views/EuropeanClubsView';
 import NationalTeamResultsView from './components/views/NationalTeamResultsView';
 import WorldCupView from './components/views/WorldCupView';
 import WCDrawView from './components/views/WCDrawView';
+import NationsLeagueView from './components/views/NationsLeagueView';
 import NationsLeagueDrawView from './components/views/NationsLeagueDrawView';
 import { WCQPlayoffDrawView } from './components/views/WCQPlayoffDrawView';
 import { WCQPlayoffResultsView } from './components/views/WCQPlayoffResultsView';
@@ -281,6 +282,8 @@ case ViewState.WC_DRAW:
   return <WCDrawView />;
 case ViewState.NATIONS_LEAGUE_DRAW:
   return <NationsLeagueDrawView />;
+case ViewState.NATIONS_LEAGUE:
+  return <NationsLeagueView />;
 case ViewState.WORLD_CUP:
   return <WorldCupView />;
 case ViewState.WCQ_PLAYOFF_DRAW_VIEW:

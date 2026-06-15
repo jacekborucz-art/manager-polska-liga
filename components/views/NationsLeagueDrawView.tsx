@@ -66,6 +66,15 @@ const NationsLeagueDrawView: React.FC = () => {
     [uefaNationalRankingState]
   );
   const totalGroups = groups.length;
+  const teamCount = groups.reduce((sum, group) => sum + group.teams.length, 0);
+  const tierCounts = useMemo(
+    () => (['A', 'B', 'C', 'D'] as NationsLeagueTier[]).map(tier => ({
+      tier,
+      groups: groups.filter(group => group.tier === tier).length,
+      teams: groups.filter(group => group.tier === tier).reduce((sum, group) => sum + group.teams.length, 0),
+    })),
+    [groups]
+  );
   const ceremonyDone = totalGroups > 0 && revealedGroups >= totalGroups;
 
   if (!nationsLeagueState) {
@@ -135,9 +144,9 @@ const NationsLeagueDrawView: React.FC = () => {
             {ceremonyDone && (
               <button
                 className={`${BTN_FONT} rounded-lg bg-emerald-400 px-6 py-2.5 text-xs text-slate-950 hover:bg-emerald-300`}
-                onClick={() => navigateTo(ViewState.MATCH_HISTORY_BROWSER)}
+                onClick={() => navigateTo(ViewState.NATIONS_LEAGUE)}
               >
-                Podgląd wyników
+                Centrum rozgrywek
               </button>
             )}
             <button
@@ -160,6 +169,40 @@ const NationsLeagueDrawView: React.FC = () => {
               style={{ width: totalGroups ? `${(revealedGroups / totalGroups) * 100}%` : '0%' }}
             />
           </div>
+        </div>
+
+        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[1.2fr_1fr]">
+          <section className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
+            <div className={`${HEADING_FONT} mb-2 text-2xl text-white`}>Format edycji</div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {tierCounts.map(row => {
+                const meta = TIER_META[row.tier];
+                return (
+                  <div key={row.tier} className={`rounded-lg border ${meta.border} ${meta.bg} px-3 py-2`}>
+                    <div className={`${BTN_FONT} text-[10px] ${meta.accent}`}>{meta.title}</div>
+                    <div className="mt-1 text-sm font-black text-white">{row.groups} grupy · {row.teams} drużyn</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <section className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
+            <div className={`${HEADING_FONT} mb-2 text-2xl text-white`}>Stawka</div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-white/[0.06] px-3 py-2">
+                <div className="text-2xl font-black text-sky-300">{teamCount}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/35">reprezentacji</div>
+              </div>
+              <div className="rounded-lg bg-white/[0.06] px-3 py-2">
+                <div className="text-2xl font-black text-amber-300">10</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/35">par baraży</div>
+              </div>
+              <div className="rounded-lg bg-white/[0.06] px-3 py-2">
+                <div className="text-2xl font-black text-emerald-300">4</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/35">finalistów</div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="grid flex-1 grid-cols-4 gap-4 overflow-y-auto pr-1">

@@ -70,6 +70,7 @@ export const Dashboard: React.FC = () => {
     saveSummerCampLocation,
     saveSummerCampProgram,
     wcState,
+    nationsLeagueState,
     seasonCelebration,
     clearSeasonCelebration,
   } = useGame();
@@ -1221,6 +1222,24 @@ const boardConfidence = useMemo(() => {
                </span>
                <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-amber-100/50">
                  {isWorldCupTournamentOpen ? 'TURNIEJ' : 'LOSOWANIE'}
+               </span>
+             </button>
+           )}
+
+           {nationsLeagueState && !nationsLeagueState.completed && (
+             <button
+               onClick={() => navigateTo(ViewState.NATIONS_LEAGUE)}
+               disabled={isJumping}
+               className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-cyan-400/30 bg-cyan-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+             >
+               <span className="font-black italic uppercase tracking-tighter text-[9px] text-cyan-200/80">
+                 Liga Narodów UEFA
+               </span>
+               <span className="font-black italic uppercase tracking-tighter text-2xl leading-none text-white drop-shadow-lg">
+                 UNL
+               </span>
+               <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-cyan-100/50">
+                 {nationsLeagueState.stage === 'LEAGUE_PHASE' ? 'FAZA LIGOWA' : nationsLeagueState.stage === 'QUARTER_FINALS' ? 'ĆWIERĆFINAŁY + BARAŻE' : nationsLeagueState.stage === 'PLAYOFFS' ? 'BARAŻE' : 'FINAL FOUR'}
                </span>
              </button>
            )}

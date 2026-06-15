@@ -28,6 +28,7 @@ MatchHistoryEntry,
 WCQPlayoffState,
 WCState,
 NationsLeagueState,
+NationsLeagueArchiveEntry,
 UefaNationalRankingState,
 CoachSeasonStats,
 AiTransferLogEntry,
@@ -937,6 +938,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setWcqPlayoffState: React.Dispatch<React.SetStateAction<WCQPlayoffState | null>>;
   nationsLeagueState: NationsLeagueState | null;
   setNationsLeagueState: React.Dispatch<React.SetStateAction<NationsLeagueState | null>>;
+  nationsLeagueArchive: NationsLeagueArchiveEntry[];
   uefaNationalRankingState: UefaNationalRankingState | null;
   setUefaNationalRankingState: React.Dispatch<React.SetStateAction<UefaNationalRankingState | null>>;
   wcState: WCState | null;
@@ -1088,8 +1090,14 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   // Baraże MŚ 2026
   const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
   const [nationsLeagueState, setNationsLeagueState] = useState<NationsLeagueState | null>(null);
+  const [nationsLeagueArchive, setNationsLeagueArchive] = useState<NationsLeagueArchiveEntry[]>([]);
   const [uefaNationalRankingState, setUefaNationalRankingState] = useState<UefaNationalRankingState | null>(null);
   const [wcState, setWcState] = useState<WCState | null>(null);
+
+  const upsertNationsLeagueArchive = (archive: NationsLeagueArchiveEntry[], state: NationsLeagueState): NationsLeagueArchiveEntry[] => {
+    const next = archive.filter(entry => entry.editionStartYear !== state.editionStartYear);
+    return [...next, state].sort((a, b) => b.editionStartYear - a.editionStartYear);
+  };
   const [europeanViewTab, setEuropeanViewTab] = useState<'clubs' | 'nt'>('clubs');
   const [selectedNTId, setSelectedNTId] = useState<string | null>(null);
   const [gameNotification, setGameNotification] = useState<GameNotificationState | null>(null);
@@ -1625,6 +1633,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setCoaches(prev => ({ ...prev, ...assignedNtCoaches }));
     setNationalTeams(ntSquadResult.updatedTeams);
     setUefaNationalRankingState(UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams));
+    setNationsLeagueState(null);
+    setNationsLeagueArchive([]);
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
@@ -2603,6 +2613,7 @@ if (userTeamId) {
     europeanStatus,
     nationalTeams,
     nationsLeagueState,
+    nationsLeagueArchive,
     uefaNationalRankingState,
     wcqPlayoffState,
     wcState,
@@ -2706,6 +2717,7 @@ if (userTeamId) {
     setNationalTeams(data.nationalTeams);
     setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, data.nationalTeams));
     setNationsLeagueState(data.nationsLeagueState ?? null);
+    setNationsLeagueArchive(Array.isArray((data as any).nationsLeagueArchive) ? (data as any).nationsLeagueArchive : []);
     setWcqPlayoffState(data.wcqPlayoffState);
     setWcState(data.wcState ?? null);
     setCupParticipants(data.cupParticipants);
@@ -3004,6 +3016,7 @@ if (userTeamId) {
     setPzpnDisciplinaryEvents([]);
     setWcqPlayoffState(null);
     setNationsLeagueState(null);
+    setNationsLeagueArchive([]);
     setWcState(null);
     setReserves([]);
     setReserveCoachId(null);
@@ -7209,15 +7222,87 @@ Asystent`,
           ? [...ntSimulation.matchHistoryEntries, ...worldFriendlySimulation.matchHistoryEntries]
           : ntSimulation.matchHistoryEntries;
         if (isNationsLeagueMatchDay && ensuredNationsLeagueState) {
-          setNationsLeagueState(NationsLeagueService.applyResults(
+          const nextNationsLeagueState = NationsLeagueService.applyResults(
             ensuredNationsLeagueState,
             dateToProcess,
             ntSimulation.results
-          ));
-          setUefaNationalRankingState(UefaNationalRankingService.applyResults(
+          );
+          const nextUefaRankingState = UefaNationalRankingService.updateFromNationsLeagueState(
             ensuredUefaRankingState,
-            ntSimulation.results
-          ));
+            nextNationsLeagueState,
+            nationalTeams
+          );
+          setNationsLeagueState(nextNationsLeagueState);
+          if (nextNationsLeagueState.completed) {
+            setNationsLeagueArchive(prev => upsertNationsLeagueArchive(prev, nextNationsLeagueState));
+          }
+          if (nextNationsLeagueState.stage === 'QUARTER_FINALS' && ensuredNationsLeagueState.stage === 'LEAGUE_PHASE') {
+            const leaguePhaseMailKey = `UNL_LEAGUE_PHASE_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(leaguePhaseMailKey)) {
+              sentMailIdsRef.current.add(leaguePhaseMailKey);
+              const qfTeams = nextNationsLeagueState.quarterFinalists.join(', ');
+              const playoffLines = (nextNationsLeagueState.playoffs ?? []).map(tie =>
+                `${tie.level}: ${tie.highLeagueTeam} - ${tie.lowLeagueTeam}`
+              );
+              const leaguePhaseMail: MailMessage = {
+                id: leaguePhaseMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - faza ligowa zakończona`,
+                body: `Faza ligowa Ligi Narodów UEFA ${nextNationsLeagueState.editionLabel} dobiegła końca.\n\nĆwierćfinaliści Ligi A: ${qfTeams || 'najlepsze reprezentacje z Ligi A'}.\n\nPary barażowe o przydział lig w kolejnej edycji:\n${playoffLines.length ? playoffLines.join('\n') : 'Brak par barażowych w tej edycji.'}\n\nRanking UEFA reprezentacji został odświeżony według tabel fazy ligowej.`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 82,
+              };
+              setMessages(prev => [leaguePhaseMail, ...prev]);
+            }
+          }
+          if (nextNationsLeagueState.stage === 'FINALS' && ensuredNationsLeagueState.stage === 'QUARTER_FINALS') {
+            const finalsPreviewMailKey = `UNL_FINALS_PREVIEW_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(finalsPreviewMailKey)) {
+              sentMailIdsRef.current.add(finalsPreviewMailKey);
+              const semiFinalists = nextNationsLeagueState.semiFinalists.join(', ');
+              const playoffOutcomes = (nextNationsLeagueState.playoffs ?? []).map(tie =>
+                `${tie.level}: ${tie.winner ?? 'zwycięzca'} zostaje wyżej, ${tie.loser ?? 'przegrany'} spada niżej`
+              );
+              const finalsPreviewMail: MailMessage = {
+                id: finalsPreviewMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - znamy finalistów i wyniki baraży`,
+                body: `Zakończono lutowe dwumecze Ligi Narodów UEFA ${nextNationsLeagueState.editionLabel}.\n\nFinal Four stworzą: ${semiFinalists || 'cztery najlepsze reprezentacje Ligi A'}.\n\nRozstrzygnięcia baraży:\n${playoffOutcomes.length ? playoffOutcomes.join('\n') : 'W tej edycji nie rozegrano baraży.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 86,
+              };
+              setMessages(prev => [finalsPreviewMail, ...prev]);
+            }
+          }
+          if (nextNationsLeagueState.completed && !ensuredNationsLeagueState.completed) {
+            const finalMailKey = `UNL_FINAL_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(finalMailKey)) {
+              sentMailIdsRef.current.add(finalMailKey);
+              const rankingTop = nextUefaRankingState.entries.slice(0, 10).map(entry => `${entry.rank}. ${entry.teamName}`).join('\n');
+              const promotionSummary = (nextNationsLeagueState.playoffs ?? [])
+                .map(tie => `${tie.level}: ${tie.winner ?? 'zwycięzca'} wyżej / ${tie.loser ?? 'przegrany'} niżej`)
+                .join('\n');
+              const finalMail: MailMessage = {
+                id: finalMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - triumfator wyłoniony`,
+                body: `${nextNationsLeagueState.finals?.champion ?? 'Zwycięzca'} wygrał Ligę Narodów UEFA ${nextNationsLeagueState.editionLabel}. Edycja została zapisana w archiwum, a jej rozstrzygnięcia wpłyną na skład dywizji przy kolejnym losowaniu.\n\nTop 10 finalnego rankingu UEFA LN:\n${rankingTop}\n\nBaraże i przydział lig:\n${promotionSummary || 'Brak baraży do podsumowania.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 88,
+              };
+              setMessages(prev => [finalMail, ...prev]);
+            }
+          }
+          setUefaNationalRankingState(nextUefaRankingState);
         }
         setPlayers(finalNTPlayers);
         finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
@@ -7299,8 +7384,12 @@ Asystent`,
         const drawState = NationsLeagueService.createInitialState(
           nationalTeams,
           seasonStartYearForNationsLeague,
-          ensuredUefaRankingState
+          ensuredUefaRankingState,
+          nationsLeagueState
         );
+        if (nationsLeagueState) {
+          setNationsLeagueArchive(prev => upsertNationsLeagueArchive(prev, nationsLeagueState));
+        }
         setUefaNationalRankingState(ensuredUefaRankingState);
         setNationsLeagueState(drawState);
         setProcessedDrawIds(prev => prev.includes(nationsLeagueDrawKey) ? prev : [...prev, nationsLeagueDrawKey]);
@@ -14497,6 +14586,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
     nationsLeagueState, setNationsLeagueState,
+    nationsLeagueArchive,
     uefaNationalRankingState, setUefaNationalRankingState,
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,

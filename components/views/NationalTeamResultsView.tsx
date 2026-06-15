@@ -218,8 +218,14 @@ const MatchRow: React.FC<MatchRowProps> = ({ result, onOpenReport }) => {
   const metaLabel = formatMeta(result);
 
   const isDraw = result.homeGoals === result.awayGoals;
+  const hasPenalties = result.homePenaltyScore !== undefined && result.awayPenaltyScore !== undefined;
+  const extraResultLabel = hasPenalties
+    ? `k. ${result.homePenaltyScore}:${result.awayPenaltyScore}`
+    : result.isExtraTime
+      ? 'pd.'
+      : null;
 
-  const scoreColor = isDraw ? 'text-slate-200' : 'text-white';
+  const scoreColor = isDraw && !hasPenalties ? 'text-slate-200' : 'text-white';
   const homeNameColor = isPlayerTeam(result.home) ? 'text-white' : 'text-slate-200';
   const awayNameColor = isPlayerTeam(result.away) ? 'text-white' : 'text-slate-200';
 
@@ -263,10 +269,17 @@ const MatchRow: React.FC<MatchRowProps> = ({ result, onOpenReport }) => {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 mx-8 min-w-[120px] justify-center">
-          <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{result.homeGoals}</span>
-          <span className="text-slate-500 text-xl font-black">:</span>
-          <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{result.awayGoals}</span>
+        <div className="mx-8 flex min-w-[120px] flex-col items-center justify-center">
+          <div className="flex items-center gap-2">
+            <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{result.homeGoals}</span>
+            <span className="text-slate-500 text-xl font-black">:</span>
+            <span className={`text-2xl font-black tabular-nums ${scoreColor}`}>{result.awayGoals}</span>
+          </div>
+          {extraResultLabel && (
+            <span className="mt-1 text-[10px] font-black uppercase tracking-widest text-rose-300">
+              {extraResultLabel}
+            </span>
+          )}
         </div>
 
         <div className="flex-1 text-left">

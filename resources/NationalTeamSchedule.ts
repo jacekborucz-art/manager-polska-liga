@@ -35,6 +35,14 @@ export interface NTGroupMatch {
   group?: string;
   /** Etykieta rozgrywek dla tego meczu (nadrzędna nad poziomem dnia meczowego). */
   competitionLabel?: string;
+  /** Kontekst pucharowy: pojedynczy mecz musi mieć zwycięzcę albo rewanż rozstrzyga dwumecz. */
+  knockoutContext?: {
+    type: 'SINGLE_MATCH' | 'AGGREGATE_SECOND_LEG';
+    firstLegHome?: string;
+    firstLegAway?: string;
+    firstLegHomeGoals?: number;
+    firstLegAwayGoals?: number;
+  };
 }
 
 /**

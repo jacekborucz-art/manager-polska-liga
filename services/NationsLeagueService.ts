@@ -2,6 +2,8 @@ import {
   NationalTeam,
   NationsLeagueFixture,
   NationsLeagueGroup,
+  NationsLeaguePlayoffLevel,
+  NationsLeaguePlayoffTie,
   NationsLeagueState,
   NationsLeagueTeamStanding,
   NationsLeagueTier,
@@ -73,13 +75,125 @@ const isNationsLeagueSeason = (seasonStartYear: number): boolean =>
 const normalize = (value: string): string =>
   value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
-const sortStandings = (standings: NationsLeagueTeamStanding[]): NationsLeagueTeamStanding[] =>
-  [...standings].sort((a, b) =>
-    b.points - a.points ||
-    b.goalDifference - a.goalDifference ||
-    b.goalsFor - a.goalsFor ||
-    a.teamName.localeCompare(b.teamName)
-  );
+type ExtraStandingStats = {
+  awayGoals: number;
+  awayWins: number;
+};
+
+type LeagueRankRow = NationsLeagueTeamStanding & {
+  tier: NationsLeagueTier;
+  groupId: string;
+  groupPosition: number;
+  awayGoals: number;
+  awayWins: number;
+};
+
+const getPlayedGroupFixtures = (fixtures: NationsLeagueFixture[]): NationsLeagueFixture[] =>
+  fixtures.filter(fixture => fixture.played && fixture.homeGoals !== undefined && fixture.awayGoals !== undefined);
+
+const getExtraStats = (teamName: string, fixtures: NationsLeagueFixture[]): ExtraStandingStats => {
+  let awayGoals = 0;
+  let awayWins = 0;
+  fixtures.forEach(fixture => {
+    if (fixture.away !== teamName) return;
+    awayGoals += fixture.awayGoals ?? 0;
+    if ((fixture.awayGoals ?? 0) > (fixture.homeGoals ?? 0)) awayWins += 1;
+  });
+  return { awayGoals, awayWins };
+};
+
+const buildHeadToHeadStanding = (
+  teamName: string,
+  tiedTeams: Set<string>,
+  fixtures: NationsLeagueFixture[]
+): NationsLeagueTeamStanding => {
+  const row = EMPTY_STANDING(teamName);
+  fixtures
+    .filter(fixture => tiedTeams.has(fixture.home) && tiedTeams.has(fixture.away))
+    .forEach(fixture => {
+      const isHome = fixture.home === teamName;
+      const isAway = fixture.away === teamName;
+      if (!isHome && !isAway) return;
+      const goalsFor = isHome ? fixture.homeGoals ?? 0 : fixture.awayGoals ?? 0;
+      const goalsAgainst = isHome ? fixture.awayGoals ?? 0 : fixture.homeGoals ?? 0;
+      row.played += 1;
+      row.goalsFor += goalsFor;
+      row.goalsAgainst += goalsAgainst;
+      if (goalsFor > goalsAgainst) {
+        row.wins += 1;
+        row.points += 3;
+      } else if (goalsFor < goalsAgainst) {
+        row.losses += 1;
+      } else {
+        row.draws += 1;
+        row.points += 1;
+      }
+    });
+  row.goalDifference = row.goalsFor - row.goalsAgainst;
+  return row;
+};
+
+const sortStandings = (
+  standings: NationsLeagueTeamStanding[],
+  groupFixtures: NationsLeagueFixture[] = []
+): NationsLeagueTeamStanding[] => {
+  const playedFixtures = getPlayedGroupFixtures(groupFixtures);
+  const byPoints = new Map<number, NationsLeagueTeamStanding[]>();
+  standings.forEach(row => {
+    byPoints.set(row.points, [...(byPoints.get(row.points) ?? []), row]);
+  });
+
+  return [...standings].sort((a, b) => {
+    const basePoints = b.points - a.points;
+    if (basePoints !== 0) return basePoints;
+
+    const tiedRows = byPoints.get(a.points) ?? [];
+    if (tiedRows.length > 1) {
+      const tiedTeams = new Set(tiedRows.map(row => row.teamName));
+      const aHead = buildHeadToHeadStanding(a.teamName, tiedTeams, playedFixtures);
+      const bHead = buildHeadToHeadStanding(b.teamName, tiedTeams, playedFixtures);
+      const headToHead =
+        bHead.points - aHead.points ||
+        bHead.goalDifference - aHead.goalDifference ||
+        bHead.goalsFor - aHead.goalsFor;
+      if (headToHead !== 0) return headToHead;
+    }
+
+    const aExtra = getExtraStats(a.teamName, playedFixtures);
+    const bExtra = getExtraStats(b.teamName, playedFixtures);
+    return b.goalDifference - a.goalDifference ||
+      b.goalsFor - a.goalsFor ||
+      bExtra.awayGoals - aExtra.awayGoals ||
+      b.wins - a.wins ||
+      bExtra.awayWins - aExtra.awayWins ||
+      a.teamName.localeCompare(b.teamName);
+  });
+};
+
+const compareLeagueRankRows = (a: LeagueRankRow, b: LeagueRankRow): number =>
+  a.groupPosition - b.groupPosition ||
+  b.points - a.points ||
+  b.goalDifference - a.goalDifference ||
+  b.goalsFor - a.goalsFor ||
+  b.awayGoals - a.awayGoals ||
+  b.wins - a.wins ||
+  b.awayWins - a.awayWins ||
+  a.teamName.localeCompare(b.teamName);
+
+const getLeagueRankRows = (state: NationsLeagueState, tier: NationsLeagueTier): LeagueRankRow[] =>
+  state.groups
+    .filter(group => group.tier === tier)
+    .flatMap(group => {
+      const fixtures = state.fixtures.filter(fixture => fixture.groupId === group.id);
+      return group.standings.map((standing, index) => ({
+        ...standing,
+        tier,
+        groupId: group.id,
+        groupPosition: index + 1,
+        ...getExtraStats(standing.teamName, getPlayedGroupFixtures(fixtures)),
+      }));
+    })
+    .sort(compareLeagueRankRows);
 
 const uniqueTeams = (teams: string[]): string[] => teams.filter((team, index, arr) => !!team && arr.indexOf(team) === index);
 
@@ -111,7 +225,8 @@ const buildGroupsForTier = (
 const buildInitialGroups = (
   nationalTeams: NationalTeam[],
   editionStartYear: number,
-  rankingState?: UefaNationalRankingState | null
+  rankingState?: UefaNationalRankingState | null,
+  previousEdition?: NationsLeagueState | null
 ): NationsLeagueGroup[] => {
   const europe = nationalTeams.filter(team => team.continent === 'Europe' && team.name !== 'Rosja');
   const byNormalizedName = new Map(europe.map(team => [normalize(team.name), team.name]));
@@ -120,18 +235,100 @@ const buildInitialGroups = (
       .map(name => byNormalizedName.get(normalize(name)))
       .filter((name): name is string => !!name)
   );
+  const rankedIndex = new Map(rankedTeams.map((team, index) => [team, index]));
+  const teamsByTier = previousEdition?.completed
+    ? buildTeamsAfterPromotionAndRelegation(previousEdition, rankedTeams)
+    : null;
   const rng = new Rng(editionStartYear ^ 0x756efa);
-  const leagueA = rankedTeams.slice(0, 16);
-  const leagueB = rankedTeams.slice(16, 32);
-  const leagueC = rankedTeams.slice(32, 48);
-  const leagueD = rankedTeams.slice(48);
+  const leagueA = teamsByTier?.A ?? rankedTeams.slice(0, 16);
+  const leagueB = teamsByTier?.B ?? rankedTeams.slice(16, 32);
+  const leagueC = teamsByTier?.C ?? rankedTeams.slice(32, 48);
+  const leagueD = teamsByTier?.D ?? rankedTeams.slice(48);
+  const byRank = (a: string, b: string) => (rankedIndex.get(a) ?? 999) - (rankedIndex.get(b) ?? 999);
 
   return [
-    ...buildGroupsForTier('A', leagueA, 4, rng),
-    ...buildGroupsForTier('B', leagueB, 4, rng),
-    ...buildGroupsForTier('C', leagueC, 4, rng),
-    ...buildGroupsForTier('D', leagueD, Math.max(1, Math.ceil(leagueD.length / 3)), rng),
+    ...buildGroupsForTier('A', [...leagueA].sort(byRank), 4, rng),
+    ...buildGroupsForTier('B', [...leagueB].sort(byRank), 4, rng),
+    ...buildGroupsForTier('C', [...leagueC].sort(byRank), 4, rng),
+    ...buildGroupsForTier('D', [...leagueD].sort(byRank), Math.max(1, Math.ceil(leagueD.length / 3)), rng),
   ];
+};
+
+const getTierTeams = (state: NationsLeagueState, tier: NationsLeagueTier): string[] =>
+  uniqueTeams(state.groups.filter(group => group.tier === tier).flatMap(group => group.teams));
+
+const getGroupWinners = (state: NationsLeagueState, tier: NationsLeagueTier): string[] =>
+  state.groups
+    .filter(group => group.tier === tier)
+    .map(group => group.standings[0]?.teamName)
+    .filter((team): team is string => !!team);
+
+const getGroupBottomTeams = (state: NationsLeagueState, tier: NationsLeagueTier): string[] =>
+  state.groups
+    .filter(group => group.tier === tier)
+    .map(group => group.standings[group.standings.length - 1])
+    .filter((row): row is NationsLeagueTeamStanding => !!row)
+    .sort((a, b) =>
+      a.points - b.points ||
+      a.goalDifference - b.goalDifference ||
+      a.goalsFor - b.goalsFor ||
+      a.teamName.localeCompare(b.teamName)
+    )
+    .map(row => row.teamName);
+
+const withoutTeams = (teams: string[], removed: string[]): string[] =>
+  teams.filter(team => !removed.includes(team));
+
+const getPlayoffWinners = (state: NationsLeagueState, level: NationsLeaguePlayoffLevel): string[] =>
+  (state.playoffs ?? [])
+    .filter(tie => tie.level === level && tie.winner)
+    .map(tie => tie.winner as string);
+
+const getPlayoffLosers = (state: NationsLeagueState, level: NationsLeaguePlayoffLevel): string[] =>
+  (state.playoffs ?? [])
+    .filter(tie => tie.level === level && tie.loser)
+    .map(tie => tie.loser as string);
+
+const buildTeamsAfterPromotionAndRelegation = (
+  previousEdition: NationsLeagueState,
+  rankedTeams: string[]
+): Record<NationsLeagueTier, string[]> => {
+  const available = new Set(rankedTeams);
+  const leagueA = getTierTeams(previousEdition, 'A').filter(team => available.has(team));
+  const leagueB = getTierTeams(previousEdition, 'B').filter(team => available.has(team));
+  const leagueC = getTierTeams(previousEdition, 'C').filter(team => available.has(team));
+  const leagueD = getTierTeams(previousEdition, 'D').filter(team => available.has(team));
+
+  const promotedB = getGroupWinners(previousEdition, 'B').filter(team => available.has(team));
+  const promotedC = getGroupWinners(previousEdition, 'C').filter(team => available.has(team));
+  const promotedD = getGroupWinners(previousEdition, 'D').filter(team => available.has(team));
+  const relegatedA = getGroupBottomTeams(previousEdition, 'A').slice(0, 4).filter(team => available.has(team));
+  const relegatedB = getGroupBottomTeams(previousEdition, 'B').slice(0, 4).filter(team => available.has(team));
+  const leagueCFourths = getLeagueRankRows(previousEdition, 'C').filter(row => row.groupPosition === 4);
+  const relegatedC = leagueCFourths.slice(-2).map(row => row.teamName).filter(team => available.has(team));
+  const playoffABWinners = getPlayoffWinners(previousEdition, 'AB').filter(team => available.has(team));
+  const playoffABLosers = getPlayoffLosers(previousEdition, 'AB').filter(team => available.has(team));
+  const playoffBCWinners = getPlayoffWinners(previousEdition, 'BC').filter(team => available.has(team));
+  const playoffBCLosers = getPlayoffLosers(previousEdition, 'BC').filter(team => available.has(team));
+  const playoffCDWinners = getPlayoffWinners(previousEdition, 'CD').filter(team => available.has(team));
+  const playoffCDLosers = getPlayoffLosers(previousEdition, 'CD').filter(team => available.has(team));
+
+  const next: Record<NationsLeagueTier, string[]> = {
+    A: uniqueTeams([...withoutTeams(withoutTeams(leagueA, relegatedA), playoffABLosers), ...promotedB, ...playoffABWinners]),
+    B: uniqueTeams([...withoutTeams(withoutTeams(withoutTeams(withoutTeams(leagueB, promotedB), relegatedB), playoffABWinners), playoffBCLosers), ...relegatedA, ...playoffABLosers, ...promotedC, ...playoffBCWinners]),
+    C: uniqueTeams([...withoutTeams(withoutTeams(withoutTeams(withoutTeams(leagueC, promotedC), relegatedC), playoffBCWinners), playoffCDLosers), ...relegatedB, ...playoffBCLosers, ...promotedD, ...playoffCDWinners]),
+    D: uniqueTeams([...withoutTeams(withoutTeams(leagueD, promotedD), playoffCDWinners), ...relegatedC, ...playoffCDLosers]),
+  };
+
+  const assigned = new Set(Object.values(next).flat());
+  rankedTeams.forEach(team => {
+    if (assigned.has(team)) return;
+    const target = next.A.length < 16 ? 'A' : next.B.length < 16 ? 'B' : next.C.length < 16 ? 'C' : 'D';
+    next[target].push(team);
+    assigned.add(team);
+  });
+
+  return next;
 };
 
 const buildGroupFixtures = (group: NationsLeagueGroup): NationsLeagueFixture[] => {
@@ -179,6 +376,9 @@ const markFixturePlayed = (fixture: NationsLeagueFixture, result: NTMatchResult)
   matchId: result.matchId,
   homeGoals: result.homeGoals,
   awayGoals: result.awayGoals,
+  homePenaltyScore: result.homePenaltyScore,
+  awayPenaltyScore: result.awayPenaltyScore,
+  isExtraTime: result.isExtraTime,
 });
 
 const refreshStandingsFromResults = (state: NationsLeagueState, results: NTMatchResult[]): NationsLeagueState => {
@@ -227,7 +427,10 @@ const refreshStandingsFromResults = (state: NationsLeagueState, results: NTMatch
 
   return {
     ...state,
-    groups: groups.map(group => ({ ...group, standings: sortStandings(group.standings) })),
+    groups: groups.map(group => ({
+      ...group,
+      standings: sortStandings(group.standings, fixtures.filter(fixture => fixture.groupId === group.id)),
+    })),
     fixtures,
     lastUpdatedIso: new Date().toISOString(),
   };
@@ -290,18 +493,128 @@ const buildQuarterFinalFixtures = (state: NationsLeagueState): NationsLeagueFixt
   ]);
 };
 
+const createPlayoffTie = (
+  level: NationsLeaguePlayoffLevel,
+  index: number,
+  highLeagueTeam: string | undefined,
+  lowLeagueTeam: string | undefined
+): { tie: NationsLeaguePlayoffTie; fixtures: NationsLeagueFixture[] } | null => {
+  if (!highLeagueTeam || !lowLeagueTeam) return null;
+  const id = `UNL_PO_${level}_${index + 1}`;
+  const firstLegId = `${id}_L1`;
+  const secondLegId = `${id}_L2`;
+  const tier = level === 'AB' ? 'A' : level === 'BC' ? 'B' : 'C';
+  return {
+    tie: {
+      id,
+      level,
+      highLeagueTeam,
+      lowLeagueTeam,
+      firstLegId,
+      secondLegId,
+    },
+    fixtures: [
+      {
+        id: firstLegId,
+        stage: 'PLAYOFFS',
+        round: 1,
+        day: QUARTER_FINAL_DATES[0].day,
+        month: QUARTER_FINAL_DATES[0].month,
+        home: lowLeagueTeam,
+        away: highLeagueTeam,
+        tier,
+        playoffTieId: id,
+        playoffLevel: level,
+        played: false,
+      },
+      {
+        id: secondLegId,
+        stage: 'PLAYOFFS',
+        round: 2,
+        day: QUARTER_FINAL_DATES[1].day,
+        month: QUARTER_FINAL_DATES[1].month,
+        home: highLeagueTeam,
+        away: lowLeagueTeam,
+        tier,
+        playoffTieId: id,
+        playoffLevel: level,
+        played: false,
+      },
+    ],
+  };
+};
+
+const buildPlayoffTiesAndFixtures = (state: NationsLeagueState): { ties: NationsLeaguePlayoffTie[]; fixtures: NationsLeagueFixture[] } => {
+  const aThirds = getLeagueRankRows(state, 'A').filter(row => row.groupPosition === 3);
+  const bRunnersUp = getLeagueRankRows(state, 'B').filter(row => row.groupPosition === 2);
+  const bThirds = getLeagueRankRows(state, 'B').filter(row => row.groupPosition === 3);
+  const cRunnersUp = getLeagueRankRows(state, 'C').filter(row => row.groupPosition === 2);
+  const cFourths = getLeagueRankRows(state, 'C').filter(row => row.groupPosition === 4).slice(0, 2);
+  const dRunnersUp = getLeagueRankRows(state, 'D').filter(row => row.groupPosition === 2);
+
+  const created = [
+    ...aThirds.map((row, index) => createPlayoffTie('AB', index, row.teamName, bRunnersUp[index]?.teamName)),
+    ...bThirds.map((row, index) => createPlayoffTie('BC', index, row.teamName, cRunnersUp[index]?.teamName)),
+    ...cFourths.map((row, index) => createPlayoffTie('CD', index, row.teamName, dRunnersUp[index]?.teamName)),
+  ].filter((item): item is { tie: NationsLeaguePlayoffTie; fixtures: NationsLeagueFixture[] } => !!item);
+
+  return {
+    ties: created.map(item => item.tie),
+    fixtures: created.flatMap(item => item.fixtures),
+  };
+};
+
+const getFirstLegForFixture = (state: NationsLeagueState, fixture: NationsLeagueFixture): NationsLeagueFixture | undefined => {
+  if (fixture.round !== 2) return undefined;
+  if (fixture.stage === 'PLAYOFFS') {
+    const tie = state.playoffs?.find(item => item.secondLegId === fixture.id);
+    return tie ? state.fixtures.find(item => item.id === tie.firstLegId) : undefined;
+  }
+  if (fixture.stage === 'QUARTER_FINALS') {
+    return state.fixtures.find(item =>
+      item.stage === 'QUARTER_FINALS' &&
+      item.round === 1 &&
+      item.home === fixture.away &&
+      item.away === fixture.home
+    );
+  }
+  return undefined;
+};
+
+const getKnockoutContextForFixture = (state: NationsLeagueState, fixture: NationsLeagueFixture): NTMatchDay['matches'][number]['knockoutContext'] => {
+  if (fixture.stage === 'FINALS') {
+    return { type: 'SINGLE_MATCH' };
+  }
+  const firstLeg = getFirstLegForFixture(state, fixture);
+  if (!firstLeg || firstLeg.homeGoals === undefined || firstLeg.awayGoals === undefined) return undefined;
+  return {
+    type: 'AGGREGATE_SECOND_LEG',
+    firstLegHome: firstLeg.home,
+    firstLegAway: firstLeg.away,
+    firstLegHomeGoals: firstLeg.homeGoals,
+    firstLegAwayGoals: firstLeg.awayGoals,
+  };
+};
+
 const getKnockoutMatchDay = (state: NationsLeagueState, date: Date): NTMatchDay | null => {
   const fixtures = state.fixtures.filter(fixture =>
-    (fixture.stage === 'QUARTER_FINALS' || fixture.stage === 'FINALS') &&
+    (fixture.stage === 'QUARTER_FINALS' || fixture.stage === 'PLAYOFFS' || fixture.stage === 'FINALS') &&
     fixture.day === date.getDate() &&
     fixture.month === date.getMonth() &&
     !fixture.played
   );
   if (fixtures.length === 0) return null;
 
-  const label = fixtures[0].stage === 'QUARTER_FINALS'
-    ? `Liga Narodów UEFA ${state.editionLabel} - Ćwierćfinały`
-    : `Liga Narodów UEFA ${state.editionLabel} - Finały`;
+  const hasFinals = fixtures.some(fixture => fixture.stage === 'FINALS');
+  const hasQuarterFinals = fixtures.some(fixture => fixture.stage === 'QUARTER_FINALS');
+  const hasPlayoffs = fixtures.some(fixture => fixture.stage === 'PLAYOFFS');
+  const label = hasFinals
+    ? `Liga Narodów UEFA ${state.editionLabel} - Finały`
+    : hasQuarterFinals && hasPlayoffs
+      ? `Liga Narodów UEFA ${state.editionLabel} - Ćwierćfinały i baraże`
+      : hasQuarterFinals
+        ? `Liga Narodów UEFA ${state.editionLabel} - Ćwierćfinały`
+        : `Liga Narodów UEFA ${state.editionLabel} - Baraże`;
 
   return {
     day: date.getDate(),
@@ -310,14 +623,19 @@ const getKnockoutMatchDay = (state: NationsLeagueState, date: Date): NTMatchDay 
     matches: fixtures.map(fixture => ({
       home: fixture.home,
       away: fixture.away,
-      group: fixture.stage === 'QUARTER_FINALS' ? 'QF' : 'FINALS',
-      competitionLabel: label,
+      group: fixture.stage === 'QUARTER_FINALS' ? 'QF' : fixture.stage === 'PLAYOFFS' ? fixture.playoffLevel : 'FINALS',
+      competitionLabel: fixture.stage === 'PLAYOFFS'
+        ? `Liga Narodów UEFA ${state.editionLabel} - Baraż ${fixture.playoffLevel} - Mecz ${fixture.round}`
+        : label,
+      knockoutContext: getKnockoutContextForFixture(state, fixture),
     })),
   };
 };
 
 const getWinner = (result: NTMatchResult): string =>
-  result.homeGoals >= result.awayGoals ? result.home : result.away;
+  result.homePenaltyScore !== undefined && result.awayPenaltyScore !== undefined
+    ? result.homePenaltyScore > result.awayPenaltyScore ? result.home : result.away
+    : result.homeGoals >= result.awayGoals ? result.home : result.away;
 
 const getLoser = (result: NTMatchResult): string =>
   getWinner(result) === result.home ? result.away : result.home;
@@ -331,7 +649,9 @@ const getAggregateWinner = (firstLeg: NationsLeagueFixture, secondLeg: NationsLe
   const secondLegAwayAggregate = firstHomeGoals + secondAwayGoals;
   if (secondLegHomeAggregate > secondLegAwayAggregate) return secondLeg.home;
   if (secondLegAwayAggregate > secondLegHomeAggregate) return secondLeg.away;
-  if (secondHomeGoals !== secondAwayGoals) return secondHomeGoals > secondAwayGoals ? secondLeg.home : secondLeg.away;
+  if (secondLeg.homePenaltyScore !== undefined && secondLeg.awayPenaltyScore !== undefined) {
+    return secondLeg.homePenaltyScore > secondLeg.awayPenaltyScore ? secondLeg.home : secondLeg.away;
+  }
   return secondLeg.home;
 };
 
@@ -351,6 +671,23 @@ const refreshKnockout = (state: NationsLeagueState, date: Date, results: NTMatch
   });
 
   let nextState: NationsLeagueState = { ...state, fixtures, lastUpdatedIso: new Date().toISOString() };
+  const playoffSecondLegs = fixtures.filter(fixture => fixture.stage === 'PLAYOFFS' && fixture.round === 2);
+  if (playoffSecondLegs.length > 0 && playoffSecondLegs.every(fixture => fixture.played)) {
+    const playoffs = (nextState.playoffs ?? []).map(tie => {
+      if (tie.winner && tie.loser) return tie;
+      const firstLeg = fixtures.find(fixture => fixture.id === tie.firstLegId);
+      const secondLeg = fixtures.find(fixture => fixture.id === tie.secondLegId);
+      if (!firstLeg || !secondLeg || !firstLeg.played || !secondLeg.played) return tie;
+      const winner = getAggregateWinner(firstLeg, secondLeg);
+      return {
+        ...tie,
+        winner,
+        loser: winner === tie.highLeagueTeam ? tie.lowLeagueTeam : tie.highLeagueTeam,
+      };
+    });
+    nextState = { ...nextState, playoffs };
+  }
+
   const qfSecondLegs = fixtures.filter(fixture => fixture.stage === 'QUARTER_FINALS' && fixture.round === 2);
   if (qfSecondLegs.length > 0 && qfSecondLegs.every(fixture => fixture.played) && nextState.semiFinalists.length === 0) {
     const winners = qfSecondLegs.map(secondLeg => {
@@ -479,9 +816,10 @@ export const NationsLeagueService = {
   createInitialState(
     nationalTeams: NationalTeam[],
     editionStartYear: number,
-    rankingState?: UefaNationalRankingState | null
+    rankingState?: UefaNationalRankingState | null,
+    previousEdition?: NationsLeagueState | null
   ): NationsLeagueState {
-    const groups = buildInitialGroups(nationalTeams, editionStartYear, rankingState);
+    const groups = buildInitialGroups(nationalTeams, editionStartYear, rankingState, previousEdition);
     const fixtures = groups.flatMap(buildGroupFixtures);
     return {
       editionStartYear,
@@ -489,6 +827,7 @@ export const NationsLeagueService = {
       stage: 'LEAGUE_PHASE',
       groups,
       fixtures,
+      playoffs: [],
       quarterFinalists: [],
       semiFinalists: [],
       finals: null,
@@ -500,12 +839,13 @@ export const NationsLeagueService = {
     state: NationsLeagueState | null,
     date: Date,
     nationalTeams: NationalTeam[],
-    rankingState?: UefaNationalRankingState | null
+    rankingState?: UefaNationalRankingState | null,
+    previousEdition?: NationsLeagueState | null
   ): NationsLeagueState | null {
     const seasonStartYear = getSeasonStartYear(date);
     if (!isNationsLeagueSeason(seasonStartYear)) return state;
     if (state?.editionStartYear === seasonStartYear) return state;
-    return NationsLeagueService.createInitialState(nationalTeams, seasonStartYear, rankingState);
+    return NationsLeagueService.createInitialState(nationalTeams, seasonStartYear, rankingState, previousEdition ?? state);
   },
 
   getMatchDayForDate(state: NationsLeagueState | null, date: Date): NTMatchDay | null {
@@ -522,11 +862,13 @@ export const NationsLeagueService = {
       const leagueFixtures = next.fixtures.filter(fixture => fixture.stage === 'LEAGUE_PHASE');
       if (leagueFixtures.length > 0 && leagueFixtures.every(fixture => fixture.played)) {
         const qfFixtures = buildQuarterFinalFixtures(next);
+        const playoffData = buildPlayoffTiesAndFixtures(next);
         return {
           ...next,
           stage: 'QUARTER_FINALS',
           quarterFinalists: uniqueTeams(qfFixtures.flatMap(fixture => [fixture.home, fixture.away])),
-          fixtures: [...next.fixtures, ...qfFixtures],
+          playoffs: playoffData.ties,
+          fixtures: [...next.fixtures, ...qfFixtures, ...playoffData.fixtures],
         };
       }
       return next;
