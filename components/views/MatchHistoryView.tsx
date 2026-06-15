@@ -196,7 +196,7 @@ function NationsLeagueArchive({
 }) {
   const ntById = new Map(nationalTeams.map(team => [team.id, team]));
   const matches = history
-    .filter(match => String(match.competition).includes('Liga Narodów UEFA'))
+    .filter(match => state && String(match.competition).includes(`Liga Narodów UEFA ${state.editionLabel}`))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   if (!state) {
@@ -425,16 +425,24 @@ function UefaNationalRankingArchive({
 
 
 export const MatchHistoryView: React.FC = () => {
-  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState, nationsLeagueState, uefaNationalRankingState } = useGame();
+  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState, nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState } = useGame();
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonNumber);
   const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
   const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup' | 'nationsLeague' | 'uefaRanking'>('matches');
   const [selectedWorldCupYear, setSelectedWorldCupYear] = useState<number>(wcState?.year ?? 2026);
+  const [selectedNationsLeagueEditionStartYear, setSelectedNationsLeagueEditionStartYear] = useState<number | null>(nationsLeagueState?.editionStartYear ?? null);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   const history = useMemo(() => MatchHistoryService.getAll(), [refreshTrigger]);
   const championshipHistory = useMemo(() => ChampionshipHistoryService.getAll(), [refreshTrigger, supercupWinners]);
+  const nationsLeagueEditions = useMemo(() => {
+    const byYear = new Map<number, NationsLeagueState>();
+    nationsLeagueArchive.forEach(entry => byYear.set(entry.editionStartYear, entry));
+    if (nationsLeagueState) byYear.set(nationsLeagueState.editionStartYear, nationsLeagueState);
+    return [...byYear.values()].sort((a, b) => b.editionStartYear - a.editionStartYear);
+  }, [nationsLeagueArchive, nationsLeagueState]);
+  const selectedNationsLeagueState = nationsLeagueEditions.find(entry => entry.editionStartYear === selectedNationsLeagueEditionStartYear) ?? nationsLeagueEditions[0] ?? null;
   
   // SUPERPUCHAR POLSKI - ostatni mecz turnieju
   const supercupWinnersFromMatches = useMemo(() => {
@@ -713,6 +721,13 @@ export const MatchHistoryView: React.FC = () => {
   useEffect(() => {
     if (wcState) setSelectedWorldCupYear(wcState.year);
   }, [wcState?.year]);
+
+  useEffect(() => {
+    if (nationsLeagueState) setSelectedNationsLeagueEditionStartYear(nationsLeagueState.editionStartYear);
+    else if (selectedNationsLeagueEditionStartYear === null && nationsLeagueEditions[0]) {
+      setSelectedNationsLeagueEditionStartYear(nationsLeagueEditions[0].editionStartYear);
+    }
+  }, [nationsLeagueState?.editionStartYear, nationsLeagueEditions, selectedNationsLeagueEditionStartYear]);
   
   const groupedHistory = useMemo(() => {
     const base = history.filter(m => {
@@ -903,7 +918,7 @@ export const MatchHistoryView: React.FC = () => {
             <div className={`${viewMode === 'uefaRanking' ? 'hidden ' : ''}mt-auto p-4 bg-black/20 rounded-2xl border border-white/5`}>
                <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' ? 'Turniej' : viewMode === 'nationsLeague' ? 'Edycja' : 'Historia'}</span>
                <span className="text-xl font-black italic text-white">
-                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : viewMode === 'nationsLeague' ? (nationsLeagueState?.editionLabel ?? '2026/27') : championshipHistory.length}
+                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : viewMode === 'nationsLeague' ? (selectedNationsLeagueState?.editionLabel ?? '2026/27') : championshipHistory.length}
                  <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : viewMode === 'nationsLeague' ? 'UNL' : 'WPISÓW'}</span>
                </span>
             </div>
@@ -1009,12 +1024,31 @@ export const MatchHistoryView: React.FC = () => {
               <WorldCupArchive wcState={wcState && wcState.year === selectedWorldCupYear ? wcState : null} />
             </>
           ) : viewMode === 'nationsLeague' ? (
-            <NationsLeagueArchive
-              state={nationsLeagueState}
-              history={history}
-              nationalTeams={nationalTeams}
-              onSelectMatch={setSelectedMatch}
-            />
+            <>
+              {nationsLeagueEditions.length > 0 && (
+                <div className="px-8 pt-8 flex flex-wrap gap-4">
+                  {nationsLeagueEditions.map(edition => (
+                    <button
+                      key={edition.editionStartYear}
+                      onClick={() => setSelectedNationsLeagueEditionStartYear(edition.editionStartYear)}
+                      className={`relative overflow-hidden px-6 py-2 rounded-xl text-xs font-black italic uppercase tracking-tighter text-center transition-all hover:-translate-y-0.5 hover:border-white/30 hover:shadow-[0_10px_24px_rgba(34,211,238,0.18)] active:translate-y-[2px] before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-500 hover:before:translate-x-full ${
+                        selectedNationsLeagueState?.editionStartYear === edition.editionStartYear
+                          ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-cyan-300 text-black'
+                          : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500'}`}
+                      style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                    >
+                      {edition.editionLabel}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <NationsLeagueArchive
+                state={selectedNationsLeagueState}
+                history={history}
+                nationalTeams={nationalTeams}
+                onSelectMatch={setSelectedMatch}
+              />
+            </>
           ) : viewMode === 'uefaRanking' ? (
             <UefaNationalRankingArchive
               state={uefaNationalRankingState}
