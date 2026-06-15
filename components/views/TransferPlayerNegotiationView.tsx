@@ -22,6 +22,7 @@ export const TransferPlayerNegotiationView: React.FC = () => {
     finalizeTransferNegotiation,
     navigateWithoutHistory,
     setClubs,
+    managerProfile,
   } = useGame();
 
   const playerData = useMemo(() => {
@@ -75,9 +76,10 @@ export const TransferPlayerNegotiationView: React.FC = () => {
       buyerClub,
       currentSquad,
       targetSquad,
-      currentDate
+      currentDate,
+      managerProfile
     );
-  }, [player, buyerClub, sellerClub, currentSquad, targetSquad, currentDate]);
+  }, [player, buyerClub, sellerClub, currentSquad, targetSquad, currentDate, managerProfile]);
   const transferTimingLabel = useMemo(() => {
     if (!offer) return '';
     switch (offer.timing) {

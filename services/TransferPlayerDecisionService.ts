@@ -1,4 +1,5 @@
-import { Club, Player, TransferContractInput } from '../types';
+import { Club, ManagerProfile, Player, TransferContractInput } from '../types';
+import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 
 type SquadRole = 'STAR' | 'FIRST_TEAM' | 'ROTATION' | 'BACKUP';
 
@@ -102,7 +103,8 @@ export const TransferPlayerDecisionService = {
     targetClub: Club,
     currentSquad: Player[],
     targetSquad: Player[],
-    currentDate: Date
+    currentDate: Date,
+    managerProfile?: ManagerProfile | null
   ): PlayerNegotiationPlan => {
     const currentRole = TransferPlayerDecisionService.estimateRole(player, currentSquad);
     const targetRole = TransferPlayerDecisionService.estimateRole(player, targetSquad);
@@ -119,6 +121,7 @@ export const TransferPlayerDecisionService = {
     const hasMoveSoftener = !!player.isOnTransferList || isNotFirstTeamPlayer;
     const ageStayScore = getAgeStayScore(player);
     const ageMovePremium = ageStayScore / 100;
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
@@ -146,6 +149,7 @@ export const TransferPlayerDecisionService = {
     if (targetRoleLevel > currentRoleLevel) salaryMultiplier -= 0.06;
     if (targetRoleLevel < currentRoleLevel) salaryMultiplier += 0.10;
     salaryMultiplier += ageMovePremium * 0.45;
+    salaryMultiplier *= managerInfluence.expectationMultiplier;
 
     let bonusMultiplier = 0.35;
     if (player.age >= 24 && player.age <= 29) bonusMultiplier = 0.55;
@@ -156,6 +160,7 @@ export const TransferPlayerDecisionService = {
     else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.14;
     else if (reputationDelta === 0) bonusMultiplier += 0.08;
     bonusMultiplier += ageMovePremium;
+    bonusMultiplier *= managerInfluence.expectationMultiplier;
 
     const desiredSalary = roundMoney(currentSalaryBase * salaryMultiplier);
     const desiredBonus = roundMoney(currentSalaryBase * bonusMultiplier);
@@ -187,7 +192,8 @@ export const TransferPlayerDecisionService = {
     targetClub: Club,
     currentSquad: Player[],
     targetSquad: Player[],
-    currentDate: Date
+    currentDate: Date,
+    managerProfile?: ManagerProfile | null
   ): PlayerDecisionResult => {
     const negotiationPlan = TransferPlayerDecisionService.buildNegotiationPlan(
       player,
@@ -195,7 +201,8 @@ export const TransferPlayerDecisionService = {
       targetClub,
       currentSquad,
       targetSquad,
-      currentDate
+      currentDate,
+      managerProfile
     );
 
     if (!negotiationPlan.willingToTalk) {
@@ -216,6 +223,7 @@ export const TransferPlayerDecisionService = {
       !!currentClub.country &&
       !!targetClub.country &&
       currentClub.country !== targetClub.country;
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
 
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;
@@ -306,6 +314,7 @@ export const TransferPlayerDecisionService = {
       reputationScore +
       foreignBonus +
       roleUpgradeBonus +
+      managerInfluence.scoreAdjustment +
       Math.round((financialFit - 1) * 35);
 
     const margin = offerScore - stayScore;
@@ -351,7 +360,8 @@ export const TransferPlayerDecisionService = {
       getBaseMoveAcceptanceChance(currentClub, targetClub) +
         roleChanceAdjustment +
         financialChanceAdjustment +
-        situationChanceAdjustment,
+        situationChanceAdjustment +
+        managerInfluence.chanceAdjustment,
       0.01,
       0.999
     );

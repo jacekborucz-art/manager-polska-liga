@@ -1,4 +1,5 @@
-import { Player, Club, PendingNegotiation, NegotiationStatus } from '../types';
+import { Player, Club, PendingNegotiation, NegotiationStatus, ManagerProfile } from '../types';
+import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -78,11 +79,13 @@ export const FreeAgentNegotiationService = {
     };
   },
 
-  evaluateInitialInterest: (player: Player, club: Club, squad: Player[] = []): { interested: boolean, message: string } => {
+  evaluateInitialInterest: (player: Player, club: Club, squad: Player[] = [], managerProfile?: ManagerProfile | null): { interested: boolean, message: string } => {
     const tier = getClubTier(club);
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
 
     if (player.overallRating > 69 && club.reputation < 5) {
-      if (Math.random() > 0.01) {
+      const reputationGateChance = clamp(0.01 + Math.max(0, managerInfluence.chanceAdjustment) * 0.5, 0.01, 0.04);
+      if (Math.random() > reputationGateChance) {
         return {
           interested: false,
           message: 'Moj klient nie jest zainteresowany gra na tym poziomie rozgrywkowym. Szukamy klubu o wiekszej renomie.'
@@ -90,7 +93,7 @@ export const FreeAgentNegotiationService = {
       }
     }
 
-    const realisticCeiling = getRealisticClubCeiling(club, player, squad);
+    const realisticCeiling = getRealisticClubCeiling(club, player, squad) + managerInfluence.realisticCeilingBonus;
     const excessOverCeiling = player.overallRating - realisticCeiling;
 
     if (tier >= 2 && player.overallRating >= 82 && player.age <= 32 && excessOverCeiling >= 4) {
@@ -114,7 +117,8 @@ export const FreeAgentNegotiationService = {
           (tier === 1 ? 0.08 : 0) +
           (club.reputation >= 8 ? 0.05 : 0) +
           (player.age >= 33 ? 0.12 : player.age >= 30 ? 0.06 : 0) -
-          (tier >= 3 ? 0.10 : 0),
+          (tier >= 3 ? 0.10 : 0) +
+          managerInfluence.chanceAdjustment,
         0.01,
         0.70
       );
@@ -131,7 +135,11 @@ export const FreeAgentNegotiationService = {
 
     const isPolishClub = club.leagueId?.startsWith('L_PL_');
     if (isPolishClub && player.overallRating > 82) {
-      const chance = 0.50 - (player.overallRating - 83) * (0.49 / 16);
+      const chance = clamp(
+        0.50 - (player.overallRating - 83) * (0.49 / 16) + managerInfluence.chanceAdjustment * 0.5,
+        0.01,
+        0.55
+      );
       if (Math.random() > chance) {
         return {
           interested: false,

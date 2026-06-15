@@ -1,4 +1,5 @@
-import { Club, Player, PlayerPosition } from '../types';
+import { Club, ManagerProfile, Player, PlayerPosition } from '../types';
+import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 
 // ============================================================
 // PARAMETRY KOSZTÓW DNIA MECZOWEGO  —  pogrupowane wg. ligi
@@ -1190,7 +1191,8 @@ export const FinanceService = {
     newEndDate: string, 
     currentDate: Date,
     clubReputation: number,
-    clubTier?: number
+    clubTier?: number,
+    managerProfile?: ManagerProfile | null
   ): { accepted: boolean, reason: string, demands: { salary: number, bonus: number } | null } => {
     const now = currentDate.getTime();
     const currentEnd = new Date(player.contractEndDate).getTime();
@@ -1203,8 +1205,11 @@ export const FinanceService = {
     const salaryCeiling = clubTier
       ? FinanceService.calculatePolishLeagueSalaryCeiling(clubTier, clubReputation)
       : null;
-    const expectedSalary = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
-    const expectedBonus = FinanceService.calculatePlayerBonusDemand(player, expectedSalary, clubReputation);
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const managerExpectationMultiplier = managerProfile ? managerInfluence.expectationMultiplier : 1;
+    const expectedSalaryBase = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
+    const expectedSalary = Math.max(50_000, Math.round(expectedSalaryBase * managerExpectationMultiplier / 5_000) * 5_000);
+    const expectedBonus = Math.max(0, Math.round(FinanceService.calculatePlayerBonusDemand(player, expectedSalary, clubReputation) * managerExpectationMultiplier / 5_000) * 5_000);
 
     // --- TUTAJ WSTAW LOGIKĘ: WARUNEK LOSOWY (1 SZANSA NA 10 PRZY MAX -15%) ---
     const isSalaryWithin15Percent = newSalary >= expectedSalary * 0.85;

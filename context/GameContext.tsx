@@ -436,7 +436,7 @@ const processAiToAiLoanMoves = (
 
   const dateStr = currentDate.toISOString().split('T')[0];
   const dailyRoll = IncomingTransferService.seededRandom(currentDate.getTime() + sessionSeed + 3907);
-  const maxDailyLoans = dailyRoll < 0.05 ? 2 : dailyRoll < 0.32 ? 1 : 0;
+  const maxDailyLoans = dailyRoll < 0.08 ? 2 : dailyRoll < 0.48 ? 1 : 0;
 
   if (maxDailyLoans === 0) {
     return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
@@ -467,7 +467,7 @@ const processAiToAiLoanMoves = (
           if (buyerClub.id === sellerClub.id) return;
           const buyerSquad = players[buyerClub.id] || [];
           if (buyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
-          if ((buyerClub.rosterIds?.length ?? buyerSquad.length) >= 30) return;
+          if (buyerSquad.length >= 32) return;
 
           const seed = IncomingTransferService.buildOfferSeed(
             currentDate,
@@ -3601,7 +3601,7 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
       const decision = FinanceService.evaluateContractLogic(
         player, neg.salary, neg.bonus, 
         new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(), 
-        simDate, userClub.reputation, FinanceService.getClubTier(userClub)
+        simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
       );
 
       const mail: MailMessage = {
@@ -12894,7 +12894,8 @@ const finalResult: SimulationOutput = {
       buyerClub,
       sellerSquad,
       buyerSquad,
-      currentDate
+      currentDate,
+      managerProfile
     );
 
     if (!playerDecision.accepted) {
@@ -13683,7 +13684,7 @@ const finalResult: SimulationOutput = {
       message: `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal transfer do ${buyerClub.name}.`,
       offer: completedOffer
     };
-  }, [userTeamId, transferOffers, clubs, players, currentDate]);
+  }, [userTeamId, transferOffers, clubs, players, currentDate, managerProfile]);
 
 const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const mail = messages.find(m => m.id === mailId);

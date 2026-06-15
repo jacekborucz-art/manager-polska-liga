@@ -239,7 +239,8 @@ export const IncomingTransferService = {
     if (!player.isAvailableForLoan || player.loan || player.transferPendingClubId) {
       return { shouldGenerate: false, category: null };
     }
-    if (buyerClub.id === sellerClub.id || buyerClub.rosterIds.length >= 30) {
+    const buyerSquadSize = buyerPlayers?.length ?? buyerClub.rosterIds.length;
+    if (buyerClub.id === sellerClub.id || buyerSquadSize >= 32) {
       return { shouldGenerate: false, category: null };
     }
 
@@ -260,20 +261,20 @@ export const IncomingTransferService = {
     const categoryWeight = category === 'LOWER_LEAGUE'
       ? 0.85
       : category === 'SAME_LEAGUE'
-        ? 0.125
-        : 0.075;
+        ? 0.18
+        : 0.09;
     const repGap = sellerClub.reputation - buyerClub.reputation;
-    let chance = 0.045 * categoryWeight;
+    let chance = 0.06 * categoryWeight;
 
     if (need.needScore >= 8) chance *= 2.2;
     else if (need.needScore >= 6) chance *= 1.45;
-    if (category === 'SAME_LEAGUE') chance *= 0.75;
+    if (category === 'SAME_LEAGUE') chance *= 0.85;
     if (category === 'FOREIGN_LOWER_REP' && repGap > 3.5) chance *= 0.65;
     if (player.age <= 23) chance *= 1.25;
     if (player.annualSalary > buyerClub.transferBudget * 0.45) chance *= 0.35;
 
     return {
-      shouldGenerate: IncomingTransferService.seededRandom(seed + 2201) < Math.min(0.12, chance),
+      shouldGenerate: IncomingTransferService.seededRandom(seed + 2201) < Math.min(0.16, chance),
       category,
     };
   },
@@ -296,10 +297,10 @@ export const IncomingTransferService = {
 
     const repGap = sellerClub.reputation - buyerClub.reputation;
     const coverageOptions = repGap >= 4
-      ? [40, 50, 60]
+      ? [35, 45, 55]
       : repGap >= 2
-        ? [50, 60, 75]
-        : [60, 75, 100];
+        ? [45, 55, 65]
+        : [50, 65, 80];
     const wageCoveragePercent = coverageOptions[Math.min(coverageOptions.length - 1, Math.floor(rng2 * coverageOptions.length))];
 
     const marketValue = FinanceService.calculateMarketValue(
@@ -308,11 +309,11 @@ export const IncomingTransferService = {
       IncomingTransferService.getClubTier(sellerClub),
       sellerClub.country
     );
-    const wantsFee = rng3 > 0.55 || player.overallRating >= IncomingTransferService.getBuyerIdealOverall(buyerClub) + 4;
-    const rawLoanFee = wantsFee ? Math.max(player.annualSalary * (0.05 + rng3 * 0.10), marketValue * (0.002 + rng3 * 0.006)) : 0;
+    const wantsFee = rng3 > 0.65 || player.overallRating >= IncomingTransferService.getBuyerIdealOverall(buyerClub) + 4;
+    const rawLoanFee = wantsFee ? Math.max(player.annualSalary * (0.04 + rng3 * 0.08), marketValue * (0.0015 + rng3 * 0.0045)) : 0;
     const loanFee = Math.round(rawLoanFee / 1000) * 1000;
     const totalCost = IncomingTransferService.calculateLoanTotalCost(player, loanFee, wageCoveragePercent, startDate, endDate);
-    const budgetCeiling = Math.max(0, Math.min(buyerClub.transferBudget, buyerClub.budget * 0.35));
+    const budgetCeiling = Math.max(0, Math.min(buyerClub.transferBudget, buyerClub.budget * 0.40));
 
     if (totalCost > budgetCeiling || loanFee > buyerClub.transferBudget) return null;
 

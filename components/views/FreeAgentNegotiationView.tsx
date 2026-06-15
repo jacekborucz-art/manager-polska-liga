@@ -4,6 +4,7 @@ import { ViewState } from '../../types';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
+import { ManagerNegotiationInfluenceService } from '../../services/ManagerNegotiationInfluenceService';
 
 export const FreeAgentNegotiationView: React.FC = () => {
   const {
@@ -17,6 +18,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
     updatePlayer,
     pendingNegotiations,
     setClubs,
+    managerProfile,
   } = useGame();
 
   const player = useMemo(
@@ -68,8 +70,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
-    return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub, mySquad);
-  }, [player, myClub, mySquad]);
+    return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub, mySquad, managerProfile);
+  }, [player, myClub, mySquad, managerProfile]);
 
   const isAlreadyNegotiating = useMemo(() => {
     if (!player) return false;
@@ -142,7 +144,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
     setIsSending(true);
 
-    const expected = FinanceService.calculateFAExpectations(player, myClub.reputation, avgSquadSalary);
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const expected = FinanceService.calculateFAExpectations(player, myClub.reputation, avgSquadSalary) * managerInfluence.expectationMultiplier;
     const ratio = salary / expected;
 
     let reaction = { type: 'GOOD', msg: 'Dziekujemy. Przeanalizujemy warunki i wrocimy z odpowiedzia.' };
