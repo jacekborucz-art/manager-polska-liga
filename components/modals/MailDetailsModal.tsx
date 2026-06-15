@@ -195,6 +195,10 @@ const ISO3_TO_ISO2: Record<string, string> = {
   BOL: 'bo', MEX: 'mx', USA: 'us', CAN: 'ca', MAR: 'ma', ALG: 'dz',
   EGY: 'eg', NGA: 'ng', SEN: 'sn', CIV: 'ci', KSA: 'sa', UZB: 'uz',
   QAT: 'qa', IRN: 'ir', JPN: 'jp', KOR: 'kr', AUS: 'au',
+  AZE: 'az', MDA: 'md', CYP: 'cy', LTU: 'lt', EST: 'ee', FRO: 'fo',
+  GIB: 'gi', LUX: 'lu', ISL: 'is', MKD: 'mk', LAT: 'lv', ALB: 'al',
+  KAZ: 'kz', GEO: 'ge', ISR: 'il', BLR: 'by', MNE: 'me', ARM: 'am',
+  LIE: 'li', KOS: 'xk', MLT: 'mt', AND: 'ad', SMR: 'sm',
 };
 
 const TEAM_NAME_TO_FLAG: Record<string, string> = {
@@ -428,8 +432,18 @@ const getFriendlyMatchesFromMail = (mail: MailMessage): FriendlyMailMatch[] => {
 };
 
 const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
+  const { clubs } = useGame();
   const matches = getFriendlyMatchesFromMail(mail);
   const intro = mail.body.split('\n').find(line => line.trim() && !line.match(/^(.+)\s(\d+)[–-](\d+)\s(.+)$/));
+
+  const resolveCountry = (teamName: string, country?: string): string | undefined => {
+    if (country) return country;
+    const club = clubs.find(c => c.name === teamName);
+    if (!club) return undefined;
+    if (club.country) return club.country;
+    if (club.leagueId?.startsWith('L_PL')) return 'POL';
+    return undefined;
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
@@ -452,7 +466,7 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
                   <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${homeWon ? 'text-white' : 'text-slate-300'}`}>
                     {match.homeName}
                   </span>
-                  <FlagBadge teamName={match.homeName} country={match.homeCountry} align="left" />
+                  <FlagBadge teamName={match.homeName} country={resolveCountry(match.homeName, match.homeCountry)} align="left" />
                 </div>
 
                 <div className="flex items-center justify-center rounded-xl border border-yellow-300/35 bg-yellow-300/10 px-3 py-2 text-[18px] font-black italic uppercase tracking-tighter text-yellow-100 shadow-[inset_0_0_18px_rgba(250,204,21,0.08)]">
@@ -460,7 +474,7 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
                 </div>
 
                 <div className="flex min-w-0 items-center justify-start gap-3 text-left">
-                  <FlagBadge teamName={match.awayName} country={match.awayCountry} align="right" />
+                  <FlagBadge teamName={match.awayName} country={resolveCountry(match.awayName, match.awayCountry)} align="right" />
                   <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${awayWon ? 'text-white' : 'text-slate-300'}`}>
                     {match.awayName}
                   </span>

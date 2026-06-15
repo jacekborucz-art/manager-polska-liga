@@ -117,6 +117,7 @@ export enum ViewState {
   WCQ_PLAYOFF_RESULTS_SF = 'WCQ_PLAYOFF_RESULTS_SF',       // 17 marca — wyniki półfinałów
   WCQ_PLAYOFF_RESULTS_FINAL = 'WCQ_PLAYOFF_RESULTS_FINAL', // 20 marca — wyniki finałów + kwalifikacja
   // ── MISTRZOSTWA ŚWIATA ───────────────────────────────────────────────────
+  NATIONS_LEAGUE_DRAW = 'NATIONS_LEAGUE_DRAW',
   WC_DRAW = 'WC_DRAW',
   WORLD_CUP = 'WORLD_CUP',
   STAFF_SEARCH = 'STAFF_SEARCH',

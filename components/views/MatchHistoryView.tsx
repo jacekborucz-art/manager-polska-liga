@@ -311,6 +311,24 @@ function NationsLeagueArchive({
   );
 }
 
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  'Portugalia': 'pt', 'Hiszpania': 'es', 'Francja': 'fr', 'Niemcy': 'de',
+  'Holandia': 'nl', 'Włochy': 'it', 'Dania': 'dk', 'Chorwacja': 'hr',
+  'Anglia': 'gb-eng', 'Belgia': 'be', 'Turcja': 'tr', 'Serbia': 'rs',
+  'Norwegia': 'no', 'Walia': 'gb-wls', 'Grecja': 'gr', 'Czechy': 'cz',
+  'Szwajcaria': 'ch', 'Austria': 'at', 'Szkocja': 'gb-sct', 'Ukraina': 'ua',
+  'Szwecja': 'se', 'Polska': 'pl', 'Węgry': 'hu', 'Rumunia': 'ro',
+  'Bośnia i Hercegowina': 'ba', 'Irlandia': 'ie', 'Izrael': 'il',
+  'Słowenia': 'si', 'Gruzja': 'ge', 'Albania': 'al',
+  'Macedonia Północna': 'mk', 'Kosovo': 'xk', 'Słowacja': 'sk',
+  'Irlandia Północna': 'gb-nir', 'Bułgaria': 'bg', 'Islandia': 'is',
+  'Finlandia': 'fi', 'Czarnogóra': 'me', 'Armenia': 'am',
+  'Białoruś': 'by', 'Luksemburg': 'lu', 'Wyspy Owcze': 'fo',
+  'Kazachstan': 'kz', 'Estonia': 'ee', 'Cypr': 'cy', 'Litwa': 'lt',
+  'Łotwa': 'lv', 'Mołdawia': 'md', 'Azerbejdżan': 'az', 'Malta': 'mt',
+  'Andora': 'ad', 'Gibraltar': 'gi', 'Liechtenstein': 'li', 'San Marino': 'sm',
+};
+
 function UefaNationalRankingArchive({
   state,
   nationalTeams,
@@ -319,7 +337,6 @@ function UefaNationalRankingArchive({
   nationalTeams: NationalTeam[];
 }) {
   const ranking = UefaNationalRankingService.ensureState(state, nationalTeams);
-  const ntByName = new Map(nationalTeams.map(team => [team.name, team]));
 
   return (
     <div className="p-8 space-y-8">
@@ -345,13 +362,19 @@ function UefaNationalRankingArchive({
         </div>
         <div className="divide-y divide-white/5">
           {ranking.entries.map(entry => {
-            const team = ntByName.get(entry.teamName);
             const movement = (entry.previousRank ?? entry.rank) - entry.rank;
             return (
               <div key={entry.teamName} className="grid grid-cols-[80px_1fr_90px_90px_110px_90px] gap-3 px-5 py-3 items-center text-sm text-white/75 hover:bg-white/[0.03] transition-colors">
                 <span className="font-mono text-white/45">#{entry.rank}</span>
                 <div className="flex items-center gap-3 min-w-0">
-                  <TeamMark team={team} className="w-8 h-8" />
+                  {COUNTRY_CODE_MAP[entry.teamName] && (
+                    <img
+                      src={`https://flagcdn.com/20x15/${COUNTRY_CODE_MAP[entry.teamName]}.png`}
+                      alt=""
+                      className="shrink-0 rounded-sm"
+                      style={{ width: 24, height: 18 }}
+                    />
+                  )}
                   <span className="truncate font-black italic uppercase tracking-tighter text-white">{entry.teamName}</span>
                 </div>
                 <span className={`text-center font-black ${movement > 0 ? 'text-emerald-400' : movement < 0 ? 'text-rose-400' : 'text-white/25'}`}>

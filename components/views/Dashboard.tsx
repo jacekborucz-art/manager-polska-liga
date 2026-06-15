@@ -1296,7 +1296,7 @@ const boardConfidence = useMemo(() => {
               label="Kadra"
               icon="squad"
               size="large"
-              tone={clubPrimary}
+              tone="#ffffff"
               onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
               disabled={isJumping || isResigned}
             />

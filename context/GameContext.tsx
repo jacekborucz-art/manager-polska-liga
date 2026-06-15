@@ -4645,7 +4645,7 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
   }, [userTeamId]);
 
   const advanceDay = useCallback(() => {
-    if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW) return;
+    if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW || viewState === ViewState.NATIONS_LEAGUE_DRAW) return;
 
     const dateToProcess = new Date(currentDate);
     // Czy to automatyczny skok (jumpToDate/jumpToNextEvent) — NIE ręczny klik gracza?
@@ -6596,8 +6596,8 @@ Asystent`,
               awayName: aName,
               homeScore: r.homeScore,
               awayScore: r.awayScore,
-              homeCountry: hClub?.country,
-              awayCountry: aClub?.country,
+              homeCountry: hClub?.country ?? (hClub?.leagueId?.startsWith('L_PL') ? 'POL' : undefined),
+              awayCountry: aClub?.country ?? (aClub?.leagueId?.startsWith('L_PL') ? 'POL' : undefined),
             };
           });
           const lines = friendlyMatches.map(match => `${match.homeName} ${match.homeScore}-${match.awayScore} ${match.awayName}`);
@@ -7279,6 +7279,52 @@ Asystent`,
           };
           setMessages(prev => [wcDrawMail, ...prev]);
         }
+      }
+    }
+
+    {
+      const seasonStartYearForNationsLeague = dateToProcess.getMonth() >= 6
+        ? dateToProcess.getFullYear()
+        : dateToProcess.getFullYear() - 1;
+      const isNationsLeagueDrawDay = dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 17;
+      const nationsLeagueDrawKey = `UNL_DRAW_${seasonStartYearForNationsLeague}`;
+
+      if (
+        isNationsLeagueDrawDay &&
+        NationsLeagueService.isNationsLeagueSeason(seasonStartYearForNationsLeague) &&
+        nationsLeagueState?.editionStartYear !== seasonStartYearForNationsLeague &&
+        !processedDrawIds.includes(nationsLeagueDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const drawState = NationsLeagueService.createInitialState(
+          nationalTeams,
+          seasonStartYearForNationsLeague,
+          ensuredUefaRankingState
+        );
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setNationsLeagueState(drawState);
+        setProcessedDrawIds(prev => prev.includes(nationsLeagueDrawKey) ? prev : [...prev, nationsLeagueDrawKey]);
+
+        if (!sentMailIdsRef.current.has(nationsLeagueDrawKey)) {
+          sentMailIdsRef.current.add(nationsLeagueDrawKey);
+          const nationsLeagueMail: MailMessage = {
+            id: nationsLeagueDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie Ligi Narodów UEFA ${drawState.editionLabel}`,
+            body: `17 lipca odbyło się losowanie Ligi Narodów UEFA ${drawState.editionLabel}. Grupy zostały ułożone na podstawie aktualnego rankingu UEFA reprezentacji, a pierwsze mecze fazy ligowej zaplanowano na wrześniowe okno reprezentacyjne.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 90,
+          };
+          setMessages(prev => [nationsLeagueMail, ...prev]);
+        }
+
+        setTargetJumpTime(null);
+        lastProcessedLeagueDateRef.current = '';
+        navigateTo(ViewState.NATIONS_LEAGUE_DRAW);
+        return;
       }
     }
 
@@ -9940,7 +9986,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, uefaNationalRankingState]);
 
 
    const confirmCLGroupDraw = () => {
