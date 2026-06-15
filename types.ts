@@ -2482,6 +2482,83 @@ export interface NationsLeagueState {
 
 export interface NationsLeagueArchiveEntry extends NationsLeagueState {}
 
+export interface EuroHostAnnouncement {
+  tournamentYear: number;
+  hosts: string[];
+  announcedIso: string;
+}
+
+export type EuroQualifiersStage = 'GROUP_STAGE' | 'PLAYOFFS' | 'COMPLETE';
+
+export interface EuroQualifiersTeamStanding {
+  teamName: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface EuroQualifiersGroup {
+  id: string;
+  teams: string[];
+  hostTeams: string[];
+  standings: EuroQualifiersTeamStanding[];
+}
+
+export interface EuroQualifiersFixture {
+  id: string;
+  year: number;
+  day: number;
+  month: number;
+  round: number;
+  home: string;
+  away: string;
+  groupId: string;
+  stage?: EuroQualifiersStage;
+  playoffPathId?: string;
+  played?: boolean;
+  matchId?: string;
+  homeGoals?: number;
+  awayGoals?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  winner?: string;
+  loser?: string;
+}
+
+export interface EuroQualifiersPlayoffPath {
+  id: string;
+  label: string;
+  mode: 'PATH' | 'TIE';
+  teams: string[];
+  semiFinalFixtureIds: string[];
+  tieFixtureIds?: string[];
+  finalFixtureId?: string;
+  winner?: string;
+}
+
+export interface EuroQualifiersState {
+  tournamentYear: number;
+  editionLabel: string;
+  stage: EuroQualifiersStage;
+  drawCompleted: boolean;
+  groups: EuroQualifiersGroup[];
+  fixtures: EuroQualifiersFixture[];
+  playoffPaths: EuroQualifiersPlayoffPath[];
+  hostTeams: string[];
+  qualifiedTeams: string[];
+  directQualifiers: string[];
+  hostReservedQualifiers: string[];
+  playoffTeams: string[];
+  completed: boolean;
+  lastUpdatedIso?: string;
+}
+
 export interface UefaNationalRankingEntry {
   teamName: string;
   points: number;

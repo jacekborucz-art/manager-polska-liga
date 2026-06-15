@@ -29,6 +29,8 @@ WCQPlayoffState,
 WCState,
 NationsLeagueState,
 NationsLeagueArchiveEntry,
+EuroHostAnnouncement,
+EuroQualifiersState,
 UefaNationalRankingState,
 CoachSeasonStats,
 AiTransferLogEntry,
@@ -113,8 +115,9 @@ import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationSer
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
 import { NationsLeagueService } from '../services/NationsLeagueService';
+import { EuroQualifiersService } from '../services/EuroQualifiersService';
 import { UefaNationalRankingService } from '../services/UefaNationalRankingService';
-import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
+import { getNTMatchDayForDate, NTMatchDay } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
@@ -939,6 +942,9 @@ finalizeFreeAgentContract: (mailId: string) => void;
   nationsLeagueState: NationsLeagueState | null;
   setNationsLeagueState: React.Dispatch<React.SetStateAction<NationsLeagueState | null>>;
   nationsLeagueArchive: NationsLeagueArchiveEntry[];
+  euroHostAnnouncements: EuroHostAnnouncement[];
+  euroQualifiersState: EuroQualifiersState | null;
+  setEuroQualifiersState: React.Dispatch<React.SetStateAction<EuroQualifiersState | null>>;
   uefaNationalRankingState: UefaNationalRankingState | null;
   setUefaNationalRankingState: React.Dispatch<React.SetStateAction<UefaNationalRankingState | null>>;
   wcState: WCState | null;
@@ -1091,6 +1097,8 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
   const [nationsLeagueState, setNationsLeagueState] = useState<NationsLeagueState | null>(null);
   const [nationsLeagueArchive, setNationsLeagueArchive] = useState<NationsLeagueArchiveEntry[]>([]);
+  const [euroHostAnnouncements, setEuroHostAnnouncements] = useState<EuroHostAnnouncement[]>([]);
+  const [euroQualifiersState, setEuroQualifiersState] = useState<EuroQualifiersState | null>(null);
   const [uefaNationalRankingState, setUefaNationalRankingState] = useState<UefaNationalRankingState | null>(null);
   const [wcState, setWcState] = useState<WCState | null>(null);
 
@@ -1635,6 +1643,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setUefaNationalRankingState(UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams));
     setNationsLeagueState(null);
     setNationsLeagueArchive([]);
+    setEuroHostAnnouncements([]);
+    setEuroQualifiersState(null);
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
@@ -2614,6 +2624,8 @@ if (userTeamId) {
     nationalTeams,
     nationsLeagueState,
     nationsLeagueArchive,
+    euroHostAnnouncements,
+    euroQualifiersState,
     uefaNationalRankingState,
     wcqPlayoffState,
     wcState,
@@ -2718,6 +2730,8 @@ if (userTeamId) {
     setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, data.nationalTeams));
     setNationsLeagueState(data.nationsLeagueState ?? null);
     setNationsLeagueArchive(Array.isArray((data as any).nationsLeagueArchive) ? (data as any).nationsLeagueArchive : []);
+    setEuroHostAnnouncements(Array.isArray((data as any).euroHostAnnouncements) ? (data as any).euroHostAnnouncements : []);
+    setEuroQualifiersState(data.euroQualifiersState ?? null);
     setWcqPlayoffState(data.wcqPlayoffState);
     setWcState(data.wcState ?? null);
     setCupParticipants(data.cupParticipants);
@@ -3017,6 +3031,8 @@ if (userTeamId) {
     setWcqPlayoffState(null);
     setNationsLeagueState(null);
     setNationsLeagueArchive([]);
+    setEuroHostAnnouncements([]);
+    setEuroQualifiersState(null);
     setWcState(null);
     setReserves([]);
     setReserveCoachId(null);
@@ -7052,17 +7068,42 @@ Asystent`,
       const scheduledMatchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
       const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
       if (!uefaNationalRankingState) setUefaNationalRankingState(ensuredUefaRankingState);
+      const latestCompletedNationsLeagueEdition = nationsLeagueState?.completed
+        ? nationsLeagueState
+        : nationsLeagueArchive.find(entry => entry.completed) ?? null;
       const ensuredNationsLeagueState = NationsLeagueService.ensureState(
         nationsLeagueState,
         dateToProcess,
         nationalTeams,
-        ensuredUefaRankingState
+        ensuredUefaRankingState,
+        latestCompletedNationsLeagueEdition
       );
       const nationsLeagueMatchDay = scheduledMatchDay
         ? null
         : NationsLeagueService.getMatchDayForDate(ensuredNationsLeagueState, dateToProcess);
-      const matchDay = scheduledMatchDay ?? nationsLeagueMatchDay;
+      const euroQualifiersMatchDay = EuroQualifiersService.getMatchDayForDate(euroQualifiersState, dateToProcess);
+      const mergeMatchDays = (matchDays: (NTMatchDay | null)[]): NTMatchDay | null => {
+        const active = matchDays.filter((item): item is NTMatchDay => !!item);
+        if (active.length === 0) return null;
+        const usedTeams = new Set<string>();
+        const matches = active.flatMap(item => item.matches).filter(match => {
+          if (usedTeams.has(match.home) || usedTeams.has(match.away)) return false;
+          usedTeams.add(match.home);
+          usedTeams.add(match.away);
+          return true;
+        });
+        if (matches.length === 0 && !active.some(item => item.eventType)) return null;
+        return {
+          day: dateToProcess.getDate(),
+          month: dateToProcess.getMonth(),
+          competitionLabel: active.map(item => item.competitionLabel).join(' / '),
+          matches,
+          eventType: active.find(item => item.eventType)?.eventType,
+        };
+      };
+      const matchDay = mergeMatchDays([scheduledMatchDay, nationsLeagueMatchDay, euroQualifiersMatchDay]);
       const isNationsLeagueMatchDay = !!nationsLeagueMatchDay;
+      const isEuroQualifiersMatchDay = !!euroQualifiersMatchDay;
       if (matchDay) {
         const dateSeed = dateToProcess.getTime();
         const ntCareerSeed = buildCareerScopedSeed(
@@ -7304,12 +7345,67 @@ Asystent`,
           }
           setUefaNationalRankingState(nextUefaRankingState);
         }
+        if (isEuroQualifiersMatchDay && euroQualifiersState) {
+          const nextEuroQualifiersState = EuroQualifiersService.applyResults(
+            euroQualifiersState,
+            ntSimulation.results,
+            ensuredUefaRankingState
+          );
+          setEuroQualifiersState(nextEuroQualifiersState);
+
+          if (nextEuroQualifiersState.stage === 'PLAYOFFS' && euroQualifiersState.stage === 'GROUP_STAGE') {
+            const euroGroupSummaryKey = `EUROQ_GROUP_SUMMARY_${nextEuroQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(euroGroupSummaryKey)) {
+              sentMailIdsRef.current.add(euroGroupSummaryKey);
+              const directLines = nextEuroQualifiersState.directQualifiers.map(team => `- ${team}`);
+              const hostLines = nextEuroQualifiersState.hostReservedQualifiers.map(team => `- ${team}`);
+              const playoffLines = nextEuroQualifiersState.playoffPaths.map(path =>
+                `${path.mode === 'TIE' ? 'Dwumecz' : 'Ścieżka'} ${path.label}: ${path.teams.join(', ')}`
+              );
+              const euroSummaryMail: MailMessage = {
+                id: euroGroupSummaryKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextEuroQualifiersState.editionLabel} - faza grupowa zakończona`,
+                body: `Zakończono fazę grupową eliminacji ${nextEuroQualifiersState.editionLabel}.\n\nBezpośredni awans:\n${directLines.join('\n') || 'Brak rozstrzygnięć.'}\n\nMiejsca rezerwowe gospodarzy:\n${hostLines.join('\n') || 'Żaden gospodarz nie potrzebował miejsca rezerwowego.'}\n\nPary barażowe:\n${playoffLines.join('\n') || 'Baraże nie są potrzebne.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 84,
+              };
+              setMessages(prev => [euroSummaryMail, ...prev]);
+            }
+          }
+
+          if (nextEuroQualifiersState.completed && !euroQualifiersState.completed) {
+            const euroFinalKey = `EUROQ_FINAL_${nextEuroQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(euroFinalKey)) {
+              sentMailIdsRef.current.add(euroFinalKey);
+              const playoffWinners = nextEuroQualifiersState.playoffPaths
+                .map(path => `${path.mode === 'TIE' ? 'Dwumecz' : 'Ścieżka'} ${path.label}: ${path.winner ?? 'brak rozstrzygnięcia'}`)
+                .join('\n');
+              const qualifiedLines = nextEuroQualifiersState.qualifiedTeams.map(team => `- ${team}`);
+              const euroFinalMail: MailMessage = {
+                id: euroFinalKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextEuroQualifiersState.editionLabel} - znamy komplet finalistów`,
+                body: `Zakończono baraże eliminacji ${nextEuroQualifiersState.editionLabel}.\n\nZwycięzcy ścieżek:\n${playoffWinners || 'Brak baraży.'}\n\nZakwalifikowane reprezentacje:\n${qualifiedLines.join('\n')}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 88,
+              };
+              setMessages(prev => [euroFinalMail, ...prev]);
+            }
+          }
+        }
         setPlayers(finalNTPlayers);
         finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
         setCoaches(prev => CoachService.applyNationalTeamExpForResults(prev, nationalTeams, finalNTResults));
         setLastNTMatchResults(finalNTResults);
         // ── Po ostatniej kolejce fazy grupowej MŚ (17 listopada) → email-podsumowanie ──
-        if (dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
+        if (dateToProcess.getFullYear() === 2025 && dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
           const wcqSummaryKey = `WCQ_GROUPS_SUMMARY_${seasonNumber}`;
           if (!sentMailIdsRef.current.has(wcqSummaryKey)) {
             sentMailIdsRef.current.add(wcqSummaryKey);
@@ -7330,6 +7426,83 @@ Asystent`,
 
     // ── LOSOWANIE MISTRZOSTW ŚWIATA (5 grudnia roku poprzedzającego MŚ) ─────
     {
+      const euroHostTournamentYear = EuroQualifiersService.getTournamentYearForHostAnnouncement(dateToProcess);
+      if (euroHostTournamentYear) {
+        const euroHostKey = `EURO_HOSTS_${euroHostTournamentYear}`;
+        const alreadyAnnounced = euroHostAnnouncements.some(entry => entry.tournamentYear === euroHostTournamentYear);
+        if (!alreadyAnnounced && !processedDrawIds.includes(euroHostKey)) {
+          const announcement = EuroQualifiersService.createHostAnnouncement(
+            nationalTeams,
+            euroHostTournamentYear,
+            euroHostAnnouncements
+          );
+          setEuroHostAnnouncements(prev => prev.some(entry => entry.tournamentYear === announcement.tournamentYear)
+            ? prev
+            : [...prev, announcement].sort((a, b) => a.tournamentYear - b.tournamentYear));
+          setProcessedDrawIds(prev => prev.includes(euroHostKey) ? prev : [...prev, euroHostKey]);
+
+          if (!sentMailIdsRef.current.has(euroHostKey)) {
+            sentMailIdsRef.current.add(euroHostKey);
+            const hostMail: MailMessage = {
+              id: euroHostKey,
+              sender: 'UEFA',
+              role: 'Komitet Wykonawczy UEFA',
+              subject: `Gospodarze EURO ${announcement.tournamentYear}`,
+              body: `UEFA ogłosiła gospodarzy turnieju EURO ${announcement.tournamentYear}.\n\nGospodarze: ${announcement.hosts.join(', ')}.\n\nDecyzja zapadła sześć lat przed turniejem, dzięki czemu kolejne losowanie eliminacji uwzględni gospodarzy i ich miejsca rezerwowe.`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 86,
+            };
+            setMessages(prev => [hostMail, ...prev]);
+          }
+        }
+      }
+
+      const euroTournamentYear = dateToProcess.getFullYear() + 2;
+      const euroQualifiersDrawKey = `EUROQ_DRAW_${euroTournamentYear}`;
+      if (
+        EuroQualifiersService.isEuroTournamentYear(euroTournamentYear) &&
+        EuroQualifiersService.isDrawDay(dateToProcess) &&
+        euroQualifiersState?.tournamentYear !== euroTournamentYear &&
+        !processedDrawIds.includes(euroQualifiersDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const drawState = EuroQualifiersService.createInitialState(
+          nationalTeams,
+          euroTournamentYear,
+          ensuredUefaRankingState,
+          nationsLeagueState,
+          euroHostAnnouncements
+        );
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setEuroQualifiersState(drawState);
+        setProcessedDrawIds(prev => prev.includes(euroQualifiersDrawKey) ? prev : [...prev, euroQualifiersDrawKey]);
+
+        if (!sentMailIdsRef.current.has(euroQualifiersDrawKey)) {
+          sentMailIdsRef.current.add(euroQualifiersDrawKey);
+          const hostLine = drawState.hostTeams.length
+            ? `Gospodarze turnieju (${drawState.hostTeams.join(', ')}) biorą udział w eliminacjach i zostali rozdzieleni do różnych grup. UEFA zachowuje dla nich maksymalnie dwa miejsca rezerwowe, jeśli nie awansują sportowo.`
+            : 'W tej edycji gra nie ma zdefiniowanych gospodarzy turnieju.';
+          const qualifyingYear = drawState.tournamentYear - 1;
+          const groupLines = drawState.groups.map(group =>
+            `Grupa ${group.id}: ${group.teams.join(', ')}`
+          );
+          const euroDrawMail: MailMessage = {
+            id: euroQualifiersDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie eliminacji ${drawState.editionLabel}`,
+            body: `Odbyło się losowanie eliminacji ${drawState.editionLabel}.\n\n${hostLine}\n\n${groupLines.join('\n')}\n\nTerminarz korzysta z okien reprezentacyjnych ${qualifyingYear} i omija znane kolizje z Ligą Narodów UEFA.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 89,
+          };
+          setMessages(prev => [euroDrawMail, ...prev]);
+        }
+      }
+
       const nextYear = dateToProcess.getFullYear() + 1;
       const curMonth = dateToProcess.getMonth() + 1;
       const curDay = dateToProcess.getDate();
@@ -7381,11 +7554,14 @@ Asystent`,
         !processedDrawIds.includes(nationsLeagueDrawKey)
       ) {
         const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const latestCompletedNationsLeagueEdition = nationsLeagueState?.completed
+          ? nationsLeagueState
+          : nationsLeagueArchive.find(entry => entry.completed) ?? null;
         const drawState = NationsLeagueService.createInitialState(
           nationalTeams,
           seasonStartYearForNationsLeague,
           ensuredUefaRankingState,
-          nationsLeagueState
+          latestCompletedNationsLeagueEdition ?? nationsLeagueState
         );
         if (nationsLeagueState) {
           setNationsLeagueArchive(prev => upsertNationsLeagueArchive(prev, nationsLeagueState));
@@ -10075,7 +10251,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, uefaNationalRankingState]);
 
 
    const confirmCLGroupDraw = () => {
@@ -14587,6 +14763,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     lastNTMatchResults, setLastNTMatchResults,
     nationsLeagueState, setNationsLeagueState,
     nationsLeagueArchive,
+    euroHostAnnouncements,
+    euroQualifiersState, setEuroQualifiersState,
     uefaNationalRankingState, setUefaNationalRankingState,
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,

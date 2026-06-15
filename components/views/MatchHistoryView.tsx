@@ -746,6 +746,7 @@ export const MatchHistoryView: React.FC = () => {
       if (selectedLeague === 'CL') return matchSeason && m.competition.startsWith('CL_');
       if (selectedLeague === 'EL') return matchSeason && m.competition.startsWith('EL_');
       if (selectedLeague === 'CONF') return matchSeason && m.competition.startsWith('CONF_');
+      if (selectedLeague === 'EUROQ') return matchSeason && m.competition.includes('Eliminacje EURO');
       if (selectedLeague === 'NT') return matchSeason && (nationalTeams.some(t => t.id === m.homeTeamId) || nationalTeams.some(t => t.id === m.awayTeamId));
       if (selectedLeague === 'FRIENDLY') return matchSeason && m.competition === 'FRIENDLY';
 
@@ -779,7 +780,7 @@ export const MatchHistoryView: React.FC = () => {
     compName = 'SUPERPUCHAR POLSKI';
   } else if (comp.startsWith('CL_')) compName = 'LIGA MISTRZÓW';
   else if (comp.startsWith('EL_')) compName = 'LIGA EUROPY';
-  else if (comp.startsWith('CONF_')) compName = 'LIGA KONFERENCJI';  else if (comp === 'FRIENDLY' || comp === CompetitionType.FRIENDLY) compName = 'MECZ TOWARZYSKI';  else if (nationalTeams.some(t => t.id === matches[0].homeTeamId) || nationalTeams.some(t => t.id === matches[0].awayTeamId)) compName = comp;
+  else if (comp.startsWith('CONF_')) compName = 'LIGA KONFERENCJI';  else if (comp.includes('Eliminacje EURO')) compName = comp;  else if (comp === 'FRIENDLY' || comp === CompetitionType.FRIENDLY) compName = 'MECZ TOWARZYSKI';  else if (nationalTeams.some(t => t.id === matches[0].homeTeamId) || nationalTeams.some(t => t.id === matches[0].awayTeamId)) compName = comp;
 
   // Dodaj datę do labelu (opcjonalnie, ale czytelniej)
   const rawDate = matches[0].date;
@@ -811,6 +812,7 @@ export const MatchHistoryView: React.FC = () => {
     { id: 'CL', label: 'LIGA MISTRZÓW', code: 'CL', accent: '#60a5fa' },
     { id: 'EL', label: 'PUCHAR LIGI EUROPY', code: 'EL', accent: '#f97316' },
     { id: 'CONF', label: 'PUCHAR LIGI KONFERENCJI', code: 'LK', accent: '#22c55e' },
+    { id: 'EUROQ', label: 'ELIMINACJE EURO', code: 'EQ', accent: '#2563eb' },
     { id: 'NT', label: 'MECZE MIĘDZYNARODOWE', code: 'NT', accent: '#14b8a6' },
     { id: 'FRIENDLY', label: 'MECZE TOWARZYSKIE', code: 'FR', accent: '#a78bfa' }
   ];

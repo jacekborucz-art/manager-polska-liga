@@ -30,6 +30,7 @@ import {
 // Import potrzebny do detekcji dnia meczowego reprezentacji
 import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
 import { NationsLeagueService } from './NationsLeagueService';
+import { EuroQualifiersService } from './EuroQualifiersService';
 
 // ─── Typy publiczne ──────────────────────────────────────────────────────────
 
@@ -1089,8 +1090,9 @@ export const CalendarEngine = {
             : undefined;
           const hasMatchDay = !!matchDayEntry;
           const hasNationsLeagueMatchDay = NationsLeagueService.isPotentialMatchDate(slot.start);
+          const hasEuroQualifiersMatchDay = EuroQualifiersService.isPotentialMatchDate(slot.start);
 
-          if ((hasMatchDay && matchDayEntry) || hasNationsLeagueMatchDay) {
+          if ((hasMatchDay && matchDayEntry) || hasNationsLeagueMatchDay || hasEuroQualifiersMatchDay) {
             // Określ targetView na podstawie eventType w NTMatchDay
             let targetView: ViewState = ViewState.NATIONAL_TEAM_RESULTS;
             if (matchDayEntry?.eventType === 'WCQ_PLAYOFF_DRAW') {

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { WCQPlayoffPath } from '../../types';
+import { EuroQualifiersFixture, EuroQualifiersPlayoffPath, WCQPlayoffPath } from '../../types';
 import polskaBgImg from '../../Graphic/themes/polska.png';
 
 const SUBHEADING = 'text-[10px] font-black uppercase tracking-[0.25em] text-slate-500';
@@ -41,6 +41,7 @@ interface GroupTeam {
 }
 
 const TOURNAMENTS: Tournament[] = [
+  { id: 'euroq2028', label: 'Eliminacje EURO 2028' },
   { id: 'wcq2026', label: 'Kwalifikacje do MŚ 2026' },
 ];
 
@@ -511,10 +512,24 @@ interface ScheduleCardProps {
   played: boolean;
   homeGoals?: number;
   awayGoals?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
 }
 
-const ScheduleCard: React.FC<ScheduleCardProps> = ({ home, away, dateLabel, played, homeGoals, awayGoals }) => {
+const ScheduleCard: React.FC<ScheduleCardProps> = ({
+  home,
+  away,
+  dateLabel,
+  played,
+  homeGoals,
+  awayGoals,
+  homePenaltyScore,
+  awayPenaltyScore,
+  isExtraTime,
+}) => {
   const isPolandGame = home === 'Polska' || away === 'Polska';
+  const hasPenalties = homePenaltyScore !== undefined && awayPenaltyScore !== undefined;
 
   return (
     <div
@@ -527,7 +542,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ home, away, dateLabel, play
           {dateLabel}
         </p>
         <p className={`text-[8px] font-black uppercase tracking-wider mt-0.5 ${played ? 'text-slate-600' : 'text-slate-700'}`}>
-          {played ? 'FT' : '–'}
+          {played ? hasPenalties ? 'KARNE' : isExtraTime ? 'DOGR.' : 'FT' : '–'}
         </p>
       </div>
 
@@ -537,12 +552,17 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ home, away, dateLabel, play
         </span>
       </div>
 
-      <div className="w-24 flex justify-center items-center shrink-0">
+      <div className="w-32 flex justify-center items-center shrink-0">
         {played ? (
           <div className="bg-black/50 px-4 py-1.5 rounded-xl border border-white/10">
             <span className="text-base font-black font-mono text-emerald-400 tabular-nums tracking-tight">
               {homeGoals} : {awayGoals}
             </span>
+            {hasPenalties && (
+              <span className="ml-2 text-[10px] font-black font-mono text-amber-300 tabular-nums">
+                k. {homePenaltyScore}:{awayPenaltyScore}
+              </span>
+            )}
           </div>
         ) : (
           <span className="text-xs font-black italic text-slate-700 tracking-widest">VS</span>
@@ -621,12 +641,52 @@ const PlayoffPathCard: React.FC<{ path: WCQPlayoffPath }> = ({ path }) => {
   );
 };
 
+const EuroPlayoffCard: React.FC<{
+  path: EuroQualifiersPlayoffPath;
+  fixtures: Array<EuroQualifiersFixture & { dateLabel: string }>;
+}> = ({ path, fixtures }) => {
+  const col = PATH_COLORS[path.label] ?? PATH_COLORS['A'];
+  const isPolandIn = path.teams.includes('Polska');
+  const title = path.mode === 'TIE' ? `Dwumecz ${path.label}` : `Ścieżka ${path.label}`;
+
+  return (
+    <div className={`rounded-[20px] border ${col.border} ${isPolandIn ? 'shadow-[0_0_20px_rgba(251,191,36,0.12)]' : ''} bg-black/20 overflow-hidden`}>
+      <div className={`px-5 py-3 flex items-center gap-3 ${col.bg} border-b ${col.border}`}>
+        <span className={`text-base font-black uppercase tracking-widest ${col.text}`}>{title}</span>
+        {isPolandIn && <span className="text-[9px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/30">★ Polska</span>}
+        {path.winner && <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/30">Awans: {path.winner}</span>}
+      </div>
+      <div className="p-4">
+        <p className={`${SUBHEADING} mb-3`}>{path.mode === 'TIE' ? 'Baraż dwumeczowy' : 'Półfinały i finał'}</p>
+        {fixtures.map(fixture => (
+          <ScheduleCard
+            key={fixture.id}
+            home={fixture.home}
+            away={fixture.away}
+            dateLabel={fixture.dateLabel}
+            played={!!fixture.played}
+            homeGoals={fixture.homeGoals}
+            awayGoals={fixture.awayGoals}
+            homePenaltyScore={fixture.homePenaltyScore}
+            awayPenaltyScore={fixture.awayPenaltyScore}
+            isExtraTime={fixture.isExtraTime}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const InternationalView: React.FC = () => {
-  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState } = useGame();
+  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState } = useGame();
   const [activeTournament, setActiveTournament] = useState<string>('wcq2026');
   const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
+  const [activeEuroGroup, setActiveEuroGroup] = useState<string>('A');
   const upcomingSchedule = NT_SCHEDULE_BY_YEAR[2025] ?? [];
+  const euroQualifiersLabel = euroQualifiersState?.editionLabel
+    ? `Eliminacje ${euroQualifiersState.editionLabel}`
+    : 'Eliminacje EURO 2028';
 
   const { standings, playedRounds, scheduledResults, maxPlayedRound } = useMemo(() => {
     const scheduleMeta = new Map<string, { round: number; dateLabel: string }>();
@@ -770,6 +830,45 @@ const InternationalView: React.FC = () => {
     };
   }, [activeGroup, nationalTeams, lastNTMatchResults]);
 
+  const activeEuroGroupData = useMemo(() => {
+    const group = euroQualifiersState?.groups.find(item => item.id === activeEuroGroup)
+      ?? euroQualifiersState?.groups[0]
+      ?? null;
+    if (!group || !euroQualifiersState) return null;
+    const standingsForView: GroupTeam[] = group.standings.map(row => ({
+      name: row.teamName,
+      M: row.played,
+      W: row.wins,
+      D: row.draws,
+      L: row.losses,
+      GF: row.goalsFor,
+      GA: row.goalsAgainst,
+      pts: row.points,
+    }));
+    const fixtures = euroQualifiersState.fixtures
+      .filter(fixture => (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE' && fixture.groupId === group.id)
+      .map(fixture => ({
+        ...fixture,
+        dateLabel: `${fixture.day} ${MONTH_SHORT[fixture.month] ?? '???'} ${String(fixture.year).slice(2)}`,
+      }))
+      .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round);
+    return { group, standingsForView, fixtures };
+  }, [activeEuroGroup, euroQualifiersState]);
+
+  const euroPlayoffData = useMemo(() => {
+    if (!euroQualifiersState?.playoffPaths.length) return [];
+    return euroQualifiersState.playoffPaths.map(path => ({
+      path,
+      fixtures: euroQualifiersState.fixtures
+        .filter(fixture => fixture.playoffPathId === path.id)
+        .map(fixture => ({
+          ...fixture,
+          dateLabel: `${fixture.day} ${MONTH_SHORT[fixture.month] ?? '???'} ${String(fixture.year).slice(2)}`,
+        }))
+        .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round),
+    }));
+  }, [euroQualifiersState]);
+
   return (
     <div className="relative flex-1 bg-slate-900/30 rounded-[40px] border border-white/5 shadow-2xl flex flex-col overflow-hidden">
       <div
@@ -789,7 +888,7 @@ const InternationalView: React.FC = () => {
                 : 'border-transparent text-slate-500 hover:text-slate-300'
             }`}
           >
-            {tournament.label}
+            {tournament.id === 'euroq2028' ? euroQualifiersLabel : tournament.label}
           </button>
         ))}
       </div>
@@ -1065,6 +1164,124 @@ const InternationalView: React.FC = () => {
           </div>
           </div>
           )} {/* end wcqSubTab === 'groups' */}
+        </div>
+      )}
+
+      {activeTournament === 'euroq2028' && (
+        <div className="relative z-10 flex-1 flex flex-col overflow-hidden px-6 py-6">
+          {!euroQualifiersState?.drawCompleted ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
+              <p className="font-black italic uppercase tracking-tighter text-3xl text-white">{euroQualifiersLabel}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Losowanie: 6 grudnia 2026</p>
+              <p className="max-w-xl text-center text-xs font-bold uppercase tracking-widest text-slate-500">
+                Gospodarze turnieju biorą udział w eliminacjach, ale UEFA zachowuje dla nich miejsca rezerwowe.
+              </p>
+            </div>
+          ) : activeEuroGroupData ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex gap-2 pb-4 shrink-0 flex-wrap border-b border-white/5">
+                {euroQualifiersState.groups.map(group => (
+                  <button
+                    key={group.id}
+                    onClick={() => setActiveEuroGroup(group.id)}
+                    className={`px-4 h-11 text-[11px] font-black uppercase tracking-[0.18em] rounded-xl transition-all border flex items-center justify-center whitespace-nowrap ${
+                      activeEuroGroupData.group.id === group.id
+                        ? 'bg-gradient-to-b from-blue-500/30 to-blue-800/20 border-blue-300/60 text-blue-200'
+                        : 'bg-gradient-to-b from-slate-800/60 to-slate-900/60 border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'
+                    }`}
+                  >
+                    Grupa {group.id}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar pt-6">
+                <div className="max-w-5xl w-full mx-auto">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className={SUBHEADING}>Eliminacje {euroQualifiersState.editionLabel} — Grupa {activeEuroGroupData.group.id}</span>
+                    <div className="flex-1 h-px bg-white/5" />
+                    <span className={SUBHEADING}>{euroQualifiersState.completed ? 'Zakończone' : 'W toku'}</span>
+                  </div>
+
+                  <div className="bg-black/20 rounded-[28px] border border-white/5 overflow-hidden mb-6">
+                    <table className="w-full text-left border-separate border-spacing-y-0 table-fixed">
+                      <thead>
+                        <tr className={`${SUBHEADING} h-10`}>
+                          <th className="pl-6 w-12">#</th>
+                          <th className="text-left min-w-[140px]">Drużyna</th>
+                          <th className="text-center w-10">M</th>
+                          <th className="text-center w-10">W</th>
+                          <th className="text-center w-10">R</th>
+                          <th className="text-center w-10">P</th>
+                          <th className="text-center w-16">Bramki</th>
+                          <th className="text-center w-14">+/-</th>
+                          <th className="text-center w-16 pr-6 text-amber-400">Pkt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeEuroGroupData.standingsForView.map((team, index) => (
+                          <StandingRow key={team.name} team={team} rank={index + 1} allStandings={activeEuroGroupData.standingsForView} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {euroQualifiersState.stage !== 'GROUP_STAGE' && (
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                        <p className={SUBHEADING}>Bezpośredni awans</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-100">{euroQualifiersState.directQualifiers.join(', ')}</p>
+                      </div>
+                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                        <p className={SUBHEADING}>Miejsca gospodarzy</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-amber-100">{euroQualifiersState.hostReservedQualifiers.join(', ') || 'Brak'}</p>
+                      </div>
+                      <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
+                        <p className={SUBHEADING}>Baraże</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-sky-100">{euroQualifiersState.playoffTeams.join(', ') || 'Do ustalenia'}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {euroPlayoffData.length > 0 && (
+                    <section className="pb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className={SUBHEADING}>Baraże eliminacji {euroQualifiersState.editionLabel}</span>
+                        <div className="flex-1 h-px bg-white/5" />
+                        <span className={SUBHEADING}>{euroQualifiersState.completed ? 'Rozstrzygnięte' : 'Marzec ' + euroQualifiersState.tournamentYear}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {euroPlayoffData.map(({ path, fixtures }) => (
+                          <EuroPlayoffCard key={path.id} path={path} fixtures={fixtures} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  <section className="pb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={SUBHEADING}>Terminarz — Grupa {activeEuroGroupData.group.id}</span>
+                      <div className="flex-1 h-px bg-white/5" />
+                    </div>
+                    {activeEuroGroupData.fixtures.map(fixture => (
+                      <ScheduleCard
+                        key={fixture.id}
+                        home={fixture.home}
+                        away={fixture.away}
+                        dateLabel={fixture.dateLabel}
+                        played={!!fixture.played}
+                        homeGoals={fixture.homeGoals}
+                        awayGoals={fixture.awayGoals}
+                        homePenaltyScore={fixture.homePenaltyScore}
+                        awayPenaltyScore={fixture.awayPenaltyScore}
+                        isExtraTime={fixture.isExtraTime}
+                      />
+                    ))}
+                  </section>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
