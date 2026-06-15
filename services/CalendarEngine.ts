@@ -29,6 +29,7 @@ import {
 } from '../types';
 // Import potrzebny do detekcji dnia meczowego reprezentacji
 import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
+import { NationsLeagueService } from './NationsLeagueService';
 
 // ─── Typy publiczne ──────────────────────────────────────────────────────────
 
@@ -1087,15 +1088,16 @@ export const CalendarEngine = {
             ? yearSchedule.find(md => md.day === slotDay && md.month === slotMonth)
             : undefined;
           const hasMatchDay = !!matchDayEntry;
+          const hasNationsLeagueMatchDay = NationsLeagueService.isPotentialMatchDate(slot.start);
 
-          if (hasMatchDay && matchDayEntry) {
+          if ((hasMatchDay && matchDayEntry) || hasNationsLeagueMatchDay) {
             // Określ targetView na podstawie eventType w NTMatchDay
             let targetView: ViewState = ViewState.NATIONAL_TEAM_RESULTS;
-            if (matchDayEntry.eventType === 'WCQ_PLAYOFF_DRAW') {
+            if (matchDayEntry?.eventType === 'WCQ_PLAYOFF_DRAW') {
               targetView = ViewState.WCQ_PLAYOFF_DRAW_VIEW;
-            } else if (matchDayEntry.eventType === 'WCQ_PLAYOFF_SF') {
+            } else if (matchDayEntry?.eventType === 'WCQ_PLAYOFF_SF') {
               targetView = ViewState.WCQ_PLAYOFF_RESULTS_SF;
-            } else if (matchDayEntry.eventType === 'WCQ_PLAYOFF_FINAL') {
+            } else if (matchDayEntry?.eventType === 'WCQ_PLAYOFF_FINAL') {
               targetView = ViewState.WCQ_PLAYOFF_RESULTS_FINAL;
             }
             // Mecze reprezentacji zaplanowane na ten dzień — symuluj w tle

@@ -27,6 +27,8 @@ Scout,
 MatchHistoryEntry,
 WCQPlayoffState,
 WCState,
+NationsLeagueState,
+UefaNationalRankingState,
 CoachSeasonStats,
 AiTransferLogEntry,
 WinterCampLocation,
@@ -109,6 +111,8 @@ import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
+import { NationsLeagueService } from '../services/NationsLeagueService';
+import { UefaNationalRankingService } from '../services/UefaNationalRankingService';
 import { getNTMatchDayForDate } from '../resources/NationalTeamSchedule';
 import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
@@ -931,6 +935,10 @@ finalizeFreeAgentContract: (mailId: string) => void;
   // Baraże MŚ 2026
   wcqPlayoffState: WCQPlayoffState | null;
   setWcqPlayoffState: React.Dispatch<React.SetStateAction<WCQPlayoffState | null>>;
+  nationsLeagueState: NationsLeagueState | null;
+  setNationsLeagueState: React.Dispatch<React.SetStateAction<NationsLeagueState | null>>;
+  uefaNationalRankingState: UefaNationalRankingState | null;
+  setUefaNationalRankingState: React.Dispatch<React.SetStateAction<UefaNationalRankingState | null>>;
   wcState: WCState | null;
   setWcState: React.Dispatch<React.SetStateAction<WCState | null>>;
   reserves: Player[];
@@ -1079,6 +1087,8 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [lastNTMatchResults, setLastNTMatchResults] = useState<NTMatchResult[] | null>(null);
   // Baraże MŚ 2026
   const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
+  const [nationsLeagueState, setNationsLeagueState] = useState<NationsLeagueState | null>(null);
+  const [uefaNationalRankingState, setUefaNationalRankingState] = useState<UefaNationalRankingState | null>(null);
   const [wcState, setWcState] = useState<WCState | null>(null);
   const [europeanViewTab, setEuropeanViewTab] = useState<'clubs' | 'nt'>('clubs');
   const [selectedNTId, setSelectedNTId] = useState<string | null>(null);
@@ -1614,6 +1624,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     }
     setCoaches(prev => ({ ...prev, ...assignedNtCoaches }));
     setNationalTeams(ntSquadResult.updatedTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams));
     // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
 
     setMessages([]);
@@ -2591,6 +2602,8 @@ if (userTeamId) {
     aiTransferLog,
     europeanStatus,
     nationalTeams,
+    nationsLeagueState,
+    uefaNationalRankingState,
     wcqPlayoffState,
     wcState,
     cupParticipants,
@@ -2691,6 +2704,8 @@ if (userTeamId) {
     setAiTransferLog(data.aiTransferLog);
     setEuropeanStatus(data.europeanStatus);
     setNationalTeams(data.nationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, data.nationalTeams));
+    setNationsLeagueState(data.nationsLeagueState ?? null);
     setWcqPlayoffState(data.wcqPlayoffState);
     setWcState(data.wcState ?? null);
     setCupParticipants(data.cupParticipants);
@@ -2935,6 +2950,7 @@ if (userTeamId) {
     setCoaches(importedCoaches);
     setStaffMembers(importedStaffMembers);
     setNationalTeams(importedNationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(importedNationalTeams));
     setUserTeamId(null);
     setManagerProfile(null);
     setSeasonTemplate(template);
@@ -2987,6 +3003,7 @@ if (userTeamId) {
     setAiFriendlyReports([]);
     setPzpnDisciplinaryEvents([]);
     setWcqPlayoffState(null);
+    setNationsLeagueState(null);
     setWcState(null);
     setReserves([]);
     setReserveCoachId(null);
@@ -7019,7 +7036,20 @@ Asystent`,
 
     if (primaryEvent?.kind === EventKind.NATIONAL_TEAM_MATCH &&
         !processedDrawIds.includes(primaryEvent.slot.id)) {
-      const matchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
+      const scheduledMatchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
+      const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+      if (!uefaNationalRankingState) setUefaNationalRankingState(ensuredUefaRankingState);
+      const ensuredNationsLeagueState = NationsLeagueService.ensureState(
+        nationsLeagueState,
+        dateToProcess,
+        nationalTeams,
+        ensuredUefaRankingState
+      );
+      const nationsLeagueMatchDay = scheduledMatchDay
+        ? null
+        : NationsLeagueService.getMatchDayForDate(ensuredNationsLeagueState, dateToProcess);
+      const matchDay = scheduledMatchDay ?? nationsLeagueMatchDay;
+      const isNationsLeagueMatchDay = !!nationsLeagueMatchDay;
       if (matchDay) {
         const dateSeed = dateToProcess.getTime();
         const ntCareerSeed = buildCareerScopedSeed(
@@ -7178,6 +7208,17 @@ Asystent`,
         const finalNTMatchHistoryEntries = worldFriendlySimulation
           ? [...ntSimulation.matchHistoryEntries, ...worldFriendlySimulation.matchHistoryEntries]
           : ntSimulation.matchHistoryEntries;
+        if (isNationsLeagueMatchDay && ensuredNationsLeagueState) {
+          setNationsLeagueState(NationsLeagueService.applyResults(
+            ensuredNationsLeagueState,
+            dateToProcess,
+            ntSimulation.results
+          ));
+          setUefaNationalRankingState(UefaNationalRankingService.applyResults(
+            ensuredUefaRankingState,
+            ntSimulation.results
+          ));
+        }
         setPlayers(finalNTPlayers);
         finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
         setCoaches(prev => CoachService.applyNationalTeamExpForResults(prev, nationalTeams, finalNTResults));
@@ -14409,6 +14450,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,
+    nationsLeagueState, setNationsLeagueState,
+    uefaNationalRankingState, setUefaNationalRankingState,
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,

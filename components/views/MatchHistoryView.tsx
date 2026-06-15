@@ -1,14 +1,16 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType, WCState, Club, NationalTeam } from '../../types';
+import { ViewState, MatchHistoryEntry, MatchEventType, CompetitionType, WCState, Club, NationalTeam, NationsLeagueState, UefaNationalRankingState } from '../../types';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { ChampionshipHistoryService } from '../../data/championship_history';
 import { RefereeService } from '../../services/RefereeService';
 import { computeGroupStandings } from '../../services/WorldCupService';
+import { UefaNationalRankingService } from '../../services/UefaNationalRankingService';
 import historiaBg from '../../Graphic/themes/historia.png';
 import { PolishCupVenueService } from '../../services/PolishCupVenueService';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 const WC_ROUND_LABEL: Record<string, string> = {
   R32: '1/16 Finału',
@@ -181,13 +183,203 @@ function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
   );
 }
 
+function NationsLeagueArchive({
+  state,
+  history,
+  nationalTeams,
+  onSelectMatch,
+}: {
+  state: NationsLeagueState | null;
+  history: MatchHistoryEntry[];
+  nationalTeams: NationalTeam[];
+  onSelectMatch: (match: MatchHistoryEntry) => void;
+}) {
+  const ntById = new Map(nationalTeams.map(team => [team.id, team]));
+  const matches = history
+    .filter(match => String(match.competition).includes('Liga Narodów UEFA'))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  if (!state) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center opacity-30">
+        <span className="text-7xl mb-6">UNL</span>
+        <p className="text-xl font-black uppercase tracking-[0.4em] italic text-center">Liga Narodów ruszy w sezonie 2026/27</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 space-y-10">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.45em]">Liga Narodów UEFA</p>
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">{state.editionLabel}</h2>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</p>
+          <p className="text-sm font-black uppercase text-white">
+            {state.completed ? 'Zakończona' : state.stage === 'LEAGUE_PHASE' ? 'Faza ligowa' : state.stage === 'QUARTER_FINALS' ? 'Ćwierćfinały' : 'Finały'}
+          </p>
+          {state.finals?.champion && <p className="text-xs font-bold text-amber-300 mt-1">Zwycięzca: {state.finals.champion}</p>}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-6 mb-5 px-2">
+          <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.5em] whitespace-nowrap">Tabele</span>
+          <div className="h-px bg-white/10 flex-1" />
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {state.groups.map(group => (
+            <div key={group.id} className="bg-slate-900/40 rounded-3xl border border-white/10 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-black italic uppercase tracking-tight text-white">Liga {group.tier} · Grupa {group.id}</h3>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/30">{group.teams.length} drużyny</span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-white/35 uppercase">
+                    <th className="text-left pb-2">Drużyna</th>
+                    <th className="w-8 text-center">M</th>
+                    <th className="w-8 text-center">W</th>
+                    <th className="w-8 text-center">R</th>
+                    <th className="w-8 text-center">P</th>
+                    <th className="w-14 text-center">B</th>
+                    <th className="w-10 text-center text-white/60">Pkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.standings.map((row, idx) => (
+                    <tr key={row.teamName} className={`border-t border-white/5 ${idx === 0 ? 'text-amber-300' : idx === group.standings.length - 1 ? 'text-rose-300/70' : 'text-white/70'}`}>
+                      <td className="py-2 font-bold">
+                        <span className="inline-block w-5 mr-2 text-center text-white/25">{idx + 1}</span>
+                        {row.teamName}
+                      </td>
+                      <td className="text-center">{row.played}</td>
+                      <td className="text-center">{row.wins}</td>
+                      <td className="text-center">{row.draws}</td>
+                      <td className="text-center">{row.losses}</td>
+                      <td className="text-center">{row.goalsFor}:{row.goalsAgainst}</td>
+                      <td className="text-center font-black text-white">{row.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-6 mb-5 px-2">
+          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.5em] whitespace-nowrap">Rozegrane mecze</span>
+          <div className="h-px bg-white/10 flex-1" />
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          {matches.length > 0 ? matches.map(match => {
+            const home = ntById.get(match.homeTeamId);
+            const away = ntById.get(match.awayTeamId);
+            return (
+              <button
+                key={match.matchId}
+                onClick={() => onSelectMatch(match)}
+                className="group relative p-5 bg-slate-900/40 rounded-3xl border border-white/5 hover:border-white/20 cursor-pointer flex justify-between items-center transition-all duration-300 hover:scale-[1.005]"
+              >
+                <div className="flex-1 flex justify-center items-center gap-8">
+                  <div className="flex items-center gap-3 w-64 justify-end">
+                    <TeamMark team={home} />
+                    <span className="truncate uppercase italic font-black text-base text-slate-300 group-hover:text-white transition-colors">{home?.name ?? match.homeTeamId}</span>
+                  </div>
+                  <div className="bg-black/60 px-6 py-3 rounded-2xl text-emerald-400 font-mono text-xl shadow-inner min-w-[100px] text-center border border-white/10 group-hover:border-cyan-500/30 transition-all tabular-nums">
+                    {match.homeScore} <span className="text-slate-700 mx-1">:</span> {match.awayScore}
+                  </div>
+                  <div className="flex items-center gap-3 w-64 justify-start">
+                    <span className="truncate uppercase italic font-black text-base text-slate-300 group-hover:text-white transition-colors">{away?.name ?? match.awayTeamId}</span>
+                    <TeamMark team={away} />
+                  </div>
+                </div>
+              </button>
+            );
+          }) : (
+            <div className="rounded-3xl bg-black/20 border border-white/5 px-6 py-14 text-center text-sm font-black uppercase tracking-[0.25em] text-white/25">
+              Mecze Ligi Narodów nie zostały jeszcze rozegrane
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UefaNationalRankingArchive({
+  state,
+  nationalTeams,
+}: {
+  state: UefaNationalRankingState | null;
+  nationalTeams: NationalTeam[];
+}) {
+  const ranking = UefaNationalRankingService.ensureState(state, nationalTeams);
+  const ntByName = new Map(nationalTeams.map(team => [team.name, team]));
+
+  return (
+    <div className="p-8 space-y-8">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-sky-400 uppercase tracking-[0.45em]">Ranking UEFA reprezentacji</p>
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">Europa</h2>
+        </div>
+        <div className="text-right max-w-xl">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Źródło startowe</p>
+          <p className="text-xs font-bold text-white/60">{ranking.source}</p>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-slate-950/50 overflow-hidden">
+        <div className="grid grid-cols-[80px_1fr_90px_90px_110px_90px] gap-3 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white/35 border-b border-white/10">
+          <span>Pozycja</span>
+          <span>Reprezentacja</span>
+          <span className="text-center">Zmiana</span>
+          <span className="text-center">Liga</span>
+          <span className="text-right">Punkty</span>
+          <span className="text-right">Ostatnio</span>
+        </div>
+        <div className="divide-y divide-white/5">
+          {ranking.entries.map(entry => {
+            const team = ntByName.get(entry.teamName);
+            const movement = (entry.previousRank ?? entry.rank) - entry.rank;
+            return (
+              <div key={entry.teamName} className="grid grid-cols-[80px_1fr_90px_90px_110px_90px] gap-3 px-5 py-3 items-center text-sm text-white/75 hover:bg-white/[0.03] transition-colors">
+                <span className="font-mono text-white/45">#{entry.rank}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <TeamMark team={team} className="w-8 h-8" />
+                  <span className="truncate font-black italic uppercase tracking-tighter text-white">{entry.teamName}</span>
+                </div>
+                <span className={`text-center font-black ${movement > 0 ? 'text-emerald-400' : movement < 0 ? 'text-rose-400' : 'text-white/25'}`}>
+                  {movement > 0 ? `+${movement}` : movement}
+                </span>
+                <span className="text-center">
+                  <span className="inline-flex min-w-8 justify-center rounded-lg border border-white/10 bg-white/5 px-2 py-1 font-black text-cyan-300">{entry.leagueTier ?? '-'}</span>
+                </span>
+                <span className="text-right font-mono text-white">{entry.points}</span>
+                <span className={`text-right font-mono ${entry.lastDelta ? 'text-emerald-300' : 'text-white/25'}`}>
+                  {entry.lastDelta ? `+${entry.lastDelta}` : '0'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export const MatchHistoryView: React.FC = () => {
-  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState } = useGame();
+  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState, nationsLeagueState, uefaNationalRankingState } = useGame();
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonNumber);
   const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
-  const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup'>('matches');
+  const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup' | 'nationsLeague' | 'uefaRanking'>('matches');
   const [selectedWorldCupYear, setSelectedWorldCupYear] = useState<number>(wcState?.year ?? 2026);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
@@ -609,6 +801,28 @@ export const MatchHistoryView: React.FC = () => {
                 <span className="font-black italic uppercase tracking-tighter text-xs">MISTRZOSTWA ŚWIATA</span>
               </div>
             </button>
+            <button
+              onClick={() => { setViewMode('nationsLeague'); setSelectedLeague('NATIONS_LEAGUE'); }}
+              className={filterButtonClass(viewMode === 'nationsLeague')}
+            >
+              <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">UNL</div>
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400" />
+              <div className={`absolute inset-0 transition-opacity pointer-events-none ${viewMode === 'nationsLeague' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`} style={{ background: 'linear-gradient(90deg, #22d3ee, transparent)' }} />
+              <div className="relative z-10 flex h-full items-center justify-center px-5">
+                <span className="font-black italic uppercase tracking-tighter text-xs">LIGA NARODÓW</span>
+              </div>
+            </button>
+            <button
+              onClick={() => { setViewMode('uefaRanking'); setSelectedLeague('UEFA_RANKING'); }}
+              className={filterButtonClass(viewMode === 'uefaRanking')}
+            >
+              <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">RKG</div>
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-sky-400" />
+              <div className={`absolute inset-0 transition-opacity pointer-events-none ${viewMode === 'uefaRanking' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`} style={{ background: 'linear-gradient(90deg, #38bdf8, transparent)' }} />
+              <div className="relative z-10 flex h-full items-center justify-center px-5">
+                <span className="font-black italic uppercase tracking-tighter text-xs">RANKING UEFA</span>
+              </div>
+            </button>
             {viewMode === 'matches' && filterItems.map(l => (
               <button
                 key={l.id}
@@ -627,11 +841,20 @@ export const MatchHistoryView: React.FC = () => {
               </button>
             ))}
 
-            <div className="mt-auto p-4 bg-black/20 rounded-2xl border border-white/5">
-               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' ? 'Turniej' : 'Historia'}</span>
+            {viewMode === 'uefaRanking' && (
+              <div className="mt-auto p-4 bg-black/20 rounded-2xl border border-white/5">
+                 <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">Ranking</span>
+                 <span className="text-xl font-black italic text-white">
+                   {uefaNationalRankingState?.entries.length ?? nationalTeams.filter(team => team.continent === 'Europe' && team.name !== 'Rosja').length}
+                   <span className="text-[10px] opacity-40"> KADR</span>
+                 </span>
+              </div>
+            )}
+            <div className={`${viewMode === 'uefaRanking' ? 'hidden ' : ''}mt-auto p-4 bg-black/20 rounded-2xl border border-white/5`}>
+               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' ? 'Turniej' : viewMode === 'nationsLeague' ? 'Edycja' : 'Historia'}</span>
                <span className="text-xl font-black italic text-white">
-                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : championshipHistory.length}
-                 <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : 'WPISÓW'}</span>
+                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : viewMode === 'nationsLeague' ? (nationsLeagueState?.editionLabel ?? '2026/27') : championshipHistory.length}
+                 <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : viewMode === 'nationsLeague' ? 'UNL' : 'WPISÓW'}</span>
                </span>
             </div>
         </div>
@@ -735,6 +958,18 @@ export const MatchHistoryView: React.FC = () => {
               </div>
               <WorldCupArchive wcState={wcState && wcState.year === selectedWorldCupYear ? wcState : null} />
             </>
+          ) : viewMode === 'nationsLeague' ? (
+            <NationsLeagueArchive
+              state={nationsLeagueState}
+              history={history}
+              nationalTeams={nationalTeams}
+              onSelectMatch={setSelectedMatch}
+            />
+          ) : viewMode === 'uefaRanking' ? (
+            <UefaNationalRankingArchive
+              state={uefaNationalRankingState}
+              nationalTeams={nationalTeams}
+            />
           ) : (
             // CHAMPIONS VIEW
             <div className="p-8 space-y-12">
@@ -947,7 +1182,13 @@ export const MatchHistoryView: React.FC = () => {
       </div>
 
       {/* DETAIL MODAL */}
-      {selectedMatch && (() => {
+      {selectedMatch && String(selectedMatch.competition).includes('Liga Narodów UEFA') ? (
+        <MatchReportModalPolishLeague
+          matchId={selectedMatch.matchId}
+          onClose={() => setSelectedMatch(null)}
+          teamType="national"
+        />
+      ) : selectedMatch && (() => {
         const homeClub = getClub(selectedMatch.homeTeamId);
         const awayClub = getClub(selectedMatch.awayTeamId);
         return (

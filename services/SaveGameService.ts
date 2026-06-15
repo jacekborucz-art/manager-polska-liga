@@ -46,6 +46,8 @@ export interface SaveState {
   aiTransferLog: any[];
   europeanStatus: Record<string, any>;
   nationalTeams: any[];
+  nationsLeagueState: any;
+  uefaNationalRankingState: any;
   wcqPlayoffState: any;
   wcState: any;
   cupParticipants: string[];
@@ -432,6 +434,8 @@ function normalizeSaveState(data: SaveState): SaveState {
     aiTransferLog: data.aiTransferLog || [],
     europeanStatus: asRecord(data.europeanStatus),
     nationalTeams: asArray(data.nationalTeams),
+    nationsLeagueState: data.nationsLeagueState ?? null,
+    uefaNationalRankingState: data.uefaNationalRankingState ?? null,
     wcqPlayoffState: data.wcqPlayoffState ?? null,
     wcState: data.wcState ?? null,
     cupParticipants: asArray(data.cupParticipants),

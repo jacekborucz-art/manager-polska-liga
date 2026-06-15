@@ -22,6 +22,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { CoachService } from './CoachService';
 import { PlayerAttributesGenerator, REGION_PROFILE } from './PlayerAttributesGenerator';
 import { createDefaultNationalTeamKits } from '../resources/ClubKits';
+import { NationsLeagueService } from './NationsLeagueService';
 
 // Skład kadry: 3 GK + 8 DEF + 8 MID + 6 FWD = 25 zawodników
 const NT_GK = 3;
@@ -816,18 +817,26 @@ export const NationalTeamService = {
 
   isSquadFrozen: (currentDate: Date, seasonStartYear: number): boolean => {
     const schedule = NT_SCHEDULE_BY_YEAR[seasonStartYear];
-    if (!schedule) return false;
 
     const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
     const limitMs = today.getTime() + NT_FREEZE_DAYS * 24 * 60 * 60 * 1000;
 
-    return schedule.some(md => {
+    const fixedScheduleFrozen = (schedule ?? []).some(md => {
       const calYear = md.month >= 6 ? seasonStartYear : seasonStartYear + 1;
       const matchDate = new Date(calYear, md.month, md.day);
       matchDate.setHours(0, 0, 0, 0);
       const matchMs = matchDate.getTime();
       return matchMs >= today.getTime() && matchMs <= limitMs;
     });
+    if (fixedScheduleFrozen) return true;
+
+    for (let offset = 0; offset <= NT_FREEZE_DAYS; offset += 1) {
+      const probe = new Date(today);
+      probe.setDate(today.getDate() + offset);
+      if (NationsLeagueService.isPotentialMatchDate(probe)) return true;
+    }
+
+    return false;
   },
 };

@@ -2395,6 +2395,82 @@ export interface NTMatchResult {
   kits?: MatchHistoryEntry['kits'];
 }
 
+export type NationsLeagueTier = 'A' | 'B' | 'C' | 'D';
+export type NationsLeagueStage = 'LEAGUE_PHASE' | 'QUARTER_FINALS' | 'FINALS' | 'COMPLETE';
+
+export interface NationsLeagueTeamStanding {
+  teamName: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface NationsLeagueGroup {
+  id: string;
+  tier: NationsLeagueTier;
+  teams: string[];
+  standings: NationsLeagueTeamStanding[];
+}
+
+export interface NationsLeagueFixture {
+  id: string;
+  stage: NationsLeagueStage;
+  round: number;
+  day: number;
+  month: number;
+  home: string;
+  away: string;
+  groupId?: string;
+  tier?: NationsLeagueTier;
+  played?: boolean;
+  matchId?: string;
+  homeGoals?: number;
+  awayGoals?: number;
+}
+
+export interface NationsLeagueFinalsState {
+  semiFinalists: string[];
+  finalists: string[];
+  thirdPlaceTeams: string[];
+  champion?: string;
+  runnerUp?: string;
+  thirdPlace?: string;
+  fourthPlace?: string;
+}
+
+export interface NationsLeagueState {
+  editionStartYear: number;
+  editionLabel: string;
+  stage: NationsLeagueStage;
+  groups: NationsLeagueGroup[];
+  fixtures: NationsLeagueFixture[];
+  quarterFinalists: string[];
+  semiFinalists: string[];
+  finals: NationsLeagueFinalsState | null;
+  completed: boolean;
+  lastUpdatedIso?: string;
+}
+
+export interface UefaNationalRankingEntry {
+  teamName: string;
+  points: number;
+  rank: number;
+  previousRank?: number;
+  leagueTier?: NationsLeagueTier;
+  lastDelta?: number;
+}
+
+export interface UefaNationalRankingState {
+  entries: UefaNationalRankingEntry[];
+  source: string;
+  lastUpdatedIso?: string;
+}
+
 export interface CalendarSlot {
   id: string;
   start: Date;
