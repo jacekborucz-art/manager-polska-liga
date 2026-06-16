@@ -1473,23 +1473,29 @@ const boardConfidence = useMemo(() => {
                   <div className="flex items-center gap-1.5 rounded-[16px] border border-white/[0.08] bg-slate-950/55 p-1 shadow-inner">
                     <button
                       onClick={() => setActiveMailboxTab('main')}
-                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter ${
+                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter relative ${
                         activeMailboxTab === 'main'
                           ? 'bg-white text-slate-950 shadow-lg'
                           : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
                     >
                       Główna ({unreadMainMessagesCount})
+                      {unreadMainMessagesCount > 0 && (
+                        <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[7px] font-black italic uppercase tracking-tighter shadow-md border border-amber-300/60 leading-none">Nowa</span>
+                      )}
                     </button>
                     <button
                       onClick={() => setActiveMailboxTab('transfers')}
-                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter ${
+                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter relative ${
                         activeMailboxTab === 'transfers'
                           ? 'bg-amber-400 text-slate-950 shadow-lg'
                           : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
                     >
                       Transfery ({unreadTransferMessagesCount})
+                      {unreadTransferMessagesCount > 0 && (
+                        <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[7px] font-black italic uppercase tracking-tighter shadow-md border border-amber-300/60 leading-none">Nowa</span>
+                      )}
                     </button>
                   </div>
                 </div>

@@ -3142,6 +3142,7 @@ export const SquadView: React.FC = () => {
                   }
                 `}</style>
                 <StaffChalkboardBackdrop />
+                <button onClick={() => { setSelectedStaffId(null); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }} className="absolute right-6 top-6 z-20 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
                 {/* nagłówek karty */}
                 <div className="w-1/3 relative z-10 bg-black/35 backdrop-blur-sm p-8 flex flex-col items-center border-r border-white/10">
                   {/* dropdown menu */}
@@ -3214,7 +3215,6 @@ export const SquadView: React.FC = () => {
                   <span className="staff-rise text-[11px] text-yellow-500 tracking-[0.35em] mt-5 text-center" style={{ animationDelay: '150ms' }}>{ROLE_LABELS[selectedMember.role]}</span>
                   <span className="staff-rise text-[25px] text-white mt-2 text-center leading-tight" style={{ animationDelay: '190ms' }}>{selectedMember.firstName}<br />{selectedMember.lastName}</span>
                   <span className="text-[12px] text-slate-400 mt-0.5">{REGION_LABELS[selectedMember.nationality] ?? selectedMember.nationality} · {selectedMember.age} lat</span>
-                  <button onClick={() => { setSelectedStaffId(null); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }} className="absolute right-6 top-6 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
                   {/* komunikat akcji */}
                   {staffActionMsg && (
                     <div className={`mt-3 px-4 py-2 rounded-lg text-[11px] font-black italic uppercase tracking-tighter ${staffActionMsg.ok ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'}`}>
