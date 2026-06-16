@@ -3161,8 +3161,11 @@ if (activePlayerTempo === 'SLOW') {
            }
 
            if (decision.newTacticId) {
-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-              else nextAwayLineup.tacticId = decision.newTacticId;
+              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — AiMatchDecisionCupService
+              // teraz zawsze przelicza i zwraca cały skład pod nowe ustawienie (applyTacticReassignment),
+              // nie tylko nazwę taktyki. Patrz komentarz przy analogicznym miejscu w MatchLiveView.tsx.
+              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+              else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
 
            // --- KROK 1: Podpięcie instrukcji operacyjnych serwisu decyzyjnego ---
@@ -4792,6 +4795,13 @@ if (activePlayerTempo === 'SLOW') {
                   } else {
                     htAwaySubsHistory = [...htAwaySubsHistory, htDecision.secondSubRecord];
                   }
+                }
+                // [AI-COACH-FIX] tu w ogóle nie było obsługi htDecision.newTacticId — zmiana taktyki
+                // zarządzona przez AI w przerwie była całkowicie gubiona (ani .tacticId, ani newLineup
+                // nie były stosowane). Dodane dla zgodności z pozostałymi wywołaniami tego serwisu.
+                if (htDecision.newTacticId) {
+                  if (htAiSide === 'HOME') htHomeLineup = htDecision.newLineup || htHomeLineup;
+                  else htAwayLineup = htDecision.newLineup || htAwayLineup;
                 }
               }
 

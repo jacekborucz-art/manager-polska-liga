@@ -13,7 +13,8 @@
       "Bash(python _fix_encoding.py)",
       "Bash(python _check.py)",
       "Bash(python _debug.py)",
-      "Bash(python _fix2.py)"
+      "Bash(python _fix2.py)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

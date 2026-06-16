@@ -1065,8 +1065,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                  }
               }
               if (decision.newTacticId) {
-                if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-                else nextAwayLineup.tacticId = decision.newTacticId;
+                // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — AiMatchDecisionService
+                // przy zmianie taktyki teraz ZAWSZE przelicza i zwraca cały skład pod nowe ustawienie
+                // (applyTacticReassignment), nie tylko nazwę taktyki. Wcześniej ten blok nadpisywał
+                // tylko .tacticId na STARYM składzie (nextHomeLineup z linii ~1056 wyżej), więc
+                // zawodnicy zostawali na starych miejscach i mogli "automatycznie" zmienić rolę
+                // (np. pomocnik -> napastnik) bez żadnej faktycznej zmiany — to był główny zgłoszony błąd.
+                if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+                else nextAwayLineup = decision.newLineup || nextAwayLineup;
               }
               if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
               if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
@@ -1181,22 +1187,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               false,
               aiLateMatchContext
             );
-           
            if (decision.subRecord) {
-              if (aiSide === 'HOME') { 
-                nextHomeLineup = decision.newLineup || nextHomeLineup; 
-                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome; 
-                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord]; 
+              if (aiSide === 'HOME') {
+                nextHomeLineup = decision.newLineup || nextHomeLineup;
+                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome;
+                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord];
               }
-              else { 
-                nextAwayLineup = decision.newLineup || nextAwayLineup; 
-                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
-                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord]; 
+              else {
+                nextAwayLineup = decision.newLineup || nextAwayLineup;
+                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway;
+                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord];
               }
            }
            if (decision.newTacticId) {
-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-              else nextAwayLineup.tacticId = decision.newTacticId;
+              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz identyczny
+              // komentarz przy pierwszym takim bloku (sekcja przerwy, ~linia 1067).
+              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+              else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
            if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;

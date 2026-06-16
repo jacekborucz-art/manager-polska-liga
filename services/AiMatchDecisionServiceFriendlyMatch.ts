@@ -1,6 +1,13 @@
 import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, SubstitutionRecord, InjurySeverity } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService } from './LineupService';
+// [AI-COACH-FIX] applyTacticReassignment — ten sam mechanizm naprawy "remapowania składu" co w
+// silniku ligowym (AiMatchDecisionService.ts). Patrz tam obszerny komentarz przy definicji: bez
+// tego, zmiana taktyki w trakcie meczu tylko zmieniała nazwę taktyki, a 11 zawodników zostawało na
+// starych miejscach — więc np. pomocnik mógł "automatycznie" zostać napastnikiem (bo to samo miejsce
+// na boisku znaczy inną rolę w nowej taktyce) bez żadnej faktycznej zmiany ustawienia, i dostawać
+// karę za grę nie na swojej pozycji.
+import { applyTacticReassignment } from './AiMatchDecisionService';
 
 /**
  * Wersja serwisu decyzyjnego AI dla meczów sparingowych.
@@ -60,7 +67,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
     let newTacticId: string | undefined;
     let updatedActionMinute = state.minute;
 
-    const tactic = TacticRepository.getById(newLineup.tacticId);
+    // [AI-COACH-FIX] let (było: const) — odświeżane zaraz po każdej zmianie newLineup.tacticId (patrz
+    // "tactic = TacticRepository..." niżej), żeby sprawdzenie "dziury w obronie" po czerwonej kartce
+    // czytało mapę rola->miejsce NOWEJ taktyki, nie tej sprzed zmiany.
+    let tactic = TacticRepository.getById(newLineup.tacticId);
 
     // --- PRIORYTET 1: BRAK BRAMKARZA / CZERWONA KARTKA GK ---
     const gkInSlot = newLineup.startingXI[0];
@@ -114,7 +124,11 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         const tacticPool = scoreDiff >= 0 ? ultraDefTactics : solidDefTactics;
         const candidates = tacticPool.filter(t => t !== newLineup.tacticId);
         if (candidates.length > 0) {
-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
+          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
+          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
+          tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
+          newTacticId = chosenTactic;
           updatedActionMinute = state.minute;
           aiTacticLockResult = true;
           logs.push(`Zmiana taktyki po czerwonej kartce: ${newTacticId}.`);
@@ -292,7 +306,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         const offensiveTactics = ['3-4-3', '4-4-2-OFF', '4-3-3', '4-2-4', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
         const candidates = offensiveTactics.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
+          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
+          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
+          newTacticId = chosenTactic;
           updatedActionMinute = state.minute;
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
@@ -300,7 +317,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         const defensiveTactics = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
         const candidates = defensiveTactics.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
+          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
+          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
+          newTacticId = chosenTactic;
           updatedActionMinute = state.minute;
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }

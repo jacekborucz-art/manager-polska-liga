@@ -2,6 +2,12 @@ import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, Substitut
 import { AiScoutReport } from './AiScoutingService';
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService } from './LineupService';
+// [AI-COACH-FIX] applyTacticReassignment — ten sam mechanizm naprawy "remapowania składu" co w
+// silniku ligowym (AiMatchDecisionService.ts). Bez tego, zmiana taktyki (linie z newTacticId = ...
+// niżej) tylko zmieniała NAZWĘ taktyki — newLineup.tacticId i newLineup.startingXI nigdy nie były
+// aktualizowane razem — więc 11 zawodników zostawało na starych miejscach i mogło "automatycznie"
+// zmienić rolę (np. pomocnik -> napastnik), bez żadnej faktycznej zmiany ustawienia.
+import { applyTacticReassignment } from './AiMatchDecisionService';
 
 export const AiMatchDecisionCupService = {
   makeDecisions: (
@@ -283,7 +289,10 @@ export const AiMatchDecisionCupService = {
                 if (!redCardDefensiveTactics.includes(currentTacticRC)) {
                     const rcCandidates = redCardDefensiveTactics.filter(t => t !== currentTacticRC);
                     if (rcCandidates.length > 0) {
-                        newTacticId = rcCandidates[Math.floor(Math.random() * rcCandidates.length)];
+                        const chosenTactic = rcCandidates[Math.floor(Math.random() * rcCandidates.length)];
+                        // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
+                        newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
+                        newTacticId = chosenTactic;
                         logs.push(`Po czerwonej kartce trener rywali przestawia drużynę na grę w obronie.`);
                     }
                 }
@@ -473,8 +482,11 @@ if (aiSensors.winningWeaker) {
         // AI zmienia system TYLKO jeśli obecna taktyka NIE realizuje pożądanego stylu I minął cooldown
         if (!isStyleAlreadyCorrect && canChangeTacticNow) {
             const candidates = possibleTactics.filter(t => t !== current);
-            if (candidates.length > 0) { 
-                newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
+            if (candidates.length > 0) {
+                const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+                // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
+                newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
+                newTacticId = chosenTactic;
                 // Komentarz sensorowy wyświetlamy TYLKO przy faktycznej zmianie taktyki (raz)
                 if (sensorLog) logs.push(sensorLog);
                 logs.push(`Zmiana taktyki: ${newTacticId} (${targetStyle.toLowerCase()}).`);

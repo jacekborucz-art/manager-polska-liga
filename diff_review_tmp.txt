@@ -1,0 +1,1120 @@
+diff --git a/PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx b/PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx
+index 8f4016a..63e391d 100644
+--- a/PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx
++++ b/PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx
+@@ -3161,8 +3161,11 @@ if (activePlayerTempo === 'SLOW') {
+            }
+ 
+            if (decision.newTacticId) {
+-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+-              else nextAwayLineup.tacticId = decision.newTacticId;
++              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — AiMatchDecisionCupService
++              // teraz zawsze przelicza i zwraca cały skład pod nowe ustawienie (applyTacticReassignment),
++              // nie tylko nazwę taktyki. Patrz komentarz przy analogicznym miejscu w MatchLiveView.tsx.
++              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
++              else nextAwayLineup = decision.newLineup || nextAwayLineup;
+            }
+ 
+            // --- KROK 1: Podpięcie instrukcji operacyjnych serwisu decyzyjnego ---
+@@ -4793,6 +4796,13 @@ if (activePlayerTempo === 'SLOW') {
+                     htAwaySubsHistory = [...htAwaySubsHistory, htDecision.secondSubRecord];
+                   }
+                 }
++                // [AI-COACH-FIX] tu w ogóle nie było obsługi htDecision.newTacticId — zmiana taktyki
++                // zarządzona przez AI w przerwie była całkowicie gubiona (ani .tacticId, ani newLineup
++                // nie były stosowane). Dodane dla zgodności z pozostałymi wywołaniami tego serwisu.
++                if (htDecision.newTacticId) {
++                  if (htAiSide === 'HOME') htHomeLineup = htDecision.newLineup || htHomeLineup;
++                  else htAwayLineup = htDecision.newLineup || htAwayLineup;
++                }
+               }
+ 
+               const htResumedState = {
+diff --git a/components/views/FriendlyMatchLiveView.tsx b/components/views/FriendlyMatchLiveView.tsx
+index 09c7d87..8842593 100644
+--- a/components/views/FriendlyMatchLiveView.tsx
++++ b/components/views/FriendlyMatchLiveView.tsx
+@@ -785,8 +785,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
+                   nextAwaySubsHistory.push(decision.subRecord);
+                 }
+                 if (decision.newTacticId) {
+-                  if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+-                  else nextAwayLineup.tacticId = decision.newTacticId;
++                  // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz komentarz
++                  // przy analogicznym miejscu w MatchLiveView.tsx (silnik ligowy).
++                  if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
++                  else nextAwayLineup = decision.newLineup || nextAwayLineup;
+                 }
+                 if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
+                 if (decision.logs) {
+@@ -879,20 +881,22 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
+            );
+            
+            if (decision.subRecord) {
+-              if (aiSide === 'HOME') { 
+-                nextHomeLineup = decision.newLineup || nextHomeLineup; 
+-                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome; 
+-                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord]; 
++              if (aiSide === 'HOME') {
++                nextHomeLineup = decision.newLineup || nextHomeLineup;
++                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome;
++                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord];
+               }
+-              else { 
+-                nextAwayLineup = decision.newLineup || nextAwayLineup; 
+-                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
+-                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord]; 
++              else {
++                nextAwayLineup = decision.newLineup || nextAwayLineup;
++                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway;
++                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord];
+               }
+            }
+            if (decision.newTacticId) {
+-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+-              else nextAwayLineup.tacticId = decision.newTacticId;
++              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz komentarz przy
++              // analogicznym miejscu w MatchLiveView.tsx (silnik ligowy).
++              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
++              else nextAwayLineup = decision.newLineup || nextAwayLineup;
+            }
+            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
+            if (decision.aiTacticLocked) nextAiTacticLocked = true;
+diff --git a/components/views/MatchLiveView.tsx b/components/views/MatchLiveView.tsx
+index e140384..ec634ab 100644
+--- a/components/views/MatchLiveView.tsx
++++ b/components/views/MatchLiveView.tsx
+@@ -1065,8 +1065,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
+                  }
+               }
+               if (decision.newTacticId) {
+-                if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+-                else nextAwayLineup.tacticId = decision.newTacticId;
++                // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — AiMatchDecisionService
++                // przy zmianie taktyki teraz ZAWSZE przelicza i zwraca cały skład pod nowe ustawienie
++                // (applyTacticReassignment), nie tylko nazwę taktyki. Wcześniej ten blok nadpisywał
++                // tylko .tacticId na STARYM składzie (nextHomeLineup z linii ~1056 wyżej), więc
++                // zawodnicy zostawali na starych miejscach i mogli "automatycznie" zmienić rolę
++                // (np. pomocnik -> napastnik) bez żadnej faktycznej zmiany — to był główny zgłoszony błąd.
++                if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
++                else nextAwayLineup = decision.newLineup || nextAwayLineup;
+               }
+               if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
+               if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
+@@ -1181,22 +1187,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
+               false,
+               aiLateMatchContext
+             );
+-           
+            if (decision.subRecord) {
+-              if (aiSide === 'HOME') { 
+-                nextHomeLineup = decision.newLineup || nextHomeLineup; 
+-                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome; 
+-                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord]; 
++              if (aiSide === 'HOME') {
++                nextHomeLineup = decision.newLineup || nextHomeLineup;
++                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome;
++                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord];
+               }
+-              else { 
+-                nextAwayLineup = decision.newLineup || nextAwayLineup; 
+-                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
+-                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord]; 
++              else {
++                nextAwayLineup = decision.newLineup || nextAwayLineup;
++                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway;
++                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord];
+               }
+            }
+            if (decision.newTacticId) {
+-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
+-              else nextAwayLineup.tacticId = decision.newTacticId;
++              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz identyczny
++              // komentarz przy pierwszym takim bloku (sekcja przerwy, ~linia 1067).
++              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
++              else nextAwayLineup = decision.newLineup || nextAwayLineup;
+            }
+            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
+            if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
+diff --git a/services/AiMatchDecisionCupService.tsx b/services/AiMatchDecisionCupService.tsx
+index 18e11cf..784fab7 100644
+--- a/services/AiMatchDecisionCupService.tsx
++++ b/services/AiMatchDecisionCupService.tsx
+@@ -2,6 +2,12 @@ import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, Substitut
+ import { AiScoutReport } from './AiScoutingService';
+ import { TacticRepository } from '../resources/tactics_db';
+ import { LineupService } from './LineupService';
++// [AI-COACH-FIX] applyTacticReassignment — ten sam mechanizm naprawy "remapowania składu" co w
++// silniku ligowym (AiMatchDecisionService.ts). Bez tego, zmiana taktyki (linie z newTacticId = ...
++// niżej) tylko zmieniała NAZWĘ taktyki — newLineup.tacticId i newLineup.startingXI nigdy nie były
++// aktualizowane razem — więc 11 zawodników zostawało na starych miejscach i mogło "automatycznie"
++// zmienić rolę (np. pomocnik -> napastnik), bez żadnej faktycznej zmiany ustawienia.
++import { applyTacticReassignment } from './AiMatchDecisionService';
+ 
+ export const AiMatchDecisionCupService = {
+   makeDecisions: (
+@@ -283,7 +289,10 @@ export const AiMatchDecisionCupService = {
+                 if (!redCardDefensiveTactics.includes(currentTacticRC)) {
+                     const rcCandidates = redCardDefensiveTactics.filter(t => t !== currentTacticRC);
+                     if (rcCandidates.length > 0) {
+-                        newTacticId = rcCandidates[Math.floor(Math.random() * rcCandidates.length)];
++                        const chosenTactic = rcCandidates[Math.floor(Math.random() * rcCandidates.length)];
++                        // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
++                        newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
++                        newTacticId = chosenTactic;
+                         logs.push(`Po czerwonej kartce trener rywali przestawia drużynę na grę w obronie.`);
+                     }
+                 }
+@@ -473,8 +482,11 @@ if (aiSensors.winningWeaker) {
+         // AI zmienia system TYLKO jeśli obecna taktyka NIE realizuje pożądanego stylu I minął cooldown
+         if (!isStyleAlreadyCorrect && canChangeTacticNow) {
+             const candidates = possibleTactics.filter(t => t !== current);
+-            if (candidates.length > 0) { 
+-                newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
++            if (candidates.length > 0) {
++                const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
++                // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
++                newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
++                newTacticId = chosenTactic;
+                 // Komentarz sensorowy wyświetlamy TYLKO przy faktycznej zmianie taktyki (raz)
+                 if (sensorLog) logs.push(sensorLog);
+                 logs.push(`Zmiana taktyki: ${newTacticId} (${targetStyle.toLowerCase()}).`);
+diff --git a/services/AiMatchDecisionService.ts b/services/AiMatchDecisionService.ts
+index 9232eef..7048207 100644
+--- a/services/AiMatchDecisionService.ts
++++ b/services/AiMatchDecisionService.ts
+@@ -1,6 +1,6 @@
+ import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, SubstitutionRecord, InjurySeverity, Coach } from '../types';
+ import { TacticRepository } from '../resources/tactics_db';
+-import { LineupService } from './LineupService';
++import { LineupService, FAVORITE_TACTIC_MAP } from './LineupService';
+ import { PlayerMoraleService } from './PlayerMoraleService';
+ 
+ const MAX_LEAGUE_SUBS = 5;
+@@ -9,6 +9,38 @@ const DEFENSIVE_TACTICS = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4
+ const SOLID_DEFENSIVE_TACTICS = ['4-4-2-DEF', '5-3-2', '4-5-1', '5-2-1-2'];
+ const OFFENSIVE_TACTICS = ['3-4-3', '4-4-2-OFF', '4-3-3', '4-2-4', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
+ 
++// [AI-COACH-CALIBRATION] FAVORITE_TACTIC_BONUS — "ulubiona taktyka to pierwszy wybór, nie nakaz".
++// Gdy trener ocenia, na jaką taktykę się przestawić, kandydat zgodny z jego Coach.favoriteTactics
++// (neutralna/ofensywna/defensywna — w zależności od tego, czy reaguje na przegrywanie czy na
++// prowadzenie) dostaje tę premię DOLICZONĄ do zwykłej oceny "score" (fit + intencja). To NIE jest
++// blokada innych taktyk — jeśli inna taktyka lepiej pasuje do zawodników na boisku, różnica w "score"
++// i tak ją wybierze. Premia ma tylko przeważyć remisy/bliskie wyniki na korzyść stylu trenera.
++// ZAKRES: te same funkcje liczą "score" w jednostkach zbliżonych do "punktów intencji" (patrz
++// getTacticIntentScore — różnice score między kandydatami to zwykle 5-30). Premia 4 jest więc
++// wyczuwalna, ale nie dominująca.
++// KALIBRACJA: zwiększ, jeśli chcesz, żeby trenerzy byli bardziej "wierni" swojemu stylowi nawet przy
++// gorszym dopasowaniu do składu; zmniejsz/wyzeruj, jeśli wolisz, żeby o wyborze decydowało wyłącznie
++// dopasowanie do obecnych zawodników i sytuacji meczowej.
++const FAVORITE_TACTIC_BONUS = 4;
++
++// [AI-COACH-CALIBRATION] getFavoriteTacticBonus — mapuje scoreDiff na to, KTÓRA z 3 ulubionych
++// taktyk trenera (offensive/neutral/defensive) jest "aktywna" w danej sytuacji:
++//   scoreDiff < 0  (przegrywamy)   -> ulubiona taktyka OFENSYWNA trenera
++//   scoreDiff > 0  (wygrywamy)     -> ulubiona taktyka DEFENSYWNA trenera (chce dowieźć wynik)
++//   scoreDiff === 0 (remis)        -> ulubiona taktyka NEUTRALNA trenera
++// Korzysta z TEGO SAMEGO FAVORITE_TACTIC_MAP, co przedmeczowy wybór składu w LineupService —
++// jeśli trener "woli" np. '3-4-3', to ten sam '3-4-3' dostanie premię i przed, i w trakcie meczu.
++const getFavoriteTacticBonus = (tacticId: string, coach: Coach | null | undefined, scoreDiff: number): number => {
++  if (!coach?.favoriteTactics) return 0;
++  const favoriteName = scoreDiff < 0
++    ? coach.favoriteTactics.offensive
++    : scoreDiff > 0
++      ? coach.favoriteTactics.defensive
++      : coach.favoriteTactics.neutral;
++  const favoriteTacticId = FAVORITE_TACTIC_MAP[favoriteName];
++  return favoriteTacticId === tacticId ? FAVORITE_TACTIC_BONUS : 0;
++};
++
+ type AiLateMatchContext = {
+   aiStakes?: 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
+   userStakes?: 'TITLE_RACE' | 'EUROPE_RACE' | 'RELEGATION_FIGHT' | 'MID_TABLE' | 'LOW_STAKES';
+@@ -57,9 +89,21 @@ const getReadinessOverall = (player: Player): number =>
+ const getReadinessMultiplier = (player: Player): number =>
+   PlayerMoraleService.getLineupReadinessMultiplier(PlayerMoraleService.ensurePlayerState(player));
+ 
+-const getEmergencyFieldScore = (player: Player, role: PlayerPosition): number => {
+-  if (player.position !== PlayerPosition.GK) return LineupService.calculateFitScore(player, role);
+-  if (role === PlayerPosition.GK) return LineupService.calculateFitScore(player, role);
++// [AI-COACH-CALIBRATION] getEmergencyFieldScore — ocena, jak dobrze dany zawodnik nadaje się do roli `role`.
++// PARAMETR useSecondaryPositions (domyślnie false = zachowanie 1:1 jak przed zmianą, żeby nic poza
++// nowym mechanizmem zmiany taktyki nie zmieniło swojego zachowania):
++//   - false: ocena liczona wyłącznie na podstawie pozycji głównej zawodnika (player.position).
++//   - true:  jeśli zawodnik ma wpisaną pozycję pomocniczą (player.secondaryPositionRating) zgodną
++//            z `role`, dostaje dodatkowy bonus z PlayerPositionFitService.getFitScoreBonus (patrz
++//            LineupService.calculateFitScore). Bez tego AI przy przebudowie składu pod nową taktykę
++//            ignorowało fakt, że np. pomocnik ma realny atrybut gry na skrzydle ataku — i traktowało
++//            go tak samo źle, jak zawodnika bez żadnych predyspozycji do tej pozycji.
++// KALIBRACJA: siła bonusu za pozycję pomocniczą NIE jest tu — jest w PlayerPositionFitService
++// (getFitScoreBonus/getPenaltyFactor), żeby był jeden, wspólny punkt prawdy dla całej gry (AI i silnik
++// meczu liczą to tak samo). Zmieniaj tam, nie tutaj.
++const getEmergencyFieldScore = (player: Player, role: PlayerPosition, useSecondaryPositions: boolean = false): number => {
++  if (player.position !== PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions });
++  if (role === PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions });
+   return (
+     player.overallRating * 0.35 +
+     player.attributes.positioning * 0.25 +
+@@ -68,12 +112,14 @@ const getEmergencyFieldScore = (player: Player, role: PlayerPosition): number =>
+   ) * getReadinessMultiplier(player);
+ };
+ 
+-const getLineupFitScore = (lineupIds: (string | null)[], tacticId: string, players: Player[]): number => {
++// [AI-COACH-CALIBRATION] getLineupFitScore — suma dopasowania całego składu do danej taktyki.
++// `useSecondaryPositions` przekazywane dalej do getEmergencyFieldScore — patrz komentarz wyżej.
++const getLineupFitScore = (lineupIds: (string | null)[], tacticId: string, players: Player[], useSecondaryPositions: boolean = false): number => {
+   const tactic = TacticRepository.getById(tacticId);
+   return tactic.slots.reduce((sum, slot) => {
+     const player = getPlayer(players, lineupIds[slot.index]);
+     if (!player) return sum - 750;
+-    return sum + getEmergencyFieldScore(player, slot.role);
++    return sum + getEmergencyFieldScore(player, slot.role, useSecondaryPositions);
+   }, 0);
+ };
+ 
+@@ -139,17 +185,51 @@ const chooseNoBenchGoalkeeperResponse = (
+   return { lineup: nextLineup, sub: bestFieldSub, fieldCover: fieldCover.player };
+ };
+ 
+-const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players: Player[]): (string | null)[] | null => {
++// [AI-COACH-CALIBRATION] assignPlayersToTactic — TO JEST SERCE NAPRAWY BŁĘDU "remapowania składu".
++// Dostaje listę ID zawodników obecnie na boisku (candidateIds) i NOWĄ taktykę (tacticId), a zwraca
++// nowy układ startingXI, w którym każde miejsce (slot) dostało najlepiej dopasowanego z dostępnych
++// zawodników. Funkcja istniała już wcześniej i była używana do SAMEJ OCENY (czy warto zmienić
++// taktykę), ale wynik tej oceny był odrzucany — w 6 miejscach w tym pliku AI zmieniało `tacticId`
++// nigdy nie wywołując tej funkcji do faktycznego przesunięcia zawodników. Efekt: pomocnik stojący
++// na miejscu nr 7 w 4-4-2 (rola MID) zostawał na tym samym miejscu po zmianie na 4-2-4, gdzie
++// miejsce nr 7 to już rola FWD — i silnik meczu czytał go jako napastnika, mimo że nikt go tam
++// nie "wstawił". Stąd kara za grę nie na swojej pozycji bez żadnej faktycznej zmiany personalnej.
++// Od teraz KAŻDA zmiana taktyki w tym pliku MUSI iść przez applyTacticReassignment (patrz niżej),
++// które wywołuje tę funkcję i synchronizuje startingXI z nowym tacticId.
++// PARAMETR useSecondaryPositions: patrz komentarz przy getEmergencyFieldScore — przy przebudowie
++// składu pod nową taktykę chcemy wiedzieć, że np. pomocnik z dobrym atrybutem gry na skrzydle ataku
++// jest realną opcją na FWD, a nie tylko "najmniej złym z najgorszych".
++// PARAMETR lockSlotZeroId (opcjonalny): używany WYŁĄCZNIE w sytuacjach awaryjnych, gdy zawodnik z
++// pola już został wcześniej "wstawiony" do bramki (bo nie ma bramkarza na ławce ani w składzie) —
++// chcemy przebudować pozostałe 10 miejsc pod nową taktykę, ale NIE pozwolić funkcji jeszcze raz
++// "wybrać", kto stoi w bramce (inna formuła oceny w tej funkcji niż ta, która już wybrała tego
++// zawodnika w pickBestFieldPlayerForGoal, mogłaby wybrać kogoś innego — niespójność bez sensu).
++const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players: Player[], useSecondaryPositions: boolean = false, lockSlotZeroId?: string): (string | null)[] | null => {
+   const tactic = TacticRepository.getById(tacticId);
+   const remaining = new Set(candidateIds);
+   const lineup: (string | null)[] = new Array(11).fill(null);
+ 
++  if (lockSlotZeroId && remaining.has(lockSlotZeroId)) {
++    lineup[0] = lockSlotZeroId;
++    remaining.delete(lockSlotZeroId);
++  }
++
+   for (const slot of tactic.slots) {
++    if (lineup[slot.index] !== null) continue; // miejsce już obsadzone przez lockSlotZeroId
++
+     const pool = Array.from(remaining)
+       .map(id => players.find(p => p.id === id))
+       .filter((p): p is Player => !!p);
+ 
+-    if (pool.length === 0) return null;
++    // [AI-COACH-FIX] continue (było: return null) — gdy zespół gra w osłabieniu (czerwona kartka),
++    // candidateIds ma MNIEJ niż 11 nazwisk, a tactic.slots nowej taktyki wciąż ma 11 miejsc. Stare
++    // "return null" przerywało WHOLE przebudowę składu w takiej sytuacji (applyTacticReassignment
++    // wtedy po prostu nic nie robił — zero korzyści ze zmiany taktyki po czerwonej kartce!). Teraz
++    // brakujące miejsce zostaje po prostu puste (null) i przebudowa idzie dalej. Każda taktyka w
++    // tactics_db.ts ma sloty w kolejności GK -> DEF -> MID -> FWD, więc przy niedoborze 1 zawodnika
++    // to ZAWSZE ostatni (napastnik) slot zostaje pusty — co jest dokładnie tym, czego chcemy (boisko
++    // "oddaje" w ataku, nie w obronie, gdy gramy w 10).
++    if (pool.length === 0) continue;
+ 
+     const samePosition = pool.filter(p => p.position === slot.role);
+     const selectable = samePosition.length > 0
+@@ -159,7 +239,7 @@ const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players
+         : pool.filter(p => p.position !== PlayerPosition.GK);
+ 
+     const fallback = selectable.length > 0 ? selectable : pool;
+-    const selected = [...fallback].sort((a, b) => getEmergencyFieldScore(b, slot.role) - getEmergencyFieldScore(a, slot.role))[0];
++    const selected = [...fallback].sort((a, b) => getEmergencyFieldScore(b, slot.role, useSecondaryPositions) - getEmergencyFieldScore(a, slot.role, useSecondaryPositions))[0];
+     if (!selected) return null;
+ 
+     lineup[slot.index] = selected.id;
+@@ -169,6 +249,22 @@ const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players
+   return lineup;
+ };
+ 
++// [AI-COACH-CALIBRATION] applyTacticReassignment — JEDYNE miejsce, które powinno zmieniać lineup.tacticId
++// w reakcji na wynik/sytuację (poza bezpośrednią wymianą zawodnika przy kontuzji, która już wcześniej
++// robiła to poprawnie przez assignPlayersToTactic). Zwraca NOWY obiekt Lineup z zsynchronizowanym
++// tacticId + startingXI. Jeśli przebudowa się nie powiedzie (np. brakuje zawodników na boisku —
++// teoretycznie niemożliwe przy 11 vs 11, ale przy czerwonych kartkach liczba aktywnych graczy może
++// być mniejsza), funkcja NIE zmienia nic i zwraca oryginalny lineup z niezmienionym tacticId —
++// lepiej zostać przy obecnej, działającej taktyce niż wejść w połowicznie poprawiony stan.
++// Eksportowane: AiMatchDecisionServiceFriendlyMatch i AiMatchDecisionCupService używają TEJ SAMEJ
++// funkcji do naprawy identycznego błędu remapowania składu — jeden punkt prawdy, nie duplikować.
++export const applyTacticReassignment = (lineup: Lineup, players: Player[], newTacticId: string, lockSlotZeroId?: string): Lineup => {
++  const activeIds = lineup.startingXI.filter((id): id is string => !!id);
++  const assignedXI = assignPlayersToTactic(activeIds, newTacticId, players, true, lockSlotZeroId);
++  if (!assignedXI) return lineup;
++  return { ...lineup, tacticId: newTacticId, startingXI: assignedXI };
++};
++
+ const chooseInjuryResponse = (
+   lineup: Lineup,
+   players: Player[],
+@@ -287,6 +383,277 @@ const getLineupAverageRating = (lineupIds: (string | null)[], players: Player[])
+   return activePlayers.reduce((sum, player) => sum + getReadinessOverall(player), 0) / activePlayers.length;
+ };
+ 
++// ============================================================================================
++// [AI-COACH MIND-FLOW] — sekcja "plan przedmeczowy + adherencja do planu"
++// ============================================================================================
++// Cała ta sekcja (do końca bloku applyPlanDeviation) implementuje ustaloną w rozmowie zasadę:
++// "każdy trener ma PLAN na każdą sytuację (siła rywala x wynik), ustalony zanim mecz się zacznie,
++// i w trakcie meczu GO TRZYMA — ale nie 100% czasu. Słabszy/mniej doświadczony trener, zaskoczony
++// przebiegiem gry, w derbach czy meczu o wszystko, czasem PORZUCA plan i reaguje impulsywnie —
++// a impulsywna reakcja to czyste 50/50: czasem wypala, czasem jest błędem."
++// Celowo NIE jest to jedna, prosta, łatwa do wyuczenia przez gracza zależność (np. "słaby trener =
++// zawsze panikuje") — adherencja do planu zależy od kilku NIEZALEŻNYCH czynników na raz (patrz
++// getPlanAdherenceProbability), z których część (ukryty nastrój meczowy) jest dla gracza całkowicie
++// niewidoczna i niezwiązana z żadną obserwowalną zmienną w grze.
++// ============================================================================================
++
++// 5 kategorii siły względnej rywala (zastąpienie/uzupełnienie istniejącego 2-kategoriowego
++// isClearFavorite/isClearUnderdog z assessHalftimeStatus o szerszą skalę, potrzebną do PLAN_TABLE).
++// Progi (3.5 i 8.0) w jednostkach getLineupAverageRating (średnia "overall" składu, z uwzględnieniem
++// zmęczenia/morale przez getReadinessOverall) — 3.5 to już istniejący próg "wyraźnej" różnicy w tym
++// pliku (assessHalftimeStatus), 8.0 to nowy, drugi próg dla "OGROMNEJ" różnicy. KALIBRACJA: podnieś
++// progi, jeśli zbyt często trafiasz w kategorie MUCH_*, opuść, jeśli zbyt rzadko.
++type OpponentStrengthTier = 'MUCH_STRONGER' | 'STRONGER' | 'EVEN' | 'WEAKER' | 'MUCH_WEAKER';
++
++const getOpponentStrengthTier = (
++  myLineup: Lineup,
++  oppLineup: Lineup,
++  myPlayers: Player[],
++  oppPlayers: Player[]
++): { tier: OpponentStrengthTier; strengthDiff: number } => {
++  const myXiStrength = getLineupAverageRating(myLineup.startingXI, myPlayers);
++  const oppXiStrength = getLineupAverageRating(oppLineup.startingXI, oppPlayers);
++  const strengthDiff = myXiStrength - oppXiStrength; // > 0 = MY jesteśmy silniejsi od rywala
++
++  if (strengthDiff <= -8) return { tier: 'MUCH_STRONGER', strengthDiff }; // rywal OGROMNIE silniejszy
++  if (strengthDiff <= -3.5) return { tier: 'STRONGER', strengthDiff };    // rywal silniejszy
++  if (strengthDiff < 3.5) return { tier: 'EVEN', strengthDiff };          // wyrównany
++  if (strengthDiff < 8) return { tier: 'WEAKER', strengthDiff };          // rywal słabszy
++  return { tier: 'MUCH_WEAKER', strengthDiff };                          // rywal OGROMNIE słabszy
++};
++
++type CoachScoreState = 'WINNING' | 'DRAWING' | 'LOSING';
++
++const getCoachScoreState = (scoreDiff: number): CoachScoreState =>
++  scoreDiff > 0 ? 'WINNING' : scoreDiff < 0 ? 'LOSING' : 'DRAWING';
++
++// "posture" steruje DWOMA rzeczami w dalszej części pliku (patrz miejsca z komentarzem
++// [AI-COACH-FIX] applyTacticReassignment, gdzie pool kandydatów jest filtrowany przez
++// crossFamilyAllowed, oraz getPostureEagernessBonus poniżej):
++//   PARK_BUS  — maksymalna zachowawczość, próg do zmiany taktyki najwyższy
++//   CONTROL   — kontrola wyniku, lekka zachowawczość
++//   BALANCED  — stan "neutralny", zero dodatkowego nacisku w żadną stronę
++//   PUSH      — zauważalna presja na poprawę sytuacji, niższy próg do zmiany
++//   ALL_IN    — maksymalna presja, najniższy próg, dopuszczona zmiana szyku formacji najwcześniej
++type CoachPosture = 'PARK_BUS' | 'CONTROL' | 'BALANCED' | 'PUSH' | 'ALL_IN';
++
++type CoachPlanIntent = {
++  posture: CoachPosture;
++  // czy PLAN (bez porzucenia go) dopuszcza JAKĄKOLWIEK zmianę taktyki w 1. połowie poza Warstwą 0/1
++  // (kontuzja/czerwona kartka) — zgodnie z zasadą "w 1. połowie trener kręci tempem/nastawieniem,
++  // nie przebudowuje formacji, OPRÓCZ naprawdę alarmujących sytuacji" z rozmowy.
++  allowFirstHalfTacticChange: boolean;
++  // od której minuty PLAN odblokowuje zmianę SZYKU formacji (inna liczba DEF/MID/FWD, wymagająca
++  // applyTacticReassignment) — przed tą minutą dozwolone są tylko bezpieczne zmiany w obrębie tej
++  // samej rodziny formacji (patrz getSameFamilyTactics), które z definicji nie przestawiają nikogo
++  // na inną rolę.
++  crossFamilyEscalationMinute: number;
++};
++
++// [AI-COACH-CALIBRATION] PLAN_TABLE — dokładny zapis tabeli "siła rywala x wynik" ustalonej w
++// rozmowie. To jest GŁÓWNE miejsce kalibracji "charakteru" trenerów w reakcji na sytuację meczową.
++// Każda zmiana liczby w crossFamilyEscalationMinute przesuwa, jak szybko trener jest skłonny
++// PRZEBUDOWAĆ FORMACJĘ (a nie tylko dostosować tempo/nastawienie). Każda zmiana posture przesuwa,
++// jak chętnie reaguje w ogóle (patrz getPostureEagernessBonus).
++const PLAN_TABLE: Record<OpponentStrengthTier, Record<CoachScoreState, CoachPlanIntent>> = {
++  MUCH_STRONGER: {
++    WINNING: { posture: 'PARK_BUS', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 70 },
++    DRAWING: { posture: 'CONTROL', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 75 },
++    LOSING: { posture: 'BALANCED', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 65 }
++  },
++  STRONGER: {
++    WINNING: { posture: 'CONTROL', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 70 },
++    DRAWING: { posture: 'BALANCED', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 70 },
++    LOSING: { posture: 'PUSH', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 60 }
++  },
++  EVEN: {
++    WINNING: { posture: 'CONTROL', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 65 },
++    DRAWING: { posture: 'BALANCED', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 60 },
++    LOSING: { posture: 'PUSH', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 50 }
++  },
++  WEAKER: {
++    WINNING: { posture: 'BALANCED', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 60 },
++    DRAWING: { posture: 'PUSH', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 45 },
++    LOSING: { posture: 'ALL_IN', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 40 }
++  },
++  MUCH_WEAKER: {
++    WINNING: { posture: 'PUSH', allowFirstHalfTacticChange: false, crossFamilyEscalationMinute: 70 },
++    DRAWING: { posture: 'ALL_IN', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 35 },
++    // LOSING z dużo słabszym rywalem to JEDYNY zaplanowany wyjątek od "nie zmieniamy w 1. połowie"
++    // (crossFamilyEscalationMinute: 1) — ustalone wprost w rozmowie jako "katastrofa wizerunkowa".
++    LOSING: { posture: 'ALL_IN', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 1 }
++  }
++};
++
++const getCoachPlan = (tier: OpponentStrengthTier, scoreState: CoachScoreState): CoachPlanIntent =>
++  PLAN_TABLE[tier][scoreState];
++
++// [AI-COACH-CALIBRATION] getPostureEagernessBonus — przekłada posture na liczbę dodawaną/odejmowaną
++// od "requiredScore" (progu potrzebnego do zaakceptowania zmiany taktyki) w chooseScoreTacticResponse.
++// Dodatnia wartość = WYŻSZY próg = trener MNIEJ chętny do zmiany. Ujemna = NIŻSZY próg = chętniej
++// zmienia. Skala zgodna z jednostkami requiredScore w chooseScoreTacticResponse (tam typowe wartości
++// to 4-16) — stąd zakres -6..+6 tutaj jest "silny, ale nie dominujący" modyfikator.
++const getPostureEagernessBonus = (posture: CoachPosture): number => {
++  switch (posture) {
++    case 'PARK_BUS': return 6;
++    case 'CONTROL': return 3;
++    case 'BALANCED': return 0;
++    case 'PUSH': return -3;
++    case 'ALL_IN': return -6;
++  }
++};
++
++// Rodziny formacji o IDENTYCZNEJ mapie rola->miejsce (sprawdzone w resources/tactics_db.ts) — zmiana
++// w obrębie jednej rodziny NIGDY nie przestawia nikogo na inną rolę, więc jest "bezpieczna" nawet
++// w 1. połowie / bez przeliczania składu. KALIBRACJA: jeśli w tactics_db.ts pojawi się nowa taktyka
++// będąca wariantem istniejącego szyku (te samo role na tych samych indeksach slotów), dopisz ją tutaj.
++const TACTIC_FAMILIES: string[][] = [
++  ['4-4-2', '4-4-2-OFF', '4-4-2-DEF', '4-4-2-DIAMOND']
++];
++
++const getSameFamilyTactics = (tacticId: string): string[] =>
++  TACTIC_FAMILIES.find(family => family.includes(tacticId)) ?? [tacticId];
++
++// Proste, STABILNE hashowanie tekstu na liczbę w [0,1). Celowo NIE używamy tu Math.random() — wynik
++// musi być identyczny przy każdym wywołaniu makeDecisions w trakcie TEGO SAMEGO meczu (to jest
++// "ukryty nastrój meczowy" trenera, ustalony raz, na starcie meczu, nie losowany co minutę).
++// Wejście (fixtureId+side+sól) gwarantuje, że dwa różne mecze / dwie strony tego samego meczu dostają
++// inną, niezależną wartość.
++const hashToUnitInterval = (text: string): number => {
++  let hash = 0;
++  for (let i = 0; i < text.length; i++) {
++    hash = (hash * 31 + text.charCodeAt(i)) % 1000003;
++  }
++  return Math.abs(hash) / 1000003;
++};
++
++type PlanAdherenceInput = {
++  fixtureId: string;
++  side: 'HOME' | 'AWAY';
++  coachExperience: number; // 0-100, Coach.attributes.experience
++  tier: OpponentStrengthTier;
++  momentum: number; // state.momentum, zakres ok. -100..100
++  lateSeasonDrama: number; // już liczone w makeDecisions z aiStakes/userStakes/isLateSeason
++  rivalryMultiplier: number;
++};
++
++// [AI-COACH-CALIBRATION] getPlanAdherenceProbability — szansa (0..1), że trener W TEJ KONKRETNEJ
++// chwili trzyma się swojego planu (PLAN_TABLE). Jeśli losowanie tę szansę przegra, trener PORZUCA
++// plan i improwizuje (patrz resolvePlanAdherence/applyPlanDeviation) — z wynikiem czystego 50/50.
++// 4 NIEZALEŻNE składowe (rozmyślnie różne źródła, żeby gracz nie mógł wyuczyć się jednego prostego
++// wzorca typu "słaby trener = zawsze panikuje"):
++//   1) DOŚWIADCZENIE (główny czynnik, ustalony w rozmowie): skala 1-99 -> ±0.24.
++//   2) UKRYTY NASTRÓJ MECZOWY: stały na CAŁY mecz, niewidoczny dla gracza, niezwiązany z żadną
++//      obserwowalną zmienną w grze -> ±0.08.
++//   3) ROZJAZD MOMENTUM vs OCZEKIWANIA wynikające z tieru siły: jeśli przebieg gry bardzo różni się
++//      od tego, czego sugerowałby tier (np. "powinniśmy dominować, a jesteśmy przepychani") —
++//      NAWET dobry trener może się "zagubić w planie" -> do -0.25.
++//   4) RANGA MECZU / RYWALIZACJA: derby/wysoka stawka podnoszą emocjonalność KAŻDEGO trenera -> do -0.15.
++// WYNIK ograniczony do [0.15, 0.95] — żaden trener nie jest 100% przewidywalny ani 100% chaotyczny.
++const getPlanAdherenceProbability = (input: PlanAdherenceInput): number => {
++  const experienceComponent = (input.coachExperience - 50) * 0.0048; // -0.24..+0.24
++
++  const hiddenMood = hashToUnitInterval(`${input.fixtureId}:${input.side}:mood`); // 0..1, stałe na mecz
++  const hiddenMoodComponent = (hiddenMood - 0.5) * 0.16; // -0.08..+0.08
++
++  // Czego "powinniśmy" doświadczać w przebiegu gry, sądząc tylko po tierze siły: jeśli rywal jest
++  // słabszy (WEAKER/MUCH_WEAKER), oczekiwane momentum jest DODATNIE (powinniśmy dominować); jeśli
++  // silniejszy, oczekiwane momentum jest UJEMNE; EVEN -> oczekiwane momentum to 0 (brak dominacji).
++  const expectedMomentumSign =
++    input.tier === 'WEAKER' || input.tier === 'MUCH_WEAKER' ? 1
++    : input.tier === 'STRONGER' || input.tier === 'MUCH_STRONGER' ? -1
++    : 0;
++  const actualMomentumNormalized = Math.max(-1, Math.min(1, input.momentum / 100));
++  const momentumDivergence01 = Math.abs(actualMomentumNormalized - expectedMomentumSign) / 2; // 0..1
++  const momentumDivergencePenalty = momentumDivergence01 * 0.25; // 0..0.25
++
++  const stakesVolatilityPenalty = Math.max(0, Math.min(0.15,
++    input.lateSeasonDrama * 0.10 + (input.rivalryMultiplier - 1) * 0.05
++  ));
++
++  const probability = 0.50 + experienceComponent + hiddenMoodComponent - momentumDivergencePenalty - stakesVolatilityPenalty;
++  return Math.max(0.15, Math.min(0.95, probability));
++};
++
++type PlanDecisionOutcome = 'FOLLOW_PLAN' | 'IMPROVISE_WELL' | 'IMPROVISE_BADLY';
++
++// [AI-COACH-CALIBRATION] resolvePlanAdherence — JEDYNE miejsce, które losuje, czy trener trzyma się
++// planu. Porzucenie planu to ZAWSZE czyste 50/50 dobry/zły wynik improwizacji — ustalone wprost w
++// rozmowie jako "jak w życiu", BEZ wpływu atrybutów trenera na ten konkretny rzut (atrybuty wpływają
++// tylko na to, JAK CZĘŚCIEJ do porzucenia planu dochodzi, czyli na getPlanAdherenceProbability wyżej).
++const resolvePlanAdherence = (input: PlanAdherenceInput): PlanDecisionOutcome => {
++  if (Math.random() < getPlanAdherenceProbability(input)) return 'FOLLOW_PLAN';
++  return Math.random() < 0.5 ? 'IMPROVISE_WELL' : 'IMPROVISE_BADLY';
++};
++
++type BadImprovisationMode = 'FREEZE' | 'SUBOPTIMAL' | 'SPECTACULAR';
++
++// [AI-COACH-CALIBRATION] rozkład 65/25/10 SKOPIOWANY Z ISTNIEJĄCEGO mechanizmu błędu trenera w
++// AiMatchDecisionCupService.tsx (sekcja "PROGRESYWNY MECHANIZM BŁĘDÓW TRENERA") — ten sam rozkład:
++// najczęściej trener po prostu nie reaguje (65%), czasem reaguje słabo/nie na temat (25%), rzadko
++// reaguje spektakularnie źle (10%). Użycie tego samego rozkładu w obu silnikach (ligowym i
++// pucharowym) to świadoma decyzja o konsekwencji, nie przypadek.
++const rollBadImprovisationMode = (): BadImprovisationMode => {
++  const roll = Math.random();
++  if (roll < 0.65) return 'FREEZE';
++  if (roll < 0.90) return 'SUBOPTIMAL';
++  return 'SPECTACULAR';
++};
++
++// [AI-COACH-CALIBRATION] applyPlanDeviation — przekłada wynik resolvePlanAdherence na KONKRETNE,
++// efektywne parametry użyte dalej w makeDecisions (effective posture / effective escalation minute /
++// czy ten tick ma być całkowicie "zamrożony"). To jest miejsce, w którym "porzucenie planu" faktycznie
++// zmienia zachowanie — patrz użycie w makeDecisions (zmienne effectivePlan / aiFrozenByBadImprovisation).
++const applyPlanDeviation = (
++  plan: CoachPlanIntent,
++  outcome: PlanDecisionOutcome,
++  tier: OpponentStrengthTier,
++  scoreState: CoachScoreState
++): { plan: CoachPlanIntent; freezeThisTick: boolean; badMode?: BadImprovisationMode } => {
++  if (outcome === 'FOLLOW_PLAN') return { plan, freezeThisTick: false };
++
++  if (outcome === 'IMPROVISE_WELL') {
++    // "Udana improwizacja" — trener trafia w decyzję odważniejszą/szybszą niż plan przewidywał, i
++    // (z definicji "udana") wychodzi mu to na dobre. Eskalujemy o jeden poziom + przybliżamy moment
++    // odblokowania zmiany szyku formacji o 15 minut (nie wcześniej niż minuta 1).
++    const posturesInOrder: CoachPosture[] = ['PARK_BUS', 'CONTROL', 'BALANCED', 'PUSH', 'ALL_IN'];
++    const currentIdx = posturesInOrder.indexOf(plan.posture);
++    const escalatedPosture = posturesInOrder[Math.min(posturesInOrder.length - 1, currentIdx + 1)];
++    return {
++      plan: {
++        posture: escalatedPosture,
++        allowFirstHalfTacticChange: plan.allowFirstHalfTacticChange,
++        crossFamilyEscalationMinute: Math.max(1, plan.crossFamilyEscalationMinute - 15)
++      },
++      freezeThisTick: false
++    };
++  }
++
++  // IMPROVISE_BADLY
++  const badMode = rollBadImprovisationMode();
++  if (badMode === 'FREEZE') return { plan, freezeThisTick: true, badMode };
++
++  if (badMode === 'SUBOPTIMAL') {
++    // Reaguje, ale "nie na temat" — czyta sytuację jakby wynik był o jeden poziom inny niż faktyczny
++    // (np. zachowuje się jak przy remisie, choć faktycznie prowadzi/przegrywa o gol). Pożyczamy plan
++    // z SĄSIEDNIEGO stanu wyniku dla TEGO SAMEGO tieru — to wciąż SENSOWNY, istniejący wpis w
++    // PLAN_TABLE (nie losowy szum), tylko nie ten, który faktycznie pasuje do sytuacji.
++    // WINNING <-> DRAWING <-> LOSING: zawsze przesuwamy w stronę DRAWING (środek), bo to jedyny
++    // kierunek, który ma sens z OBU krańców (z WINNING i z LOSING) bez specjalnych przypadków.
++    const neighborScoreState: CoachScoreState = scoreState === 'DRAWING' ? 'LOSING' : 'DRAWING';
++    return { plan: getCoachPlan(tier, neighborScoreState), freezeThisTick: false, badMode };
++  }
++
++  // SPECTACULAR — najbardziej dramatyczny błąd: trener całkowicie błędnie ocenia wagę sytuacji,
++  // odblokowuje zmianę szyku formacji NATYCHMIAST (nawet w 1. połowie) i ustawia najbardziej
++  // ekstremalne posture (ALL_IN) niezależnie od tego, czy sytuacja na to wskazuje.
++  return {
++    plan: { posture: 'ALL_IN', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 1 },
++    freezeThisTick: false,
++    badMode
++  };
++};
++
+ const assessHalftimeStatus = (
+   myLineup: Lineup,
+   oppLineup: Lineup,
+@@ -371,25 +738,46 @@ const chooseScoreTacticResponse = (
+   lineup: Lineup,
+   players: Player[],
+   scoreDiff: number,
+-  coachQuality: number
++  coachQuality: number,
++  coach: Coach | null | undefined = null,
++  // [AI-COACH-FIX] crossFamilyAllowed=true zachowuje DOKŁADNIE stare zachowanie (pełna pula
++  // OFFENSIVE_TACTICS/DEFENSIVE_TACTICS) — domyślne true, żeby wywołania, które nie przekazują tego
++  // argumentu (jeśli jakieś zostały), się nie zepsuły. W makeDecisions zawsze przekazujemy realną
++  // wartość z crossFamilyAllowed (plan przedmeczowy, patrz PLAN_TABLE.crossFamilyEscalationMinute).
++  crossFamilyAllowed: boolean = true,
++  // [AI-COACH-FIX] postureEagernessBonus — patrz getPostureEagernessBonus. Domyślnie 0 = stare
++  // zachowanie (próg "requiredScore" niezmieniony).
++  postureEagernessBonus: number = 0
+ ): string | null => {
+-  const currentFit = getLineupFitScore(lineup.startingXI, lineup.tacticId, players);
++  // useSecondaryPositions=true: oceniamy taktykę tak, jak ona FAKTYCZNIE zostanie wystawiona przez
++  // applyTacticReassignment (które też liczy z pozycjami pomocniczymi) — inaczej moglibyśmy odrzucić
++  // dobrą taktykę tylko dlatego, że ocena nie widziała, że ktoś ma realny atrybut na drugiej pozycji.
++  const currentFit = getLineupFitScore(lineup.startingXI, lineup.tacticId, players, true);
+   const currentIntent = getTacticIntentScore(lineup.tacticId, scoreDiff);
+-  const pool = scoreDiff < 0
++  const fullPool = scoreDiff < 0
+     ? (scoreDiff <= -2 ? OFFENSIVE_TACTICS : ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1'])
+     : DEFENSIVE_TACTICS;
++  // [AI-COACH-FIX] crossFamilyAllowed=false: ZANIM plan odblokuje zmianę szyku formacji (np. w
++  // 1. połowie), ograniczamy pulę do wariantów TEJ SAMEJ rodziny co obecna taktyka (getSameFamilyTactics)
++  // — bezpieczne, bo nie przestawiają nikogo na inną rolę. Jeśli obecna taktyka nie ma rodziny
++  // (np. graliśmy 4-3-3), pula degeneruje się do samej obecnej taktyki, czyli efektywnie "brak zmiany
++  // dostępnej teraz" — to jest poprawne zachowanie (patrz komentarz przy TACTIC_FAMILIES).
++  const pool = crossFamilyAllowed ? fullPool : fullPool.filter(t => getSameFamilyTactics(lineup.tacticId).includes(t));
+ 
+   const candidates = Array.from(new Set(pool))
+     .filter(tacticId => tacticId !== lineup.tacticId)
+     .map(tacticId => {
+-      const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players);
++      const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players, true);
+       if (!assignedXI) return null;
+-      const fit = getLineupFitScore(assignedXI, tacticId, players);
++      const fit = getLineupFitScore(assignedXI, tacticId, players, true);
+       const intent = getTacticIntentScore(tacticId, scoreDiff);
+       const fitLoss = Math.max(0, currentFit - fit);
+       return {
+         tacticId,
+-        score: intent - currentIntent - fitLoss * (0.18 + coachQuality / 650)
++        // [AI-COACH-CALIBRATION] + getFavoriteTacticBonus: "pierwszy wybór, nie nakaz" — patrz
++        // komentarz przy definicji funkcji. Dodane na końcu, żeby nie zmieniać wag już istniejących
++        // składników (intent/fitLoss), tylko delikatnie przeważać remisy w stronę stylu trenera.
++        score: intent - currentIntent - fitLoss * (0.18 + coachQuality / 650) + getFavoriteTacticBonus(tacticId, coach, scoreDiff)
+       };
+     })
+     .filter((entry): entry is { tacticId: string; score: number } => !!entry)
+@@ -398,9 +786,13 @@ const chooseScoreTacticResponse = (
+   const best = candidates[0];
+   if (!best) return null;
+ 
+-  const requiredScore = scoreDiff < 0
++  // [AI-COACH-FIX] + postureEagernessBonus: PUSH/ALL_IN (plan mówi "trzeba reagować") obniżają próg,
++  // PARK_BUS/CONTROL (plan mówi "nie ma potrzeby") go podnoszą — patrz getPostureEagernessBonus.
++  // Math.max(2, ...) na końcu, żeby nawet przy najbardziej agresywnym posture próg nie spadł do
++  // zera/ujemnej wartości (zero wymagań do zmiany taktyki byłoby nierealistyczne).
++  const requiredScore = Math.max(2, (scoreDiff < 0
+     ? Math.max(4, 13 - coachQuality * 0.08 - Math.abs(scoreDiff) * 3)
+-    : Math.max(6, 16 - coachQuality * 0.06);
++    : Math.max(6, 16 - coachQuality * 0.06)) + postureEagernessBonus);
+ 
+   return best.score >= requiredScore ? best.tacticId : null;
+ };
+@@ -436,12 +828,16 @@ const chooseOpponentGoalkeeperCrisisResponse = (
+   oppLineup: Lineup,
+   oppPlayers: Player[],
+   scoreDiff: number,
+-  coachQuality: number
++  coachQuality: number,
++  coach: Coach | null | undefined = null,
++  crossFamilyAllowed: boolean = true
+ ): { tacticId: string; reason: 'smart_pressure' | 'reckless_push' } | null => {
+   if (hasReliableGoalkeeper(oppLineup, oppPlayers)) return null;
+ 
+   const currentTactic = TacticRepository.getById(lineup.tacticId);
+-  const currentFit = getLineupFitScore(lineup.startingXI, lineup.tacticId, players);
++  // useSecondaryPositions=true — patrz komentarz w chooseScoreTacticResponse: ocena musi odpowiadać
++  // temu, co applyTacticReassignment faktycznie wystawi na boisko.
++  const currentFit = getLineupFitScore(lineup.startingXI, lineup.tacticId, players, true);
+   const counterThreat = getCounterThreatScore(oppLineup, oppPlayers);
+   const coachControl = Math.max(0, Math.min(1, (coachQuality - 45) / 35));
+   const chaseNeed = scoreDiff < 0 ? Math.min(1, Math.abs(scoreDiff) / 2) : 0;
+@@ -450,15 +846,19 @@ const chooseOpponentGoalkeeperCrisisResponse = (
+ 
+   const smartPool = ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '4-3-3-F9', '4-4-2'];
+   const recklessPool = ['4-2-4', '3-4-3', '3-4-2-1', '4-4-2-OFF'];
+-  const pool = coachQuality >= 62 || counterThreat >= 68 ? smartPool : recklessPool;
++  const fullPool = coachQuality >= 62 || counterThreat >= 68 ? smartPool : recklessPool;
++  // [AI-COACH-FIX] crossFamilyAllowed=false — patrz identyczny mechanizm i komentarz w
++  // chooseScoreTacticResponse: przed odblokowaniem zmiany szyku formacji przez plan, ograniczamy się
++  // do bezpiecznych wariantów tej samej rodziny co obecna taktyka.
++  const pool = crossFamilyAllowed ? fullPool : fullPool.filter(t => getSameFamilyTactics(lineup.tacticId).includes(t));
+ 
+   const candidates = Array.from(new Set(pool))
+     .filter(tacticId => tacticId !== lineup.tacticId)
+     .map(tacticId => {
+       const tactic = TacticRepository.getById(tacticId);
+-      const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players);
++      const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players, true);
+       if (!assignedXI) return null;
+-      const fit = getLineupFitScore(assignedXI, tacticId, players);
++      const fit = getLineupFitScore(assignedXI, tacticId, players, true);
+       const fitLoss = Math.max(0, currentFit - fit);
+       const attackGain = Math.max(0, tactic.attackBias - currentTactic.attackBias) * 0.42;
+       const pressureGain = Math.max(0, tactic.pressingIntensity - currentTactic.pressingIntensity) * 0.20;
+@@ -480,7 +880,14 @@ const chooseOpponentGoalkeeperCrisisResponse = (
+         recklessBonus -
+         counterExposure * counterRiskWeight -
+         defensiveLoss * (0.25 + protectionNeed) -
+-        fitLoss * 0.18;
++        fitLoss * 0.18 +
++        // [AI-COACH-CALIBRATION] premia za ulubioną taktykę trenera — patrz getFavoriteTacticBonus.
++        // Tu scoreDiff>0 (prowadzimy, polujemy na kryzys bramkarski rywala) traktujemy jak "wygrywamy"
++        // w sensie wyboru ulubionej taktyki defensywnej — ale to wciąż ATAK na słabego bramkarza, więc
++        // do tej premii dorzucamy też ulubioną taktykę OFENSYWNĄ, gdyby trener miał taką preferencję
++        // przy każdym wyniku różnym od remisu — stąd przekazujemy -1 zamiast scoreDiff, żeby zawsze
++        // sprawdzić wariant "ofensywny" ulubionych taktyk (ta funkcja z definicji szuka ataku).
++        getFavoriteTacticBonus(tacticId, coach, -1);
+       return { tacticId, score, attackBias: tactic.attackBias };
+     })
+     .filter((entry): entry is { tacticId: string; score: number; attackBias: number } => !!entry)
+@@ -503,10 +910,14 @@ const chooseHalftimeTacticResponse = (
+   players: Player[],
+   status: HalftimeStatus,
+   coachQuality: number,
+-  scoreDiff: number
++  scoreDiff: number,
++  coach: Coach | null | undefined = null,
++  postureEagernessBonus: number = 0
+ ): string | null => {
+   const tacticalScoreDiff = status === 'PROTECT_RESULT' || status === 'CONTROL_GAME' ? Math.max(1, scoreDiff) : Math.min(-1, scoreDiff);
+-  const candidate = chooseScoreTacticResponse(lineup, players, tacticalScoreDiff, coachQuality);
++  // crossFamilyAllowed=true na stałe: ta funkcja jest wywoływana WYŁĄCZNIE w przerwie meczu (patrz
++  // wywołanie w makeDecisions), a w przerwie crossFamilyAllowed jest i tak zawsze true (isHalftime).
++  const candidate = chooseScoreTacticResponse(lineup, players, tacticalScoreDiff, coachQuality, coach, true, postureEagernessBonus);
+   if (!candidate) return null;
+ 
+   if (status === 'NEUTRAL') return null;
+@@ -522,7 +933,11 @@ const chooseScoreImpulseSub = (
+   coachQuality: number,
+   minute: number
+ ): { playerOutId: string; playerIn: Player; slotIdx: number; reason: string } | null => {
+-  if (scoreDiff >= 0 || minute < 35) return null;
++  // [AI-COACH-FIX] minute < 46 (było: < 35) — "w 1. połowie trener raczej nie wymienia zawodników,
++  // chyba że nastąpi krytyczna sytuacja (kontuzja, czerwona kartka)" (ustalone w rozmowie). Impulsywna
++  // zmiana z powodu samego wyniku NIE jest tu krytyczną sytuacją — Warstwa 0/1 (kontuzje/czerwone
++  // kartki) ma własne, osobne ścieżki w makeDecisions i nie jest tym ograniczona.
++  if (scoreDiff >= 0 || minute < 46) return null;
+ 
+   const tactic = TacticRepository.getById(lineup.tacticId);
+   const benchPool = getAvailableBench(lineup, players, subsHistory).filter(p => p.position !== PlayerPosition.GK);
+@@ -725,6 +1140,25 @@ export const AiMatchDecisionService = {
+     const mustChaseLate = isFinalPhase && scoreDiff < 0 && (lateSeasonDrama >= 0.70 || aiStakes !== 'LOW_STAKES');
+     const avoidCollapseLate = isFinalPhase && scoreDiff <= -2 && (lateSeasonDrama >= 0.90 || aiStakes === 'RELEGATION_FIGHT');
+ 
++    // [AI-COACH MIND-FLOW] Tu wchodzi "plan przedmeczowy" — patrz cała sekcja zdefiniowana wyżej
++    // (getOpponentStrengthTier .. applyPlanDeviation). Liczone RAZ na wywołanie makeDecisions, bo
++    // od tego zależy: (1) czy ten tick ma być całkowicie "zamrożony" (poniżej, w gate reactionChance),
++    // (2) czy dyskrecjonalna (nie wymuszona Warstwą 0/1) zmiana taktyki jest w ogóle dopuszczona w
++    // 1. połowie, (3) jak chętnie/jak szybko (posture) trener sięga po zmianę szyku formacji.
++    const strengthAssessment = getOpponentStrengthTier(currentLineup, oppLineup, myPlayers, oppPlayers);
++    const coachScoreState = getCoachScoreState(scoreDiff);
++    const basePlan = getCoachPlan(strengthAssessment.tier, coachScoreState);
++    const planAdherenceOutcome = resolvePlanAdherence({
++      fixtureId: state.fixtureId,
++      side,
++      coachExperience: myCoach?.attributes.experience ?? 50,
++      tier: strengthAssessment.tier,
++      momentum: state.momentum,
++      lateSeasonDrama,
++      rivalryMultiplier
++    });
++    const { plan: effectivePlan, freezeThisTick: aiFrozenByBadImprovisation } = applyPlanDeviation(basePlan, planAdherenceOutcome, strengthAssessment.tier, coachScoreState);
++
+     let reactionChance = 0.35;
+     if (isHalftime) {
+       reactionChance = getHalftimeReactionChance(halftimeAssessment.status, coachQuality, scoreDiff);
+@@ -734,10 +1168,22 @@ export const AiMatchDecisionService = {
+       if (opponentGoalkeeperCrisis) reactionChance += coachQuality >= 60 ? 0.28 : 0.16;
+       if (isFinalPhase && (mustProtectLate || mustChaseLate)) reactionChance += 0.08 + lateSeasonDrama * 0.08;
+       if (isFinalPhase && aiStakes === 'LOW_STAKES' && scoreDiff === 0) reactionChance -= 0.12;
++      // [AI-COACH-CALIBRATION] ranga meczu poza końcówką: wcześniej lateSeasonDrama wpływało na
++      // zachowanie trenera WYŁĄCZNIE od minuty 76 (isFinalPhase). Mecz o mistrzostwo/spadek powinien
++      // być inny od 1. minuty, nie tylko w doliczonym czasie — stąd ten sam czynnik, przeskalowany
++      // od 0 (minuta 0) do swojej pełnej wartości (minuta 75), żeby końcówka (gdzie już DZIAŁA pełny
++      // mustProtectLate/mustChaseLate) nie dostała tego bonusu PODWÓJNIE.
++      if (!isFinalPhase) reactionChance += lateSeasonDrama * 0.05 * Math.min(1, state.minute / 75);
+     }
+     reactionChance = Math.max(0.08, Math.min(0.98, reactionChance + (coachQuality - 50) * 0.004));
+ 
+-    if (Math.random() > reactionChance && !isPriority) return { logs: [] };
++    // [AI-COACH-FIX] aiFrozenByBadImprovisation — "porzucenie planu" w wariancie FREEZE (65% z
++    // IMPROVISE_BADLY, patrz rollBadImprovisationMode): trener w tej minucie po prostu nic nie robi,
++    // mimo że sytuacja by tego wymagała. Dopisane do TEGO SAMEGO gate co istniejący reactionChance,
++    // bo to już jest jedyne miejsce w pliku, które kontroluje "czy w ogóle coś tickować" dla
++    // dyskrecjonalnej (nie wymuszonej Warstwą 0/1 — kontuzja/czerwona/brak bramkarza) reakcji —
++    // Warstwa 0/1 działa NIŻEJ w kodzie i nie jest tym gate'em w żaden sposób ograniczona.
++    if ((Math.random() > reactionChance || aiFrozenByBadImprovisation) && !isPriority) return { logs: [] };
+ 
+     let newLineup = { ...currentLineup, startingXI: [...currentLineup.startingXI], bench: [...currentLineup.bench], reserves: [...currentLineup.reserves] };
+     let newSubsCount = currentSubsCount;
+@@ -794,13 +1240,44 @@ export const AiMatchDecisionService = {
+       logs
+     });
+ 
+-    const tactic = TacticRepository.getById(newLineup.tacticId);
++    // [AI-COACH-FIX] let (było: const) — `tactic` musi być odświeżane (patrz "tactic = TacticRepository...
++    // " w 7 miejscach niżej) zaraz po KAŻDEJ zmianie newLineup.tacticId w tej funkcji. Bez tego dalsza
++    // część makeDecisions (np. sprawdzenie "czy jest dziura w obronie" po czerwonej kartce, albo wybór
++    // zmiennika za zmęczenie) czytałaby mapę rola->miejsce ze STAREJ taktyki, mimo że skład już został
++    // przebudowany pod nową — czyli ten sam błąd remapowania, tylko przesunięty o jeden krok dalej.
++    let tactic = TacticRepository.getById(newLineup.tacticId);
+     const mySentOffCount = state.sentOffIds.filter(id => myPlayers.some(p => p.id === id)).length;
+-    const tacticCooldown = 12;
++    // [AI-COACH-CALIBRATION] tacticCooldown — minimalny odstęp (w minutach) między dwiema zmianami
++    // taktyki tego samego trenera. Wcześniej była to STAŁA wartość 12 dla każdego trenera, co było
++    // niespójne z `subCooldown` (linia ~806), który już od dawna skaluje się jakością trenera —
++    // zgodnie z zasadą "lepszy trener reaguje szybciej, ma krótszy cooldown" (ustalone w rozmowie
++    // o mind-flow trenera AI). Wzór skalibrowany tak, żeby przy coachQuality≈50 (przeciętny trener)
++    // wciąż wychodziło ~12, czyli zachowanie "typowego" trenera AI się NIE zmienia — zmienia się tylko
++    // rozstrzał między bardzo słabym (wolniejszy, do 16 min) i bardzo dobrym (szybszy, do 8 min) trenerem.
++    // ZAKRES: 8 (coachQuality=100) .. 16 (coachQuality=0). KALIBRACJA: zwiększ stałe 16/8, żeby
++    // poszerzyć/zmniejszyć różnicę między słabym i dobrym trenerem; getCoachQuality (góra pliku)
++    // liczy coachQuality z experience*0.48 + decisionMaking*0.52, w skali 0-100.
++    const tacticCooldown = Math.max(8, Math.round(16 - (coachQuality / 100) * 8));
+     const tacticLockActive = (state.aiTacticLockUntilMinute ?? 0) > state.minute;
+     const lastFormationAction = state.lastAiFormationMinute ?? state.lastAiActionMinute ?? 0;
+     const canChangeTactic = !tacticLockActive && (state.minute - lastFormationAction) >= tacticCooldown;
+     const canChangeTacticNow = isHalftime || canChangeTactic;
++    // [AI-COACH-FIX] canChangeTacticDiscretionary — "w 1. połowie trener kręci tempem/nastawieniem,
++    // nie przebudowuje formacji, OPRÓCZ naprawdę alarmujących sytuacji" (ustalone w rozmowie). UWAGA:
++    // używać WYŁĄCZNIE przy DYSKRECJONALNYCH (nie wymuszonych) zmianach taktyki — reakcja na
++    // czerwoną kartkę / kontuzję bramkarza (Warstwa 0/1, dalej w kodzie) celowo NIE jest tym
++    // ograniczona, bo to są właśnie te "alarmujące sytuacje", które plan z definicji omija.
++    // effectivePlan.allowFirstHalfTacticChange to JEDYNY zaplanowany wyjątek (patrz PLAN_TABLE:
++    // przegrywanie z dużo słabszym rywalem) — poza tym 1. połowa = brak zmian formacji.
++    const canChangeTacticDiscretionary = canChangeTacticNow &&
++      (state.minute >= 46 || isHalftime || isPriority || effectivePlan.allowFirstHalfTacticChange);
++    // [AI-COACH-FIX] crossFamilyAllowed — przed effectivePlan.crossFamilyEscalationMinute dozwolone
++    // są TYLKO bezpieczne zmiany w obrębie tej samej rodziny formacji (getSameFamilyTactics) — czyli
++    // takie, które z definicji nie przestawiają nikogo na inną rolę (patrz TACTIC_FAMILIES). Po tej
++    // minucie dozwolona jest pełna zmiana szyku (inna liczba DEF/MID/FWD, wymagająca
++    // applyTacticReassignment z prawdziwym przeliczeniem składu).
++    const crossFamilyAllowed = isHalftime || isPriority || state.minute >= effectivePlan.crossFamilyEscalationMinute;
++    const postureEagernessBonus = getPostureEagernessBonus(effectivePlan.posture);
+ 
+     const severeInjuredId = newLineup.startingXI.find(id => id && currentInjuries[id] === InjurySeverity.SEVERE);
+     if (severeInjuredId) {
+@@ -816,7 +1293,11 @@ export const AiMatchDecisionService = {
+             if (!newLineup.reserves.includes(severeInjuredId)) newLineup.reserves.push(severeInjuredId);
+             const defensiveTactic = DEFENSIVE_TACTICS.find(id => id !== newLineup.tacticId);
+             if (defensiveTactic && canChangeTactic) {
+-              newLineup.tacticId = defensiveTactic;
++              // [AI-COACH-FIX] lockSlotZeroId=fieldCover.player.id: ${fieldCover.player.lastName} już
++              // stoi w bramce (decyzja podjęta linię wyżej przez pickBestFieldPlayerForGoal) — nie
++              // pozwalamy applyTacticReassignment jeszcze raz "wybrać" bramkarza inną formułą, tylko
++              // przebudowujemy pozostałe 10 miejsc pod nową, defensywną taktykę.
++              newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, fieldCover.player.id);
+               newTacticId = defensiveTactic;
+               markFormationAction(12);
+             }
+@@ -839,7 +1320,8 @@ export const AiMatchDecisionService = {
+             subRecord = { playerOutId: severeInjuredId, playerInId: noGkResponse.sub.id, minute: state.minute };
+             const defensiveTactic = DEFENSIVE_TACTICS.find(id => id !== newLineup.tacticId);
+             if (defensiveTactic && canChangeTactic) {
+-              newLineup.tacticId = defensiveTactic;
++              // lockSlotZeroId=noGkResponse.fieldCover.id — patrz komentarz przy poprzednim bloku z tym samym wzorcem.
++              newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, noGkResponse.fieldCover.id);
+               newTacticId = defensiveTactic;
+               markFormationAction(12);
+             }
+@@ -884,7 +1366,8 @@ export const AiMatchDecisionService = {
+           if (!newLineup.reserves.includes(severeInjuredId)) newLineup.reserves.push(severeInjuredId);
+           const defensiveTactic = DEFENSIVE_TACTICS.find(id => id !== newLineup.tacticId);
+           if (defensiveTactic && canChangeTactic) {
+-            newLineup.tacticId = defensiveTactic;
++            // lockSlotZeroId=fieldCover.player.id — patrz komentarz przy pierwszym bloku z tym samym wzorcem (linia ~921).
++            newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, fieldCover.player.id);
+             newTacticId = defensiveTactic;
+             markFormationAction(12);
+           }
+@@ -933,6 +1416,15 @@ export const AiMatchDecisionService = {
+         const tacticPool = scoreDiff >= 0 ? DEFENSIVE_TACTICS : SOLID_DEFENSIVE_TACTICS;
+         const candidates = tacticPool.filter(t => t !== newLineup.tacticId);
+         if (candidates.length > 0) {
++          // [AI-COACH-FIX] applyTacticReassignment — TO JEST GŁÓWNA NAPRAWA opisanego błędu: bez tego
++          // wiersza zmieniał się tylko newLineup.tacticId, a 11 zawodników zostawało na starych
++          // miejscach, więc po czerwonej kartce mogli "automatycznie" stać się obrońcami/pomocnikami/
++          // napastnikami bez żadnej faktycznej zmiany ustawienia — i dostawać karę za złą pozycję.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
++          // [AI-COACH-FIX] odśwież `tactic` — kod kawałek niżej (defSlots/emptyDefIdx) i dalsza część
++          // makeDecisions sprawdzają role po mapie SLOTÓW tej zmiennej; bez odświeżenia czytałyby
++          // mapę starej taktyki, mimo że skład już przebudowany pod nową (patrz komentarz przy `let tactic`).
++          tactic = TacticRepository.getById(newLineup.tacticId);
+           newTacticId = candidates[0];
+           markFormationAction(12);
+           logs.push(`Zmiana taktyki po czerwonej kartce: ${newTacticId}.`);
+@@ -1072,10 +1564,13 @@ export const AiMatchDecisionService = {
+ 
+     if (isHalftime && !subRecord && halftimeAssessment.status !== 'NEUTRAL') {
+       const plannedTactic = !newTacticId && canChangeTacticNow
+-        ? chooseHalftimeTacticResponse(newLineup, myPlayers, halftimeAssessment.status, coachQuality, scoreDiff)
++        ? chooseHalftimeTacticResponse(newLineup, myPlayers, halftimeAssessment.status, coachQuality, scoreDiff, myCoach, postureEagernessBonus)
+         : null;
+ 
+       if (plannedTactic) {
++        // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++        newLineup = applyTacticReassignment(newLineup, myPlayers, plannedTactic);
++        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
+         newTacticId = plannedTactic;
+         markFormationAction();
+         const statusText = halftimeAssessment.status === 'PROTECT_RESULT'
+@@ -1143,17 +1638,22 @@ export const AiMatchDecisionService = {
+       }
+     }
+ 
+-    if (!newTacticId && opponentGoalkeeperCrisis && canChangeTacticNow && canUsePlannedLateTactic) {
++    if (!newTacticId && opponentGoalkeeperCrisis && canChangeTacticDiscretionary && canUsePlannedLateTactic) {
+       const goalkeeperCrisisResponse = chooseOpponentGoalkeeperCrisisResponse(
+         newLineup,
+         myPlayers,
+         oppLineup,
+         oppPlayers,
+         scoreDiff,
+-        coachQuality
++        coachQuality,
++        myCoach,
++        crossFamilyAllowed
+       );
+ 
+       if (goalkeeperCrisisResponse) {
++        // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++        newLineup = applyTacticReassignment(newLineup, myPlayers, goalkeeperCrisisResponse.tacticId);
++        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
+         newTacticId = goalkeeperCrisisResponse.tacticId;
+         markFormationAction(goalkeeperCrisisResponse.reason === 'reckless_push' ? 6 : 10);
+         logs.push(
+@@ -1165,18 +1665,25 @@ export const AiMatchDecisionService = {
+     }
+ 
+     if (!subRecord && shouldReactToScore(scoreDiff, state.minute, coachQuality, isHalftime)) {
+-      const plannedTactic = !newTacticId && canChangeTacticNow && canUsePlannedLateTactic
+-        ? chooseScoreTacticResponse(newLineup, myPlayers, scoreDiff, coachQuality)
++      const plannedTactic = !newTacticId && canChangeTacticDiscretionary && canUsePlannedLateTactic
++        ? chooseScoreTacticResponse(newLineup, myPlayers, scoreDiff, coachQuality, myCoach, crossFamilyAllowed, postureEagernessBonus)
+         : null;
+ 
+       if (plannedTactic) {
++        // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++        newLineup = applyTacticReassignment(newLineup, myPlayers, plannedTactic);
++        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
+         newTacticId = plannedTactic;
+         markPlannedFormationAction(isFinalPhase ? 18 : 0);
+         const direction = scoreDiff < 0 ? 'odważniej' : 'bezpieczniej';
+         logs.push(`${state.minute}' Trener reaguje na wynik i ustawia zespół ${direction}: ${plannedTactic}.`);
+       }
+ 
+-      if (!subRecord && currentSubsCount < MAX_LEAGUE_SUBS && (scoreDiff <= -2 || state.minute >= 40 || isHalftime)) {
++      // [AI-COACH-FIX] usunięto wcześniejsze "scoreDiff <= -2 || state.minute >= 40" jako osobne
++      // wcześniejsze odblokowanie zmiany — to były dokładnie te "szablonowe", przedwczesne reakcje
++      // sprzed 1. połowy, o których mówiliśmy. Teraz: zmiana z powodu wyniku tylko od 46. minuty
++      // (chooseScoreImpulseSub ma to też wewnątrz, na wszelki wypadek) albo w przerwie.
++      if (!subRecord && currentSubsCount < MAX_LEAGUE_SUBS && (state.minute >= 46 || isHalftime)) {
+         const impulseSub = chooseScoreImpulseSub(
+           newLineup,
+           myPlayers,
+@@ -1269,6 +1776,9 @@ export const AiMatchDecisionService = {
+             : [];
+         const lateTactic = lateTacticPool.find(t => t !== newLineup.tacticId);
+         if (lateTactic) {
++          // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, lateTactic);
++          tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
+           newTacticId = lateTactic;
+           markPlannedFormationAction(isExtremeLateTacticNeed ? 12 : 18);
+           const direction = mustChaseLate && !avoidCollapseLate ? 'rzuca zespół do ataku' : 'zamyka końcówkę bezpieczniej';
+@@ -1353,6 +1863,8 @@ export const AiMatchDecisionService = {
+       if (scoreDiff < -1 && state.minute > 45) {
+         const candidates = OFFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
+         if (candidates.length > 0) {
++          // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
+           newTacticId = candidates[0];
+           markPlannedFormationAction(isFinalPhase ? 18 : 0);
+           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
+@@ -1360,6 +1872,8 @@ export const AiMatchDecisionService = {
+       } else if (scoreDiff > 0 && state.minute > 75 && mySentOffCount === 0) {
+         const candidates = DEFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
+         if (candidates.length > 0) {
++          // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
+           newTacticId = candidates[0];
+           markPlannedFormationAction(18);
+           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
+diff --git a/services/AiMatchDecisionServiceFriendlyMatch.ts b/services/AiMatchDecisionServiceFriendlyMatch.ts
+index 4d470c3..c3cf367 100644
+--- a/services/AiMatchDecisionServiceFriendlyMatch.ts
++++ b/services/AiMatchDecisionServiceFriendlyMatch.ts
+@@ -1,6 +1,13 @@
+ import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, SubstitutionRecord, InjurySeverity } from '../types';
+ import { TacticRepository } from '../resources/tactics_db';
+ import { LineupService } from './LineupService';
++// [AI-COACH-FIX] applyTacticReassignment — ten sam mechanizm naprawy "remapowania składu" co w
++// silniku ligowym (AiMatchDecisionService.ts). Patrz tam obszerny komentarz przy definicji: bez
++// tego, zmiana taktyki w trakcie meczu tylko zmieniała nazwę taktyki, a 11 zawodników zostawało na
++// starych miejscach — więc np. pomocnik mógł "automatycznie" zostać napastnikiem (bo to samo miejsce
++// na boisku znaczy inną rolę w nowej taktyce) bez żadnej faktycznej zmiany ustawienia, i dostawać
++// karę za grę nie na swojej pozycji.
++import { applyTacticReassignment } from './AiMatchDecisionService';
+ 
+ /**
+  * Wersja serwisu decyzyjnego AI dla meczów sparingowych.
+@@ -60,7 +67,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
+     let newTacticId: string | undefined;
+     let updatedActionMinute = state.minute;
+ 
+-    const tactic = TacticRepository.getById(newLineup.tacticId);
++    // [AI-COACH-FIX] let (było: const) — odświeżane zaraz po każdej zmianie newLineup.tacticId (patrz
++    // "tactic = TacticRepository..." niżej), żeby sprawdzenie "dziury w obronie" po czerwonej kartce
++    // czytało mapę rola->miejsce NOWEJ taktyki, nie tej sprzed zmiany.
++    let tactic = TacticRepository.getById(newLineup.tacticId);
+ 
+     // --- PRIORYTET 1: BRAK BRAMKARZA / CZERWONA KARTKA GK ---
+     const gkInSlot = newLineup.startingXI[0];
+@@ -114,7 +124,11 @@ export const AiMatchDecisionServiceFriendlyMatch = {
+         const tacticPool = scoreDiff >= 0 ? ultraDefTactics : solidDefTactics;
+         const candidates = tacticPool.filter(t => t !== newLineup.tacticId);
+         if (candidates.length > 0) {
+-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
++          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
++          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
++          tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
++          newTacticId = chosenTactic;
+           updatedActionMinute = state.minute;
+           aiTacticLockResult = true;
+           logs.push(`Zmiana taktyki po czerwonej kartce: ${newTacticId}.`);
+@@ -292,7 +306,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
+         const offensiveTactics = ['3-4-3', '4-4-2-OFF', '4-3-3', '4-2-4', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
+         const candidates = offensiveTactics.filter(t => t !== currentLineup.tacticId);
+         if (candidates.length > 0) {
+-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
++          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
++          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
++          newTacticId = chosenTactic;
+           updatedActionMinute = state.minute;
+           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
+         }
+@@ -300,7 +317,10 @@ export const AiMatchDecisionServiceFriendlyMatch = {
+         const defensiveTactics = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
+         const candidates = defensiveTactics.filter(t => t !== currentLineup.tacticId);
+         if (candidates.length > 0) {
+-          newTacticId = candidates[Math.floor(Math.random() * candidates.length)];
++          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
++          // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
++          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
++          newTacticId = chosenTactic;
+           updatedActionMinute = state.minute;
+           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
+         }
+diff --git a/services/LineupService.ts b/services/LineupService.ts
+index 46e5d3b..888988b 100644
+--- a/services/LineupService.ts
++++ b/services/LineupService.ts
+@@ -16,7 +16,9 @@ type LineupAvailabilityOptions = {
+   competitionId?: string;
+ };
+ 
+-const FAVORITE_TACTIC_MAP: Record<string, string> = {
++// Eksportowane, żeby AiMatchDecisionService mógł użyć TEGO SAMEGO mapowania nazwa-ulubionej-taktyki -> tacticId
++// przy ocenie taktyk w trakcie meczu (premia za ulubioną taktykę trenera). Jeden punkt prawdy — nie duplikować.
++export const FAVORITE_TACTIC_MAP: Record<string, string> = {
+   '4-3-3 Atak':         '4-3-3',
+   '3-4-3':              '3-4-3',
+   'Wysoki Pressing':    '4-3-3',

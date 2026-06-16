@@ -785,8 +785,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   nextAwaySubsHistory.push(decision.subRecord);
                 }
                 if (decision.newTacticId) {
-                  if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-                  else nextAwayLineup.tacticId = decision.newTacticId;
+                  // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz komentarz
+                  // przy analogicznym miejscu w MatchLiveView.tsx (silnik ligowy).
+                  if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+                  else nextAwayLineup = decision.newLineup || nextAwayLineup;
                 }
                 if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
                 if (decision.logs) {
@@ -879,20 +881,22 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            );
            
            if (decision.subRecord) {
-              if (aiSide === 'HOME') { 
-                nextHomeLineup = decision.newLineup || nextHomeLineup; 
-                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome; 
-                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord]; 
+              if (aiSide === 'HOME') {
+                nextHomeLineup = decision.newLineup || nextHomeLineup;
+                nextSubsCountHome = decision.newSubsCount ?? nextSubsCountHome;
+                nextHomeSubsHistory = [...nextHomeSubsHistory, decision.subRecord];
               }
-              else { 
-                nextAwayLineup = decision.newLineup || nextAwayLineup; 
-                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
-                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord]; 
+              else {
+                nextAwayLineup = decision.newLineup || nextAwayLineup;
+                nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway;
+                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord];
               }
            }
            if (decision.newTacticId) {
-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-              else nextAwayLineup.tacticId = decision.newTacticId;
+              // [AI-COACH-FIX] decision.newLineup zamiast samego .tacticId — patrz komentarz przy
+              // analogicznym miejscu w MatchLiveView.tsx (silnik ligowy).
+              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+              else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
            if (decision.aiTacticLocked) nextAiTacticLocked = true;

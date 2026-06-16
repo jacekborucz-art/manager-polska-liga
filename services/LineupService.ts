@@ -16,7 +16,9 @@ type LineupAvailabilityOptions = {
   competitionId?: string;
 };
 
-const FAVORITE_TACTIC_MAP: Record<string, string> = {
+// Eksportowane, żeby AiMatchDecisionService mógł użyć TEGO SAMEGO mapowania nazwa-ulubionej-taktyki -> tacticId
+// przy ocenie taktyk w trakcie meczu (premia za ulubioną taktykę trenera). Jeden punkt prawdy — nie duplikować.
+export const FAVORITE_TACTIC_MAP: Record<string, string> = {
   '4-3-3 Atak':         '4-3-3',
   '3-4-3':              '3-4-3',
   'Wysoki Pressing':    '4-3-3',
