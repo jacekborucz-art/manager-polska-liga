@@ -67,7 +67,7 @@ export const GoalAttributionService = {
     // Final Calculation: Skalowane prawdopodobieństwo dla strzałów z gry
     // Final Calculation: Skalowane prawdopodobieństwo dla strzałów z gry
     const diff = attackPower - savePower;
-    const goalProb = 0.50 + (diff / 300);
+    const goalProb = 0.65 + (diff / 300); // [było 0.50 — podwyższono jako kompensacja zmniejszonego shotThreshold, zachowuje tę samą oczekiwaną liczbę goli]
 
     return rng() < Math.max(0.05, Math.min(0.90, goalProb));
 

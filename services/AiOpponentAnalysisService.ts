@@ -257,13 +257,12 @@ export const AiOpponentAnalysisService = {
     };
     const perceivedWeakness = getWeakness(lines, perceivedFatigueLevel);
 
-    const aiRepGap = aiClub.reputation - opponentClub.reputation;
     let recommendedApproach: AiRecommendedApproach = 'CONTROL';
     if (predictedStyle === 'OFFENSIVE' || lines.attack > lines.defense + 5) recommendedApproach = 'COUNTER';
     if (predictedStyle === 'DEFENSIVE' || lines.defense < 64 || perceivedWeakness === 'DEFENSE') recommendedApproach = 'PRESS';
-    if (aiRepGap <= -3 || perceivedPower > 850) recommendedApproach = 'LOW_BLOCK';
-    if (perceivedWeakness === 'FITNESS' && aiRepGap >= -1) recommendedApproach = 'PRESS';
-    if (perceivedWeakness === 'MIDFIELD' && aiRepGap >= -1) recommendedApproach = 'CONTROL';
+    if (perceivedPower > 850) recommendedApproach = 'LOW_BLOCK';
+    if (perceivedWeakness === 'FITNESS') recommendedApproach = 'PRESS';
+    if (perceivedWeakness === 'MIDFIELD') recommendedApproach = 'CONTROL';
     if (perceivedWeakness === 'ATTACK' && predictedStyle !== 'DEFENSIVE') recommendedApproach = 'DIRECT';
 
     return {
@@ -279,11 +278,10 @@ export const AiOpponentAnalysisService = {
     };
   },
 
-  recommendStartingTactic: (baseTacticId: string, report: AiOpponentMatchReport, aiClub: Club, opponentClub: Club, aiPlayers: Player[] = []): string => {
+  recommendStartingTactic: (baseTacticId: string, report: AiOpponentMatchReport, aiClub: Club, opponentClub: Club, aiPlayers: Player[] = [], isAiAway: boolean = false, aiCoach: Coach | null = null): string => {
     const confidenceGate = report.confidence >= 0.48;
     if (!confidenceGate) return baseTacticId;
 
-    const repGap = aiClub.reputation - opponentClub.reputation;
     const current = TacticRepository.getById(baseTacticId);
     const alreadyDefensive = current.defenseBias >= 65;
     const alreadyOffensive = current.attackBias >= 65;
@@ -293,13 +291,27 @@ export const AiOpponentAnalysisService = {
       return tacticIds.find(tacticId => isTacticFeasible(aiPlayers, tacticId)) ?? baseTacticId;
     };
 
-    if ((report.recommendedApproach === 'LOW_BLOCK' || report.recommendedApproach === 'COUNTER') && !alreadyDefensive) {
-      if (repGap <= -3) return pickFeasible('5-4-1', '4-5-1', '4-4-2-DEF');
-      return report.predictedStyle === 'OFFENSIVE' ? pickFeasible('4-5-1', '4-4-2-DEF') : pickFeasible('4-4-2-DEF', '4-5-1');
+    if (report.recommendedApproach === 'LOW_BLOCK' && !alreadyDefensive) {
+      return pickFeasible('5-4-1', '4-5-1', '4-4-2-DEF');
+    }
+
+    if (report.recommendedApproach === 'COUNTER' && !alreadyDefensive) {
+      const coachBoldness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
+      if (!isAiAway) {
+        if (!alreadyOffensive && coachBoldness >= 60 && Math.random() < (coachBoldness - 55) / 45) {
+          return pickFeasible('4-3-3', '4-2-3-1', '4-4-2-OFF');
+        }
+        return baseTacticId;
+      }
+      const offensiveRisk = Math.max(0, (coachBoldness - 45) / 55);
+      if (!alreadyOffensive && Math.random() < offensiveRisk) {
+        return pickFeasible('4-2-3-1', '4-3-3', '4-4-2-OFF');
+      }
+      if (coachBoldness < 45) return pickFeasible('4-4-2-DEF', '4-5-1');
+      return baseTacticId;
     }
 
     if (report.recommendedApproach === 'PRESS' && !alreadyOffensive) {
-      if (repGap >= 3) return pickFeasible('4-3-3', '4-2-3-1', '4-4-2-OFF');
       return pickFeasible('4-2-3-1', '4-3-3', '4-4-2-OFF');
     }
 

@@ -7,7 +7,8 @@ const MAX_LEAGUE_SUBS = 5;
 
 const DEFENSIVE_TACTICS = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
 const SOLID_DEFENSIVE_TACTICS = ['4-4-2-DEF', '5-3-2', '4-5-1', '5-2-1-2'];
-const OFFENSIVE_TACTICS = ['3-4-3', '4-4-2-OFF', '4-3-3', '4-2-4', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
+const OFFENSIVE_TACTICS = ['3-4-3', '4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
+const DESPERATION_TACTICS = ['4-2-4'];
 
 // [AI-COACH-CALIBRATION] FAVORITE_TACTIC_BONUS — "ulubiona taktyka to pierwszy wybór, nie nakaz".
 // Gdy trener ocenia, na jaką taktykę się przestawić, kandydat zgodny z jego Coach.favoriteTactics
@@ -1148,6 +1149,7 @@ export const AiMatchDecisionService = {
     const mustProtectLate = isFinalPhase && scoreDiff > 0 && (lateSeasonDrama >= 0.70 || userStakesWeight >= 0.75 || tablePressure);
     const mustChaseLate = isFinalPhase && scoreDiff < 0 && (lateSeasonDrama >= 0.70 || aiStakes !== 'LOW_STAKES');
     const avoidCollapseLate = isFinalPhase && scoreDiff <= -2 && (lateSeasonDrama >= 0.90 || aiStakes === 'RELEGATION_FIGHT');
+    const desperationAllows4_2_4 = isFinalPhase && scoreDiff <= -2 && (aiStakes === 'TITLE_RACE' || aiStakes === 'RELEGATION_FIGHT');
 
     // [AI-COACH MIND-FLOW] Tu wchodzi "plan przedmeczowy" — patrz cała sekcja zdefiniowana wyżej
     // (getOpponentStrengthTier .. applyPlanDeviation). Liczone RAZ na wywołanie makeDecisions, bo
@@ -1772,7 +1774,7 @@ export const AiMatchDecisionService = {
 
       if (!newTacticId && canChangeTacticNow && canUsePlannedLateTactic) {
         const lateTacticPool = mustChaseLate && !avoidCollapseLate
-          ? OFFENSIVE_TACTICS
+          ? [...OFFENSIVE_TACTICS, ...(desperationAllows4_2_4 ? DESPERATION_TACTICS : [])]
           : (mustProtectLate || avoidCollapseLate)
             ? DEFENSIVE_TACTICS
             : [];
@@ -1861,7 +1863,7 @@ export const AiMatchDecisionService = {
 
     if (state.minute > 20 && !newTacticId && canChangeTactic && canUsePlannedLateTactic) {
       if (scoreDiff < -1 && state.minute > 45) {
-        const candidates = OFFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
+        const candidates = [...OFFENSIVE_TACTICS, ...(desperationAllows4_2_4 ? DESPERATION_TACTICS : [])].filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
           applyTactic(candidates[0]);

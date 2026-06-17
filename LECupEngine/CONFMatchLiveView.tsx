@@ -362,7 +362,9 @@ const isPausedForSevereInjury = useMemo(() => {
           opponentReport,
           aiClubInit,
           userClubInit,
-          aiPlayersInit
+          aiPlayersInit,
+          aiClubInit.id !== ctx.homeClub.id,
+          aiCoachInit
         )
         : aiLineupBase.tacticId;
       const aiPreparedLineup = aiPreparedTacticId !== aiLineupBase.tacticId

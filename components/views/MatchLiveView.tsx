@@ -482,7 +482,7 @@ const isPausedForSevereInjury = useMemo(() => {
           })
         : undefined;
       const aiPreparedTacticId = opponentReport
-        ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit)
+        ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit, aiClubInit.id !== ctx.homeClub.id, aiCoachInit)
         : aiLineupBase.tacticId;
       const aiLineupPrepared = aiPreparedTacticId !== aiLineupBase.tacticId
         ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, null)
@@ -1413,7 +1413,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
-        let shotThreshold = 0.18; // Bazowa szansa
+        let shotThreshold = 0.13; // Bazowa szansa [było 0.18 — obniżono aby zmniejszyć liczbę strzałów do ~22-26/mecz (Ekstraklasa), kompensacja w goalProb]
         const goalDiff = Math.abs(prev.homeScore - prev.awayScore);
         const leads = (activeSide === 'HOME' && prev.homeScore > prev.awayScore) || (activeSide === 'AWAY' && prev.awayScore > prev.homeScore);
 
@@ -2318,7 +2318,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
              if (injury) processInjury(injury);
            }
         }
-        else if (rngEvent < 0.42) {
+        else if (rngEvent < 0.32) { // [było 0.42 — obniżono proporcjonalnie do shotThreshold, aby zmniejszyć liczbę rzutów rożnych/autów bez wpływu na gole]
           const flavorRng = seededRng(currentSeed, nextMinute, 900);
          let type = MatchEventType.MIDFIELD_CONTROL;
           if (flavorRng < 0.25) type = MatchEventType.CORNER;
