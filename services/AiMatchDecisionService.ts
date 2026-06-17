@@ -236,7 +236,17 @@ const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players
       ? samePosition
       : slot.role === PlayerPosition.GK
         ? pool.filter(p => p.position !== PlayerPosition.GK)
-        : pool.filter(p => p.position !== PlayerPosition.GK);
+        : slot.role === PlayerPosition.MID
+          ? (pool.filter(p => p.position === PlayerPosition.DEF).length > 0
+              ? pool.filter(p => p.position === PlayerPosition.DEF)
+              : pool.filter(p => p.position !== PlayerPosition.GK))
+          : slot.role === PlayerPosition.FWD
+            ? (pool.filter(p => p.position === PlayerPosition.MID).length > 0
+                ? pool.filter(p => p.position === PlayerPosition.MID)
+                : pool.filter(p => p.position !== PlayerPosition.GK))
+            : (pool.filter(p => p.position === PlayerPosition.MID).length > 0
+                ? pool.filter(p => p.position === PlayerPosition.MID)
+                : pool.filter(p => p.position !== PlayerPosition.GK));
 
     const fallback = selectable.length > 0 ? selectable : pool;
     const selected = [...fallback].sort((a, b) => getEmergencyFieldScore(b, slot.role, useSecondaryPositions) - getEmergencyFieldScore(a, slot.role, useSecondaryPositions))[0];
