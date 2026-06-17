@@ -197,6 +197,10 @@ export const AiMatchDecisionCupService = {
     let newTacticId: string | undefined;
 
     const tactic = TacticRepository.getById(newLineup.tacticId);
+    const applyTactic = (tacticId: string, lockSlotZeroId?: string) => {
+      newLineup = applyTacticReassignment(newLineup, myPlayers, tacticId, lockSlotZeroId);
+      newTacticId = tacticId;
+    };
 
     // --- PRIORYTET 1: BRAK BRAMKARZA / CZERWONA KARTKA GK ---
     const gkInSlot = newLineup.startingXI[0];
@@ -291,8 +295,7 @@ export const AiMatchDecisionCupService = {
                     if (rcCandidates.length > 0) {
                         const chosenTactic = rcCandidates[Math.floor(Math.random() * rcCandidates.length)];
                         // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
-                        newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
-                        newTacticId = chosenTactic;
+                        applyTactic(chosenTactic);
                         logs.push(`Po czerwonej kartce trener rywali przestawia drużynę na grę w obronie.`);
                     }
                 }
@@ -485,8 +488,7 @@ if (aiSensors.winningWeaker) {
             if (candidates.length > 0) {
                 const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
                 // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
-                newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
-                newTacticId = chosenTactic;
+                applyTactic(chosenTactic);
                 // Komentarz sensorowy wyświetlamy TYLKO przy faktycznej zmianie taktyki (raz)
                 if (sensorLog) logs.push(sensorLog);
                 logs.push(`Zmiana taktyki: ${newTacticId} (${targetStyle.toLowerCase()}).`);

@@ -71,6 +71,11 @@ export const AiMatchDecisionServiceFriendlyMatch = {
     // "tactic = TacticRepository..." niżej), żeby sprawdzenie "dziury w obronie" po czerwonej kartce
     // czytało mapę rola->miejsce NOWEJ taktyki, nie tej sprzed zmiany.
     let tactic = TacticRepository.getById(newLineup.tacticId);
+    const applyTactic = (tacticId: string, lockSlotZeroId?: string) => {
+      newLineup = applyTacticReassignment(newLineup, myPlayers, tacticId, lockSlotZeroId);
+      tactic = TacticRepository.getById(newLineup.tacticId);
+      newTacticId = tacticId;
+    };
 
     // --- PRIORYTET 1: BRAK BRAMKARZA / CZERWONA KARTKA GK ---
     const gkInSlot = newLineup.startingXI[0];
@@ -126,9 +131,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         if (candidates.length > 0) {
           const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
           // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
-          tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
-          newTacticId = chosenTactic;
+          applyTactic(chosenTactic);
           updatedActionMinute = state.minute;
           aiTacticLockResult = true;
           logs.push(`Zmiana taktyki po czerwonej kartce: ${newTacticId}.`);
@@ -308,8 +311,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         if (candidates.length > 0) {
           const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
           // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
-          newTacticId = chosenTactic;
+          applyTactic(chosenTactic);
           updatedActionMinute = state.minute;
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
@@ -319,8 +321,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
         if (candidates.length > 0) {
           const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
           // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, chosenTactic);
-          newTacticId = chosenTactic;
+          applyTactic(chosenTactic);
           updatedActionMinute = state.minute;
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }

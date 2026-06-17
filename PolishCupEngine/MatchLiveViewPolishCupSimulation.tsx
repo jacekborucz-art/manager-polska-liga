@@ -9,7 +9,8 @@ TacticalInstructions,
 PromotionPlayoffSingleMatchResult,
 PromotionPlayoffSemiResults,
 PlayerStats,
-GoalTickerInfo
+GoalTickerInfo,
+AiCupMatchPlan
 } from '../types';
 import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
 import { MatchEngineService } from '../services/MatchEngineService';
@@ -39,6 +40,7 @@ import { AiMatchPreparationService } from '@/services/AiMatchPreparationService'
 import { AiScoutingService } from '../services/AiScoutingService';
 import { AiOpponentAnalysisService } from '../services/AiOpponentAnalysisService';
 import { AiCoachTacticsService } from '../services/AiCoachTacticsService';
+import { AiCupMatchPlanService } from '../services/AiCupMatchPlanService';
 import { TacticalBrainService } from '@/services/TacticalBrainService';
 import { MatchHistoryService } from '@/services/MatchHistoryService';
 import { getClubLogo } from '../resources/ClubLogoAssets';
@@ -717,6 +719,19 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
       );
+      const aiPlayersInit = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
+      const aiLineupInit = userSide === 'HOME' ? awayLineupData : homeLineupData;
+      const getInitSimplePower = (players: Player[], lineup: Lineup): number =>
+        lineup.startingXI.filter((id): id is string => id !== null)
+          .map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p)
+          .reduce((s, p) => s + p.attributes.attacking + p.attributes.passing + p.attributes.defending + p.attributes.technique * 0.5, 0);
+      const initStaffProfile = AiOpponentAnalysisService.buildStaffProfile(aiClubInit, aiCoachInit, staffMembers);
+      const aiCupMatchPlan: AiCupMatchPlan = AiCupMatchPlanService.generatePlan({
+        aiPerceivedPlayerPower: opponentReport.perceivedPower,
+        aiOwnPower: getInitSimplePower(aiPlayersInit, aiLineupInit),
+        coachQuality: initStaffProfile.decisionQuality,
+        seed: cupSessionSeed + 31,
+      });
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(conferenceMatchEffect, aiClubInit.id);
       const aiBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(
         aiConferenceEffect,
@@ -751,7 +766,7 @@ homeGoals: [], awayGoals: [], sessionSeed: cupSessionSeed,
         flashMessage: null,
         tacticalImpact: 0,
         // -> tutaj wstaw kod
-       
+        aiCupMatchPlan: aiCupMatchPlan,
         aiActiveShout: {
            id: 'PRE_MATCH_INIT',
            expiryMinute: 20 + Math.floor(Math.abs(Math.sin(cupSessionSeed + 77)) * 15),
@@ -1398,7 +1413,31 @@ useEffect(() => {
         // TUTAJ WSTAW TEN KOD - Zmiana !currentAiShout na sprawdzenie wygaśnięcia
         const isSlotAvailable = !currentAiShout || currentAiShout.isExpired;
 
-        if (isSlotAvailable && canShoutNow && nextMinute % Math.floor(reactionDelay) === 0) {
+        // CUP MATCH PLAN: sprawdzamy plan przed TacticalBrain
+        let cupPlanFired = false;
+        if (prev.aiCupMatchPlan && isSlotAvailable && canShoutNow) {
+          const planScoreDiff = aiSide === 'HOME' ? (prev.homeScore - prev.awayScore) : (prev.awayScore - prev.homeScore);
+          const planInstr = AiCupMatchPlanService.getActiveInstructions(prev.aiCupMatchPlan, nextMinute, planScoreDiff);
+          if (planInstr) {
+            cupPlanFired = true;
+            nextLastAiActionMinute = nextMinute;
+            const disciplineDuration = 10 + Math.floor((aiCoach?.attributes.experience || 50) / 10);
+            currentAiShout = {
+              id: `CUP_PLAN_${nextMinute}`,
+              expiryMinute: nextMinute + disciplineDuration,
+              mindset: planInstr.mindset,
+              tempo: planInstr.tempo,
+              intensity: planInstr.intensity,
+              pressing: planInstr.pressing,
+              counterAttack: planInstr.counterAttack,
+            };
+            if (planInstr.log) {
+              updatedLogs = [{ id: `cup_plan_${nextMinute}`, minute: nextMinute, text: planInstr.log, type: MatchEventType.GENERIC, teamSide: aiSide }, ...updatedLogs];
+            }
+          }
+        }
+
+        if (!cupPlanFired && isSlotAvailable && canShoutNow && nextMinute % Math.floor(reactionDelay) === 0) {
            // Jeśli krzyk nastąpi, aktualizujemy czas ostatniej akcji w locie
            nextLastAiActionMinute = nextMinute; 
            const brainDecision = TacticalBrainService.calculate(prev, userSide === 'HOME') as any; // Rzutowanie na any naprawia błąd intensity
@@ -2469,7 +2508,7 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
  // Kierunkowy momentum: bonus obniża próg tylko dla strony dominującej
         // HOME dominuje (dodatni) → obniża próg HOME | AWAY dominuje (ujemny) → obniża próg AWAY
         const directionalMomentum = eventSide === 'HOME' ? Math.max(0, nextMomentum) : Math.max(0, -nextMomentum);
-        const momentumBonus = directionalMomentum / 250;
+        const momentumBonus = Math.min(0.10, directionalMomentum / 300);
 
 
  // REKALIBRACJA PRO: Obniżamy bazowy próg z 0.55 na 0.42. 
@@ -2477,7 +2516,9 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
         const activeBaseThreshold = eventSide === 'HOME' ? homeProgressionThreshold : awayProgressionThreshold;
        let dynamicThreshold = Math.max(0.25, (activeBaseThreshold - momentumBonus) * 1.03);
 // Podnosimy szanse słabszej drużyny w sposób stopniowany — im większa dysproporcja, tym większa ulga
-const isUnderdog = eventSide === 'HOME' ? powerDiff < 0 : powerDiff > 0;
+const attackerPwr = eventSide === userSide ? pPower : aPower;
+const defenderSidePwr = eventSide === userSide ? aPower : pPower;
+const isUnderdog = attackerPwr < defenderSidePwr;
 const attackingClubRep = eventSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
 const defendingClubRep = eventSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
 const repGap = Math.max(0, defendingClubRep - attackingClubRep);

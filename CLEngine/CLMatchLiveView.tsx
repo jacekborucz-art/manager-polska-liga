@@ -809,8 +809,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                  }
               }
               if (decision.newTacticId) {
-                if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-                else nextAwayLineup.tacticId = decision.newTacticId;
+                if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+                else nextAwayLineup = decision.newLineup || nextAwayLineup;
               }
               if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
               if (decision.logs) {
@@ -911,12 +911,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               else { 
                 nextAwayLineup = decision.newLineup || nextAwayLineup; 
                 nextSubsCountAway = decision.newSubsCount ?? nextSubsCountAway; 
-                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord]; 
+                nextAwaySubsHistory = [...nextAwaySubsHistory, decision.subRecord];
               }
            }
            if (decision.newTacticId) {
-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-              else nextAwayLineup.tacticId = decision.newTacticId;
+              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+              else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
            if (decision.aiTacticLocked) nextAiTacticLocked = true;
@@ -959,7 +959,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
-        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 160 + fatInitiativeMod));
+        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 220 + fatInitiativeMod));
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
 
         const userScoreDiff = userSide === 'HOME'
@@ -1031,7 +1031,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
-        let shotThreshold = 0.125; // Bazowa szansa
+        let shotThreshold = 0.18; // Bazowa szansa
         if (counterAttackTriggered && activeSide === userSide) {
           shotThreshold += counterAttackShotBonus;
         }
@@ -1123,6 +1123,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const freshDefBonus = criticalAttackers >= 1 ? freshDefenders * 0.007 : 0;
 
         shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus - criticalFatPenalty - freshDefBonus);
+
+        const attackingAvgRating = attackingXI2.length > 0
+          ? attackingTeamPlayers2.filter(p => attackingXI2.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / attackingXI2.length
+          : 62;
+        const defendingXI3 = defendingLineup2.startingXI.filter((id): id is string => id !== null);
+        const defendingAvgRating = defendingXI3.length > 0
+          ? defendingTeamPlayers2.filter(p => defendingXI3.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / defendingXI3.length
+          : 62;
+        const strengthShotMod = Math.max(-0.025, Math.min(0.025, (attackingAvgRating - defendingAvgRating) * 0.005));
+        shotThreshold += strengthShotMod;
+
+        const attackBiasBonus = Math.max(-0.016, Math.min(0.016, (attackingTacticObj.attackBias - 50) / 100 * 0.04));
+        shotThreshold += attackBiasBonus;
 
         // Momentum bonus do shotThreshold - tylko gdy aktywna drużyna ma impet po swojej stronie
         // max +0.015 przy momentum 100, przy momentum 50 → +0.0075
@@ -1590,10 +1603,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
              if (injury) processInjury(injury);
            }
         }
-        else if (rngEvent < 0.25) {
+        else if (rngEvent < 0.42) {
           const flavorRng = seededRng(currentSeed, nextMinute, 900);
          let type = MatchEventType.MIDFIELD_CONTROL;
-          if (flavorRng < 0.06) type = MatchEventType.CORNER;
+          if (flavorRng < 0.25) type = MatchEventType.CORNER;
           else if (flavorRng < 0.12) type = MatchEventType.THROW_IN;
           else if (flavorRng < 0.19) type = MatchEventType.DRIBBLING;
           else if (flavorRng < 0.26) type = MatchEventType.MISPLACED_PASS;
@@ -1783,8 +1796,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (severityWas === InjurySeverity.SEVERE || subbedId === 'NONE') aiFixedSevere = true;
            }
            if (decision.newTacticId) {
-              if (aiSide === 'HOME') nextHomeLineup.tacticId = decision.newTacticId;
-              else nextAwayLineup.tacticId = decision.newTacticId;
+              if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
+              else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
            if (decision.aiTacticLocked) nextAiTacticLocked = true;

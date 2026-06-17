@@ -240,7 +240,6 @@ const assignPlayersToTactic = (candidateIds: string[], tacticId: string, players
 
     const fallback = selectable.length > 0 ? selectable : pool;
     const selected = [...fallback].sort((a, b) => getEmergencyFieldScore(b, slot.role, useSecondaryPositions) - getEmergencyFieldScore(a, slot.role, useSecondaryPositions))[0];
-    if (!selected) return null;
 
     lineup[slot.index] = selected.id;
     remaining.delete(selected.id);
@@ -291,7 +290,7 @@ const chooseInjuryResponse = (
   let bestResponse = {
     lineup: directLineup,
     sub: directSub,
-    score: getLineupFitScore(directLineup.startingXI, directLineup.tacticId, players),
+    score: getLineupFitScore(directLineup.startingXI, directLineup.tacticId, players, true),
     note: directSub.position === PlayerPosition.GK && requiredRole !== PlayerPosition.GK
       ? 'awaryjnie bramkarz wchodzi w pole'
       : 'zmiana po pozycji'
@@ -304,7 +303,7 @@ const chooseInjuryResponse = (
 
     for (const tacticId of tacticIds) {
       for (const sub of benchPool) {
-        const assignedXI = assignPlayersToTactic([...activeIds, sub.id], tacticId, players);
+        const assignedXI = assignPlayersToTactic([...activeIds, sub.id], tacticId, players, true);
         if (!assignedXI) continue;
         const tacticLineup: Lineup = {
           ...lineup,
@@ -313,7 +312,7 @@ const chooseInjuryResponse = (
           bench: lineup.bench.filter(id => id !== sub.id && id !== injuredId),
           reserves: lineup.reserves.includes(injuredId) ? lineup.reserves : [...lineup.reserves, injuredId]
         };
-        const score = getLineupFitScore(assignedXI, tacticId, players);
+        const score = getLineupFitScore(assignedXI, tacticId, players, true);
         if (score > bestResponse.score) {
           bestResponse = { lineup: tacticLineup, sub, score, note: `zmiana ustawienia na ${tacticId}` };
         }
@@ -321,7 +320,7 @@ const chooseInjuryResponse = (
     }
   }
 
-  const directScore = getLineupFitScore(directLineup.startingXI, directLineup.tacticId, players);
+  const directScore = getLineupFitScore(directLineup.startingXI, directLineup.tacticId, players, true);
   const requiredGain = Math.max(2.5, 8 - coachQuality * 0.06);
   if (bestResponse.lineup.tacticId !== lineup.tacticId && bestResponse.score < directScore + requiredGain) {
     return { lineup: directLineup, sub: directSub, note: directSub.position === PlayerPosition.GK && requiredRole !== PlayerPosition.GK ? 'awaryjnie bramkarz wchodzi w pole' : 'zmiana po pozycji' };
@@ -768,7 +767,7 @@ const chooseScoreTacticResponse = (
     .filter(tacticId => tacticId !== lineup.tacticId)
     .map(tacticId => {
       const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players, true);
-      if (!assignedXI) return null;
+      if (!assignedXI || assignedXI.some(s => s === null)) return null;
       const fit = getLineupFitScore(assignedXI, tacticId, players, true);
       const intent = getTacticIntentScore(tacticId, scoreDiff);
       const fitLoss = Math.max(0, currentFit - fit);
@@ -857,7 +856,7 @@ const chooseOpponentGoalkeeperCrisisResponse = (
     .map(tacticId => {
       const tactic = TacticRepository.getById(tacticId);
       const assignedXI = assignPlayersToTactic(lineup.startingXI.filter((id): id is string => !!id), tacticId, players, true);
-      if (!assignedXI) return null;
+      if (!assignedXI || assignedXI.some(s => s === null)) return null;
       const fit = getLineupFitScore(assignedXI, tacticId, players, true);
       const fitLoss = Math.max(0, currentFit - fit);
       const attackGain = Math.max(0, tactic.attackBias - currentTactic.attackBias) * 0.42;
@@ -1153,7 +1152,7 @@ export const AiMatchDecisionService = {
       side,
       coachExperience: myCoach?.attributes.experience ?? 50,
       tier: strengthAssessment.tier,
-      momentum: state.momentum,
+      momentum: side === 'HOME' ? state.momentum : -state.momentum,
       lateSeasonDrama,
       rivalryMultiplier
     });
@@ -1224,6 +1223,11 @@ export const AiMatchDecisionService = {
         updatedLateTacticChanges = lateTacticChanges + 1;
         updatedLateTacticScoreDiff = scoreDiff;
       }
+    };
+    const applyTactic = (tacticId: string, lockSlotZeroId?: string) => {
+      newLineup = applyTacticReassignment(newLineup, myPlayers, tacticId, lockSlotZeroId);
+      tactic = TacticRepository.getById(newLineup.tacticId);
+      newTacticId = tacticId;
     };
     const buildResult = (): AiDecisionResult => ({
       newLineup,
@@ -1297,9 +1301,8 @@ export const AiMatchDecisionService = {
               // stoi w bramce (decyzja podjęta linię wyżej przez pickBestFieldPlayerForGoal) — nie
               // pozwalamy applyTacticReassignment jeszcze raz "wybrać" bramkarza inną formułą, tylko
               // przebudowujemy pozostałe 10 miejsc pod nową, defensywną taktykę.
-              newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, fieldCover.player.id);
-              newTacticId = defensiveTactic;
-              markFormationAction(12);
+              applyTactic(defensiveTactic, fieldCover.player.id);
+              markFormationAction(tacticCooldown);
             }
             logs.push(`Brak zmian. ${fieldCover.player.lastName} przejmuje bramkę po kontuzji ${injuredPlayer?.lastName ?? 'bramkarza'}, a drużyna cofa ustawienie.`);
           }
@@ -1321,9 +1324,8 @@ export const AiMatchDecisionService = {
             const defensiveTactic = DEFENSIVE_TACTICS.find(id => id !== newLineup.tacticId);
             if (defensiveTactic && canChangeTactic) {
               // lockSlotZeroId=noGkResponse.fieldCover.id — patrz komentarz przy poprzednim bloku z tym samym wzorcem.
-              newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, noGkResponse.fieldCover.id);
-              newTacticId = defensiveTactic;
-              markFormationAction(12);
+              applyTactic(defensiveTactic, noGkResponse.fieldCover.id);
+              markFormationAction(tacticCooldown);
             }
             markSubAction();
             logs.push(`${state.minute}' ${noGkResponse.fieldCover.lastName} przejmuje bramkę, a ${noGkResponse.sub.lastName} wchodzi w pole po kontuzji ${injuredPlayer?.lastName ?? 'bramkarza'}.`);
@@ -1351,6 +1353,7 @@ export const AiMatchDecisionService = {
           markSubAction();
           if (injuryResponse.newTacticId) {
             newTacticId = injuryResponse.newTacticId;
+            tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
             markFormationAction();
           }
         logs.push(`${state.minute}' ${injuryResponse.sub.lastName} zastępuje ${injuredPlayer?.lastName ?? 'kontuzjowanego'} (${injuryResponse.note}).`);
@@ -1367,9 +1370,8 @@ export const AiMatchDecisionService = {
           const defensiveTactic = DEFENSIVE_TACTICS.find(id => id !== newLineup.tacticId);
           if (defensiveTactic && canChangeTactic) {
             // lockSlotZeroId=fieldCover.player.id — patrz komentarz przy pierwszym bloku z tym samym wzorcem (linia ~921).
-            newLineup = applyTacticReassignment(newLineup, myPlayers, defensiveTactic, fieldCover.player.id);
-            newTacticId = defensiveTactic;
-            markFormationAction(12);
+            applyTactic(defensiveTactic, fieldCover.player.id);
+            markFormationAction(tacticCooldown);
           }
           logs.push(`Brak rezerwowego bramkarza. ${fieldCover.player.lastName} przejmuje bramkę po kontuzji ${injuredPlayer?.lastName ?? 'bramkarza'}.`);
 
@@ -1420,13 +1422,8 @@ export const AiMatchDecisionService = {
           // wiersza zmieniał się tylko newLineup.tacticId, a 11 zawodników zostawało na starych
           // miejscach, więc po czerwonej kartce mogli "automatycznie" stać się obrońcami/pomocnikami/
           // napastnikami bez żadnej faktycznej zmiany ustawienia — i dostawać karę za złą pozycję.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
-          // [AI-COACH-FIX] odśwież `tactic` — kod kawałek niżej (defSlots/emptyDefIdx) i dalsza część
-          // makeDecisions sprawdzają role po mapie SLOTÓW tej zmiennej; bez odświeżenia czytałyby
-          // mapę starej taktyki, mimo że skład już przebudowany pod nową (patrz komentarz przy `let tactic`).
-          tactic = TacticRepository.getById(newLineup.tacticId);
-          newTacticId = candidates[0];
-          markFormationAction(12);
+          applyTactic(candidates[0]);
+          markFormationAction(tacticCooldown);
           logs.push(`Zmiana taktyki po czerwonej kartce: ${newTacticId}.`);
         }
       } else if (tacticLockActive) {
@@ -1554,6 +1551,7 @@ export const AiMatchDecisionService = {
           markSubAction();
           if (injuryResponse.newTacticId) {
             newTacticId = injuryResponse.newTacticId;
+            tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
             markFormationAction();
           }
           const reason = lightCandidate.fatigue < 58 ? 'lekki uraz i spadek kondycji' : 'profilaktyka po urazie';
@@ -1569,9 +1567,7 @@ export const AiMatchDecisionService = {
 
       if (plannedTactic) {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-        newLineup = applyTacticReassignment(newLineup, myPlayers, plannedTactic);
-        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
-        newTacticId = plannedTactic;
+        applyTactic(plannedTactic);
         markFormationAction();
         const statusText = halftimeAssessment.status === 'PROTECT_RESULT'
           ? 'korzystny wynik z mocniejszym rywalem'
@@ -1652,9 +1648,7 @@ export const AiMatchDecisionService = {
 
       if (goalkeeperCrisisResponse) {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-        newLineup = applyTacticReassignment(newLineup, myPlayers, goalkeeperCrisisResponse.tacticId);
-        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
-        newTacticId = goalkeeperCrisisResponse.tacticId;
+        applyTactic(goalkeeperCrisisResponse.tacticId);
         markFormationAction(goalkeeperCrisisResponse.reason === 'reckless_push' ? 6 : 10);
         logs.push(
           goalkeeperCrisisResponse.reason === 'reckless_push'
@@ -1671,9 +1665,7 @@ export const AiMatchDecisionService = {
 
       if (plannedTactic) {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-        newLineup = applyTacticReassignment(newLineup, myPlayers, plannedTactic);
-        tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
-        newTacticId = plannedTactic;
+        applyTactic(plannedTactic);
         markPlannedFormationAction(isFinalPhase ? 18 : 0);
         const direction = scoreDiff < 0 ? 'odważniej' : 'bezpieczniej';
         logs.push(`${state.minute}' Trener reaguje na wynik i ustawia zespół ${direction}: ${plannedTactic}.`);
@@ -1777,9 +1769,7 @@ export const AiMatchDecisionService = {
         const lateTactic = lateTacticPool.find(t => t !== newLineup.tacticId);
         if (lateTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, lateTactic);
-          tactic = TacticRepository.getById(newLineup.tacticId); // odśwież — patrz komentarz przy `let tactic`
-          newTacticId = lateTactic;
+          applyTactic(lateTactic);
           markPlannedFormationAction(isExtremeLateTacticNeed ? 12 : 18);
           const direction = mustChaseLate && !avoidCollapseLate ? 'rzuca zespół do ataku' : 'zamyka końcówkę bezpieczniej';
           logs.push(`${state.minute}' Trener ${direction}: ${lateTactic}.`);
@@ -1864,8 +1854,7 @@ export const AiMatchDecisionService = {
         const candidates = OFFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
-          newTacticId = candidates[0];
+          applyTactic(candidates[0]);
           markPlannedFormationAction(isFinalPhase ? 18 : 0);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
@@ -1873,8 +1862,7 @@ export const AiMatchDecisionService = {
         const candidates = DEFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
         if (candidates.length > 0) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-          newLineup = applyTacticReassignment(newLineup, myPlayers, candidates[0]);
-          newTacticId = candidates[0];
+          applyTactic(candidates[0]);
           markPlannedFormationAction(18);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }

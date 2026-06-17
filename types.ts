@@ -2027,6 +2027,33 @@ export type InstructionPassing = 'SHORT' | 'MIXED' | 'LONG';
 export type InstructionPressing = 'NORMAL' | 'PRESSING';
 export type InstructionCounterAttack = 'NORMAL' | 'COUNTER';
 
+export type CupPowerScenario = 'MUCH_STRONGER' | 'STRONGER' | 'EQUAL' | 'WEAKER' | 'MUCH_WEAKER';
+export type CupScoreState = 'WINNING' | 'DRAWING' | 'LOSING';
+
+export interface AiCupScenarioPlan {
+  mindset: InstructionMindset;
+  tempo: InstructionTempo;
+  intensity: InstructionIntensity;
+  pressing: InstructionPressing;
+  counterAttack: InstructionCounterAttack;
+  log?: string;
+  escalation?: {
+    minute: number;
+    mindset?: InstructionMindset;
+    tempo?: InstructionTempo;
+    intensity?: InstructionIntensity;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+    log?: string;
+  };
+}
+
+export interface AiCupMatchPlan {
+  powerScenario: CupPowerScenario;
+  coachQuality: number;
+  plans: Record<CupScoreState, AiCupScenarioPlan>;
+}
+
 export interface TacticalInstructions {
   tempo: InstructionTempo;
   mindset: InstructionMindset;
@@ -2180,6 +2207,7 @@ isPenalties?: boolean;
     rivalBoost: number;
     label: string;
   };
+  aiCupMatchPlan?: AiCupMatchPlan;
   userInstructions: TacticalInstructions;
 }
 
