@@ -36,12 +36,15 @@ export const GoalAttributionService = {
       return rng() < Math.max(0.12, Math.min(0.95, 0.76 + statInfluence));
     }
 
-    // 2. Standardowa siła ataku
+    // 2. Standardowa siła ataku (skalowana przez zmęczenie + fitMod + morale napastnika)
+    // [ZMIANA 2026-06-17: attMod i gkMod były obliczane ale nigdy nie aplikowane — zmęczony napastnik strzelał tak samo jak świeży]
     let attackPower = isHeader ? (attacker.attributes.heading * 1.1) : (attacker.attributes.finishing * 1.05);
     attackPower += attacker.attributes.attacking * 0.35;
+    attackPower *= attMod;
 
-    // 3. Siła obrony bramkarza
+    // 3. Siła obrony bramkarza (skalowana przez zmęczenie + fitMod + morale bramkarza)
     let savePower = (goalkeeper.attributes.goalkeeping * 1.2) + (goalkeeper.attributes.positioning * 0.65);
+    savePower *= gkMod;
     
     // 4. Presja defensywna
     const topDefenders = defenders
@@ -67,7 +70,7 @@ export const GoalAttributionService = {
     // Final Calculation: Skalowane prawdopodobieństwo dla strzałów z gry
     // Final Calculation: Skalowane prawdopodobieństwo dla strzałów z gry
     const diff = attackPower - savePower;
-    const goalProb = 0.65 + (diff / 300); // [było 0.50 — podwyższono jako kompensacja zmniejszonego shotThreshold, zachowuje tę samą oczekiwaną liczbę goli]
+    const goalProb = 0.50 + (diff / 300);
 
     return rng() < Math.max(0.05, Math.min(0.90, goalProb));
 

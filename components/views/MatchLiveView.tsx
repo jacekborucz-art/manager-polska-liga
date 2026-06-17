@@ -494,7 +494,7 @@ const isPausedForSevereInjury = useMemo(() => {
         ? aiLineupPrepared
         : (lineups[ctx.awayClub.id] ?? LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers));
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
+        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
       );
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
       const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, calculateAiCoachBriefingEffect(
@@ -798,7 +798,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             homeGoals: newHomeGoals,
             awayGoals: newAwayGoals,
             logs: [newLog, ...prev.logs],
-            momentum: MomentumService.computeMomentum(ctx, prev, finalResult, activePenalty.side, prev.homeFatigue, prev.awayFatigue),
+            momentum: MomentumService.computeMomentum(ctx, prev, finalResult, activePenalty.side, prev.homeFatigue, prev.awayFatigue, env?.weather),
             liveStats: {
               ...prev.liveStats,
               home: activePenalty.side === 'HOME' ? {
@@ -1231,19 +1231,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
         const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
 
-        // Krzywa kary: kondycja 85→0 | 78→-0.005 | 70→-0.015 | 65→-0.022 | 60→-0.031 | 55→-0.040
-        // ZMIANA (2026-06-09): próg podniesiony z 75 → 85, współczynnik z 0.14 → 0.17.
-        // Powód: poprzednie wartości były zbyt łagodne — drużyna z dobrą staminą (avg fatigue ~80)
-        // nie odczuwała żadnej kary za brak zmian (próg 75 nigdy nie był przekraczany).
-        // Teraz kara zaczyna się wcześniej (85) i jest bardziej odczuwalna, ale nadal lekka.
-        // Sprawiedliwość: drużyny z wysoką staminą kończą mecz na ~82 kondycji → kara -0.002 (pomijalna).
-        // Drużyny ze słabą staminą / bez zmian kończą na ~65-70 → kara -0.015 do -0.022 (odczuwalna).
-        // Mechanizm inicjatywy (fatInitiativeMod) jest już względny (różnica obu drużyn) — brak zmian
-        // tylko wtedy szkodzi, gdy rywal jest RELATYWNIE świeższy.
+        // Krzywa kary: kondycja 92→0 | 85→-0.015 | 80→-0.022 | 75→-0.031 | 70→-0.041 | 60→-0.064
+        // ZMIANA (2026-06-17): próg podniesiony z 85 → 92, współczynnik z 0.17 → 0.30.
+        // Powód: poprzednie wartości były zbyt łagodne — przy typowej końcowej kondycji 80%
+        // kara wynosiła zaledwie -0.005 (niewidoczna). Brak zmian nie powodował żadnej przewagi rywala.
+        // Teraz: przy 80% kara = -0.022, przy 75% kara = -0.031 — odczuwalna różnica w kreowaniu sytuacji.
+        // Drużyna bez zmian (80% kondycji) vs drużyna z 3 zmianami (87%) → różnica inicjatywy ~8-11%.
         const _fatiguePenalty = (avgFat: number): number => {
-          if (avgFat >= 85) return 0;
-          const depth = (85 - avgFat) / 85; // 0..1
-          return -(Math.pow(depth, 1.4) * 0.17);
+          if (avgFat >= 92) return 0;
+          const depth = (92 - avgFat) / 92; // 0..1
+          return -(Math.pow(depth, 1.4) * 0.30);
         };
         const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
         const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
@@ -1296,7 +1293,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
-        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
+        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 2.5; // [było *0.6 — zbyt słabe, zmęczona drużyna traciła inicjatywę o <1%; teraz ~8-11% różnicy przy braku zmian]
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
         const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
         const getGoalkeeperCrisisInitiativePenalty = (lineup: Lineup, players: Player[]): number => {
@@ -1314,11 +1311,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           getGoalkeeperCrisisInitiativePenalty(nextAwayLineup, ctx.awayPlayers) -
           getGoalkeeperCrisisInitiativePenalty(nextHomeLineup, ctx.homePlayers);
         const homeAttackChance = Math.min(
-          0.92,
+          0.72,
           Math.max(
-            0.08,
+            0.28,
             0.5 +
-              prev.momentum / 220 +
+              prev.momentum / 280 +
               fatInitiativeMod +
               pressureInitiativeMod +
               formInitiativeMod +
@@ -1413,7 +1410,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
-        let shotThreshold = 0.13; // Bazowa szansa [było 0.18 — obniżono aby zmniejszyć liczbę strzałów do ~22-26/mecz (Ekstraklasa), kompensacja w goalProb]
+        let shotThreshold = 0.11;
         const goalDiff = Math.abs(prev.homeScore - prev.awayScore);
         const leads = (activeSide === 'HOME' && prev.homeScore > prev.awayScore) || (activeSide === 'AWAY' && prev.awayScore > prev.homeScore);
 
@@ -1428,7 +1425,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // max kara: 6-3-1 (defenseBias=95) → -0.076 | min: 4-2-4 (defenseBias=10) → -0.008
         const defendingLineup2 = activeSide === 'HOME' ? nextAwayLineup : nextHomeLineup;
         const defendingTactic2 = TacticRepository.getById(defendingLineup2.tacticId);
-        const defBiasPenalty = (defendingTactic2.defenseBias / 100) * 0.08;
+        const defBiasPenalty = (defendingTactic2.defenseBias / 100) * 0.045;
 
         // Bonus gdy broniący nie ma bramkarza na bramce (slot 0 = null lub nie-GK)
         const defendingXI2 = activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
@@ -1569,23 +1566,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           redCardDefensiveBoost = baseBoost * Math.pow(1.7, defendingSentOff - 1);
         }
 
-        // ─── KARA: KRYTYCZNA KONDYCJA INDYWIDUALNYCH GRACZY ───────────────────
+        // ─── KARA: ZMĘCZENIE INDYWIDUALNYCH GRACZY ───────────────────────────
         // Średnia kondycji całej jedenastki rozmywa wpływ 1-2 krytycznie zmęczonych graczy.
-        // Dlatego: każdy zawodnik atakującej drużyny z fatigue < 30 nakłada dodatkową karę.
-        // Każdy świeży zawodnik broniącej drużyny (fatigue > 70) przy krytycznym rywalu daje bonus.
-        // 1 krytyczny gracz atakujący → -0.012 | 2 → -0.024 itd.
-        // 1 świeży obrońca przy ≥1 krytycznym atakującym → +0.007 itd.
+        // Dlatego: każdy zawodnik atakującej drużyny z fatigue < 75 nakłada dodatkową karę.
+        // Każdy świeży zawodnik broniącej drużyny (fatigue > 78) przy ≥1 zmęczonym rywalu daje bonus.
+        // 1 zmęczony gracz atakujący → -0.012 | 2 → -0.024 itd. (po 80 min bez zmian: ~3-5 graczy < 75%)
+        // [ZMIANA 2026-06-17: próg podniesiony z 30 → 75 (wcześniej żaden zawodnik nie przekraczał progu w normalnej grze)]
         const attackingFatigueMap = activeSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
         const defendingFatigueMap = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const attackingXIIds = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
-        const criticalAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 30).length;
-        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 70).length;
+        const criticalAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 75).length;
+        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 78).length;
         const criticalFatPenalty = criticalAttackers * 0.012;
         const freshDefBonus = criticalAttackers >= 1 ? freshDefenders * 0.007 : 0;
 
         shotThreshold = Math.max(
-          0.04,
+          0.10,
           shotThreshold
             - defBiasPenalty
             + strikerBonus
@@ -1602,7 +1599,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - criticalFatPenalty
             - freshDefBonus
         );
-        shotThreshold = Math.max(0.04, shotThreshold * moraleDebuffMultiplier);
+        shotThreshold = Math.max(0.10, shotThreshold * moraleDebuffMultiplier);
 
         const attackingAvgRating = attackingXI2.length > 0
           ? attackingTeamPlayers2.filter(p => attackingXI2.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / attackingXI2.length
@@ -1683,6 +1680,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const oXIList      = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
+        const uAvgPace = _getXIAvgAttr(uPlayersList, uXIList, 'pace');
+        const oAvgPace = _getXIAvgAttr(oPlayersList, oXIList, 'pace');
         const oppTacticDefBias = TacticRepository.getById(
           userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
         ).defenseBias;
@@ -1808,7 +1807,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               aiRank: aiPressureProfile.rank,
               userRank: userPressureProfile.rank,
               isLateSeason: livePressureContext?.isLateSeason ?? false,
-              rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1
+              rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1,
+              aiSentOffCount: prev.sentOffIds.filter(id => (userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers).some(p => p.id === id)).length,
+              aiPaceAvg: oAvgPace,
+              aiTechAvg: oAvgTech,
+              userPaceAvg: uAvgPace,
+              userTechAvg: uAvgTech
             }
           );
           nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;
@@ -1834,34 +1838,48 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           nextAiNextInstructionMinute = nextMinute + baseDelay + randomDelay;
         }
 
+        const aiShoutMinute = nextAiActiveShout?.id.startsWith('ai_')
+          ? parseInt(nextAiActiveShout.id.replace('ai_', ''))
+          : 0;
+        const aiTempoRf     = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 801) * 0.8).toFixed(2)) : 1.0;
+        const aiMindsetRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 802) * 0.8).toFixed(2)) : 1.0;
+        const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
+        const aiPressingRf  = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 804) * 0.8).toFixed(2)) : 1.0;
+        const aiIntensityRf = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 805) * 0.8).toFixed(2)) : 1.0;
+
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
           if (nextAiActiveShout.tempo === 'FAST') {
             if (isAiAttacking) {
-              shotThreshold += 0.012;
+              shotThreshold += 0.012 * aiTempoRf;
             } else {
               const counterBonus = aiOppTacticDefBias > 60 ? 0.010 : 0.004;
               const techSafetyMod = oAvgTech > 62 ? 0.5 : 1.0;
-              shotThreshold += counterBonus * techSafetyMod;
+              shotThreshold += counterBonus * techSafetyMod * aiTempoRf;
             }
           } else if (nextAiActiveShout.tempo === 'SLOW' && isAiAttacking) {
             shotThreshold += LiveMatchInstructionBalanceService.getSlowTempoModifier(
               oPlayersList, oXIList, uPlayersList, uXIList
-            );
+            ) * aiTempoRf;
           }
-          if (nextAiActiveShout.mindset === 'OFFENSIVE' && isAiAttacking) {
-            shotThreshold += 0.015;
-          } else if (nextAiActiveShout.mindset === 'DEFENSIVE' && !isAiAttacking) {
-            shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
-              oPlayersList, oXIList, uPlayersList, uXIList
-            );
+          if (nextAiActiveShout.mindset === 'OFFENSIVE') {
+            if (isAiAttacking) shotThreshold += 0.015 * aiMindsetRf;
+            else if (aiOppTacticDefBias > 65) shotThreshold += 0.012 * aiMindsetRf;
+          } else if (nextAiActiveShout.mindset === 'DEFENSIVE') {
+            if (!isAiAttacking) {
+              shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
+                oPlayersList, oXIList, uPlayersList, uXIList
+              ) * aiMindsetRf;
+            } else {
+              shotThreshold -= 0.005 * aiMindsetRf;
+            }
           }
         }
         // AI PRESSING
         if (nextAiActiveShout?.pressing === 'PRESSING') {
           const modifier = LiveMatchInstructionBalanceService.getPressingModifier(
             oPlayersList, oXIList, uPlayersList, uXIList
-          );
+          ) * aiPressingRf;
           if (isAiAttacking) shotThreshold += modifier;
           else shotThreshold -= modifier;
         }
@@ -1874,9 +1892,22 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             isAiAttacking
           );
         }
+        if (nextAiActiveShout?.passing === 'SHORT') {
+          const modifier = LiveMatchInstructionBalanceService.getShortPassingModifier(
+            oPlayersList, oXIList, uPlayersList, uXIList, nextAiActiveShout.tempo === 'FAST'
+          ) * aiPassingRf;
+          if (isAiAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
+        } else if (nextAiActiveShout?.passing === 'LONG') {
+          const modifier = LiveMatchInstructionBalanceService.getLongPassingModifier(
+            oPlayersList, oXIList, uPlayersList, uXIList, nextAiActiveShout.tempo === 'FAST'
+          ) * aiPassingRf;
+          if (isAiAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
+        }
 
         const aiIntensityRisk = LiveMatchInstructionBalanceService.getIntensityRiskModifiers(
-          nextAiActiveShout?.intensity ?? 'NORMAL', oPlayersList, oXIList
+          nextAiActiveShout?.intensity ?? 'NORMAL', oPlayersList, oXIList, aiIntensityRf
         );
         // ────────────────────────────────────────────────────────────────────────
 
@@ -1937,8 +1968,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
         }
         shotThreshold = Math.max(
-          0.035,
-          Math.min(0.245, shotThreshold * activePressureMods.shotMultiplier * (livePressureContext?.rivalryMultiplier ?? 1))
+          0.09,
+          Math.min(0.155, shotThreshold * activePressureMods.shotMultiplier * (livePressureContext?.rivalryMultiplier ?? 1))
         );
 
         let pauseForEvent = false;
@@ -2602,7 +2633,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)
               + (activeAiBriefing?.momentumBonus ?? 0) * (aiSide === 'HOME' ? 1 : -1)
             : 0;
-        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue, env?.weather);
         const momentumUpdate = Math.max(-100, Math.min(100, rawMomentumUpdate + briefingMomentumImpulse));
 
      if (priorityAiTrigger) {

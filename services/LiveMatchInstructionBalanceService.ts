@@ -160,7 +160,8 @@ export const LiveMatchInstructionBalanceService = {
     opponentPlayers: Player[],
     opponentStartingXI: (string | null)[],
     opponentTacticDefBias: number,
-    isAttacking: boolean
+    isAttacking: boolean,
+    pressRf: number = 1.0
   ) => {
     const pressing = instructions.pressing ?? 'NORMAL';
     let modifier = 0;
@@ -195,7 +196,7 @@ export const LiveMatchInstructionBalanceService = {
     if (pressing === 'PRESSING') {
       const pressingModifier = LiveMatchInstructionBalanceService.getPressingModifier(
         userPlayers, userStartingXI, opponentPlayers, opponentStartingXI
-      );
+      ) * pressRf;
       modifier += isAttacking ? pressingModifier : -pressingModifier;
     }
 

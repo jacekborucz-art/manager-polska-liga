@@ -1,8 +1,8 @@
-import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack } from '../types';
+import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack, InstructionPassing } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
 
-type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack };
+type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack; passing?: InstructionPassing };
 
 type InMatchDecisionContext = {
   aiAvgFatigue?: number;
@@ -18,6 +18,11 @@ type InMatchDecisionContext = {
   userRank?: number;
   isLateSeason?: boolean;
   rivalryMultiplier?: number;
+  aiSentOffCount?: number;
+  aiPaceAvg?: number;
+  aiTechAvg?: number;
+  userPaceAvg?: number;
+  userTechAvg?: number;
 };
 
 const seededRng = (seed: number, minute: number, offset: number = 0): number => {
@@ -62,6 +67,7 @@ export const AiCoachTacticsService = {
   decidePreMatchInstructions: (
     ownClub: Club,
     ownCoach: Coach | null,
+    ownPlayers: Player[],
     userClub: Club,
     userPlayers: Player[],
     userTacticId: string,
@@ -142,10 +148,47 @@ export const AiCoachTacticsService = {
       && !wantsCounter
       && consistent.mindset !== 'DEFENSIVE';
 
+    const ownPaceAvg       = ownPlayers.length > 0 ? ownPlayers.reduce((s, p) => s + p.attributes.pace, 0) / ownPlayers.length : 60;
+    const ownTechAvg       = ownPlayers.length > 0 ? ownPlayers.reduce((s, p) => s + p.attributes.technique, 0) / ownPlayers.length : 60;
+    const ownHeadingAvg    = ownPlayers.length > 0 ? ownPlayers.reduce((s, p) => s + p.attributes.heading, 0) / ownPlayers.length : 60;
+    const ownAggAvg        = ownPlayers.length > 0 ? ownPlayers.reduce((s, p) => s + p.attributes.aggression, 0) / ownPlayers.length : 60;
+    const userPaceAvgPre    = userPlayers.length > 0 ? userPlayers.reduce((s, p) => s + p.attributes.pace, 0) / userPlayers.length : 60;
+    const userTechAvgPre    = userPlayers.length > 0 ? userPlayers.reduce((s, p) => s + p.attributes.technique, 0) / userPlayers.length : 60;
+    const userHeadingAvgPre = userPlayers.length > 0 ? userPlayers.reduce((s, p) => s + p.attributes.heading, 0) / userPlayers.length : 60;
+    const userAggAvgPre     = userPlayers.length > 0 ? userPlayers.reduce((s, p) => s + p.attributes.aggression, 0) / userPlayers.length : 60;
+    const preCoachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
+    const preCoachAccuracy = 0.35 + preCoachScore * 0.50;
+    const prePaceGap    = ownPaceAvg    - userPaceAvgPre;
+    const preTechGap    = ownTechAvg    - userTechAvgPre;
+    const preHeadingGap = ownHeadingAvg - userHeadingAvgPre;
+    const preAggGap     = ownAggAvg     - userAggAvgPre;
+    let passScore = 0;
+    if (prePaceGap >= 3)     passScore += 2;
+    if (prePaceGap <= -3)    passScore -= 2;
+    if (preTechGap >= 3)     passScore -= 2;
+    if (preTechGap <= -3)    passScore += 2;
+    if (preHeadingGap >= 3)  passScore += 1;
+    if (preHeadingGap <= -3) passScore -= 1;
+    if (preAggGap <= -3)     passScore -= 1;
+    let prePassing: InstructionPassing = 'MIXED';
+    if (seededRng(seed, 0, 303) < preCoachAccuracy) {
+      if (passScore >= 2) prePassing = 'LONG';
+      else if (passScore <= -2) prePassing = 'SHORT';
+    } else {
+      const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
+      prePassing = opts[Math.floor(seededRng(seed, 0, 304) * 3)];
+    }
+    console.log(
+      `[AI PRE] ${ownClub.name} | pace gap=${prePaceGap.toFixed(1)} tech gap=${preTechGap.toFixed(1)} ` +
+      `heading gap=${preHeadingGap.toFixed(1)} agg gap=${preAggGap.toFixed(1)} ` +
+      `| passScore=${passScore} acc=${preCoachAccuracy.toFixed(2)} → ${prePassing}`
+    );
+
     return {
       ...consistent,
       pressing: wantsPressing ? 'PRESSING' : 'NORMAL',
       counterAttack: wantsCounter ? 'COUNTER' : 'NORMAL',
+      passing: prePassing,
     };
   },
 
@@ -168,6 +211,28 @@ export const AiCoachTacticsService = {
     const rng1 = seededRng(seed, minute, 401);
     const rng2 = seededRng(seed, minute, 402);
     const rng3 = seededRng(seed, minute, 403);
+
+    const aiSentOffCount = context?.aiSentOffCount ?? 0;
+    if (aiSentOffCount > 0) {
+      const coachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
+      const defensiveChance = 0.30 + coachScore * 0.62;
+      const mindset: InstructionMindset = rng1 < defensiveChance ? 'DEFENSIVE' : 'NEUTRAL';
+      const slowChance = 0.20 + (experience / 100) * 0.68;
+      const tempo: InstructionTempo = rng2 < slowChance ? 'SLOW' : 'NORMAL';
+      const paceGap = (context?.aiPaceAvg ?? 60) - (context?.userPaceAvg ?? 60);
+      const techGap = (context?.aiTechAvg ?? 60) - (context?.userTechAvg ?? 60);
+      const coachAccuracy = 0.40 + coachScore * 0.50;
+      let passing: InstructionPassing = 'MIXED';
+      if (rng3 < coachAccuracy) {
+        if (paceGap >= 3) passing = 'LONG';
+        else if (paceGap <= -3 || techGap >= 3) passing = 'SHORT';
+      } else {
+        const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
+        passing = opts[Math.floor(seededRng(seed, minute, 704) * 3)];
+      }
+      const base = enforceConsistency(mindset, tempo, 'NORMAL');
+      return { ...base, pressing: 'NORMAL', counterAttack: 'COUNTER', passing };
+    }
 
     const isSecondHalfDecisionWindow = minute >= 46 && minute <= 75;
     const aiAvgFatigue = context?.aiAvgFatigue ?? 100;
@@ -381,6 +446,23 @@ export const AiCoachTacticsService = {
       pressing = experience >= 55 || pressureDrama >= 0.75 ? 'PRESSING' : pressing;
     }
 
-    return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack };
+    const paceGap = (context?.aiPaceAvg ?? 60) - (context?.userPaceAvg ?? 60);
+    const techGap = (context?.aiTechAvg ?? 60) - (context?.userTechAvg ?? 60);
+    const coachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
+    const coachAccuracy = 0.35 + coachScore * 0.50;
+    let passing: InstructionPassing = 'MIXED';
+    if (seededRng(seed, minute, 601) < coachAccuracy) {
+      if (paceGap >= 3) passing = 'LONG';
+      else if (paceGap <= -3 || techGap >= 3) passing = 'SHORT';
+    } else {
+      const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
+      passing = opts[Math.floor(seededRng(seed, minute, 602) * 3)];
+    }
+    console.log(
+      `[AI IN-MATCH min=${minute}] pace gap=${paceGap.toFixed(1)} tech gap=${techGap.toFixed(1)} ` +
+      `acc=${coachAccuracy.toFixed(2)} → ${passing} | mindset=${mindset} tempo=${tempo}`
+    );
+
+    return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack, passing };
   },
 };

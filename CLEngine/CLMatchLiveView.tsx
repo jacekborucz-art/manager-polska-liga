@@ -378,7 +378,7 @@ const isPausedForSevereInjury = useMemo(() => {
       const homeLineupData = aiClubInit.id === ctx.homeClub.id ? aiPreparedLineup : homeLineupBase;
       const awayLineupData = aiClubInit.id === ctx.awayClub.id ? aiPreparedLineup : awayLineupBase;
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
+        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
       );
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
@@ -1033,7 +1033,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
-        let shotThreshold = 0.18; // Bazowa szansa
+        let shotThreshold = 0.14; // Bazowa szansa
         if (counterAttackTriggered && activeSide === userSide) {
           shotThreshold += counterAttackShotBonus;
         }
@@ -1205,6 +1205,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const oXIList      = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
+        const uAvgPace = _getXIAvgAttr(uPlayersList, uXIList, 'pace');
+        const oAvgPace = _getXIAvgAttr(oPlayersList, oXIList, 'pace');
         const oppTacticDefBias = TacticRepository.getById(
           userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
         ).defenseBias;
@@ -1297,17 +1299,39 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               userShots: userStats.shots,
               aiShotsOnTarget: aiStats.shotsOnTarget,
               userShotsOnTarget: userStats.shotsOnTarget,
+              aiPaceAvg: oAvgPace,
+              aiTechAvg: oAvgTech,
+              userPaceAvg: uAvgPace,
+              userTechAvg: uAvgTech,
             }
           );
           nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;
           const coachReadiness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
           nextAiNextInstructionMinute = nextMinute + Math.max(6, Math.round(14 - coachReadiness * 0.05)) + Math.floor(seededRng(currentSeed, nextMinute, 77) * 7);
         }
+        const aiShoutMinute = nextAiActiveShout?.id.startsWith('ai_')
+          ? parseInt(nextAiActiveShout.id.replace('ai_', ''))
+          : 0;
+        const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
+        const aiPressingRf  = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 804) * 0.8).toFixed(2)) : 1.0;
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
           shotThreshold += LiveMatchInstructionBalanceService.getInstructionShotModifier(
-            nextAiActiveShout, oPlayersList, oXIList, uPlayersList, uXIList, userCounterTactic.defenseBias, isAiAttacking
+            nextAiActiveShout, oPlayersList, oXIList, uPlayersList, uXIList, userCounterTactic.defenseBias, isAiAttacking, aiPressingRf
           );
+        }
+        if (nextAiActiveShout?.passing === 'SHORT') {
+          const modifier = LiveMatchInstructionBalanceService.getShortPassingModifier(
+            oPlayersList, oXIList, uPlayersList, uXIList, nextAiActiveShout.tempo === 'FAST'
+          ) * aiPassingRf;
+          if (isAiAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
+        } else if (nextAiActiveShout?.passing === 'LONG') {
+          const modifier = LiveMatchInstructionBalanceService.getLongPassingModifier(
+            oPlayersList, oXIList, uPlayersList, uXIList, nextAiActiveShout.tempo === 'FAST'
+          ) * aiPassingRf;
+          if (isAiAttacking) shotThreshold += modifier;
+          else shotThreshold -= modifier;
         }
         // ───────────────────────────────────────────────────────────────────────
         const activeBriefing =
@@ -1353,6 +1377,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (nextMinute === 1 && activeAiBriefing?.momentumBonus && isAiAttacking) {
           shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
         }
+        shotThreshold = Math.min(0.155, shotThreshold);
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;

@@ -1,5 +1,5 @@
 
-import { MatchContext, MatchLiveState, Player, MatchEventType } from '../types';
+import { MatchContext, MatchLiveState, Player, MatchEventType, WeatherSnapshot } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 
 export const MomentumService = {
@@ -9,7 +9,7 @@ export const MomentumService = {
   getEventImpulse: (type: MatchEventType, side: 'HOME' | 'AWAY'): number => {
     const power = side === 'HOME' ? 1 : -1;
     switch (type) {
-      case MatchEventType.GOAL: return 45 * power;
+      case MatchEventType.GOAL: return 28 * power;
       case MatchEventType.SHOT_ON_TARGET: return 15 * power;
       case MatchEventType.SHOT_POST:
       case MatchEventType.SHOT_BAR: return 20 * power;
@@ -22,8 +22,8 @@ export const MomentumService = {
       case MatchEventType.YELLOW_CARD: return -5 * power;
       case MatchEventType.GK_LONG_THROW: return 5 * power;
       case MatchEventType.DRIBBLING: return 7 * power;
-      case MatchEventType.PENALTY_AWARDED: return 30 * power;
-      case MatchEventType.PENALTY_SCORED: return 40 * power;
+      case MatchEventType.PENALTY_AWARDED: return 20 * power;
+      case MatchEventType.PENALTY_SCORED: return 20 * power;
       case MatchEventType.PENALTY_MISSED: return -35 * power;
       default: return 0;
     }
@@ -32,7 +32,7 @@ export const MomentumService = {
   /**
    * Computes the "Natural Target" for momentum based on stats and tactics.
    */
-   calculateNaturalTarget: (ctx: MatchContext, state: MatchLiveState): number => {
+   calculateNaturalTarget: (ctx: MatchContext, state: MatchLiveState, weather?: WeatherSnapshot): number => {
     const isNeutralVenue = ctx.fixture.id.includes("FINAŁ") || ctx.fixture.id.includes("SUPER_CUP");
     let target = (ctx.homeClub.reputation - ctx.awayClub.reputation) * 0.4; // Mały czynnik psychologiczny: respekt przed lepszą drużyną
     
@@ -51,23 +51,25 @@ export const MomentumService = {
     const homePower = getTeamTechPower(ctx.homePlayers, state.homeLineup.startingXI);
     const awayPower = getTeamTechPower(ctx.awayPlayers, state.awayLineup.startingXI);
    const powerRatio = homePower / awayPower;
-    target += (Math.pow(powerRatio, 3) - 1) * 50; // Bardzo silna dominacja przy przewadze OVR
+    target += (Math.pow(powerRatio, 2) - 1) * 35;
 
 const homeHasGK = ctx.homePlayers.find((p: any) => p.id === state.homeLineup.startingXI[0])?.position === 'GK';
     const awayHasGK = ctx.awayPlayers.find((p: any) => p.id === state.awayLineup.startingXI[0])?.position === 'GK';
 
-// Usunięto nieużywane deklaracje stylów. 
-    // Logika PRO opiera się teraz na Grawitacji Jakościowej (Power Ratio).
-
-    // ZMIANA PRO: Zastępujemy stałe bonusy "Grawitacją Jakościową"
-    // Im większa różnica jakości (powerRatio), tym silniej Momentum chce być po stronie silniejszego.
-    // Polska piłka: mniejsza grawitacja jakościowa — mecz może być wyrównany nawet przy różnicy OVR
-    const qualityGravity = (Math.pow(powerRatio, 1.15) - 1) * 25;
-    target += qualityGravity; // Dodajemy do reputacji zamiast nadpisywać
-
     // "Czynnik ludzki" w przewidywaniu celu - rzut kością na to, jak zespół czuje mecz
     const perceptionRoll = (Math.random() * 20) - 10;
     target += perceptionRoll;
+
+    if (weather) {
+      if (weather.precipitationChance > 40) {
+        const rainIntensity = Math.min(1.0, (weather.precipitationChance - 40) / 60);
+        target *= (1 - rainIntensity * 0.35);
+      }
+      if (weather.tempC > 30) {
+        const heatIntensity = Math.min(1.0, (weather.tempC - 30) / 15);
+        target -= Math.sign(target) * heatIntensity * 4;
+      }
+    }
 
 return Math.max(-85, Math.min(85, target));
   },
@@ -75,8 +77,8 @@ return Math.max(-85, Math.min(85, target));
   /**
    * Dynamiczny silnik Momentum v2.5 - Skokowa reakcja i szum kinetyczny.
    */
-  computeMomentum: (ctx: MatchContext, state: MatchLiveState, lastEventType?: MatchEventType, lastEventSide?: 'HOME' | 'AWAY'): number => {
-    const naturalTarget = MomentumService.calculateNaturalTarget(ctx, state);
+  computeMomentum: (ctx: MatchContext, state: MatchLiveState, lastEventType?: MatchEventType, lastEventSide?: 'HOME' | 'AWAY', _homeFatigue?: Record<string, number>, _awayFatigue?: Record<string, number>, weather?: WeatherSnapshot): number => {
+    const naturalTarget = MomentumService.calculateNaturalTarget(ctx, state, weather);
     
     // 1. Natychmiastowy impuls ze zdarzenia
     let impulse = 0;

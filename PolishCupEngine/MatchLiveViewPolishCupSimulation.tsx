@@ -707,6 +707,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
       const userPlayersInit = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
       const userLineupInit = userSide === 'HOME' ? homeLineupData : awayLineupData;
       const aiCoachInit = coaches[aiClubInit.coachId || ''] ?? null;
+      const aiPlayersInit = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
       const opponentReport = AiOpponentAnalysisService.generateReport({
         aiClub: aiClubInit,
         aiCoach: aiCoachInit,
@@ -717,9 +718,8 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
         seed: cupSessionSeed,
       });
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
+        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
       );
-      const aiPlayersInit = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
       const aiLineupInit = userSide === 'HOME' ? awayLineupData : homeLineupData;
       const getInitSimplePower = (players: Player[], lineup: Lineup): number =>
         lineup.startingXI.filter((id): id is string => id !== null)

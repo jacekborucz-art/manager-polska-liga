@@ -2166,6 +2166,7 @@ isPenalties?: boolean;
     intensity: InstructionIntensity;
     pressing?: InstructionPressing;
     counterAttack?: InstructionCounterAttack;
+    passing?: InstructionPassing;
     isExpired?: boolean;
   } | null;
   lastGoalBoostMinute: number;
