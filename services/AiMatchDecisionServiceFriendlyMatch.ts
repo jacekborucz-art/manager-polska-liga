@@ -9,6 +9,56 @@ import { LineupService } from './LineupService';
 // karę za grę nie na swojej pozycji.
 import { applyTacticReassignment } from './AiMatchDecisionService';
 
+const FRIENDLY_OFFENSIVE_TACTICS = ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '4-3-3-F9', '3-4-2-1', '3-4-3'];
+const FRIENDLY_DEFENSIVE_TACTICS = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
+
+const getLineupFitForTactic = (lineup: Lineup, players: Player[], tacticId: string): number => {
+  const tactic = TacticRepository.getById(tacticId);
+  return lineup.startingXI.reduce((sum, playerId, idx) => {
+    if (!playerId) return sum;
+    const player = players.find(p => p.id === playerId);
+    if (!player) return sum;
+    return sum + LineupService.calculateFitScore(player, tactic.slots[idx].role);
+  }, 0);
+};
+
+const chooseFriendlyScoreTacticResponse = (
+  lineup: Lineup,
+  players: Player[],
+  scoreDiff: number
+): string | null => {
+  const pool = scoreDiff < 0
+    ? (scoreDiff <= -2 ? FRIENDLY_OFFENSIVE_TACTICS : ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1'])
+    : FRIENDLY_DEFENSIVE_TACTICS;
+  const currentTactic = TacticRepository.getById(lineup.tacticId);
+  const currentFit = getLineupFitForTactic(lineup, players, lineup.tacticId);
+
+  const candidates = pool
+    .filter(tacticId => tacticId !== lineup.tacticId)
+    .map(tacticId => {
+      const tactic = TacticRepository.getById(tacticId);
+      const fitLoss = Math.max(0, currentFit - getLineupFitForTactic(lineup, players, tacticId));
+      const intentGain = scoreDiff < 0
+        ? tactic.attackBias - currentTactic.attackBias
+        : tactic.defenseBias - currentTactic.defenseBias;
+      const chaseDeficit = scoreDiff < 0 ? Math.min(3, Math.abs(scoreDiff)) : 0;
+      const ultraOpenRisk = scoreDiff < 0
+        ? Math.max(0, tactic.attackBias - 78) * 0.22 +
+          Math.max(0, 42 - tactic.defenseBias) * (0.16 + chaseDeficit * 0.06)
+        : 0;
+      const structureBreakRisk = scoreDiff < 0 && currentTactic.defenseBias - tactic.defenseBias > 25
+        ? (currentTactic.defenseBias - tactic.defenseBias - 25) * 0.12
+        : 0;
+      return {
+        tacticId,
+        score: intentGain - fitLoss * 0.24 - ultraOpenRisk - structureBreakRisk
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.tacticId ?? null;
+};
+
 /**
  * Wersja serwisu decyzyjnego AI dla meczów sparingowych.
  * Różnice względem AiMatchDecisionService:
@@ -306,20 +356,16 @@ export const AiMatchDecisionServiceFriendlyMatch = {
 
     if (state.minute > 20 && !newTacticId && canChangeTactic) {
       if (scoreDiff < -1 && state.minute > 45) {
-        const offensiveTactics = ['3-4-3', '4-4-2-OFF', '4-3-3', '4-2-4', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
-        const candidates = offensiveTactics.filter(t => t !== currentLineup.tacticId);
-        if (candidates.length > 0) {
-          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+        const chosenTactic = chooseFriendlyScoreTacticResponse(newLineup, myPlayers, scoreDiff);
+        if (chosenTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
           applyTactic(chosenTactic);
           updatedActionMinute = state.minute;
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       } else if (scoreDiff > 0 && state.minute > 75 && mySentOffCount === 0) {
-        const defensiveTactics = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
-        const candidates = defensiveTactics.filter(t => t !== currentLineup.tacticId);
-        if (candidates.length > 0) {
-          const chosenTactic = candidates[Math.floor(Math.random() * candidates.length)];
+        const chosenTactic = chooseFriendlyScoreTacticResponse(newLineup, myPlayers, scoreDiff);
+        if (chosenTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz komentarz przy imporcie na górze pliku.
           applyTactic(chosenTactic);
           updatedActionMinute = state.minute;

@@ -951,12 +951,22 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Mechanizm inicjatywy (fatInitiativeMod) jest już względny (różnica obu drużyn) — brak zmian
         // tylko wtedy szkodzi, gdy rywal jest RELATYWNIE świeższy.
         const _fatiguePenalty = (avgFat: number): number => {
-          if (avgFat >= 85) return 0;
-          const depth = (85 - avgFat) / 85; // 0..1
-          return -(Math.pow(depth, 1.4) * 0.17);
+          if (avgFat >= 94) return 0;
+          const depth = (94 - avgFat) / 94; // 0..1
+          return -(Math.pow(depth, 1.25) * 0.42);
         };
-        const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
-        const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
+        const _rotationPenalty = (lineup: (string | null)[], fatigueMap: Record<string, number>, ownSubs: number, oppSubs: number): number => {
+          if (nextMinute < 60 || ownSubs >= 2) return 0;
+          const ids = lineup.filter((id): id is string => id !== null);
+          if (ids.length === 0) return 0;
+          const tiredShare = ids.filter(id => (fatigueMap[id] ?? 100) < 84).length / ids.length;
+          const lateFactor = Math.min(1, (nextMinute - 60) / 30);
+          const rotationGap = Math.max(0, oppSubs - ownSubs);
+          const pressure = ((2 - ownSubs) * 0.012) + tiredShare * 0.052 + rotationGap * 0.010;
+          return -Math.min(0.085, pressure * lateFactor);
+        };
+        const homeFatPenalty = _fatiguePenalty(avgFatigueHome) + _rotationPenalty(nextHomeLineup.startingXI, localHomeFatigue, nextSubsCountHome, nextSubsCountAway);
+        const awayFatPenalty = _fatiguePenalty(avgFatigueAway) + _rotationPenalty(nextAwayLineup.startingXI, localAwayFatigue, nextSubsCountAway, nextSubsCountHome);
 
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
@@ -1119,12 +1129,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const defendingFatigueMap = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const attackingXIIds = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
-        const criticalAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 30).length;
-        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 70).length;
-        const criticalFatPenalty = criticalAttackers * 0.012;
-        const freshDefBonus = criticalAttackers >= 1 ? freshDefenders * 0.007 : 0;
+        const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
+        const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
+        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
+        const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
+        const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
+        const attackingSubsUsed = activeSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
+        const defendingSubsUsed = activeSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome;
+        const noRotationShotPenalty = nextMinute >= 60 && attackingSubsUsed <= 1
+          ? Math.min(
+              0.035,
+              (2 - attackingSubsUsed) * 0.006 +
+              tiredAttackers * 0.004 +
+              Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
+            ) * Math.min(1, (nextMinute - 60) / 30)
+          : 0;
 
-        shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus - criticalFatPenalty - freshDefBonus);
+        shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus - criticalFatPenalty - freshDefBonus - noRotationShotPenalty);
 
         const attackingAvgRating = attackingXI2.length > 0
           ? attackingTeamPlayers2.filter(p => attackingXI2.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / attackingXI2.length
