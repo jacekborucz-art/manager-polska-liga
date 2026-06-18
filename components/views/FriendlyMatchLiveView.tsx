@@ -950,7 +950,36 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
-        const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 220 + fatInitiativeMod));
+        const getXIAvgOverall = (playersList: Player[], xi: (string | null)[]): number => {
+          const ids = xi.filter((id): id is string => id !== null);
+          const active = playersList.filter(p => ids.includes(p.id));
+          if (active.length === 0) return 62;
+          return active.reduce((sum, player) => sum + player.overallRating, 0) / active.length;
+        };
+        const homeAvgOverallLive = getXIAvgOverall(ctx.homePlayers, nextHomeLineup.startingXI);
+        const awayAvgOverallLive = getXIAvgOverall(ctx.awayPlayers, nextAwayLineup.startingXI);
+        const homeQualityGapLive = homeAvgOverallLive - awayAvgOverallLive;
+        const getQualityGapCurve = (gap: number): number => {
+          const absGap = Math.abs(gap);
+          if (absGap <= 2) return 0;
+          const normalized = Math.min(1, (absGap - 2) / 18);
+          return Math.sign(gap) * Math.pow(normalized, 1.35);
+        };
+        const qualityInitiativeMod = getQualityGapCurve(homeQualityGapLive) * 0.055;
+        const shotGapLive = nextLiveStats.home.shots - nextLiveStats.away.shots;
+        const shotDominanceInitiativeMod =
+          nextMinute < 25 || Math.abs(shotGapLive) < 8
+            ? 0
+            : -Math.sign(shotGapLive) *
+              Math.min(0.055, (Math.abs(shotGapLive) - 7) * 0.006) *
+              (Math.sign(shotGapLive) === Math.sign(homeQualityGapLive) && Math.abs(homeQualityGapLive) > 8 ? 0.45 : 1);
+        const homeAttackChance = Math.min(
+          0.72,
+          Math.max(
+            0.28,
+            0.5 + prev.momentum / 280 + fatInitiativeMod + qualityInitiativeMod + shotDominanceInitiativeMod
+          )
+        );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
 
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
@@ -1118,15 +1147,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus - criticalFatPenalty - freshDefBonus - noRotationShotPenalty);
 
-        const attackingAvgRating = attackingXI2.length > 0
-          ? attackingTeamPlayers2.filter(p => attackingXI2.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / attackingXI2.length
-          : 62;
         const defendingXI3 = defendingLineup2.startingXI.filter((id): id is string => id !== null);
-        const defendingAvgRating = defendingXI3.length > 0
-          ? defendingTeamPlayers2.filter(p => defendingXI3.includes(p.id)).reduce((s, p) => s + p.overallRating, 0) / defendingXI3.length
-          : 62;
-        const strengthShotMod = Math.max(-0.025, Math.min(0.025, (attackingAvgRating - defendingAvgRating) * 0.005));
+        const attackingAvgRating = activeSide === 'HOME' ? homeAvgOverallLive : awayAvgOverallLive;
+        const defendingAvgRating = activeSide === 'HOME' ? awayAvgOverallLive : homeAvgOverallLive;
+        const ratingGap = attackingAvgRating - defendingAvgRating;
+        const strengthShotMod = Math.max(-0.014, Math.min(0.020, getQualityGapCurve(ratingGap) * 0.020));
         shotThreshold += strengthShotMod;
+        const activeShotsSoFar = activeSide === 'HOME' ? nextLiveStats.home.shots : nextLiveStats.away.shots;
+        const defendingShotsSoFar = activeSide === 'HOME' ? nextLiveStats.away.shots : nextLiveStats.home.shots;
+        const activeShotGap = activeShotsSoFar - defendingShotsSoFar;
+        const shotVolumeDrag =
+          nextMinute < 25 || activeShotGap < 8
+            ? 0
+            : Math.min(0.034, (activeShotGap - 7) * 0.0026) *
+              (ratingGap > 10 ? 0.40 : ratingGap > 6 ? 0.65 : 1.0);
 
         const attackBiasBonus = Math.max(-0.016, Math.min(0.016, (attackingTacticObj.attackBias - 50) / 100 * 0.04));
         shotThreshold += attackBiasBonus;
@@ -1377,7 +1411,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold += aiCounterAttackShotBonus;
         }
         // ───────────────────────────────────────────────────────────────────────
-        shotThreshold = Math.min(0.155, shotThreshold);
+        shotThreshold = Math.max(0.04, Math.min(0.155, shotThreshold - shotVolumeDrag));
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;

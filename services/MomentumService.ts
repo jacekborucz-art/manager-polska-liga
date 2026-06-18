@@ -143,7 +143,9 @@ export const MomentumService = {
       impulse = MomentumService.getEventImpulse(lastEventType, lastEventSide);
     }
 
-    const jitter = (Math.random() - 0.5) * 3;
+    const dominanceConfidence = Math.min(1, Math.abs(naturalTarget) / 70);
+    const upsetNoiseFactor = 1 - dominanceConfidence * 0.45;
+    const jitter = (Math.random() - 0.5) * 3 * upsetNoiseFactor;
 
     const homeIds = state.homeLineup.startingXI.filter((id): id is string => id !== null);
     const awayIds = state.awayLineup.startingXI.filter((id): id is string => id !== null);
@@ -157,8 +159,8 @@ export const MomentumService = {
     }, 0) / Math.max(1, awayIds.length);
     const activeMentality = lastEventSide === 'HOME' ? homeAvgMentality : awayAvgMentality;
     const mentalityErrorMod = 1.0 - ((activeMentality - 50) / 100) * 0.40;
-    const humanError = Math.random() < (0.015 * mentalityErrorMod)
-      ? (Math.random() - 0.5) * 16 * mentalityErrorMod
+    const humanError = Math.random() < (0.015 * mentalityErrorMod * upsetNoiseFactor)
+      ? (Math.random() - 0.5) * 16 * mentalityErrorMod * upsetNoiseFactor
       : 0;
 
     const getAvgFatigue = (lineup: (string | null)[], fatigueMap: Record<string, number>): number => {
