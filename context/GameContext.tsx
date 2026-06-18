@@ -173,6 +173,7 @@ export interface ImportedSquadPlayer {
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   nationalStats?: { matchesPlayed?: number; goals?: number };
   reputacja?: number;
+  lojalnosc?: number;
   attributes: {
     strength: number; stamina: number; pace: number; defending: number;
     passing: number; attacking: number; finishing: number; technique: number;
@@ -2928,6 +2929,7 @@ if (userTeamId) {
         isNegotiationPermanentBlocked: !!p.isNegotiationPermanentBlocked,
         transferLockoutUntil: p.transferLockoutUntil ?? null,
         freeAgentLockoutUntil: p.freeAgentLockoutUntil ?? null,
+        lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
       } as Player);
     };
     const normalizeFullPackPlayerDump = (source: Record<string, Player[]>): Record<string, Player[]> => {
@@ -2951,6 +2953,7 @@ if (userTeamId) {
                 history: p.history ?? [],
                 boardLockoutUntil: p.boardLockoutUntil ?? null,
                 reputacja: p.reputacja ?? calcReputacja(overall, clubRepMap.get(clubId) ?? 5),
+                lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
               } as Player);
             })
           : []
@@ -3802,9 +3805,56 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
   // ── SPARINGI — propozycje i odpowiedzi ──────────────────────────────────────
 
   const addFriendlyRequest = useCallback((req: Omit<PendingFriendlyRequest, 'id'>) => {
+    const parseDateKey = (dateKey: string): Date => {
+      const [year, month, day] = dateKey.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      date.setHours(12, 0, 0, 0);
+      return date;
+    };
+
+    const getFriendlyWindow = (dateKey: string): { start: Date; end: Date } | null => {
+      if (!seasonTemplate) return null;
+      const date = parseDateKey(dateKey);
+      const slot = seasonTemplate.slots.find(s => {
+        if (s.competition !== CompetitionType.FRIENDLY) return false;
+        const start = new Date(s.start); start.setHours(0, 0, 0, 0);
+        const end = new Date(s.end); end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end;
+      });
+      if (!slot) return null;
+      const start = new Date(slot.start); start.setHours(0, 0, 0, 0);
+      const end = new Date(slot.end); end.setHours(23, 59, 59, 999);
+      return { start, end };
+    };
+
+    const isInWindow = (date: Date, window: { start: Date; end: Date }): boolean => {
+      const d = new Date(date);
+      d.setHours(12, 0, 0, 0);
+      return d >= window.start && d <= window.end;
+    };
+
+    const requestedWindow = getFriendlyWindow(req.proposedDate);
+    const userId = userTeamId ?? '';
+    const hasConfirmedDuplicate = requestedWindow
+      ? globalFixtures.some(f =>
+          f.leagueId === CompetitionType.FRIENDLY &&
+          isInWindow(f.date instanceof Date ? f.date : new Date(f.date), requestedWindow) &&
+          ((f.homeTeamId === userId && f.awayTeamId === req.opponentClubId) ||
+            (f.awayTeamId === userId && f.homeTeamId === req.opponentClubId))
+        )
+      : false;
+
+    if (hasConfirmedDuplicate) return;
+
     const id = `FRIENDLY_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    setPendingFriendlyRequests(prev => [...prev, { ...req, id }]);
-  }, []);
+    setPendingFriendlyRequests(prev => {
+      const hasPendingDuplicate = requestedWindow
+        ? prev.some(r => r.opponentClubId === req.opponentClubId && isInWindow(parseDateKey(r.proposedDate), requestedWindow))
+        : false;
+      if (hasPendingDuplicate) return prev;
+      return [...prev, { ...req, id }];
+    });
+  }, [globalFixtures, seasonTemplate, userTeamId]);
 
   const cancelFriendly = useCallback((fixtureId: string) => {
     setGlobalFixtures(prev => prev.filter(f => f.id !== fixtureId));
@@ -11717,6 +11767,7 @@ const finalResult: SimulationOutput = {
           negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
           fatigueDebt: 0, isNegotiationPermanentBlocked: false,
           reputacja: p.reputacja ?? calcReputacja(overall, importClubRep),
+          lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
           transferLockoutUntil: null, freeAgentLockoutUntil: null,
         } as Player);
         if (!newPlayersChunk[targetClubId]) newPlayersChunk[targetClubId] = [];

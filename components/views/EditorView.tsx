@@ -957,6 +957,7 @@ export const EditorView: React.FC = () => {
   const [nationalMatchesPlayed, setNationalMatchesPlayed] = useState(0);
   const [nationalGoals, setNationalGoals] = useState(0);
   const [reputacja, setReputacja] = useState<number>(50);
+  const [lojalnosc, setLojalnosc] = useState<number>(50);
 
   const filteredClubs = useMemo(() => {
     const list = selectedTier === 'ALL'
@@ -1499,6 +1500,7 @@ export const EditorView: React.FC = () => {
     setNationalMatchesPlayed(0);
     setNationalGoals(0);
     setReputacja(50);
+    setLojalnosc(50);
     const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
     setContractEndDate(new Date(now.getFullYear() + 2, 5, 30).toISOString().substring(0, 10));
   };
@@ -1597,6 +1599,7 @@ export const EditorView: React.FC = () => {
         setNationalMatchesPlayed(p.nationalStats?.matchesPlayed ?? 0);
         setNationalGoals(p.nationalStats?.goals ?? 0);
         setReputacja(p.reputacja ?? 50);
+        setLojalnosc(p.lojalnosc ?? 50);
       }
     } else {
       resetPlayerForm();
@@ -1795,6 +1798,7 @@ export const EditorView: React.FC = () => {
         contractLockoutUntil: null,
         fatigueDebt: 0,
         reputacja,
+        lojalnosc,
         isNegotiationPermanentBlocked: false,
         transferLockoutUntil: null,
         freeAgentLockoutUntil: null,
@@ -1836,6 +1840,7 @@ export const EditorView: React.FC = () => {
       isAvailableForLoan: loan || hasPendingTransfer ? false : isAvailableForLoan,
       squadRole: squadRole,
       reputacja,
+      lojalnosc,
       nationalStats: { ...(existingPlayer.nationalStats ?? emptyStats()), matchesPlayed: nationalMatchesPlayed, goals: nationalGoals }
     };
     if (targetClubId !== selectedClubId) {
@@ -3102,6 +3107,12 @@ export const EditorView: React.FC = () => {
                 <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
                   className={`${inputCls} w-40 px-2 py-1.5`} placeholder="nazwisko..." />
               </div>
+              <div>
+                <div className={`${labelCls} mb-1`}>Reputacja</div>
+                <input type="number" min={1} max={99} value={reputacja}
+                  onChange={(e) => setReputacja(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                  className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
+              </div>
             </div>
 
             {/* KLUB / STATUS / REPREZENTACJA */}
@@ -3150,12 +3161,6 @@ export const EditorView: React.FC = () => {
                 <div className={`${labelCls} mb-1`}>Reprez. bramki</div>
                 <input type="number" min={0} value={nationalGoals}
                   onChange={(e) => setNationalGoals(parseInt(e.target.value) || 0)}
-                  className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
-              </div>
-              <div>
-                <div className={`${labelCls} mb-1`}>Reputacja</div>
-                <input type="number" min={1} max={99} value={reputacja}
-                  onChange={(e) => setReputacja(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
                   className={`${inputCls} w-20 px-2 py-1.5 text-center`} />
               </div>
             </div>
@@ -3435,6 +3440,18 @@ export const EditorView: React.FC = () => {
                           </div>
                         </td>
                       ))}
+                      {rowIdx === Math.ceil(ATTR_KEYS.length / 3) - 1 && (
+                        <td className="py-[2px] pr-6">
+                          <div className="flex items-center gap-3">
+                            <span className="text-yellow-400 text-[15px] whitespace-nowrap w-44 flex-shrink-0">Lojalność</span>
+                            <input
+                              type="number" min={1} max={99} value={lojalnosc}
+                              onChange={(e) => setLojalnosc(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                              className={`${inputCls} w-[48px] h-[38px] p-0 text-center text-[18px] leading-none`}
+                            />
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

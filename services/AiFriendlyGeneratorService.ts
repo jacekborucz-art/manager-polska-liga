@@ -43,6 +43,8 @@ export class AiFriendlyGeneratorService {
     const pairsPerDay = options.pairsPerDay ?? PAIRS_PER_DAY;
     const minDaysBetweenMatches = options.minDaysBetweenMatches ?? dates.length;
     const lastPlayedDateIndex = new Map<string, number>();
+    const usedPairKeys = new Set<string>();
+    const pairKey = (a: string, b: string): string => [a, b].sort().join('__');
 
     for (let dateIndex = 0; dateIndex < dates.length; dateIndex++) {
       const date = dates[dateIndex];
@@ -71,6 +73,7 @@ export class AiFriendlyGeneratorService {
           const candidates = polishClubs.filter(c =>
             isAvailable(c) &&
             c.id !== polishTeam.id &&
+            !usedPairKeys.has(pairKey(polishTeam.id, c.id)) &&
             c.reputation >= polishTeam.reputation - 5 &&
             c.reputation <= polishTeam.reputation + 3
           );
@@ -83,6 +86,7 @@ export class AiFriendlyGeneratorService {
           // 30% lub fallback - druzyna europejska
           const candidates = europeanClubs.filter(c =>
             isAvailable(c) &&
+            !usedPairKeys.has(pairKey(polishTeam.id, c.id)) &&
             c.reputation >= polishTeam.reputation - 3 &&
             c.reputation <= polishTeam.reputation + 3
           );
@@ -108,6 +112,7 @@ export class AiFriendlyGeneratorService {
         usedToday.add(opponent.id);
         lastPlayedDateIndex.set(polishTeam.id, dateIndex);
         lastPlayedDateIndex.set(opponent.id, dateIndex);
+        usedPairKeys.add(pairKey(polishTeam.id, opponent.id));
         count++;
       }
     }

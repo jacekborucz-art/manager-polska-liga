@@ -388,6 +388,7 @@ function normalizeSaveState(data: SaveState): SaveState {
           freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
           freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
           reputacja: player.reputacja ?? 50,
+          lojalnosc: (typeof player.lojalnosc === 'number' && player.lojalnosc >= 1) ? player.lojalnosc : Math.floor(Math.random() * 99) + 1,
         };
       }),
     ])

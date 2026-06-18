@@ -401,6 +401,7 @@ export const AcademyService = {
       moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
       fatigueDebt: 0,
       reputacja: calcReputacja(overallRating, clubReputation),
+      lojalnosc: Math.floor(Math.random() * 99) + 1,
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,
       freeAgentLockoutUntil: null,

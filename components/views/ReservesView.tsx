@@ -258,16 +258,6 @@ const formatProgressDate = (date: string): string => {
   });
 };
 
-const formatProgressShortDate = (date: string): string => {
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-
-  return parsed.toLocaleDateString('pl-PL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-  });
-};
 
 const formatReservePanelDate = (date: string): string => {
   const parsed = new Date(date);
@@ -1272,7 +1262,7 @@ export const ReservesView: React.FC = () => {
 
     {showProgressModal && latestReserveProgress && (
       <div
-        className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 px-4 py-4"
+        className="fixed inset-0 z-[90] flex items-center justify-center bg-black/65 px-4 py-4"
         onClick={() => {
           setShowProgressModal(false);
           setHoveredProgressPoint(null);
@@ -1296,230 +1286,245 @@ export const ReservesView: React.FC = () => {
         )}
 
         <div
-          className="relative flex max-h-[78vh] w-[96vw] max-w-[1550px] flex-col overflow-hidden rounded-[20px] border border-emerald-400/35 bg-[#020617] shadow-[0_28px_90px_rgba(0,0,0,0.85)]"
+          className="relative flex max-h-[78vh] w-[96vw] max-w-[1550px] flex-col overflow-hidden rounded-[20px] border border-emerald-800/50 bg-[#050f08] shadow-[0_28px_90px_rgba(0,0,0,0.85)]"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex shrink-0 items-start justify-between gap-5 border-b border-white/15 bg-black/45 px-6 py-4">
-            <div>
-              <p className="text-[13px] italic uppercase tracking-tighter text-emerald-300">Analiza rozwoju</p>
-              <h2 className="text-3xl italic uppercase tracking-tighter text-white leading-none">Progres Rezerw</h2>
-              <p className="mt-2 text-[13px] italic uppercase tracking-tighter text-white">
-                {myClub?.name || 'Klub'} II / {reserves.length} zawodnikow / RAPORT: {latestReserveProgress.label}
-              </p>
+          <div className="relative flex shrink-0 items-center justify-between overflow-hidden border-b border-emerald-900/40 px-5 py-3" style={{background: 'linear-gradient(180deg, #0d2416 0%, #081a0e 100%)'}}>
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500/55 to-transparent" />
+            <div className="flex items-center gap-2.5">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="#c4a45a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 17l4-5 4 3 4-6 4-3" />
+                <path d="M3 21h18" />
+              </svg>
+              <h2 className="text-[13px] font-black italic uppercase tracking-[0.45em] leading-none text-amber-200/90">Progres Rezerw</h2>
+              <span className="mx-1 text-emerald-900/60 select-none">|</span>
+              <span className="text-[10px] font-black italic uppercase tracking-[0.2em] text-slate-500">{myClub?.name || 'Klub'} II · {reserves.length} zawodników</span>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl border border-emerald-300/60 bg-emerald-500 px-4 py-2 text-black">
-                <p className="text-[13px] italic uppercase tracking-tighter">Ogólne</p>
-                <p className="text-2xl italic uppercase tracking-tighter leading-none">{latestReserveProgress.overall}</p>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-emerald-600/30 bg-emerald-900/25 px-3 py-1.5 text-center">
+                <p className="text-[8px] font-black italic uppercase tracking-[0.3em] text-slate-500">Ogólne</p>
+                <p className="text-[18px] font-black italic uppercase tracking-tighter leading-none text-emerald-300">{latestReserveProgress.overall}</p>
               </div>
-              <div
-                className="rounded-xl border px-4 py-2 text-center"
-                style={{
-                  borderColor: reserveProgressDiff >= 0 ? '#34d399' : '#fb7185',
-                  backgroundColor: reserveProgressDiff >= 0 ? 'rgba(16,185,129,0.18)' : 'rgba(244,63,94,0.18)',
-                }}
-              >
-                <p className="text-[13px] italic uppercase tracking-tighter text-white">Wzrost/Spadek</p>
-                <p
-                  className="text-center text-2xl italic uppercase tracking-tighter leading-none"
-                  style={{ color: reserveProgressDiff >= 0 ? '#34d399' : '#fb7185' }}
-                >
+              <div className="rounded-lg border px-3 py-1.5 text-center" style={{borderColor: reserveProgressDiff >= 0 ? 'rgba(52,211,153,0.35)' : 'rgba(251,113,133,0.3)', backgroundColor: reserveProgressDiff >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)'}}>
+                <p className="text-[8px] font-black italic uppercase tracking-[0.3em] text-slate-500">Wzrost</p>
+                <p className="text-[18px] font-black italic uppercase tracking-tighter leading-none" style={{color: reserveProgressDiff >= 0 ? '#34d399' : '#fb7185'}}>
                   {reserveProgressDiff > 0 ? `+${reserveProgressDiff}` : reserveProgressDiff}
                 </p>
               </div>
               <button
-                onClick={() => {
-                  setShowProgressModal(false);
-                  setHoveredProgressPoint(null);
-                }}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white text-lg text-black transition-all hover:scale-105 active:scale-95"
+                onClick={() => { setShowProgressModal(false); setHoveredProgressPoint(null); }}
+                className="ml-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/15 text-[11px] font-black text-slate-500 transition-all hover:border-white/35 hover:text-white"
                 aria-label="Zamknij modal progresu rezerw"
-              >
-                X
-              </button>
+              >✕</button>
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-5 lg:grid-cols-[460px_1fr]">
-            <section className="flex min-h-0 flex-col rounded-2xl border border-white/15 bg-black/35 p-4">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl italic uppercase tracking-tighter text-white">Ogólne</h3>
-                  <p className="text-[13px] italic uppercase tracking-tighter text-emerald-300">
-                    {visibleReserveProgressPoints[0]?.label || latestReserveProgress.label} - {visibleReserveProgressPoints[visibleReserveProgressPoints.length - 1]?.label || latestReserveProgress.label}
-                  </p>
-                </div>
-                <div className="flex rounded-xl border border-white/15 bg-black p-1">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+
+            <div className="shrink-0 border-b border-emerald-900/30 px-5 py-2.5" style={{background: 'rgba(4,12,6,0.85)'}}>
+              <div className="flex items-center gap-4">
+                <div className="flex gap-0.5 rounded-xl border border-white/10 bg-black/60 p-0.5">
                   {(['DAY', 'WEEK', 'MONTH'] as ProgressRange[]).map(range => (
                     <button
                       key={range}
-                      onClick={() => {
-                        setProgressRange(range);
-                        setProgressWindowOffset(0);
-                        setHoveredProgressPoint(null);
-                      }}
-                      className={`min-w-10 rounded-lg px-3 py-2 text-[13px] italic uppercase tracking-tighter transition-all ${
-                        progressRange === range ? 'bg-emerald-400 text-black' : 'text-white hover:bg-white/10'
+                      onClick={() => { setProgressRange(range); setProgressWindowOffset(0); setHoveredProgressPoint(null); }}
+                      className={`rounded-lg px-2.5 py-1.5 text-[11px] italic uppercase tracking-tighter transition-all ${
+                        progressRange === range
+                          ? 'bg-emerald-400 text-black shadow-[0_2px_6px_rgba(52,211,153,0.4)]'
+                          : 'text-slate-500 hover:text-white hover:bg-white/10'
                       }`}
                     >
                       {PROGRESS_RANGE_LABELS[range]}
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {(() => {
-                const data = visibleReserveProgressPoints.length > 0 ? visibleReserveProgressPoints : reserveProgressPoints;
-                const W = 420;
-                const H = 250;
-                const PAD = { top: 26, right: 18, bottom: 48, left: 50 };
-                const innerW = W - PAD.left - PAD.right;
-                const innerH = H - PAD.top - PAD.bottom;
-                const minVal = Math.min(...data.map(point => point.overall)) - 1;
-                const maxVal = Math.max(...data.map(point => point.overall)) + 1;
-                const valueRange = maxVal - minVal || 1;
-                const toX = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * innerW;
-                const toY = (v: number) => PAD.top + innerH - ((v - minVal) / valueRange) * innerH;
-                const points = data.map((point, i) => `${toX(i)},${toY(point.overall)}`).join(' ');
-                const areaPoints = `${toX(0)},${PAD.top + innerH} ${points} ${toX(data.length - 1)},${PAD.top + innerH}`;
-                const labelIndexes = data.length <= 6
-                  ? data.map((_, i) => i)
-                  : [0, Math.floor((data.length - 1) / 2), data.length - 1];
-
-                return (
-                  <div className="rounded-2xl border border-white/15 bg-black/55 p-3">
-                    <svg
-                      viewBox={`0 0 ${W} ${H}`}
-                      width="100%"
-                      height={H}
-                      role="img"
-                      aria-label="Wykres liniowy ogólne rezerw"
-                      onMouseLeave={() => setHoveredProgressPoint(null)}
-                      style={{ display: 'block' }}
-                    >
+                {(() => {
+                  const data = visibleReserveProgressPoints.length > 0 ? visibleReserveProgressPoints : reserveProgressPoints;
+                  const W = 600;
+                  const H = 44;
+                  const PAD = { top: 5, right: 10, bottom: 5, left: 10 };
+                  const innerW = W - PAD.left - PAD.right;
+                  const innerH = H - PAD.top - PAD.bottom;
+                  const minVal = Math.min(...data.map(p => p.overall)) - 1;
+                  const maxVal = Math.max(...data.map(p => p.overall)) + 1;
+                  const vRange = maxVal - minVal || 1;
+                  const toX = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * innerW;
+                  const toY = (v: number) => PAD.top + innerH - ((v - minVal) / vRange) * innerH;
+                  const pts = data.map((p, i) => `${toX(i)},${toY(p.overall)}`).join(' ');
+                  const areaPts = `${toX(0)},${H} ${pts} ${toX(data.length - 1)},${H}`;
+                  return (
+                    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="flex-1" style={{ display: 'block' }} onMouseLeave={() => setHoveredProgressPoint(null)}>
                       <defs>
-                        <linearGradient id="reserveProgressModalFillCompact" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
-                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                        <linearGradient id="rpStripFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.01" />
                         </linearGradient>
                       </defs>
-
-                      {[0, 0.5, 1].map((t, i) => {
-                        const y = PAD.top + innerH * (1 - t);
-                        const val = Math.round(minVal + valueRange * t);
-                        return (
-                          <g key={i}>
-                            <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
-                            <text x={PAD.left - 10} y={y + 5} fill="#ffffff" fontSize="13" textAnchor="end" fontStyle="italic">{val}</text>
-                          </g>
-                        );
-                      })}
-
-                      <polygon points={areaPoints} fill="url(#reserveProgressModalFillCompact)" />
-                      <polyline points={points} fill="none" stroke="#34d399" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
-
-                      {labelIndexes.map(index => (
-                        <text key={index} x={toX(index)} y={H - 14} fill="#ffffff" fontSize="13" textAnchor="middle" fontStyle="italic">
-                          {progressRange === 'DAY' ? formatProgressShortDate(data[index].date) : data[index].label}
-                        </text>
-                      ))}
-
+                      <polygon points={areaPts} fill="url(#rpStripFill)" />
+                      <polyline points={pts} fill="none" stroke="#34d399" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                       {data.map((point, index) => {
                         const diff = index === 0 ? 0 : point.overall - data[index - 1].overall;
-                        const fill = index === data.length - 1 ? '#34d399' : '#020617';
                         return (
-                          <g key={`${point.date}-${index}`}>
-                            <circle
-                              cx={toX(index)}
-                              cy={toY(point.overall)}
-                              r={6.5}
-                              fill={fill}
-                              stroke="#34d399"
-                              strokeWidth="3"
-                              cursor="pointer"
-                              onMouseEnter={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
-                              onMouseMove={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
-                            />
-                            <text x={toX(index)} y={toY(point.overall) - 12} fill="#ffffff" fontSize="13" textAnchor="middle" fontStyle="italic">
-                              {point.overall}
-                            </text>
-                          </g>
+                          <circle
+                            key={`strip-${point.date}-${index}`}
+                            cx={toX(index)}
+                            cy={toY(point.overall)}
+                            r={3}
+                            fill={index === data.length - 1 ? '#34d399' : '#020617'}
+                            stroke="#34d399"
+                            strokeWidth="1.5"
+                            cursor="pointer"
+                            onMouseEnter={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
+                            onMouseMove={e => setHoveredProgressPoint({ x: e.clientX, y: e.clientY, index, point, diff })}
+                          />
                         );
                       })}
                     </svg>
-                  </div>
-                );
-              })()}
-
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setProgressWindowOffset(prev => prev + 1)}
-                  disabled={!canShiftProgressLeft}
-                  className="rounded-xl border border-white/20 bg-white px-4 py-2 text-[13px] italic uppercase tracking-tighter text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  ←
-                </button>
-                <p className="text-center text-[13px] italic uppercase tracking-tighter text-white">
-                  {visibleReserveProgressPoints.length} / {rangedReserveProgressPoints.length}
-                </p>
-                <button
-                  onClick={() => setProgressWindowOffset(prev => Math.max(0, prev - 1))}
-                  disabled={!canShiftProgressRight}
-                  className="rounded-xl border border-white/20 bg-white px-4 py-2 text-[13px] italic uppercase tracking-tighter text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  →
-                </button>
-              </div>
-            </section>
-
-            <section className="flex min-h-0 flex-col rounded-2xl border border-white/15 bg-black/35">
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                <h3 className="text-xl italic uppercase tracking-tighter text-white">Atrybuty</h3>
-                <div className="flex gap-3 text-[13px] italic uppercase tracking-tighter">
-                  <span className="text-emerald-300">+{reserveAttributeChanges.filter(stat => stat.total > 0).length}</span>
-                  <span className="text-rose-300">-{reserveAttributeChanges.filter(stat => stat.total < 0).length}</span>
-                  <span className="text-white">0:{reserveAttributeChanges.filter(stat => stat.total === 0).length}</span>
+                  );
+                })()}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={() => setProgressWindowOffset(prev => prev + 1)}
+                    disabled={!canShiftProgressLeft}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-[11px] text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-30"
+                  >←</button>
+                  <span className="text-[10px] italic uppercase tracking-tighter text-slate-500">
+                    {visibleReserveProgressPoints.length}/{rangedReserveProgressPoints.length}
+                  </span>
+                  <button
+                    onClick={() => setProgressWindowOffset(prev => Math.max(0, prev - 1))}
+                    disabled={!canShiftProgressRight}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-[11px] text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-30"
+                  >→</button>
                 </div>
               </div>
+            </div>
 
-              <div className="custom-scrollbar grid flex-1 grid-cols-1 gap-1.5 overflow-y-auto p-2 xl:grid-cols-2">
-                {reserveAttributeChanges.map(stat => {
-                  const isPositive = stat.total > 0;
-                  const isNegative = stat.total < 0;
-                  const barWidth = `${Math.max(stat.total === 0 ? 2 : 6, (Math.abs(stat.total) / maxAttributeChange) * 50)}%`;
-                  const valueColor = isPositive ? '#34d399' : isNegative ? '#fb7185' : '#ffffff';
+            <div className="grid min-h-0 flex-1 grid-cols-2 overflow-hidden">
+
+              <div className="flex flex-col items-center justify-center border-r border-emerald-900/25 p-6" style={{background: 'rgba(4,14,7,0.6)'}}>
+                {(() => {
+                  const radarDefs: { key: keyof PlayerAttributes; label: string }[] = [
+                    { key: 'defending', label: 'Obrona' },
+                    { key: 'strength', label: 'Siła' },
+                    { key: 'stamina', label: 'Wytrzymałość' },
+                    { key: 'pace', label: 'Prędkość' },
+                    { key: 'finishing', label: 'Skuteczność' },
+                    { key: 'passing', label: 'Podania' },
+                    { key: 'vision', label: 'Wizja' },
+                    { key: 'technique', label: 'Technika' },
+                  ];
+                  const N = radarDefs.length;
+                  const CX = 200;
+                  const CY = 195;
+                  const R = 140;
+                  const LABEL_R = R + 24;
+                  const ang = (i: number) => -Math.PI / 2 + (2 * Math.PI * i / N);
+                  const vals = radarDefs.map(({ key }) => (
+                    reserves.length > 0
+                      ? reserves.reduce((sum, p) => sum + p.attributes[key], 0) / reserves.length
+                      : 0
+                  ));
+                  const gridPoly = (level: number) =>
+                    Array.from({ length: N }, (_, i) => {
+                      const a = ang(i);
+                      const r = R * level;
+                      return `${CX + r * Math.cos(a)},${CY + r * Math.sin(a)}`;
+                    }).join(' ');
+                  const valuePoly = vals.map((v, i) => {
+                    const a = ang(i);
+                    const r = (v / 99) * R;
+                    return `${CX + r * Math.cos(a)},${CY + r * Math.sin(a)}`;
+                  }).join(' ');
                   return (
-                    <div key={stat.key} className="grid grid-cols-[118px_1fr_86px] items-center gap-2 rounded-lg border border-white/15 bg-black/55 px-2.5 py-1">
-                      <div>
-                        <p className="truncate text-[11px] italic uppercase tracking-tighter text-white" title={stat.name}>{stat.name}</p>
-                      </div>
-                      <div className="relative h-5 overflow-hidden rounded-md border border-white/20 bg-black">
-                        <div className="absolute bottom-0 left-1/2 top-0 w-px bg-white" />
-                        {isPositive && (
-                          <div className="absolute bottom-0 left-1/2 top-0 bg-emerald-400" style={{ width: barWidth }} />
-                        )}
-                        {isNegative && (
-                          <div className="absolute bottom-0 right-1/2 top-0 bg-rose-400" style={{ width: barWidth }} />
-                        )}
-                        {!isPositive && !isNegative && (
-                          <div className="absolute bottom-0 left-1/2 top-0 -translate-x-1/2 bg-white" style={{ width: barWidth }} />
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[11px] italic uppercase tracking-tighter leading-none text-white">Suma</p>
-                        <p className="text-[15px] italic uppercase tracking-tighter leading-none tabular-nums" style={{ color: valueColor }}>
-                          {stat.total > 0 ? `+${stat.total}` : stat.total}
-                        </p>
-                        <p className="mt-0.5 text-[10px] italic uppercase tracking-tighter leading-none text-white">
-                          Sr/zaw {stat.average > 0 ? `+${stat.average.toFixed(1)}` : stat.average.toFixed(1)}
-                        </p>
-                      </div>
-                    </div>
+                    <svg viewBox="0 0 400 390" width="100%" style={{ maxWidth: 400, display: 'block' }}>
+                      {[0.25, 0.5, 0.75, 1.0].map((level, li) => (
+                        <polygon key={li} points={gridPoly(level)} fill="none" stroke={level === 1.0 ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.06)'} strokeWidth="1" />
+                      ))}
+                      {Array.from({ length: N }, (_, i) => {
+                        const a = ang(i);
+                        return <line key={i} x1={CX} y1={CY} x2={CX + R * Math.cos(a)} y2={CY + R * Math.sin(a)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />;
+                      })}
+                      <polygon points={valuePoly} fill="rgba(16,185,129,0.2)" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" />
+                      {vals.map((v, i) => {
+                        const a = ang(i);
+                        const r = (v / 99) * R;
+                        const px = CX + r * Math.cos(a);
+                        const py = CY + r * Math.sin(a);
+                        return <circle key={i} cx={px} cy={py} r={5.5} fill="#3b82f6" stroke="#1e40af" strokeWidth="1.5" />;
+                      })}
+                      {radarDefs.map(({ label }, i) => {
+                        const a = ang(i);
+                        const lx = CX + LABEL_R * Math.cos(a);
+                        const ly = CY + LABEL_R * Math.sin(a);
+                        const anchor = Math.abs(Math.cos(a)) < 0.15 ? 'middle' : Math.cos(a) > 0 ? 'start' : 'end';
+                        return (
+                          <text key={i} x={lx} y={ly + 4} fill="#c4a45a" fontSize="11" fontStyle="italic" textAnchor={anchor} fontWeight="900" letterSpacing="0.05em">
+                            {label.toUpperCase()}
+                          </text>
+                        );
+                      })}
+                      <circle cx={CX} cy={CY} r={3} fill="rgba(16,185,129,0.5)" />
+                    </svg>
                   );
-                })}
+                })()}
               </div>
-            </section>
+
+              <section className="flex min-h-0 flex-col overflow-hidden" style={{background: 'rgba(4,14,7,0.4)'}}>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-900/30 px-5 py-3">
+                  <h3 className="text-xl italic uppercase tracking-tighter text-white leading-none">Atrybuty</h3>
+                  <div className="flex gap-2">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-500/10 px-2.5 py-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                      <span className="text-[11px] italic uppercase tracking-tighter text-blue-300">+{reserveAttributeChanges.filter(stat => stat.total > 0).length}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                      <span className="text-[11px] italic uppercase tracking-tighter text-amber-300">-{reserveAttributeChanges.filter(stat => stat.total < 0).length}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-2">
+                  {reserveAttributeChanges.map(stat => {
+                    const isPositive = stat.total > 0;
+                    const isNegative = stat.total < 0;
+                    const positiveCount = reserveAttributeChanges.filter(s => s.total > 0).length;
+                    const barPct = isPositive || isNegative
+                      ? Math.max(6, (Math.abs(stat.total) / maxAttributeChange) * 82)
+                      : 3;
+                    const posRank = isPositive ? reserveAttributeChanges.filter(s => s.total > 0).indexOf(stat) : -1;
+                    const barColor = isPositive
+                      ? posRank < Math.ceil(positiveCount * 0.34)
+                        ? 'linear-gradient(90deg, #1d4ed8, #60a5fa)'
+                        : posRank < Math.ceil(positiveCount * 0.67)
+                        ? 'linear-gradient(90deg, #0e7490, #22d3ee)'
+                        : 'linear-gradient(90deg, #92400e, #f59e0b)'
+                      : isNegative
+                      ? 'linear-gradient(90deg, #1e3a8a, #2563eb)'
+                      : 'rgba(100,116,139,0.25)';
+                    const valueColor = isPositive
+                      ? posRank < Math.ceil(positiveCount * 0.34)
+                        ? '#60a5fa'
+                        : posRank < Math.ceil(positiveCount * 0.67)
+                        ? '#22d3ee'
+                        : '#fbbf24'
+                      : isNegative ? '#93c5fd' : '#475569';
+                    return (
+                      <div key={stat.key} className="flex items-center gap-3 border-b border-emerald-900/20 py-2">
+                        <p className="w-[130px] shrink-0 text-[10px] font-black italic uppercase tracking-tighter leading-none" style={{color: '#c4a45a'}} title={stat.name}>{stat.name}</p>
+                        <div className="flex-1 h-[6px] overflow-hidden rounded-full bg-white/[0.07]">
+                          <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: barColor }} />
+                        </div>
+                        <p className="w-9 shrink-0 text-right text-[16px] font-black italic uppercase tracking-tighter leading-none tabular-nums" style={{ color: valueColor }}>
+                          {stat.total > 0 ? `+${stat.total}` : stat.total === 0 ? '0' : stat.total}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+            </div>
           </div>
         </div>
       </div>

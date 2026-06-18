@@ -7,7 +7,7 @@ const MAX_LEAGUE_SUBS = 5;
 
 const DEFENSIVE_TACTICS = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
 const SOLID_DEFENSIVE_TACTICS = ['4-4-2-DEF', '5-3-2', '4-5-1', '5-2-1-2'];
-const OFFENSIVE_TACTICS = ['3-4-3', '4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '3-4-2-1', '4-3-3-F9'];
+const OFFENSIVE_TACTICS = ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '4-3-3-F9', '3-4-2-1', '3-4-3'];
 const DESPERATION_TACTICS = ['4-2-4'];
 
 // [AI-COACH-CALIBRATION] FAVORITE_TACTIC_BONUS — "ulubiona taktyka to pierwszy wybór, nie nakaz".
@@ -782,12 +782,22 @@ const chooseScoreTacticResponse = (
       const fit = getLineupFitScore(assignedXI, tacticId, players, true);
       const intent = getTacticIntentScore(tacticId, scoreDiff);
       const fitLoss = Math.max(0, currentFit - fit);
+      const tactic = TacticRepository.getById(tacticId);
+      const currentTactic = TacticRepository.getById(lineup.tacticId);
+      const chaseDeficit = scoreDiff < 0 ? Math.min(3, Math.abs(scoreDiff)) : 0;
+      const ultraOpenRisk = scoreDiff < 0
+        ? Math.max(0, tactic.attackBias - 78) * 0.22 +
+          Math.max(0, 42 - tactic.defenseBias) * (0.16 + chaseDeficit * 0.06)
+        : 0;
+      const structureBreakRisk = scoreDiff < 0 && currentTactic.defenseBias - tactic.defenseBias > 25
+        ? (currentTactic.defenseBias - tactic.defenseBias - 25) * 0.12
+        : 0;
       return {
         tacticId,
         // [AI-COACH-CALIBRATION] + getFavoriteTacticBonus: "pierwszy wybór, nie nakaz" — patrz
         // komentarz przy definicji funkcji. Dodane na końcu, żeby nie zmieniać wag już istniejących
         // składników (intent/fitLoss), tylko delikatnie przeważać remisy w stronę stylu trenera.
-        score: intent - currentIntent - fitLoss * (0.18 + coachQuality / 650) + getFavoriteTacticBonus(tacticId, coach, scoreDiff)
+        score: intent - currentIntent - fitLoss * (0.18 + coachQuality / 650) - ultraOpenRisk - structureBreakRisk + getFavoriteTacticBonus(tacticId, coach, scoreDiff)
       };
     })
     .filter((entry): entry is { tacticId: string; score: number } => !!entry)
@@ -1186,7 +1196,19 @@ export const AiMatchDecisionService = {
       // mustProtectLate/mustChaseLate) nie dostała tego bonusu PODWÓJNIE.
       if (!isFinalPhase) reactionChance += lateSeasonDrama * 0.05 * Math.min(1, state.minute / 75);
     }
+    const urgentTacticalContext =
+      isPriority ||
+      isHalftime ||
+      mustProtectLate ||
+      mustChaseLate ||
+      avoidCollapseLate ||
+      opponentGoalkeeperCrisis ||
+      (scoreDiff < 0 && state.minute >= 60);
+
     reactionChance = Math.max(0.08, Math.min(0.98, reactionChance + (coachQuality - 50) * 0.004));
+    if (urgentTacticalContext) {
+      reactionChance = Math.max(reactionChance, isFinalPhase ? 0.82 : 0.72);
+    }
 
     // [AI-COACH-FIX] aiFrozenByBadImprovisation — "porzucenie planu" w wariancie FREEZE (65% z
     // IMPROVISE_BADLY, patrz rollBadImprovisationMode): trener w tej minucie po prostu nic nie robi,
@@ -1194,7 +1216,10 @@ export const AiMatchDecisionService = {
     // bo to już jest jedyne miejsce w pliku, które kontroluje "czy w ogóle coś tickować" dla
     // dyskrecjonalnej (nie wymuszonej Warstwą 0/1 — kontuzja/czerwona/brak bramkarza) reakcji —
     // Warstwa 0/1 działa NIŻEJ w kodzie i nie jest tym gate'em w żaden sposób ograniczona.
-    if ((Math.random() > reactionChance || aiFrozenByBadImprovisation) && !isPriority) return { logs: [] };
+    if (!isPriority) {
+      if (Math.random() > reactionChance) return { logs: [] };
+      if (aiFrozenByBadImprovisation && !urgentTacticalContext) return { logs: [] };
+    }
 
     let newLineup = { ...currentLineup, startingXI: [...currentLineup.startingXI], bench: [...currentLineup.bench], reserves: [...currentLineup.reserves] };
     let newSubsCount = currentSubsCount;
@@ -1773,12 +1798,10 @@ export const AiMatchDecisionService = {
       }
 
       if (!newTacticId && canChangeTacticNow && canUsePlannedLateTactic) {
-        const lateTacticPool = mustChaseLate && !avoidCollapseLate
-          ? [...OFFENSIVE_TACTICS, ...(desperationAllows4_2_4 ? DESPERATION_TACTICS : [])]
-          : (mustProtectLate || avoidCollapseLate)
-            ? DEFENSIVE_TACTICS
-            : [];
-        const lateTactic = lateTacticPool.find(t => t !== newLineup.tacticId);
+        const lateTacticScoreDiff = mustChaseLate && !avoidCollapseLate ? Math.min(-1, scoreDiff) : Math.max(1, scoreDiff);
+        const lateTactic = (mustChaseLate || mustProtectLate || avoidCollapseLate)
+          ? chooseScoreTacticResponse(newLineup, myPlayers, lateTacticScoreDiff, coachQuality, myCoach, crossFamilyAllowed, postureEagernessBonus)
+          : null;
         if (lateTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
           applyTactic(lateTactic);
@@ -1863,18 +1886,18 @@ export const AiMatchDecisionService = {
 
     if (state.minute > 20 && !newTacticId && canChangeTactic && canUsePlannedLateTactic) {
       if (scoreDiff < -1 && state.minute > 45) {
-        const candidates = [...OFFENSIVE_TACTICS, ...(desperationAllows4_2_4 ? DESPERATION_TACTICS : [])].filter(t => t !== currentLineup.tacticId);
-        if (candidates.length > 0) {
+        const lateTactic = chooseScoreTacticResponse(newLineup, myPlayers, scoreDiff, coachQuality, myCoach, crossFamilyAllowed, postureEagernessBonus);
+        if (lateTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-          applyTactic(candidates[0]);
+          applyTactic(lateTactic);
           markPlannedFormationAction(isFinalPhase ? 18 : 0);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       } else if (scoreDiff > 0 && state.minute > 75 && mySentOffCount === 0) {
-        const candidates = DEFENSIVE_TACTICS.filter(t => t !== currentLineup.tacticId);
-        if (candidates.length > 0) {
+        const lateTactic = chooseScoreTacticResponse(newLineup, myPlayers, scoreDiff, coachQuality, myCoach, crossFamilyAllowed, postureEagernessBonus);
+        if (lateTactic) {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
-          applyTactic(candidates[0]);
+          applyTactic(lateTactic);
           markPlannedFormationAction(18);
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }

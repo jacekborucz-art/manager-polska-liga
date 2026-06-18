@@ -87,6 +87,7 @@ export const FreeAgentService = {
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
         reputacja: calcReputacja(finalOverall, 1),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         isNegotiationPermanentBlocked: false,
         transferLockoutUntil: null,
         freeAgentLockoutUntil: null,

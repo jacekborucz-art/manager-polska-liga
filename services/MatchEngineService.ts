@@ -30,13 +30,23 @@ export const MatchEngineService = {
     const homeRedFatMod = _redFatMod(homeRedCount);
     const awayRedFatMod = _redFatMod(awayRedCount);
 
-    const update = (players: Player[], fatigueMap: Record<string, number>, sideLineup: (string | null)[], pressureFactor: number, pressingMod: number, redFatigueMod: number) => {
+    const getRotationFatigueMod = (minute: number, subsUsed: number): number => {
+      if (minute < 55) return 1.0;
+      const lateFactor = Math.min(1, (minute - 55) / 35);
+      const missingRotation = Math.max(0, 4 - subsUsed);
+      return 1 + (missingRotation * 0.075 * lateFactor);
+    };
+
+    const homeRotationFatMod = getRotationFatigueMod(state.minute, state.subsCountHome);
+    const awayRotationFatMod = getRotationFatigueMod(state.minute, state.subsCountAway);
+
+    const update = (players: Player[], fatigueMap: Record<string, number>, sideLineup: (string | null)[], pressureFactor: number, pressingMod: number, redFatigueMod: number, rotationFatigueMod: number) => {
       players.forEach(p => {
         if (!sideLineup.includes(p.id)) return;
 
         const current = fatigueMap[p.id] !== undefined ? fatigueMap[p.id] : 100;
         
-        let drain = 0.17 * pressureFactor;
+        let drain = 0.19 * pressureFactor;
 
         if (p.position === PlayerPosition.DEF) drain *= 1.35;
         if (p.position === PlayerPosition.MID) drain *= 1.35;
@@ -56,6 +66,7 @@ export const MatchEngineService = {
         drain *= workRateMod;
         drain *= pressingMod;
         drain *= redFatigueMod;
+        drain *= rotationFatigueMod;
 
         if (weather && weather.precipitationChance > 0) drain *= 1.08;
         if (weather && weather.tempC > 30) drain *= 1.10;
@@ -64,8 +75,8 @@ export const MatchEngineService = {
       });
     };
 
-    update(ctx.homePlayers, homeFatigue, state.homeLineup.startingXI, homePressureFactor, homePressingMod, homeRedFatMod);
-    update(ctx.awayPlayers, awayFatigue, state.awayLineup.startingXI, awayPressureFactor, awayPressingMod, awayRedFatMod);
+    update(ctx.homePlayers, homeFatigue, state.homeLineup.startingXI, homePressureFactor, homePressingMod, homeRedFatMod, homeRotationFatMod);
+    update(ctx.awayPlayers, awayFatigue, state.awayLineup.startingXI, awayPressureFactor, awayPressingMod, awayRedFatMod, awayRotationFatMod);
 
     return { home: homeFatigue, away: awayFatigue };
   },

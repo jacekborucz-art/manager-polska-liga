@@ -35,6 +35,22 @@ export const CalendarDebugView: React.FC = () => {
     return set;
   }, [fixtures, userTeamId]);
 
+  const confirmedFriendlyBookings = useMemo(() => {
+    if (!userTeamId) return [];
+    return fixtures
+      .filter(f =>
+        f.leagueId === CompetitionType.FRIENDLY &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      )
+      .map(f => {
+        const d = new Date(f.date);
+        return {
+          opponentClubId: f.homeTeamId === userTeamId ? f.awayTeamId : f.homeTeamId,
+          dateKey: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
+        };
+      });
+  }, [fixtures, userTeamId]);
+
   const getClub = (id: string) => clubs.find(c => c.id === id);
 
   const slots = useMemo(() => {
@@ -549,6 +565,7 @@ export const CalendarDebugView: React.FC = () => {
         userTeamId={userTeamId ?? ''}
         pendingFriendlyRequests={pendingFriendlyRequests}
         confirmedFriendlyDates={confirmedFriendlyDates}
+        confirmedFriendlyBookings={confirmedFriendlyBookings}
         onConfirmFriendly={addFriendlyRequest}
         aiFriendlyPairs={aiFriendlyPairs}
       />

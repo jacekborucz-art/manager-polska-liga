@@ -10,7 +10,7 @@ const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_r
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
 
 export const PostMatchCLStudioView: React.FC = () => {
-  const { fixtures, clubs, currentDate, navigateTo, advanceDay } = useGame();
+  const { fixtures, clubs, currentDate, navigateTo, advanceDay, clGroups } = useGame();
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
   const [animated, setAnimated] = useState(false);
@@ -32,6 +32,22 @@ export const PostMatchCLStudioView: React.FC = () => {
        f.leagueId === CompetitionType.EL_FINAL)
     );
   }, [fixtures, currentDate]);
+
+  const groupedResults = useMemo(() => {
+    const isGS = results.length > 0 && results[0].leagueId === CompetitionType.CL_GROUP_STAGE;
+    if (!isGS || !clGroups) return null;
+    const GRP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const groups: { label: string; matches: typeof results }[] = [];
+    clGroups.forEach((groupTeams, gi) => {
+      const groupMatches = results.filter(f =>
+        groupTeams.includes(f.homeTeamId) && groupTeams.includes(f.awayTeamId)
+      );
+      if (groupMatches.length > 0) {
+        groups.push({ label: GRP_LABELS[gi] ?? String(gi + 1), matches: groupMatches });
+      }
+    });
+    return groups;
+  }, [results, clGroups]);
 
   const getClub = (id: string) => clubs.find(c => c.id === id);
 
@@ -123,6 +139,71 @@ export const PostMatchCLStudioView: React.FC = () => {
   const handleContinue = () => {
     advanceDay();
     navigateTo(ViewState.DASHBOARD);
+  };
+
+  const renderFixtureRow = (fixture: typeof results[0]) => {
+    const home = getClub(fixture.homeTeamId);
+    const away = getClub(fixture.awayTeamId);
+    if (!home || !away) return null;
+
+    const agg = getAggregate(fixture);
+    const homeWins = (fixture.homeScore ?? 0) > (fixture.awayScore ?? 0);
+    const awayWins = (fixture.awayScore ?? 0) > (fixture.homeScore ?? 0);
+    const hasPens = fixture.homePenaltyScore !== undefined;
+
+    let aggWinnerId: string | null = null;
+    if (agg) {
+      if (agg.teamATotal > agg.teamBTotal) aggWinnerId = agg.teamAId;
+      else if (agg.teamBTotal > agg.teamATotal) aggWinnerId = agg.teamBId;
+      else if (hasPens) {
+        aggWinnerId = (fixture.homePenaltyScore ?? 0) > (fixture.awayPenaltyScore ?? 0)
+          ? fixture.homeTeamId : fixture.awayTeamId;
+      }
+    }
+
+    return (
+      <div key={fixture.id} className="flex flex-col px-6 py-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] rounded-3xl transition-colors group gap-1">
+        {/* Wynik meczu */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 flex-1 justify-end">
+            {aggWinnerId === fixture.homeTeamId && (
+              <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">AWANS</span>
+            )}
+            <span className={`text-sm font-black uppercase italic tracking-tight text-right truncate max-w-[180px] transition-colors ${homeWins ? 'text-white' : 'text-slate-400'}`}>
+              {home.name}
+            </span>
+            <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
+          </div>
+          <div className="w-28 flex flex-col items-center shrink-0">
+            <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(fixture.id)}>
+              {fixture.homeScore} : {fixture.awayScore}
+            </span>
+            {hasPens && (
+              <span className="text-[8px] text-rose-400 font-black uppercase tracking-widest">
+                k. {fixture.homePenaltyScore}:{fixture.awayPenaltyScore}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 flex-1 justify-start">
+            <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: away.colorsHex[0] }} />
+            <span className={`text-sm font-black uppercase italic tracking-tight truncate max-w-[180px] transition-colors ${awayWins ? 'text-white' : 'text-slate-400'}`}>
+              {away.name}
+            </span>
+            {aggWinnerId === fixture.awayTeamId && (
+              <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">AWANS</span>
+            )}
+          </div>
+        </div>
+        {/* Agregat (tylko rewanż) */}
+        {agg && (
+          <div className="flex justify-center">
+            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.3em]">
+              Agregat: {agg.teamBTotal} : {agg.teamATotal}
+            </span>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -230,73 +311,24 @@ export const PostMatchCLStudioView: React.FC = () => {
               {results.length} meczów · Wyniki oficjalne
             </p>
             <div className="flex flex-col gap-2">
-              {results.map((fixture) => {
-                const home = getClub(fixture.homeTeamId);
-                const away = getClub(fixture.awayTeamId);
-                if (!home || !away) return null;
-
-                const agg = getAggregate(fixture);
-                const homeWins = (fixture.homeScore ?? 0) > (fixture.awayScore ?? 0);
-                const awayWins = (fixture.awayScore ?? 0) > (fixture.homeScore ?? 0);
-                const hasPens = fixture.homePenaltyScore !== undefined;
-
-                // Zwycięzca dwumeczu (tylko przy rewanżu)
-                let aggWinnerId: string | null = null;
-                if (agg) {
-                  if (agg.teamATotal > agg.teamBTotal) aggWinnerId = agg.teamAId;
-                  else if (agg.teamBTotal > agg.teamATotal) aggWinnerId = agg.teamBId;
-                  else if (hasPens) {
-                    aggWinnerId = (fixture.homePenaltyScore ?? 0) > (fixture.awayPenaltyScore ?? 0)
-                      ? fixture.homeTeamId : fixture.awayTeamId;
-                  }
-                }
-
-                return (
-                  <div key={fixture.id} className="flex flex-col px-6 py-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] rounded-3xl transition-colors group gap-1">
-                    {/* Wynik meczu */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 justify-end">
-                        {aggWinnerId === fixture.homeTeamId && (
-                          <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">AWANS</span>
-                        )}
-                        <span className={`text-sm font-black uppercase italic tracking-tight text-right truncate max-w-[180px] transition-colors ${homeWins ? 'text-white' : 'text-slate-400'}`}>
-                          {home.name}
-                        </span>
-                        <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
-                      </div>
-                      <div className="w-28 flex flex-col items-center shrink-0">
-                        <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(fixture.id)}>
-                          {fixture.homeScore} : {fixture.awayScore}
-                        </span>
-                        {hasPens && (
-                          <span className="text-[8px] text-rose-400 font-black uppercase tracking-widest">
-                            k. {fixture.homePenaltyScore}:{fixture.awayPenaltyScore}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 flex-1 justify-start">
-                        <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: away.colorsHex[0] }} />
-                        <span className={`text-sm font-black uppercase italic tracking-tight truncate max-w-[180px] transition-colors ${awayWins ? 'text-white' : 'text-slate-400'}`}>
-                          {away.name}
-                        </span>
-                        {aggWinnerId === fixture.awayTeamId && (
-                          <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">AWANS</span>
-                        )}
-                      </div>
-                    </div>
-                    {/* Agregat (tylko rewanż) */}
-                    {agg && (
-                      <div className="flex justify-center">
-                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.3em]">
-                          Agregat: {agg.teamBTotal} : {agg.teamATotal}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {results.length === 0 && (
-                <div className="h-40 flex items-center justify-center text-slate-600 text-sm italic">Brak wyników</div>
+              {groupedResults ? (
+                groupedResults.map((group, gi) => (
+                  <React.Fragment key={group.label}>
+                    {gi > 0 && <div className="h-1.5 bg-blue-950/50 border-y border-blue-900/30 my-3" />}
+                    <p className="text-lg font-black uppercase tracking-[0.5em] text-cyan-300 text-center mt-2 mb-1">
+                      Grupa {group.label}
+                    </p>
+                    <div className="h-px bg-amber-400/35 mx-4 mb-3 rounded-full" />
+                    {group.matches.map(renderFixtureRow)}
+                  </React.Fragment>
+                ))
+              ) : (
+                <>
+                  {results.map(renderFixtureRow)}
+                  {results.length === 0 && (
+                    <div className="h-40 flex items-center justify-center text-slate-600 text-sm italic">Brak wyników</div>
+                  )}
+                </>
               )}
             </div>
           </div>

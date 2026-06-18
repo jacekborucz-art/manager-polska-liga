@@ -453,6 +453,7 @@ export const NationalTeamService = {
       freeAgentLockoutUntil: null,
       freeAgentClubLockouts: {},
       isNegotiationPermanentBlocked: false,
+      lojalnosc: Math.floor(Math.random() * 99) + 1,
       transferLockoutUntil: null,
     } as Player;
   },

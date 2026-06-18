@@ -204,6 +204,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       negotiationLockoutUntil: null,
       contractLockoutUntil: null,
       isNegotiationPermanentBlocked: false,
+      lojalnosc: Math.floor(Math.random() * 99) + 1,
       transferLockoutUntil: null,
       freeAgentLockoutUntil: null,
       freeAgentClubLockouts: {},
@@ -265,6 +266,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       negotiationLockoutUntil: null,
       contractLockoutUntil: null,
       isNegotiationPermanentBlocked: false,
+      lojalnosc: Math.floor(Math.random() * 99) + 1,
       transferLockoutUntil: null,
       freeAgentLockoutUntil: null,
       freeAgentClubLockouts: {},
@@ -319,6 +321,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
         negotiationLockoutUntil: null,
         contractLockoutUntil: null,
         isNegotiationPermanentBlocked: false,
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         transferLockoutUntil: null,
         freeAgentLockoutUntil: null,
         freeAgentClubLockouts: {}

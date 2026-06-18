@@ -417,6 +417,7 @@ export const SquadGeneratorService = {
             age: age,
             fatigueDebt: 0,
             reputacja: calcReputacja(genData.overall, clubRep),
+            lojalnosc: Math.floor(Math.random() * 99) + 1,
             overallRating: genData.overall,
             attributes: genData.attributes,
             stats: {
@@ -610,6 +611,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         age,
         fatigueDebt: 0,
         reputacja: calcReputacja(region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall, reputation),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall,
         attributes: genData.attributes,
         stats: {
@@ -728,6 +730,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         age,
         fatigueDebt: 0,
         reputacja: calcReputacja(genData.overall, reputation),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
         stats: {
@@ -820,6 +823,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         age,
         fatigueDebt: 0,
         reputacja: calcReputacja(genData.overall, reputation),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
         stats: {
@@ -923,6 +927,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         age,
         fatigueDebt: 0,
         reputacja: calcReputacja(genData.overall, Math.max(1, clubRep - 1)),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
         stats: {
@@ -1089,6 +1094,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         age,
         fatigueDebt: 0,
         reputacja: calcReputacja(genData.overall, reputation),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
         stats: {

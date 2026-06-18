@@ -11,6 +11,7 @@ interface FriendlySchedulerModalProps {
   userTeamId: string;
   pendingFriendlyRequests: PendingFriendlyRequest[];
   confirmedFriendlyDates: Set<string>;
+  confirmedFriendlyBookings: { opponentClubId: string; dateKey: string }[];
   onConfirmFriendly: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
   aiFriendlyPairs: AiFriendlyPair[];
 }
@@ -92,6 +93,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
   userTeamId,
   pendingFriendlyRequests,
   confirmedFriendlyDates,
+  confirmedFriendlyBookings,
   onConfirmFriendly,
   aiFriendlyPairs,
 }) => {
@@ -196,6 +198,40 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
       const pStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       return pStr === dateStr;
     });
+  };
+
+  const getFriendlyWindow = (dateStr: string | null): { start: Date; end: Date } | null => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const selected = new Date(y, m - 1, d);
+    selected.setHours(0, 0, 0, 0);
+    const slot = slots.find(s => {
+      if (s.competition !== CompetitionType.FRIENDLY) return false;
+      const start = new Date(s.start); start.setHours(0, 0, 0, 0);
+      const end = new Date(s.end); end.setHours(23, 59, 59, 999);
+      return selected >= start && selected <= end;
+    });
+    if (!slot) return null;
+    const start = new Date(slot.start); start.setHours(0, 0, 0, 0);
+    const end = new Date(slot.end); end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
+
+  const isDateInWindow = (dateStr: string, window: { start: Date; end: Date }): boolean => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setHours(12, 0, 0, 0);
+    return date >= window.start && date <= window.end;
+  };
+
+  const hasOpponentInSelectedWindow = (clubId: string): boolean => {
+    const window = getFriendlyWindow(selectedDate);
+    if (!window) return false;
+    return pendingFriendlyRequests.some(r =>
+      r.opponentClubId === clubId && isDateInWindow(r.proposedDate, window)
+    ) || confirmedFriendlyBookings.some(booking =>
+      booking.opponentClubId === clubId && isDateInWindow(booking.dateKey, window)
+    );
   };
 
   // ---------- manual search results ----------
@@ -398,7 +434,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                 🎲 Sugerowane drużyny
               </div>
               <div className="space-y-2">
-                {suggestedList.filter(({ club }) => !isClubBusyOnDate(club.id, selectedDate)).map(({ club, venue, acceptChance }) => {
+                {suggestedList.filter(({ club }) => !isClubBusyOnDate(club.id, selectedDate) && !hasOpponentInSelectedWindow(club.id)).map(({ club, venue, acceptChance }) => {
                   const vInfo = venueInfo[venue];
                   const selected = selectedOpponent?.club.id === club.id && selectedOpponent.venue === venue;
                   return (
@@ -476,7 +512,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                   const chance = manualChance(club);
                   const vInfo = venueInfo[manualVenue];
                   const selected = selectedOpponent?.club.id === club.id;
-                  const busy = isClubBusyOnDate(club.id, selectedDate);
+                  const busy = isClubBusyOnDate(club.id, selectedDate) || hasOpponentInSelectedWindow(club.id);
                   return (
                     <button
                       key={`man-${club.id}`}
@@ -497,7 +533,7 @@ export const FriendlySchedulerModal: React.FC<FriendlySchedulerModalProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="text-[10px] font-black text-white uppercase italic truncate">{club.name}</div>
                         {busy
-                          ? <span className="text-[8px] font-black text-amber-500">Zajęta — sparing AI</span>
+                          ? <span className="text-[8px] font-black text-amber-500">Zajęta - sparing w tym oknie</span>
                           : <span className={`text-[8px] font-black ${vInfo.color}`}>{vInfo.label}</span>
                         }
                       </div>

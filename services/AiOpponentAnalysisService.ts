@@ -1,5 +1,6 @@
 import { Club, Coach, HealthStatus, InjurySeverity, Lineup, Player, PlayerPosition, StaffMember, StaffRole } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
+import { TacticalMatchupService } from './TacticalMatchupService';
 
 export type AiPredictedStyle = 'DEFENSIVE' | 'BALANCED' | 'OFFENSIVE';
 export type AiRecommendedApproach = 'PRESS' | 'CONTROL' | 'COUNTER' | 'LOW_BLOCK' | 'DIRECT';
@@ -290,6 +291,13 @@ export const AiOpponentAnalysisService = {
       if (aiPlayers.length === 0) return tacticIds[0] ?? baseTacticId;
       return tacticIds.find(tacticId => isTacticFeasible(aiPlayers, tacticId)) ?? baseTacticId;
     };
+
+    const tacticalCounters = TacticalMatchupService.suggestCounterTactics(report.predictedTacticId)
+      .filter(tacticId => tacticId !== baseTacticId);
+    if (tacticalCounters.length > 0 && report.confidence >= 0.58) {
+      const suggestedCounter = pickFeasible(...tacticalCounters);
+      if (suggestedCounter !== baseTacticId) return suggestedCounter;
+    }
 
     if (report.recommendedApproach === 'LOW_BLOCK' && !alreadyDefensive) {
       return pickFeasible('5-4-1', '4-5-1', '4-4-2-DEF');

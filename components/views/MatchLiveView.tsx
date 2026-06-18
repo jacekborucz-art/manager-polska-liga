@@ -9,7 +9,9 @@ import {
   PlayerPerformance,
   MatchEvent,
   InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack,
-  Referee
+  Referee,
+  Fixture,
+  WeatherSnapshot
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
@@ -99,13 +101,14 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
-import { AiOpponentAnalysisService } from '../../services/AiOpponentAnalysisService';
+import { AiOpponentAnalysisService, AiOpponentMatchReport } from '../../services/AiOpponentAnalysisService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
+import { TacticalMatchupService } from '../../services/TacticalMatchupService';
 import {
   adjustBriefingEffectForPressure,
   adjustDebriefEffectForPressure,
@@ -190,6 +193,248 @@ const clampNumber = (value: number, min: number, max: number) => Math.min(max, M
 
 const getRefereeDecisionQuality = (referee: Referee) =>
   (referee.consistency * 0.6) + ((referee.experience ?? 50) * 0.4);
+
+const getWinterFriendlyPrepMultiplier = (teamId: string, matchDate: Date, fixtures: Fixture[]): number => {
+  const month = matchDate.getMonth();
+  const day = matchDate.getDate();
+  const isWinterRestartWindow = month === 0 || month === 1 || (month === 2 && day <= 15);
+  if (!isWinterRestartWindow) return 1;
+
+  const matchTime = matchDate.getTime();
+  const lookbackMs = 45 * 24 * 60 * 60 * 1000;
+  const recentFriendlyCount = fixtures.filter(f => {
+    if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+    if (f.homeScore === null || f.awayScore === null) return false;
+    if (f.homeTeamId !== teamId && f.awayTeamId !== teamId) return false;
+    const fixtureTime = f.date instanceof Date ? f.date.getTime() : new Date(f.date).getTime();
+    return fixtureTime < matchTime && matchTime - fixtureTime <= lookbackMs;
+  }).length;
+
+  if (recentFriendlyCount <= 0) return 1.45;
+  if (recentFriendlyCount === 1) return 1.18;
+  return 1;
+};
+
+const getLiveInstructionFatigueMultiplier = (
+  minute: number,
+  tempo: InstructionTempo,
+  intensity: InstructionIntensity,
+  pressing: InstructionPressing,
+  weather: WeatherSnapshot | undefined,
+  subsUsed: number,
+  startingXI: (string | null)[],
+  fatigueMap: Record<string, number>
+): number => {
+  const ids = startingXI.filter((id): id is string => id !== null);
+  if (ids.length === 0) return 1;
+
+  const avgFatigue = ids.reduce((sum, id) => sum + (fatigueMap[id] ?? 100), 0) / ids.length;
+  const tiredShare = ids.filter(id => (fatigueMap[id] ?? 100) < 82).length / ids.length;
+  const exhaustedShare = ids.filter(id => (fatigueMap[id] ?? 100) < 70).length / ids.length;
+
+  const exertionRaw =
+    (tempo === 'FAST' ? 1.0 : tempo === 'SLOW' ? -0.35 : 0) +
+    (intensity === 'AGGRESSIVE' ? 0.75 : intensity === 'CAUTIOUS' ? -0.30 : 0) +
+    (pressing === 'PRESSING' ? 0.60 : 0);
+  const exertionFactor = clampNumber(exertionRaw / 2.35, 0, 1);
+  if (exertionFactor <= 0) return 1;
+
+  const heatPressure = weather ? clampNumber((weather.tempC - 24) / 12, 0, 1) : 0;
+  const rainPressure = weather ? clampNumber((weather.precipitationChance - 55) / 45, 0, 1) : 0;
+  const weatherPressure = clampNumber(heatPressure * 0.78 + rainPressure * 0.22, 0, 1);
+  const lateFactor = minute < 55 ? 0 : clampNumber((minute - 55) / 35, 0, 1);
+  const rotationPressure = (Math.max(0, 4 - subsUsed) / 4) * lateFactor;
+  const averageFatiguePressure = clampNumber((84 - avgFatigue) / 22, 0, 1);
+  const individualFatiguePressure = clampNumber(tiredShare * 0.75 + exhaustedShare * 0.55, 0, 1);
+
+  return clampNumber(
+    1 +
+      exertionFactor *
+        (
+          0.07 +
+          weatherPressure * 0.24 +
+          rotationPressure * 0.26 +
+          averageFatiguePressure * 0.18 +
+          individualFatiguePressure * 0.22
+        ),
+    1,
+    1.85
+  );
+};
+
+const getAiMediaStakesBriefingEffect = (
+  aiSide: 'HOME' | 'AWAY',
+  pressureContext: ReturnType<typeof buildMatchPressureContext> | null,
+  aiCoachAttributes: { motivation?: number; experience?: number; decisionMaking?: number } | undefined,
+  aiRecentForm: ('W' | 'R' | 'P')[],
+  rivalryBoost: number
+): BriefingEffect => {
+  if (!pressureContext) {
+    return {
+      actionMod: 0,
+      goalMod: 0,
+      momentumBonus: 0,
+      expiryMinute: 0,
+      fatigueMult: 1,
+      rivalBoost: 0,
+      label: 'NORMALNE TŁO MEDIALNE',
+      reactionText: '',
+      wasSurprise: false,
+    };
+  }
+
+  const aiProfile = aiSide === 'HOME' ? pressureContext.home : pressureContext.away;
+  const opponentProfile = aiSide === 'HOME' ? pressureContext.away : pressureContext.home;
+  const aiHome = aiSide === 'HOME';
+  const directTableRival = Math.abs(aiProfile.rank - opponentProfile.rank) <= 2;
+  const topClash = aiProfile.rank <= 5 && opponentProfile.rank <= 5;
+  const relegationClash = aiProfile.rank >= 13 && opponentProfile.rank >= 13;
+  const wins = aiRecentForm.slice(-5).filter(result => result === 'W').length;
+  const winStreak = (() => {
+    let streak = 0;
+    for (let i = aiRecentForm.length - 1; i >= 0; i -= 1) {
+      if (aiRecentForm[i] !== 'W') break;
+      streak += 1;
+    }
+    return streak;
+  })();
+  const coachDrive = clampNumber(
+    (((aiCoachAttributes?.motivation ?? 50) - 50) * 0.55 +
+      ((aiCoachAttributes?.experience ?? 50) - 50) * 0.25 +
+      ((aiCoachAttributes?.decisionMaking ?? 50) - 50) * 0.20) / 50,
+    -1,
+    1
+  );
+
+  const contextHeat = clampNumber(
+    (topClash ? 0.36 : 0) +
+      (relegationClash ? 0.32 : 0) +
+      (directTableRival ? 0.18 : 0) +
+      (aiHome ? 0.12 : 0) +
+      (pressureContext.isLateSeason ? 0.16 : 0) +
+      (rivalryBoost - 1) * 4.5 +
+      (wins >= 3 ? 0.08 : 0) +
+      (winStreak >= 2 ? Math.min(0.12, (winStreak - 1) * 0.05) : 0) +
+      Math.max(0, coachDrive) * 0.14,
+    0,
+    1
+  );
+
+  if (contextHeat < 0.28) {
+    return {
+      actionMod: 0,
+      goalMod: 0,
+      momentumBonus: 0,
+      expiryMinute: 0,
+      fatigueMult: 1,
+      rivalBoost: 0,
+      label: 'NORMALNE TŁO MEDIALNE',
+      reactionText: '',
+      wasSurprise: false,
+    };
+  }
+
+  return {
+    actionMod: clampNumber(contextHeat * 0.022, 0, 0.022),
+    goalMod: clampNumber(contextHeat * 0.014, 0, 0.014),
+    momentumBonus: Math.round(contextHeat * 11),
+    expiryMinute: contextHeat >= 0.70 ? 45 : 30,
+    fatigueMult: clampNumber(1 + contextHeat * 0.025, 1, 1.025),
+    rivalBoost: 0,
+    label: topClash
+      ? 'MECZ NA SZCZYCIE'
+      : relegationClash
+        ? 'MECZ O PRZETRWANIE'
+        : directTableRival
+          ? 'BEZPOŚREDNI RYWAL'
+          : 'MOCNE TŁO MEDIALNE',
+    reactionText: '',
+    wasSurprise: false,
+  };
+};
+
+const getAiUserPatternBriefingEffect = (
+  userTeamId: string,
+  currentUserTacticId: string,
+  aiCoachAttributes: { motivation?: number; experience?: number; decisionMaking?: number } | undefined,
+  opponentReport?: AiOpponentMatchReport
+): BriefingEffect => {
+  const neutralPatternEffect = (): BriefingEffect => ({
+    actionMod: 0,
+    goalMod: 0,
+    momentumBonus: 0,
+    expiryMinute: 0,
+    fatigueMult: 1,
+    rivalBoost: 0,
+    label: 'BRAK ROZPOZNANEGO WZORCA',
+    reactionText: '',
+    wasSurprise: false,
+  });
+
+  if (!opponentReport || opponentReport.confidence < 0.42) {
+    return neutralPatternEffect();
+  }
+
+  const tacticStyleKey = (tacticId: string) => {
+    const tactic = TacticRepository.getById(tacticId);
+    return `${tactic.category}_${tactic.attackBias >= 68 ? 'ATT' : tactic.defenseBias >= 72 ? 'DEF' : 'BAL'}_${tactic.pressingIntensity >= 70 ? 'PRESS' : 'NORMAL'}`;
+  };
+  const currentStyleKey = tacticStyleKey(currentUserTacticId);
+  const predictedStyleKey = tacticStyleKey(opponentReport.predictedTacticId);
+  const reportAlignment = opponentReport.predictedTacticId === currentUserTacticId
+    ? 1
+    : predictedStyleKey === currentStyleKey
+      ? 0.72
+      : 0;
+
+  if (reportAlignment <= 0) {
+    return neutralPatternEffect();
+  }
+
+  const recent = MatchHistoryService.getTeamHistory(userTeamId)
+    .slice(-6)
+    .map(entry => entry.homeTeamId === userTeamId ? entry.homeTacticId : entry.awayTacticId)
+    .filter((tacticId): tacticId is string => !!tacticId);
+
+  if (recent.length < 3) {
+    return neutralPatternEffect();
+  }
+
+  const sameTacticCount = recent.filter(tacticId => tacticId === currentUserTacticId).length;
+  const sameStyleCount = recent.filter(tacticId => {
+    return tacticStyleKey(tacticId) === currentStyleKey;
+  }).length;
+
+  const repetitionScore = Math.max(
+    sameTacticCount / recent.length,
+    sameStyleCount / recent.length * 0.82
+  );
+  if (sameTacticCount < 3 && repetitionScore < 0.58) {
+    return neutralPatternEffect();
+  }
+
+  const coachRead = clampNumber(
+    ((aiCoachAttributes?.decisionMaking ?? 50) * 0.46 +
+      (aiCoachAttributes?.experience ?? 50) * 0.34 +
+      (aiCoachAttributes?.motivation ?? 50) * 0.20) / 100,
+    0.35,
+    0.95
+  );
+  const reportRead = clampNumber(opponentReport.confidence * (0.62 + reportAlignment * 0.38), 0.28, 0.95);
+  const strength = clampNumber(repetitionScore * coachRead * reportRead, 0, 0.78);
+
+  return {
+    actionMod: clampNumber(strength * 0.024, 0, 0.020),
+    goalMod: clampNumber(strength * 0.014, 0, 0.011),
+    momentumBonus: Math.round(strength * 10),
+    expiryMinute: strength >= 0.48 ? 45 : 30,
+    fatigueMult: 1,
+    rivalBoost: 0,
+    label: sameTacticCount >= 3 ? 'ROZCZYTANY SCHEMAT GRACZA' : 'ROZCZYTANY STYL GRACZA',
+    reactionText: '',
+    wasSurprise: false,
+  };
+};
 
 const getPenaltyCallChance = (referee: Referee) => {
   const decisionQuality = getRefereeDecisionQuality(referee);
@@ -368,11 +613,17 @@ export const MatchLiveView = () => {
 
     const matchDateStr = ctx.fixture.date instanceof Date ? ctx.fixture.date.toISOString().split('T')[0] : String(ctx.fixture.date);
     const matchSeed = new Date(matchDateStr).getTime() / 100000;
+    const homePrepMultiplier = ctx.homeClub.id === userTeamId
+      ? getWinterFriendlyPrepMultiplier(ctx.homeClub.id, ctx.fixture.date, fixtures)
+      : 1;
+    const awayPrepMultiplier = ctx.awayClub.id === userTeamId
+      ? getWinterFriendlyPrepMultiplier(ctx.awayClub.id, ctx.fixture.date, fixtures)
+      : 1;
     return {
-      home: applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed, ctx.homeClub.id === userTeamId),
-      away: applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1, ctx.awayClub.id === userTeamId),
+      home: applyFocusToFormImpact(analyzeClubFormImpact(ctx.homeClub.stats.form, ctx.homeCoach), ctx.homeClub, matchDateStr, matchSeed, ctx.homeClub.id === userTeamId, homePrepMultiplier),
+      away: applyFocusToFormImpact(analyzeClubFormImpact(ctx.awayClub.stats.form, ctx.awayCoach), ctx.awayClub, matchDateStr, matchSeed + 1, ctx.awayClub.id === userTeamId, awayPrepMultiplier),
     };
-  }, [ctx, userTeamId]);
+  }, [ctx, userTeamId, fixtures]);
 
   const handleBriefingClose = (effect: BriefingEffect) => {
     const conferenceEffect = ctx && userTeamId
@@ -463,6 +714,7 @@ const isPausedForSevereInjury = useMemo(() => {
       const sessionSeed = Math.abs(Math.floor(Date.now() * Math.random()));
 
       const aiClubInit = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
+      const aiInitialSide: 'HOME' | 'AWAY' = aiClubInit.id === ctx.homeClub.id ? 'HOME' : 'AWAY';
       const aiCoachInit = aiClubInit?.coachId ? coaches[aiClubInit.coachId] : null;
       const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
       const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
@@ -497,14 +749,34 @@ const isPausedForSevereInjury = useMemo(() => {
         aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
       );
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
-      const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, calculateAiCoachBriefingEffect(
+      const aiCoachBriefingEffect = calculateAiCoachBriefingEffect(
           aiClubInit.reputation,
           userClubInit.reputation,
           aiCoachInit?.attributes,
           sessionSeed + 17,
           'LEAGUE',
           leagueMotivationContext
-        ));
+        );
+      const aiMediaStakesEffect = getAiMediaStakesBriefingEffect(
+        aiInitialSide,
+        livePressureContext,
+        aiCoachInit?.attributes,
+        aiClubInit.stats.form ?? [],
+        livePressureContext?.rivalryMultiplier ?? 1
+      );
+      const aiUserPatternEffect = getAiUserPatternBriefingEffect(
+        userClubInit.id,
+        userTacticIdInit,
+        aiCoachInit?.attributes,
+        opponentReport
+      );
+      const aiBriefingWithMedia = aiMediaStakesEffect.expiryMinute > 0
+        ? PreMatchPressConferenceService.combineWithBriefing(aiMediaStakesEffect, aiCoachBriefingEffect)
+        : aiCoachBriefingEffect;
+      const aiBriefingWithPattern = aiUserPatternEffect.expiryMinute > 0
+        ? PreMatchPressConferenceService.combineWithBriefing(aiUserPatternEffect, aiBriefingWithMedia)
+        : aiBriefingWithMedia;
+      const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, aiBriefingWithPattern);
       const aiRivalryBriefingEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(aiBaseBriefingEffect, rivalryContext) : aiBaseBriefingEffect;
       const aiBriefingEffect = adjustBriefingEffectForPressure(
         aiRivalryBriefingEffect,
@@ -581,7 +853,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext, livePressureContext]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1231,19 +1503,32 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
         const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
 
-        // Krzywa kary: kondycja 92→0 | 85→-0.015 | 80→-0.022 | 75→-0.031 | 70→-0.041 | 60→-0.064
+        // Krzywa kary: kondycja 94→0 | 85→-0.022 | 80→-0.039 | 75→-0.057 | 70→-0.077 | 60→-0.118
+        // ZMIANA (2026-06-18): brak zmian był nadal zbyt mało odczuwalny, bo średnia kondycja
+        // często nie spadała poniżej progów wpływających realnie na inicjatywę i liczbę strzałów.
+        // Wyższy próg i łagodniejszy wykładnik zaczynają karać wcześniej, ale nadal progresywnie.
         // ZMIANA (2026-06-17): próg podniesiony z 85 → 92, współczynnik z 0.17 → 0.30.
         // Powód: poprzednie wartości były zbyt łagodne — przy typowej końcowej kondycji 80%
         // kara wynosiła zaledwie -0.005 (niewidoczna). Brak zmian nie powodował żadnej przewagi rywala.
-        // Teraz: przy 80% kara = -0.022, przy 75% kara = -0.031 — odczuwalna różnica w kreowaniu sytuacji.
-        // Drużyna bez zmian (80% kondycji) vs drużyna z 3 zmianami (87%) → różnica inicjatywy ~8-11%.
+        // Teraz: przy 80% kara = -0.039, przy 75% kara = -0.057 — odczuwalna różnica w kreowaniu sytuacji.
+        // Drużyna bez zmian (80% kondycji) vs drużyna z 3 zmianami (87%) → różnica inicjatywy ~11-14%.
         const _fatiguePenalty = (avgFat: number): number => {
-          if (avgFat >= 92) return 0;
-          const depth = (92 - avgFat) / 92; // 0..1
-          return -(Math.pow(depth, 1.4) * 0.30);
+          if (avgFat >= 94) return 0;
+          const depth = (94 - avgFat) / 94; // 0..1
+          return -(Math.pow(depth, 1.25) * 0.42);
         };
-        const homeFatPenalty = _fatiguePenalty(avgFatigueHome);
-        const awayFatPenalty = _fatiguePenalty(avgFatigueAway);
+        const _rotationPenalty = (lineup: (string | null)[], fatigueMap: Record<string, number>, ownSubs: number, oppSubs: number): number => {
+          if (nextMinute < 60 || ownSubs >= 2) return 0;
+          const ids = lineup.filter((id): id is string => id !== null);
+          if (ids.length === 0) return 0;
+          const tiredShare = ids.filter(id => (fatigueMap[id] ?? 100) < 84).length / ids.length;
+          const lateFactor = Math.min(1, (nextMinute - 60) / 30);
+          const rotationGap = Math.max(0, oppSubs - ownSubs);
+          const pressure = ((2 - ownSubs) * 0.012) + tiredShare * 0.052 + rotationGap * 0.010;
+          return -Math.min(0.085, pressure * lateFactor);
+        };
+        const homeFatPenalty = _fatiguePenalty(avgFatigueHome) + _rotationPenalty(nextHomeLineup.startingXI, localHomeFatigue, nextSubsCountHome, nextSubsCountAway);
+        const awayFatPenalty = _fatiguePenalty(avgFatigueAway) + _rotationPenalty(nextAwayLineup.startingXI, localAwayFatigue, nextSubsCountAway, nextSubsCountHome);
         const homeFormImpact = teamFormImpact.home;
         const awayFormImpact = teamFormImpact.away;
         const getFormStackingMultiplier = (side: 'HOME' | 'AWAY'): number => {
@@ -1293,7 +1578,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
-        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 2.5; // [było *0.6 — zbyt słabe, zmęczona drużyna traciła inicjatywę o <1%; teraz ~8-11% różnicy przy braku zmian]
+        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 3.0; // [było *0.6 — zbyt słabe, zmęczona drużyna traciła inicjatywę o <1%; teraz ~11-14% różnicy przy braku zmian]
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
         const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
         const getGoalkeeperCrisisInitiativePenalty = (lineup: Lineup, players: Player[]): number => {
@@ -1329,6 +1614,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
         const opponentCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
         const opponentPressure = userSide === 'HOME' ? Math.max(0, -prev.momentum) : Math.max(0, prev.momentum);
+        const userPressure = userSide === 'HOME' ? Math.max(0, prev.momentum) : Math.max(0, -prev.momentum);
         const counterShape =
           prev.userInstructions.mindset === 'DEFENSIVE' ||
           userCounterTactic.defenseBias >= 62 ||
@@ -1380,16 +1666,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           aiScoreDiffForCounter > 0;
         const userPushes =
           prev.userInstructions.mindset === 'OFFENSIVE' ||
-          opponentCounterTactic.attackBias >= 60 ||
+          userCounterTactic.attackBias >= 60 ||
           userScoreDiff < 0;
 
         if (!counterAttackTriggered && activeSide === userSide && aiCounterAttackEnabled && aiCounterShape && userPushes) {
-          const userPressFactor = Math.max(0, Math.min(1, (opponentPressure - 20) / 60));
+          const userPressFactor = Math.max(0, Math.min(1, (userPressure - 25) / 75));
           const aiShapeFactor = Math.max(0, Math.min(1, (aiCounterTacticObj.defenseBias - 50) / 40));
-          const userRiskFactor = Math.max(0, Math.min(1, (opponentCounterTactic.attackBias - 50) / 45));
+          const userRiskFactor = Math.max(0, Math.min(1, (userCounterTactic.attackBias - 50) / 45));
+          const aiScoreFactor = aiScoreDiffForCounter > 0 ? 0.03 : 0;
           const aiCounterChance = Math.max(
             0,
-            Math.min(0.12, 0.018 + userPressFactor * 0.046 + aiShapeFactor * 0.022 + userRiskFactor * 0.018)
+            Math.min(0.14, 0.023 + userPressFactor * 0.054 + aiShapeFactor * 0.022 + userRiskFactor * 0.022 + aiScoreFactor)
           );
           if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
             activeSide = aiSideForCounter;
@@ -1401,8 +1688,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI
             );
             aiCounterAttackShotBonus = Math.max(
-              0.004,
-              Math.min(0.026, 0.009 + userPressFactor * 0.008 + userRiskFactor * 0.005 + aiCounterQualityModifier)
+              0.006,
+              Math.min(0.028, 0.011 + userPressFactor * 0.009 + userRiskFactor * 0.005 + aiCounterQualityModifier)
             );
           }
         }
@@ -1568,18 +1855,29 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // ─── KARA: ZMĘCZENIE INDYWIDUALNYCH GRACZY ───────────────────────────
         // Średnia kondycji całej jedenastki rozmywa wpływ 1-2 krytycznie zmęczonych graczy.
-        // Dlatego: każdy zawodnik atakującej drużyny z fatigue < 75 nakłada dodatkową karę.
-        // Każdy świeży zawodnik broniącej drużyny (fatigue > 78) przy ≥1 zmęczonym rywalu daje bonus.
-        // 1 zmęczony gracz atakujący → -0.012 | 2 → -0.024 itd. (po 80 min bez zmian: ~3-5 graczy < 75%)
-        // [ZMIANA 2026-06-17: próg podniesiony z 30 → 75 (wcześniej żaden zawodnik nie przekraczał progu w normalnej grze)]
+        // Dlatego: zawodnicy atakującej drużyny poniżej 82 i 70 fatigue nakładają dodatkową karę.
+        // Każdy świeży zawodnik broniącej drużyny (fatigue > 82) przy ≥2 zmęczonych rywalach daje bonus.
+        // Brak zmian ma być odczuwalny już zanim piłkarze spadną do krytycznych wartości <75.
+        // [ZMIANA 2026-06-18: próg zmęczenia użytkowego podniesiony z 75 → 82, z limitem kary 0.060]
         const attackingFatigueMap = activeSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
         const defendingFatigueMap = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const attackingXIIds = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
-        const criticalAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 75).length;
-        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 78).length;
-        const criticalFatPenalty = criticalAttackers * 0.012;
-        const freshDefBonus = criticalAttackers >= 1 ? freshDefenders * 0.007 : 0;
+        const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
+        const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
+        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
+        const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
+        const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
+        const attackingSubsUsed = activeSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
+        const defendingSubsUsed = activeSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome;
+        const noRotationShotPenalty = nextMinute >= 60 && attackingSubsUsed <= 1
+          ? Math.min(
+              0.035,
+              (2 - attackingSubsUsed) * 0.006 +
+              tiredAttackers * 0.004 +
+              Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
+            ) * Math.min(1, (nextMinute - 60) / 30)
+          : 0;
 
         shotThreshold = Math.max(
           0.10,
@@ -1598,6 +1896,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             + redCardDefensiveBoost
             - criticalFatPenalty
             - freshDefBonus
+            - noRotationShotPenalty
         );
         shotThreshold = Math.max(0.10, shotThreshold * moraleDebuffMultiplier);
 
@@ -1613,6 +1912,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const attackBiasBonus = Math.max(-0.016, Math.min(0.016, (attackingTacticObj.attackBias - 50) / 100 * 0.04));
         shotThreshold += attackBiasBonus;
+        shotThreshold += TacticalMatchupService.evaluateShotMatchup(
+          attackingTacticObj.id,
+          defendingTacticObj.id,
+          attackingTeamPlayers2,
+          activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          defendingTeamPlayers2,
+          defendingLineup2.startingXI
+        ).modifier;
 
         const activeMidfieldControlDiff = activeSide === 'HOME'
           ? midfieldControlDiff
@@ -2717,7 +3024,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           updatedLogs = [...lateCarriedOffLogs, ...updatedLogs];
         }
 
-        const fatigue = MatchEngineService.calculateFatigueStep({ ...prev, momentum: momentumUpdate, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue }, ctx, env.weather);
+        const fatigue = MatchEngineService.calculateFatigueStep({
+          ...prev,
+          momentum: momentumUpdate,
+          homeLineup: nextHomeLineup,
+          awayLineup: nextAwayLineup,
+          homeFatigue: localHomeFatigue,
+          awayFatigue: localAwayFatigue,
+          homeInjuries: nextHomeInjuries,
+          awayInjuries: nextAwayInjuries,
+          sentOffIds: nextSentOffIds,
+          subsCountHome: nextSubsCountHome,
+          subsCountAway: nextSubsCountAway,
+          homeSubsHistory: nextHomeSubsHistory,
+          awaySubsHistory: nextAwaySubsHistory,
+        }, ctx, env.weather);
         
         const uFatExtra = LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
           uInstr.tempo,
@@ -2730,22 +3051,52 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (uFatExtra !== 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
+          const uSubsUsed = userSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
+          const uFatigueMultiplier = uFatExtra > 0
+            ? getLiveInstructionFatigueMultiplier(
+                nextMinute,
+                uInstr.tempo,
+                uInstr.intensity,
+                uInstr.pressing,
+                env.weather,
+                uSubsUsed,
+                uXIForFat,
+                uFatTarget
+              )
+            : 1;
           uXIForFat.filter((id): id is string => id !== null).forEach(id => {
-            uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - uFatExtra));
+            uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - (uFatExtra * uFatigueMultiplier)));
           });
         }
         const aiFatExtra = nextAiActiveShout
           ? LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
               nextAiActiveShout.tempo,
               nextAiActiveShout.intensity,
-              nextAiActiveShout.pressing ?? 'NORMAL'
+              nextAiActiveShout.pressing ?? 'NORMAL',
+              aiTempoRf,
+              aiIntensityRf,
+              aiPressingRf
             )
           : 0;
         if (aiFatExtra !== 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
+          const aiSubsUsed = userSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome;
+          const aiPressing = nextAiActiveShout?.pressing ?? 'NORMAL';
+          const aiFatigueMultiplier = aiFatExtra > 0 && nextAiActiveShout
+            ? getLiveInstructionFatigueMultiplier(
+                nextMinute,
+                nextAiActiveShout.tempo,
+                nextAiActiveShout.intensity,
+                aiPressing,
+                env.weather,
+                aiSubsUsed,
+                aiXIForFat,
+                aiFatTarget
+              )
+            : 1;
           aiXIForFat.filter((id): id is string => id !== null).forEach(id => {
-            aiFatTarget[id] = Math.min(100, Math.max(0, (aiFatTarget[id] ?? 100) - aiFatExtra));
+            aiFatTarget[id] = Math.min(100, Math.max(0, (aiFatTarget[id] ?? 100) - (aiFatExtra * aiFatigueMultiplier)));
           });
         }
         if (hLivePressure.fatigueDrainExtra > 0) {
@@ -3357,6 +3708,8 @@ const summary: MatchSummary = {
       ratings: finalRatingsMap,
       homeLineup: summary.homePlayers.map(player => player.playerId),
       awayLineup: summary.awayPlayers.map(player => player.playerId),
+      homeTacticId: matchState.homeLineup.tacticId,
+      awayTacticId: matchState.awayLineup.tacticId,
       cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           return [...matchState.logs]

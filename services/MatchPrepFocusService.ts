@@ -48,7 +48,8 @@ export const applyFocusToFormImpact = (
   club: Club,
   currentDate: string,
   seed: number,
-  applyUnpreparedPenalty = false
+  applyUnpreparedPenalty = false,
+  unpreparedPenaltyMultiplier = 1
 ): ClubFormImpact => {
   const aiTrainingModifier = getAIWeeklyTrainingModifier(club, currentDate);
   const applyAITraining = (impactToAdjust: ClubFormImpact): ClubFormImpact => {
@@ -67,16 +68,16 @@ export const applyFocusToFormImpact = (
   if (!isFocusReady(club, currentDate)) {
     if (!applyUnpreparedPenalty) return applyAITraining(impact);
     const hasAnyFocus = !!club.matchPrepFocusId && !!club.matchPrepFocusStartDate;
-    const penaltyScale = hasAnyFocus ? 0.55 : 1.0;
+    const penaltyScale = Math.max(0.5, Math.min(1.65, (hasAnyFocus ? 0.70 : 1.0) * unpreparedPenaltyMultiplier));
     return applyAITraining({
       ...impact,
-      score: impact.score - 0.18 * penaltyScale,
-      momentumBonus: Math.max(-7, impact.momentumBonus - 1.6 * penaltyScale),
-      initiativeModifier: Math.max(-0.026, impact.initiativeModifier - 0.005 * penaltyScale),
-      shotModifier: Math.max(-0.013, impact.shotModifier - 0.003 * penaltyScale),
-      shotResistanceModifier: Math.max(-0.011, impact.shotResistanceModifier - 0.002 * penaltyScale),
-      finishingMultiplier: Math.max(0.95, impact.finishingMultiplier - 0.010 * penaltyScale),
-      goalkeepingMultiplier: Math.max(0.955, impact.goalkeepingMultiplier - 0.007 * penaltyScale),
+      score: impact.score - 0.32 * penaltyScale,
+      momentumBonus: Math.max(-7, impact.momentumBonus - 2.4 * penaltyScale),
+      initiativeModifier: Math.max(-0.030, impact.initiativeModifier - 0.010 * penaltyScale),
+      shotModifier: Math.max(-0.018, impact.shotModifier - 0.006 * penaltyScale),
+      shotResistanceModifier: Math.max(-0.016, impact.shotResistanceModifier - 0.004 * penaltyScale),
+      finishingMultiplier: Math.max(0.935, impact.finishingMultiplier - 0.018 * penaltyScale),
+      goalkeepingMultiplier: Math.max(0.940, impact.goalkeepingMultiplier - 0.012 * penaltyScale),
     });
   }
   const focus = MATCH_PREP_FOCUSES.find(f => f.id === club.matchPrepFocusId);
