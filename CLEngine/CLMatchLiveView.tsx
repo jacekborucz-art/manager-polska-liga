@@ -971,14 +971,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
-        const getXIAvgOverall = (playersList: Player[], xi: (string | null)[]): number => {
+        const getEffectiveXIStrength = (playersList: Player[], xi: (string | null)[]): number => {
           const ids = xi.filter((id): id is string => id !== null);
           const active = playersList.filter(p => ids.includes(p.id));
           if (active.length === 0) return 62;
-          return active.reduce((sum, player) => sum + player.overallRating, 0) / active.length;
+          const avgOverall = active.reduce((sum, player) => sum + player.overallRating, 0) / active.length;
+          // Średnia jakości nie może maskować gry w 10/9. Efektywna siła XI waży klasę graczy
+          // liczbą realnie obsadzonych slotów, więc 10 elitarnych nadal rozbije 10 amatorów,
+          // ale brak zawodnika obniża strukturę zespołu.
+          const structureFactor = Math.min(1, active.length / 11);
+          return avgOverall * structureFactor;
         };
-        const homeAvgOverallLive = getXIAvgOverall(ctx.homePlayers, nextHomeLineup.startingXI);
-        const awayAvgOverallLive = getXIAvgOverall(ctx.awayPlayers, nextAwayLineup.startingXI);
+        const homeAvgOverallLive = getEffectiveXIStrength(ctx.homePlayers, nextHomeLineup.startingXI);
+        const awayAvgOverallLive = getEffectiveXIStrength(ctx.awayPlayers, nextAwayLineup.startingXI);
         const homeQualityGapLive = homeAvgOverallLive - awayAvgOverallLive;
         const getQualityGapCurve = (gap: number): number => {
           const absGap = Math.abs(gap);
@@ -1388,6 +1393,34 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (isAiAttacking) shotThreshold += modifier;
           else shotThreshold -= modifier;
         }
+        const uFatigueMap = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
+        const oFatigueMap = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
+        const userBuildUpProfile = LiveMatchInstructionBalanceService.getBuildUpAccuracyProfile(
+          uPlayersList,
+          uXIList,
+          oPlayersList,
+          oXIList,
+          uInstr.passing,
+          uInstr.tempo,
+          nextAiActiveShout?.pressing ?? 'NORMAL',
+          uFatigueMap
+        );
+        const aiBuildUpProfile = LiveMatchInstructionBalanceService.getBuildUpAccuracyProfile(
+          oPlayersList,
+          oXIList,
+          uPlayersList,
+          uXIList,
+          nextAiActiveShout?.passing ?? 'MIXED',
+          nextAiActiveShout?.tempo ?? 'NORMAL',
+          uInstr.pressing,
+          oFatigueMap
+        );
+        const activeBuildUpProfile = isUserAttacking ? userBuildUpProfile : aiBuildUpProfile;
+        shotThreshold += activeBuildUpProfile.shotModifier;
+        const opponentPressingNow = isUserAttacking
+          ? nextAiActiveShout?.pressing === 'PRESSING'
+          : uInstr.pressing === 'PRESSING';
+        shotThreshold -= activeBuildUpProfile.turnoverRisk * (opponentPressingNow ? 0.006 : 0.002);
         // ───────────────────────────────────────────────────────────────────────
         const activeBriefing =
           prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute

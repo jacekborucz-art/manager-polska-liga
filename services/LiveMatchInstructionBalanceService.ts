@@ -2,6 +2,7 @@ import {
   InstructionCounterAttack,
   InstructionIntensity,
   InstructionMindset,
+  InstructionPassing,
   InstructionPressing,
   InstructionTempo,
   Player,
@@ -69,6 +70,74 @@ const getProgressiveModifier = (
 };
 
 export const LiveMatchInstructionBalanceService = {
+  getBuildUpAccuracyProfile: (
+    userPlayers: Player[],
+    userStartingXI: (string | null)[],
+    opponentPlayers: Player[],
+    opponentStartingXI: (string | null)[],
+    passing: InstructionPassing = 'MIXED',
+    tempo: InstructionTempo = 'NORMAL',
+    opponentPressing: InstructionPressing = 'NORMAL',
+    fatigueMap: Record<string, number> = {}
+  ) => {
+    const builders: Player['position'][] = [PlayerPosition.DEF, PlayerPosition.MID];
+    const receivers: Player['position'][] = [PlayerPosition.MID, PlayerPosition.FWD];
+    const opponentBlock: Player['position'][] = [PlayerPosition.MID, PlayerPosition.FWD];
+    const activePlayers = getSelectedPlayers(userPlayers, userStartingXI, builders);
+    const activeCount = Math.max(1, activePlayers.length);
+    const avgFatigue = activePlayers.reduce((sum, player) => sum + (fatigueMap[player.id] ?? 100), 0) / activeCount;
+    const fatigueDrag = clamp((82 - avgFatigue) / 55, 0, 1);
+
+    const buildQuality = getWeightedAverage(userPlayers, userStartingXI, {
+      passing: 0.34,
+      technique: 0.25,
+      vision: 0.18,
+      mentality: 0.13,
+      workRate: 0.10,
+    }, builders);
+    const receivingQuality = getWeightedAverage(userPlayers, userStartingXI, {
+      technique: 0.30,
+      passing: 0.24,
+      vision: 0.18,
+      dribbling: 0.14,
+      positioning: 0.14,
+    }, receivers);
+    const pressResistance = buildQuality * 0.68 + receivingQuality * 0.32 - fatigueDrag * 9;
+    const opponentPressQuality = getWeightedAverage(opponentPlayers, opponentStartingXI, {
+      workRate: 0.27,
+      stamina: 0.23,
+      aggression: 0.18,
+      pace: 0.14,
+      mentality: 0.10,
+      positioning: 0.08,
+    }, opponentBlock);
+
+    const tempoRisk = tempo === 'FAST' ? 5.5 : tempo === 'SLOW' ? -3.5 : 0;
+    const passStyleRisk = passing === 'SHORT' ? -1.8 : passing === 'LONG' ? 3.2 : 0;
+    const opponentPressingRisk = opponentPressing === 'PRESSING' ? 5.5 : 0;
+    const rawSecurity = pressResistance - opponentPressQuality - tempoRisk - passStyleRisk - opponentPressingRisk;
+    const qualityGap = buildQuality - opponentPressQuality;
+    const positiveControl = getProgressiveModifier(rawSecurity, 2, 0.011, 0.008, 28);
+    const turnoverDrag = getProgressiveModifier(rawSecurity, 2, 0.008, 0.018, 28);
+    const styleBonus = passing === 'SHORT' && qualityGap > 4 && tempo !== 'FAST'
+      ? clamp((qualityGap - 4) / 24, 0, 1) * 0.004
+      : 0;
+    const rushedLongBallPenalty = passing === 'LONG' && receivingQuality < opponentPressQuality - 5
+      ? -clamp((opponentPressQuality - receivingQuality - 5) / 24, 0, 1) * 0.006
+      : 0;
+    const shotModifier = clamp(positiveControl + turnoverDrag + styleBonus + rushedLongBallPenalty, -0.024, 0.017);
+    const turnoverRisk = clamp((-rawSecurity - 2) / 55, 0, 1);
+
+    return {
+      buildQuality,
+      pressResistance,
+      opponentPressQuality,
+      rawSecurity,
+      shotModifier,
+      turnoverRisk,
+    };
+  },
+
   getIntensityRiskModifiers: (
     intensity: InstructionIntensity,
     players: Player[],
