@@ -1125,7 +1125,7 @@ export const ReservesView: React.FC = () => {
                     className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-transform ${player ? 'hover:scale-110' : 'opacity-45'}`}
                     style={{ left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
                   >
-                    {kit ? (
+                    {player && kit ? (
                       <span className="relative block h-11 w-11 drop-shadow-[0_8px_10px_rgba(0,0,0,0.5)]">
                         <span
                           className="absolute left-1/2 top-0 flex h-7 w-9 -translate-x-1/2 items-center justify-center border border-white/30 text-[8px] font-black italic uppercase tracking-tighter shadow-[inset_0_1px_1px_rgba(255,255,255,0.55),inset_0_-4px_7px_rgba(0,0,0,0.38),0_2px_0_rgba(0,0,0,0.45)]"
