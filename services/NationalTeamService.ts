@@ -181,6 +181,10 @@ const isEligibleForTeam = (
     return clubCountry === 'LIE';
   }
 
+  if (team.name === 'Korea PŁN') {
+    return player.nationalityCountry === 'Korea PŁN';
+  }
+
   if (player.nationalityCountry) {
     if (player.nationalityCountry !== team.name) return false;
   } else {

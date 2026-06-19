@@ -976,13 +976,7 @@ export const EditorView: React.FC = () => {
     [...clubs]
       .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
   [clubs]);
-  const nationalityCountryOptions = useMemo(() => {
-    const regionCountries = getCountriesForRegion(nationality);
-    if (nationalityCountry && !regionCountries.some(country => country.name === nationalityCountry)) {
-      return [{ region: nationality, name: nationalityCountry, reputation: 1 }, ...regionCountries];
-    }
-    return regionCountries;
-  }, [nationality, nationalityCountry]);
+  const nationalityCountryOptions = useMemo(() => COUNTRY_OPTIONS, []);
 
   const sortedPlayers = useMemo(() => {
     return [...clubPlayers].sort((a, b) => {
@@ -3234,7 +3228,7 @@ export const EditorView: React.FC = () => {
                   />
                 </div>
               </div>
-              <div>
+              <div className="hidden">
                 <div className={`${labelCls} mb-1`}>Region</div>
                 <select value={nationality} onChange={(e) => handleNationalityRegionChange(e.target.value as Region)}
                   className={`${selectCls} px-2 py-1.5 w-36`}>

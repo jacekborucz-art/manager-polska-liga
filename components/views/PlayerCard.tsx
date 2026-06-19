@@ -49,6 +49,7 @@ const COUNTRY_FLAG_CODES: Record<string, string> = {
   Bahrajn: 'BH', Irak: 'IQ', Iran: 'IR', Jemen: 'YE', Jordania: 'JO',
   Kuwejt: 'KW', Liban: 'LB', Oman: 'OM', Palestyna: 'PS', Syria: 'SY', ZEA: 'AE',
   Filipiny: 'PH', Indonezja: 'ID', Kambodża: 'KH', 'Korea PŁD': 'KR', 'Korea PŁN': 'KP',
+  'Korea Płd': 'KR', 'Korea Płn': 'KP',
   Laos: 'LA', Malezja: 'MY', Mjanma: 'MM', Singapur: 'SG', Tajlandia: 'TH',
   'Timor Wschodni': 'TL', Wietnam: 'VN',
   Afganistan: 'AF', Bangladesz: 'BD', Bhutan: 'BT', Hongkong: 'HK',
