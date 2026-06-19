@@ -15,6 +15,7 @@ import { CLUBS_SOUTH_AMERICA } from '../../resources/static_db/clubs/Southameric
 import { generateSAClubId } from '../../resources/static_db/clubs/SouthamericanTeams';
 import { CLUBS_AFRICAN, generateAfricanClubId } from '../../resources/static_db/clubs/african_teams';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { FifaRankingService } from '../../services/FifaRankingService';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
 import { WorldNationalFriendlyService } from '../../services/WorldNationalFriendlyService';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -472,32 +473,41 @@ const NTFlagBadge: React.FC<{ teamName: string; className?: string }> = ({ teamN
   );
 };
 
-const NTCard: React.FC<{ team: NationalTeam; coachName: string; onSelect: () => void; showTier?: boolean; rank?: number }> = ({ team, onSelect, showTier, rank }) => (
+const NTCard: React.FC<{ team: NationalTeam; coachName: string; onSelect: () => void; showTier?: boolean; rank?: number; fifaPoints?: number }> = ({ team, onSelect, showTier, rank, fifaPoints }) => (
   <button
     onClick={onSelect}
-    className="group relative w-full rounded-xl overflow-hidden transition-all duration-200 border border-white/[0.05] hover:border-white/[0.15] mb-1 text-left"
+    className={`group relative block ${showTier ? 'w-full max-w-[760px] mx-auto' : 'w-full'} rounded-xl overflow-hidden transition-all duration-200 border border-white/[0.05] hover:border-white/[0.15] mb-1 text-left`}
     style={{ background: `linear-gradient(90deg, ${team.colorsHex[0]}18, transparent 60%)` }}
   >
     <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: team.colorsHex[0] }} />
     <div className="absolute right-2 top-[-4px] text-6xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors leading-none tracking-tighter">
       {team.name.substring(0, 4).toUpperCase()}
     </div>
-    <div className="relative h-[62px] flex items-center pl-6 pr-5 gap-4">
+    <div className={`relative h-[62px] items-center pl-6 pr-5 gap-4 ${showTier ? 'grid grid-cols-[72px_minmax(260px,1fr)_140px_28px]' : 'flex'}`}>
       {rank !== undefined && (
-        <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/20 text-sm font-black tabular-nums text-white shrink-0">
-          {rank}
-        </span>
+        <div className="flex items-center justify-center">
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/20 text-sm font-black tabular-nums text-white shrink-0">
+            {rank}
+          </span>
+        </div>
       )}
-      <NTFlagBadge teamName={team.name} className="w-10 h-10" />
-      <span className="flex-1 text-lg font-medium italic uppercase tracking-wide text-white truncate">
-        {team.name}
-      </span>
+      <div className={`${showTier ? 'grid grid-cols-[44px_minmax(0,1fr)] items-center gap-4' : 'contents'}`}>
+        <NTFlagBadge teamName={team.name} className="w-10 h-10" />
+        <span className={`${showTier ? 'text-left' : 'flex-1'} text-lg font-medium italic uppercase tracking-wide text-white truncate`}>
+          {team.name}
+        </span>
+      </div>
       {showTier && (
-        <span className={`text-xs font-black uppercase px-3 py-1 rounded shrink-0 ${TIER_BADGE[team.tier] ?? TIER_BADGE[5]}`}>
-          Tier {team.tier}
-        </span>
+        <div className="flex items-baseline justify-center min-w-[120px] shrink-0">
+          {fifaPoints !== undefined && (
+            <span className="font-black italic uppercase tracking-tighter text-lg text-emerald-300 tabular-nums drop-shadow-[0_0_10px_rgba(52,211,153,0.35)]">
+              {fifaPoints.toFixed(2)}
+              <span className="ml-1 text-[10px] text-emerald-200/55 align-baseline">PKT</span>
+            </span>
+          )}
+        </div>
       )}
-      <span className="text-white/30 group-hover:text-white/70 transition-colors text-lg shrink-0">›</span>
+      <span className="text-center text-white/30 group-hover:text-white/70 transition-colors text-lg shrink-0">›</span>
     </div>
   </button>
 );
@@ -1177,6 +1187,28 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
           </div>
         </div>
       </div>
+      <style>{`
+        .nt-ranking-scroll {
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(16, 185, 129, 0.45) rgba(15, 23, 42, 0.45);
+        }
+        .nt-ranking-scroll::-webkit-scrollbar {
+          width: 10px;
+        }
+        .nt-ranking-scroll::-webkit-scrollbar-track {
+          background: rgba(15, 23, 42, 0.45);
+          border-radius: 999px;
+        }
+        .nt-ranking-scroll::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, rgba(52, 211, 153, 0.7), rgba(14, 165, 233, 0.45));
+          border: 2px solid rgba(15, 23, 42, 0.7);
+          border-radius: 999px;
+        }
+        .nt-ranking-scroll::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(180deg, rgba(110, 231, 183, 0.95), rgba(56, 189, 248, 0.7));
+        }
+      `}</style>
     </div>
   );
 };
@@ -1231,23 +1263,24 @@ export const EuropeanClubsView: React.FC = () => {
     return map;
   }, [nationalTeams]);
 
+  const fifaRanking = useMemo(() => {
+    return FifaRankingService.buildRanking(nationalTeams, MatchHistoryService.getAll());
+  }, [nationalTeams, currentDate]);
+
+  const fifaRankingByTeamId = useMemo(() => {
+    return new Map(fifaRanking.map(entry => [entry.teamId, entry]));
+  }, [fifaRanking]);
+
   const continentTeams = useMemo(() => {
     if (activeContinent === 'RANKING') {
-      const avgOverall = (team: NationalTeam): number => {
-        const ratings = team.squadPlayerIds.map(id => playerById[id]?.overallRating ?? 0).filter(r => r > 0);
-        return ratings.length ? ratings.reduce((s, r) => s + r, 0) / ratings.length : 0;
-      };
-      return [...nationalTeams].sort((a, b) => {
-        const diff = avgOverall(b) - avgOverall(a);
-        if (diff !== 0) return diff;
-        if (b.reputation !== a.reputation) return b.reputation - a.reputation;
-        return a.tier - b.tier;
-      });
+      return fifaRanking
+        .map(entry => nationalTeams.find(team => team.id === entry.teamId))
+        .filter((team): team is NationalTeam => !!team);
     }
     return nationalTeams
       .filter(t => t.continent === activeContinent)
       .sort((a, b) => a.name.localeCompare(b.name, 'pl'));
-  }, [nationalTeams, activeContinent, playerById]);
+  }, [nationalTeams, activeContinent, fifaRanking]);
 
   const getCoachName = (team: NationalTeam): string => {
     if (!team.coachId) return '';
@@ -1583,23 +1616,38 @@ export const EuropeanClubsView: React.FC = () => {
                   {continentTeams.length} reprezentacji
                 </div>
 
-                {/* Lista drużyn */}
-                {nationalTeams.length === 0 ? (
-                  <div className="text-center py-12 text-slate-600 text-sm">
-                    Brak danych — uruchom nową grę
+                {activeContinent === 'RANKING' && (
+                  <div className="w-full max-w-[760px] mx-auto grid grid-cols-[72px_minmax(260px,1fr)_140px_28px] items-center pl-6 pr-5 gap-4 mb-2 text-[10px] text-slate-500">
+                    <span className="font-black italic uppercase tracking-tighter text-center">Miejsce</span>
+                    <span className="font-black italic uppercase tracking-tighter text-left">Reprezentacja</span>
+                    <span className="font-black italic uppercase tracking-tighter text-center">Punkty</span>
+                    <span />
                   </div>
-                ) : (
-                  continentTeams.map((team, i) => (
-                    <NTCard
-                      key={team.id}
-                      team={team}
-                      coachName={getCoachName(team)}
-                      onSelect={() => setSelectedNT(team)}
-                      showTier={activeContinent === 'RANKING'}
-                      rank={activeContinent === 'RANKING' ? i + 1 : undefined}
-                    />
-                  ))
                 )}
+
+                {/* Lista drużyn */}
+                <div className="max-h-[calc(100vh-330px)] min-h-[360px] overflow-y-auto overflow-x-hidden pr-3 nt-ranking-scroll">
+                  {nationalTeams.length === 0 ? (
+                    <div className="text-center py-12 text-slate-600 text-sm">
+                      Brak danych — uruchom nową grę
+                    </div>
+                  ) : (
+                    continentTeams.map((team, i) => {
+                      const rankingEntry = fifaRankingByTeamId.get(team.id);
+                      return (
+                        <NTCard
+                          key={team.id}
+                          team={team}
+                          coachName={getCoachName(team)}
+                          onSelect={() => setSelectedNT(team)}
+                          showTier={activeContinent === 'RANKING'}
+                          rank={activeContinent === 'RANKING' ? rankingEntry?.rank ?? i + 1 : undefined}
+                          fifaPoints={activeContinent === 'RANKING' ? rankingEntry?.points : undefined}
+                        />
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
