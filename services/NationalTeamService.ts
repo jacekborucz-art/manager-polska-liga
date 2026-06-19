@@ -427,7 +427,7 @@ export const NationalTeamService = {
       nationalityCountry: teamName,
       age,
       fatigueDebt: 0,
-      overallRating: genData.overall,
+      overallRating: overallCap !== undefined ? Math.min(genData.overall, overallCap) : genData.overall,
       attributes: genData.attributes,
       stats: {
         matchesPlayed: 0,
