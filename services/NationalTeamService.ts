@@ -153,6 +153,9 @@ const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name' | 'tier' | 'continen
   return rule.maxStars ?? getCoachStarAllowance(coachExp);
 };
 
+const isTierFiveNonEuropeanTeam = (team: Pick<NationalTeam, 'tier' | 'continent'>): boolean =>
+  team.tier === 5 && team.continent !== 'Europe';
+
 const getSyntheticRegionProfile = (
   teamName: string,
   region: Region
@@ -596,10 +599,11 @@ export const NationalTeamService = {
 
     // Free agents with explicit nationalityCountry — last resort before synthetics
     const freeAgentsList = (allPlayers[FREE_AGENT_CLUB_ID] ?? [])
-      .filter(p => !!p.nationalityCountry && p.id.startsWith('NTFA_'));
+      .filter(p => !!p.nationalityCountry && (!p.id.startsWith('NT_') || p.id.startsWith('NTFA_')));
 
     const playerMap: Record<string, Player> = {};
     Object.values(allPlayers).flat().forEach(p => { playerMap[p.id] = p; });
+    const usedPlayerIds = new Set(Object.keys(playerMap));
 
     const updatedTeams: NationalTeam[] = [];
     const allNewPlayers: Player[] = [];
@@ -619,11 +623,46 @@ export const NationalTeamService = {
       const coach = team.coachId ? coaches[team.coachId] : null;
       const coachExp = coach ? coach.attributes.experience : 50;
       const threshold = getThreshold(coachExp);
+      const teamMaxStars = getMaxStarsForTeam(team, coachExp);
 
-      const squadIds = [...team.squadPlayerIds];
+      const seenSquadIds = new Set<string>();
+      const squadIds = team.squadPlayerIds.filter(id => {
+        if (!playerMap[id] || seenSquadIds.has(id)) return false;
+        seenSquadIds.add(id);
+        return true;
+      });
       let genIndex = team.squadPlayerIds.length;
       const usedNames = new Set<string>();
-      let changed = false;
+      let changed = squadIds.length !== team.squadPlayerIds.length;
+
+      const generateUniqueSyntheticPlayer = (pos: PlayerPosition, overallCap: number): Player => {
+        let np = NationalTeamService.generatePlayerForNT(
+          team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, overallCap
+        );
+        while (usedPlayerIds.has(np.id)) {
+          np = NationalTeamService.generatePlayerForNT(
+            team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, overallCap
+          );
+        }
+        usedPlayerIds.add(np.id);
+        return np;
+      };
+
+      const starEntries = squadIds
+        .map(id => ({ id, player: playerMap[id] }))
+        .filter((entry): entry is { id: string; player: Player } => !!entry.player && isTeamStarPlayer(team, entry.player))
+        .sort((a, b) => b.player.overallRating - a.player.overallRating);
+
+      if (starEntries.length > teamMaxStars) {
+        const allowedStarIds = new Set(starEntries.slice(0, teamMaxStars).map(entry => entry.id));
+        for (let i = squadIds.length - 1; i >= 0; i--) {
+          const player = playerMap[squadIds[i]];
+          if (!player || !isTeamStarPlayer(team, player) || allowedStarIds.has(player.id)) continue;
+          allPlayerUpdates.push({ id: player.id, assignedNationalTeamId: null });
+          squadIds.splice(i, 1);
+          changed = true;
+        }
+      }
 
       for (const pos of POSITIONS) {
         const REQUIRED: Record<PlayerPosition, number> = {
@@ -644,7 +683,6 @@ export const NationalTeamService = {
             .map(id => playerMap[id])
             .filter((player): player is Player => !!player)
             .filter(player => isTeamStarPlayer(team, player)).length;
-          const maxStars = getMaxStarsForTeam(team, coachExp);
           const isEligibleFiller = (p: Player): boolean => {
             if (p.position !== pos) return false;
             if (p.health.status !== HealthStatus.HEALTHY) return false;
@@ -657,7 +695,7 @@ export const NationalTeamService = {
             .map(x => x.player);
           const acceptedFillers: Player[] = [];
           for (const filler of fillers) {
-            if (isTeamStarPlayer(team, filler) && selectedStarCount >= maxStars) continue;
+            if (isTeamStarPlayer(team, filler) && selectedStarCount >= teamMaxStars) continue;
             acceptedFillers.push(filler);
             if (isTeamStarPlayer(team, filler)) selectedStarCount++;
             if (acceptedFillers.length >= missing) break;
@@ -678,7 +716,7 @@ export const NationalTeamService = {
               .map(x => x.player);
             const acceptedFA: Player[] = [];
             for (const filler of faFillers) {
-              if (isTeamStarPlayer(team, filler) && selectedStarCount >= maxStars) continue;
+              if (isTeamStarPlayer(team, filler) && selectedStarCount >= teamMaxStars) continue;
               acceptedFA.push(filler);
               if (isTeamStarPlayer(team, filler)) selectedStarCount++;
               if (acceptedFA.length >= stillMissing) break;
@@ -692,13 +730,12 @@ export const NationalTeamService = {
             stillMissing -= acceptedFA.length;
           }
           for (let i = 0; i < stillMissing; i++) {
-            const syntheticCap = selectedStarCount >= maxStars && getTeamRule(team)?.starThreshold !== undefined
+            const syntheticCap = selectedStarCount >= teamMaxStars && getTeamRule(team)?.starThreshold !== undefined
               ? Math.min(getTeamOvrCap(team), (getTeamRule(team)?.starThreshold ?? getTeamOvrCap(team)) - 1)
               : getTeamOvrCap(team);
-            const np = NationalTeamService.generatePlayerForNT(
-              team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, syntheticCap
-            );
+            const np = generateUniqueSyntheticPlayer(pos, syntheticCap);
             np.assignedNationalTeamId = team.id;
+            playerMap[np.id] = np;
             allNewPlayers.push(np);
             squadIds.push(np.id);
             changed = true;
@@ -728,7 +765,6 @@ export const NationalTeamService = {
           .map(id => playerMap[id])
           .filter((player): player is Player => !!player)
           .filter(player => isTeamStarPlayer(team, player)).length;
-        const maxStars = getMaxStarsForTeam(team, coachExp);
 
         // Priorytet 1: najlepszy kandydat klubowy, który mieści się w limicie gwiazd
         const candidate = clubPlayersList
@@ -736,11 +772,18 @@ export const NationalTeamService = {
           .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
           .sort((a, b) => b.score - a.score)
           .map(x => x.player)
-          .find(player => !isTeamStarPlayer(team, player) || starsWithoutWeakest < maxStars) ?? null;
+          .find(player => !isTeamStarPlayer(team, player) || starsWithoutWeakest < teamMaxStars) ?? null;
 
         // Jesli w kadrze zostal wolny agent, klubowy kandydat wypycha go bez progu OVR.
         if (!candidate) continue;
-        if (!freeAgentInSquad && candidate.overallRating - replacementTargetOvr < threshold) continue;
+        const candidateIsStar = isTeamStarPlayer(team, candidate);
+        const canUseOpenStarSlot =
+          isTierFiveNonEuropeanTeam(team) &&
+          candidateIsStar &&
+          starsWithoutWeakest < teamMaxStars &&
+          candidate.overallRating > replacementTargetOvr;
+
+        if (!freeAgentInSquad && !canUseOpenStarSlot && candidate.overallRating - replacementTargetOvr < threshold) continue;
 
         squadIds[replacementTarget.idx] = candidate.id;
         allPlayerUpdates.push({ id: replacementTarget.id, assignedNationalTeamId: null });
@@ -865,18 +908,34 @@ export const NationalTeamService = {
     ];
 
     const allPlayersList = Object.values(allPlayers).flat();
+    const playerById = new Map(allPlayersList.map(player => [player.id, player]));
+    const usedPlayerIds = new Set(allPlayersList.map(player => player.id));
     const newPlayers: Player[] = [];
     const usedNames = new Set<string>();
 
     for (const team of nationalTeams) {
-      if (team.squadPlayerIds.length >= NT_SQUAD_TARGET) continue;
-
+      const seenSquadIds = new Set<string>();
       const squadPlayers = team.squadPlayerIds
-        .map(id => allPlayersList.find(p => p.id === id))
+        .filter(id => {
+          if (seenSquadIds.has(id)) return false;
+          seenSquadIds.add(id);
+          return true;
+        })
+        .map(id => playerById.get(id))
         .filter((p): p is Player => p !== undefined);
 
+      const maxStars = getMaxStarsForTeam(team);
+      const starPlayers = squadPlayers
+        .filter(player => isTeamStarPlayer(team, player))
+        .sort((a, b) => b.overallRating - a.overallRating);
+      const allowedStarIds = new Set(starPlayers.slice(0, maxStars).map(player => player.id));
+      const legalSquadPlayers = squadPlayers.filter(player =>
+        !isTeamStarPlayer(team, player) || allowedStarIds.has(player.id)
+      );
+
       const posCount: Partial<Record<PlayerPosition, number>> = {};
-      squadPlayers.forEach(p => { posCount[p.position] = (posCount[p.position] ?? 0) + 1; });
+      legalSquadPlayers.forEach(p => { posCount[p.position] = (posCount[p.position] ?? 0) + 1; });
+      if (legalSquadPlayers.length >= NT_SQUAD_TARGET && NT_POS_TARGETS.every(([pos, target]) => (posCount[pos] ?? 0) >= target)) continue;
 
       const ovrCap = getTeamOvrCap(team);
       let genIdx = 0;
@@ -884,10 +943,16 @@ export const NationalTeamService = {
       for (const [pos, target] of NT_POS_TARGETS) {
         const missing = Math.max(0, target - (posCount[pos] ?? 0));
         for (let i = 0; i < missing; i++) {
+          let playerId = `NTFA_${team.id}_${year}_${genIdx}`;
+          while (usedPlayerIds.has(playerId)) {
+            genIdx++;
+            playerId = `NTFA_${team.id}_${year}_${genIdx}`;
+          }
           const player = NationalTeamService.generatePlayerForNT(
             team.id, team.region, team.name, pos, team.reputation, genIdx, usedNames, ovrCap
           );
-          player.id = `NTFA_${team.id}_${year}_${genIdx}`;
+          player.id = playerId;
+          usedPlayerIds.add(player.id);
           genIdx++;
           newPlayers.push(player);
         }

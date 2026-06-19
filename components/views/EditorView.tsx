@@ -768,6 +768,7 @@ export const EditorView: React.FC = () => {
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [isCreatingPlayer, setIsCreatingPlayer] = useState(false);
   const [playerSearch, setPlayerSearch] = useState('');
+  const [playerNationalityFilter, setPlayerNationalityFilter] = useState('');
 
   const allExportableClubs = useMemo(() =>
     clubs.filter(c =>
@@ -985,10 +986,7 @@ export const EditorView: React.FC = () => {
     });
   }, [clubPlayers]);
 
-  const playerSearchResults = useMemo(() => {
-    const q = playerSearch.trim().toLowerCase();
-    if (!q) return [];
-
+  const allIndexedPlayers = useMemo(() => {
     const byKey = new Map<string, { player: Player; clubName: string; clubId: string }>();
     Object.entries(players).forEach(([clubId, squad]) => {
       const clubName = clubs.find(c => c.id === clubId)?.name ?? (clubId === 'FREE_AGENTS' ? 'Bez klubu' : clubId);
@@ -1002,14 +1000,48 @@ export const EditorView: React.FC = () => {
       byKey.set(`${selectedClubId}:${player.id}`, { player, clubName, clubId: selectedClubId });
     });
 
-    return Array.from(byKey.values())
+    return Array.from(byKey.values());
+  }, [players, clubs, clubPlayers, selectedClub, selectedClubId]);
+
+  const playerSearchResults = useMemo(() => {
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return [];
+
+    return allIndexedPlayers
       .filter(({ player, clubName }) => {
         const haystack = `${player.firstName} ${player.lastName} ${clubName} ${player.position} ${player.overallRating} ${player.nationalityCountry ?? ''}`.toLowerCase();
         return haystack.includes(q);
       })
       .sort((a, b) => b.player.overallRating - a.player.overallRating)
       .slice(0, 80);
-  }, [playerSearch, players, clubs, clubPlayers, selectedClub, selectedClubId]);
+  }, [playerSearch, allIndexedPlayers]);
+
+  const nationalityFilteredPlayers = useMemo(() => {
+    if (!playerNationalityFilter) return [];
+
+    return allIndexedPlayers
+      .filter(({ player }) => {
+        const playerCountry = player.nationalityCountry ?? pickNationalityForRegion(player.nationality);
+        return playerCountry === playerNationalityFilter;
+      })
+      .sort((a, b) => b.player.overallRating - a.player.overallRating);
+  }, [playerNationalityFilter, allIndexedPlayers]);
+
+  const filteredPlayerSearchResults = useMemo(() => {
+    if (!playerNationalityFilter) return playerSearchResults;
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return nationalityFilteredPlayers;
+
+    return allIndexedPlayers
+      .filter(({ player, clubName }) => {
+        const playerCountry = player.nationalityCountry ?? pickNationalityForRegion(player.nationality);
+        if (playerCountry !== playerNationalityFilter) return false;
+        const haystack = `${player.firstName} ${player.lastName} ${clubName} ${player.position} ${player.overallRating} ${player.nationalityCountry ?? ''}`.toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => b.player.overallRating - a.player.overallRating)
+      .slice(0, 80);
+  }, [playerNationalityFilter, playerSearch, playerSearchResults, nationalityFilteredPlayers, allIndexedPlayers]);
 
   const liveOvr = useMemo(() => PlayerAttributesGenerator.calculateOverall(attrs, position), [attrs, position]);
 
@@ -1852,7 +1884,8 @@ export const EditorView: React.FC = () => {
   };
 
   const isSelected = !!selectedPlayerId || isCreatingPlayer;
-  const displayedPlayers = playerSearch.trim() ? playerSearchResults : sortedPlayers.map(player => ({
+  const isPlayerListFiltered = !!playerSearch.trim() || !!playerNationalityFilter;
+  const displayedPlayers = isPlayerListFiltered ? filteredPlayerSearchResults : sortedPlayers.map(player => ({
     player,
     clubName: selectedClub?.name ?? selectedClubId,
     clubId: selectedClubId
@@ -3480,7 +3513,7 @@ export const EditorView: React.FC = () => {
         <div className="w-96 border-l border-slate-800 flex flex-col flex-shrink-0 bg-slate-900/40">
           <div className="px-4 py-2 border-b border-slate-800 bg-slate-900 space-y-2">
             <span className="text-xs text-yellow-400">
-              {playerSearch.trim() ? `Wyniki (${displayedPlayers.length})` : `Zawodnicy ${selectedClubId ? `(${clubPlayers.length})` : ''}`}
+              {isPlayerListFiltered ? `Wyniki (${displayedPlayers.length})` : `Zawodnicy ${selectedClubId ? `(${clubPlayers.length})` : ''}`}
             </span>
             <input
               type="text"
@@ -3489,9 +3522,24 @@ export const EditorView: React.FC = () => {
               className={`${inputCls} w-full px-2 py-1.5`}
               placeholder="szukaj zawodnika..."
             />
+            <select
+              value={playerNationalityFilter}
+              onChange={(e) => setPlayerNationalityFilter(e.target.value)}
+              className={`${selectCls} w-full px-2 py-1.5`}
+            >
+              <option value="">Wszystkie narodowości</option>
+              {nationalityCountryOptions.map(country => (
+                <option key={`player_filter_${country.region}_${country.name}`} value={country.name}>{country.name}</option>
+              ))}
+            </select>
+            {playerNationalityFilter && (
+              <div className="text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">
+                Znaleziono w bazie: <span className="text-emerald-400">{nationalityFilteredPlayers.length}</span>
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto editor-scroll">
-            {!selectedClubId && !playerSearch.trim() ? (
+            {!selectedClubId && !isPlayerListFiltered ? (
               <div className="p-6 text-center text-slate-600 text-xs">Wybierz klub albo wpisz nazwisko</div>
             ) : (
               <table className="w-full border-collapse text-xs">
@@ -3517,7 +3565,7 @@ export const EditorView: React.FC = () => {
                       </td>
                       <td className="px-2 py-1.5 text-white">
                         <div>{p.lastName}</div>
-                        {playerSearch.trim() && <div className="text-[9px] text-slate-500 truncate max-w-[92px]">{clubName}</div>}
+                        {isPlayerListFiltered && <div className="text-[9px] text-slate-500 truncate max-w-[92px]">{clubName}</div>}
                       </td>
                       <td className="px-2 py-1.5 text-slate-400">{p.firstName}</td>
                       <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">{p.overallRating}</td>
