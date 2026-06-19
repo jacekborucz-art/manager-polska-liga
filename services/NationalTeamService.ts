@@ -34,6 +34,8 @@ const NT_TIER_OVR_CAP: Record<number, number> = {
   1: 99, 2: 95, 3: 90, 4: 80, 5: 70,
 };
 
+const NT_CAP_DISABLED = true; // TEST FLAG: disables OVR cap and star player limit for all national teams — set to false to restore normal squad selection rules
+
 const KNOWN_CLUBS = [
   ...STATIC_CLUBS,
   ...STATIC_CL_CLUBS,
@@ -97,6 +99,8 @@ const getTeamRule = (team: Pick<NationalTeam, 'name'>): TeamSelectionRule | unde
   TEAM_SELECTION_RULES[team.name];
 
 const getTeamOvrCap = (team: Pick<NationalTeam, 'name' | 'tier' | 'continent' | 'reputation'>): number => {
+  if (NT_CAP_DISABLED) return 99;
+  if (team.tier === 5 && team.continent !== 'Europe') return 55;
   let cap = NT_TIER_OVR_CAP[team.tier] ?? 62;
 
   if (team.continent === 'Africa') {
@@ -132,7 +136,9 @@ const getCoachStarAllowance = (coachExp: number): number => {
   return 1;
 };
 
-const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name'>, coachExp: number = 50): number => {
+const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name' | 'tier' | 'continent'>, coachExp: number = 50): number => {
+  if (NT_CAP_DISABLED) return 99;
+  if (team.tier === 5 && team.continent !== 'Europe') return 3;
   const rule = getTeamRule(team);
   if (!rule) return getCoachStarAllowance(coachExp);
 
@@ -170,12 +176,9 @@ const isEligibleForTeam = (
   if (!options.bypassOverallCap && player.overallRating > getTeamOvrCap(team)) return false;
 
   if (team.name === 'Liechtenstein') {
+    if (player.nationalityCountry) return player.nationalityCountry === 'Liechtenstein';
     const clubCountry = CLUB_COUNTRY_BY_ID.get(player.clubId);
-    const isLiechtensteinClubPlayer = clubCountry === 'LIE';
-    const isGermanFallback =
-      (player.nationalityCountry === 'Niemcy' || (!player.nationalityCountry && player.nationality === Region.GERMANY)) &&
-      (options.bypassOverallCap || player.overallRating <= (getTeamRule(team)?.fallbackMaxOverall ?? 60));
-    return isLiechtensteinClubPlayer || isGermanFallback;
+    return clubCountry === 'LIE';
   }
 
   if (player.nationalityCountry) {

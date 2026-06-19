@@ -6,15 +6,15 @@ export const NATIONAL_TEAMS_CONCACAF = [
   { name: "Kanada", continent: "North America", tier: 3, colors: ['#D52B1E','#FFFFFF','#D52B1E'], stadium: "BMO Field", capacity: 30000, reputation: 12, region: Region.NORTH_AMERICA },
   { name: "Kostaryka", continent: "North America", tier: 2, colors: ['#002B7F','#FFFFFF','#CE1126'], stadium: "Estadio Nacional", capacity: 35000, reputation: 12, region: Region.IBERIA },
   { name: "Panama", continent: "North America", tier: 2, colors: ['#0052A5','#FFFFFF','#EF3340'], stadium: "Estadio Rommel Fernández", capacity: 32000, reputation: 12, region: Region.IBERIA },
-  { name: "Honduras", continent: "North America", tier: 4, colors: ['#0073CF','#FFFFFF','#0073CF'], stadium: "Estadio Olímpico Metropolitano", capacity: 38000, reputation: 10, region: Region.IBERIA },
+  { name: "Honduras", continent: "North America", tier: 5, colors: ['#0073CF','#FFFFFF','#0073CF'], stadium: "Estadio Olímpico Metropolitano", capacity: 38000, reputation: 10, region: Region.IBERIA },
   { name: "Salwador", continent: "North America", tier: 4, colors: ['#0F47AF','#FFFFFF','#0F47AF'], stadium: "Estadio Cuscatlán", capacity: 53000, reputation: 9, region: Region.IBERIA },
-  { name: "Gwatemala", continent: "North America", tier: 3, colors: ['#4997D0','#FFFFFF','#4997D0'], stadium: "Estadio Doroteo Guamuch Flores", capacity: 26000, reputation: 8, region: Region.IBERIA },
-  { name: "Nikaragua", continent: "North America", tier: 3, colors: ['#0067C6','#FFFFFF','#0067C6'], stadium: "Estadio Nacional de Fútbol", capacity: 15000, reputation: 7, region: Region.IBERIA },
+  { name: "Gwatemala", continent: "North America", tier: 5, colors: ['#4997D0','#FFFFFF','#4997D0'], stadium: "Estadio Doroteo Guamuch Flores", capacity: 26000, reputation: 8, region: Region.IBERIA },
+  { name: "Nikaragua", continent: "North America", tier: 5, colors: ['#0067C6','#FFFFFF','#0067C6'], stadium: "Estadio Nacional de Fútbol", capacity: 15000, reputation: 7, region: Region.IBERIA },
   { name: "Belize", continent: "North America", tier: 5, colors: ['#003F87','#FFFFFF','#CE1126'], stadium: "FFB Stadium", capacity: 5000, reputation: 4, region: Region.ENGLAND },
   { name: "Jamajka", continent: "North America", tier: 3, colors: ['#009B3A','#FED100','#000000'], stadium: "Independence Park", capacity: 35000, reputation: 10, region: Region.NORTH_AMERICA },
   { name: "Trynidad i Tobago", continent: "North America", tier: 3, colors: ['#CE1126','#FFFFFF','#000000'], stadium: "Hasely Crawford Stadium", capacity: 23000, reputation: 9, region: Region.ENGLAND },
   { name: "Haiti", continent: "North America", tier: 3, colors: ['#00209F','#D21034','#FFFFFF'], stadium: "Stade Sylvio Cator", capacity: 15000, reputation: 9, region: Region.FRANCE },
-  { name: "Curaçao", continent: "North America", tier: 5, colors: ['#0033A0','#FFD100','#CE1126'], stadium: "Ergilio Hato Stadium", capacity: 15000, reputation: 9, region: Region.BENELUX },
+  { name: "Curaçao", continent: "North America", tier: 3, colors: ['#0033A0','#FFD100','#CE1126'], stadium: "Ergilio Hato Stadium", capacity: 15000, reputation: 9, region: Region.BENELUX },
   { name: "Surinam", continent: "North America", tier: 5, colors: ['#377E3F','#FFFFFF','#B40A2D'], stadium: "André Kamperveen Stadium", capacity: 6000, reputation: 7, region: Region.BENELUX },
   { name: "Kuba", continent: "North America", tier: 5, colors: ['#002A8F','#FFFFFF','#CF142B'], stadium: "Estadio Pedro Marrero", capacity: 30000, reputation: 8, region: Region.IBERIA },
   { name: "Republika Dominikany", continent: "North America", tier: 5, colors: ['#002D62','#FFFFFF','#CE1126'], stadium: "Estadio Cibao FC", capacity: 14000, reputation: 8, region: Region.IBERIA },
@@ -39,7 +39,7 @@ export const NATIONAL_TEAMS_CONCACAF = [
   colors: ['#FFFFFF', '#CE1126', '#00247D'], 
   stadium: "Raymond E. Lee Football Field", 
   capacity: 2500, 
-  reputation: 3, 
+  reputation: 5, 
   region: Region.ENGLAND 
 },
 { 
@@ -49,7 +49,7 @@ export const NATIONAL_TEAMS_CONCACAF = [
   colors: ['#FFFFFF', '#00247D', '#CE1126'], 
   stadium: "A.O. Shirley Recreation Ground", 
   capacity: 5000, 
-  reputation: 3, 
+  reputation: 5, 
   region: Region.ENGLAND 
 },
 { 
