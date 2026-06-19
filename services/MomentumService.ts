@@ -1,4 +1,4 @@
-import { MatchContext, MatchLiveState, Player, MatchEventType } from '../types';
+import { MatchContext, MatchLiveState, Player, MatchEventType, WeatherSnapshot } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { analyzeClubFormImpact } from './MatchFormService';
 import { applyFocusToFormImpact } from './MatchPrepFocusService';
@@ -134,9 +134,21 @@ export const MomentumService = {
     lastEventType?: MatchEventType,
     lastEventSide?: 'HOME' | 'AWAY',
     homeFatigueMap?: Record<string, number>,
-    awayFatigueMap?: Record<string, number>
+    awayFatigueMap?: Record<string, number>,
+    weather?: WeatherSnapshot
   ): number => {
     const naturalTarget = MomentumService.calculateNaturalTarget(ctx, state);
+
+    // Weather modifiers: rain levels the playing field, wind adds unpredictability, heat amplifies fatigue impact
+    const precipDampen = weather && weather.precipitationChance > 60
+      ? 1 - Math.min(0.22, (weather.precipitationChance - 60) / 180)
+      : 1;
+    const windJitter = weather && weather.windKmh > 40
+      ? Math.min(1.0, (weather.windKmh - 40) / 80) * (Math.random() - 0.5) * 3
+      : 0;
+    const heatFatigueAmp = weather && weather.tempC > 30
+      ? 1 + Math.min(0.40, (weather.tempC - 30) / 25)
+      : 1;
 
     let impulse = 0;
     if (lastEventType && lastEventSide) {
@@ -145,7 +157,7 @@ export const MomentumService = {
 
     const dominanceConfidence = Math.min(1, Math.abs(naturalTarget) / 70);
     const upsetNoiseFactor = 1 - dominanceConfidence * 0.45;
-    const jitter = (Math.random() - 0.5) * 3 * upsetNoiseFactor;
+    const jitter = (Math.random() - 0.5) * 3 * upsetNoiseFactor + windJitter;
 
     const homeIds = state.homeLineup.startingXI.filter((id): id is string => id !== null);
     const awayIds = state.awayLineup.startingXI.filter((id): id is string => id !== null);
@@ -177,11 +189,11 @@ export const MomentumService = {
       if (avg < 70) return 2;
       return 0;
     };
-    const fatigueBalance = fatiguePenalty(awayAvg) - fatiguePenalty(homeAvg);
+    const fatigueBalance = (fatiguePenalty(awayAvg) - fatiguePenalty(homeAvg)) * heatFatigueAmp;
 
     const current = state.momentum + impulse;
     const lerpFactor = 0.08;
-    const nextVal = current + (naturalTarget - current) * lerpFactor + jitter + humanError + fatigueBalance;
+    const nextVal = current + (naturalTarget * precipDampen - current) * lerpFactor + jitter + humanError + fatigueBalance;
 
     return Math.max(-100, Math.min(100, nextVal));
   }

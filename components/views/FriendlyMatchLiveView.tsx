@@ -496,7 +496,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             homeGoals: newHomeGoals,
             awayGoals: newAwayGoals,
             logs: [newLog, ...prev.logs],
-            momentum: MomentumService.computeMomentum(ctx, prev, finalResult, activePenalty.side, prev.homeFatigue, prev.awayFatigue)
+            momentum: MomentumService.computeMomentum(ctx, prev, finalResult, activePenalty.side, prev.homeFatigue, prev.awayFatigue, env?.weather) // weather: rain dampens naturalTarget, wind adds jitter, heat amplifies fatigue impact
           };
         });
 
@@ -1835,7 +1835,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }, 3500);
         }
 
-        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue);
+        // weather passed so precipitation/wind/heat affect per-minute momentum drift
+        const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue, env?.weather);
         const briefingMomentumImpulse =
           nextMinute <= 6
             ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)

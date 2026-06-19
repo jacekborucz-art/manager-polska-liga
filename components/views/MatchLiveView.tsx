@@ -148,7 +148,7 @@ const PitchBroadcastOverlay = ({
   momentum: number;
 }) => {
   const activeColor = activeSide === 'AWAY' ? awayColor : activeSide === 'HOME' ? homeColor : '#ffffff';
-  const isMajorEvent = eventType === MatchEventType.GOAL || eventType === MatchEventType.SHOT_ON_TARGET || eventType === MatchEventType.PENALTY_GOAL;
+  const isMajorEvent = eventType === MatchEventType.GOAL || eventType === MatchEventType.SHOT_ON_TARGET || eventType === MatchEventType.PENALTY_SCORED;
   void momentum;
 
   return (
@@ -554,7 +554,7 @@ export const MatchLiveView = () => {
 
   const kitColors = useMemo(() => {
     if (pendingMatchKits) return pendingMatchKits;
-    if (!ctx) return null;
+    if (!ctx) return undefined;
     return KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub);
   }, [ctx, pendingMatchKits]);
 
