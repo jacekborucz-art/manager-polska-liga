@@ -114,16 +114,27 @@ const simulateMatch = (seed: number): MatchStats => {
 
     const statShotGapDrag = active.shots >= 14 ? Math.min(0.035, (active.shots - 13) * 0.007) : 0;
     const statPressureChance = clamp(
+<<<<<<< ours
       0.60
+=======
+      0.145
+>>>>>>> theirs
         + clamp(qualityGapCurve(ratingGap) * 0.022, -0.018, 0.024)
         + clamp((attackingBias - 50) / 100 * 0.045, -0.014, 0.018)
         + (activeMidfieldControlDiff > 0 ? Math.min(0.014, activeMidfieldControlDiff * 0.0010) : -Math.min(0.012, Math.abs(activeMidfieldControlDiff) * 0.0009))
         + (hasMomentumAdvantage ? (Math.abs(momentum) / 100) * 0.010 : 0)
         - statShotGapDrag,
+<<<<<<< ours
       0.48,
       0.68
     );
     const statPressureLimit = Math.min(0.92, shotThreshold + statPressureChance);
+=======
+      0.075,
+      0.205
+    );
+    const statPressureLimit = Math.min(0.42, shotThreshold + statPressureChance);
+>>>>>>> theirs
 
     const rngEvent = seededRng(seed, minute, 600);
     const foulThreshold = 0.043;
@@ -154,9 +165,15 @@ const simulateMatch = (seed: number): MatchStats => {
 
     if (rngEvent < statPressureLimit) {
       const statRng = seededRng(seed, minute, 910);
+<<<<<<< ours
       const shotShare = active.shots < 8 ? 0.36 : active.shots > 13 ? 0.27 : 0.31;
       const cornerShare = 0.16 + Math.max(0, Math.min(0.05, (active.shots - active.corners) * 0.005));
       const foulShare = 0.41 + Math.max(0, Math.min(0.06, (70 - defendingBias) * 0.0016));
+=======
+      const shotShare = active.shots < 8 ? 0.78 : active.shots > 13 ? 0.50 : 0.66;
+      const cornerShare = 0.14 + Math.max(0, Math.min(0.06, (active.shots - active.corners) * 0.006));
+      const foulShare = 0.12 + Math.max(0, Math.min(0.06, (70 - defendingBias) * 0.0015));
+>>>>>>> theirs
 
       if (statRng < shotShare) {
         active.shots++;

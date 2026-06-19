@@ -2368,10 +2368,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           ? Math.min(0.035, (activeShotsSoFar - 13) * 0.007)
           : 0;
         const statPressureChance = Math.max(
-          0.48,
+          0.075,
           Math.min(
-            0.68,
-            0.60
+            0.205,
+            0.145
               + Math.max(-0.018, Math.min(0.024, getQualityGapCurve(ratingGap) * 0.022))
               + Math.max(-0.014, Math.min(0.018, (attackingTacticObj.attackBias - 50) / 100 * 0.045))
               + (activeMidfieldControlDiff > 0 ? Math.min(0.014, activeMidfieldControlDiff * 0.0010) : -Math.min(0.012, Math.abs(activeMidfieldControlDiff) * 0.0009))
@@ -2380,7 +2380,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               - statShotGapDrag
           )
         );
-        const statPressureLimit = Math.min(0.92, shotThreshold + statPressureChance);
+        const statPressureLimit = Math.min(0.42, shotThreshold + statPressureChance);
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;
@@ -2769,12 +2769,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const statPlayerId = statActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 914) * statActiveIds.length)];
           const statPlayer = statTeam.find(p => p.id === statPlayerId);
           const shotShare = activeStats.shots < 8
-            ? 0.36
+            ? 0.78
             : activeStats.shots > 13
-              ? 0.27
-              : 0.31;
-          const cornerShare = 0.16 + Math.max(0, Math.min(0.05, (activeStats.shots - activeStats.corners) * 0.005));
-          const foulShare = 0.41 + Math.max(0, Math.min(0.06, (70 - attackingTacticObj.defenseBias) * 0.0016));
+              ? 0.50
+              : 0.66;
+          const cornerShare = 0.14 + Math.max(0, Math.min(0.06, (activeStats.shots - activeStats.corners) * 0.006));
+          const foulShare = 0.12 + Math.max(0, Math.min(0.06, (70 - attackingTacticObj.defenseBias) * 0.0015));
 
           if (statRng < shotShare) {
             targetSideStats.shots++;
