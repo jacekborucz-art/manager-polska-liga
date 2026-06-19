@@ -1,4 +1,4 @@
-import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
+﻿import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
@@ -691,15 +691,15 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         ? 'Polska w finale baraży do MŚ ! Sport Express po półfinale'
         : 'Polska odpada w półfinale baraży do MŚ';
       lead = polandWon
-        ? `Reprezentacja Polski pokonała ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i zagra w finale baraży o Mistrzostwa Świata. Biało-Czerwonym został już tylko jeden krok do mundialu.`
-        : `Reprezentacja Polski przegrała z ${opponent} ${scoreForPoland} w półfinale ścieżki ${polandPath.pathLabel} i odpadła z baraży o Mistrzostwa Świata. Mundial bez Biało-Czerwonych.`;
+        ? `Reprezentacja Polski odniosła ważne zwycięstwo w półfinale baraży o awans do Mistrzostw Świata, pokonując reprezentację ${opponent} wynikiem ${scoreForPoland}. Dzięki temu sukcesowi Biało-Czerwoni zachowali szanse na udział w najważniejszym turnieju piłkarskim globu i wykonali kolejny krok w kierunku mundialu.`
+        : `Reprezentacja Polski nie awansowała do Mistrzostw Świata po porażce w meczu barażowym z reprezentacją ${opponent}. Spotkanie zakończyło się wynikiem ${scoreForPoland} na korzyść rywali, co przekreśliło szanse Biało-Czerwonych na udział w nadchodzącym mundialu.`;
     } else {
       subject = polandWon
         ? 'POLSKA JEDZIE NA MUNDIAL! Zwycięstwo w finale baraży!!!'
         : 'Polska przegrywa finał baraży. Mundial bez Biało-Czerwonych';
       lead = polandWon
         ? `Reprezentacja Polski wygrywa finał ścieżki ${polandPath.pathLabel}, pokonując ${opponent} ${scoreForPoland}, i wywalczyła awans na Mistrzostwa Świata. Biało-Czerwoni wracają na największą scenę futbolu.`
-        : `Reprezentacja Polski przegrała finał ścieżki ${polandPath.pathLabel} z ${opponent} ${scoreForPoland} i nie zagra na Mistrzostwach Świata.`;
+        : `Reprezentacja Polski nie awansowała do Mistrzostw Świata po porażce w meczu barażowym z reprezentacją ${opponent}. Spotkanie zakończyło się wynikiem ${scoreForPoland} na korzyść rywali, co przekreśliło szanse Biało-Czerwonych na udział w nadchodzącym mundialu.`;
     }
 
     const finalOpponent = polandWon && stage === 'SF'

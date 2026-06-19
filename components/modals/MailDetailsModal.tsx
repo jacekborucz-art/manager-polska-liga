@@ -578,9 +578,28 @@ const WCQPlayoffPolandMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
         <p className={`mb-2 text-[12px] font-black italic uppercase tracking-tighter ${data.polandWon ? 'text-emerald-200' : 'text-rose-200'}`}>
           {statusText}
         </p>
-        <p className="mx-auto max-w-2xl text-[16px] font-medium leading-8 text-sky-50">
-          {data.lead}
-        </p>
+        {data.polandWon && data.stage === 'SF' ? (
+          <div className="mx-auto max-w-2xl space-y-4 text-left text-[14px] font-medium leading-7 text-sky-50">
+            <p>{data.lead}</p>
+            <p>Spotkanie dostarczyło kibicom wielu emocji, a polscy zawodnicy pokazali determinację, zaangażowanie oraz wolę walki. Osiągnięty wynik pozwolił reprezentacji awansować do decydującego meczu barażowego, który rozstrzygnie o awansie na Mistrzostwa Świata.</p>
+            {data.finalOpponent && (
+              <p>Choć mundial jest już coraz bliżej, najtrudniejsze wyzwanie wciąż pozostaje przed Biało-Czerwonymi. W finałowym meczu barażowym Polska zmierzy się z reprezentacją {data.finalOpponent}. Zwycięzca tego spotkania zapewni sobie miejsce w gronie uczestników nadchodzących Mistrzostw Świata.</p>
+            )}
+            <p>Przed drużyną czas na regenerację, przygotowania oraz analizę kolejnego rywala. Cały sztab szkoleniowy i zawodnicy są świadomi stawki nadchodzącego pojedynku i zrobią wszystko, aby spełnić marzenia milionów polskich kibiców.</p>
+            <p>Dziękujemy wszystkim fanom za nieustające wsparcie i wiarę w reprezentację. Przed nami ostatni krok na drodze do mundialu.</p>
+          </div>
+        ) : !data.polandWon ? (
+          <div className="mx-auto max-w-2xl space-y-4 text-left text-[14px] font-medium leading-7 text-sky-50">
+            <p>{data.lead}</p>
+            <p>Pomimo ogromnego zaangażowania zawodników, sztabu szkoleniowego oraz wsparcia kibiców, reprezentacji nie udało się osiągnąć celu, jakim był awans na najważniejszy turniej piłkarski świata. Drużyna walczyła do końcowego gwizdka, jednak tego dnia przeciwnik okazał się skuteczniejszy.</p>
+            <p>Brak awansu jest dużym rozczarowaniem dla całego środowiska piłkarskiego w Polsce. Jednocześnie pragniemy podziękować wszystkim kibicom za nieustające wsparcie, które towarzyszyło reprezentacji podczas całych eliminacji oraz meczu barażowego.</p>
+            <p>Przed reprezentacją Polski rozpoczyna się nowy etap przygotowań do kolejnych rozgrywek międzynarodowych. Polski Związek Piłki Nożnej oraz sztab szkoleniowy dokonają szczegółowej analizy zakończonej kampanii, aby wyciągnąć wnioski i odpowiednio przygotować drużynę do przyszłych wyzwań.</p>
+          </div>
+        ) : (
+          <p className="mx-auto max-w-2xl text-[16px] font-medium leading-8 text-sky-50">
+            {data.lead}
+          </p>
+        )}
       </div>
 
       <div className="w-full overflow-hidden rounded-3xl border border-yellow-300/25 bg-black/25 shadow-[0_24px_70px_rgba(0,0,0,0.4)]">
@@ -614,14 +633,6 @@ const WCQPlayoffPolandMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
         </div>
       </div>
 
-      {data.stage === 'SF' && data.polandWon && data.finalOpponent && (
-        <div className="mt-6 w-full rounded-2xl border border-sky-300/20 bg-sky-400/10 px-6 py-5">
-          <p className="mb-1 text-[11px] font-black italic uppercase tracking-tighter text-sky-200">Co dalej?</p>
-          <p className="text-[15px] font-medium leading-7 text-sky-50">
-            W finale ścieżki Polska zagra z reprezentacją {data.finalOpponent}. Stawką będzie bezpośredni awans na mundial.
-          </p>
-        </div>
-      )}
     </div>
   );
 };
