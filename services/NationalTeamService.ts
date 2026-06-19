@@ -99,8 +99,8 @@ const getTeamRule = (team: Pick<NationalTeam, 'name'>): TeamSelectionRule | unde
   TEAM_SELECTION_RULES[team.name];
 
 const getTeamOvrCap = (team: Pick<NationalTeam, 'name' | 'tier' | 'continent' | 'reputation'>): number => {
-  if (NT_CAP_DISABLED) return 99;
   if (team.tier === 5 && team.continent !== 'Europe') return 55;
+  if (NT_CAP_DISABLED) return 99;
   let cap = NT_TIER_OVR_CAP[team.tier] ?? 62;
 
   if (team.continent === 'Africa') {
@@ -137,8 +137,8 @@ const getCoachStarAllowance = (coachExp: number): number => {
 };
 
 const getMaxStarsForTeam = (team: Pick<NationalTeam, 'name' | 'tier' | 'continent'>, coachExp: number = 50): number => {
-  if (NT_CAP_DISABLED) return 99;
   if (team.tier === 5 && team.continent !== 'Europe') return 3;
+  if (NT_CAP_DISABLED) return 99;
   const rule = getTeamRule(team);
   if (!rule) return getCoachStarAllowance(coachExp);
 
