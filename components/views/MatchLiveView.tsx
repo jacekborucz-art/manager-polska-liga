@@ -2768,40 +2768,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const statActiveIds = statLineup.filter((id): id is string => id !== null);
           const statPlayerId = statActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 914) * statActiveIds.length)];
           const statPlayer = statTeam.find(p => p.id === statPlayerId);
-          const shotShare = activeStats.shots < 8
-            ? 0.78
-            : activeStats.shots > 13
-              ? 0.50
-              : 0.66;
-          const cornerShare = 0.14 + Math.max(0, Math.min(0.06, (activeStats.shots - activeStats.corners) * 0.006));
+          // shotShare removed — it was generating ~9 extra shots/team on top of the original shot block (~11/team), inflating totals to ~40 instead of 22-26. cornerShare raised from 0.14→0.30 to compensate for corners lost when this block crowded out the original misc block (rngEvent < 0.32).
+          const cornerShare = 0.30 + Math.max(0, Math.min(0.05, (activeStats.shots - activeStats.corners) * 0.006));
           const foulShare = 0.12 + Math.max(0, Math.min(0.06, (70 - attackingTacticObj.defenseBias) * 0.0015));
 
-          if (statRng < shotShare) {
-            targetSideStats.shots++;
-            const onTargetChance = Math.max(
-              0.22,
-              Math.min(
-                0.42,
-                0.30
-                  + Math.max(-0.05, Math.min(0.06, getQualityGapCurve(ratingGap) * 0.06))
-                  + (activeMidfieldControlDiff > 0 ? 0.025 : -0.015)
-                  - lateFatigueShotDrag * 0.45
-              )
-            );
-            const isStatShotOnTarget = seededRng(currentSeed, nextMinute, 918) < onTargetChance;
-            if (isStatShotOnTarget) targetSideStats.shotsOnTarget++;
-            immediateEventType = isStatShotOnTarget ? MatchEventType.SHOT_ON_TARGET : MatchEventType.SHOT;
-            if (seededRng(currentSeed, nextMinute, 922) < 0.18) {
-              newLog = {
-                id: `STAT_SHOT_${nextMinute}`,
-                minute: nextMinute,
-                text: getCommentary(immediateEventType, statPlayer?.lastName || ''),
-                type: immediateEventType,
-                teamSide: activeSide,
-                playerName: statPlayer?.lastName
-              };
-            }
-          } else if (statRng < shotShare + cornerShare) {
+          if (statRng < cornerShare) {
             targetSideStats.corners++;
             immediateEventType = MatchEventType.CORNER;
             if (seededRng(currentSeed, nextMinute, 924) < 0.16) {
@@ -2814,7 +2785,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 playerName: statPlayer?.lastName
               };
             }
-          } else if (statRng < shotShare + cornerShare + foulShare) {
+          } else if (statRng < cornerShare + foulShare) {
             targetSideStats.fouls++;
             immediateEventType = MatchEventType.FOUL;
           } else {
