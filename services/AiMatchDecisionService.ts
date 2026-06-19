@@ -999,6 +999,70 @@ const chooseScoreImpulseSub = (
   };
 };
 
+const chooseTacticSupportSub = (
+  lineup: Lineup,
+  players: Player[],
+  fatigue: Record<string, number>,
+  subsHistory: SubstitutionRecord[],
+  scoreDiff: number,
+  coachQuality: number,
+  minute: number
+): { playerOutId: string; playerIn: Player; slotIdx: number; reason: string } | null => {
+  const tactic = TacticRepository.getById(lineup.tacticId);
+  const benchPool = getAvailableBench(lineup, players, subsHistory).filter(p => p.position !== PlayerPosition.GK);
+  if (benchPool.length === 0) return null;
+
+  const candidates = lineup.startingXI
+    .map((id, slotIdx) => ({ id, slotIdx, role: tactic.slots[slotIdx]?.role }))
+    .filter((entry): entry is { id: string; slotIdx: number; role: PlayerPosition } =>
+      !!entry.id && entry.role !== PlayerPosition.GK
+    )
+    .map(entry => {
+      const currentPlayer = getPlayer(players, entry.id);
+      if (!currentPlayer) return null;
+      const currentFatigue = fatigue[entry.id] ?? 100;
+      const currentScore = getEmergencyFieldScore(currentPlayer, entry.role, true) + (currentFatigue - 72) * 0.12;
+      const roleMismatch = currentPlayer.position !== entry.role;
+      const bestSub = [...benchPool]
+        .sort((a, b) => {
+          const chaseA = scoreDiff < 0 && a.position === PlayerPosition.FWD ? 8 : 0;
+          const chaseB = scoreDiff < 0 && b.position === PlayerPosition.FWD ? 8 : 0;
+          const protectA = scoreDiff > 0 && a.position === PlayerPosition.DEF ? 7 : 0;
+          const protectB = scoreDiff > 0 && b.position === PlayerPosition.DEF ? 7 : 0;
+          return (
+            getEmergencyFieldScore(b, entry.role, true) + chaseB + protectB -
+            (getEmergencyFieldScore(a, entry.role, true) + chaseA + protectA)
+          );
+        })[0];
+      if (!bestSub) return null;
+      const bestSubScore = getEmergencyFieldScore(bestSub, entry.role, true) +
+        ((bestSub.condition ?? 100) - 72) * 0.10 +
+        (scoreDiff < 0 && bestSub.position === PlayerPosition.FWD ? 8 : 0) +
+        (scoreDiff > 0 && bestSub.position === PlayerPosition.DEF ? 7 : 0);
+      const naturalRoleFix = roleMismatch && bestSub.position === entry.role ? 10 : 0;
+      const roleMismatchPressure = roleMismatch ? 7 : 0;
+      const fatiguePressure = Math.max(0, 66 - currentFatigue) * 0.18;
+      const gain = bestSubScore - currentScore + naturalRoleFix + roleMismatchPressure + fatiguePressure;
+      return { ...entry, currentPlayer, bestSub, gain, roleMismatch };
+    })
+    .filter((entry): entry is { id: string; slotIdx: number; role: PlayerPosition; currentPlayer: Player; bestSub: Player; gain: number; roleMismatch: boolean } => !!entry)
+    .sort((a, b) => b.gain - a.gain);
+
+  const best = candidates[0];
+  if (!best) return null;
+
+  const baseRequiredGain = Math.max(4, 12 - coachQuality * 0.08 - (minute >= 75 ? 2 : 0));
+  const requiredGain = best.roleMismatch ? Math.max(2, baseRequiredGain - 5) : baseRequiredGain;
+  if (best.gain < requiredGain) return null;
+
+  return {
+    playerOutId: best.id,
+    playerIn: best.bestSub,
+    slotIdx: best.slotIdx,
+    reason: best.roleMismatch ? 'korekta pozycji po zmianie ustawienia' : 'dopasowanie profilu do nowej taktyki'
+  };
+};
+
 const chooseHalftimeExpectationSub = (
   lineup: Lineup,
   players: Player[],
@@ -1319,6 +1383,27 @@ export const AiMatchDecisionService = {
     // applyTacticReassignment z prawdziwym przeliczeniem składu).
     const crossFamilyAllowed = isHalftime || isPriority || state.minute >= effectivePlan.crossFamilyEscalationMinute;
     const postureEagernessBonus = getPostureEagernessBonus(effectivePlan.posture);
+    const tryApplyTacticSupportSub = (): boolean => {
+      if (subRecord || newSubsCount >= MAX_LEAGUE_SUBS) return false;
+      const supportSub = chooseTacticSupportSub(
+        newLineup,
+        myPlayers,
+        currentFatigue,
+        mySubsHistory,
+        scoreDiff,
+        coachQuality,
+        state.minute
+      );
+      if (!supportSub) return false;
+
+      const pOut = getPlayer(myPlayers, supportSub.playerOutId);
+      newLineup = LineupService.swapPlayers(newLineup, supportSub.playerOutId, supportSub.playerIn.id, supportSub.slotIdx);
+      newSubsCount++;
+      subRecord = { playerOutId: supportSub.playerOutId, playerInId: supportSub.playerIn.id, minute: state.minute };
+      markSubAction();
+      logs.push(`${state.minute}' ${supportSub.playerIn.lastName} zastępuje ${pOut?.lastName} (${supportSub.reason}).`);
+      return true;
+    };
 
     const severeInjuredId = newLineup.startingXI.find(id => id && currentInjuries[id] === InjurySeverity.SEVERE);
     if (severeInjuredId) {
@@ -1606,6 +1691,7 @@ export const AiMatchDecisionService = {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
         applyTactic(plannedTactic);
         markFormationAction();
+        tryApplyTacticSupportSub();
         const statusText = halftimeAssessment.status === 'PROTECT_RESULT'
           ? 'korzystny wynik z mocniejszym rywalem'
           : halftimeAssessment.status === 'CONTROL_GAME'
@@ -1687,6 +1773,7 @@ export const AiMatchDecisionService = {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
         applyTactic(goalkeeperCrisisResponse.tacticId);
         markFormationAction(goalkeeperCrisisResponse.reason === 'reckless_push' ? 6 : 10);
+        tryApplyTacticSupportSub();
         logs.push(
           goalkeeperCrisisResponse.reason === 'reckless_push'
             ? `${state.minute}' Trener widzi problem z bramkarzem rywala i każe mocno zaatakować: ${newTacticId}.`
@@ -1704,6 +1791,7 @@ export const AiMatchDecisionService = {
         // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
         applyTactic(plannedTactic);
         markPlannedFormationAction(isFinalPhase ? 18 : 0);
+        tryApplyTacticSupportSub();
         const direction = scoreDiff < 0 ? 'odważniej' : 'bezpieczniej';
         logs.push(`${state.minute}' Trener reaguje na wynik i ustawia zespół ${direction}: ${plannedTactic}.`);
       }
@@ -1806,6 +1894,7 @@ export const AiMatchDecisionService = {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
           applyTactic(lateTactic);
           markPlannedFormationAction(isExtremeLateTacticNeed ? 12 : 18);
+          tryApplyTacticSupportSub();
           const direction = mustChaseLate && !avoidCollapseLate ? 'rzuca zespół do ataku' : 'zamyka końcówkę bezpieczniej';
           logs.push(`${state.minute}' Trener ${direction}: ${lateTactic}.`);
         }
@@ -1891,6 +1980,7 @@ export const AiMatchDecisionService = {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
           applyTactic(lateTactic);
           markPlannedFormationAction(isFinalPhase ? 18 : 0);
+          tryApplyTacticSupportSub();
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       } else if (scoreDiff > 0 && state.minute > 75 && mySentOffCount === 0) {
@@ -1899,6 +1989,7 @@ export const AiMatchDecisionService = {
           // [AI-COACH-FIX] applyTacticReassignment — patrz szerszy komentarz przy bloku czerwonej kartki.
           applyTactic(lateTactic);
           markPlannedFormationAction(18);
+          tryApplyTacticSupportSub();
           logs.push(`Zmiana ustawienia na ${newTacticId}.`);
         }
       }

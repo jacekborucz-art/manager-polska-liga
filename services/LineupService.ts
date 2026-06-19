@@ -227,6 +227,11 @@ export const LineupService = {
     const isGkRole = role === PlayerPosition.GK;
     const moraleFit = (PlayerMoraleService.getLineupReadinessMultiplier(PlayerMoraleService.ensurePlayerState(player)) - 1) * 45;
     const positionFitBonus = PlayerPositionFitService.getFitScoreBonus(player, role, options.useSecondaryPositions ?? false);
+    // Feed the role-adjusted overall into both auto-pick and AI substitution decisions. This keeps
+    // a useful converted player viable, while making a strong player with bad role attributes less
+    // attractive than his raw overall would suggest.
+    const effectiveRoleOverall = PlayerPositionFitService.getEffectiveRoleOverall(player, role, options.useSecondaryPositions ?? false);
+    const roleOverallAdjustment = (effectiveRoleOverall - player.overallRating) * 1.15;
 
     if ((isGkPlayer && !isGkRole) || (!isGkPlayer && isGkRole)) {
       return -2000 + getSelectionScore(player);
@@ -234,13 +239,13 @@ export const LineupService = {
 
     switch (role) {
       case PlayerPosition.GK:
-        return attr.goalkeeping * 2 + attr.positioning + moraleFit + positionFitBonus;
+        return attr.goalkeeping * 2 + attr.positioning + moraleFit + positionFitBonus + roleOverallAdjustment;
       case PlayerPosition.DEF:
-        return attr.defending * 1.5 + attr.strength + attr.positioning + moraleFit + positionFitBonus;
+        return attr.defending * 1.5 + attr.strength + attr.positioning + moraleFit + positionFitBonus + roleOverallAdjustment;
       case PlayerPosition.MID:
-        return attr.passing * 1.2 + attr.vision + attr.technique + moraleFit + positionFitBonus;
+        return attr.passing * 1.2 + attr.vision + attr.technique + moraleFit + positionFitBonus + roleOverallAdjustment;
       case PlayerPosition.FWD:
-        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5 + moraleFit + positionFitBonus;
+        return attr.finishing * 1.5 + attr.attacking + attr.pace * 0.5 + moraleFit + positionFitBonus + roleOverallAdjustment;
       default:
         return getSelectionScore(player);
     }

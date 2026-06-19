@@ -846,7 +846,9 @@ export const SquadView: React.FC = () => {
     const slotRole = loc === 'START' && index !== undefined ? currentTactic.slots[index]?.role : null;
     const positionPenaltyFactor = player && slotRole ? PlayerPositionFitService.getPenaltyFactor(player, slotRole, true) : 0;
     const isSecondaryPosition = !!player && !!slotRole && PlayerPositionFitService.hasSecondaryPosition(player, slotRole) && positionPenaltyFactor > 0;
-    const isOutOfPosition = !!player && !!slotRole && positionPenaltyFactor >= 1;
+    // The penalty curve is no longer binary, so the UI marks only heavy mismatches as clearly
+    // out of position. Mild role conversions can stay playable without a red warning.
+    const isOutOfPosition = !!player && !!slotRole && positionPenaltyFactor >= 0.55;
     const averageRating = player.stats?.ratingHistory?.length
       ? player.stats.ratingHistory.reduce((a, b) => a + b, 0) / player.stats.ratingHistory.length
       : null;
@@ -1249,7 +1251,8 @@ export const SquadView: React.FC = () => {
                 const isDropTarget = draggedPitchSlot !== null && draggedPitchSlot.index !== idx;
                 const positionPenaltyFactor = player ? PlayerPositionFitService.getPenaltyFactor(player, slot.role, true) : 0;
                 const isSecondaryPosition = !!player && PlayerPositionFitService.hasSecondaryPosition(player, slot.role) && positionPenaltyFactor > 0;
-                const isOutOfPosition = !!player && positionPenaltyFactor >= 1;
+                // Keep the pitch warning aligned with the progressive role-fit penalty curve.
+                const isOutOfPosition = !!player && positionPenaltyFactor >= 0.55;
                 
                 return (
                   <div 

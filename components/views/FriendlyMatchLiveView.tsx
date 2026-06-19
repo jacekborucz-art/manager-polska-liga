@@ -950,19 +950,29 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
-        const getEffectiveXIStrength = (playersList: Player[], xi: (string | null)[]): number => {
-          const ids = xi.filter((id): id is string => id !== null);
-          const active = playersList.filter(p => ids.includes(p.id));
-          if (active.length === 0) return 62;
-          const avgOverall = active.reduce((sum, player) => sum + player.overallRating, 0) / active.length;
-          // Średnia jakości nie może maskować gry w 10/9. Efektywna siła XI waży klasę graczy
+        // Use role-adjusted strength for the live advantage curve. A player moved into a new slot
+        // contributes as his effective role overall, so tactical reshuffles can improve or weaken
+        // the team instead of blindly reusing raw OVR.
+        const getEffectiveXIStrength = (playersList: Player[], lineup: Lineup): number => {
+          const tactic = TacticRepository.getById(lineup.tacticId);
+          const activeRoleOveralls = lineup.startingXI
+            .map((id, idx) => {
+              if (!id) return null;
+              const player = playersList.find(p => p.id === id);
+              const role = tactic.slots[idx]?.role ?? player?.position;
+              return player && role ? PlayerPositionFitService.getEffectiveRoleOverall(player, role, true) : null;
+            })
+            .filter((value): value is number => value !== null);
+          if (activeRoleOveralls.length === 0) return 62;
+          const avgOverall = activeRoleOveralls.reduce((sum, overall) => sum + overall, 0) / activeRoleOveralls.length;
+          // Średnia jakości roli nie może maskować gry w 10/9. Efektywna siła XI waży klasę graczy
           // liczbą realnie obsadzonych slotów, więc 10 elitarnych nadal rozbije 10 amatorów,
-          // ale brak zawodnika obniża strukturę zespołu.
-          const structureFactor = Math.min(1, active.length / 11);
+          // ale brak zawodnika oraz zły profil na pozycji obniżają strukturę zespołu.
+          const structureFactor = Math.min(1, activeRoleOveralls.length / 11);
           return avgOverall * structureFactor;
         };
-        const homeAvgOverallLive = getEffectiveXIStrength(ctx.homePlayers, nextHomeLineup.startingXI);
-        const awayAvgOverallLive = getEffectiveXIStrength(ctx.awayPlayers, nextAwayLineup.startingXI);
+        const homeAvgOverallLive = getEffectiveXIStrength(ctx.homePlayers, nextHomeLineup);
+        const awayAvgOverallLive = getEffectiveXIStrength(ctx.awayPlayers, nextAwayLineup);
         const homeQualityGapLive = homeAvgOverallLive - awayAvgOverallLive;
         const getQualityGapCurve = (gap: number): number => {
           const absGap = Math.abs(gap);
