@@ -594,7 +594,10 @@ export const NationalTeamService = {
       .flatMap(([, arr]) => arr)
       .filter(p => !p.id.startsWith('NT_'));
 
-    // Miesieczny przeglad nie powoluje prawdziwych wolnych agentow.
+    // Free agents with explicit nationalityCountry — last resort before synthetics
+    const freeAgentsList = (allPlayers[FREE_AGENT_CLUB_ID] ?? [])
+      .filter(p => !!p.nationalityCountry && p.id.startsWith('NTFA_'));
+
     const playerMap: Record<string, Player> = {};
     Object.values(allPlayers).flat().forEach(p => { playerMap[p.id] = p; });
 
@@ -665,7 +668,28 @@ export const NationalTeamService = {
             calledUpFromClub.push({ playerId: p.id, teamName: team.name });
             changed = true;
           });
-          const stillMissing = missing - acceptedFillers.length;
+          let stillMissing = missing - acceptedFillers.length;
+          if (stillMissing > 0) {
+            const faFillers = freeAgentsList
+              .filter(isEligibleFiller)
+              .map(p => ({ player: p, score: p.overallRating }))
+              .sort((a, b) => b.score - a.score)
+              .map(x => x.player);
+            const acceptedFA: Player[] = [];
+            for (const filler of faFillers) {
+              if (isTeamStarPlayer(team, filler) && selectedStarCount >= maxStars) continue;
+              acceptedFA.push(filler);
+              if (isTeamStarPlayer(team, filler)) selectedStarCount++;
+              if (acceptedFA.length >= stillMissing) break;
+            }
+            acceptedFA.forEach(p => {
+              squadIds.push(p.id);
+              allPlayerUpdates.push({ id: p.id, assignedNationalTeamId: team.id });
+              calledUpFromClub.push({ playerId: p.id, teamName: team.name });
+              changed = true;
+            });
+            stillMissing -= acceptedFA.length;
+          }
           for (let i = 0; i < stillMissing; i++) {
             const syntheticCap = selectedStarCount >= maxStars && getTeamRule(team)?.starThreshold !== undefined
               ? Math.min(getTeamOvrCap(team), (getTeamRule(team)?.starThreshold ?? getTeamOvrCap(team)) - 1)
