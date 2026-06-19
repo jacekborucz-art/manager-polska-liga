@@ -823,6 +823,55 @@ export const NationalTeamService = {
 
   // ─── 9. SPRAWDZENIE OKNA ZAMROŻENIA KADRY ────────────────────────────────────
 
+  // ─── 10. UZUPEŁNIENIE PULI WOLNYCH AGENTÓW (8 LIPCA) ────────────────────────
+  // Generates missing players for any national team with fewer than 25 squad members
+  // and adds them to the free agent pool so the coach has enough candidates to call up.
+  topUpFreeAgentPool: (
+    nationalTeams: NationalTeam[],
+    allPlayers: Record<string, Player[]>,
+    year: number
+  ): { newPlayers: Player[] } => {
+    const NT_SQUAD_TARGET = 25;
+    const NT_POS_TARGETS: [PlayerPosition, number][] = [
+      [PlayerPosition.GK, NT_GK],
+      [PlayerPosition.DEF, NT_DEF],
+      [PlayerPosition.MID, NT_MID],
+      [PlayerPosition.FWD, NT_FWD],
+    ];
+
+    const allPlayersList = Object.values(allPlayers).flat();
+    const newPlayers: Player[] = [];
+    const usedNames = new Set<string>();
+
+    for (const team of nationalTeams) {
+      if (team.squadPlayerIds.length >= NT_SQUAD_TARGET) continue;
+
+      const squadPlayers = team.squadPlayerIds
+        .map(id => allPlayersList.find(p => p.id === id))
+        .filter((p): p is Player => p !== undefined);
+
+      const posCount: Partial<Record<PlayerPosition, number>> = {};
+      squadPlayers.forEach(p => { posCount[p.position] = (posCount[p.position] ?? 0) + 1; });
+
+      const ovrCap = getTeamOvrCap(team);
+      let genIdx = 0;
+
+      for (const [pos, target] of NT_POS_TARGETS) {
+        const missing = Math.max(0, target - (posCount[pos] ?? 0));
+        for (let i = 0; i < missing; i++) {
+          const player = NationalTeamService.generatePlayerForNT(
+            team.id, team.region, team.name, pos, team.reputation, genIdx, usedNames, ovrCap
+          );
+          player.id = `NTFA_${team.id}_${year}_${genIdx}`;
+          genIdx++;
+          newPlayers.push(player);
+        }
+      }
+    }
+
+    return { newPlayers };
+  },
+
   isSquadFrozen: (currentDate: Date, seasonStartYear: number): boolean => {
     const schedule = NT_SCHEDULE_BY_YEAR[seasonStartYear];
 

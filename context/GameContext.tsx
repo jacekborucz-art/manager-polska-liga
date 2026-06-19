@@ -6617,6 +6617,19 @@ Asystent`,
       }
     }
 
+    // ── NT FREE AGENT TOP-UP (8 lipca) ───────────────────────────────────────
+    // Each year on July 8, generates missing players for national teams with fewer than 25
+    // squad members and adds them to the free agent pool for coaches to call up.
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 8) {
+      const topUp = NationalTeamService.topUpFreeAgentPool(nationalTeams, players, dateToProcess.getFullYear());
+      if (topUp.newPlayers.length > 0) {
+        setPlayers(prev => ({
+          ...prev,
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...topUp.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
+        }));
+      }
+    }
+
     // ── SPARINGI AI: SYMULACJA W TLE (8 i 9 lipca) ───────────────────────────
     if ((dateToProcess.getMonth() === 6 && (dateToProcess.getDate() === 8 || dateToProcess.getDate() === 9)) || (dateToProcess.getMonth() === 0 && dateToProcess.getDate() >= 2 && dateToProcess.getDate() <= 18)) {
       const dayDate = dateToProcess.getDate();
