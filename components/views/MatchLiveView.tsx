@@ -2364,6 +2364,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               (livePressureContext?.rivalryMultiplier ?? 1)
           )
         );
+        const statShotGapDrag = activeShotsSoFar >= 14
+          ? Math.min(0.035, (activeShotsSoFar - 13) * 0.007)
+          : 0;
+        const statPressureChance = Math.max(
+          0.48,
+          Math.min(
+            0.68,
+            0.60
+              + Math.max(-0.018, Math.min(0.024, getQualityGapCurve(ratingGap) * 0.022))
+              + Math.max(-0.014, Math.min(0.018, (attackingTacticObj.attackBias - 50) / 100 * 0.045))
+              + (activeMidfieldControlDiff > 0 ? Math.min(0.014, activeMidfieldControlDiff * 0.0010) : -Math.min(0.012, Math.abs(activeMidfieldControlDiff) * 0.0009))
+              + (hasMomentumAdvantage ? (Math.abs(prev.momentum) / 100) * 0.010 : 0)
+              - lateFatigueShotDrag * 0.35
+              - statShotGapDrag
+          )
+        );
+        const statPressureLimit = Math.min(0.92, shotThreshold + statPressureChance);
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;
@@ -2741,6 +2758,69 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
              const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2500));
              if (injury) processInjury(injury);
            }
+        }
+        else if (rngEvent < statPressureLimit) {
+          const statRng = seededRng(currentSeed, nextMinute, 910);
+          const activeStats = activeSide === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          const targetSideStats = activeSide === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          const statTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+          const statLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+          const statActiveIds = statLineup.filter((id): id is string => id !== null);
+          const statPlayerId = statActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 914) * statActiveIds.length)];
+          const statPlayer = statTeam.find(p => p.id === statPlayerId);
+          const shotShare = activeStats.shots < 8
+            ? 0.36
+            : activeStats.shots > 13
+              ? 0.27
+              : 0.31;
+          const cornerShare = 0.16 + Math.max(0, Math.min(0.05, (activeStats.shots - activeStats.corners) * 0.005));
+          const foulShare = 0.41 + Math.max(0, Math.min(0.06, (70 - attackingTacticObj.defenseBias) * 0.0016));
+
+          if (statRng < shotShare) {
+            targetSideStats.shots++;
+            const onTargetChance = Math.max(
+              0.22,
+              Math.min(
+                0.42,
+                0.30
+                  + Math.max(-0.05, Math.min(0.06, getQualityGapCurve(ratingGap) * 0.06))
+                  + (activeMidfieldControlDiff > 0 ? 0.025 : -0.015)
+                  - lateFatigueShotDrag * 0.45
+              )
+            );
+            const isStatShotOnTarget = seededRng(currentSeed, nextMinute, 918) < onTargetChance;
+            if (isStatShotOnTarget) targetSideStats.shotsOnTarget++;
+            immediateEventType = isStatShotOnTarget ? MatchEventType.SHOT_ON_TARGET : MatchEventType.SHOT;
+            if (seededRng(currentSeed, nextMinute, 922) < 0.18) {
+              newLog = {
+                id: `STAT_SHOT_${nextMinute}`,
+                minute: nextMinute,
+                text: getCommentary(immediateEventType, statPlayer?.lastName || ''),
+                type: immediateEventType,
+                teamSide: activeSide,
+                playerName: statPlayer?.lastName
+              };
+            }
+          } else if (statRng < shotShare + cornerShare) {
+            targetSideStats.corners++;
+            immediateEventType = MatchEventType.CORNER;
+            if (seededRng(currentSeed, nextMinute, 924) < 0.16) {
+              newLog = {
+                id: `STAT_CORNER_${nextMinute}`,
+                minute: nextMinute,
+                text: getCommentary(MatchEventType.CORNER, statPlayer?.lastName || ''),
+                type: MatchEventType.CORNER,
+                teamSide: activeSide,
+                playerName: statPlayer?.lastName
+              };
+            }
+          } else if (statRng < shotShare + cornerShare + foulShare) {
+            targetSideStats.fouls++;
+            immediateEventType = MatchEventType.FOUL;
+          } else {
+            targetSideStats.offsides++;
+            immediateEventType = MatchEventType.OFFSIDE;
+          }
         }
         else if (rngEvent < 0.32) { // [było 0.42 — obniżono proporcjonalnie do shotThreshold, aby zmniejszyć liczbę rzutów rożnych/autów bez wpływu na gole]
           const flavorRng = seededRng(currentSeed, nextMinute, 900);
