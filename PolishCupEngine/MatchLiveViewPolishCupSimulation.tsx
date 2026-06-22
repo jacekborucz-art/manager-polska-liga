@@ -2618,7 +2618,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
            dynamicThreshold *= (1 + nextPostGoalPenaltyPct);
         }
        
-       const currentThreshold = Math.min(0.95, dynamicThreshold * 1.35);
+       const thresholdPressureTax = isUnderdog ? 1.18 : 1.35;
+       const currentThreshold = Math.min(0.95, dynamicThreshold * thresholdPressureTax);
 
         // === GIANT KILLER: minimalna szansa przebicia dla drużyny z niższego Tier ===
         // Formuła: repGap≥5 → (11-repGap)*0.9%/min | repGap<5 → (11-repGap)*0.6%/min
@@ -2894,9 +2895,12 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                 eventSide === 'HOME' ? nextAwayInjuries : nextHomeInjuries
             );
             const upsetPowerGap = upsetDefPwr / Math.max(1, upsetAttPwr);
+            const upsetRepGap = Math.max(0, defendingClubRep - attackingClubRep);
 
-            if (upsetPowerGap > 1.4) {
-                const upsetActionChance = Math.min(0.10, 0.016 / upsetPowerGap);
+            if (upsetPowerGap > 1.15 && upsetRepGap >= 2) {
+                const homeCupEdge = eventSide === 'HOME' && attackingClubRep < defendingClubRep ? 1.35 : 1.0;
+                const closeTierEdge = upsetRepGap <= 3 ? 1.25 : 1.0;
+                const upsetActionChance = Math.min(0.12, (0.080 / upsetPowerGap) * homeCupEdge * closeTierEdge);
                 if (seededRng(currentSeed, nextMinute, 9991) < upsetActionChance) {
                     const upsetAttTeam = eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
                     const upsetAttLineup = (eventSide === 'HOME' ? nextHomeLineup : nextAwayLineup).startingXI;
