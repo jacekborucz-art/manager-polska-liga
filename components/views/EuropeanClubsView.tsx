@@ -781,9 +781,11 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
     const worldFriendlyMatchDays = baseMatchDays
       .map(matchDay => WorldNationalFriendlyService.generateMatchDay(matchDay, nationalTeams, seasonStartYear, matchSimulationSeed))
       .filter((matchDay): matchDay is NonNullable<typeof matchDay> => Boolean(matchDay));
-    const playoffWindowFriendlyMatchDays = WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
-      .map(date => WorldNationalFriendlyService.generatePlayoffWindowMatchDay(date, nationalTeams, wcqPlayoffState, matchSimulationSeed))
-      .filter((matchDay): matchDay is NonNullable<typeof matchDay> => Boolean(matchDay));
+    const playoffWindowFriendlyMatchDays = WorldNationalFriendlyService.generatePlayoffWindowMatchDays(
+      nationalTeams,
+      wcqPlayoffState,
+      matchSimulationSeed
+    );
 
     return [
       ...baseMatchDays.flatMap(toScheduleItems),

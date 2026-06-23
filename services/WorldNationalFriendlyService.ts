@@ -116,6 +116,12 @@ const buildReputationBalancedMatches = (
   return matches;
 };
 
+const getStableTeamPool = (teams: NationalTeam[]): NationalTeam[] =>
+  [...teams].sort((a, b) =>
+    a.name.localeCompare(b.name) ||
+    a.id.localeCompare(b.id)
+  );
+
 const collectRegularFriendlyPairHistory = (
   currentMatchDay: NTMatchDay,
   nationalTeams: NationalTeam[],
@@ -123,7 +129,7 @@ const collectRegularFriendlyPairHistory = (
   sessionSeed: number
 ): Set<string> => {
   const usedPairKeys = new Set<string>();
-  const eligibleTeams = nationalTeams.filter(team => team.continent !== 'Europe');
+  const eligibleTeams = getStableTeamPool(nationalTeams.filter(team => team.continent !== 'Europe'));
 
   (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
     .filter(isWorldFriendlyDate)
@@ -143,18 +149,21 @@ const collectRegularFriendlyPairHistory = (
   return usedPairKeys;
 };
 
-const collectMarchPlayoffFriendlyPairHistory = (
-  date: Date,
-  eligibleTeams: NationalTeam[],
+const buildMarchPlayoffFriendlyMatchDays = (
+  nationalTeams: NationalTeam[],
+  playoffState: WCQPlayoffState | null,
   sessionSeed: number
-): Set<string> => {
-  const usedPairKeys = new Set<string>();
+): NTMatchDay[] => {
+  if (!playoffState?.drawCompleted) return [];
 
-  WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
-    .filter(friendlyDate => friendlyDate.getTime() < date.getTime())
-    .forEach(friendlyDate => {
+  const usedPairKeys = new Set<string>();
+  const playoffTeamNames = getPlayoffTeamNames(playoffState);
+  const eligibleTeams = getStableTeamPool(nationalTeams.filter(team => !playoffTeamNames.has(team.name)));
+
+  return WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
+    .map(friendlyDate => {
       const rng = new Rng(hash(`2026|${sessionSeed}|MARCH_PLAYOFF_WORLD_NT_FRIENDLIES|${friendlyDate.getDate()}`));
-      buildReputationBalancedMatches(
+      const matches = buildReputationBalancedMatches(
         eligibleTeams,
         MARCH_PLAYOFF_FRIENDLY_PAIRS,
         WORLD_FRIENDLY_GROUP,
@@ -162,9 +171,17 @@ const collectMarchPlayoffFriendlyPairHistory = (
         rng,
         usedPairKeys
       );
-    });
 
-  return usedPairKeys;
+      if (matches.length === 0) return null;
+
+      return {
+        day: friendlyDate.getDate(),
+        month: friendlyDate.getMonth(),
+        competitionLabel: WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL,
+        matches,
+      };
+    })
+    .filter((matchDay): matchDay is NTMatchDay => Boolean(matchDay));
 };
 
 export const WorldNationalFriendlyService = {
@@ -178,7 +195,7 @@ export const WorldNationalFriendlyService = {
     if (!isWorldFriendlyDate(matchDay)) return null;
 
     const rng = new Rng(hash(`${seasonStartYear}|${sessionSeed}|WORLD_NT_FRIENDLIES|${matchDay.month}|${matchDay.day}`));
-    const teams = nationalTeams.filter(team => team.continent !== 'Europe');
+    const teams = getStableTeamPool(nationalTeams.filter(team => team.continent !== 'Europe'));
     const usedPairKeys = collectRegularFriendlyPairHistory(matchDay, nationalTeams, seasonStartYear, sessionSeed);
     const matches = buildReputationBalancedMatches(teams, MAX_WORLD_FRIENDLY_PAIRS, WORLD_FRIENDLY_GROUP, WORLD_FRIENDLY_LABEL, rng, usedPairKeys);
 
@@ -199,32 +216,17 @@ export const WorldNationalFriendlyService = {
     ];
   },
 
+  generatePlayoffWindowMatchDays(nationalTeams: NationalTeam[], playoffState: WCQPlayoffState | null, sessionSeed: number): NTMatchDay[] {
+    return buildMarchPlayoffFriendlyMatchDays(nationalTeams, playoffState, sessionSeed);
+  },
+
   generatePlayoffWindowMatchDay(date: Date, nationalTeams: NationalTeam[], playoffState: WCQPlayoffState | null, sessionSeed: number): NTMatchDay | null {
     const isSupportedDate = date.getFullYear() === 2026 &&
       date.getMonth() === 2 &&
       (date.getDate() === 17 || date.getDate() === 20);
     if (!isSupportedDate || !playoffState?.drawCompleted) return null;
 
-    const playoffTeamNames = getPlayoffTeamNames(playoffState);
-    const eligibleTeams = nationalTeams.filter(team => !playoffTeamNames.has(team.name));
-    const rng = new Rng(hash(`2026|${sessionSeed}|MARCH_PLAYOFF_WORLD_NT_FRIENDLIES|${date.getDate()}`));
-    const usedPairKeys = collectMarchPlayoffFriendlyPairHistory(date, eligibleTeams, sessionSeed);
-    const matches = buildReputationBalancedMatches(
-      eligibleTeams,
-      MARCH_PLAYOFF_FRIENDLY_PAIRS,
-      WORLD_FRIENDLY_GROUP,
-      WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL,
-      rng,
-      usedPairKeys
-    );
-
-    if (matches.length === 0) return null;
-
-    return {
-      day: date.getDate(),
-      month: date.getMonth(),
-      competitionLabel: WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL,
-      matches,
-    };
+    return buildMarchPlayoffFriendlyMatchDays(nationalTeams, playoffState, sessionSeed)
+      .find(matchDay => matchDay.day === date.getDate() && matchDay.month === date.getMonth()) ?? null;
   },
 };

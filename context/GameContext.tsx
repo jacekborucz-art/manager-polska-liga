@@ -7138,9 +7138,11 @@ Asystent`,
     if (dateToProcess.getFullYear() === 2025 && dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 30 && wcqPlayoffState?.drawCompleted) {
       const marchFriendlyScheduleKey = `MARCH_2026_WORLD_NT_FRIENDLY_SCHEDULE_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(marchFriendlyScheduleKey)) {
-        const matchDays = WorldNationalFriendlyService.getMarchPlayoffFriendlyDates()
-          .map(date => WorldNationalFriendlyService.generatePlayoffWindowMatchDay(date, nationalTeams, wcqPlayoffState, matchSimulationSeed))
-          .filter(Boolean) as NonNullable<ReturnType<typeof WorldNationalFriendlyService.generatePlayoffWindowMatchDay>>[];
+        const matchDays = WorldNationalFriendlyService.generatePlayoffWindowMatchDays(
+          nationalTeams,
+          wcqPlayoffState,
+          matchSimulationSeed
+        );
         const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
         const scheduleLines = matchDays.flatMap(matchDay => [
           `${matchDay.day} ${monthNames[matchDay.month]}`,
