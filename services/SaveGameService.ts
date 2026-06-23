@@ -53,6 +53,7 @@ export interface SaveState {
   uefaNationalRankingState: any;
   wcqPlayoffState: any;
   wcState: any;
+  euroState: any;
   cupParticipants: string[];
   activeCupDraw: any;
   activeGroupDraw: any;
@@ -445,6 +446,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     uefaNationalRankingState: data.uefaNationalRankingState ?? null,
     wcqPlayoffState: data.wcqPlayoffState ?? null,
     wcState: data.wcState ?? null,
+    euroState: (data as any).euroState ?? null,
     cupParticipants: asArray(data.cupParticipants),
     activeCupDraw: normalizeDraw(data.activeCupDraw),
     activeGroupDraw: normalizeDraw(data.activeGroupDraw),

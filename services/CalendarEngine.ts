@@ -31,6 +31,7 @@ import {
 import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
 import { NationsLeagueService } from './NationsLeagueService';
 import { EuroQualifiersService } from './EuroQualifiersService';
+import { EuroTournamentService } from './EuroTournamentService';
 
 // ─── Typy publiczne ──────────────────────────────────────────────────────────
 
@@ -1084,6 +1085,18 @@ export const CalendarEngine = {
           const slotYear  = slot.start.getFullYear();
           const slotMonth = slot.start.getMonth(); // 0-11
           const slotDay   = slot.start.getDate();
+          const isEuroJuneReservedDate =
+            EuroTournamentService.isEuroTournamentYear(slotYear) &&
+            slotMonth === 5 &&
+            (slotDay === 7 || slotDay === 11);
+          if (isEuroJuneReservedDate) {
+            return {
+              slot,
+              kind: EventKind.NONE,
+              participation: 'info',
+              targetView: ViewState.DASHBOARD,
+            };
+          }
           const yearSchedule = NT_SCHEDULE_BY_YEAR[slotYear];
           const matchDayEntry = yearSchedule
             ? yearSchedule.find(md => md.day === slotDay && md.month === slotMonth)

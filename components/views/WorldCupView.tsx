@@ -3,6 +3,7 @@ import wcBgImg from '../../Graphic/themes/worldcup.png';
 import { useGame } from '../../context/GameContext';
 import { MatchCardEntry, MatchGoalEntry, NationalTeam, ViewState, WCGroup, WCGroupStanding, WCKnockoutMatch, WCState } from '../../types';
 import { WorldCupService, computeGroupStandings } from '../../services/WorldCupService';
+import { EuroTournamentService } from '../../services/EuroTournamentService';
 
 const GLASS_CARD = 'bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden';
 const GLOSS_LAYER = 'absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none';
@@ -103,6 +104,24 @@ interface WCMatchRowProps {
   nationalTeams: NationalTeam[];
 }
 
+type TournamentReportMatch = {
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+  date: string;
+  label: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  homeGoalsAET?: number;
+  awayGoalsAET?: number;
+  homePenalties?: number;
+  awayPenalties?: number;
+  wentToET?: boolean;
+  wentToPenalties?: boolean;
+  winner?: string;
+};
+
 function WCMatchRow({ home, away, homeGoals, awayGoals, goals, cards, metaLabel, wcState, nationalTeams }: WCMatchRowProps) {
   const gradient = getTeamGradient(wcState, home, away);
   const homeGoalsList = filterGoals(goals, home, nationalTeams);
@@ -199,9 +218,13 @@ function WCMatchRow({ home, away, homeGoals, awayGoals, goals, cards, metaLabel,
   );
 }
 
-function WCGroupMatchResultRow({ home, away, homeGoals, awayGoals }: Pick<WCMatchRowProps, 'home' | 'away' | 'homeGoals' | 'awayGoals'>) {
+function WCGroupMatchResultRow({ home, away, homeGoals, awayGoals, onClick }: Pick<WCMatchRowProps, 'home' | 'away' | 'homeGoals' | 'awayGoals'> & { onClick?: () => void }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 border-b border-white/[0.06] px-1 py-2 last:border-b-0">
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid w-full grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 border-b border-white/[0.06] px-1 py-2 text-left transition-colors last:border-b-0 hover:bg-white/[0.05]"
+    >
       <div className="min-w-0 flex items-center gap-2">
         <SmallFlag name={home} />
         <span className="text-xs font-bold leading-tight text-white/85">{home}</span>
@@ -215,11 +238,11 @@ function WCGroupMatchResultRow({ home, away, homeGoals, awayGoals }: Pick<WCMatc
         <span className="text-xs font-bold leading-tight text-white/85">{away}</span>
         <SmallFlag name={away} />
       </div>
-    </div>
+    </button>
   );
 }
 
-function WCGroupResults({ group }: { group: WCGroup }) {
+function WCGroupResults({ group, onOpenReport }: { group: WCGroup; onOpenReport: (match: TournamentReportMatch) => void }) {
   const matchesByDate = group.matches.reduce<Record<string, WCGroup['matches']>>((acc, match) => {
     if (!acc[match.date]) acc[match.date] = [];
     acc[match.date].push(match);
@@ -241,6 +264,16 @@ function WCGroupResults({ group }: { group: WCGroup }) {
                 away={m.away}
                 homeGoals={m.homeGoals}
                 awayGoals={m.awayGoals}
+                onClick={() => onOpenReport({
+                  home: m.home,
+                  away: m.away,
+                  homeGoals: m.homeGoals,
+                  awayGoals: m.awayGoals,
+                  date: m.date,
+                  label: `Grupa ${group.label}`,
+                  goals: m.goals,
+                  cards: m.cards,
+                })}
               />
             ))}
           </div>
@@ -254,9 +287,10 @@ interface WCKOMatchRowProps {
   m: WCKnockoutMatch;
   wcState: WCState;
   nationalTeams: NationalTeam[];
+  onOpenReport?: (match: TournamentReportMatch) => void;
 }
 
-function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
+function WCKOMatchRow({ m, wcState, nationalTeams, onOpenReport }: WCKOMatchRowProps) {
   if (!m.home || !m.away) {
     return (
       <div className="px-8 py-4 rounded-2xl mb-3 border border-white/[0.06] bg-white/[0.03] flex items-center justify-center">
@@ -306,8 +340,26 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
   const hasEvents = homeGoalsList.length > 0 || awayGoalsList.length > 0 || homeCardsList.length > 0 || awayCardsList.length > 0;
 
   return (
-    <div
-      className="px-8 py-4 rounded-2xl mb-3 border border-white/[0.08] transition-all"
+    <button
+      type="button"
+      onClick={() => onOpenReport?.({
+        home: m.home as string,
+        away: m.away as string,
+        homeGoals: m.homeGoals ?? 0,
+        awayGoals: m.awayGoals ?? 0,
+        date: m.date,
+        label: ROUND_LABEL[m.round] ?? m.round,
+        goals: m.goals,
+        cards: m.cards,
+        homeGoalsAET: m.homeGoalsAET,
+        awayGoalsAET: m.awayGoalsAET,
+        homePenalties: m.homePenalties,
+        awayPenalties: m.awayPenalties,
+        wentToET: m.wentToET,
+        wentToPenalties: m.wentToPenalties,
+        winner: m.winner,
+      })}
+      className="w-full px-8 py-4 rounded-2xl mb-3 border border-white/[0.08] text-left transition-all hover:border-white/20 hover:brightness-110"
       style={{ background: gradient }}
     >
       <div className="mb-4 flex justify-center">
@@ -389,11 +441,95 @@ function WCKOMatchRow({ m, wcState, nationalTeams }: WCKOMatchRowProps) {
           )}
         </div>
       )}
+    </button>
+  );
+}
+
+function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: TournamentReportMatch; nationalTeams: NationalTeam[]; onClose: () => void }) {
+  const homeGoals = filterGoals(match.goals, match.home, nationalTeams);
+  const awayGoals = filterGoals(match.goals, match.away, nationalTeams);
+  const homeCards = filterCards(match.cards, match.home, nationalTeams);
+  const awayCards = filterCards(match.cards, match.away, nationalTeams);
+  const hasDetails = homeGoals.length > 0 || awayGoals.length > 0 || homeCards.length > 0 || awayCards.length > 0;
+  const extraLabel = match.wentToPenalties
+    ? `Karne ${match.homePenalties ?? 0}:${match.awayPenalties ?? 0}`
+    : match.wentToET
+      ? `Po dogrywce ${match.homeGoalsAET ?? 0}:${match.awayGoalsAET ?? 0}`
+      : null;
+
+  const EventList = ({ title, goals, cards }: { title: string; goals: MatchGoalEntry[]; cards: MatchCardEntry[] }) => (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className={`${HEADING_FONT} mb-3 text-sm text-white`}>{title}</div>
+      <div className="space-y-2">
+        {goals.map((goal, index) => (
+          <div key={`g-${index}`} className="flex items-center justify-between gap-3 text-xs text-slate-200">
+            <span>{goal.playerName}{goal.isPenalty ? ' (k.)' : ''}</span>
+            <span className="font-black text-emerald-300">{goal.minute}' GOL</span>
+          </div>
+        ))}
+        {cards.map((card, index) => (
+          <div key={`c-${index}`} className="flex items-center justify-between gap-3 text-xs text-slate-300">
+            <span>{card.playerName}</span>
+            <span className={`font-black ${card.type === 'YELLOW' ? 'text-yellow-300' : 'text-red-300'}`}>
+              {card.minute}' {card.type === 'YELLOW' ? 'ŻÓŁTA' : card.type === 'SECOND_YELLOW' ? 'DRUGA ŻÓŁTA' : 'CZERWONA'}
+            </span>
+          </div>
+        ))}
+        {goals.length === 0 && cards.length === 0 && (
+          <div className="text-xs font-bold text-slate-500">Brak zdarzeń po tej stronie.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[32px] border border-white/15 bg-slate-950 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.65)]" onClick={event => event.stopPropagation()}>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-300">{match.label} · {match.date}</div>
+            <div className={`${HEADING_FONT} mt-1 text-3xl text-white`}>Raport meczowy</div>
+          </div>
+          <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-xl text-slate-400 transition-colors hover:bg-white/10 hover:text-white">×</button>
+        </div>
+
+        <div className="mb-6 grid grid-cols-[minmax(0,1fr)_110px_minmax(0,1fr)] items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="flex min-w-0 items-center justify-end gap-3 text-right">
+            <span className={`${HEADING_FONT} truncate text-2xl text-white`}>{match.home}</span>
+            <NTStyleFlag name={match.home} />
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-black tabular-nums text-white">{match.homeGoals} : {match.awayGoals}</div>
+            {extraLabel && <div className="mt-1 text-[10px] font-black uppercase tracking-widest text-amber-200">{extraLabel}</div>}
+          </div>
+          <div className="flex min-w-0 items-center gap-3">
+            <NTStyleFlag name={match.away} />
+            <span className={`${HEADING_FONT} truncate text-2xl text-white`}>{match.away}</span>
+          </div>
+        </div>
+
+        {match.winner && (
+          <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-emerald-200">
+            Awans / zwycięzca: {match.winner}
+          </div>
+        )}
+
+        {hasDetails ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <EventList title={match.home} goals={homeGoals} cards={homeCards} />
+            <EventList title={match.away} goals={awayGoals} cards={awayCards} />
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-center text-sm font-bold text-slate-400">
+            Raport nie ma szczegółowych zdarzeń dla tego meczu.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState: WCState; nationalTeams: NationalTeam[] }) {
+function GroupCard({ group, wcState, nationalTeams, onOpenReport }: { group: WCGroup; wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
   const standings = computeGroupStandings(group);
   return (
     <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-3">
@@ -442,7 +578,7 @@ function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState:
         <div className="mt-1">
           <div className="h-px bg-white/10 mb-3" />
           <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Wyniki</p>
-          <WCGroupResults group={group} />
+          <WCGroupResults group={group} onOpenReport={onOpenReport} />
           {false && (
           <div>
             {group.matches.map((m, idx) => (
@@ -467,7 +603,7 @@ function GroupCard({ group, wcState, nationalTeams }: { group: WCGroup; wcState:
   );
 }
 
-function BracketTab({ wcState, nationalTeams }: { wcState: WCState; nationalTeams: NationalTeam[] }) {
+function BracketTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
   const rounds: Array<'R32' | 'R16' | 'QF' | 'SF' | 'THIRD' | 'FINAL'> = ['R32', 'R16', 'QF', 'SF', 'THIRD', 'FINAL'];
   return (
     <div className="flex flex-col gap-8">
@@ -484,7 +620,7 @@ function BracketTab({ wcState, nationalTeams }: { wcState: WCState; nationalTeam
               <div className="w-full h-[2px] rounded-full opacity-60" style={{ background: 'linear-gradient(to right, transparent 0%, #f59e0b 20%, #ffffff 50%, #f59e0b 80%, transparent 100%)' }} />
             </div>
             <div>
-              {matches.map(m => <WCKOMatchRow key={m.id} m={m} wcState={wcState} nationalTeams={nationalTeams} />)}
+              {matches.map(m => <WCKOMatchRow key={m.id} m={m} wcState={wcState} nationalTeams={nationalTeams} onOpenReport={onOpenReport} />)}
             </div>
           </div>
         );
@@ -496,7 +632,7 @@ function BracketTab({ wcState, nationalTeams }: { wcState: WCState; nationalTeam
   );
 }
 
-function FinalTab({ wcState, nationalTeams }: { wcState: WCState; nationalTeams: NationalTeam[] }) {
+function FinalTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
   const finalMatch = wcState.knockoutMatches.find(m => m.round === 'FINAL');
   const thirdMatch = wcState.knockoutMatches.find(m => m.round === 'THIRD');
 
@@ -517,11 +653,11 @@ function FinalTab({ wcState, nationalTeams }: { wcState: WCState; nationalTeams:
         </div>
       )}
       <div>
-        <WCKOMatchRow m={finalMatch} wcState={wcState} nationalTeams={nationalTeams} />
+        <WCKOMatchRow m={finalMatch} wcState={wcState} nationalTeams={nationalTeams} onOpenReport={onOpenReport} />
       </div>
       {thirdMatch && thirdMatch.winner && (
         <div>
-          <WCKOMatchRow m={thirdMatch} wcState={wcState} nationalTeams={nationalTeams} />
+          <WCKOMatchRow m={thirdMatch} wcState={wcState} nationalTeams={nationalTeams} onOpenReport={onOpenReport} />
           {wcState.thirdPlace && (
             <div className="text-center text-xs text-white/60 mt-1">3. miejsce: <span className="text-white font-bold">{wcState.thirdPlace}</span></div>
           )}
@@ -640,18 +776,27 @@ function StatystykiTab({ wcState, nationalTeams }: { wcState: WCState; nationalT
   );
 }
 
-const WorldCupView: React.FC = () => {
-  const { currentDate, wcState, setWcState, navigateTo, matchSimulationSeed, nationalTeams, players, setPlayers, coaches } = useGame();
+const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' }) => {
+  const { currentDate, wcState, setWcState, euroState, setEuroState, navigateTo, matchSimulationSeed, nationalTeams, players, setPlayers, coaches } = useGame();
   const [activeTab, setActiveTab] = useState<Tab>('grupy');
   const [skipConfirm, setSkipConfirm] = useState(false);
+  const [selectedReportMatch, setSelectedReportMatch] = useState<TournamentReportMatch | null>(null);
+  const isEuro = mode === 'euro';
+  const tournamentState = isEuro ? euroState : wcState;
+  const setTournamentState = isEuro ? setEuroState : setWcState;
+  const title = isEuro ? 'Mistrzostwa Europy' : 'Mistrzostwa Świata';
+  const emptyText = isEuro ? 'Mistrzostwa Europy jeszcze się nie rozpoczęły.' : 'Mistrzostwa Świata jeszcze się nie rozpoczęły.';
+  const championLabel = isEuro ? 'Mistrz Europy' : 'Mistrz';
+  const tournamentMeta = isEuro ? '24 drużyny · 6 grup' : '48 drużyn · 12 grup';
+  const knockoutDays = isEuro ? EuroTournamentService.KNOCKOUT_DAYS : WC_KNOCKOUT_DAYS;
 
-  if (!wcState) {
+  if (!tournamentState) {
     return (
       <div
         className="min-h-screen w-full flex items-center justify-center gap-4"
         style={{ backgroundImage: `url(${wcBgImg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
       >
-        <div className="text-white/60 text-lg font-bold">Mistrzostwa Świata jeszcze się nie rozpoczęły.</div>
+        <div className="text-white/60 text-lg font-bold">{emptyText}</div>
         <button
           className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm font-bold hover:bg-white/20 transition-all"
           onClick={() => navigateTo(ViewState.DASHBOARD)}
@@ -660,17 +805,19 @@ const WorldCupView: React.FC = () => {
     );
   }
 
-  const tournamentStarted = currentDate >= new Date(wcState.year, 5, 2);
+  const tournamentStarted = currentDate >= new Date(tournamentState.year, 5, isEuro ? 1 : 2);
 
-  if (wcState.drawComplete && !wcState.groupStageComplete && !tournamentStarted) {
+  if (!isEuro && tournamentState.drawComplete && !tournamentState.groupStageComplete && !tournamentStarted) {
     navigateTo(ViewState.WC_DRAW);
     return null;
   }
 
   const handleSkipToFinal = () => {
     if (!skipConfirm) { setSkipConfirm(true); return; }
-    const result = WorldCupService.simulateFullTournament(wcState, matchSimulationSeed, nationalTeams, players, coaches);
-    setWcState(result.state);
+    const result = isEuro
+      ? EuroTournamentService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches)
+      : WorldCupService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches);
+    setTournamentState(result.state);
     if (result.updatedPlayers) setPlayers(result.updatedPlayers);
     setActiveTab('final');
     setSkipConfirm(false);
@@ -683,25 +830,27 @@ const WorldCupView: React.FC = () => {
     { id: 'statystyki', label: 'Statystyki' },
   ];
 
-  const canSkip = !wcState.knockoutComplete;
+  const canSkip = !tournamentState.knockoutComplete;
 
   useEffect(() => {
-    if (!wcState.groupStageComplete || wcState.knockoutComplete) return;
+    if (!tournamentState.groupStageComplete || tournamentState.knockoutComplete) return;
 
     const currentDayKey = Number(`${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}${String(currentDate.getDate()).padStart(2, '0')}`);
-    let healedState = wcState;
+    let healedState = tournamentState;
     let healedPlayers = players;
     let changed = false;
 
-    for (const koDay of WC_KNOCKOUT_DAYS) {
-      const koDayKey = Number(`${wcState.year}06${String(koDay).padStart(2, '0')}`);
+    for (const koDay of knockoutDays) {
+      const koDayKey = Number(`${tournamentState.year}06${String(koDay).padStart(2, '0')}`);
       if (koDayKey > currentDayKey) continue;
 
-      const date = `${wcState.year}-06-${String(koDay).padStart(2, '0')}`;
+      const date = `${tournamentState.year}-06-${String(koDay).padStart(2, '0')}`;
       const hasUnplayedDueMatch = healedState.knockoutMatches.some(m => m.date === date && !m.winner && m.home && m.away);
       if (!hasUnplayedDueMatch) continue;
 
-      const knockoutSimulation = WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, healedPlayers, coaches);
+      const knockoutSimulation = isEuro
+        ? EuroTournamentService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, healedPlayers, coaches)
+        : WorldCupService.simulateKnockoutDay(healedState, healedState.teams, koDay, 6, healedState.year, matchSimulationSeed, nationalTeams, healedPlayers, coaches);
       healedPlayers = knockoutSimulation.updatedPlayers ?? healedPlayers;
       healedState = {
         ...healedState,
@@ -717,16 +866,18 @@ const WorldCupView: React.FC = () => {
         ...healedState,
         knockoutComplete: true,
         champion: finalMatch.winner ?? undefined,
+        runnerUp: finalMatch.winner === finalMatch.home ? finalMatch.away : finalMatch.home,
         thirdPlace: thirdMatch?.winner ?? undefined,
+        fourthPlace: thirdMatch?.winner === thirdMatch?.home ? thirdMatch?.away : thirdMatch?.home,
       };
       changed = true;
     }
 
     if (changed) {
-      setWcState(healedState);
+      setTournamentState(healedState);
       setPlayers(healedPlayers);
     }
-  }, [coaches, currentDate, nationalTeams, players, matchSimulationSeed, setPlayers, setWcState, wcState]);
+  }, [coaches, currentDate, isEuro, knockoutDays, nationalTeams, players, matchSimulationSeed, setPlayers, setTournamentState, tournamentState]);
 
   return (
     <div
@@ -740,13 +891,13 @@ const WorldCupView: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <div className={`${HEADING_FONT} text-4xl text-white`}>
-              Mistrzostwa Świata
-              <span className="text-amber-400 ml-3">{wcState.year}</span>
+              {title}
+              <span className="text-amber-400 ml-3">{tournamentState.year}</span>
             </div>
-            {wcState.champion && (
+            {tournamentState.champion && (
               <div className="text-sm text-amber-300 mt-1 flex items-center gap-2">
-                <NTStyleFlag name={wcState.champion} />
-                Mistrz: <span className="font-bold">{wcState.champion}</span>
+                <NTStyleFlag name={tournamentState.champion} />
+                {championLabel}: <span className="font-bold">{tournamentState.champion}</span>
               </div>
             )}
           </div>
@@ -771,15 +922,15 @@ const WorldCupView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4 mb-5 text-xs text-white/50">
-          <span className={wcState.groupStageComplete ? 'text-green-400' : 'text-amber-400'}>
-            {wcState.groupStageComplete ? '✓ Faza grupowa zakończona' : '⏳ Faza grupowa w toku'}
+          <span className={tournamentState.groupStageComplete ? 'text-green-400' : 'text-amber-400'}>
+            {tournamentState.groupStageComplete ? '✓ Faza grupowa zakończona' : '⏳ Faza grupowa w toku'}
           </span>
-          {wcState.groupStageComplete && (
-            <span className={wcState.knockoutComplete ? 'text-green-400' : 'text-amber-400'}>
-              {wcState.knockoutComplete ? '✓ Turniej zakończony' : '⏳ Faza pucharowa w toku'}
+          {tournamentState.groupStageComplete && (
+            <span className={tournamentState.knockoutComplete ? 'text-green-400' : 'text-amber-400'}>
+              {tournamentState.knockoutComplete ? '✓ Turniej zakończony' : '⏳ Faza pucharowa w toku'}
             </span>
           )}
-          <span className="ml-auto">48 drużyn · 12 grup</span>
+          <span className="ml-auto">{tournamentMeta}</span>
         </div>
 
         <div className="flex gap-2 mb-5">
@@ -802,22 +953,30 @@ const WorldCupView: React.FC = () => {
 
             {activeTab === 'grupy' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {wcState.groups.map(g => (
-                  <GroupCard key={g.label} group={g} wcState={wcState} nationalTeams={nationalTeams} />
+                {tournamentState.groups.map(g => (
+                  <GroupCard key={g.label} group={g} wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />
                 ))}
               </div>
             )}
 
-            {activeTab === 'drabinka' && <BracketTab wcState={wcState} nationalTeams={nationalTeams} />}
+            {activeTab === 'drabinka' && <BracketTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />}
 
-            {activeTab === 'final' && <FinalTab wcState={wcState} nationalTeams={nationalTeams} />}
+            {activeTab === 'final' && <FinalTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />}
 
-            {activeTab === 'statystyki' && <StatystykiTab wcState={wcState} nationalTeams={nationalTeams} />}
+            {activeTab === 'statystyki' && <StatystykiTab wcState={tournamentState} nationalTeams={nationalTeams} />}
 
           </div>
         </div>
 
       </div>
+
+      {selectedReportMatch && (
+        <TournamentMatchReportModal
+          match={selectedReportMatch}
+          nationalTeams={nationalTeams}
+          onClose={() => setSelectedReportMatch(null)}
+        />
+      )}
     </div>
   );
 };

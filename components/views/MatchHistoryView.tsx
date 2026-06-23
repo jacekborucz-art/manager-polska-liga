@@ -42,12 +42,12 @@ const TeamMark: React.FC<{ team?: Club | NationalTeam; className?: string }> = (
   );
 };
 
-function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
+function WorldCupArchive({ wcState, title = 'Mistrzostwa Świata', emptyLabel = 'Brak danych MŚ' }: { wcState: WCState | null; title?: string; emptyLabel?: string }) {
   if (!wcState) {
     return (
       <div className="h-full flex flex-col items-center justify-center opacity-30">
         <span className="text-7xl mb-6">🏆</span>
-        <p className="text-xl font-black uppercase tracking-[0.4em] italic text-center">Brak danych MŚ</p>
+        <p className="text-xl font-black uppercase tracking-[0.4em] italic text-center">{emptyLabel}</p>
       </div>
     );
   }
@@ -58,7 +58,7 @@ function WorldCupArchive({ wcState }: { wcState: WCState | null }) {
     <div className="p-8 space-y-10">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black text-amber-400 uppercase tracking-[0.45em]">Mistrzostwa Świata</p>
+          <p className="text-[10px] font-black text-amber-400 uppercase tracking-[0.45em]">{title}</p>
           <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">{wcState.year}</h2>
         </div>
         <div className="text-right">
@@ -425,17 +425,50 @@ function UefaNationalRankingArchive({
 
 
 export const MatchHistoryView: React.FC = () => {
-  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState, nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState } = useGame();
+  const { navigateTo, clubs, nationalTeams, seasonNumber, supercupWinners, viewClubDetails, viewPlayerDetails, viewRefereeDetails, players, wcState, euroState, nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState } = useGame();
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonNumber);
   const [selectedMatch, setSelectedMatch] = useState<MatchHistoryEntry | null>(null);
-  const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup' | 'nationsLeague' | 'uefaRanking'>('matches');
+  const [viewMode, setViewMode] = useState<'matches' | 'champions' | 'worldCup' | 'euroChampionship' | 'nationsLeague' | 'uefaRanking'>('matches');
   const [selectedWorldCupYear, setSelectedWorldCupYear] = useState<number>(wcState?.year ?? 2026);
+  const [selectedEuroYear, setSelectedEuroYear] = useState<number>(euroState?.year ?? 2028);
   const [selectedNationsLeagueEditionStartYear, setSelectedNationsLeagueEditionStartYear] = useState<number | null>(nationsLeagueState?.editionStartYear ?? null);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   const history = useMemo(() => MatchHistoryService.getAll(), [refreshTrigger]);
   const championshipHistory = useMemo(() => ChampionshipHistoryService.getAll(), [refreshTrigger, supercupWinners]);
+  const worldCupResults = useMemo(() => {
+    const byYear = new Map<number, any>();
+    championshipHistory
+      .filter(entry => entry.competition === 'WORLD_CUP')
+      .forEach(entry => byYear.set(entry.year, entry));
+    if (wcState?.champion) {
+      byYear.set(wcState.year, {
+        season: String(wcState.year),
+        winner: wcState.champion,
+        runnerUp: wcState.runnerUp,
+        thirdPlace: wcState.thirdPlace,
+        fourthPlace: wcState.fourthPlace,
+        year: wcState.year
+      });
+    }
+    return [...byYear.values()].sort((a, b) => b.year - a.year);
+  }, [championshipHistory, wcState]);
+  const euroResults = useMemo(() => {
+    const byYear = new Map<number, any>();
+    championshipHistory
+      .filter(entry => entry.competition === 'EURO_CHAMPIONSHIP')
+      .forEach(entry => byYear.set(entry.year, entry));
+    if (euroState?.champion) {
+      byYear.set(euroState.year, {
+        season: String(euroState.year),
+        winner: euroState.champion,
+        runnerUp: euroState.runnerUp,
+        year: euroState.year
+      });
+    }
+    return [...byYear.values()].sort((a, b) => b.year - a.year);
+  }, [championshipHistory, euroState]);
   const nationsLeagueEditions = useMemo(() => {
     const byYear = new Map<number, NationsLeagueState>();
     nationsLeagueArchive.forEach(entry => byYear.set(entry.editionStartYear, entry));
@@ -723,6 +756,10 @@ export const MatchHistoryView: React.FC = () => {
   }, [wcState?.year]);
 
   useEffect(() => {
+    if (euroState) setSelectedEuroYear(euroState.year);
+  }, [euroState?.year]);
+
+  useEffect(() => {
     if (nationsLeagueState) setSelectedNationsLeagueEditionStartYear(nationsLeagueState.editionStartYear);
     else if (selectedNationsLeagueEditionStartYear === null && nationsLeagueEditions[0]) {
       setSelectedNationsLeagueEditionStartYear(nationsLeagueEditions[0].editionStartYear);
@@ -869,6 +906,17 @@ export const MatchHistoryView: React.FC = () => {
               </div>
             </button>
             <button
+              onClick={() => { setViewMode('euroChampionship'); setSelectedLeague('EURO_CHAMPIONSHIP'); }}
+              className={filterButtonClass(viewMode === 'euroChampionship')}
+            >
+              <div className="absolute right-[-5px] top-[-5px] text-4xl font-black italic text-white/[0.03] select-none group-hover:text-white/[0.06] transition-colors">EU</div>
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-400" />
+              <div className={`absolute inset-0 transition-opacity pointer-events-none ${viewMode === 'euroChampionship' ? 'opacity-10' : 'opacity-0 group-hover:opacity-5'}`} style={{ background: 'linear-gradient(90deg, #60a5fa, transparent)' }} />
+              <div className="relative z-10 flex h-full items-center justify-center px-5">
+                <span className="font-black italic uppercase tracking-tighter text-xs">MISTRZOSTWA EUROPY</span>
+              </div>
+            </button>
+            <button
               onClick={() => { setViewMode('nationsLeague'); setSelectedLeague('NATIONS_LEAGUE'); }}
               className={filterButtonClass(viewMode === 'nationsLeague')}
             >
@@ -918,10 +966,10 @@ export const MatchHistoryView: React.FC = () => {
               </div>
             )}
             <div className={`${viewMode === 'uefaRanking' ? 'hidden ' : ''}mt-auto p-4 bg-black/20 rounded-2xl border border-white/5`}>
-               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' ? 'Turniej' : viewMode === 'nationsLeague' ? 'Edycja' : 'Historia'}</span>
+               <span className="text-[8px] font-bold text-slate-600 uppercase block mb-1">{viewMode === 'matches' ? 'Statystyka' : viewMode === 'worldCup' || viewMode === 'euroChampionship' ? 'Turniej' : viewMode === 'nationsLeague' ? 'Edycja' : 'Historia'}</span>
                <span className="text-xl font-black italic text-white">
-                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : viewMode === 'nationsLeague' ? (selectedNationsLeagueState?.editionLabel ?? '2026/27') : championshipHistory.length}
-                 <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : viewMode === 'nationsLeague' ? 'UNL' : 'WPISÓW'}</span>
+                 {viewMode === 'matches' ? history.length : viewMode === 'worldCup' ? (wcState?.year ?? '-') : viewMode === 'euroChampionship' ? (euroState?.year ?? '-') : viewMode === 'nationsLeague' ? (selectedNationsLeagueState?.editionLabel ?? '2026/27') : championshipHistory.length}
+                 <span className="text-[10px] opacity-40"> {viewMode === 'matches' ? 'MECZÓW' : viewMode === 'worldCup' ? 'MŚ' : viewMode === 'euroChampionship' ? 'EURO' : viewMode === 'nationsLeague' ? 'UNL' : 'WPISÓW'}</span>
                </span>
             </div>
         </div>
@@ -1024,6 +1072,29 @@ export const MatchHistoryView: React.FC = () => {
                 ))}
               </div>
               <WorldCupArchive wcState={wcState && wcState.year === selectedWorldCupYear ? wcState : null} />
+            </>
+          ) : viewMode === 'euroChampionship' ? (
+            <>
+              <div className="px-8 pt-8 flex gap-4">
+                {[euroState?.year ?? selectedEuroYear].map(year => (
+                  <button
+                    key={year}
+                    onClick={() => setSelectedEuroYear(year)}
+                    className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all active:translate-y-[2px] ${
+                      selectedEuroYear === year
+                        ? 'border-t border-x border-b border-t-white/40 border-x-white/20 border-b-black/60 bg-white text-black'
+                        : 'border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-white/5 text-slate-500'}`}
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+              <WorldCupArchive
+                wcState={euroState && euroState.year === selectedEuroYear ? euroState : null}
+                title="Mistrzostwa Europy"
+                emptyLabel="Brak danych EURO"
+              />
             </>
           ) : viewMode === 'nationsLeague' ? (
             <>
@@ -1166,6 +1237,72 @@ export const MatchHistoryView: React.FC = () => {
                         <tr>
                           <td colSpan={3} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td>
                         </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* MISTRZOSTWA ŚWIATA */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🏆</span>
+                  <h3 className="text-lg font-black uppercase tracking-wider italic text-white">MISTRZOSTWA ŚWIATA</h3>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-amber-600/20 border-b border-white/5">
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Rok</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Mistrz świata</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">2. miejsce</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">3. miejsce</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">4. miejsce</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {worldCupResults.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
+                          <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp || '-'}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.thirdPlace || '-'}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-500">{entry.fourthPlace || '-'}</td>
+                        </tr>
+                      ))}
+                      {worldCupResults.length === 0 && (
+                        <tr><td colSpan={5} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* MISTRZOSTWA EUROPY */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🇪🇺</span>
+                  <h3 className="text-lg font-black uppercase tracking-wider italic text-white">MISTRZOSTWA EUROPY</h3>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-blue-600/20 border-b border-white/5">
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Rok</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Zwycięzca</th>
+                        <th className="px-6 py-3 text-left text-xs font-black text-white uppercase tracking-widest">Finalista</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {euroResults.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
+                          <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp || '-'}</td>
+                        </tr>
+                      ))}
+                      {euroResults.length === 0 && (
+                        <tr><td colSpan={3} className="px-6 py-4 text-center text-xs text-slate-600 uppercase tracking-widest">Brak danych</td></tr>
                       )}
                     </tbody>
                   </table>

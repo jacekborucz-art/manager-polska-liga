@@ -57,7 +57,9 @@ export const PostMatchCLFinalView: React.FC = () => {
             timestamp: new Date().toISOString()
           });
 
-          ChampionshipHistoryService.addCLChampion(seasonLabel, winnerClub.name, year + 1);
+          const runnerUpId = winnerId === finalFixture.homeTeamId ? finalFixture.awayTeamId : finalFixture.homeTeamId;
+          const runnerUpClub = clubs.find(c => c.id === runnerUpId);
+          ChampionshipHistoryService.addCLChampion(seasonLabel, winnerClub.name, year + 1, runnerUpClub?.name);
           savedMatchesRef.current.add(finalFixture.id);
         }
       }

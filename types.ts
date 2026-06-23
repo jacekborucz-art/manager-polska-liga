@@ -121,6 +121,7 @@ export enum ViewState {
   NATIONS_LEAGUE_DRAW = 'NATIONS_LEAGUE_DRAW',
   WC_DRAW = 'WC_DRAW',
   WORLD_CUP = 'WORLD_CUP',
+  EURO_CHAMPIONSHIP = 'EURO_CHAMPIONSHIP',
   STAFF_SEARCH = 'STAFF_SEARCH',
   AI_FRIENDLY_REPORTS = 'AI_FRIENDLY_REPORTS',
 }
@@ -2869,7 +2870,9 @@ export interface WCState {
   groups: WCGroup[];
   knockoutMatches: WCKnockoutMatch[];
   champion?: string;
+  runnerUp?: string;
   thirdPlace?: string;
+  fourthPlace?: string;
   playerEffects: WCPlayerEffect[];
   groupStageComplete: boolean;
   knockoutComplete: boolean;

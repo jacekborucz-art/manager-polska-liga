@@ -70,6 +70,7 @@ export const Dashboard: React.FC = () => {
     saveSummerCampLocation,
     saveSummerCampProgram,
     wcState,
+    euroState,
     nationsLeagueState,
     euroQualifiersState,
     seasonCelebration,
@@ -119,6 +120,14 @@ export const Dashboard: React.FC = () => {
     (
       currentDate.getMonth() > 5 ||
       (currentDate.getMonth() === 5 && currentDate.getDate() >= 2)
+    )
+  );
+  const isEuroTournamentOpen = Boolean(
+    euroState &&
+    currentDate.getFullYear() === euroState.year &&
+    (
+      currentDate.getMonth() > 5 ||
+      (currentDate.getMonth() === 5 && currentDate.getDate() >= 1)
     )
   );
 
@@ -1211,9 +1220,9 @@ const boardConfidence = useMemo(() => {
              );
            })()}
 
-           {wcState && !wcState.knockoutComplete && (
-             <button
-               onClick={() => navigateTo(isWorldCupTournamentOpen ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
+          {wcState && !wcState.knockoutComplete && (
+            <button
+              onClick={() => navigateTo(isWorldCupTournamentOpen ? ViewState.WORLD_CUP : ViewState.WC_DRAW)}
                disabled={isJumping}
                className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-amber-400/30 bg-amber-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
              >
@@ -1226,10 +1235,28 @@ const boardConfidence = useMemo(() => {
                <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-amber-100/50">
                  {isWorldCupTournamentOpen ? 'TURNIEJ' : 'LOSOWANIE'}
                </span>
-             </button>
-           )}
+            </button>
+          )}
 
-           {nationsLeagueState && !nationsLeagueState.completed && (
+          {euroState && !euroState.knockoutComplete && isEuroTournamentOpen && (
+            <button
+              onClick={() => navigateTo(ViewState.EURO_CHAMPIONSHIP)}
+              disabled={isJumping}
+              className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-blue-400/30 bg-blue-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/60 hover:bg-blue-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="font-black italic uppercase tracking-tighter text-[9px] text-blue-200/80">
+                Mistrzostwa Europy
+              </span>
+              <span className="font-black italic uppercase tracking-tighter text-2xl leading-none text-white drop-shadow-lg">
+                EURO
+              </span>
+              <span className="mt-2 text-[8px] font-black uppercase tracking-[0.28em] text-blue-100/50">
+                {euroState.groupStageComplete ? 'FAZA PUCHAROWA' : 'FAZA GRUPOWA'}
+              </span>
+            </button>
+          )}
+
+          {nationsLeagueState && !nationsLeagueState.completed && (
              <button
                onClick={() => navigateTo(ViewState.NATIONS_LEAGUE)}
                disabled={isJumping}

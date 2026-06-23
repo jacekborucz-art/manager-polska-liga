@@ -123,17 +123,17 @@ export const HALFTIME_TALKS: Record<ScoreContext, TalkOption[]> = {
     { id: 'WO_10', text: 'Bez komentarza', hiddenType: 'SILENCE' },
   ],
 
-  // ─── PROWADZIMY O 2+ (2:0, 3:1+) ────────────────────────────────────────
+  // ─── PROWADZIMY WYSOKO (2+ BRAMKI PRZEWAGI) ─────────────────────────────
   WINNING_HIGH: [
     { id: 'WH_1',  text: 'Świetny wynik. Teraz zagrajcie spokojnie, bez zbędnego ryzyka.', hiddenType: 'CALM' },
     { id: 'WH_2',  text: 'Doskonała gra, panowie! Jesteście absolutnie fantastyczni dziś wieczór!', hiddenType: 'PRAISE' },
     { id: 'WH_3',  text: 'Nie zadowalamy się tym! Idźcie po więcej bramek, koniec z litością!', hiddenType: 'AGGRESSIVE' },
-    { id: 'WH_4',  text: 'Dwie bramki przewagi to dobra poduszka. Brońcie pozycji, nie ryzykujcie.', hiddenType: 'CALM' },
+    { id: 'WH_4',  text: 'Wysoka przewaga to dobra poduszka. Brońcie pozycji, nie ryzykujcie.', hiddenType: 'CALM' },
     { id: 'WH_5',  text: 'To jest nasz poziom! Wy rozumiecie jak grać w piłkę! Tak dalej!', hiddenType: 'PRAISE' },
-    { id: 'WH_6',  text: 'Nie popadajcie w samozadowolenie! Widziałem jak z 2:0 robi się 2:2!', hiddenType: 'CRITICIZE' },
+    { id: 'WH_6',  text: 'Nie popadajcie w samozadowolenie! Widziałem jak pewne prowadzenie znika w kilka minut!', hiddenType: 'CRITICIZE' },
     { id: 'WH_7',  text: 'Chcę was głodnych do końca! Cztery, pięć goli jest dzisiaj możliwe!', hiddenType: 'AGGRESSIVE' },
     { id: 'WH_8',  text: 'Kontrolujcie mecz. Nie śpieszcie się. Wynik jest po naszej stronie.', hiddenType: 'CALM' },
-    { id: 'WH_9',  text: 'Dwie bramki to za mało żeby odpoczywać. Nie zwalniajcie, dajcie z siebie coś!', hiddenType: 'CRITICIZE' },
+    { id: 'WH_9',  text: 'Ta przewaga nie daje prawa do odpoczynku. Nie zwalniajcie, dajcie z siebie coś!', hiddenType: 'CRITICIZE' },
     { id: 'WH_10', text: 'Bez komentarza', hiddenType: 'SILENCE' },
   ],
 };

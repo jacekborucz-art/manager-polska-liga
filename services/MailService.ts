@@ -870,6 +870,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       if (!mailDate || getYearMonthKey(mailDate) !== boardPositionMonthKey) return false;
       return [...boardPositionTemplateIds].some(templateId => mail.id.includes(`_${templateId}_`));
     });
+    const alreadySentWinningStreakThisMonth = existingMails.some(mail => {
+      const mailDate = getMailDate(mail);
+      if (!mailDate || getYearMonthKey(mailDate) !== boardPositionMonthKey) return false;
+      return mail.id.includes('board_winning_streak') || mail.subject === 'Imponująca seria zwycięstw!';
+    });
     const remainingUserLeagueMatches = allFixtures
       ? allFixtures.filter(f =>
           f.status === MatchStatus.SCHEDULED &&
@@ -908,7 +913,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
        if (boardConfidence < 35 && rng < 0.2 && currentLossStreak >= 3) {
           newMails.push(createMail('board_losing_streak', { 'CLUB': userClub.name }));
-       } else if (boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3) {
+       } else if (boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3 && !alreadySentWinningStreakThisMonth) {
           newMails.push(createMail('board_winning_streak', { 'CLUB': userClub.name }));
        }
     }

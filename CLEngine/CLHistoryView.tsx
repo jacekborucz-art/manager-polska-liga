@@ -383,13 +383,16 @@ const clFixtures = useMemo(
       ) {
         // Określ zwycięzcę
         let winnerId: string | null = null;
+        let runnerUpId: string | null = null;
         const hs = finalFixture.homeScore as number;
         const as_ = finalFixture.awayScore as number;
         
         if (hs > as_) {
           winnerId = finalFixture.homeTeamId;
+          runnerUpId = finalFixture.awayTeamId;
         } else if (as_ > hs) {
           winnerId = finalFixture.awayTeamId;
+          runnerUpId = finalFixture.homeTeamId;
         } else if (
           finalFixture.homePenaltyScore != null &&
           finalFixture.awayPenaltyScore != null
@@ -398,10 +401,15 @@ const clFixtures = useMemo(
             finalFixture.homePenaltyScore > finalFixture.awayPenaltyScore
               ? finalFixture.homeTeamId
               : finalFixture.awayTeamId;
+          runnerUpId =
+            finalFixture.homePenaltyScore > finalFixture.awayPenaltyScore
+              ? finalFixture.awayTeamId
+              : finalFixture.homeTeamId;
         }
 
         if (winnerId) {
           const winner = clubs.find(c => c.id === winnerId);
+          const runnerUp = runnerUpId ? clubs.find(c => c.id === runnerUpId) : null;
           if (winner) {
             const year = finalFixture.date.getFullYear();
             const month = finalFixture.date.getMonth();
@@ -410,7 +418,7 @@ const clFixtures = useMemo(
             const seasonLabel = `${seasonStartYear}/${seasonEndYear}`;
             
             // Zapisz zwycięzcę do localStorage
-            ChampionshipHistoryService.addCLChampion(seasonLabel, winner.name, seasonEndYear);
+            ChampionshipHistoryService.addCLChampion(seasonLabel, winner.name, seasonEndYear, runnerUp?.name);
             savedFinalRef.current.add(finalFixture.id);
           }
         }

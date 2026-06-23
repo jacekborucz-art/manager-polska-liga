@@ -286,6 +286,8 @@ case ViewState.NATIONS_LEAGUE:
   return <NationsLeagueView />;
 case ViewState.WORLD_CUP:
   return <WorldCupView />;
+case ViewState.EURO_CHAMPIONSHIP:
+  return <WorldCupView mode="euro" />;
 case ViewState.WCQ_PLAYOFF_DRAW_VIEW:
   return <WCQPlayoffDrawView />;
 case ViewState.WCQ_PLAYOFF_RESULTS_SF:

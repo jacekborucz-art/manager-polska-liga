@@ -3,6 +3,7 @@ import { WorldCupService } from './WorldCupService';
 
 export interface WorldCupHistoryBackfillResult {
   latestWorldCupState: WCState | null;
+  worldCupStates: WCState[];
   messages: MailMessage[];
 }
 
@@ -78,6 +79,7 @@ export const WorldCupHistoryBackfillService = {
   ): WorldCupHistoryBackfillResult {
     const careerStartDate = new Date(careerStartYear, 6, 1);
     const messages: MailMessage[] = [];
+    const worldCupStates: WCState[] = [];
     let latestWorldCupState: WCState | null = null;
 
     for (let year = 2026; year <= careerStartYear; year += 4) {
@@ -100,9 +102,10 @@ export const WorldCupHistoryBackfillService = {
         groupStageComplete: true,
         knockoutComplete: true,
       };
+      worldCupStates.push(latestWorldCupState);
       messages.push(buildWorldCupMessage(latestWorldCupState, careerStartDate));
     }
 
-    return { latestWorldCupState, messages };
+    return { latestWorldCupState, worldCupStates, messages };
   },
 };

@@ -2,11 +2,22 @@
 
 export interface ChampionshipEntry {
   season: string;
-  competition: 'EKSTRAKLASA' | 'PUCHAR_POLSKI' | 'SUPERPUCHAR_POLSKI' | 'LIGA_MISTRZOW' | 'LIGA_EUROPY';
+  competition: ChampionshipCompetition;
   winner: string;
   runnerUp?: string;
+  thirdPlace?: string;
+  fourthPlace?: string;
   year: number;
 }
+
+export type ChampionshipCompetition =
+  | 'EKSTRAKLASA'
+  | 'PUCHAR_POLSKI'
+  | 'SUPERPUCHAR_POLSKI'
+  | 'LIGA_MISTRZOW'
+  | 'LIGA_EUROPY'
+  | 'WORLD_CUP'
+  | 'EURO_CHAMPIONSHIP';
 
 // Przechowywanie w localStorage
 const STORAGE_KEY = 'fm_championship_history';
@@ -97,7 +108,7 @@ export class ChampionshipHistoryService {
     return this.getHistory();
   }
 
-  static getByCompetition(competition: 'EKSTRAKLASA' | 'PUCHAR_POLSKI' | 'SUPERPUCHAR_POLSKI' | 'LIGA_MISTRZOW' | 'LIGA_EUROPY'): ChampionshipEntry[] {
+  static getByCompetition(competition: ChampionshipCompetition): ChampionshipEntry[] {
     return this.getHistory()
       .filter(c => c.competition === competition)
       .sort((a, b) => b.year - a.year);
@@ -146,11 +157,34 @@ export class ChampionshipHistoryService {
     });
   }
 
-  static addCLChampion(season: string, winner: string, year: number): void {
+  static addCLChampion(season: string, winner: string, year: number, runnerUp?: string): void {
     this.addChampion({
       season,
       competition: 'LIGA_MISTRZOW',
       winner,
+      runnerUp,
+      year
+    });
+  }
+
+  static addWorldCupResult(year: number, winner: string, runnerUp?: string, thirdPlace?: string, fourthPlace?: string): void {
+    this.addChampion({
+      season: String(year),
+      competition: 'WORLD_CUP',
+      winner,
+      runnerUp,
+      thirdPlace,
+      fourthPlace,
+      year
+    });
+  }
+
+  static addEuroChampion(year: number, winner: string, runnerUp?: string): void {
+    this.addChampion({
+      season: String(year),
+      competition: 'EURO_CHAMPIONSHIP',
+      winner,
+      runnerUp,
       year
     });
   }
@@ -174,7 +208,7 @@ export class ChampionshipHistoryService {
 
 // Backward compatibility
 export const championshipHistory = ChampionshipHistoryService.getAll();
-export const getChampionsByCompetition = (competition: 'EKSTRAKLASA' | 'PUCHAR_POLSKI' | 'SUPERPUCHAR_POLSKI' | 'LIGA_MISTRZOW') => {
+export const getChampionsByCompetition = (competition: ChampionshipCompetition) => {
   return ChampionshipHistoryService.getByCompetition(competition);
 };
 export const getAllChampions = () => {

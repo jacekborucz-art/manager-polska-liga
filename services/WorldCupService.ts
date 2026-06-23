@@ -671,7 +671,9 @@ export const WorldCupService = {
     const finalMatch = state.knockoutMatches.find(m => m.round === 'FINAL');
     const thirdMatch = state.knockoutMatches.find(m => m.round === 'THIRD');
     state.champion = finalMatch?.winner ?? undefined;
+    state.runnerUp = finalMatch?.winner === finalMatch?.home ? finalMatch?.away : finalMatch?.home;
     state.thirdPlace = thirdMatch?.winner ?? undefined;
+    state.fourthPlace = thirdMatch?.winner === thirdMatch?.home ? thirdMatch?.away : thirdMatch?.home;
 
     return { state, updatedPlayers };
   },
