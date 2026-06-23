@@ -472,6 +472,7 @@ export interface MailMessage {
   } | {
     type: 'NATIONAL_TEAM_FRIENDLY_RESULTS';
     matches?: {
+      matchId?: string;
       homeName: string;
       awayName: string;
       homeScore: number;

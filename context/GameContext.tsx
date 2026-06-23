@@ -7245,6 +7245,7 @@ Asystent`,
             const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
             const dateLabel = `${dateToProcess.getDate()} ${monthNames[dateToProcess.getMonth()]}`;
             const friendlyResultMatches = friendlySimulation.results.map(result => ({
+              matchId: result.matchId,
               homeName: result.home,
               awayName: result.away,
               homeScore: result.homeGoals,

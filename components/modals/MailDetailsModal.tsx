@@ -8,6 +8,7 @@ import { MediaInterviewModal, MediaInterviewResult } from './MediaInterviewModal
 import { MediaInterviewService } from '../../services/MediaInterviewService';
 import { KitPreview } from '../common/KitPreview';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { MatchReportModalPolishLeague } from './MatchReportModalPolishLeague';
 
 interface MailDetailsModalProps {
   mail: MailMessage;
@@ -373,6 +374,7 @@ const TEAM_NAME_TO_FLAG: Record<string, string> = {
 };
 
 type FriendlyMailMatch = {
+  matchId?: string;
   homeName: string;
   awayName: string;
   homeScore: number;
@@ -432,7 +434,8 @@ const getFriendlyMatchesFromMail = (mail: MailMessage): FriendlyMailMatch[] => {
 };
 
 const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
-  const { clubs } = useGame();
+  const { clubs, nationalTeams } = useGame();
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const matches = getFriendlyMatchesFromMail(mail);
   const intro = mail.body.split('\n').find(line => line.trim() && !line.match(/^(.+)\s(\d+)[–-](\d+)\s(.+)$/));
 
@@ -445,6 +448,27 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
     return undefined;
   };
 
+  const resolveMatchId = (match: FriendlyMailMatch): string | null => {
+    if (match.matchId) return match.matchId;
+    if (mail.metadata?.type !== 'NATIONAL_TEAM_FRIENDLY_RESULTS') return null;
+
+    const date = new Date(mail.date);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const homeTeam = nationalTeams.find(team => team.name === match.homeName);
+    const awayTeam = nationalTeams.find(team => team.name === match.awayName);
+    if (!homeTeam || !awayTeam) return null;
+
+    return [
+      'NT',
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+      homeTeam.id,
+      awayTeam.id,
+    ].join('_');
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
       {intro && (
@@ -453,15 +477,26 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
         </p>
       )}
 
-      <div className="w-full overflow-hidden rounded-2xl border border-yellow-300/20 bg-black/20 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+      <div className="w-full">
         {matches.map((match, index) => {
           const homeWon = match.homeScore > match.awayScore;
           const awayWon = match.awayScore > match.homeScore;
+          const matchId = resolveMatchId(match);
 
           return (
             <div key={`${match.homeName}_${match.awayName}_${index}`}>
               {index > 0 && <div className="mx-8 border-t border-yellow-300/30" />}
-              <div className="grid grid-cols-[1fr_92px_1fr] items-center gap-4 px-6 py-4">
+              <button
+                type="button"
+                disabled={!matchId}
+                onClick={() => matchId && setSelectedMatchId(matchId)}
+                className={`grid w-full grid-cols-[1fr_92px_1fr] items-center gap-4 px-6 py-4 text-left outline-none transition-all ${
+                  matchId
+                    ? 'cursor-pointer hover:bg-white/[0.035] focus-visible:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-emerald-400/70'
+                    : 'cursor-default'
+                }`}
+                title={matchId ? 'Otwórz raport meczowy' : undefined}
+              >
                 <div className="flex min-w-0 items-center justify-end gap-3 text-right">
                   <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${homeWon ? 'text-white' : 'text-slate-300'}`}>
                     {match.homeName}
@@ -479,11 +514,17 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
                     {match.awayName}
                   </span>
                 </div>
-              </div>
+              </button>
             </div>
           );
         })}
       </div>
+
+      <MatchReportModalPolishLeague
+        matchId={selectedMatchId}
+        onClose={() => setSelectedMatchId(null)}
+        teamType="national"
+      />
     </div>
   );
 };
