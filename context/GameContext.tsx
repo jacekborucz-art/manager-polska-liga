@@ -1344,6 +1344,11 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       (player.cupStats?.minutesPlayed || 0) +
       (player.euroStats?.minutesPlayed || 0);
 
+    const totalStat = (player: Player, key: 'goals' | 'assists' | 'cleanSheets'): number =>
+      (player.stats?.[key] || 0) +
+      (player.cupStats?.[key] || 0) +
+      (player.euroStats?.[key] || 0);
+
     const averageRating = (player: Player): number | null => {
       const ratings = [
         ...(player.stats?.ratingHistory || []),
@@ -1397,8 +1402,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
         const reasons = [
           left <= 90 ? `zostało tylko ${left} dni kontraktu` : left <= 330 ? `kontrakt kończy się za ${Math.ceil(left / 30)} mies.` : `za około ${Math.ceil((left - 330) / 30)} mies. zacznie się okno prekontraktu`,
           player.squadRole === 'KEY_PLAYER' ? 'status: kluczowy zawodnik' : player.squadRole === 'STARTER' ? 'status: pierwszy skład' : importantByRole ? 'jest w planach meczowych' : 'rola w kadrze jest mniejsza',
-          `OVR ${player.overallRating}`,
-          matchCount > 0 ? `${matchCount} mecz(e), śr. ocena ${rating ?? 'brak'}` : 'brak większej próbki meczowej',
+          matchCount > 0 ? `${matchCount} mecz(e) w tym sezonie` : 'brak większej próbki meczowej',
           wantsBetterMove ? 'może chcieć mocniejszego projektu' : null,
           retirementRisk ? 'ryzyko końca kariery lub spadku roli' : null,
         ].filter(Boolean);
@@ -1412,7 +1416,20 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
           (youngUpside ? 10 : 0) -
           (fringe ? 8 : 0);
 
-        return { player, left, recommendation, reasons, urgency };
+        return {
+          player,
+          left,
+          recommendation,
+          reasons,
+          urgency,
+          stats: {
+            assists: totalStat(player, 'assists'),
+            cleanSheets: totalStat(player, 'cleanSheets'),
+            goals: totalStat(player, 'goals'),
+            matchCount,
+            rating,
+          },
+        };
       })
       .filter(Boolean)
       .sort((a, b) => (b!.urgency - a!.urgency) || (a!.left - b!.left))
@@ -1424,7 +1441,15 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     const signature = expiring.map(entry => `${entry!.player.id}_${entry!.left <= 90 ? '90' : entry!.left <= 180 ? '180' : '330'}`).join('_');
     const lines = expiring.map(entry => {
       const item = entry!;
-      return `- ${item.player.firstName} ${item.player.lastName} (${item.player.position}, ${item.player.age} lat): ${item.recommendation}. Powody: ${item.reasons.join(', ')}.`;
+      const ratingLabel = item.stats.rating !== null ? item.stats.rating.toFixed(1) : 'brak';
+      const concededPerMatchLabel = club.stats.played > 0
+        ? (club.stats.goalsAgainst / club.stats.played).toFixed(2)
+        : 'brak';
+      const baseStats = item.player.position === PlayerPosition.GK
+        ? `średnia ocena ${ratingLabel}, czyste konta ${item.stats.cleanSheets}/${Math.max(1, item.stats.matchCount)} (${Math.round((item.stats.cleanSheets / Math.max(1, item.stats.matchCount)) * 100)}%), stracone gole/mecz drużyny ${concededPerMatchLabel}`
+        : `średnia ocena ${ratingLabel}, bramki ${item.stats.goals}, asysty ${item.stats.assists}`;
+
+      return `${item.player.firstName} ${item.player.lastName} (${item.player.position}, ${item.player.age} lat, OVR ${item.player.overallRating})\nDecyzja: ${item.recommendation}.\nPowód: ${item.reasons.join(', ')}; ${baseStats}.`;
     });
 
     return {
@@ -1432,7 +1457,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       sender: 'Sztab trenera',
       role: 'Asystent trenera',
       subject: 'Przegląd kontraktów: decyzje przed końcem umów',
-      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na około 11 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
+      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na około 11 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
       date: new Date(date),
       isRead: false,
       type: MailType.STAFF,

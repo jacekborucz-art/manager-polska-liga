@@ -55,7 +55,7 @@ export const HALFTIME_TALKS: Record<ScoreContext, TalkOption[]> = {
 
   // ─── REMIS — MAŁO BRAMEK (0:0) ───────────────────────────────────────────
   DRAW_LOW: [
-    { id: 'DL_1',  text: 'Spokojnie, panowie. 0:0 to dobry wynik na wyjeździe. Utrzymajcie ustawienie i szukajcie kontry.', hiddenType: 'CALM' },
+    { id: 'DL_1',  text: 'Spokojnie, panowie. 0:0 zostawia wszystko otwarte. Utrzymajcie ustawienie i szukajcie kontry.', hiddenType: 'CALM' },
     { id: 'DL_2',  text: 'Nie strzelimy żadnego gola stojąc z tyłu! Idźcie do przodu, atakujcie bez strachu!', hiddenType: 'AGGRESSIVE' },
     { id: 'DL_3',  text: 'Dobra, zwarta defensywa w pierwszej połowie. Teraz pora na nasz ruch ofensywny.', hiddenType: 'PRAISE' },
     { id: 'DL_4',  text: 'Zero strzałów, zero kreatywności. Gdzie była wasza gra kombinacyjna?!', hiddenType: 'CRITICIZE' },

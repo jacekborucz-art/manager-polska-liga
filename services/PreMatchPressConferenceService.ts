@@ -233,6 +233,7 @@ const getCupQuestions = (
   const isFinal = normalizedFixtureId.includes('FINAŁ') || normalizedFixtureId.includes('FINAL');
   const isSemifinal = normalizedFixtureId.includes('1/2') || normalizedFixtureId.includes('SEMI');
   const roundLabel = getPolishCupRoundLabel(fixture.id);
+  const isOpeningCupRound = roundLabel.includes('1/64');
   const tierGap = getLeagueTier(userClub) - getLeagueTier(opponent);
   const isFavourite = tierGap < 0 || (tierGap === 0 && userClub.reputation >= opponent.reputation + 8);
   const isUnderdog = tierGap > 0 || (tierGap === 0 && opponent.reputation >= userClub.reputation + 8);
@@ -270,6 +271,14 @@ const getCupQuestions = (
           'To rywal powinien martwić się presją. My zamierzamy narzucić swoje warunki.',
           'Najważniejsze, aby przez cały mecz kontrolować emocje i realizować plan.',
         )
+      : isOpeningCupRound
+        ? answers(
+            `${fixture.id}_CUP_STAKES`,
+            'Musimy zachować spokój. To początek pucharowej drogi i liczy się każda decyzja.',
+            'Jesteśmy gotowi na pierwszy pucharowy test. Chcemy od początku narzucić własne warunki.',
+            'To dobry moment, żeby od razu pokazać energię i ambicję. Oczekuję odwagi i pełnego zaangażowania.',
+            'Nie możemy pozwolić, aby emocje odebrały nam koncentrację. Najważniejsza będzie dyscyplina.',
+          )
       : answers(
           `${fixture.id}_CUP_STAKES`,
           'Musimy zachować spokój. W pucharach liczy się każda decyzja i każda minuta.',

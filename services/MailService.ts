@@ -63,6 +63,8 @@ const getDayDifference = (from: Date, to: Date): number =>
 const getYearMonthKey = (date: Date): string =>
   `${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+const STAR_INJURY_DRAMA_MIN_DAYS = 90;
+
 const getMailDate = (mail: MailMessage): Date | null => {
   const mailDate = mail.date instanceof Date ? mail.date : new Date(mail.date);
   return Number.isNaN(mailDate.getTime()) ? null : mailDate;
@@ -1118,7 +1120,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             p.health.status === HealthStatus.INJURED && 
             p.health.injury?.severity === InjurySeverity.SEVERE &&
             p.overallRating >= 75 &&
-            (p.health.injury?.daysRemaining ?? 0) >= 31
+            (p.health.injury?.daysRemaining ?? 0) >= STAR_INJURY_DRAMA_MIN_DAYS
           );
           if (injuredStar) {
             victim = injuredStar;
@@ -1263,7 +1265,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       .replace('{FEE}', fee.toLocaleString('pl-PL'))
       .replace('{TIMING}', timing)
       .replace('{BOARD_PRESSURE_NOTE}', boardNote)
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_offer_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1343,7 +1345,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       .replace('{PLAYER}', `${player.firstName} ${player.lastName}`)
       .replace('{BUYER_CLUB}', buyerClubName)
       .replace('{FEE}', fee.toLocaleString('pl-PL'))
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_reminder_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1368,7 +1370,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const body = template.body
       .replace('{PLAYER}', `${player.firstName} ${player.lastName}`)
       .replace(/{BUYER_CLUB}/g, buyerClubName)
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_expired_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1395,7 +1397,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       .replace('{PLAYER}', `${player.firstName} ${player.lastName}`)
       .replace('{BUYER_CLUB}', buyerClubName)
       .replace('{FEE}', fee.toLocaleString('pl-PL'))
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_ai_acc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1427,7 +1429,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       .replace('{BUYER_CLUB}', buyerClubName)
       .replace('{AI_COUNTER_FEE}', aiCounterFee.toLocaleString('pl-PL'))
       .replace('{ROUND}', round.toString())
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_ai_ctr_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1454,7 +1456,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const body = template.body
       .replace('{PLAYER}', `${player.firstName} ${player.lastName}`)
       .replace('{BUYER_CLUB}', buyerClubName)
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_ai_rej_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1485,7 +1487,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       .replace('{BUYER_CLUB}', buyerClubName)
       .replace('{FEE}', fee.toLocaleString('pl-PL'))
       .replace('{TIMING}', timing)
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_plr_acc_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
@@ -1511,7 +1513,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     const body = template.body
       .replace('{PLAYER}', `${player.firstName} ${player.lastName}`)
       .replace('{BUYER_CLUB}', buyerClubName)
-      .replace('{CLUB}', sellerClubName);
+      .replace(/{CLUB}/g, sellerClubName);
     return {
       id: `incoming_plr_ref_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       sender: template.sender,
