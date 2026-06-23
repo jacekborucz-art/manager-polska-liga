@@ -5,6 +5,11 @@ import { Button } from '../ui/Button';
 import { ViewState } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 
+const CAREER_START_OPTIONS = [
+  { year: 2025, label: '2025/26', description: 'Start od 1 lipca 2025' },
+  { year: 2026, label: '2026/27', description: 'Start od 1 lipca 2026' },
+];
+
 const ClubSelectionBadge: React.FC<{
   clubName: string;
   colorsHex: string[];
@@ -31,7 +36,7 @@ const ClubSelectionBadge: React.FC<{
 };
 
 export const TeamSelection: React.FC = () => {
-  const { clubs, selectUserTeam, navigateTo } = useGame();
+  const { clubs, currentDate, managerProfile, selectUserTeam, startNewGame, navigateTo } = useGame();
   
   const [selectedLeagueTier, setSelectedLeagueTier] = useState<number | 'FOREIGN'>(1);
   const [selectedCountry, setSelectedCountry] = useState<'ENG' | 'ITA' | 'ESP' | 'GER' | 'FRA' | 'OTHER'>('ENG');
@@ -84,6 +89,16 @@ export const TeamSelection: React.FC = () => {
     () => (selectedClub ? getClubLogo(selectedClub.id) : undefined),
     [selectedClub]
   );
+  const selectedCareerStartYear = currentDate.getFullYear();
+  const selectedCareerSeasonLabel = `${selectedCareerStartYear}/${String(selectedCareerStartYear + 1).slice(-2)}`;
+
+  const handleSeasonChange = (year: number) => {
+    if (year === selectedCareerStartYear) return;
+    startNewGame(year, {
+      preserveManagerProfile: managerProfile,
+      nextView: ViewState.TEAM_SELECTION,
+    });
+  };
 
   const handleRandomize = () => {
     if (filteredClubs.length > 0) {
@@ -130,10 +145,30 @@ export const TeamSelection: React.FC = () => {
               Wybór Drużyny
             </h1>
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mt-1">
-              ROZPOCZNIJ NOWĄ KARIERĘ • SEZON 2025/26
+              ROZPOCZNIJ NOWĄ KARIERĘ • SEZON {selectedCareerSeasonLabel}
             </p>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3 items-end">
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[8px] font-black uppercase tracking-[0.28em] text-slate-500">Wybierz sezon startowy</span>
+              <div className="flex gap-2">
+                {CAREER_START_OPTIONS.map(option => (
+                  <button
+                    key={option.year}
+                    onClick={() => handleSeasonChange(option.year)}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border
+                      ${selectedCareerStartYear === option.year
+                        ? 'bg-cyan-600 border-cyan-300 text-white shadow-[0_0_15px_rgba(34,211,238,0.45)]'
+                        : 'bg-slate-900/50 border-white/5 text-slate-500 hover:text-slate-200 hover:border-cyan-400/30'
+                      }
+                    `}
+                    title={option.description}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-2">
               {[1, 2, 3, ...(secretUnlocked ? [4] : [])].map(tier => (
                   <button

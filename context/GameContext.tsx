@@ -812,7 +812,7 @@ interface GameContextType {
   trainingProgressHistory: number[];
   reserveProgressHistory: ReserveProgressPoint[];
 
-  startNewGame: (careerStartYear?: number) => void;
+  startNewGame: (careerStartYear?: number, options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }) => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
   importEditorFullPack: (data: unknown) => { success: boolean; message: string };
@@ -1575,13 +1575,29 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     return schedules;
   };
 
-  const startNewGame = (careerStartYear = 2025) => {
+  const startNewGame = (
+    careerStartYear = 2025,
+    options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }
+  ) => {
     const startYear = careerStartYear;
     const careerStartDate = new Date(startYear, 6, 1);
     const newSessionSeed = generateRuntimeSeed();
     const newRuntimeSimulationSeed = generateRuntimeSeed();
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     setIsResigned(false);
+    setUserTeamId(null);
+    setManagerProfile(options?.preserveManagerProfile ?? null);
+    setLineups({});
+    setReserves([]);
+    setReserveCoachId(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
+    setAcademy(null);
+    setScoutPool([]);
+    setScoutMarket([]);
+    setScoutMarketRefreshDate('');
+    setScoutMarketManualRefreshCount(0);
+    setScoutMarketPeriodStart('');
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
     setCurrentDate(careerStartDate);
@@ -1745,7 +1761,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setStaffMembers(staffData.staffMembers);
     const clubsWithManagement = ClubManagementService.generateForAllClubs(staffData.updatedClubs);
     setClubs(clubsWithManagement);
-    navigateTo(ViewState.MANAGER_CREATION);
+    navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
   };
 
   const startNextSeason = useCallback((newYear: number) => {

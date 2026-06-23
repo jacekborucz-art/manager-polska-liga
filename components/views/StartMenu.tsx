@@ -63,8 +63,8 @@ export const StartMenu: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleNewGameClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    startNewGame(event.shiftKey ? 2026 : 2025);
+  const handleNewGameClick = () => {
+    startNewGame(2025);
   };
 
   return (
