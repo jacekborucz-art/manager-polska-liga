@@ -166,6 +166,79 @@ function normalizeDraw(draw: any): any {
   };
 }
 
+function normalizeNationsLeagueState(state: any): any {
+  if (!state || typeof state !== 'object') return null;
+  return {
+    ...state,
+    groups: asArray(state.groups).map((group: any) => ({
+      ...group,
+      teams: asArray<string>(group?.teams),
+      standings: asArray(group?.standings),
+    })),
+    fixtures: asArray(state.fixtures),
+    playoffs: asArray(state.playoffs),
+    quarterFinalists: asArray<string>(state.quarterFinalists),
+    semiFinalists: asArray<string>(state.semiFinalists),
+    finals: state.finals
+      ? {
+          ...state.finals,
+          semiFinalists: asArray<string>(state.finals.semiFinalists),
+          finalists: asArray<string>(state.finals.finalists),
+          thirdPlaceTeams: asArray<string>(state.finals.thirdPlaceTeams),
+        }
+      : null,
+    completed: state.completed ?? false,
+  };
+}
+
+function normalizeEuroQualifiersState(state: any): any {
+  if (!state || typeof state !== 'object') return null;
+  return {
+    ...state,
+    groups: asArray(state.groups).map((group: any) => ({
+      ...group,
+      teams: asArray<string>(group?.teams),
+      hostTeams: asArray<string>(group?.hostTeams),
+      standings: asArray(group?.standings),
+    })),
+    fixtures: asArray(state.fixtures),
+    playoffPaths: asArray(state.playoffPaths).map((path: any) => ({
+      ...path,
+      teams: asArray<string>(path?.teams),
+      semiFinalFixtureIds: asArray<string>(path?.semiFinalFixtureIds),
+      tieFixtureIds: path?.tieFixtureIds ? asArray<string>(path.tieFixtureIds) : undefined,
+    })),
+    hostTeams: asArray<string>(state.hostTeams),
+    qualifiedTeams: asArray<string>(state.qualifiedTeams),
+    directQualifiers: asArray<string>(state.directQualifiers),
+    hostReservedQualifiers: asArray<string>(state.hostReservedQualifiers),
+    playoffTeams: asArray<string>(state.playoffTeams),
+    drawCompleted: state.drawCompleted ?? false,
+    completed: state.completed ?? false,
+  };
+}
+
+function normalizeTournamentState(state: any): any {
+  if (!state || typeof state !== 'object') return null;
+  return {
+    ...state,
+    teams: asArray(state.teams),
+    groups: asArray(state.groups).map((group: any) => ({
+      ...group,
+      teams: asArray<string>(group?.teams),
+      matches: asArray(group?.matches),
+    })),
+    knockoutMatches: asArray(state.knockoutMatches),
+    playerEffects: asArray(state.playerEffects),
+    groupStageComplete: state.groupStageComplete ?? false,
+    knockoutComplete: state.knockoutComplete ?? false,
+  };
+}
+
+function normalizeNTMatchResults(results: any): any {
+  return results == null ? null : asArray(results);
+}
+
 function normalizeSeasonTemplate(template: any): any {
   if (!template || typeof template !== 'object') return null;
   return {
@@ -439,14 +512,14 @@ function normalizeSaveState(data: SaveState): SaveState {
     aiTransferLog: data.aiTransferLog || [],
     europeanStatus: asRecord(data.europeanStatus),
     nationalTeams: asArray(data.nationalTeams),
-    nationsLeagueState: data.nationsLeagueState ?? null,
-    nationsLeagueArchive: asArray(data.nationsLeagueArchive),
+    nationsLeagueState: normalizeNationsLeagueState(data.nationsLeagueState),
+    nationsLeagueArchive: asArray(data.nationsLeagueArchive).map(normalizeNationsLeagueState).filter(Boolean),
     euroHostAnnouncements: asArray((data as any).euroHostAnnouncements),
-    euroQualifiersState: data.euroQualifiersState ?? null,
+    euroQualifiersState: normalizeEuroQualifiersState(data.euroQualifiersState),
     uefaNationalRankingState: data.uefaNationalRankingState ?? null,
     wcqPlayoffState: data.wcqPlayoffState ?? null,
-    wcState: data.wcState ?? null,
-    euroState: (data as any).euroState ?? null,
+    wcState: normalizeTournamentState(data.wcState),
+    euroState: normalizeTournamentState((data as any).euroState),
     cupParticipants: asArray(data.cupParticipants),
     activeCupDraw: normalizeDraw(data.activeCupDraw),
     activeGroupDraw: normalizeDraw(data.activeGroupDraw),
@@ -481,7 +554,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     winterCampProgramPending: data.winterCampProgramPending ?? false,
     summerCampInvitePending: data.summerCampInvitePending ?? false,
     summerCampProgramPending: data.summerCampProgramPending ?? false,
-    lastNTMatchResults: data.lastNTMatchResults ?? null,
+    lastNTMatchResults: normalizeNTMatchResults(data.lastNTMatchResults),
     aiFriendlyPairs: asArray(data.aiFriendlyPairs),
     aiFriendlyReports: asArray(data.aiFriendlyReports),
     pzpnDisciplinaryEvents: asArray(data.pzpnDisciplinaryEvents),
