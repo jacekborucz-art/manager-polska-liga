@@ -185,6 +185,19 @@ const CUP_DRAW_STRONG_DEBRIEF: DebriefComment[] = [
   { id: 'cup_ds_10', text: 'Każdy wie, ile pracy nas to kosztowało.', hiddenType: 'SILENCE' },
 ];
 
+const CUP_PENALTY_WIN_DEBRIEF: DebriefComment[] = [
+  { id: 'cup_pw_1', text: 'Awans po karnych wymaga nerwów ze stali. Wytrzymaliście moment największej presji.', hiddenType: 'PRAISE' },
+  { id: 'cup_pw_2', text: 'Seria jedenastek była testem charakteru i zdaliście go razem. Jestem z was dumny.', hiddenType: 'PRAISE' },
+  { id: 'cup_pw_3', text: 'Jesteśmy dalej po karnych. Odpoczywamy, ale spokojnie analizujemy, czemu mecz musiał dojść aż tam.', hiddenType: 'CALM' },
+  { id: 'cup_pw_4', text: 'Awans jest najważniejszy. Teraz chłodna głowa, regeneracja i przygotowanie do kolejnej rundy.', hiddenType: 'CALM' },
+  { id: 'cup_pw_5', text: 'Tak wygrywa się pucharowe wojny nerwów! Chcę tej odwagi w następnym meczu od pierwszej minuty!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_pw_6', text: 'Nie pękliście przy jedenastkach. Taka mentalność musi zostać z nami w każdej rundzie!', hiddenType: 'AGGRESSIVE' },
+  { id: 'cup_pw_7', text: 'Awansowaliśmy, ale karne pokazują, że wcześniej nie zamknęliśmy meczu tak, jak powinniśmy.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_pw_8', text: 'Seria karnych nas przepchnęła dalej. W regulaminowym czasie musimy być skuteczniejsi.', hiddenType: 'CRITICIZE' },
+  { id: 'cup_pw_9', text: 'Karne wytrzymane. Gramy dalej.', hiddenType: 'SILENCE' },
+  { id: 'cup_pw_10', text: 'Awans po jedenastkach. Tyle dziś wystarczy.', hiddenType: 'SILENCE' },
+];
+
 const CUP_POST_MATCH_DEBRIEF: Record<CupDebriefStage, Record<DebriefOutcome, DebriefComment[]>> = {
   CUP: {
     WIN: [
@@ -590,6 +603,10 @@ export const getCommentsForContext = (
 
   if (matchStage !== 'LEAGUE' && matchStage !== 'CUP_FINAL' && context === 'DRAW_STRONG') {
     return CUP_DRAW_STRONG_DEBRIEF;
+  }
+
+  if (matchStage !== 'LEAGUE' && matchStage !== 'CUP_FINAL' && context === 'PENALTY_WIN') {
+    return CUP_PENALTY_WIN_DEBRIEF;
   }
 
   if (matchStage !== 'LEAGUE') {
