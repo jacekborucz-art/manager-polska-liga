@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { CompetitionType, MatchStatus, ViewState } from './types';
 import { StartMenu } from './components/views/StartMenu';
@@ -197,9 +197,34 @@ const SeasonCelebrationOverlay: React.FC = () => {
   );
 };
 
+const JobMarketLoadingView: React.FC = () => (
+  <div className="fixed inset-0 z-50 bg-slate-950/55 text-slate-50 flex items-center justify-center p-6">
+    <div className="w-full max-w-sm rounded-xl border border-amber-300/30 bg-slate-900/95 px-6 py-5 text-center shadow-2xl shadow-black/40">
+      <div className="mx-auto mb-4 h-8 w-8 rounded-full border-4 border-amber-400/30 border-t-amber-300 animate-spin" />
+      <h1 className="font-black italic uppercase tracking-tighter text-2xl text-amber-300">
+        Proszę czekać
+      </h1>
+      <p className="font-black italic uppercase tracking-tighter mt-2 text-sm text-slate-300">
+        Zbieranie informacji o rynku
+      </p>
+    </div>
+  </div>
+);
+
 // Internal component to handle view switching
 const AppContent: React.FC = () => {
   const { viewState, navigateTo } = useGame();
+  const [isJobMarketReady, setIsJobMarketReady] = useState(false);
+
+  useEffect(() => {
+    if (viewState !== ViewState.JOB_MARKET) {
+      setIsJobMarketReady(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setIsJobMarketReady(true), 120);
+    return () => window.clearTimeout(timer);
+  }, [viewState]);
 
   const renderView = () => {
     switch (viewState) {
@@ -396,7 +421,14 @@ case ViewState.POLISH_CUP_BRACKET:
         case ViewState.EDITOR:
         return <EditorView />;
       case ViewState.JOB_MARKET: // -> tutaj wstaw kod
-        return <JobMarketView />;
+        return isJobMarketReady ? (
+          <JobMarketView />
+        ) : (
+          <>
+            <Dashboard />
+            <JobMarketLoadingView />
+          </>
+        );
       case ViewState.STAFF_SEARCH:
         return <StaffSearchView />;
       case ViewState.TRANSFER_NEWS:
