@@ -1517,6 +1517,56 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     };
   },
 
+  generateAgentClientsOfferMail(
+    candidates: Player[],
+    clubName: string,
+    currentDate: Date,
+    seasonNumber: number
+  ): MailMessage {
+    const candidateLines = candidates.map((player, index) => {
+      const nationality = player.nationalityCountry || player.nationality || 'nieznany rynek';
+      return `${index + 1}. ${player.firstName} ${player.lastName} - ${player.age} lat, ${player.position}, ${player.overallRating} OVR, ${nationality}`;
+    });
+
+    return {
+      id: `AGENT_CLIENTS_${seasonNumber}_${currentDate.toISOString().split('T')[0]}_${candidates.map(player => player.id).join('_')}`,
+      sender: 'Niezależny agent piłkarski',
+      role: 'Agent zawodników',
+      subject: `Propozycja agenta: ${candidates.length} ${candidates.length === 1 ? 'wolny zawodnik' : 'wolnych zawodników'}`,
+      body: [
+        'Trenerze,',
+        '',
+        `Reprezentuję kilku wolnych zawodników, którzy nie pojawiają się w standardowej bazie rynku pracy ${clubName}. To gracze z dalszych rynków, więc normalnie wymagają kontaktów skautingowych albo ręcznego szukania poza Europą.`,
+        '',
+        'Moim zdaniem mogą pasować poziomem do obecnej kadry:',
+        '',
+        ...candidateLines,
+        '',
+        'Jeżeli któryś profil Pana interesuje, warto szybko sprawdzić kartę zawodnika i rozpocząć rozmowy kontraktowe. Nie gwarantuję, że będę mógł utrzymać ich dostępność długo.',
+        '',
+        'Z poważaniem,',
+        'Niezależny agent',
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 4,
+      metadata: {
+        type: 'AGENT_CLIENTS_OFFER',
+        seasonNumber,
+        playerIds: candidates.map(player => player.id),
+        candidates: candidates.map(player => ({
+          playerId: player.id,
+          playerName: `${player.firstName} ${player.lastName}`,
+          position: player.position,
+          age: player.age,
+          overallRating: player.overallRating,
+          nationalityLabel: player.nationalityCountry || String(player.nationality || ''),
+        })),
+      },
+    };
+  },
+
   generateNTCallUpMail: (player: Player, nationalTeamName: string, date: Date): MailMessage => {
     return {
       id: `NT_CALLUP_${player.id}_${date.getFullYear()}_${date.getMonth()}`,

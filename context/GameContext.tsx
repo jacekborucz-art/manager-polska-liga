@@ -125,6 +125,7 @@ import { WorldCupHistoryBackfillService } from '../services/WorldCupHistoryBackf
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
+import { PlayerMarketVisibilityService } from '../services/PlayerMarketVisibilityService';
 import { SAVE_VERSION, SaveState, migrateWelcomeMailSignatories } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
@@ -4412,7 +4413,63 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     setAcademy(prev => prev ? { ...prev, operationalBudgetWeekly: Math.max(0, amount) } : prev);
   }, []);
 
-  const employedScouts = scoutPool.filter(s => s.employedByClubId === userTeamId);
+  const employedScouts = useMemo(
+    () => scoutPool.filter(s => s.employedByClubId === userTeamId),
+    [scoutPool, userTeamId]
+  );
+
+  useEffect(() => {
+    if (!userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const dateKey = currentDate.toISOString().split('T')[0];
+    const seasonAgentSentIds = Array.from(sentMailIdsRef.current).filter(id =>
+      id.startsWith(`AGENT_CLIENTS_${seasonNumber}_`)
+    );
+    const seasonAgentMails = messages.filter(mail =>
+      mail.metadata?.type === 'AGENT_CLIENTS_OFFER' && mail.metadata.seasonNumber === seasonNumber
+    );
+    const seasonAgentCount = Math.max(seasonAgentSentIds.length, seasonAgentMails.length);
+    if (seasonAgentCount >= 5) return;
+    if (
+      seasonAgentSentIds.some(id => id.includes(`_${dateKey}_`)) ||
+      seasonAgentMails.some(mail => mail.id.includes(`_${dateKey}_`))
+    ) return;
+
+    const month = currentDate.getMonth() + 1;
+    if (month === 6) return;
+
+    const day = currentDate.getDate();
+    const roll = PlayerMarketVisibilityService.getStableNumber(
+      `${dateKey}|${userTeamId}|agent-clients|${seasonNumber}`,
+      10_000
+    ) / 10_000;
+    const isLateSeasonGuarantee = seasonAgentCount === 0 && (month === 5 || (month === 4 && day >= 15));
+    const dailyChance = seasonAgentCount === 0 ? 0.012 : 0.008;
+    if (!isLateSeasonGuarantee && roll >= dailyChance) return;
+
+    const userSquad = players[userTeamId] || [];
+    const freeAgents = players['FREE_AGENTS'] || [];
+    const candidates = PlayerMarketVisibilityService.selectAgentClientRecommendations(
+      freeAgents,
+      userSquad,
+      userClub,
+      employedScouts,
+      academy?.activeMissions ?? [],
+      userTeamId,
+      `${dateKey}|${seasonNumber}`
+    );
+    if (candidates.length === 0) return;
+
+    const mail = MailService.generateAgentClientsOfferMail(candidates, userClub.name, currentDate, seasonNumber);
+    sentMailIdsRef.current.add(mail.id);
+    setMessages(prev => (
+      prev.some(existingMail => existingMail.id === mail.id || existingMail.id.includes(`AGENT_CLIENTS_${seasonNumber}_${dateKey}_`))
+        ? prev
+        : [mail, ...prev]
+    ));
+  }, [academy, clubs, currentDate, employedScouts, messages, players, seasonNumber, userTeamId]);
 
   const refreshScoutMarket = useCallback(() => {
     if (!userTeamId) return;

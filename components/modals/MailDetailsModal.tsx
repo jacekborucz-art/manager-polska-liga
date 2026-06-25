@@ -1006,6 +1006,23 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </button>
             )}
 
+            {mail.metadata?.type === 'AGENT_CLIENTS_OFFER' && (
+              <div className="mr-4 flex flex-wrap items-center justify-end gap-2">
+                {mail.metadata.candidates.map(candidate => (
+                  <button
+                    key={candidate.playerId}
+                    onClick={() => {
+                      viewPlayerDetails(candidate.playerId);
+                      onClose();
+                    }}
+                    className="rounded-2xl bg-emerald-600 px-5 py-3 text-[10px] font-black italic uppercase tracking-tighter text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                  >
+                    {candidate.playerName} ({candidate.position}, {candidate.overallRating})
+                  </button>
+                ))}
+              </div>
+            )}
+
             {mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && (
               <button
                 onClick={() => {

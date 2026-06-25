@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus } from '../../types';
+import { PlayerMarketVisibilityService } from '../../services/PlayerMarketVisibilityService';
 
 type ContractStatusFilter = 'ALL' | 'FREE_AGENT' | 'CONTRACT' | 'TRANSFER_LIST';
 type MarketOriginFilter = 'ALL' | 'LOCAL' | 'FOREIGN';
@@ -37,7 +38,7 @@ const _persisted = {
 };
 
 export const JobMarketView: React.FC = () => {
-  const { coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails, transferOffers, pendingNegotiations, userTeamId } = useGame();
+  const { coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails, transferOffers, pendingNegotiations, userTeamId, employedScouts, academy } = useGame();
 
   // Filtry Piłkarzy - inicjalizowane z ostatnich zapamiętanych wartości
   const [searchTermPlayers, setSearchTermPlayers] = useState(_persisted.searchTermPlayers);
@@ -62,14 +63,53 @@ export const JobMarketView: React.FC = () => {
 
   const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
   const clubById = useMemo(() => new Map(clubs.map(club => [club.id, club])), [clubs]);
+  const visibleMarketPlayers = useMemo(() => {
+    const visibleByDefault: Player[] = [];
+    const nonEuropeanFreeAgents: Player[] = [];
+    const activeMissions = academy?.activeMissions ?? [];
+
+    allPlayersFlat.forEach(player => {
+      const sourceClub = player.clubId === 'FREE_AGENTS' ? null : clubById.get(player.clubId);
+
+      if (player.clubId === 'FREE_AGENTS') {
+        if (
+          PlayerMarketVisibilityService.isEuropeanRegion(player.nationality) ||
+          PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions)
+        ) {
+          visibleByDefault.push(player);
+        } else if (PlayerMarketVisibilityService.isNonEuropeanRegion(player.nationality)) {
+          nonEuropeanFreeAgents.push(player);
+        }
+        return;
+      }
+
+      if (
+        PlayerMarketVisibilityService.isNaturallyVisiblePlayer(player, sourceClub) ||
+        PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions)
+      ) {
+        visibleByDefault.push(player);
+      }
+    });
+
+    const sampleSize = PlayerMarketVisibilityService.getNonEuropeanFreeAgentSampleSize(userClub, employedScouts);
+    const sampledNonEuropeanFreeAgents = nonEuropeanFreeAgents
+      .sort((a, b) =>
+        PlayerMarketVisibilityService.getStablePlayerRoll(a, userTeamId) -
+        PlayerMarketVisibilityService.getStablePlayerRoll(b, userTeamId)
+      )
+      .slice(0, sampleSize);
+
+    return [...visibleByDefault, ...sampledNonEuropeanFreeAgents];
+  }, [allPlayersFlat, clubById, userClub, userTeamId, employedScouts, academy]);
+  const hiddenMarketPlayersCount = Math.max(0, allPlayersFlat.length - visibleMarketPlayers.length);
 
   const nationalityOptions = useMemo(() =>
     Array.from(new Set(
-      allPlayersFlat
+      visibleMarketPlayers
         .map(player => (player.nationalityCountry || player.nationality || '').trim())
         .filter(Boolean)
     )).sort((a, b) => a.localeCompare(b, 'pl')),
-  [allPlayersFlat]);
+  [visibleMarketPlayers]);
 
   const activeTransferOffers = useMemo(() =>
     transferOffers.filter(o =>
@@ -169,7 +209,7 @@ export const JobMarketView: React.FC = () => {
   // TUTAJ WSTAW TEN KOD: Logika pustej listy transferowej
   const transferListedPlayers = useMemo(() => {
     if (contractStatusFilter === 'FREE_AGENT') return [];
-    let list = Object.values(players).flat().filter(p => p.clubId !== 'FREE_AGENTS');
+    let list = visibleMarketPlayers.filter(p => p.clubId !== 'FREE_AGENTS');
     if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
     if (contractStatusFilter === 'CONTRACT') list = list.filter(p => !p.isOnTransferList);
     list = list.filter(matchesCommonPlayerFilters);
@@ -181,14 +221,14 @@ export const JobMarketView: React.FC = () => {
     if (marketOriginFilter === 'LOCAL') list = list.filter(p => clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
     if (marketOriginFilter === 'FOREIGN') list = list.filter(p => !clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
     return list.sort((a,b) => b.overallRating - a.overallRating);
-  }, [players, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
+  }, [visibleMarketPlayers, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
 
   // RYNEK WYPOŻYCZEŃ DLA GRACZA:
   // Ta lista pokazuje wyłącznie zawodników z klubów AI, którzy zostali oznaczeni przez AI
   // albo edytor jako dostępni do wypożyczenia. Samo złożenie oferty odbywa się potem
   // z karty zawodnika, bo tam gracz widzi pełny kontekst i może ustawić warunki.
   const loanListedPlayers = useMemo(() => {
-    let list = Object.values(players).flat().filter(p =>
+    let list = visibleMarketPlayers.filter(p =>
       p.clubId !== 'FREE_AGENTS' &&
       p.clubId !== userTeamId &&
       p.isAvailableForLoan &&
@@ -204,16 +244,16 @@ export const JobMarketView: React.FC = () => {
     if (marketOriginFilter === 'LOCAL') list = list.filter(p => clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
     if (marketOriginFilter === 'FOREIGN') list = list.filter(p => !clubById.get(p.clubId)?.leagueId?.startsWith('L_PL_'));
     return list.sort((a, b) => b.overallRating - a.overallRating);
-  }, [players, userTeamId, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
+  }, [visibleMarketPlayers, userTeamId, searchTermPlayers, posFilter, filters, playerNationalityFilter, searchTermTransfer, priceFilter, marketOriginFilter, clubById]);
 
   const filteredPlayerResults = useMemo(() => {
-    let list = allPlayersFlat;
+    let list = visibleMarketPlayers;
     if (contractStatusFilter === 'FREE_AGENT') list = list.filter(p => p.clubId === 'FREE_AGENTS');
     if (contractStatusFilter === 'CONTRACT') list = list.filter(p => p.clubId !== 'FREE_AGENTS' && !p.isOnTransferList);
     if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
     list = list.filter(matchesCommonPlayerFilters);
     return list.sort((a, b) => b.overallRating - a.overallRating);
-  }, [allPlayersFlat, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter]);
+  }, [visibleMarketPlayers, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter]);
 
   const getPlayerClubName = (player: Player) =>
     player.clubId === 'FREE_AGENTS' ? 'Wolny agent' : clubById.get(player.clubId)?.name ?? 'Bez klubu';
@@ -529,6 +569,9 @@ export const JobMarketView: React.FC = () => {
           <section className="flex-1 bg-white/[0.02] border border-white/10 rounded-[40px] flex flex-col overflow-hidden shadow-2xl relative">
             <div className="p-5 border-b border-white/10 flex flex-col gap-3 bg-white/[0.02]">
               <h2 className="text-[10px] font-black text-white uppercase tracking-widest text-center italic">Wyniki filtrowania ({filteredPlayerResults.length})</h2>
+              <p className="text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                Widoczna baza zależy od zasięgu skautingu. Ukryci zawodnicy: {hiddenMarketPlayersCount}.
+              </p>
               <div className="text-[10px] flex bg-black/30 p-2 rounded-xl border border-white/5">
                 {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
                   <button 

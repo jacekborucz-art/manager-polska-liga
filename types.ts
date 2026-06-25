@@ -442,6 +442,18 @@ export interface MailMessage {
     type: 'LOAN_PLAYTIME_WARNING';
     playerId: string;
   } | {
+    type: 'AGENT_CLIENTS_OFFER';
+    seasonNumber: number;
+    playerIds: string[];
+    candidates: {
+      playerId: string;
+      playerName: string;
+      position: PlayerPosition;
+      age: number;
+      overallRating: number;
+      nationalityLabel: string;
+    }[];
+  } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
     requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'TRANSFER_LIST_OBJECTION' | 'DEVELOPMENT_EXIT' | 'RAISE';
