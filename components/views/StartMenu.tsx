@@ -148,14 +148,14 @@ export const StartMenu: React.FC = () => {
       </div>
       
       {/* 2. CENTRAL CONTENT */}
-      <div className="relative z-10 flex flex-col items-center max-w-4xl w-full px-6 text-center animate-fade-in pb-8">
+      <div className="relative z-10 flex flex-col items-center max-w-[1180px] w-full px-6 text-center animate-fade-in pb-8">
         
         
 
       
 
         {/* Action Menu */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5 w-full max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full max-w-[1180px] mx-auto">
                                                                       
           
           <button 
