@@ -59,7 +59,7 @@ export const PlayerTransferListObjectionModal: React.FC<PlayerTransferListObject
       playerLastName={player.lastName}
       title="O LIŚCIE TRANSFEROWEJ"
       subtitle="PLAYER MINDFLOW"
-      moodLabel={`RZUT UKRYTY: ${result ? result.diceRoll : '?'}/6`}
+      moodLabel="NIEPRZEWIDYWALNA REAKCJA"
       currentStep={Math.min(session.currentQuestionIndex + 1, session.questions.length)}
       totalSteps={session.questions.length}
       score={session.score}
@@ -73,7 +73,8 @@ export const PlayerTransferListObjectionModal: React.FC<PlayerTransferListObject
         score: result.score,
         targetScore: result.targetScore,
         moraleDelta: result.moraleToMinimum ? -99 : result.moraleDelta,
-        isPositive: result.outcome === 'CONVINCED',
+        isPositive: result.outcome === 'CONVINCED' || result.outcome === 'PROMISED_REMOVE',
+        hideMeta: true,
       } : null}
       onAnswer={answerQuestion}
       onEndConversation={() => finishConversation(true)}

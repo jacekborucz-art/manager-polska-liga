@@ -1,6 +1,6 @@
 import { Player, PlayerMoralePersonality } from '../types';
 
-export type PlayerTransferListObjectionOutcome = 'CONVINCED' | 'BROKEN' | 'IGNORED';
+export type PlayerTransferListObjectionOutcome = 'CONVINCED' | 'PROMISED_REMOVE' | 'BROKEN' | 'IGNORED';
 export type PlayerTransferListObjectionTone = 'EMPATHY' | 'HONESTY' | 'AUTHORITY';
 
 export interface PlayerTransferListObjectionAnswer {
@@ -35,6 +35,7 @@ export interface PlayerTransferListObjectionResult {
   moraleDelta: number;
   moraleToMinimum: boolean;
   removeFromTransferList: boolean;
+  promiseRemoveFromTransferList: boolean;
   title: string;
   summary: string;
 }
@@ -63,6 +64,7 @@ const QUESTIONS: PlayerTransferListObjectionQuestion[] = [
     playerText: 'Chcę zostać i udowodnić swoją wartość. Czy trener jest gotów dać mi jeszcze realną szansę?',
     answers: [
       { id: 'STAY_E', tone: 'EMPATHY', points: 3, text: 'Tak. Jeśli chcesz zostać, nie zamknę ci drogi. Decyzja była trudna, ale twoja reakcja ma dla mnie znaczenie.', reaction: 'Tego potrzebowałem. Nie obiecuję, że od razu zapomnę, ale mogę wrócić do pracy z innym nastawieniem.' },
+      { id: 'STAY_REMOVE', tone: 'EMPATHY', points: 6, text: 'Masz rację. Zdejmę cię z listy transferowej. Ta decyzja nie powinna zostać podjęta bez rozmowy z tobą.', reaction: 'Dobrze. Jeśli naprawdę zostanę zdjęty z listy, uznam, że trener potraktował tę rozmowę poważnie.' },
       { id: 'STAY_H', tone: 'HONESTY', points: 2, text: 'Dostaniesz szansę, ale muszę też chronić interes klubu. Jeśli przyjdzie dobra oferta, będziemy musieli ją rozważyć.', reaction: 'To uczciwe, chociaż nadal trudne. Przynajmniej wiem, że mogę walczyć o swoją pozycję.' },
       { id: 'STAY_A', tone: 'AUTHORITY', points: -3, text: 'Na razie decyzja się nie zmienia. Najlepsze, co możesz zrobić, to nie utrudniać sprawy.', reaction: 'W takim razie wygląda na to, że ta rozmowa nic dla pana nie znaczyła.' },
     ],
@@ -133,13 +135,30 @@ export const PlayerTransferListObjectionService = {
         moraleDelta: -20,
         moraleToMinimum: true,
         removeFromTransferList: false,
+        promiseRemoveFromTransferList: false,
         title: 'Rozmowa przerwana',
-        summary: 'Zawodnik uznał, że trener nie chce nawet wyjaśnić decyzji. Morale spada do minimum, a relacja z trenerem zostaje mocno naruszona.',
+        summary: 'Zawodnik nie przyjął argumentów trenera.',
       };
     }
 
     const finalScore = session.score + session.diceRoll;
+    const promisedRemove = session.lastReaction === 'Dobrze. Jeśli naprawdę zostanę zdjęty z listy, uznam, że trener potraktował tę rozmowę poważnie.';
     const convinced = finalScore >= session.targetScore;
+
+    if (promisedRemove) {
+      return {
+        outcome: 'PROMISED_REMOVE',
+        score: finalScore,
+        targetScore: session.targetScore,
+        diceRoll: session.diceRoll,
+        moraleDelta: 1,
+        moraleToMinimum: false,
+        removeFromTransferList: false,
+        promiseRemoveFromTransferList: true,
+        title: 'Zawodnik czeka na decyzję',
+        summary: 'Zawodnik przyjął deklarację trenera.',
+      };
+    }
 
     return convinced
       ? {
@@ -150,8 +169,9 @@ export const PlayerTransferListObjectionService = {
           moraleDelta: 4,
           moraleToMinimum: false,
           removeFromTransferList: false,
+          promiseRemoveFromTransferList: false,
           title: 'Zawodnik przyjął wyjaśnienia',
-          summary: `Rzut rozmowy: ${session.diceRoll}. Zawodnik nadal nie jest zachwycony decyzją, ale przyjął argumenty trenera i wraca do pracy.`,
+          summary: 'Zawodnik przyjął argumenty trenera.',
         }
       : {
           outcome: 'BROKEN',
@@ -161,8 +181,9 @@ export const PlayerTransferListObjectionService = {
           moraleDelta: -30,
           moraleToMinimum: true,
           removeFromTransferList: false,
+          promiseRemoveFromTransferList: false,
           title: 'Rozmowa załamała relację',
-          summary: `Rzut rozmowy: ${session.diceRoll}. Zawodnik nie uwierzył w wyjaśnienia. Odbiera listę transferową jako zdradę zaufania, a morale spada do minimum.`,
+          summary: 'Zawodnik nie przyjął argumentów trenera.',
         };
   },
 };

@@ -1353,6 +1353,8 @@ export interface Player {
   transferAllowAfterSeasonDeadline?: string | null;
   /** Oczekująca odpowiedź gracza — "zastanawia się" 5–14 dni (THINKING state). */
   transferRequestPendingResponse?: TransferRequestPendingResponse | null;
+  /** Obietnica zdjęcia zawodnika z listy transferowej po jego proteście. Deadline zwykle +1 dzień. */
+  transferListRemovalPromiseDeadline?: string | null;
   contractRaiseDemandUntil?: string | null;
   contractRaiseRequest?: {
     salary: number;

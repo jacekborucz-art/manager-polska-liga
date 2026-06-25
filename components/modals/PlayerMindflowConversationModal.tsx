@@ -29,6 +29,7 @@ interface PlayerMindflowConversationModalProps {
     targetScore: number;
     moraleDelta: number;
     isPositive: boolean;
+    hideMeta?: boolean;
   } | null;
   onAnswer: (answerId: string) => void;
   onEndConversation: () => void;
@@ -137,9 +138,11 @@ export const PlayerMindflowConversationModal: React.FC<PlayerMindflowConversatio
                 </span>
                 <h2 className="mt-3 text-3xl font-black italic uppercase tracking-tighter text-white">{result.title}</h2>
                 <p className="mt-4 text-base font-black italic uppercase tracking-tighter leading-relaxed text-slate-200">{result.summary}</p>
-                <p className="mt-5 text-xs font-black italic uppercase tracking-tighter text-slate-500">
-                  WYNIK: {result.score} / {result.targetScore} PKT · ZMIANA MORALE: {result.moraleDelta > 0 ? '+' : ''}{result.moraleDelta}
-                </p>
+                {!result.hideMeta && (
+                  <p className="mt-5 text-xs font-black italic uppercase tracking-tighter text-slate-500">
+                    WYNIK: {result.score} / {result.targetScore} PKT · ZMIANA MORALE: {result.moraleDelta > 0 ? '+' : ''}{result.moraleDelta}
+                  </p>
+                )}
               </div>
               <button
                 onClick={closeModal}

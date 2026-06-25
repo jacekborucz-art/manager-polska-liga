@@ -3585,6 +3585,40 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
           reviewed = seasonReview.player;
           transferRequestMails.push(...seasonReview.mails);
 
+          if (reviewed.transferListRemovalPromiseDeadline && !reviewed.isOnTransferList) {
+            reviewed = { ...reviewed, transferListRemovalPromiseDeadline: null };
+          } else if (reviewed.transferListRemovalPromiseDeadline && reviewed.isOnTransferList) {
+            const deadlineTime = new Date(reviewed.transferListRemovalPromiseDeadline).setHours(0, 0, 0, 0);
+            const todayTime = new Date(currentDate).setHours(0, 0, 0, 0);
+
+            if (!Number.isNaN(deadlineTime) && todayTime >= deadlineTime) {
+              const lockoutDate = new Date(currentDate);
+              lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+              reviewed = PlayerMoraleService.withMoraleChange(
+                reviewed,
+                -(reviewed.morale ?? 50),
+                'Trener nie dotrzymał obietnicy zdjęcia z listy transferowej',
+                currentDate
+              );
+              reviewed = {
+                ...reviewed,
+                transferListRemovalPromiseDeadline: null,
+                negotiationLockoutUntil: lockoutDate.toISOString(),
+                transferLockoutUntil: lockoutDate.toISOString(),
+              };
+              transferRequestMails.push({
+                id: `TRANSFER_LIST_REMOVAL_PROMISE_BROKEN_${reviewed.id}_${currentDate.toISOString().split('T')[0]}`,
+                date: currentDate.toISOString(),
+                type: MailType.SYSTEM,
+                subject: `Zerwane zaufanie: ${reviewed.lastName}`,
+                sender: `${reviewed.firstName} ${reviewed.lastName}`,
+                role: 'Zawodnik',
+                body: `Trenerze,\n\nPowiedział pan, że zdejmie mnie z listy transferowej. Minął dzień, a ja nadal na niej jestem.\n\nDla mnie ta rozmowa straciła jakiekolwiek znaczenie. Nie chcę wracać do negocjacji ani rozmów o przyszłości przez najbliższe miesiące.\n\n${reviewed.firstName} ${reviewed.lastName}`,
+                isRead: false,
+              });
+            }
+          }
+
           transferRequestReviewedSquad.push(reviewed);
         }
 
@@ -4653,7 +4687,9 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
         const nextPlayer = PlayerMoraleService.withMoraleChange(
           player,
           moraleDelta,
-          result.outcome === 'CONVINCED'
+          result.outcome === 'PROMISED_REMOVE'
+            ? 'Trener obiecał zdjęcie z listy transferowej'
+            : result.outcome === 'CONVINCED'
             ? 'Udana rozmowa po wystawieniu na listę transferową'
             : result.outcome === 'IGNORED'
               ? 'Trener przerwał rozmowę o wystawieniu na listę transferową'
@@ -4661,10 +4697,20 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
           currentDate
         );
 
+        const removalDeadline = result.promiseRemoveFromTransferList
+          ? new Date(currentDate)
+          : null;
+        if (removalDeadline) removalDeadline.setDate(removalDeadline.getDate() + 1);
+
         return {
           ...nextPlayer,
           isOnTransferList: result.removeFromTransferList ? false : nextPlayer.isOnTransferList,
           transferListPrice: result.removeFromTransferList ? undefined : nextPlayer.transferListPrice,
+          transferListRemovalPromiseDeadline: removalDeadline
+            ? removalDeadline.toISOString()
+            : result.removeFromTransferList
+              ? null
+              : nextPlayer.transferListRemovalPromiseDeadline,
         };
       }),
     }));
@@ -12238,6 +12284,9 @@ const finalResult: SimulationOutput = {
         moraleHistory: moraleAdjustedPlayer.moraleHistory,
         playerMindset: moraleAdjustedPlayer.playerMindset,
         transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
+        transferListRemovalPromiseDeadline: isAddingToTransferList
+          ? moraleAdjustedPlayer.transferListRemovalPromiseDeadline
+          : null,
         developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
         developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
         unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
