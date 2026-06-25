@@ -33,6 +33,17 @@ type EditorSearchResult =
   | { type: 'STAFF'; id: string; clubId: string | null; title: string; subtitle: string }
   | { type: 'BOARD'; clubId: string; boardKey: string; title: string; subtitle: string }
   | { type: 'NATIONAL_TEAM'; id: string; title: string; subtitle: string };
+type ContractLookupVariant = {
+  id: string;
+  label: string;
+  sourceName: string;
+  sourceUrl: string;
+  contractEndDate: string;
+  annualSalary: number;
+  marketValue: number;
+  confidence: number;
+  note: string;
+};
 
 const FREE_AGENTS_ID = 'FREE_AGENTS';
 
@@ -255,6 +266,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const toNumber = (value: string, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const dateInput = (value?: string | null) => value ? value.substring(0, 10) : '';
 const isoFromDateInput = (value: string) => value ? new Date(value).toISOString() : new Date().toISOString();
+const formatMoney = (value?: number | null) => `${Math.max(0, Math.round(value ?? 0)).toLocaleString('pl-PL')} PLN`;
 
 export const PreGameDatapackEditorView: React.FC = () => {
   const {
@@ -289,6 +301,8 @@ export const PreGameDatapackEditorView: React.FC = () => {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [selectedNationalTeamId, setSelectedNationalTeamId] = useState<string>('');
   const [nationalTeamQuery, setNationalTeamQuery] = useState('');
+  const [contractLookupPlayerId, setContractLookupPlayerId] = useState<string>('');
+  const [contractLookupVariants, setContractLookupVariants] = useState<ContractLookupVariant[]>([]);
 
   const editableClubs = useMemo(
     () => clubs.filter(club => club.id !== 'UNEMPLOYED_MANAGER').sort((a, b) => a.name.localeCompare(b.name, 'pl')),
@@ -335,6 +349,10 @@ export const PreGameDatapackEditorView: React.FC = () => {
   const selectedPlayer = useMemo(
     () => squad.find(player => player.id === selectedPlayerId) ?? squad[0] ?? null,
     [selectedPlayerId, squad]
+  );
+  const contractLookupPlayer = useMemo(
+    () => Object.values(players).flat().find(player => player.id === contractLookupPlayerId) ?? squad.find(player => player.id === contractLookupPlayerId) ?? null,
+    [contractLookupPlayerId, players, squad]
   );
 
   const clubCoach = selectedClub?.coachId ? coaches[selectedClub.coachId] ?? null : null;
@@ -549,20 +567,124 @@ export const PreGameDatapackEditorView: React.FC = () => {
     setIsCoachEditorOpen(false);
   };
 
+  const getCurrentSquadForPersistence = () => {
+    if (!selectedClubId) return [];
+    if (isFreeAgentsPool) return squad;
+    return squad.filter(player => player.clubId === selectedClubId);
+  };
+
   const updatePlayer = (playerId: string, patch: Partial<Player>) => {
     setPlayers(prev => {
       const next = { ...prev };
+      let sourceClubId = '';
+      let currentPlayer: Player | null = null;
+
       Object.entries(next).some(([clubId, clubPlayers]) => {
         const index = clubPlayers.findIndex(player => player.id === playerId);
         if (index === -1) return false;
-        const current = clubPlayers[index];
-        const updated = { ...current, ...patch };
-        const targetClubId = patch.clubId ?? current.clubId;
-        next[clubId] = clubPlayers.filter(player => player.id !== playerId);
-        next[targetClubId] = [...(next[targetClubId] ?? []), updated];
+        sourceClubId = clubId;
+        currentPlayer = clubPlayers[index];
         return true;
       });
+
+      if (!currentPlayer) {
+        currentPlayer = squad.find(player => player.id === playerId) ?? null;
+        sourceClubId = currentPlayer?.clubId ?? selectedClubId;
+        if (!currentPlayer || !sourceClubId) return prev;
+        if (!next[sourceClubId]) next[sourceClubId] = getCurrentSquadForPersistence();
+      }
+
+      const targetClubId = patch.clubId ?? currentPlayer.clubId;
+      const updated = { ...currentPlayer, ...patch, clubId: targetClubId };
+      next[sourceClubId] = (next[sourceClubId] ?? []).filter(player => player.id !== playerId);
+      next[targetClubId] = [...(next[targetClubId] ?? []).filter(player => player.id !== playerId), updated];
       return next;
+    });
+
+    if (patch.clubId !== undefined) {
+      setClubs(prev => prev.map(club => {
+        const isTargetClub = patch.clubId !== FREE_AGENTS_ID && club.id === patch.clubId;
+        const rosterIds = isTargetClub
+          ? Array.from(new Set([...(club.rosterIds ?? []), playerId]))
+          : (club.rosterIds ?? []).filter(id => id !== playerId);
+        return {
+          ...club,
+          rosterIds,
+          captainId: isTargetClub ? club.captainId : (club.captainId === playerId ? null : club.captainId),
+          penaltyTakerId: isTargetClub ? club.penaltyTakerId : (club.penaltyTakerId === playerId ? null : club.penaltyTakerId),
+          freeKickTakerId: isTargetClub ? club.freeKickTakerId : (club.freeKickTakerId === playerId ? null : club.freeKickTakerId),
+        };
+      }));
+    }
+  };
+
+  const buildContractLookupVariants = (player: Player): ContractLookupVariant[] => {
+    const playerName = `${player.firstName} ${player.lastName}`.trim();
+    const clubName = editableClubs.find(club => club.id === player.clubId)?.name ?? '';
+    const baseQuery = [playerName, clubName, 'contract expires salary market value'].filter(Boolean).join(' ');
+    const transfermarktQuery = [playerName, clubName].filter(Boolean).join(' ');
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(`${baseQuery} Transfermarkt`)}`;
+    const transfermarktUrl = `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(transfermarktQuery || playerName)}`;
+    const newsUrl = `https://www.google.com/search?q=${encodeURIComponent(`${baseQuery} contract extension`)}`;
+
+    return [
+      {
+        id: 'current',
+        label: 'Wariant 1',
+        sourceName: 'Aktualne dane datapacka',
+        sourceUrl: googleUrl,
+        contractEndDate: dateInput(player.contractEndDate),
+        annualSalary: player.annualSalary ?? 0,
+        marketValue: player.marketValue ?? 0,
+        confidence: 50,
+        note: 'Punkt startowy z obecnego datapacka. Możesz porównać z wynikami wyszukiwania.',
+      },
+      {
+        id: 'transfermarkt',
+        label: 'Wariant 2',
+        sourceName: 'Transfermarkt / profil zawodnika',
+        sourceUrl: transfermarktUrl,
+        contractEndDate: '',
+        annualSalary: 0,
+        marketValue: 0,
+        confidence: 70,
+        note: 'Wklej datę kontraktu i wartość po sprawdzeniu profilu zawodnika.',
+      },
+      {
+        id: 'press',
+        label: 'Wariant 3',
+        sourceName: 'Media / komunikat klubu',
+        sourceUrl: newsUrl,
+        contractEndDate: '',
+        annualSalary: 0,
+        marketValue: 0,
+        confidence: 60,
+        note: 'Dobry wariant, gdy klub lub media podały przedłużenie kontraktu albo nową pensję.',
+      },
+    ];
+  };
+
+  const openContractLookup = (player: Player) => {
+    setContractLookupPlayerId(player.id);
+    setContractLookupVariants(buildContractLookupVariants(player));
+  };
+
+  const updateContractLookupVariant = (variantId: string, patch: Partial<ContractLookupVariant>) => {
+    setContractLookupVariants(prev => prev.map(variant => variant.id === variantId ? { ...variant, ...patch } : variant));
+  };
+
+  const applyContractLookupVariant = (player: Player, variant: ContractLookupVariant) => {
+    const patch: Partial<Player> = {};
+    if (variant.contractEndDate) patch.contractEndDate = isoFromDateInput(variant.contractEndDate);
+    if (variant.annualSalary > 0) patch.annualSalary = Math.round(variant.annualSalary);
+    if (variant.marketValue > 0) patch.marketValue = Math.round(variant.marketValue);
+    updatePlayer(player.id, patch);
+    setContractLookupPlayerId('');
+    setContractLookupVariants([]);
+    showGameNotification({
+      title: 'Zastosowano wariant kontraktu',
+      message: `${player.firstName} ${player.lastName}: ${variant.sourceName}.`,
+      tone: 'success',
     });
   };
 
@@ -572,6 +694,10 @@ export const PreGameDatapackEditorView: React.FC = () => {
 
     setPlayers(prev => {
       const next = { ...prev };
+      const sourceClubId = player.clubId || selectedClubId;
+      if (sourceClubId && !next[sourceClubId]) {
+        next[sourceClubId] = getCurrentSquadForPersistence();
+      }
       Object.keys(next).forEach(clubId => {
         next[clubId] = next[clubId].filter(item => item.id !== player.id);
       });
@@ -822,6 +948,12 @@ export const PreGameDatapackEditorView: React.FC = () => {
       lojalnosc: 50,
     };
     setPlayers(prev => ({ ...prev, [targetClubId]: [...(prev[targetClubId] ?? []), player] }));
+    if (targetClubId !== FREE_AGENTS_ID) {
+      setClubs(prev => prev.map(club => club.id === targetClubId
+        ? { ...club, rosterIds: Array.from(new Set([...(club.rosterIds ?? []), player.id])) }
+        : club
+      ));
+    }
     if (targetClubId === FREE_AGENTS_ID) {
       setSelectedClubId(FREE_AGENTS_ID);
       setTab('SQUAD');
@@ -935,12 +1067,21 @@ export const PreGameDatapackEditorView: React.FC = () => {
   };
 
   const exportFullPack = () => {
+    const exportPlayers = selectedClubId && squad.length && !players[selectedClubId]
+      ? { ...players, [selectedClubId]: getCurrentSquadForPersistence() }
+      : players;
+    const exportClubs = selectedClubId && selectedClubId !== FREE_AGENTS_ID && exportPlayers[selectedClubId]
+      ? clubs.map(club => club.id === selectedClubId
+        ? { ...club, rosterIds: exportPlayers[selectedClubId].map(player => player.id) }
+        : club
+      )
+      : clubs;
     const data = {
       type: 'editor_full_pack',
       version: 2,
       exportedAt: new Date().toISOString(),
-      clubs,
-      players,
+      clubs: exportClubs,
+      players: exportPlayers,
       coaches,
       staffMembers,
       nationalTeams,
@@ -1361,7 +1502,10 @@ export const PreGameDatapackEditorView: React.FC = () => {
                           <div className="rounded-lg border border-white/10 bg-slate-900/50 p-5">
                             <div className="flex items-center justify-between gap-3 mb-4">
                               <div className="text-xl text-yellow-400">EDYCJA ZAWODNIKA</div>
-                              <button onClick={() => deletePlayer(selectedPlayer)} className="rounded bg-red-800 hover:bg-red-700 px-4 py-2 text-xs text-white">USUŃ ZAWODNIKA</button>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => openContractLookup(selectedPlayer)} className="rounded bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs text-white">ZNAJDŹ INFO O KONTRAKCIE</button>
+                                <button onClick={() => deletePlayer(selectedPlayer)} className="rounded bg-red-800 hover:bg-red-700 px-4 py-2 text-xs text-white">USUŃ ZAWODNIKA</button>
+                              </div>
                             </div>
                             <div className="grid grid-cols-4 gap-3">
                               {renderField('Imię', selectedPlayer.firstName, value => updatePlayer(selectedPlayer.id, { firstName: value }))}
@@ -1783,6 +1927,77 @@ export const PreGameDatapackEditorView: React.FC = () => {
           </main>
         )}
       </div>
+
+      {contractLookupPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+          <div className="w-full max-w-6xl max-h-[88vh] overflow-y-auto rounded-lg border border-cyan-500/30 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-4 mb-5 border-b border-white/10 pb-4">
+              <div>
+                <div className="text-xl text-cyan-300">SZUKAJ INFORMACJI O KONTRAKCIE</div>
+                <div className="text-[10px] text-slate-500">
+                  {contractLookupPlayer.firstName} {contractLookupPlayer.lastName} · obecnie: kontrakt do {dateInput(contractLookupPlayer.contractEndDate) || 'brak'} · pensja {formatMoney(contractLookupPlayer.annualSalary)}
+                </div>
+              </div>
+              <button onClick={() => { setContractLookupPlayerId(''); setContractLookupVariants([]); }} className="rounded bg-white/10 hover:bg-white/20 px-4 py-2 text-xs">ZAMKNIJ</button>
+            </div>
+
+            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-4 mb-4">
+              <div className="text-sm text-cyan-200">TRYB BEZPIECZNY</div>
+              <div className="text-[11px] text-slate-300 normal-case not-italic tracking-normal font-normal mt-1">
+                Edytor nie scrapuje stron automatycznie. Otwórz źródło, sprawdź dane, wpisz wartości w jednym z wariantów i dopiero wtedy kliknij UŻYJ WARIANTU.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              {contractLookupVariants.map(variant => (
+                <div key={variant.id} className="rounded-lg border border-white/10 bg-black/25 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg text-white">{variant.label}</div>
+                      <div className="text-[10px] text-slate-500">{variant.sourceName}</div>
+                    </div>
+                    <a href={variant.sourceUrl} target="_blank" rel="noreferrer" className="rounded bg-cyan-700 hover:bg-cyan-600 px-3 py-2 text-[10px] text-white">
+                      OTWÓRZ ŹRÓDŁO
+                    </a>
+                  </div>
+
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Źródło / opis</span>
+                    <input value={variant.sourceName} onChange={event => updateContractLookupVariant(variant.id, { sourceName: event.target.value })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Kontrakt do</span>
+                    <input type="date" value={variant.contractEndDate} onChange={event => updateContractLookupVariant(variant.id, { contractEndDate: event.target.value })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Pensja roczna PLN</span>
+                    <input type="number" min={0} value={variant.annualSalary} onChange={event => updateContractLookupVariant(variant.id, { annualSalary: Math.max(0, Math.round(toNumber(event.target.value))) })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Wartość rynkowa PLN</span>
+                    <input type="number" min={0} value={variant.marketValue} onChange={event => updateContractLookupVariant(variant.id, { marketValue: Math.max(0, Math.round(toNumber(event.target.value))) })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Pewność 0-100</span>
+                    <input type="number" min={0} max={100} value={variant.confidence} onChange={event => updateContractLookupVariant(variant.id, { confidence: clamp(toNumber(event.target.value, variant.confidence), 0, 100) })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Notatka</span>
+                    <textarea value={variant.note} onChange={event => updateContractLookupVariant(variant.id, { note: event.target.value })} className={`${inputCls} min-h-20 normal-case not-italic tracking-normal font-normal`} />
+                  </label>
+
+                  <div className="rounded border border-white/10 bg-white/5 p-3 text-[10px] text-slate-400 normal-case not-italic tracking-normal font-normal">
+                    Zastosuje tylko pola z wpisanymi wartościami. Puste daty i wartości 0 nie nadpiszą danych zawodnika.
+                  </div>
+                  <button onClick={() => applyContractLookupVariant(contractLookupPlayer, variant)} className="w-full rounded bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-3 text-xs">
+                    UŻYJ WARIANTU
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isCoachEditorOpen && selectedCoach && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
