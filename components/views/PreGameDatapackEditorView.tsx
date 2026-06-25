@@ -44,6 +44,7 @@ type ContractLookupVariant = {
   confidence: number;
   note: string;
   sourceText?: string;
+  marketValueOptions?: number[];
 };
 
 const FREE_AGENTS_ID = 'FREE_AGENTS';
@@ -290,6 +291,24 @@ const findMoneyInText = (text: string) => {
   return 0;
 };
 
+const findMoneyOptionsInText = (text: string) => {
+  const values: number[] = [];
+  const pushValue = (amount?: string, unit?: string) => {
+    if (!amount) return;
+    const value = parseMoneyTokenToPln(amount, unit);
+    if (value > 0) values.push(value);
+  };
+
+  for (const match of text.matchAll(/(?:€|eur)\s*([\d\s.,]+)\s*(m|million|mil|mln|k|thousand|tys)?/gi)) {
+    pushValue(match[1], match[2]);
+  }
+  for (const match of text.matchAll(/([\d\s.,]+)\s*(m|million|mil|mln|k|thousand|tys)?\s*(?:€|eur)/gi)) {
+    pushValue(match[1], match[2]);
+  }
+
+  return Array.from(new Set(values)).sort((a, b) => b - a).slice(0, 6);
+};
+
 const parseLookupDate = (text: string) => {
   const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
@@ -321,10 +340,12 @@ const parseContractLookupText = (text: string) => {
   const lower = text.toLowerCase();
   const salaryContext = lower.match(/(?:salary|wage|pensja|zarobki|wynagrodzenie).{0,80}/i)?.[0] ?? '';
   const valueContext = lower.match(/(?:market value|wartość rynkowa|wartosc rynkowa|value).{0,80}/i)?.[0] ?? text;
+  const valueOptions = findMoneyOptionsInText(valueContext).length ? findMoneyOptionsInText(valueContext) : findMoneyOptionsInText(text);
   return {
     contractEndDate: parseLookupDate(text),
     annualSalary: salaryContext ? findMoneyInText(salaryContext) : 0,
-    marketValue: findMoneyInText(valueContext),
+    marketValue: valueOptions[0] ?? 0,
+    marketValueOptions: valueOptions,
   };
 };
 
@@ -743,11 +764,25 @@ export const PreGameDatapackEditorView: React.FC = () => {
         contractEndDate: parsed.contractEndDate || variant.contractEndDate,
         annualSalary: parsed.annualSalary > 0 ? parsed.annualSalary : variant.annualSalary,
         marketValue: parsed.marketValue > 0 ? parsed.marketValue : variant.marketValue,
+        marketValueOptions: parsed.marketValueOptions.length > 0 ? parsed.marketValueOptions : variant.marketValueOptions,
         note: parsed.contractEndDate || parsed.annualSalary > 0 || parsed.marketValue > 0
           ? `Automatycznie odczytano z wklejonego tekstu. Kurs edytora: 1 EUR = ${EUR_TO_PLN_EDITOR_RATE.toFixed(2)} PLN.`
           : variant.note,
       };
     }));
+  };
+
+  const readContractLookupClipboard = async (variantId: string) => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        showGameNotification({ title: 'Schowek jest pusty', message: 'Skopiuj fragment z Transfermarkt i spróbuj ponownie.', tone: 'error' });
+        return;
+      }
+      updateContractLookupSourceText(variantId, text);
+    } catch {
+      showGameNotification({ title: 'Brak dostępu do schowka', message: 'Wklej tekst ręcznie w pole źródła.', tone: 'error' });
+    }
   };
 
   const applyContractLookupVariant = (player: Player, variant: ContractLookupVariant) => {
@@ -2050,6 +2085,9 @@ export const PreGameDatapackEditorView: React.FC = () => {
                       placeholder="Np. Market value €2.50m albo Contract expires Jun 30, 2028"
                       className={`${inputCls} min-h-16 normal-case not-italic tracking-normal font-normal`}
                     />
+                    <button type="button" onClick={() => readContractLookupClipboard(variant.id)} className="rounded bg-cyan-700 hover:bg-cyan-600 px-3 py-2 text-[10px] text-white">
+                      ODCZYTAJ ZE SCHOWKA
+                    </button>
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className={labelCls}>Kontrakt do</span>
@@ -2062,6 +2100,20 @@ export const PreGameDatapackEditorView: React.FC = () => {
                   <label className="flex flex-col gap-1">
                     <span className={labelCls}>Wartość rynkowa PLN</span>
                     <input type="number" min={0} value={variant.marketValue} onChange={event => updateContractLookupVariant(variant.id, { marketValue: Math.max(0, Math.round(toNumber(event.target.value))) })} className={inputCls} />
+                    {variant.marketValueOptions && variant.marketValueOptions.length > 0 && (
+                      <div className="grid grid-cols-2 gap-1 mt-1">
+                        {variant.marketValueOptions.map(value => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => updateContractLookupVariant(variant.id, { marketValue: value })}
+                            className={`rounded border px-2 py-1 text-[10px] ${variant.marketValue === value ? 'bg-yellow-500 text-black border-yellow-300' : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'}`}
+                          >
+                            {formatMoney(value)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className={labelCls}>Pewność 0-100</span>
