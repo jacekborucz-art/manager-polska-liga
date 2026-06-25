@@ -10031,6 +10031,7 @@ const finalResult: SimulationOutput = {
             else if (repDelta < 0) chance *= 0.45;
             if (!isEliteWatchlistOpportunity && (p.squadRole === 'KEY_PLAYER' || p.isUntouchable)) chance *= 0.55;
             if (p.isNegotiationPermanentBlocked) chance *= 2.0;
+            chance *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(p, aiClub, userClub);
             chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
 
             if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(isEliteWatchlistOpportunity ? 0.60 : 0.18, chance)) return;

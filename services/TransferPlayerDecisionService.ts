@@ -41,6 +41,23 @@ const getBaseMoveAcceptanceChance = (currentClub: Club, targetClub: Club): numbe
   return clamp(0.60 * Math.pow(0.82, reputationDrop - 5), 0.02, 0.60);
 };
 
+const getPlayerLoyalty = (player: Player): number =>
+  clamp(Math.round(player.lojalnosc ?? 50), 1, 99);
+
+const isLoyaltySoftenedForTransfer = (player: Player): boolean =>
+  !!player.isOnTransferList || !player.squadRole;
+
+const isMajorReputationStepUp = (currentClub: Club, targetClub: Club): boolean =>
+  targetClub.reputation >= currentClub.reputation + 5;
+
+const getLoyaltyResistance = (player: Player, currentClub: Club, targetClub: Club): number => {
+  if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub)) {
+    return 0;
+  }
+
+  return clamp((getPlayerLoyalty(player) - 50) / 49, 0, 1);
+};
+
 const roleScore = (role: SquadRole): number => {
   switch (role) {
     case 'STAR':
@@ -125,6 +142,18 @@ export const TransferPlayerDecisionService = {
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
+    const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
+
+    if (getPlayerLoyalty(player) >= 88 && loyaltyResistance >= 0.72 && daysLeft > PRE_CONTRACT_PRIORITY_DAYS) {
+      return {
+        willingToTalk: false,
+        reason: 'Moj klient jest mocno zwiazany z obecnym klubem i nie traktuje tego transferu jako realnej mozliwosci. Rozmowy moglyby miec sens tylko przy jasnym sygnale ze strony klubu albo przy wyraznym awansie sportowym.',
+        targetRole,
+        desiredSalary: roundMoney(currentSalaryBase * 1.25),
+        desiredBonus: roundMoney(currentSalaryBase * 0.75),
+        desiredYears: 3
+      };
+    }
 
     let desiredYears = 3;
     if (player.age <= 22) desiredYears = 5;
@@ -148,6 +177,7 @@ export const TransferPlayerDecisionService = {
     if (isNotFirstTeamPlayer) salaryMultiplier -= 0.06;
     if (targetRoleLevel > currentRoleLevel) salaryMultiplier -= 0.06;
     if (targetRoleLevel < currentRoleLevel) salaryMultiplier += 0.10;
+    salaryMultiplier += loyaltyResistance * 0.14;
     salaryMultiplier += ageMovePremium * 0.45;
     salaryMultiplier *= managerInfluence.expectationMultiplier;
 
@@ -159,6 +189,7 @@ export const TransferPlayerDecisionService = {
     if (reputationDrop > 0) bonusMultiplier += Math.min(0.45, reputationDrop * 0.07);
     else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.14;
     else if (reputationDelta === 0) bonusMultiplier += 0.08;
+    bonusMultiplier += loyaltyResistance * 0.18;
     bonusMultiplier += ageMovePremium;
     bonusMultiplier *= managerInfluence.expectationMultiplier;
 
@@ -224,6 +255,7 @@ export const TransferPlayerDecisionService = {
       !!targetClub.country &&
       currentClub.country !== targetClub.country;
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
 
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;
@@ -283,6 +315,7 @@ export const TransferPlayerDecisionService = {
     const contractBreakdownPressure =
       player.isNegotiationPermanentBlocked && daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS ? 24 : 0;
     const transferListPressure = player.isOnTransferList ? 10 : 0;
+    const loyaltyStayBonus = Math.round(loyaltyResistance * 24);
     const reputationScore = reputationDelta > 0 ? Math.min(22, reputationDelta * 7) : 0;
     const foreignBonus = reputationDelta === 0 && isForeignMove ? 6 : 0;
 
@@ -298,6 +331,7 @@ export const TransferPlayerDecisionService = {
       currentClub.reputation * 7 +
       roleScore(currentRole) +
       ageStayScore +
+      loyaltyStayBonus +
       Math.min(16, Math.round(currentSalaryBase / 110_000)) +
       salarySatisfactionBonus -
       contractPressure -
@@ -355,7 +389,8 @@ export const TransferPlayerDecisionService = {
     const situationChanceAdjustment =
       (player.isOnTransferList ? 0.08 : 0) +
       (contractPressure > 0 ? 0.04 : 0) +
-      (contractBreakdownPressure > 0 ? 0.12 : 0);
+      (contractBreakdownPressure > 0 ? 0.12 : 0) -
+      loyaltyResistance * 0.34;
     const finalAcceptanceChance = clamp(
       getBaseMoveAcceptanceChance(currentClub, targetClub) +
         roleChanceAdjustment +
@@ -367,7 +402,9 @@ export const TransferPlayerDecisionService = {
     );
 
     if (Math.random() > finalAcceptanceChance) {
-      const reason = reputationDrop > 0
+      const reason = loyaltyResistance >= 0.45
+        ? 'Zawodnik docenia oferte, ale jego przywiazanie do obecnego klubu przewazylo. Bez statusu zawodnika przeznaczonego do odejscia lub bardzo duzego kroku sportowego nie chce zmieniac klubu.'
+        : reputationDrop > 0
         ? 'Zawodnik byl gotow rozmawiac, ale po analizie uznal, ze spadek reputacji klubu jest dla niego zbyt duzym ryzykiem sportowym przy tej ofercie.'
         : 'Zawodnik byl blisko akceptacji, ale po namysle uznal, ze pozostanie w obecnym klubie jest dla niego minimalnie lepszym wyborem.';
 

@@ -513,6 +513,31 @@ export const IncomingTransferService = {
     });
   },
 
+  getPlayerLoyalty(player: Player): number {
+    return Math.max(1, Math.min(99, Math.round(player.lojalnosc ?? 50)));
+  },
+
+  isTransferLoyaltySoftened(player: Player): boolean {
+    return !!player.isOnTransferList || !player.squadRole;
+  },
+
+  isMajorReputationStepUp(buyerClub: Club, sellerClub: Club): boolean {
+    return buyerClub.reputation >= sellerClub.reputation + 5;
+  },
+
+  getTransferLoyaltyInterestMultiplier(player: Player, buyerClub: Club, sellerClub: Club): number {
+    if (
+      IncomingTransferService.isTransferLoyaltySoftened(player) ||
+      IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)
+    ) {
+      return 1;
+    }
+
+    const loyalty = IncomingTransferService.getPlayerLoyalty(player);
+    const resistance = Math.max(0, (loyalty - 55) / 44);
+    return Math.max(0.16, 1 - resistance * 0.84);
+  },
+
   isProtectedFromLowerReputationBuyer(
     player: Player,
     buyerClub: Club,
@@ -668,6 +693,7 @@ export const IncomingTransferService = {
     let source: 'SHORTLIST' | 'SPONTANEOUS' | null = null;
 
     prob *= IncomingTransferService.getBuyerFitProbabilityMultiplier(player, buyerClub, buyerPlayers);
+    prob *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(player, buyerClub, sellerClub);
 
     if (player.isOnTransferList) prob *= 4.0;
     if (player.isUntouchable && !player.isOnTransferList) prob *= 0.18;
@@ -851,8 +877,19 @@ export const IncomingTransferService = {
     else acceptChance = 0.25;
 
     if (player.isOnTransferList) acceptChance += 0.15;
+    if (!player.squadRole) acceptChance += 0.08;
     const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
     if (daysLeft < 180) acceptChance += 0.10;
+
+    if (
+      !IncomingTransferService.isTransferLoyaltySoftened(player) &&
+      !IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)
+    ) {
+      const loyalty = IncomingTransferService.getPlayerLoyalty(player);
+      const loyaltyResistance = Math.max(0, (loyalty - 50) / 49);
+      acceptChance -= loyaltyResistance * 0.46;
+      if (loyalty >= 85) acceptChance *= 0.72;
+    }
 
     acceptChance = Math.min(0.95, Math.max(0.05, acceptChance));
     return rng < acceptChance ? 'accepted' : 'refused';
