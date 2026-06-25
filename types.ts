@@ -33,6 +33,7 @@ export enum ViewState {
   EDITOR = 'EDITOR',
   CONTRACT_MANAGEMENT = 'CONTRACT_MANAGEMENT',
   FREE_AGENT_NEGOTIATION = 'FREE_AGENT_NEGOTIATION',
+  MYSTERY_AGENT_NEGOTIATION = 'MYSTERY_AGENT_NEGOTIATION',
   TRANSFER_OFFER = 'TRANSFER_OFFER',
   TRANSFER_PLAYER_NEGOTIATION = 'TRANSFER_PLAYER_NEGOTIATION',
   INCOMING_OFFER = 'INCOMING_OFFER',
@@ -1388,6 +1389,8 @@ export interface Player {
   transferOfferBanUntil?: string | null;
   freeAgentLockoutUntil: string | null;
   freeAgentClubLockouts?: Record<string, string>;
+  mysteryAgentHiddenUntilScouted?: boolean;
+  mysteryAgentProspect?: boolean;
   assignedNationalTeamId?: string | null;
   /** Data ISO końca krótkiej odnowy po występie w reprezentacji. */
   nationalTeamRecoveryUntil?: string | null;
@@ -1419,6 +1422,52 @@ export interface Player {
   nationalSuspensionMatches?: number;
   reputacja?: number;
   lojalnosc?: number;
+}
+
+export interface MysteryAgentContractOffer {
+  signingFee: number;
+  salary: number;
+  years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+}
+
+export interface MysteryAgentOfferState {
+  id: string;
+  seasonNumber: number;
+  clubId: string;
+  createdDate: string;
+  player: Player;
+  hiddenOverallRating: number;
+  askingSigningFee: number;
+  askingSalary: number;
+  minimumSigningFee: number;
+  minimumSalary: number;
+  attemptsUsed: number;
+  maxAttempts: number;
+  status: 'ACTIVE' | 'AGREED' | 'FAILED';
+  boardRequestUsed: boolean;
+  boardApproved?: boolean;
+  boardSupportAmount?: number;
+  joinDate?: string;
+  agreedContract?: MysteryAgentContractOffer;
+  lastAgentMessage?: string;
+}
+
+export interface MysteryAgentNegotiationResult {
+  accepted: boolean;
+  ended: boolean;
+  message: string;
+  nextOffer?: MysteryAgentOfferState;
+}
+
+export interface MysteryAgentBoardRequestResult {
+  approved: boolean;
+  ended: boolean;
+  grantedAmount: number;
+  message: string;
+  nextOffer?: MysteryAgentOfferState;
 }
 
 export interface TeamStats {

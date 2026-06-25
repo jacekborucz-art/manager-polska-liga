@@ -36,6 +36,7 @@ import { CoachCard } from './components/views/CoachCard';
 import { EditorView } from './components/views/EditorView';
 import { ContractManagementView } from './components/views/ContractManagementView';
 import { FreeAgentNegotiationView } from './components/views/FreeAgentNegotiationView';
+import { MysteryAgentNegotiationView } from './components/views/MysteryAgentNegotiationView';
 import { TransferOfferView } from './components/views/TransferOfferView';
 import { TransferPlayerNegotiationView } from './components/views/TransferPlayerNegotiationView';
 import { IncomingOfferView } from './components/views/IncomingOfferView';
@@ -409,6 +410,8 @@ case ViewState.POLISH_CUP_BRACKET:
    
       case ViewState.FREE_AGENT_NEGOTIATION:
         return <FreeAgentNegotiationView />;
+      case ViewState.MYSTERY_AGENT_NEGOTIATION:
+        return <MysteryAgentNegotiationView />;
       case ViewState.TRANSFER_OFFER:
         return <TransferOfferView />;
       case ViewState.TRANSFER_PLAYER_NEGOTIATION:

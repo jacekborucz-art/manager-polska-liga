@@ -72,11 +72,21 @@ export const JobMarketView: React.FC = () => {
       const sourceClub = player.clubId === 'FREE_AGENTS' ? null : clubById.get(player.clubId);
 
       if (player.clubId === 'FREE_AGENTS') {
+        const isScoutedMysteryPlayer =
+          PlayerMarketVisibilityService.isMysteryAgentHidden(player) &&
+          PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions);
+        if (PlayerMarketVisibilityService.isMysteryAgentHidden(player) && !isScoutedMysteryPlayer) {
+          return;
+        }
+
         if (
           PlayerMarketVisibilityService.isEuropeanRegion(player.nationality) ||
           PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions)
         ) {
-          visibleByDefault.push(player);
+          visibleByDefault.push({
+            ...player,
+            mysteryAgentHiddenUntilScouted: isScoutedMysteryPlayer ? false : player.mysteryAgentHiddenUntilScouted,
+          });
         } else if (PlayerMarketVisibilityService.isNonEuropeanRegion(player.nationality)) {
           nonEuropeanFreeAgents.push(player);
         }

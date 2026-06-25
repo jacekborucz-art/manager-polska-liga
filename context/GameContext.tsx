@@ -48,6 +48,10 @@ StaffRole,
 BoardClubRequestType,
 AiFriendlyPair,
 AiFriendlyMatchReport,
+MysteryAgentOfferState,
+MysteryAgentContractOffer,
+MysteryAgentNegotiationResult,
+MysteryAgentBoardRequestResult,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { AiFriendlyGeneratorService } from '../services/AiFriendlyGeneratorService';
@@ -126,6 +130,7 @@ import { PlayerCareerService } from '../services/PlayerCareerService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
 import { PlayerMarketVisibilityService } from '../services/PlayerMarketVisibilityService';
+import { MysteryAgentService } from '../services/MysteryAgentService';
 import { SAVE_VERSION, SaveState, migrateWelcomeMailSignatories } from '../services/SaveGameService';
 import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
 import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
@@ -984,6 +989,10 @@ finalizeFreeAgentContract: (mailId: string) => void;
   scoutMarketRefreshDate: string;
   scoutMarketManualRefreshCount: number;
   scoutMarketPeriodStart: string;
+  mysteryAgentOffer: MysteryAgentOfferState | null;
+  submitMysteryAgentOffer: (contract: MysteryAgentContractOffer) => MysteryAgentNegotiationResult;
+  requestMysteryAgentBoardFunds: (contract: MysteryAgentContractOffer) => MysteryAgentBoardRequestResult;
+  declineMysteryAgentOffer: () => void;
   applyWeeklyMotivation: (moraleDelta: number) => void;
   completedPressConferenceFixtureIds: string[];
   pressConferenceEffects: Record<string, PressConferenceMatchEffect>;
@@ -1038,11 +1047,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reserveFixtures, setReserveFixtures] = useState<ReserveFixture[]>([]);
   const [reserveMatchResults, setReserveMatchResults] = useState<ReserveMatchResult[]>([]);
   const [academy, setAcademy] = useState<ClubAcademy | null>(null);
-  const [scoutPool, setScoutPool] = useState<Scout[]>([]);
-  const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
-  const [scoutMarketRefreshDate, setScoutMarketRefreshDate] = useState<string>('');
-  const [scoutMarketManualRefreshCount, setScoutMarketManualRefreshCount] = useState<number>(0);
-  const [scoutMarketPeriodStart, setScoutMarketPeriodStart] = useState<string>('');
+ const [scoutPool, setScoutPool] = useState<Scout[]>([]);
+ const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
+ const [scoutMarketRefreshDate, setScoutMarketRefreshDate] = useState<string>('');
+ const [scoutMarketManualRefreshCount, setScoutMarketManualRefreshCount] = useState<number>(0);
+ const [scoutMarketPeriodStart, setScoutMarketPeriodStart] = useState<string>('');
+  const [mysteryAgentOffer, setMysteryAgentOffer] = useState<MysteryAgentOfferState | null>(null);
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
@@ -2697,6 +2707,7 @@ if (userTeamId) {
     scoutMarketRefreshDate,
     scoutMarketManualRefreshCount,
     scoutMarketPeriodStart,
+    mysteryAgentOffer,
     lineups,
     userTeamId,
     seasonTemplate,
@@ -2804,6 +2815,7 @@ if (userTeamId) {
     setScoutMarketRefreshDate(data.scoutMarketRefreshDate);
     setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
     setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
+    setMysteryAgentOffer(data.mysteryAgentOffer ?? null);
     setLineups(data.lineups);
     setUserTeamId(data.userTeamId);
     setSeasonTemplate(data.seasonTemplate);
@@ -4417,6 +4429,212 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     () => scoutPool.filter(s => s.employedByClubId === userTeamId),
     [scoutPool, userTeamId]
   );
+
+  const addMysteryAgentPlayerToHiddenPool = useCallback((offer: MysteryAgentOfferState) => {
+    setPlayers(prev => {
+      const freeAgents = prev['FREE_AGENTS'] || [];
+      if (freeAgents.some(player => player.id === offer.player.id)) return prev;
+
+      const hiddenPlayer: Player = {
+        ...offer.player,
+        clubId: 'FREE_AGENTS',
+        annualSalary: 0,
+        contractEndDate: offer.createdDate,
+        mysteryAgentHiddenUntilScouted: true,
+        mysteryAgentProspect: true,
+      };
+
+      return {
+        ...prev,
+        FREE_AGENTS: [hiddenPlayer, ...freeAgents],
+      };
+    });
+  }, []);
+
+  const submitMysteryAgentOffer = useCallback((contract: MysteryAgentContractOffer): MysteryAgentNegotiationResult => {
+    if (!mysteryAgentOffer || !userTeamId) {
+      return { accepted: false, ended: true, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+    }
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) {
+      return { accepted: false, ended: true, message: 'Nie znaleziono klubu gracza.' };
+    }
+
+    const availableBudget = userClub.transferBudget + (mysteryAgentOffer.boardSupportAmount ?? 0);
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    if (totalCost > availableBudget) {
+      return {
+        accepted: false,
+        ended: false,
+        message: `Pakiet kosztuje ${totalCost.toLocaleString('pl-PL')} PLN, a dostępny budżet to ${availableBudget.toLocaleString('pl-PL')} PLN.`,
+        nextOffer: mysteryAgentOffer,
+      };
+    }
+
+    const result = MysteryAgentService.evaluateOffer(mysteryAgentOffer, contract, currentDate);
+    if (result.nextOffer) {
+      setMysteryAgentOffer(result.nextOffer);
+      if (result.nextOffer.status === 'FAILED') {
+        addMysteryAgentPlayerToHiddenPool(result.nextOffer);
+      }
+    }
+
+    return result;
+  }, [addMysteryAgentPlayerToHiddenPool, clubs, currentDate, mysteryAgentOffer, userTeamId]);
+
+  const requestMysteryAgentBoardFunds = useCallback((contract: MysteryAgentContractOffer): MysteryAgentBoardRequestResult => {
+    if (!mysteryAgentOffer || !userTeamId) {
+      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+    }
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const userSquad = players[userTeamId] || [];
+    if (!userClub) {
+      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie znaleziono klubu gracza.' };
+    }
+
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    const shortfall = Math.max(0, totalCost - userClub.transferBudget);
+    if (shortfall <= 0) {
+      return { approved: true, ended: false, grantedAmount: 0, message: 'Budżet klubu wystarcza na tę ofertę.', nextOffer: mysteryAgentOffer };
+    }
+
+    const result = MysteryAgentService.evaluateBoardRequest(mysteryAgentOffer, userClub, userSquad, shortfall);
+    setClubs(prev => prev.map(c => c.id === userTeamId
+      ? { ...c, boardBudgetRequestsThisSeason: (c.boardBudgetRequestsThisSeason ?? 0) + 1 }
+      : c
+    ));
+    if (result.nextOffer) {
+      setMysteryAgentOffer(result.nextOffer);
+      if (result.nextOffer.status === 'FAILED') {
+        addMysteryAgentPlayerToHiddenPool(result.nextOffer);
+      }
+    }
+
+    return result;
+  }, [addMysteryAgentPlayerToHiddenPool, clubs, mysteryAgentOffer, players, userTeamId]);
+
+  const declineMysteryAgentOffer = useCallback(() => {
+    if (!mysteryAgentOffer) return;
+    const failedOffer: MysteryAgentOfferState = {
+      ...mysteryAgentOffer,
+      status: 'FAILED',
+      lastAgentMessage: 'Klub nie podjął rozmów. Zawodnik trafia do ukrytej puli skautingu.',
+    };
+    setMysteryAgentOffer(failedOffer);
+    addMysteryAgentPlayerToHiddenPool(failedOffer);
+    navigateTo(ViewState.DASHBOARD);
+  }, [addMysteryAgentPlayerToHiddenPool, mysteryAgentOffer, navigateTo]);
+
+  useEffect(() => {
+    if (!userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    if (!MysteryAgentService.shouldTriggerOffer({
+      currentDate,
+      seasonNumber,
+      userClubId: userTeamId,
+      existingOffer: mysteryAgentOffer,
+    })) return;
+
+    const userSquad = players[userTeamId] || [];
+    if (userSquad.length === 0) return;
+
+    const offer = MysteryAgentService.createOffer({
+      seasonNumber,
+      club: userClub,
+      squad: userSquad,
+      currentDate,
+    });
+    setMysteryAgentOffer(offer);
+    navigateTo(ViewState.MYSTERY_AGENT_NEGOTIATION);
+  }, [clubs, currentDate, mysteryAgentOffer, navigateTo, players, seasonNumber, userTeamId]);
+
+  useEffect(() => {
+    if (!mysteryAgentOffer || mysteryAgentOffer.status !== 'AGREED' || !mysteryAgentOffer.joinDate || !mysteryAgentOffer.agreedContract) return;
+    if (!userTeamId || userTeamId !== mysteryAgentOffer.clubId) return;
+
+    const today = currentDate.toISOString().split('T')[0];
+    if (today < mysteryAgentOffer.joinDate) return;
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const contract = mysteryAgentOffer.agreedContract;
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    const availableBudget = userClub.transferBudget + (mysteryAgentOffer.boardSupportAmount ?? 0);
+    if (totalCost > availableBudget) return;
+
+    const player = mysteryAgentOffer.player;
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const updatedHistory = PlayerCareerService.movePlayer(
+      player,
+      { clubName: userClub.name, clubId: userTeamId },
+      currentYear,
+      currentMonth
+    );
+    const contractEnd = new Date(currentDate);
+    contractEnd.setFullYear(contractEnd.getFullYear() + contract.years);
+
+    const signedPlayer: Player = {
+      ...PlayerMoraleService.applyContractSigningMindflowReset(
+        PlayerCareerService.resetClubStatsForNewEntry(player),
+        currentDate
+      ),
+      clubId: userTeamId,
+      annualSalary: contract.salary,
+      contractEndDate: contractEnd.toISOString().split('T')[0],
+      goalBonus: contract.goalBonus,
+      assistBonus: contract.assistBonus,
+      cleanSheetBonus: contract.cleanSheetBonus,
+      history: updatedHistory,
+      mysteryAgentHiddenUntilScouted: false,
+      mysteryAgentProspect: true,
+      freeAgentClubLockouts: {},
+    };
+
+    setPlayers(prev => {
+      const existingSquad = prev[userTeamId] || [];
+      if (existingSquad.some(existingPlayer => existingPlayer.id === signedPlayer.id)) return prev;
+      return {
+        ...prev,
+        [userTeamId]: [...existingSquad, signedPlayer],
+        FREE_AGENTS: (prev['FREE_AGENTS'] || []).filter(freeAgent => freeAgent.id !== signedPlayer.id),
+      };
+    });
+
+    setClubs(prev => prev.map(c => c.id === userTeamId ? {
+      ...c,
+      transferBudget: Math.max(0, c.transferBudget - totalCost),
+      budget: Math.max(0, c.budget - contract.signingFee),
+      financeHistory: [
+        {
+          id: `MYSTERY_AGENT_SIGNING_${signedPlayer.id}_${today}`,
+          date: today,
+          amount: -totalCost,
+          type: 'EXPENSE' as const,
+          description: `Tajemniczy agent: podpis ${signedPlayer.firstName} ${signedPlayer.lastName}`,
+          previousBalance: c.budget,
+        },
+        ...(c.financeHistory || []),
+      ].slice(0, 50),
+    } : c));
+
+    setMysteryAgentOffer(prev => prev ? {
+      ...prev,
+      status: 'FAILED',
+      lastAgentMessage: 'Zawodnik dołączył do klubu.',
+    } : prev);
+
+    showGameNotification({
+      title: 'Tajemniczy talent w klubie',
+      message: `${signedPlayer.firstName} ${signedPlayer.lastName} pojawił się w klubie i podpisał kontrakt.`,
+      tone: 'success',
+    });
+  }, [clubs, currentDate, mysteryAgentOffer, showGameNotification, userTeamId]);
 
   useEffect(() => {
     if (!userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID) return;
@@ -15419,6 +15637,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
+    mysteryAgentOffer, submitMysteryAgentOffer, requestMysteryAgentBoardFunds, declineMysteryAgentOffer,
     pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
     pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, resolvePlayerTransferRequestDialog,
     pendingOpenTransferListObjection, setPendingOpenTransferListObjection, resolvePlayerTransferListObjection,

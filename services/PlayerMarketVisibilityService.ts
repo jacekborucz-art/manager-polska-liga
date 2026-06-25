@@ -126,6 +126,10 @@ export const PlayerMarketVisibilityService = {
     return nonEuropeanFreeAgents.filter(player => !visibleSampleIds.has(player.id));
   },
 
+  isMysteryAgentHidden(player: Player): boolean {
+    return player.clubId === 'FREE_AGENTS' && player.mysteryAgentHiddenUntilScouted === true;
+  },
+
   selectAgentClientRecommendations(
     freeAgents: Player[],
     userSquad: Player[],

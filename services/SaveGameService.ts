@@ -22,6 +22,7 @@ export interface SaveState {
   scoutMarketRefreshDate: string;
   scoutMarketManualRefreshCount: number;
   scoutMarketPeriodStart: string;
+  mysteryAgentOffer?: any;
   lineups: Record<string, any>;
   userTeamId: string | null;
   seasonTemplate: any;
@@ -491,6 +492,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     scoutMarketRefreshDate: asDateOnlyString(data.scoutMarketRefreshDate),
     scoutMarketManualRefreshCount: data.scoutMarketManualRefreshCount ?? 0,
     scoutMarketPeriodStart: asDateOnlyString(data.scoutMarketPeriodStart),
+    mysteryAgentOffer: data.mysteryAgentOffer ?? null,
     lineups: asRecord(data.lineups),
     seasonTemplate: normalizeSeasonTemplate(data.seasonTemplate),
     leagueSchedules: normalizeLeagueSchedules(data.leagueSchedules),
