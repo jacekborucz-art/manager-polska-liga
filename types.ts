@@ -4,6 +4,7 @@ export enum ViewState {
   MANAGER_CREATION = 'MANAGER_CREATION',
   TEAM_SELECTION = 'TEAM_SELECTION',
   SQUAD_IMPORT = 'SQUAD_IMPORT',
+  PREGAME_DATAPACK_EDITOR = 'PREGAME_DATAPACK_EDITOR',
   DASHBOARD = 'DASHBOARD',
   LEAGUE_TABLES = 'LEAGUE_TABLES',
   LEAGUE_STATS = 'LEAGUE_STATS',
@@ -1893,6 +1894,7 @@ export interface NationalTeam {
   id: string;
   name: string;
   continent: string;
+  capital?: string;
   tier: number;
   colorsHex: string[];
   kits?: ClubKit[];

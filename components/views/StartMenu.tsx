@@ -155,7 +155,7 @@ export const StartMenu: React.FC = () => {
       
 
         {/* Action Menu */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 w-full max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5 w-full max-w-7xl mx-auto">
                                                                       
           
           <button 
@@ -182,6 +182,20 @@ export const StartMenu: React.FC = () => {
                 <div className="text-center">
                   <span className="block text-[10px] font-black text-blue-500 group-hover:text-blue-100 uppercase tracking-widest mb-1">GUIDE</span>
                   <span className="text-2xl font-black text-white italic uppercase tracking-tighter">INSTRUKCJA</span>
+                </div>
+             </div>
+          </button>
+
+          <button
+            onClick={() => navigateTo(ViewState.PREGAME_DATAPACK_EDITOR)}
+            className="group relative h-48 bg-yellow-600/10 border border-yellow-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-yellow-600 hover:border-yellow-300 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(234,179,8,0.5)] overflow-hidden"
+          >
+             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+             <div className="relative z-10 flex flex-col h-full items-center justify-between">
+                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">DB</span>
+                <div className="text-center">
+                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-yellow-400 group-hover:text-yellow-100 mb-1">BAZA GRY</span>
+                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">EDYTOR</span>
                 </div>
              </div>
           </button>

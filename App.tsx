@@ -4,6 +4,7 @@ import { CompetitionType, MatchStatus, ViewState } from './types';
 import { StartMenu } from './components/views/StartMenu';
 import { TeamSelection } from './components/views/TeamSelection';
 import { SquadImportView } from './components/views/SquadImportView';
+import { PreGameDatapackEditorView } from './components/views/PreGameDatapackEditorView';
 import { Dashboard } from './components/views/Dashboard';
 import { LeagueTables } from './components/views/LeagueTables';
 import { MatchView } from './components/views/MatchView';
@@ -344,6 +345,8 @@ case ViewState.POLISH_CUP_BRACKET:
         return <TeamSelection />;
       case ViewState.SQUAD_IMPORT:
         return <SquadImportView />;
+      case ViewState.PREGAME_DATAPACK_EDITOR:
+        return <PreGameDatapackEditorView />;
       case ViewState.GAME_MANUAL:
         return <GameManual />;
       case ViewState.TRAINING_VIEW:

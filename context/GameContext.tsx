@@ -815,7 +815,7 @@ interface GameContextType {
   startNewGame: (careerStartYear?: number, options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }) => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
-  importEditorFullPack: (data: unknown) => { success: boolean; message: string };
+  importEditorFullPack: (data: unknown, options?: { nextView?: ViewState }) => { success: boolean; message: string };
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   advanceDay: () => void;
@@ -2878,7 +2878,7 @@ if (userTeamId) {
     setViewState(ViewState.DASHBOARD);
   };
 
-  const importEditorFullPack = (data: unknown): { success: boolean; message: string } => {
+  const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState }): { success: boolean; message: string } => {
     const raw = data as any;
     if (!raw || raw.type !== 'editor_full_pack' || !Array.isArray(raw.clubs)) {
       return { success: false, message: 'Wybrany plik nie jest paczką full pack edytora.' };
@@ -3050,6 +3050,7 @@ if (userTeamId) {
             ...(baseTeam ?? {}),
             ...entry,
             id: teamId || entry.name,
+            capital: entry.capital ?? entry.capitalCity ?? baseTeam?.capital ?? '',
             kits: Array.isArray(entry.kits) ? entry.kits : baseTeam?.kits,
           } as NationalTeam;
         }).filter((team: NationalTeam) => !!team.id)
@@ -3144,7 +3145,7 @@ if (userTeamId) {
       SuperCupService.generateFixture(2025, finalClubs),
       UEFASuperCupService.generateFixture(2025, finalClubs),
     ]);
-    navigateTo(ViewState.MANAGER_CREATION);
+    navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
 
     return {
       success: true,
