@@ -13,6 +13,8 @@ import { PlayerTransferMindflowModal } from '../modals/PlayerTransferMindflowMod
 // Serwis: PlayerTransferRequestDialogService | Handler: resolvePlayerTransferRequestDialog
 import { PlayerTransferRequestModal } from '../modals/PlayerTransferRequestModal';
 import { TransferRequestDialogResult } from '../../services/PlayerTransferRequestDialogService';
+import { PlayerTransferListObjectionModal } from '../modals/PlayerTransferListObjectionModal';
+import { PlayerTransferListObjectionResult } from '../../services/PlayerTransferListObjectionService';
 
 const COUNTRY_FLAG_CODES: Record<string, string> = {
   Albania: 'AL', Andora: 'AD', Armenia: 'AM', Austria: 'AT', Azerbejdżan: 'AZ',
@@ -131,7 +133,7 @@ const getCountryFlagCode = (country: string, region: Region): string | null => {
 };
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, submitLoanOffer, sessionSeed } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, resolvePlayerTransferListObjection, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, pendingOpenTransferListObjection, setPendingOpenTransferListObjection, submitLoanOffer, sessionSeed } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -150,6 +152,7 @@ export const PlayerCard: React.FC = () => {
   // lub przez MailDetailsModal (przycisk "Porozmawiaj").
   // Serwis: PlayerTransferRequestDialogService
   const [isTransferRequestDialogOpen, setIsTransferRequestDialogOpen] = useState(false);
+  const [isTransferListObjectionOpen, setIsTransferListObjectionOpen] = useState(false);
   useEffect(() => {
     if (pendingOpenTalk) {
       setIsTalkPanelOpen(true);
@@ -169,6 +172,12 @@ export const PlayerCard: React.FC = () => {
       setPendingOpenTransferRequestDialog(false);
     }
   }, [pendingOpenTransferRequestDialog]);
+  useEffect(() => {
+    if (pendingOpenTransferListObjection) {
+      setIsTransferListObjectionOpen(true);
+      setPendingOpenTransferListObjection(false);
+    }
+  }, [pendingOpenTransferListObjection]);
   const button3DStyle: React.CSSProperties = {
     boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
   };
@@ -1641,6 +1650,16 @@ export const PlayerCard: React.FC = () => {
           sessionSeed={sessionSeed}
           onResolve={(result: TransferRequestDialogResult) => resolvePlayerTransferRequestDialog(player.id, result)}
           onClose={() => setIsTransferRequestDialogOpen(false)}
+        />
+      )}
+
+      {isTransferListObjectionOpen && (
+        <PlayerTransferListObjectionModal
+          player={playerMorale}
+          currentDate={currentDate}
+          sessionSeed={sessionSeed}
+          onResolve={(result: PlayerTransferListObjectionResult) => resolvePlayerTransferListObjection(player.id, result)}
+          onClose={() => setIsTransferListObjectionOpen(false)}
         />
       )}
 

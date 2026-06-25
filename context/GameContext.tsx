@@ -138,6 +138,7 @@ import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowService';
 import { PlayerTransferConversationResult } from '../services/PlayerTransferMindflowService';
+import { PlayerTransferListObjectionResult } from '../services/PlayerTransferListObjectionService';
 // ── Transfer Request Dialog ──────────────────────────────────────────────────
 // 4 ścieżki rozmowy po prośbie o listę transferową (A/B/C/D).
 // Modal: PlayerTransferRequestModal | Serwis: PlayerTransferRequestDialogService
@@ -994,6 +995,9 @@ finalizeFreeAgentContract: (mailId: string) => void;
   resolvePlayerTransferRequestDialog: (playerId: string, result: TransferRequestDialogResult) => void;
   pendingOpenTransferRequestDialog: boolean;
   setPendingOpenTransferRequestDialog: (v: boolean) => void;
+  resolvePlayerTransferListObjection: (playerId: string, result: PlayerTransferListObjectionResult) => void;
+  pendingOpenTransferListObjection: boolean;
+  setPendingOpenTransferListObjection: (v: boolean) => void;
   fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
   extendStaffContract: (staffId: string, years: number) => void;
   negotiateStaffContract: (staffId: string, newSalary: number, years: number) => void;
@@ -1079,6 +1083,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
  const [pendingOpenRoleMindflow, setPendingOpenRoleMindflow] = useState(false);
  // Flaga otwierająca PlayerTransferRequestModal przez PlayerCard po nawigacji z maila
  const [pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog] = useState(false);
+ const [pendingOpenTransferListObjection, setPendingOpenTransferListObjection] = useState(false);
  const [completedPressConferenceFixtureIds, setCompletedPressConferenceFixtureIds] = useState<string[]>([]);
  const [pressConferenceEffects, setPressConferenceEffects] = useState<Record<string, PressConferenceMatchEffect>>({});
  const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
@@ -4630,6 +4635,37 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
         return result.outcome === 'ACCEPTED_PLAN'
           ? { ...nextPlayer, transferListDemandUntil: null }
           : nextPlayer;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  const resolvePlayerTransferListObjection = useCallback((playerId: string, result: PlayerTransferListObjectionResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        const moraleDelta = result.moraleToMinimum
+          ? -(player.morale ?? 50)
+          : result.moraleDelta;
+        const nextPlayer = PlayerMoraleService.withMoraleChange(
+          player,
+          moraleDelta,
+          result.outcome === 'CONVINCED'
+            ? 'Udana rozmowa po wystawieniu na listę transferową'
+            : result.outcome === 'IGNORED'
+              ? 'Trener przerwał rozmowę o wystawieniu na listę transferową'
+              : 'Nieudana rozmowa po wystawieniu na listę transferową',
+          currentDate
+        );
+
+        return {
+          ...nextPlayer,
+          isOnTransferList: result.removeFromTransferList ? false : nextPlayer.isOnTransferList,
+          transferListPrice: result.removeFromTransferList ? undefined : nextPlayer.transferListPrice,
+        };
       }),
     }));
   }, [currentDate, userTeamId]);
@@ -12134,6 +12170,7 @@ const finalResult: SimulationOutput = {
 
       const isAddingToTransferList = !player.isOnTransferList;
       let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+      let transferListObjectionMail: MailMessage | null = null;
       if (isAddingToTransferList) {
         const hasRequestedTransferList = !!moraleAdjustedPlayer.transferListDemandUntil;
         const hasRequestedDevelopmentExit = !!moraleAdjustedPlayer.developmentExitDemandUntil;
@@ -12163,6 +12200,35 @@ const finalResult: SimulationOutput = {
             'Wystawienie na listę transferową bez zgody zawodnika',
             currentDate
           );
+
+          const morale = moraleAdjustedPlayer.morale ?? 50;
+          const loyalty = Math.max(1, Math.min(99, moraleAdjustedPlayer.lojalnosc ?? 50));
+          const transferOpenness = moraleAdjustedPlayer.playerMindset?.transferOpenness ?? 50;
+          const objectionChance = Math.max(0.08, Math.min(0.70,
+            0.18 + (loyalty / 99) * 0.35 + (morale / 100) * 0.25 - (transferOpenness / 100) * 0.25
+          ));
+
+          if (Math.random() < objectionChance) {
+            const responseDeadline = new Date(currentDate);
+            responseDeadline.setDate(responseDeadline.getDate() + 14);
+            const dateKey = currentDate.toISOString().split('T')[0];
+            transferListObjectionMail = {
+              id: `PLAYER_TRANSFER_LIST_OBJECTION_${player.id}_${dateKey}`,
+              date: currentDate.toISOString(),
+              type: MailType.SYSTEM,
+              subject: `Prośba o rozmowę po wystawieniu na listę: ${player.lastName}`,
+              sender: `${player.firstName} ${player.lastName}`,
+              role: 'Zawodnik',
+              body: `Trenerze,\n\nDowiedziałem się, że zostałem wystawiony na listę transferową. Nie prosiłem o odejście i chcę zostać w zespole, dlatego potrzebuję rozmowy i jasnego wyjaśnienia tej decyzji.\n\nChcę wiedzieć, czy nadal mam miejsce w planie drużyny i czy mogę jeszcze przekonać sztab swoją pracą. Taka decyzja bez rozmowy jest dla mnie bardzo trudna do zaakceptowania.\n\n${player.firstName} ${player.lastName}`,
+              isRead: false,
+              metadata: {
+                type: 'PLAYER_MORALE_REQUEST',
+                playerId: player.id,
+                requestType: 'TRANSFER_LIST_OBJECTION',
+                responseDeadline: responseDeadline.toISOString(),
+              },
+            };
+          }
         }
       }
 
@@ -12182,6 +12248,10 @@ const finalResult: SimulationOutput = {
         isAvailableForLoan: isAddingToTransferList ? false : player.isAvailableForLoan,
         transferListPrice: !player.isOnTransferList ? price : undefined
       });
+
+      if (transferListObjectionMail) {
+        prependUniqueMessages([transferListObjectionMail]);
+      }
     }
   };
 
@@ -15151,6 +15221,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
     pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, resolvePlayerTransferRequestDialog,
+    pendingOpenTransferListObjection, setPendingOpenTransferListObjection, resolvePlayerTransferListObjection,
     applyWeeklyMotivation, completedPressConferenceFixtureIds, pressConferenceEffects, completePreMatchPressConference, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
     winterCampInvitePending, winterCampProgramPending,
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,

@@ -444,7 +444,7 @@ export interface MailMessage {
   } | {
     type: 'PLAYER_MORALE_REQUEST';
     playerId: string;
-    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'DEVELOPMENT_EXIT' | 'RAISE';
+    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'TRANSFER_LIST_OBJECTION' | 'DEVELOPMENT_EXIT' | 'RAISE';
     requestedRole?: 'STARTER' | 'KEY_PLAYER';
     requestedSalary?: number;
     requestedBonus?: number;

@@ -375,12 +375,15 @@ const pickSalaryRaisePct = (player: Player, seed: number): number => {
   const coachTrust = mindset?.coachTrust ?? 50;
   const transferOpenness = mindset?.transferOpenness ?? 50;
   const conflictLevel = mindset?.conflictLevel ?? 50;
+  const loyalty = Math.max(1, Math.min(99, player.lojalnosc ?? 50));
 
   // Waga rośnie dla wyższych % przy wysokim konflikcie/otwartości na transfer,
   // a maleje dla wyższych % przy wysokim zaufaniu do trenera.
   const weights = POSSIBLE_RAISES.map((_, i) => {
     let w = 1.0;
     if (coachTrust > 60) w += (POSSIBLE_RAISES.length - 1 - i) * 0.12; // preferuje niższe %
+    if (loyalty > 60) w += (POSSIBLE_RAISES.length - 1 - i) * 0.08;    // lojalny częściej wybiera niższą podwyżkę
+    if (loyalty < 40) w += i * 0.08;                                   // niska lojalność podbija żądania
     if (transferOpenness > 60) w += i * 0.15;  // preferuje wyższe %
     if (conflictLevel > 50) w += i * 0.10;     // preferuje wyższe %
     return Math.max(0.1, w);
@@ -421,6 +424,7 @@ const computePlayerReaction = (
   const conflictLevel = mindset?.conflictLevel ?? 50;
   const transferOpenness = mindset?.transferOpenness ?? 50;
   const morale = player.morale ?? 50;
+  const loyalty = Math.max(1, Math.min(99, player.lojalnosc ?? 50));
   const personality: PlayerMoralePersonality = player.moralePersonality ?? 'CALM';
 
   // Znormalizowany wynik dialogu [0, 1]
@@ -463,6 +467,10 @@ const computePlayerReaction = (
     EGOIST: -0.22,     // egoist jest najtrudniejszy
   };
   chance += personalityMods[personality] ?? 0;
+
+  // Modyfikator lojalności: 1 daje ok. -12%, 50 neutralnie, 99 ok. +12%.
+  // Działa niezależnie od osobowości LOYAL, bo to osobny liczbowy atrybut zawodnika.
+  chance += ((loyalty - 50) / 49) * 0.12;
 
   // Modyfikator morale — bardzo niskie morale prawie zawsze kończy się REFUSED
   if (morale < 20) chance -= 0.25;

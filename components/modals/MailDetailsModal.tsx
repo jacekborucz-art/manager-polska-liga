@@ -691,6 +691,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     // Flaga: PlayerCard wykrywa ją i otwiera PlayerTransferRequestModal.
     // Logika: PlayerTransferRequestDialogService | Handler: resolvePlayerTransferRequestDialog
     setPendingOpenTransferRequestDialog,
+    setPendingOpenTransferListObjection,
     setTransferNewsActiveTab,
     currentDate,
     clubs,
@@ -1021,6 +1022,9 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                     // ────────────────────────────────────────────────────────────────────
                     viewPlayerDetails(mail.metadata!.playerId);
                     setPendingOpenTransferRequestDialog(true);
+                  } else if (mail.metadata!.requestType === 'TRANSFER_LIST_OBJECTION') {
+                    viewPlayerDetails(mail.metadata!.playerId);
+                    setPendingOpenTransferListObjection(true);
                   } else {
                     viewPlayerDetails(mail.metadata!.playerId);
                     setPendingOpenRoleMindflow(mail.metadata!.requestType === 'ROLE' || mail.metadata!.requestType === 'ROLE_PLAYTIME');
@@ -1033,7 +1037,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                   ? 'Otwórz kontrakt'
                   : mail.metadata.requestType === 'ROLE' || mail.metadata.requestType === 'ROLE_PLAYTIME'
                     ? 'Otwórz rozmowę'
-                    : mail.metadata.requestType === 'TRANSFER_LIST'
+                    : mail.metadata.requestType === 'TRANSFER_LIST' || mail.metadata.requestType === 'TRANSFER_LIST_OBJECTION'
                       ? 'Porozmawiaj'
                       : 'Otwórz kartę'}
               </button>
