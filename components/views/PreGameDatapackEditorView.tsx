@@ -48,6 +48,7 @@ type ContractLookupVariant = {
 };
 
 const FREE_AGENTS_ID = 'FREE_AGENTS';
+const EDITOR_DATAPACK_IMPORTED_STORAGE_KEY = 'polish_league_editor_datapack_imported';
 
 const inputCls = 'bg-black/45 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-yellow-400 font-black italic uppercase tracking-tighter';
 const selectCls = `${inputCls} cursor-pointer`;
@@ -384,6 +385,9 @@ export const PreGameDatapackEditorView: React.FC = () => {
   const [nationalTeamQuery, setNationalTeamQuery] = useState('');
   const [contractLookupPlayerId, setContractLookupPlayerId] = useState<string>('');
   const [contractLookupVariants, setContractLookupVariants] = useState<ContractLookupVariant[]>([]);
+  const [hasImportedEditorDatapack, setHasImportedEditorDatapack] = useState(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem(EDITOR_DATAPACK_IMPORTED_STORAGE_KEY) === '1'
+  );
 
   const editableClubs = useMemo(
     () => clubs.filter(club => club.id !== 'UNEMPLOYED_MANAGER').sort((a, b) => a.name.localeCompare(b.name, 'pl')),
@@ -1213,6 +1217,10 @@ export const PreGameDatapackEditorView: React.FC = () => {
     if (!file) return;
     try {
       const result = importEditorFullPack(JSON.parse(await file.text()), { nextView: ViewState.PREGAME_DATAPACK_EDITOR });
+      if (result.success) {
+        window.localStorage.setItem(EDITOR_DATAPACK_IMPORTED_STORAGE_KEY, '1');
+        setHasImportedEditorDatapack(true);
+      }
       showGameNotification({
         title: result.success ? 'Datapack zaimportowany' : 'Błąd importu',
         message: result.message,
@@ -1311,6 +1319,24 @@ export const PreGameDatapackEditorView: React.FC = () => {
             <div className="max-w-6xl">
               <div className="text-[11px] text-emerald-400 mb-2">STRONA GŁÓWNA EDYTORA</div>
               <h1 className="text-5xl text-white leading-none mb-6">WYBIERZ CO CHCESZ ZMIENIĆ</h1>
+              {!hasImportedEditorDatapack && (
+                <div className="rounded-lg border border-red-500/40 bg-red-950/60 p-5 mb-6 shadow-lg shadow-red-950/20">
+                  <div className="flex items-start justify-between gap-5">
+                    <div>
+                      <div className="text-2xl text-red-200 font-black italic uppercase tracking-tighter">NAJPIERW WCZYTAJ DATAPACK</div>
+                      <div className="text-xs text-slate-200 mt-2 normal-case not-italic tracking-normal font-normal">
+                        Edytor działa na danych z datapacka. Jeśli wejdziesz dalej bez importu, baza może być pusta albo niepełna i nie będzie czego sensownie edytować.
+                      </div>
+                      <div className="text-[10px] text-red-100/80 mt-3">
+                        Wczytaj plik wyeksportowany ze starego lub nowego edytora, a dopiero potem edytuj kluby, zawodników, trenerów, sztab i reprezentacje.
+                      </div>
+                    </div>
+                    <button onClick={() => importRef.current?.click()} className="shrink-0 rounded bg-red-500 hover:bg-red-400 text-black px-5 py-3 text-xs font-black italic uppercase tracking-tighter">
+                      WCZYTAJ DATAPACK
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-4 mb-6">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <div>

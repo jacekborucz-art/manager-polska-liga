@@ -5,6 +5,9 @@ import { ViewState } from '../../types';
 import bgImg from '../../Graphic/themes/main_theme.png';
 import { importSaveFromFile } from '../../services/SaveGameService';
 import { useGameScaler } from '../GameScaler';
+
+const EDITOR_DATAPACK_IMPORTED_STORAGE_KEY = 'polish_league_editor_datapack_imported';
+
 export const StartMenu: React.FC = () => {
   const { startNewGame, navigateTo, loadGameFromFile, importEditorFullPack, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -48,6 +51,9 @@ export const StartMenu: React.FC = () => {
     try {
       const raw = JSON.parse(await file.text());
       const result = importEditorFullPack(raw);
+      if (result.success) {
+        window.localStorage.setItem(EDITOR_DATAPACK_IMPORTED_STORAGE_KEY, '1');
+      }
       showGameNotification({
         title: result.success ? 'Full pack zaimportowany' : 'Nieprawidłowy full pack',
         message: result.message,
