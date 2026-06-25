@@ -25,6 +25,16 @@ const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>):
 
 const clampAiMatchMoraleDelta = (delta: number): number => Math.max(-10, Math.min(10, delta));
 
+const getLossCrisisPenalty = (form: ('W' | 'R' | 'P')[], resultChar: 'W' | 'R' | 'P'): number => {
+  if (resultChar !== 'P') return 0;
+
+  const lossesInLastFive = form.filter(result => result === 'P').length;
+  if (lossesInLastFive >= 5) return -10;
+  if (lossesInLastFive >= 4) return -7;
+  if (lossesInLastFive >= 3) return -4;
+  return 0;
+};
+
 const applyAiMatchMoraleToClub = (
   playersMap: Record<string, Player[]>,
   clubId: string,
@@ -36,6 +46,7 @@ const applyAiMatchMoraleToClub = (
   resultChar: 'W' | 'R' | 'P',
   scoreDiff: number,
   coach: Coach,
+  recentForm: ('W' | 'R' | 'P')[] | undefined,
   currentDate: Date
 ): Record<string, Player[]> => {
   const squad = playersMap[clubId] || [];
@@ -44,6 +55,8 @@ const applyAiMatchMoraleToClub = (
   const playedIds = new Set(playedPlayerIds.filter(id => initialSquad.some(player => player.id === id)));
   const motivation = coach?.attributes?.motivation ?? 50;
   const motivationModifier = Math.max(-2, Math.min(2, Math.round((motivation - 50) / 25)));
+  const formAfterMatch = [...(recentForm || []), resultChar].slice(-5) as ('W' | 'R' | 'P')[];
+  const lossCrisisPenalty = getLossCrisisPenalty(formAfterMatch, resultChar);
   const baseDelta = resultChar === 'W'
     ? (scoreDiff >= 2 ? 5 : 3)
     : resultChar === 'P'
@@ -51,7 +64,7 @@ const applyAiMatchMoraleToClub = (
       : 0;
   const teamDelta = baseDelta === 0
     ? Math.round(motivationModifier * 0.35)
-    : baseDelta + motivationModifier;
+    : baseDelta + motivationModifier + lossCrisisPenalty;
 
   const nextSquad = squad.map(player => {
     const withMorale = PlayerMoraleService.ensurePlayerState(player);
@@ -506,13 +519,15 @@ if (todayFixtures.length === 0) {
           const _moraleDelta = resultChar === 'W' ? (_scoreDiff >= 2 ? 8 : 5) : resultChar === 'P' ? (_scoreDiff <= -3 ? -10 : -5) : 0;
           const _recentTwo = (c.stats.form || []).slice(-2);
           const _seriesBonus = (resultChar === 'W' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'W')) ? 3 : (resultChar === 'P' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'P')) ? -4 : 0;
+          const _lossCrisisPenalty = getLossCrisisPenalty(newForm, resultChar);
           const _clubCoach = c.id === home.id ? hCoach : aCoach;
           const _coachMotivation = _clubCoach?.attributes?.motivation ?? 50;
-          // im wyższa motywacja trenera tym mniejszy negatywny wpływ porażek (mot=0 → ×1.0, mot=50 → ×0.6, mot=100 → ×0.2)
-          const _motivationFactor = resultChar === 'P' ? (1.0 - (_coachMotivation / 100) * 0.8) : 1.0;
+          // Motywacja trenera amortyzuje porażki, ale nie może ukryć długiej serii przegranych.
+          const _motivationFactor = resultChar === 'P' ? Math.max(0.55, 1.0 - (_coachMotivation / 100) * 0.45) : 1.0;
           const _adjustedMoraleDelta = _moraleDelta < 0 ? Math.round(_moraleDelta * _motivationFactor) : _moraleDelta;
           const _adjustedSeriesBonus = _seriesBonus < 0 ? Math.round(_seriesBonus * _motivationFactor) : _seriesBonus;
-          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + (50 - (c.morale ?? 50)) * 0.05)));
+          const _adjustedLossCrisisPenalty = Math.round(_lossCrisisPenalty * _motivationFactor);
+          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + _adjustedLossCrisisPenalty + (50 - (c.morale ?? 50)) * 0.05)));
 
           const matchExpenses = isHome ? homeMatchExpenses : awayMatchExpenses;
           const { revenue: ticketRevenue, avgPrice: ticketAvgPrice } = isHome
@@ -698,6 +713,7 @@ if (todayFixtures.length === 0) {
         homeResultChar,
         result.homeScore - result.awayScore,
         hCoach as Coach,
+        home.stats.form,
         currentDate
       );
       currentPlayers = applyAiMatchMoraleToClub(
@@ -711,6 +727,7 @@ if (todayFixtures.length === 0) {
         awayResultChar,
         result.awayScore - result.homeScore,
         aCoach as Coach,
+        away.stats.form,
         currentDate
       );
 

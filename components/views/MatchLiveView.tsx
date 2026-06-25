@@ -3544,13 +3544,18 @@ return {
           const _moraleDelta = resultChar === 'W' ? (_scoreDiff >= 2 ? 8 : 5) : resultChar === 'P' ? (_scoreDiff <= -3 ? -10 : -5) : 0;
           const _recentTwo = (c.stats.form || []).slice(-2);
           const _seriesBonus = (resultChar === 'W' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'W')) ? 3 : (resultChar === 'P' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'P')) ? -4 : 0;
+          const _lossesInLastFive = newForm.filter(result => result === 'P').length;
+          const _lossCrisisPenalty = resultChar === 'P'
+            ? (_lossesInLastFive >= 5 ? -10 : _lossesInLastFive >= 4 ? -7 : _lossesInLastFive >= 3 ? -4 : 0)
+            : 0;
           const _clubCoach = coaches[c.coachId || ''];
           const _coachMotivation = _clubCoach?.attributes?.motivation ?? 50;
-          // im wyższa motywacja trenera tym mniejszy negatywny wpływ porażek (mot=0 → ×1.0, mot=50 → ×0.6, mot=100 → ×0.2)
-          const _motivationFactor = resultChar === 'P' ? (1.0 - (_coachMotivation / 100) * 0.8) : 1.0;
+          // Motywacja trenera amortyzuje porażki, ale nie może ukryć długiej serii przegranych.
+          const _motivationFactor = resultChar === 'P' ? Math.max(0.55, 1.0 - (_coachMotivation / 100) * 0.45) : 1.0;
           const _adjustedMoraleDelta = _moraleDelta < 0 ? Math.round(_moraleDelta * _motivationFactor) : _moraleDelta;
           const _adjustedSeriesBonus = _seriesBonus < 0 ? Math.round(_seriesBonus * _motivationFactor) : _seriesBonus;
-          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + (50 - (c.morale ?? 50)) * 0.05)));
+          const _adjustedLossCrisisPenalty = Math.round(_lossCrisisPenalty * _motivationFactor);
+          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + _adjustedLossCrisisPenalty + (50 - (c.morale ?? 50)) * 0.05)));
 
           // Tworzymy logi finansowe
           const financeLogsToAdd: any[] = [];
