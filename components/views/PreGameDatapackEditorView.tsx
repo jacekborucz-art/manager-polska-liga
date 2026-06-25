@@ -43,6 +43,7 @@ type ContractLookupVariant = {
   marketValue: number;
   confidence: number;
   note: string;
+  sourceText?: string;
 };
 
 const FREE_AGENTS_ID = 'FREE_AGENTS';
@@ -267,6 +268,65 @@ const toNumber = (value: string, fallback = 0) => Number.isFinite(Number(value))
 const dateInput = (value?: string | null) => value ? value.substring(0, 10) : '';
 const isoFromDateInput = (value: string) => value ? new Date(value).toISOString() : new Date().toISOString();
 const formatMoney = (value?: number | null) => `${Math.max(0, Math.round(value ?? 0)).toLocaleString('pl-PL')} PLN`;
+const EUR_TO_PLN_EDITOR_RATE = 4.3;
+
+const parseMoneyTokenToPln = (amountText: string, unitText?: string) => {
+  const amount = Number(amountText.replace(/\s/g, '').replace(',', '.'));
+  if (!Number.isFinite(amount)) return 0;
+  const unit = (unitText ?? '').toLowerCase();
+  const multiplier = unit === 'm' || unit.includes('million') || unit.includes('mln') || unit.includes('mil')
+    ? 1_000_000
+    : unit === 'k' || unit.includes('thousand') || unit.includes('tys')
+      ? 1_000
+      : 1;
+  return Math.round(amount * multiplier * EUR_TO_PLN_EDITOR_RATE);
+};
+
+const findMoneyInText = (text: string) => {
+  const euroPrefix = text.match(/(?:€|eur)\s*([\d\s.,]+)\s*(m|million|mil|mln|k|thousand|tys)?/i);
+  if (euroPrefix) return parseMoneyTokenToPln(euroPrefix[1], euroPrefix[2]);
+  const euroSuffix = text.match(/([\d\s.,]+)\s*(m|million|mil|mln|k|thousand|tys)?\s*(?:€|eur)/i);
+  if (euroSuffix) return parseMoneyTokenToPln(euroSuffix[1], euroSuffix[2]);
+  return 0;
+};
+
+const parseLookupDate = (text: string) => {
+  const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dotted = text.match(/\b(\d{1,2})[./-](\d{1,2})[./-](20\d{2})\b/);
+  if (dotted) return `${dotted[3]}-${dotted[2].padStart(2, '0')}-${dotted[1].padStart(2, '0')}`;
+  const monthNames: Record<string, string> = {
+    jan: '01', january: '01', sty: '01', styczen: '01', stycznia: '01',
+    feb: '02', february: '02', lut: '02', luty: '02', lutego: '02',
+    mar: '03', march: '03', marca: '03',
+    apr: '04', april: '04', kwi: '04', kwiecien: '04', kwietnia: '04',
+    may: '05', maj: '05', maja: '05',
+    jun: '06', june: '06', cze: '06', czerwiec: '06', czerwca: '06',
+    jul: '07', july: '07', lip: '07', lipiec: '07', lipca: '07',
+    aug: '08', august: '08', sie: '08', sierpien: '08', sierpnia: '08',
+    sep: '09', sept: '09', september: '09', wrz: '09', wrzesien: '09', wrzesnia: '09',
+    oct: '10', october: '10', paz: '10', paź: '10', pazdziernik: '10', październik: '10', pazdziernika: '10', października: '10',
+    nov: '11', november: '11', lis: '11', listopad: '11', listopada: '11',
+    dec: '12', december: '12', gru: '12', grudzien: '12', grudnia: '12',
+  };
+  const named = text.toLowerCase().match(/\b([a-ząćęłńóśźż]+)\.?\s+(\d{1,2}),?\s+(20\d{2})\b|\b(\d{1,2})\s+([a-ząćęłńóśźż]+)\.?\s+(20\d{2})\b/);
+  if (!named) return '';
+  const month = named[1] ? monthNames[named[1]] : monthNames[named[5]];
+  const day = named[2] ?? named[4];
+  const year = named[3] ?? named[6];
+  return month ? `${year}-${month}-${day.padStart(2, '0')}` : '';
+};
+
+const parseContractLookupText = (text: string) => {
+  const lower = text.toLowerCase();
+  const salaryContext = lower.match(/(?:salary|wage|pensja|zarobki|wynagrodzenie).{0,80}/i)?.[0] ?? '';
+  const valueContext = lower.match(/(?:market value|wartość rynkowa|wartosc rynkowa|value).{0,80}/i)?.[0] ?? text;
+  return {
+    contractEndDate: parseLookupDate(text),
+    annualSalary: salaryContext ? findMoneyInText(salaryContext) : 0,
+    marketValue: findMoneyInText(valueContext),
+  };
+};
 
 export const PreGameDatapackEditorView: React.FC = () => {
   const {
@@ -671,6 +731,23 @@ export const PreGameDatapackEditorView: React.FC = () => {
 
   const updateContractLookupVariant = (variantId: string, patch: Partial<ContractLookupVariant>) => {
     setContractLookupVariants(prev => prev.map(variant => variant.id === variantId ? { ...variant, ...patch } : variant));
+  };
+
+  const updateContractLookupSourceText = (variantId: string, sourceText: string) => {
+    const parsed = parseContractLookupText(sourceText);
+    setContractLookupVariants(prev => prev.map(variant => {
+      if (variant.id !== variantId) return variant;
+      return {
+        ...variant,
+        sourceText,
+        contractEndDate: parsed.contractEndDate || variant.contractEndDate,
+        annualSalary: parsed.annualSalary > 0 ? parsed.annualSalary : variant.annualSalary,
+        marketValue: parsed.marketValue > 0 ? parsed.marketValue : variant.marketValue,
+        note: parsed.contractEndDate || parsed.annualSalary > 0 || parsed.marketValue > 0
+          ? `Automatycznie odczytano z wklejonego tekstu. Kurs edytora: 1 EUR = ${EUR_TO_PLN_EDITOR_RATE.toFixed(2)} PLN.`
+          : variant.note,
+      };
+    }));
   };
 
   const applyContractLookupVariant = (player: Player, variant: ContractLookupVariant) => {
@@ -1964,6 +2041,15 @@ export const PreGameDatapackEditorView: React.FC = () => {
                   <label className="flex flex-col gap-1">
                     <span className={labelCls}>Źródło / opis</span>
                     <input value={variant.sourceName} onChange={event => updateContractLookupVariant(variant.id, { sourceName: event.target.value })} className={inputCls} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={labelCls}>Wklej tekst ze źródła</span>
+                    <textarea
+                      value={variant.sourceText ?? ''}
+                      onChange={event => updateContractLookupSourceText(variant.id, event.target.value)}
+                      placeholder="Np. Market value €2.50m albo Contract expires Jun 30, 2028"
+                      className={`${inputCls} min-h-16 normal-case not-italic tracking-normal font-normal`}
+                    />
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className={labelCls}>Kontrakt do</span>
