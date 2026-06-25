@@ -3,6 +3,7 @@ import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
 import { MediaInterviewService } from './MediaInterviewService';
+import { CoachService } from './CoachService';
 
 export interface SeasonSummaryData {
   year: number;
@@ -799,6 +800,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     userLineup?: Lineup,
     allFixtures?: Fixture[],
     managerName?: string,
+    managerExpPoints?: number,
     mediaRelationships: Record<string, number> = {},
     sentUnfriendlyPressMonths: string[] = [],
     sentFriendlyPressMonths: string[] = [],
@@ -1075,27 +1077,13 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     }
 
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
-    // Obliczenie gap wg tej samej logiki co CoachService.evaluatePerformance
     if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure) {
       const board = userClub.board;
       if (board) {
-        const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {
-          bardzo_wysoka: 3, wysoka: 6, przecietna: 12, niska: 15, bardzo_niska: 18,
-        };
-        const AMBICJA_OFFSET: Record<string, number> = {
-          bardzo_wysoka: -2, wysoka: -1, przecietna: 0, niska: 2, bardzo_niska: 4,
-        };
-        const MIN_MATCHES_PRESSURE: Record<string, number> = {
-          bardzo_wysoka: 22, wysoka: 17, przecietna: 13, niska: 9, bardzo_niska: 6,
-        };
-        const boardExpected  = EXPECTED_RANK_FROM_BOARD[board.oczekiwania];
-        const repExpected    = Math.max(1, 15 - userClub.reputation);
-        const baseExpected   = Math.max(boardExpected, repExpected);
-        const expectedRankW  = Math.max(1, baseExpected + AMBICJA_OFFSET[board.ambicja]);
-        const minMatchesPr   = MIN_MATCHES_PRESSURE[board.cierpliwosc];
-        const gap            = rank - expectedRankW;
+        const pressure = CoachService.getPerformancePressure(userClub, rank, managerExpPoints);
+        const gap = pressure.gap;
 
-        if (played >= minMatchesPr && gap > 0) {
+        if ((pressure.finalChance > 0 || pressure.earlyReviewAllowed) && gap > 0) {
           if (gap >= 7 || (rank >= 16 && userClub.reputation >= 7)) {
             newMails.push(createMail('board_pressure_critical', { 'CLUB': userClub.name }));
           } else if (gap >= 4) {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
-  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, MatchLiveState,
+  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity, IndividualTalkType,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
@@ -930,6 +930,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   selectedNTId: string | null;
   setSelectedNTId: React.Dispatch<React.SetStateAction<string | null>>;
   isResigned: boolean;
+  managerEmploymentStatus: ManagerEmploymentStatus;
   resignFromClub: () => void;
   gameNotification: GameNotificationState | null;
   showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => void;
@@ -1141,6 +1142,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [elHistoryInitialRound, setElHistoryInitialRound] = useState<string | null>(null);
   const [confHistoryInitialRound, setConfHistoryInitialRound] = useState<string | null>(null);
   const [isResigned, setIsResigned] = useState(false);
+  const [managerEmploymentStatus, setManagerEmploymentStatus] = useState<ManagerEmploymentStatus>('EMPLOYED');
   const [winterCampInvitePending, setWinterCampInvitePending] = useState(false);
   const [winterCampProgramPending, setWinterCampProgramPending] = useState(false);
   const [summerCampInvitePending, setSummerCampInvitePending] = useState(false);
@@ -1590,6 +1592,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const newRuntimeSimulationSeed = generateRuntimeSeed();
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
     setUserTeamId(null);
     setManagerProfile(options?.preserveManagerProfile ?? null);
     setLineups({});
@@ -2750,6 +2753,7 @@ if (userTeamId) {
     processedDrawIds,
     globalFixtures,
     isResigned,
+    managerEmploymentStatus,
     currentPolishChampionId,
     currentPolishCupWinnerId,
     currentCLWinnerId,
@@ -2856,6 +2860,7 @@ if (userTeamId) {
     setProcessedDrawIds(data.processedDrawIds);
     setGlobalFixtures(data.globalFixtures);
     setIsResigned(data.isResigned);
+    setManagerEmploymentStatus(data.managerEmploymentStatus ?? (data.isResigned ? 'RESIGNED' : 'EMPLOYED'));
     setCurrentPolishChampionId(data.currentPolishChampionId);
     setCurrentPolishCupWinnerId(data.currentPolishCupWinnerId);
     setCurrentCLWinnerId(data.currentCLWinnerId);
@@ -3068,6 +3073,7 @@ if (userTeamId) {
       : defaultNationalTeams;
 
     setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
     sentMailIdsRef.current = new Set();
@@ -3126,6 +3132,7 @@ if (userTeamId) {
     setConfHistoryInitialRound(null);
     setProcessedDrawIds([]);
     setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
     setWinterCampInvitePending(false);
     setWinterCampProgramPending(false);
     setSummerCampInvitePending(false);
@@ -3166,6 +3173,7 @@ if (userTeamId) {
 const selectUserTeam = (clubId: string) => {
     setUserTeamId(clubId);
     setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
     const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
     const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
@@ -3248,8 +3256,60 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     navigateTo(ViewState.SQUAD_IMPORT);
   };
 
+  const calculateManagerFiringExpPenalty = (profile: ManagerProfile | null, club: Club): number => {
+    const expPoints = Math.max(1, profile?.expPoints ?? 1);
+    if (expPoints <= 1) return 0;
+
+    const reputationPart = Math.max(3, Math.round((club.reputation ?? 5) * 1.1));
+    const experiencePart = Math.round(expPoints * 0.03);
+    return Math.min(expPoints - 1, Math.max(5, reputationPart + experiencePart));
+  };
+
+  const createManagerFiredMail = (club: Club, reason: string, rank: number, date: Date, expPenalty: number): MailMessage => ({
+    id: `MANAGER_FIRED_${club.id}_${date.getFullYear()}_${date.getMonth() + 1}_${date.getDate()}`,
+    sender: `Zarząd ${club.name}`,
+    role: 'Zarząd klubu',
+    subject: `Zwolnienie z funkcji trenera ${club.name}`,
+    body: `Po analizie wyników sportowych zarząd klubu ${club.name} podjął decyzję o zakończeniu współpracy. Aktualna pozycja w lidze: ${rank}. Powód: ${reason}\n\nKonsekwencja reputacyjna: ${expPenalty > 0 ? `-${expPenalty} punktów EXP.` : 'brak utraty EXP, ponieważ doświadczenie nie może spaść poniżej minimum.'}\n\nKlub natychmiast rozpoczyna pracę z nowym szkoleniowcem. Do czasu znalezienia kolejnego zatrudnienia pozostaje Pan bez klubu.`,
+    date,
+    isRead: false,
+    type: MailType.BOARD,
+    priority: 95,
+  });
+
+  const assignReplacementCoachToClub = (
+    updatedCoaches: Record<string, Coach>,
+    club: Club,
+    hireDate: Date,
+    excludedCoachId?: string
+  ): Coach | undefined => {
+    const replacement = CoachService.findReplacementCoach(updatedCoaches, club, hireDate, excludedCoachId);
+    if (!replacement) {
+      club.coachId = undefined;
+      return undefined;
+    }
+
+    const replacementHiredDate = hireDate.toISOString();
+    replacement.currentClubId = club.id;
+    replacement.hiredDate = replacementHiredDate;
+    replacement.contractEndDate = CoachService.getDefaultContractEndDate(replacementHiredDate);
+    replacement.annualSalary = CoachService.calculateAnnualSalaryForClub(club, replacement);
+    replacement.favoritePlayerIds = undefined;
+    replacement.history.push({
+      clubId: club.id,
+      clubName: club.name,
+      fromYear: hireDate.getFullYear(),
+      fromMonth: hireDate.getMonth() + 1,
+      toYear: null,
+      toMonth: null,
+    });
+    club.coachId = replacement.id;
+    return replacement;
+  };
+
   const resignFromClub = () => {
     setIsResigned(true);
+    setManagerEmploymentStatus('RESIGNED');
     setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
     setIncomingOffers([]);
   };
@@ -8843,7 +8903,7 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber);
       if (newMails.length > 0) {
         prependUniqueMessages(newMails);
         const sentUnfriendlyPressMonthKeys = newMails
@@ -9360,23 +9420,56 @@ const finalResult: SimulationOutput = {
       const updatedClubsList = [...clubs];
       const newMails: MailMessage[] = [];
 
+      if (userTeamId && !isResigned && userTeamId !== UNEMPLOYED_MANAGER_CLUB_ID) {
+        const userClub = updatedClubsList.find(club => club.id === userTeamId);
+        if (userClub && (userClub.leagueId === 'L_PL_1' || userClub.leagueId === 'L_PL_2' || userClub.leagueId === 'L_PL_3')) {
+          const leagueClubs = updatedClubsList.filter(club => club.leagueId === userClub.leagueId);
+          const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+          const rank = sorted.findIndex(club => club.id === userClub.id) + 1;
+          const pressure = CoachService.getPerformancePressure(userClub, rank, managerProfile?.expPoints);
+
+          if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
+            const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
+            assignReplacementCoachToClub(updatedCoaches, userClub, nextDay, userClub.coachId);
+            newMails.push(createManagerFiredMail(userClub, pressure.reason, rank, nextDay, expPenalty));
+            if (expPenalty > 0) {
+              setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, [{
+                sourceKey: `manager-fired:${userClub.id}:${nextDay.toISOString().split('T')[0]}`,
+                date: nextDay,
+                season: seasonNumber,
+                delta: -expPenalty,
+                competition: userClub.name,
+                label: 'Zwolnienie przez zarząd',
+              }]));
+            }
+            setIsResigned(true);
+            setManagerEmploymentStatus('FIRED');
+            setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+            setIncomingOffers([]);
+            setActiveTrainingId(null);
+            coachClubStateChanged = true;
+          }
+        }
+      }
+
       updatedClubsList.forEach(club => {
         if (club.id === userTeamId || !club.coachId) return;
         if (club.leagueId !== 'L_PL_1' && club.leagueId !== 'L_PL_2' && club.leagueId !== 'L_PL_3') return;
         
         const coach = updatedCoaches[club.coachId];
-        
-        // 6-MIESIĘCZNY OKRES OCHRONNY (Immunitet)
-        const hireDate = new Date(coach.hiredDate);
-        const diffTime = Math.abs(nextDay.getTime() - hireDate.getTime());
-        const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30.44);
-        const isProtected = diffMonths < 6;
-
-        if (isProtected) return; // Zarząd nawet nie otwiera teczki tego trenera
 
         const leagueClubs = updatedClubsList.filter(c => c.leagueId === club.leagueId);
         const sorted = [...leagueClubs].sort((a,b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
         const rank = sorted.findIndex(c => c.id === club.id) + 1;
+        const pressure = CoachService.getPerformancePressure(club, rank, coach.expPoints);
+
+        // 6-miesięczny immunitet zostaje, ale katastrofalne wyniki mogą otworzyć wcześniejszy przegląd.
+        const hireDate = new Date(coach.hiredDate);
+        const diffTime = Math.abs(nextDay.getTime() - hireDate.getTime());
+        const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30.44);
+        const isProtected = diffMonths < 6 && !pressure.earlyReviewAllowed;
+
+        if (isProtected) return;
 
         const evaluation = CoachService.evaluatePerformance(club, coach, rank);
         
@@ -15253,7 +15346,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     euroState, setEuroState,
-    europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, resignFromClub,
+    europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, managerEmploymentStatus, resignFromClub,
     gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, submitBoardClubRequest,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,

@@ -55,6 +55,7 @@ export const Dashboard: React.FC = () => {
     setConfHistoryInitialRound,
     incomingOffers,
     isResigned,
+    managerEmploymentStatus,
     resignFromClub,
     getSaveState,
     winterCampInvitePending,
@@ -114,6 +115,9 @@ export const Dashboard: React.FC = () => {
   }, [summerCampProgramPending]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const isOutOfClub = isResigned || myClub?.leagueId === 'NONE';
+  const wasFired = managerEmploymentStatus === 'FIRED';
+  const clubManagementDisabled = isJumping || isOutOfClub;
   const isWorldCupTournamentOpen = Boolean(
     wcState &&
     currentDate.getFullYear() === wcState.year &&
@@ -235,7 +239,7 @@ const boardConfidence = useMemo(() => {
     }
 
     // ── Rezygnacja — gracz tylko obserwuje ───────────────────────────────
-    if (isResigned) {
+    if (isOutOfClub) {
       return { text: isJumping ? 'PRZETWARZANIE...' : 'NASTĘPNY DZIEŃ', action: advanceDay, isMatch: false, disabled: isJumping };
     }
 
@@ -542,7 +546,7 @@ const boardConfidence = useMemo(() => {
 
     // ── Domyślnie: przesuń dzień ───────────────────────────────────────────
     return { text: isJumping ? 'PRZETWARZANIE...' : 'NASTĘPNY DZIEŃ', action: advanceDay, isMatch: false, disabled: isJumping };
-  }, [currentDate, advanceDay, navigateTo, lineupValidation, isJumping,
+  }, [currentDate, advanceDay, navigateTo, lineupValidation, isJumping, isOutOfClub,
       processBackgroundCupMatches, processCLMatchDay, fixtures, userTeamId, confirmSeasonEnd, seasonTemplate, clubs, setElHistoryInitialRound, setConfHistoryInitialRound]);
 
   const searchResults = useMemo(() => {
@@ -1008,8 +1012,8 @@ const boardConfidence = useMemo(() => {
               <span className="text-lg font-black italic uppercase tracking-tighter text-white leading-none">
                  {managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : 'NOWY MANAGER'}
               </span>
-              <span className="text-sm font-black italic uppercase tracking-tighter bg-red-600 text-white px-2 py-0.5 rounded">
-                {myClub?.leagueId === 'L_PL_1' ? 'Ekstraklasa' : myClub?.leagueId === 'L_PL_2' ? 'I Liga' : myClub?.leagueId === 'L_PL_3' ? 'II Liga' : myClub?.leagueId === 'L_PL_4' ? 'III Liga' : 'Ekstraklasa'}
+              <span className={`text-sm font-black italic uppercase tracking-tighter px-2 py-0.5 rounded ${isOutOfClub ? 'bg-slate-700 text-slate-300' : 'bg-red-600 text-white'}`}>
+                {isOutOfClub ? (wasFired ? 'ZWOLNIONY' : 'BEZ KLUBU') : myClub?.leagueId === 'L_PL_1' ? 'Ekstraklasa' : myClub?.leagueId === 'L_PL_2' ? 'I Liga' : myClub?.leagueId === 'L_PL_3' ? 'II Liga' : myClub?.leagueId === 'L_PL_4' ? 'III Liga' : 'Ekstraklasa'}
               </span>
               <span className="text-sm font-black italic uppercase tracking-tighter text-blue-400">SEZON {seasonNumber} ({seasonYearLabel})</span>
             </div>
@@ -1327,7 +1331,7 @@ const boardConfidence = useMemo(() => {
       </div>
 
       <div className="flex-1 flex gap-6 min-h-0 z-0">
-        <div className="w-80 flex flex-col gap-4 shrink-0 rounded-[26px] bg-slate-950/50 border border-white/[0.06] backdrop-blur-md p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] relative">
+        <div className={`w-80 flex flex-col gap-4 shrink-0 rounded-[26px] bg-slate-950/50 border border-white/[0.06] backdrop-blur-md p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] relative transition-all ${isOutOfClub ? 'grayscale opacity-60' : ''}`}>
           <Card className="rounded-[28px] border border-white/[0.08] bg-slate-950/48 backdrop-blur-2xl relative group shrink-0 overflow-hidden shadow-2xl">
             <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: clubPrimary }} />
             <div className="absolute right-[-8px] bottom-[-22px] text-8xl font-black italic text-white/[0.025] select-none pointer-events-none">
@@ -1336,9 +1340,9 @@ const boardConfidence = useMemo(() => {
             <div className="relative z-10 p-2">
               <div className="flex flex-col items-center gap-1">
                 <h3 className="text-base text-white leading-tight truncate font-black italic uppercase tracking-tighter text-center w-full">
-                  {isResigned ? 'BEZ KLUBU' : myClub?.name}
+                  {isOutOfClub ? (wasFired ? 'ZWOLNIONY' : 'BEZ KLUBU') : myClub?.name}
                 </h3>
-                {isResigned ? (
+                {isOutOfClub ? (
                   <div className="w-16 h-16 flex items-center justify-center text-2xl">👨‍💼</div>
                 ) : getClubLogo(myClub?.id || '') ? (
                   <div className="w-16 h-16 shrink-0 transition-transform group-hover:-rotate-2">
@@ -1358,6 +1362,17 @@ const boardConfidence = useMemo(() => {
             </div>
           </Card>
 
+          {isOutOfClub && (
+            <div className="rounded-[18px] border border-slate-500/20 bg-slate-950/70 px-4 py-3 text-center">
+              <p className="text-[11px] text-slate-300 font-black italic uppercase tracking-tighter">
+                {wasFired ? 'Zarząd zakończył współpracę' : 'Nie prowadzisz obecnie klubu'}
+              </p>
+              <p className="mt-1 text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
+                Opcje prowadzenia zespołu są niedostępne
+              </p>
+            </div>
+          )}
+
           <div className="relative z-10 grid w-full grid-cols-3 gap-2">
             <DashboardSvgButton
               label="Kadra"
@@ -1365,42 +1380,42 @@ const boardConfidence = useMemo(() => {
               size="large"
               tone="#ffffff"
               onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Trening"
               icon="training"
               tone="#38bdf8"
               onClick={() => navigateTo(ViewState.TRAINING_VIEW)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Rezerwy"
               icon="reserves"
               tone="#818cf8"
               onClick={() => navigateTo(ViewState.RESERVES_VIEW)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Zarząd"
               icon="board"
               tone="#f59e0b"
               onClick={() => setIsBoardModalOpen(true)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Szpital"
               icon="hospital"
               tone="#fb7185"
               onClick={() => navigateTo(ViewState.HOSPITAL_VIEW)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Akademia"
               icon="academy"
               tone="#a3e635"
               onClick={() => navigateTo(ViewState.ACADEMY_VIEW)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Rozgrywki"
@@ -1414,7 +1429,7 @@ const boardConfidence = useMemo(() => {
               icon="calendar"
               tone="#22d3ee"
               onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <DashboardSvgButton
               label="Statystyki"
@@ -1449,7 +1464,7 @@ const boardConfidence = useMemo(() => {
               icon="finance"
               tone="#2dd4bf"
               onClick={() => setIsFinanceModalOpen(true)}
-              disabled={isJumping || isResigned}
+              disabled={clubManagementDisabled}
             />
             <div className="col-span-3 relative h-px my-1 overflow-hidden">
               <div className="absolute inset-0 bg-yellow-400/25" />
@@ -1675,8 +1690,8 @@ const boardConfidence = useMemo(() => {
                 label="Rezygnacja"
                 icon="resign"
                 tone="#f59e0b"
-                onClick={() => !isResigned && setShowResignConfirm(true)}
-                disabled={isResigned}
+                onClick={() => !isOutOfClub && setShowResignConfirm(true)}
+                disabled={isOutOfClub}
               />
             </div>
             <div className="flex-1 min-w-0">

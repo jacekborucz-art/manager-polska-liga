@@ -167,6 +167,142 @@ const getCoachExpPoints = (coach: Coach): number => Math.max(1, typeof coach.exp
 const randomIntInclusive = (min: number, max: number): number =>
   min + Math.floor(Math.random() * (max - min + 1));
 
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const BOARD_LEVEL_SCORE: Record<string, number> = {
+  bardzo_niska: 1,
+  niska: 2,
+  przecietna: 3,
+  wysoka: 4,
+  bardzo_wysoka: 5,
+};
+
+export type CoachPerformancePressure = {
+  expectedRank: number;
+  gap: number;
+  finalChance: number;
+  reviewReadiness: number;
+  earlyReviewAllowed: boolean;
+  experienceTrustMultiplier: number;
+  reason: string;
+};
+
+const getExperienceRatingFromPoints = (expPoints?: number | null): number => {
+  if (!Number.isFinite(expPoints ?? NaN)) return 35;
+  const safePoints = Math.max(1, expPoints ?? 1);
+  const rating = 1 + 98 * (1 - Math.exp(-safePoints / 1500));
+  return clamp(Math.round(rating), 1, 99);
+};
+
+const getExperienceTrustMultiplier = (expPoints?: number | null): number => {
+  const rating = getExperienceRatingFromPoints(expPoints);
+  // EXP daje kredyt zaufania, ale nie immunitet. Niedoświadczony trener szybciej traci zaufanie,
+  // bardzo doświadczony może obniżyć presję maksymalnie o ok. 24%.
+  return clamp(1.18 - rating * 0.0042, 0.76, 1.18);
+};
+
+const calculatePerformancePressure = (club: Club, rank: number, expPoints?: number | null): CoachPerformancePressure => {
+  const board = club.board;
+
+  const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {
+    bardzo_wysoka: 3,
+    wysoka:        6,
+    przecietna:    12,
+    niska:         15,
+    bardzo_niska:  18,
+  };
+  const boardExpected = board ? EXPECTED_RANK_FROM_BOARD[board.oczekiwania] : 12;
+  const repExpected   = Math.max(1, 15 - club.reputation);
+  const baseExpected  = Math.max(boardExpected, repExpected);
+
+  const AMBICJA_OFFSET: Record<string, number> = {
+    bardzo_wysoka: -2,
+    wysoka:        -1,
+    przecietna:     0,
+    niska:         +2,
+    bardzo_niska:  +4,
+  };
+  const ambicjaOffset = board ? AMBICJA_OFFSET[board.ambicja] : 0;
+  const expectedRank  = Math.max(1, baseExpected + ambicjaOffset);
+  const gap = rank - expectedRank;
+
+  let baseChance: number;
+  if (gap <= 0)        baseChance = 0.00;
+  else if (gap <= 2)   baseChance = 0.02;
+  else if (gap <= 4)   baseChance = 0.08;
+  else if (gap <= 6)   baseChance = 0.20;
+  else if (gap <= 9)   baseChance = 0.35;
+  else                 baseChance = 0.55;
+
+  const played = Math.max(0, club.stats.played);
+  const ppg = played > 0 ? club.stats.points / played : 0;
+  const expectedPpg =
+    expectedRank <= 3 ? 1.90 :
+    expectedRank <= 6 ? 1.60 :
+    expectedRank <= 12 ? 1.25 :
+    expectedRank <= 15 ? 1.05 :
+    0.85;
+  const ppgPressure = clamp((expectedPpg - ppg) * 0.20, 0, 0.22);
+
+  const recentForm = club.stats.form.slice(-5);
+  const recentLosses = recentForm.filter(result => result === 'P').length;
+  const recentWins = recentForm.filter(result => result === 'W').length;
+  const recentPressure = recentForm.length >= 3
+    ? recentLosses * 0.035 + (recentWins === 0 ? 0.06 : 0)
+    : 0;
+
+  const goalDiffPerMatch = played > 0 ? club.stats.goalDifference / played : 0;
+  const goalDiffPressure = clamp(-goalDiffPerMatch * 0.05, 0, 0.10);
+  const embarrassmentPressure = rank >= 16 && club.reputation >= 7 ? 0.20 : 0;
+
+  const PATIENCE_MULTIPLIER: Record<string, number> = {
+    bardzo_wysoka: 0.25,
+    wysoka:        0.55,
+    przecietna:    1.00,
+    niska:         1.30,
+    bardzo_niska:  1.80,
+  };
+  const patience = board?.cierpliwosc ?? 'przecietna';
+  const multiplier = PATIENCE_MULTIPLIER[patience];
+
+  const REVIEW_WINDOW: Record<string, { firstLook: number; fullReview: number }> = {
+    bardzo_wysoka: { firstLook: 10, fullReview: 22 },
+    wysoka:        { firstLook: 8,  fullReview: 17 },
+    przecietna:    { firstLook: 6,  fullReview: 13 },
+    niska:         { firstLook: 4,  fullReview: 9  },
+    bardzo_niska:  { firstLook: 3,  fullReview: 6  },
+  };
+  const window = REVIEW_WINDOW[patience];
+  const pressureBeforeReadiness = baseChance + ppgPressure + recentPressure + goalDiffPressure + embarrassmentPressure;
+  const experienceTrustMultiplier = getExperienceTrustMultiplier(expPoints);
+  const patienceScore = BOARD_LEVEL_SCORE[patience];
+  const catastrophic =
+    played >= 3 &&
+    gap >= 7 &&
+    (rank >= 16 || ppg <= 0.75 || recentLosses >= 4 || club.stats.goalDifference <= -10);
+  const earlyReviewAllowed =
+    played >= window.firstLook &&
+    pressureBeforeReadiness >= (patienceScore >= 4 ? 0.58 : patienceScore === 3 ? 0.42 : 0.30);
+
+  if (played < window.firstLook && !catastrophic) {
+    return { expectedRank, gap, finalChance: 0, reviewReadiness: 0, earlyReviewAllowed: false, experienceTrustMultiplier, reason: "" };
+  }
+
+  const readiness = catastrophic
+    ? 1
+    : clamp((played - window.firstLook + 1) / Math.max(1, window.fullReview - window.firstLook + 1), 0.20, 1.15);
+  const rawFinalChance = gap > 0 ? Math.min(0.95, pressureBeforeReadiness * multiplier * readiness) : 0;
+  const finalChance = catastrophic ? rawFinalChance : Math.min(0.95, rawFinalChance * experienceTrustMultiplier);
+
+  let reason = "Zarząd stracił cierpliwość do obecnego szkoleniowca.";
+  if (rank >= 16 && club.reputation >= 7) reason = "Kompromitująca pozycja w tabeli względem potencjału klubu.";
+  else if (gap >= 7) reason = "Brak wyników sportowych i niezadowolenie kibiców.";
+  else if (recentLosses >= 4 || ppgPressure >= 0.16) reason = "Seria słabych wyników przyspieszyła reakcję zarządu.";
+  else if (gap >= 4) reason = "Wyniki poniżej oczekiwań zarządu przez zbyt długi okres.";
+
+  return { expectedRank, gap, finalChance, reviewReadiness: readiness, earlyReviewAllowed: earlyReviewAllowed || catastrophic, experienceTrustMultiplier, reason };
+};
+
 const getInitialCoachExpRangeForClub = (club?: Pick<Club, 'reputation'> | null): { min: number; max: number } => {
   const reputation = club?.reputation ?? 5;
   if (reputation >= 18) return { min: 100, max: 200 };
@@ -228,6 +364,9 @@ export const CoachService = {
     const renewalKey = renewalDate.toISOString().split('T')[0];
     return stableHash(`${coach.id}|${club.id}|${renewalKey}|contract-renewal`) % 2 === 0;
   },
+
+  getPerformancePressure: (club: Club, rank: number, expPoints?: number | null): CoachPerformancePressure =>
+    calculatePerformancePressure(club, rank, expPoints),
 
   findReplacementCoach: (
     coaches: Record<string, Coach>,
@@ -554,77 +693,12 @@ createRandomCoach: (isPolish: boolean): Coach => {
   },
 
   evaluatePerformance: (club: Club, coach: Coach, rank: number): { fire: boolean, reason: string } => {
-    const board = club.board;
-
-    // --- KROK 1: Oczekiwana pozycja ---
-    // Baza z oczekiwań zarządu, korygowana przez reputację (klub słaby nie może mieć nierealistycznych oczekiwań)
-    const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {
-      bardzo_wysoka: 3,
-      wysoka:        6,
-      przecietna:    12,
-      niska:         15,
-      bardzo_niska:  18,
-    };
-    const boardExpected = board ? EXPECTED_RANK_FROM_BOARD[board.oczekiwania] : 12;
-    const repExpected   = Math.max(1, 15 - club.reputation);
-    // Bierzemy gorsze z dwóch (wyższy rank = niższe oczekiwanie reputacyjne hamuje zbyt ambitny zarząd)
-    const baseExpected  = Math.max(boardExpected, repExpected);
-
-    // Ambicja przesuwa poprzeczkę: wysoka ambicja = surowszy próg, niska = odpuszcza
-    const AMBICJA_OFFSET: Record<string, number> = {
-      bardzo_wysoka: -2,
-      wysoka:        -1,
-      przecietna:     0,
-      niska:         +2,
-      bardzo_niska:  +4,
-    };
-    const ambicjaOffset = board ? AMBICJA_OFFSET[board.ambicja] : 0;
-    const expectedRank  = Math.max(1, baseExpected + ambicjaOffset);
-
-    // --- KROK 2: Gap i bazowe prawdopodobieństwo ---
-    const gap = rank - expectedRank;
-
-    let baseChance: number;
-    if (gap <= 0)        baseChance = 0.00;
-    else if (gap <= 2)   baseChance = 0.02;
-    else if (gap <= 4)   baseChance = 0.08;
-    else if (gap <= 6)   baseChance = 0.20;
-    else if (gap <= 9)   baseChance = 0.35;
-    else                 baseChance = 0.55;
-
-    // Bonus za kompromitację: wielki klub w strefie spadkowej
-    if (rank >= 16 && club.reputation >= 7) baseChance = Math.max(baseChance, 0.40) + 0.20;
-
-    // --- KROK 3: Mnożnik cierpliwości ---
-    const PATIENCE_MULTIPLIER: Record<string, number> = {
-      bardzo_wysoka: 0.25,
-      wysoka:        0.55,
-      przecietna:    1.00,
-      niska:         1.30,
-      bardzo_niska:  1.80,
-    };
-    const multiplier = board ? PATIENCE_MULTIPLIER[board.cierpliwosc] : 1.00;
-
-    // --- KROK 4: Minimalna liczba meczy zanim zarząd reaguje ---
-    const MIN_MATCHES: Record<string, number> = {
-      bardzo_wysoka: 22,
-      wysoka:        17,
-      przecietna:    13,
-      niska:         9,
-      bardzo_niska:  6,
-    };
-    const minMatches = board ? MIN_MATCHES[board.cierpliwosc] : 13;
-    if (club.stats.played < minMatches) return { fire: false, reason: "" };
-
-    // --- Finalna decyzja ---
-    const finalChance = Math.min(0.95, baseChance * multiplier);
+    const pressure = calculatePerformancePressure(club, rank, coach.expPoints);
+    const finalChance = pressure.finalChance;
     if (finalChance <= 0) return { fire: false, reason: "" };
 
     if (Math.random() < finalChance) {
-      if (rank >= 16 && club.reputation >= 7) return { fire: true, reason: "Kompromitująca pozycja w tabeli względem potencjału klubu." };
-      if (gap >= 7) return { fire: true, reason: "Brak wyników sportowych i niezadowolenie kibiców." };
-      if (gap >= 4) return { fire: true, reason: "Wyniki poniżej oczekiwań zarządu przez zbyt długi okres." };
-      return { fire: true, reason: "Zarząd stracił cierpliwość do obecnego szkoleniowca." };
+      return { fire: true, reason: pressure.reason };
     }
 
     return { fire: false, reason: "" };

@@ -2784,6 +2784,8 @@ export interface ManagerProfile {
   achievements: ManagerAchievement[];
 }
 
+export type ManagerEmploymentStatus = 'EMPLOYED' | 'RESIGNED' | 'FIRED';
+
 export interface TrainingCycle {
   id: string;
   name: string;

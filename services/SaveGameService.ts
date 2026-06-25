@@ -73,6 +73,7 @@ export interface SaveState {
   processedDrawIds: string[];
   globalFixtures: any[];
   isResigned: boolean;
+  managerEmploymentStatus?: import('../types').ManagerEmploymentStatus;
   currentPolishChampionId: string;
   currentPolishCupWinnerId: string;
   currentCLWinnerId: string;
@@ -540,6 +541,11 @@ function normalizeSaveState(data: SaveState): SaveState {
     processedDrawIds: asArray(data.processedDrawIds),
     globalFixtures: asArray(data.globalFixtures).map(normalizeFixture),
     isResigned: data.isResigned ?? false,
+    managerEmploymentStatus: (data as any).managerEmploymentStatus === 'FIRED' || (data as any).managerEmploymentStatus === 'RESIGNED' || (data as any).managerEmploymentStatus === 'EMPLOYED'
+      ? (data as any).managerEmploymentStatus
+      : data.isResigned
+        ? 'RESIGNED'
+        : 'EMPLOYED',
     reserveFixtures: asArray(data.reserveFixtures),
     reserveMatchResults: asArray(data.reserveMatchResults),
     supercupWinners: asArray(data.supercupWinners),
