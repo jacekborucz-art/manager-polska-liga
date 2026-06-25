@@ -682,7 +682,7 @@ export const PreGameDatapackEditorView: React.FC = () => {
     const playerName = `${player.firstName} ${player.lastName}`.trim();
     const clubName = editableClubs.find(club => club.id === player.clubId)?.name ?? '';
     const baseQuery = [playerName, clubName, 'contract expires salary market value'].filter(Boolean).join(' ');
-    const transfermarktQuery = [playerName, clubName].filter(Boolean).join(' ');
+    const transfermarktQuery = playerName;
     const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(`${baseQuery} Transfermarkt`)}`;
     const transfermarktUrl = `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(transfermarktQuery || playerName)}`;
     const newsUrl = `https://www.google.com/search?q=${encodeURIComponent(`${baseQuery} contract extension`)}`;
