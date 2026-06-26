@@ -1,0 +1,116 @@
+JAK URUCHOMIC GRE
+=================
+
+1. Otworz folder z gra.
+
+2. Kliknij dwa razy plik:
+
+   START_GRY.bat
+
+3. Poczekaj kilka sekund.
+
+4. Gra powinna otworzyc sie sama w osobnym oknie przegladarki.
+
+
+WAZNE
+=====
+
+Nie przenos samego pliku START_GRY.bat w inne miejsce.
+
+Plik START_GRY.bat musi byc w tym samym folderze co:
+
+- dist
+- runtime
+- server.cjs
+
+Najlepiej trzymaj caly folder gry razem, np. na Pulpicie, w Dokumentach
+albo na dysku D.
+
+
+JESLI GRA SIE NIE OTWIERA
+=========================
+
+1. Sprawdz, czy w folderze gry jest folder:
+
+   dist
+
+   W srodku powinien byc plik:
+
+   index.html
+
+2. Sprawdz, czy w folderze gry jest plik:
+
+   server.cjs
+
+3. Sprawdz, czy w folderze gry jest folder:
+
+   runtime
+
+   W srodku powinien byc plik:
+
+   node.exe
+
+4. Jesli po kliknieciu START_GRY.bat pojawia sie czarne okno i znika,
+   uruchom plik jeszcze raz i zobacz, czy pokazuje komunikat bledu.
+
+5. Gra sama szuka wolnego portu od 4173 do 4183.
+
+   Jesli pojawia sie komunikat, ze nie udalo sie znalezc wolnego portu:
+
+   - zamknij inne uruchomione okna gry,
+   - zamknij czarne okna z napisem "Futbol Manager - lokalny serwer",
+   - uruchom START_GRY.bat ponownie.
+
+6. Jesli przegladarka nie otworzy sie sama, otworz recznie adres:
+
+   http://127.0.0.1:4173
+
+   Jesli gra uzyla innego portu, adres bedzie pokazany w czarnym oknie
+   serwera, np.:
+
+   http://127.0.0.1:4174
+
+7. Jesli Windows pyta o pozwolenie zapory sieciowej, kliknij:
+
+   Zezwol
+
+   Gra dziala lokalnie na Twoim komputerze.
+
+
+GDZIE NIE TRZYMAC GRY
+=====================
+
+Nie polecam trzymac gry w:
+
+   C:\Program Files
+
+Lepiej uzyc:
+
+   Pulpit
+   Dokumenty
+   D:\Gry
+   pendrive lub inny zwykly folder
+
+
+JAK ZAMKNAC GRE
+===============
+
+1. Zamknij okno gry.
+
+2. Zamknij czarne okno serwera, jesli nadal jest otwarte.
+
+   Mozesz tez nacisnac w nim Ctrl + C.
+
+
+JESLI NADAL NIE DZIALA
+======================
+
+Sprawdz, czy caly folder gry zostal skopiowany razem.
+
+Najczestszy problem to brak jednego z tych elementow:
+
+- START_GRY.bat
+- server.cjs
+- runtime\node.exe
+- dist\index.html
+- dist\assets
