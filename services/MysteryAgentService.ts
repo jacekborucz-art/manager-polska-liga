@@ -205,7 +205,7 @@ export const MysteryAgentService = {
       maxAttempts: 3,
       status: 'ACTIVE',
       boardRequestUsed: false,
-      lastAgentMessage: 'Mój klient ma talent 99. Nie pytaj skąd go znam. Pytaj, czy masz odwagę zaryzykować.',
+      lastAgentMessage: 'Dzień dobry. Chciałem zaproponować Wam tego utalentowanego chłopaka. Jeśli warunki będą odpowiednie, możemy szybko dojść do porozumienia.',
     };
   },
 

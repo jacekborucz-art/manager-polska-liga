@@ -93,11 +93,8 @@ export const MysteryAgentNegotiationView: React.FC = () => {
               Tajemniczy agent
             </p>
             <h1 className="font-black italic uppercase tracking-tighter text-4xl md:text-6xl text-white">
-              Talent bez papierów
+              Propozycja agenta
             </h1>
-            <p className="mt-2 text-slate-400 text-sm max-w-2xl">
-              Agent pokazuje tylko podstawowe dane. Overall jest ukryty. Wiesz tylko, że zawodnik ma talent 99.
-            </p>
           </div>
           <button
             onClick={() => navigateTo(ViewState.DASHBOARD)}
@@ -116,10 +113,6 @@ export const MysteryAgentNegotiationView: React.FC = () => {
                   {player.firstName} {player.lastName}
                 </h2>
               </div>
-              <div className="rounded-2xl bg-amber-300 px-4 py-3 text-center text-black">
-                <div className="text-[9px] font-black uppercase">Talent</div>
-                <div className="font-black text-3xl leading-none">99</div>
-              </div>
             </div>
 
             <div className="mt-8 grid grid-cols-2 gap-3">
@@ -134,7 +127,7 @@ export const MysteryAgentNegotiationView: React.FC = () => {
                 "{mysteryAgentOffer.lastAgentMessage}"
               </p>
               <p className="mt-3 text-xs text-slate-400 leading-relaxed">
-                Agent nie pokaże raportu OVR. Jeśli rozmowy upadną, zawodnik trafi do ukrytej puli i będzie go można odnaleźć tylko przez skauting.
+                Agent przekazał podstawowe informacje o zawodniku. Szczegółowy raport sportowy nie jest jeszcze dostępny.
               </p>
             </div>
 
