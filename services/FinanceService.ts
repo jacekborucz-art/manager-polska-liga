@@ -1060,10 +1060,11 @@ export const FinanceService = {
   },
 
   calculateMarketValue: (player: Player, reputation: number, tier: number, clubCountry?: string | null): number => {
-    if (player.clubId === 'FREE_AGENTS') return 0;
+    const playerClubId = player.clubId ?? '';
+    if (playerClubId === 'FREE_AGENTS') return 0;
     const ovr = player.overallRating;
     const normalizedCountry = normalizeMarketCountry(clubCountry);
-    const isPolishClub = player.clubId.startsWith('PL_') || normalizedCountry === 'POL';
+    const isPolishClub = playerClubId.startsWith('PL_') || normalizedCountry === 'POL';
     if (isPolishClub) {
       return calculatePolishMarketValue(player, reputation, tier);
     }
