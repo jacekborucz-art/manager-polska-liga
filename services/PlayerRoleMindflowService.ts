@@ -272,6 +272,25 @@ const getQuestionCount = (mood: PlayerRoleConversationMood, seed: number): numbe
   return Math.min(7, base + (seededRandom(seed + 19) > 0.62 ? 1 : 0));
 };
 
+const getLoyaltyRoleBias = (player: Player): number => {
+  const loyalty = Math.max(1, Math.min(99, Math.round(player.lojalnosc ?? 50)));
+  const hasRoleConflict =
+    !!player.roleDemandUntil ||
+    !!player.minutesDemandUntil ||
+    !!player.developmentExitDemandUntil ||
+    !!player.isNegotiationPermanentBlocked;
+
+  if (hasRoleConflict) {
+    return loyalty >= 85 ? -1 : loyalty <= 25 ? 2 : 0;
+  }
+
+  if (loyalty >= 88) return -2;
+  if (loyalty >= 75) return -1;
+  if (loyalty <= 20) return 2;
+  if (loyalty <= 35) return 1;
+  return 0;
+};
+
 const getCurrentRoleLabel = (player: Player): string =>
   player.squadRole === 'KEY_PLAYER' ? 'kluczowego zawodnika' : 'zawodnika pierwszej jedenastki';
 
@@ -364,6 +383,7 @@ export const PlayerRoleMindflowService = {
     const mood = getMood(player);
     const questionCount = getQuestionCount(mood, seed);
     const moodDifficulty = mood === 'CALM' ? 0 : mood === 'UNEASY' ? 1 : mood === 'UPSET' ? 2 : 3;
+    const loyaltyRoleBias = getLoyaltyRoleBias(player);
 
     return {
       mood,
@@ -373,7 +393,10 @@ export const PlayerRoleMindflowService = {
       ],
       currentQuestionIndex: 0,
       score: 0,
-      targetScore: Math.min(questionCount * 3, questionCount * 2 + moodDifficulty),
+      targetScore: Math.max(
+        Math.ceil(questionCount * 1.35),
+        Math.min(questionCount * 3, questionCount * 2 + moodDifficulty + loyaltyRoleBias)
+      ),
       answeredCount: 0,
       lastReaction: null,
       promisedNextMatch: false,

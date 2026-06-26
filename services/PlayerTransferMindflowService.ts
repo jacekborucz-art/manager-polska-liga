@@ -158,6 +158,28 @@ const getPreferredTone = (personality: PlayerMoralePersonality): PlayerTransferC
   return 'RESPECT';
 };
 
+const getLoyaltyScore = (player: Player): number =>
+  Math.max(1, Math.min(99, Math.round(player.lojalnosc ?? 50)));
+
+const getLoyaltyPlanBias = (player: Player): number => {
+  const loyalty = getLoyaltyScore(player);
+  const hasExitSignal =
+    !!player.transferListDemandUntil ||
+    !!player.developmentExitDemandUntil ||
+    !!player.isOnTransferList ||
+    !!player.isNegotiationPermanentBlocked;
+
+  if (hasExitSignal) {
+    return loyalty >= 85 ? -1 : loyalty <= 25 ? 2 : 0;
+  }
+
+  if (loyalty >= 88) return -3;
+  if (loyalty >= 75) return -2;
+  if (loyalty <= 20) return 3;
+  if (loyalty <= 35) return 1;
+  return 0;
+};
+
 export const PlayerTransferMindflowService = {
   getMoodLabel: (mood: PlayerTransferConversationMood): string => {
     if (mood === 'HOSTILE') return 'Bardzo napięty';
@@ -172,6 +194,7 @@ export const PlayerTransferMindflowService = {
     const questionCount = mood === 'OPEN' ? 3 : mood === 'RESTLESS' ? 4 : mood === 'DETERMINED' ? 5 : 6;
     const personality = player.moralePersonality ?? 'CALM';
     const personalityResistance = personality === 'EGOIST' ? 3 : personality === 'AMBITIOUS' ? 2 : personality === 'CONFIDENT' ? 1 : personality === 'LOYAL' ? -2 : 0;
+    const loyaltyPlanBias = getLoyaltyPlanBias(player);
     const moodResistance = mood === 'HOSTILE' ? 3 : mood === 'DETERMINED' ? 2 : mood === 'RESTLESS' ? 1 : 0;
     const uncertaintyModifier = Math.floor(seededRandom(seed + 101) * 5) - 2;
 
@@ -180,7 +203,10 @@ export const PlayerTransferMindflowService = {
       questions: shuffle(QUESTIONS, seed).slice(0, questionCount),
       currentQuestionIndex: 0,
       score: 0,
-      targetScore: Math.min(questionCount * 3, questionCount * 2 + personalityResistance + moodResistance + uncertaintyModifier),
+      targetScore: Math.max(
+        Math.ceil(questionCount * 1.35),
+        Math.min(questionCount * 3, questionCount * 2 + personalityResistance + loyaltyPlanBias + moodResistance + uncertaintyModifier)
+      ),
       answeredCount: 0,
       lastReaction: null,
       uncertaintyModifier,

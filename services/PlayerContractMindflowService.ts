@@ -42,6 +42,7 @@ export interface PlayerContractMindflow {
     squadRoleFit: number;
     playingTimeFit: number;
     moraleFit: number;
+    loyaltyFit: number;
     developmentFit: number;
     financialRespectFit: number;
     totalStayComfort: number;
@@ -130,6 +131,33 @@ const getContractDaysLeft = (player: Player, currentDate: Date): number => {
   if (!player.contractEndDate) return 9999;
   return Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
 };
+
+const getPlayerLoyalty = (player: Player): number =>
+  clamp(Math.round(player.lojalnosc ?? 50), 1, 99);
+
+const hasActiveExitSignal = (player: Player): boolean =>
+  !!player.transferListDemandUntil ||
+  !!player.developmentExitDemandUntil ||
+  !!player.isOnTransferList ||
+  !!player.isNegotiationPermanentBlocked;
+
+const getLoyaltyResistance = (
+  player: Player,
+  contractDaysLeft: number,
+  bestSportingUpgrade = 0
+): number => {
+  const baseResistance = clamp((getPlayerLoyalty(player) - 50) / 49, 0, 1);
+  if (baseResistance <= 0) return 0;
+  if (hasActiveExitSignal(player)) return baseResistance * 0.22;
+  if (bestSportingUpgrade >= 5) return baseResistance * 0.08;
+  if (bestSportingUpgrade >= 3) return baseResistance * 0.40;
+  if (contractDaysLeft <= 90) return baseResistance * 0.35;
+  if (contractDaysLeft <= 330) return baseResistance * 0.55;
+  return baseResistance;
+};
+
+const getLowLoyaltyInstability = (player: Player): number =>
+  clamp((50 - getPlayerLoyalty(player)) / 49, 0, 1);
 
 const getCombinedMatches = (player: Player): number =>
   (player.stats?.matchesPlayed || 0) +
@@ -374,6 +402,8 @@ const buildExpectations = (
   if (currentClubSituation.totalStayComfort < 55) salaryMultiplier += 0.10;
   if (profile.ageGroup === 'VETERAN') salaryMultiplier -= 0.04;
   if (profile.potentialStatus === 'ELITE_UPSIDE') salaryMultiplier += 0.10;
+  if (currentClubSituation.loyaltyFit >= 82 && currentClubSituation.totalStayComfort >= 72) salaryMultiplier -= 0.04;
+  if (currentClubSituation.loyaltyFit <= 32) salaryMultiplier += 0.05;
 
   const salaryCeiling = FinanceService.calculatePolishLeagueSalaryCeiling(
     FinanceService.getClubTier(currentClub),
@@ -505,11 +535,15 @@ const getNegotiationMemory = (
     (permanentBreakdown ? 38 : 0) +
     (currentClubSituation.financialRespectFit < 60 ? 14 : 0) +
     (currentClubSituation.squadRoleFit < 55 ? 10 : 0);
+  const loyaltyResistance = getLoyaltyResistance(player, currentClubSituation.contractDaysLeft, 0);
+  const lowLoyaltyInstability = getLowLoyaltyInstability(player);
 
   if ((player.morale ?? 55) >= 78) frustration -= 10;
   if (player.moralePersonality === 'LOYAL') frustration -= 8;
   if (player.moralePersonality === 'EGOIST') frustration += 8;
   if (player.moralePersonality === 'AMBITIOUS' && currentClubSituation.clubReputationFit < 58) frustration += 8;
+  frustration -= loyaltyResistance * 12;
+  frustration += lowLoyaltyInstability * 8;
 
   frustration = clamp(frustration, 0, 100);
 
@@ -525,6 +559,8 @@ const getNegotiationMemory = (
     (player.moralePersonality === 'LOYAL' ? 14 : 0) +
     (player.moralePersonality === 'CALM' ? 8 : 0) -
     (player.moralePersonality === 'EGOIST' ? 12 : 0) -
+    lowLoyaltyInstability * 10 +
+    loyaltyResistance * 18 -
     rejectedOffers * 12 -
     (permanentBreakdown ? 30 : 0),
     0,
@@ -566,7 +602,14 @@ const getMindset = (
   const activeExitDemand =
     !!player.transferListDemandUntil ||
     !!player.developmentExitDemandUntil ||
+    !!player.isOnTransferList ||
     player.isNegotiationPermanentBlocked;
+  const loyaltyResistance = getLoyaltyResistance(
+    player,
+    currentClubSituation.contractDaysLeft,
+    marketSituation.bestSportingUpgrade
+  );
+  const lowLoyaltyInstability = getLowLoyaltyInstability(player);
   const ageStayBias =
     player.age >= 35 ? 18 :
     player.age >= 32 ? 12 :
@@ -585,6 +628,8 @@ const getMindset = (
     marketConfidence * 0.40 -
     ageStayBias +
     eliteLatePrimeAmbition +
+    lowLoyaltyInstability * 18 -
+    loyaltyResistance * 28 +
     (activeExitDemand ? 34 : 0) -
     stayComfort * 0.42 -
     trust * 0.20,
@@ -598,6 +643,8 @@ const getMindset = (
     (negotiationMemory.permanentBreakdown ? 25 : 0) +
     (activeExitDemand ? 24 : 0) +
     Math.max(0, marketSituation.bestSportingUpgrade) * 8 -
+    loyaltyResistance * 22 +
+    lowLoyaltyInstability * 10 -
     (stayComfort >= 82 ? 22 : stayComfort >= 72 ? 12 : 0),
     0,
     100
@@ -609,6 +656,8 @@ const getMindset = (
     frustration * 0.28 -
     (activeExitDemand ? 38 : 0) +
     ageStayBias * 0.35 -
+    lowLoyaltyInstability * 12 +
+    loyaltyResistance * 16 -
     timePressure * 0.12,
     0,
     100
@@ -632,6 +681,8 @@ const getMindset = (
     marketSituation.hasInterest ? `Rynek jest aktywny: ${marketSituation.interestedClubCount} klub(y) obserwują sytuację.` : null,
     currentClubSituation.contractDaysLeft <= 180 ? 'Końcówka kontraktu zwiększa presję decyzyjną.' : null,
     player.squadRole === 'KEY_PLAYER' || player.isUntouchable ? 'Status w drużynie działa na korzyść obecnego klubu.' : null,
+    loyaltyResistance >= 0.45 ? 'Silne przywiązanie do klubu obniża gotowość do zwykłego ruchu na rynku.' : null,
+    lowLoyaltyInstability >= 0.35 ? 'Niska lojalność zwiększa podatność na propozycje zewnętrzne.' : null,
     activeExitDemand ? 'Zawodnik aktywnie sygnalizuje chęć odejścia, więc zwykłe przedłużenie kontraktu będzie bardzo trudne.' : null,
     ageStayBias > 0 && !activeExitDemand ? 'Wiek i stabilizacja kariery działają na korzyść pozostania w klubie.' : null,
     eliteLatePrimeAmbition > 0 ? 'Elitarny poziom sportowy utrzymuje realną ambicję dużego ruchu mimo wieku.' : null,
@@ -649,6 +700,7 @@ const getMindset = (
 };
 
 const getExternalOfferGate = (
+  player: Player,
   currentClub: Club,
   targetClub: Club | undefined,
   mindset: PlayerContractMindflow['mindset'],
@@ -660,17 +712,29 @@ const getExternalOfferGate = (
   const isClearSportingUpgrade = reputationUpgrade >= 1;
   const isLowerStep = reputationUpgrade < 0;
   const isSuperHappy = mindset.state === 'SUPER_HAPPY';
+  const loyaltyResistance = getLoyaltyResistance(
+    player,
+    currentClubSituation.contractDaysLeft,
+    reputationUpgrade
+  );
   const requiresMajorUpgrade =
     isSuperHappy ||
+    (loyaltyResistance >= 0.72 && currentClubSituation.contractDaysLeft > 330 && !negotiationMemory.permanentBreakdown) ||
     (mindset.state === 'HAPPY_TO_STAY' && currentClubSituation.contractDaysLeft > 90);
 
   let willingnessToListen = mindset.marketOpenness + Math.max(0, reputationUpgrade) * 10;
   if (isLowerStep) willingnessToListen -= 18;
   if (isSuperHappy) willingnessToListen -= 26;
+  willingnessToListen -= loyaltyResistance * 18;
   if (negotiationMemory.permanentBreakdown) willingnessToListen += 28;
   willingnessToListen = clamp(willingnessToListen, 0, 100);
 
-  const autoRejectThreshold = requiresMajorUpgrade ? 72 : mindset.state === 'OPEN_TO_RENEWAL' ? 54 : 42;
+  const autoRejectThreshold = clamp(
+    (requiresMajorUpgrade ? 72 : mindset.state === 'OPEN_TO_RENEWAL' ? 54 : 42) +
+    loyaltyResistance * 16,
+    42,
+    88
+  );
   const willListen =
     negotiationMemory.permanentBreakdown ||
     mindset.state === 'READY_TO_LEAVE' ||
@@ -694,13 +758,16 @@ const getExternalOfferGate = (
     0.25 +
     mindset.preContractReadiness / 72 +
     Math.max(0, reputationUpgrade) * 0.12 -
+    loyaltyResistance * 0.45 -
     (isSuperHappy ? 0.55 : 0),
     0.08,
     2.2
   );
 
   const reason = !willListen
-    ? 'Zawodnik nie chce słuchać tej oferty na obecnym etapie.'
+    ? loyaltyResistance >= 0.55
+      ? 'Zawodnik jest mocno przywiązany do obecnego klubu i nie chce słuchać zwykłej oferty na tym etapie.'
+      : 'Zawodnik nie chce słuchać tej oferty na obecnym etapie.'
     : canSignPreContract
       ? 'Zawodnik jest gotów realnie rozważyć prekontrakt.'
       : 'Zawodnik może wysłuchać rynku, ale nie jest gotów podpisać prekontraktu.';
@@ -874,6 +941,17 @@ export const PlayerContractMindflowService = {
       squadRoleFit: getRoleFit(player, profile),
       playingTimeFit: getPlayingTimeFit(player, currentClub, profile),
       moraleFit: clamp(player.morale ?? 55, 0, 100),
+      loyaltyFit: clamp(
+        getPlayerLoyalty(player) +
+        (player.moralePersonality === 'LOYAL' ? 8 : 0) +
+        (player.moralePersonality === 'PROFESSIONAL' ? 5 : 0) -
+        (player.moralePersonality === 'EGOIST' ? 8 : 0) -
+        (player.moralePersonality === 'AMBITIOUS' ? 4 : 0) -
+        (player.isOnTransferList ? 25 : 0) -
+        (player.isNegotiationPermanentBlocked ? 30 : 0),
+        0,
+        100
+      ),
       developmentFit: clamp(58 + developmentSignal * 8 + (profile.careerStage === 'DEVELOPMENT' ? performanceFit * 0.08 : 0), 15, 95),
       financialRespectFit,
       totalStayComfort: 0,
@@ -883,8 +961,9 @@ export const PlayerContractMindflowService = {
       currentClubSituation.clubReputationFit * 0.16 +
       currentClubSituation.teamAmbitionFit * 0.12 +
       currentClubSituation.squadRoleFit * 0.18 +
-      currentClubSituation.playingTimeFit * 0.17 +
-      currentClubSituation.moraleFit * 0.17 +
+      currentClubSituation.playingTimeFit * 0.15 +
+      currentClubSituation.moraleFit * 0.15 +
+      currentClubSituation.loyaltyFit * 0.10 +
       currentClubSituation.developmentFit * 0.08 +
       currentClubSituation.financialRespectFit * 0.12,
       0,
@@ -895,7 +974,7 @@ export const PlayerContractMindflowService = {
     const negotiationMemory = getNegotiationMemory(player, currentDate, currentClubSituation);
     const marketSituation = getMarketSituation(player, currentClub, interestedClubs);
     const mindset = getMindset(player, currentClubSituation, negotiationMemory, marketSituation);
-    const externalOfferGate = getExternalOfferGate(currentClub, targetClub, mindset, currentClubSituation, negotiationMemory);
+    const externalOfferGate = getExternalOfferGate(player, currentClub, targetClub, mindset, currentClubSituation, negotiationMemory);
 
     return {
       profile,
