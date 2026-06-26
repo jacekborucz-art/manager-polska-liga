@@ -74,7 +74,7 @@ const getTotalCost = (contract: MysteryAgentContractOffer): number =>
 
 export const MysteryAgentService = {
   getSeasonTriggerDate(seasonNumber: number, userClubId: string): string {
-    const seasonStartYear = 2023 + Math.max(0, seasonNumber - 1);
+    const seasonStartYear = 2025 + Math.max(0, seasonNumber - 1);
     const seasonStart = new Date(seasonStartYear, 6, 15);
     const offsetDays = 20 + (hashString(`${seasonNumber}|${userClubId}|mystery-agent-day`) % 270);
     seasonStart.setDate(seasonStart.getDate() + offsetDays);
@@ -92,7 +92,7 @@ export const MysteryAgentService = {
 
     const today = params.currentDate.toISOString().split('T')[0];
     const triggerDate = MysteryAgentService.getSeasonTriggerDate(params.seasonNumber, params.userClubId);
-    return today >= triggerDate;
+    return today === triggerDate;
   },
 
   createOffer(params: {
