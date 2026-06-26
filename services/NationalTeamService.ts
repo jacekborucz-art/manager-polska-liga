@@ -64,10 +64,38 @@ const FREE_AGENT_CLUB_ID = 'FREE_AGENTS';
 const isFreeAgentPlayer = (player?: Pick<Player, 'clubId'> | null): boolean =>
   player?.clubId === FREE_AGENT_CLUB_ID;
 
-const calcPolishNTScore = (player: Player): number => {
+const clampSelectionValue = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+
+const calcNationalTeamSelectionScore = (
+  team: NationalTeam,
+  player: Player,
+  coach: Coach | null
+): number => {
   const clubRep = CLUB_REPUTATION_BY_ID.get(player.clubId) ?? 1;
+  const playerReputation = clampSelectionValue(player.reputacja ?? 50, 1, 99);
+  const experience = coach?.attributes.experience ?? 50;
+  const decisionMaking = coach?.attributes.decisionMaking ?? 50;
+  const motivation = coach?.attributes.motivation ?? 50;
+  const training = coach?.attributes.training ?? 50;
+  const reputationTrust = clampSelectionValue(
+    0.10 +
+      (experience - 50) * 0.006 +
+      (motivation - 50) * 0.003 -
+      (decisionMaking - 50) * 0.003,
+    0.02,
+    0.55
+  );
+  const talentAssessment = clampSelectionValue(
+    0.08 + (training - 50) * 0.003 + (decisionMaking - 50) * 0.004,
+    0.02,
+    0.40
+  );
+  const playerReputationBonus = (playerReputation - 50) * reputationTrust;
+  const clubReputationBonus = clubRep * (team.region === Region.POLAND ? 1 : 0.45 + experience / 220);
+  const technicalTrustBonus = (player.overallRating - 65) * talentAssessment;
   const jitter = Math.floor(Math.random() * 7) - 3;
-  return player.overallRating * 2 + clubRep + jitter;
+  return player.overallRating * 2 + clubReputationBonus + playerReputationBonus + technicalTrustBonus + jitter;
 };
 
 type TeamSelectionRule = {
@@ -472,7 +500,7 @@ export const NationalTeamService = {
 
   generateSquadForTeam: (
     team: NationalTeam,
-    coachExp: number,
+    coach: Coach | null,
     allPlayers: Record<string, Player[]>,
     assignedPlayerIds: Set<string>
   ): { squadPlayerIds: string[]; newPlayers: Player[]; selectedPlayerIds: string[] } => {
@@ -489,7 +517,7 @@ export const NationalTeamService = {
           if (p.position !== pos) return false;
           return isEligibleForTeam(team, p, [], assignedPlayerIds, { bypassOverallCap: true });
         })
-        .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+        .map(p => ({ player: p, score: calcNationalTeamSelectionScore(team, p, coach) }))
         .sort((a, b) => b.score - a.score)
         .map(x => x.player);
 
@@ -499,6 +527,7 @@ export const NationalTeamService = {
     const poolFWD = byPos(PlayerPosition.FWD);
 
     // Współczynnik okna selekcji: trener z exp=99 widzi top 100%, exp=0 widzi top 40%
+    const coachExp = coach ? coach.attributes.experience : 50;
     const windowFactor = 0.4 + 0.6 * (coachExp / 99);
 
     const squadPlayerIds: string[] = [];
@@ -565,10 +594,9 @@ export const NationalTeamService = {
 
     for (const team of sortTeamsByPriority(nationalTeams)) {
       const coach = team.coachId ? ntCoaches[team.coachId] : null;
-      const coachExp = coach ? coach.attributes.experience : 50;
 
       const { squadPlayerIds, newPlayers, selectedPlayerIds } = NationalTeamService.generateSquadForTeam(
-        team, coachExp, allPlayers, assignedPlayerIds
+        team, coach, allPlayers, assignedPlayerIds
       );
 
       selectedPlayerIds.forEach(id => allPlayerUpdates.push({ id, assignedNationalTeamId: team.id }));
@@ -690,7 +718,7 @@ export const NationalTeamService = {
           };
           const fillers = clubPlayersList
             .filter(isEligibleFiller)
-            .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+            .map(p => ({ player: p, score: calcNationalTeamSelectionScore(team, p, coach) }))
             .sort((a, b) => b.score - a.score)
             .map(x => x.player);
           const acceptedFillers: Player[] = [];
@@ -752,7 +780,11 @@ export const NationalTeamService = {
           .filter(entry => isFreeAgentPlayer(entry.player))
           .sort((a, b) => (a.player?.overallRating ?? 0) - (b.player?.overallRating ?? 0))[0] ?? null;
         const replacementTarget = freeAgentInSquad ?? weakest;
-        const replacementTargetOvr = replacementTarget.player?.overallRating ?? 0;
+        const replacementTargetPlayer = replacementTarget.player ?? null;
+        const replacementTargetOvr = replacementTargetPlayer?.overallRating ?? 0;
+        const replacementTargetScore = replacementTargetPlayer
+          ? calcNationalTeamSelectionScore(team, replacementTargetPlayer, coach)
+          : 0;
 
         const isEligible = (p: Player): boolean => {
           if (p.position !== pos) return false;
@@ -769,7 +801,7 @@ export const NationalTeamService = {
         // Priorytet 1: najlepszy kandydat klubowy, który mieści się w limicie gwiazd
         const candidate = clubPlayersList
           .filter(isEligible)
-          .map(p => ({ player: p, score: team.region === Region.POLAND ? calcPolishNTScore(p) : p.overallRating }))
+          .map(p => ({ player: p, score: calcNationalTeamSelectionScore(team, p, coach) }))
           .sort((a, b) => b.score - a.score)
           .map(x => x.player)
           .find(player => !isTeamStarPlayer(team, player) || starsWithoutWeakest < teamMaxStars) ?? null;
@@ -782,8 +814,17 @@ export const NationalTeamService = {
           candidateIsStar &&
           starsWithoutWeakest < teamMaxStars &&
           candidate.overallRating > replacementTargetOvr;
+        const candidateScore = calcNationalTeamSelectionScore(team, candidate, coach);
+        const reputationOverride =
+          candidateScore - replacementTargetScore >= Math.max(2, threshold * 1.6) &&
+          candidate.overallRating >= replacementTargetOvr - 2;
 
-        if (!freeAgentInSquad && !canUseOpenStarSlot && candidate.overallRating - replacementTargetOvr < threshold) continue;
+        if (
+          !freeAgentInSquad &&
+          !canUseOpenStarSlot &&
+          candidate.overallRating - replacementTargetOvr < threshold &&
+          !reputationOverride
+        ) continue;
 
         squadIds[replacementTarget.idx] = candidate.id;
         allPlayerUpdates.push({ id: replacementTarget.id, assignedNationalTeamId: null });
