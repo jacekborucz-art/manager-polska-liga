@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus } from '../../types';
 import { PlayerMarketVisibilityService } from '../../services/PlayerMarketVisibilityService';
+import { ManagerJobService } from '../../services/ManagerJobService';
 
 type ContractStatusFilter = 'ALL' | 'FREE_AGENT' | 'CONTRACT' | 'TRANSFER_LIST';
 type MarketOriginFilter = 'ALL' | 'LOCAL' | 'FOREIGN';
@@ -38,7 +39,7 @@ const _persisted = {
 };
 
 export const JobMarketView: React.FC = () => {
-  const { coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails, transferOffers, pendingNegotiations, userTeamId, employedScouts, academy } = useGame();
+  const { coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails, transferOffers, pendingNegotiations, userTeamId, employedScouts, academy, isResigned, managerEmploymentStatus, managerProfile, managerJobOffers, applyForManagerJob, acceptManagerJobOffer, currentDate } = useGame();
 
   // Filtry Piłkarzy - inicjalizowane z ostatnich zapamiętanych wartości
   const [searchTermPlayers, setSearchTermPlayers] = useState(_persisted.searchTermPlayers);
@@ -55,11 +56,44 @@ export const JobMarketView: React.FC = () => {
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
+  const [managerJobFeedback, setManagerJobFeedback] = useState<string | null>(null);
 
   const scrollRefPlayers = useRef<HTMLDivElement>(null);
   const scrollRefTransfer = useRef<HTMLDivElement>(null);
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId) ?? null, [clubs, userTeamId]);
+  const isOutOfClub = isResigned || userClub?.leagueId === 'NONE';
+  const managerJobRows = useMemo(() => {
+    if (!isOutOfClub) return [];
+
+    const latestOfferByClub = new Map<string, typeof managerJobOffers[number]>();
+    managerJobOffers.forEach(offer => {
+      const existing = latestOfferByClub.get(offer.clubId);
+      if (!existing || new Date(offer.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+        latestOfferByClub.set(offer.clubId, offer);
+      }
+    });
+
+    return clubs
+      .filter(ManagerJobService.isPolishManagerJobClub)
+      .map(club => ({
+        club,
+        evaluation: ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus),
+        offer: latestOfferByClub.get(club.id),
+      }))
+      .filter(row =>
+        row.evaluation.isVacant ||
+        row.evaluation.isUnderReview ||
+        (row.offer?.status === 'OFFERED' && new Date(row.offer.expiresAt).getTime() >= currentDate.getTime())
+      )
+      .sort((a, b) =>
+        Number(b.offer?.status === 'OFFERED' && new Date(b.offer.expiresAt).getTime() >= currentDate.getTime()) -
+        Number(a.offer?.status === 'OFFERED' && new Date(a.offer.expiresAt).getTime() >= currentDate.getTime()) ||
+        Number(b.evaluation.isVacant) - Number(a.evaluation.isVacant) ||
+        b.evaluation.chance - a.evaluation.chance ||
+        b.club.reputation - a.club.reputation
+      );
+  }, [clubs, coaches, managerProfile, managerEmploymentStatus, managerJobOffers, isOutOfClub, currentDate]);
 
   const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
   const clubById = useMemo(() => new Map(clubs.map(club => [club.id, club])), [clubs]);
@@ -452,6 +486,116 @@ export const JobMarketView: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {isOutOfClub && (
+          <section className="mb-4 shrink-0 bg-slate-950/80 border border-orange-400/20 rounded-[24px] overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10">
+              <div>
+                <h2 className="text-xl text-white font-black italic uppercase tracking-tighter">Rynek pracy trenera</h2>
+                <p className="text-[10px] text-slate-400 mt-1 font-black italic uppercase tracking-tighter">
+                  Aplikuj o wakaty albo przyjmij propozycje klubów zainteresowanych Twoim EXP
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Twój status</p>
+                <p className="text-sm text-orange-300 font-black italic uppercase tracking-tighter">
+                  {managerEmploymentStatus === 'FIRED' ? 'Zwolniony' : 'Bez klubu'} · {managerProfile?.expPoints ?? 1} EXP
+                </p>
+              </div>
+            </div>
+
+            {managerJobFeedback && (
+              <div className="mx-6 mt-4 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-100 font-black italic uppercase tracking-tighter">
+                {managerJobFeedback}
+              </div>
+            )}
+
+            <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
+              {managerJobRows.length === 0 ? (
+                <div className="px-6 py-10 text-center text-slate-500 font-black italic uppercase tracking-tighter">
+                  Brak otwartych rekrutacji. Przewiń kalendarz i obserwuj zwolnienia trenerów.
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.03]">
+                      <th className="px-6 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Klub</th>
+                      <th className="px-4 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Liga</th>
+                      <th className="px-4 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Sytuacja</th>
+                      <th className="px-4 py-3 text-center text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Wymagane EXP</th>
+                      <th className="px-4 py-3 text-center text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Szansa</th>
+                      <th className="px-6 py-3 text-right text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Decyzja</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {managerJobRows.map(({ club, evaluation, offer }) => {
+                      const isOffered = offer?.status === 'OFFERED' && new Date(offer.expiresAt).getTime() >= currentDate.getTime();
+                      const isRejected = offer?.status === 'REJECTED';
+                      const canApply = !isOffered && !isRejected;
+                      return (
+                        <tr key={club.id} className="border-b border-white/[0.05] hover:bg-white/[0.03] transition-colors">
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => viewClubDetails(club.id)}
+                              className="text-left text-sm text-white hover:text-orange-300 transition-colors font-black italic uppercase tracking-tighter"
+                            >
+                              {club.name}
+                            </button>
+                          </td>
+                          <td className="px-4 py-4 text-[11px] text-slate-300 font-black italic uppercase tracking-tighter">
+                            {ManagerJobService.getManagerJobLeagueLabel(club)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="text-[11px] text-orange-200 font-black italic uppercase tracking-tighter">
+                              {isOffered ? 'Oferta dla Ciebie' : evaluation.pressureLabel}
+                            </div>
+                            <div className="text-[9px] text-slate-500 mt-0.5 font-black italic uppercase tracking-tighter">
+                              {offer?.response || offer?.reason || evaluation.reason}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-center text-[12px] text-slate-200 font-black italic uppercase tracking-tighter">
+                            {evaluation.requiredExp}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className={`text-[12px] font-black italic uppercase tracking-tighter ${evaluation.chance >= 65 ? 'text-emerald-300' : evaluation.chance >= 35 ? 'text-yellow-300' : 'text-red-300'}`}>
+                              {evaluation.chance}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {isOffered ? (
+                              <button
+                                onClick={() => {
+                                  const result = acceptManagerJobOffer(offer!.id);
+                                  setManagerJobFeedback(result.message);
+                                }}
+                                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] transition-colors font-black italic uppercase tracking-tighter"
+                              >
+                                Przyjmij pracę
+                              </button>
+                            ) : isRejected ? (
+                              <span className="text-[10px] text-red-300 font-black italic uppercase tracking-tighter">Odrzucono</span>
+                            ) : (
+                              <button
+                                disabled={!canApply}
+                                onClick={() => {
+                                  const result = applyForManagerJob(club.id);
+                                  setManagerJobFeedback(result.message);
+                                }}
+                                className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-[10px] transition-colors font-black italic uppercase tracking-tighter"
+                              >
+                                Aplikuj
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
         )}
 
         <div className="flex-1 flex gap-4 min-h-0">

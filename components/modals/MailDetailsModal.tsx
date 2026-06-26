@@ -703,6 +703,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     setPlayers,
     managerProfile,
     addPendingPressArticle,
+    acceptManagerJobOffer,
   } = useGame();
 
   const { closeModal, exitClass } = useModalClose(onClose);
@@ -1069,6 +1070,18 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
                 Podpisz kontrakt
+              </button>
+            )}
+
+            {mail.metadata?.type === 'MANAGER_JOB_OFFER' && (
+              <button
+                onClick={() => {
+                  acceptManagerJobOffer(mail.metadata!.offerId);
+                  onClose();
+                }}
+                className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+              >
+                Przyjmij pracę
               </button>
             )}
 

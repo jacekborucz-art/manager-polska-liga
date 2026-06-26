@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
-  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, MatchLiveState,
+  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, ManagerJobOffer, ManagerJobApplicationResult, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity, IndividualTalkType,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
@@ -151,6 +151,7 @@ import { PlayerTransferListObjectionResult } from '../services/PlayerTransferLis
 import { PlayerTransferRequestDialogService, TransferRequestDialogResult } from '../services/PlayerTransferRequestDialogService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
 import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
+import { ManagerJobService } from '../services/ManagerJobService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
@@ -774,6 +775,7 @@ interface GameContextType {
   roundResults: Record<string, LeagueRoundResults>;
   isJumping: boolean;
   managerProfile: ManagerProfile | null;
+  managerJobOffers: ManagerJobOffer[];
   seasonNumber: number;
   activeMatchState: MatchLiveState | null;
   messages: MailMessage[];
@@ -938,6 +940,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   isResigned: boolean;
   managerEmploymentStatus: ManagerEmploymentStatus;
   resignFromClub: () => void;
+  applyForManagerJob: (clubId: string) => ManagerJobApplicationResult;
+  acceptManagerJobOffer: (offerId: string) => ManagerJobApplicationResult;
   gameNotification: GameNotificationState | null;
   showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => void;
   clearGameNotification: () => void;
@@ -1068,6 +1072,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [staffMembers, setStaffMembers] = useState<Record<string, StaffMember>>({});
   const [roundResults, setRoundResults] = useState<Record<string, LeagueRoundResults>>({});
   const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(null);
+  const [managerJobOffers, setManagerJobOffers] = useState<ManagerJobOffer[]>([]);
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
   const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
@@ -1606,6 +1611,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setManagerEmploymentStatus('EMPLOYED');
     setUserTeamId(null);
     setManagerProfile(options?.preserveManagerProfile ?? null);
+    setManagerJobOffers([]);
     setLineups({});
     setReserves([]);
     setReserveCoachId(null);
@@ -2717,6 +2723,7 @@ if (userTeamId) {
     staffMembers,
     roundResults,
     managerProfile,
+    managerJobOffers,
     seasonNumber,
     messages,
     mediaRelationships,
@@ -2825,6 +2832,7 @@ if (userTeamId) {
     setStaffMembers(data.staffMembers ?? {});
     setRoundResults(data.roundResults);
     setManagerProfile(data.managerProfile);
+    setManagerJobOffers(data.managerJobOffers ?? []);
     setSeasonNumber(data.seasonNumber);
     setMessages(data.messages);
     setMediaRelationships(data.mediaRelationships ?? {});
@@ -3264,7 +3272,7 @@ const takingOverInterviewMail = isNewJobAfterGameStart
       currentDate
     )
   : null;
-setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fanMail] : [welcomeMail, fanMail]);
+setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fanMail, ...prev] : [welcomeMail, fanMail, ...prev]);
 
     navigateTo(ViewState.SQUAD_IMPORT);
   };
@@ -3289,6 +3297,124 @@ setMessages(takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fan
     type: MailType.BOARD,
     priority: 95,
   });
+
+  const createManagerJobOfferRecord = (
+    club: Club,
+    source: ManagerJobOffer['source'],
+    status: ManagerJobOffer['status'],
+    date: Date,
+    customReason?: string
+  ): ManagerJobOffer => {
+    const evaluation = ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus);
+    const expiresAt = new Date(date);
+    expiresAt.setDate(expiresAt.getDate() + 14);
+
+    return {
+      id: `MANAGER_JOB_${source}_${club.id}_${date.toISOString().split('T')[0]}_${Math.random().toString(36).slice(2, 8)}`,
+      clubId: club.id,
+      createdAt: date.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      season: seasonNumber,
+      status,
+      source,
+      requiredExp: evaluation.requiredExp,
+      chance: evaluation.chance,
+      reason: customReason ?? evaluation.reason,
+    };
+  };
+
+  const createManagerJobOfferMail = (club: Club, offer: ManagerJobOffer, date: Date): MailMessage => ({
+    id: `MANAGER_JOB_OFFER_${offer.id}`,
+    sender: `Zarząd ${club.name}`,
+    role: 'Oferta pracy',
+    subject: `Propozycja pracy: ${club.name}`,
+    body: `Zarząd klubu ${club.name} zaprasza Pana do objęcia funkcji pierwszego trenera.\n\nPowód: ${offer.reason}.\nWymagane doświadczenie: ${offer.requiredExp} EXP.\nPańskie szanse w tej rekrutacji oceniono na ${offer.chance}%.\n\nOferta jest ważna do ${new Date(offer.expiresAt).toLocaleDateString('pl-PL')}. Można ją przyjąć z poziomu tej wiadomości albo rynku pracy.`,
+    date,
+    isRead: false,
+    type: MailType.BOARD,
+    priority: 98,
+    metadata: {
+      type: 'MANAGER_JOB_OFFER',
+      offerId: offer.id,
+      clubId: club.id,
+    },
+  });
+
+  const isManagerOutOfClub = (): boolean =>
+    isResigned || !userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+
+  const applyForManagerJob = (clubId: string): ManagerJobApplicationResult => {
+    if (!isManagerOutOfClub()) {
+      return { ok: false, message: 'Najpierw musisz odejść z obecnego klubu.' };
+    }
+
+    const club = clubs.find(item => item.id === clubId);
+    if (!club || !ManagerJobService.isPolishManagerJobClub(club)) {
+      return { ok: false, message: 'Ten klub nie prowadzi obecnie rekrutacji dla gracza.' };
+    }
+
+    const evaluation = ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus);
+    if (!evaluation.isVacant && !evaluation.isUnderReview) {
+      return { ok: false, message: 'Zarząd tego klubu nie szuka teraz nowego trenera.' };
+    }
+
+    const existingActive = managerJobOffers.find(offer =>
+      offer.clubId === clubId &&
+      (offer.status === 'OFFERED' || offer.status === 'APPLIED') &&
+      new Date(offer.expiresAt).getTime() >= currentDate.getTime()
+    );
+    if (existingActive) {
+      return { ok: false, offer: existingActive, message: 'Masz już aktywną sprawę z tym klubem.' };
+    }
+
+    const accepted = Math.random() * 100 <= evaluation.chance;
+    const offer = createManagerJobOfferRecord(
+      club,
+      'APPLICATION',
+      accepted ? 'OFFERED' : 'REJECTED',
+      currentDate,
+      evaluation.reason
+    );
+    const completedOffer = {
+      ...offer,
+      response: accepted
+        ? 'Klub zaakceptował aplikację i zaprasza do podpisania kontraktu.'
+        : 'Klub podziękował za aplikację i wybrał inny kierunek rozmów.',
+    };
+
+    setManagerJobOffers(prev => [completedOffer, ...prev].slice(0, 80));
+    if (accepted) {
+      setMessages(prev => [createManagerJobOfferMail(club, completedOffer, currentDate), ...prev]);
+    }
+
+    return {
+      ok: accepted,
+      offer: completedOffer,
+      message: completedOffer.response,
+    };
+  };
+
+  const acceptManagerJobOffer = (offerId: string): ManagerJobApplicationResult => {
+    const offer = managerJobOffers.find(item => item.id === offerId);
+    if (!offer || offer.status !== 'OFFERED') {
+      return { ok: false, message: 'Ta oferta pracy nie jest już aktywna.' };
+    }
+    if (new Date(offer.expiresAt).getTime() < currentDate.getTime()) {
+      setManagerJobOffers(prev => prev.map(item => item.id === offerId ? { ...item, status: 'EXPIRED' } : item));
+      return { ok: false, message: 'Oferta wygasła.' };
+    }
+
+    const club = clubs.find(item => item.id === offer.clubId);
+    if (!club) return { ok: false, message: 'Nie znaleziono klubu dla tej oferty.' };
+
+    setManagerJobOffers(prev => prev.map(item => {
+      if (item.id === offerId) return { ...item, status: 'ACCEPTED', response: 'Oferta przyjęta.' };
+      if (item.status === 'OFFERED' || item.status === 'APPLIED') return { ...item, status: 'EXPIRED' };
+      return item;
+    }));
+    selectUserTeam(club.id);
+    return { ok: true, offer: { ...offer, status: 'ACCEPTED' }, message: `Podpisałeś kontrakt z ${club.name}.` };
+  };
 
   const assignReplacementCoachToClub = (
     updatedCoaches: Record<string, Coach>,
@@ -9529,6 +9655,14 @@ const finalResult: SimulationOutput = {
 
       updatedClubs.forEach(club => {
         if (club.id === userTeamId || club.leagueId === 'NONE') return;
+        if (
+          managerJobHoldClubIds.has(club.id) ||
+          managerJobOffers.some(offer =>
+            offer.clubId === club.id &&
+            offer.status === 'OFFERED' &&
+            new Date(offer.expiresAt).getTime() >= nextDay.getTime()
+          )
+        ) return;
 
         const currentCoach = club.coachId ? updatedCoaches[club.coachId] : null;
         if (currentCoach?.currentClubId === club.id) return;
@@ -9689,6 +9823,7 @@ const finalResult: SimulationOutput = {
     let nextClubsState = clubs;
     let staffClubStateChanged = false;
     let nextStaffMembersState = staffMembers;
+    const managerJobHoldClubIds = new Set<string>();
 
     if (isBoardMeeting) {
       const updatedCoaches = { ...coaches };
@@ -9772,6 +9907,28 @@ const finalResult: SimulationOutput = {
           coach.history[coach.history.length-1].toYear = nextDay.getFullYear();
           coach.history[coach.history.length-1].toMonth = nextDay.getMonth()+1;
           // Szukanie następcy
+          const shouldConsiderPlayer = isManagerOutOfClub() && managerProfile && ManagerJobService.isPolishManagerJobClub(club);
+          const playerJobEvaluation = ManagerJobService.evaluateManagerJob(club, updatedClubsList, updatedCoaches, managerProfile, managerEmploymentStatus);
+          const shouldOfferPlayerJob =
+            shouldConsiderPlayer &&
+            playerJobEvaluation.chance >= 28 &&
+            Math.random() * 100 <= Math.min(78, playerJobEvaluation.chance + 8);
+
+          if (shouldOfferPlayerJob) {
+            club.coachId = undefined;
+            const managerOffer = createManagerJobOfferRecord(
+              club,
+              'CLUB_OFFER',
+              'OFFERED',
+              nextDay,
+              `Zarząd zwolnił ${coach.firstName} ${coach.lastName} i chce szybko rozpocząć nowy projekt.`
+            );
+            managerJobHoldClubIds.add(club.id);
+            setManagerJobOffers(prev => [managerOffer, ...prev].slice(0, 80));
+            newMails.push(createManagerJobOfferMail(club, managerOffer, nextDay));
+            return;
+          }
+
           const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, coach.id);
           
           if (replacement) {
@@ -15602,7 +15759,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
     viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
       lastRecoveryDate,
-      managerProfile, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
+      managerProfile, managerJobOffers, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
       startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
@@ -15622,7 +15779,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
     euroState, setEuroState,
-    europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, managerEmploymentStatus, resignFromClub,
+    europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, managerEmploymentStatus, resignFromClub, applyForManagerJob, acceptManagerJobOffer,
     gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, submitBoardClubRequest,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,

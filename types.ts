@@ -440,6 +440,10 @@ export interface MailMessage {
   } | {
     type: 'LEAGUE_FINANCE_REPORT';
   } | {
+    type: 'MANAGER_JOB_OFFER';
+    offerId: string;
+    clubId: string;
+  } | {
     type: 'LOAN_PLAYTIME_WARNING';
     playerId: string;
   } | {
@@ -2846,6 +2850,29 @@ export interface ManagerProfile {
 }
 
 export type ManagerEmploymentStatus = 'EMPLOYED' | 'RESIGNED' | 'FIRED';
+
+export type ManagerJobOfferStatus = 'OPEN' | 'APPLIED' | 'REJECTED' | 'OFFERED' | 'ACCEPTED' | 'EXPIRED';
+export type ManagerJobOfferSource = 'VACANCY' | 'APPLICATION' | 'CLUB_OFFER';
+
+export interface ManagerJobOffer {
+  id: string;
+  clubId: string;
+  createdAt: string;
+  expiresAt: string;
+  season: number;
+  status: ManagerJobOfferStatus;
+  source: ManagerJobOfferSource;
+  requiredExp: number;
+  chance: number;
+  reason: string;
+  response?: string;
+}
+
+export interface ManagerJobApplicationResult {
+  ok: boolean;
+  offer?: ManagerJobOffer;
+  message: string;
+}
 
 export interface TrainingCycle {
   id: string;
