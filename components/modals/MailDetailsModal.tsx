@@ -390,13 +390,14 @@ const getFlagCode = (teamName: string, country?: string): string | null => {
   return TEAM_NAME_TO_FLAG[teamName] ?? null;
 };
 
-const FlagBadge: React.FC<{ teamName: string; country?: string; align: 'left' | 'right' }> = ({ teamName, country, align }) => {
+const FlagBadge: React.FC<{ teamName: string; country?: string; align: 'left' | 'right'; size?: 'normal' | 'small' }> = ({ teamName, country, align, size = 'normal' }) => {
   const code = getFlagCode(teamName, country);
   const fallback = teamName.slice(0, 2).toUpperCase();
+  const sizeClass = size === 'small' ? 'h-[18px] w-6 rounded-[3px]' : 'h-9 w-12 rounded-md';
 
   if (!code) {
     return (
-      <div className="flex h-9 w-12 items-center justify-center rounded-md border border-yellow-300/20 bg-yellow-300/10 text-[10px] font-black italic uppercase tracking-tighter text-yellow-100">
+      <div className={`flex items-center justify-center border border-yellow-300/20 bg-yellow-300/10 font-black italic uppercase tracking-tighter text-yellow-100 ${sizeClass} ${size === 'small' ? 'text-[7px]' : 'text-[10px]'}`}>
         {fallback}
       </div>
     );
@@ -406,7 +407,7 @@ const FlagBadge: React.FC<{ teamName: string; country?: string; align: 'left' | 
     <img
       src={`https://flagcdn.com/w80/${code}.png`}
       alt={teamName}
-      className={`h-9 w-12 rounded-md border border-white/10 bg-white/5 object-cover shadow-lg ${align === 'right' ? 'order-first' : ''}`}
+      className={`border border-white/10 bg-white/5 object-cover shadow-lg ${sizeClass} ${align === 'right' ? 'order-first' : ''}`}
     />
   );
 };
@@ -501,15 +502,15 @@ const FriendlyResultsMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
                   <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${homeWon ? 'text-white' : 'text-slate-300'}`}>
                     {match.homeName}
                   </span>
-                  <FlagBadge teamName={match.homeName} country={resolveCountry(match.homeName, match.homeCountry)} align="left" />
+                  <FlagBadge teamName={match.homeName} country={resolveCountry(match.homeName, match.homeCountry)} align="left" size="small" />
                 </div>
 
-                <div className="flex items-center justify-center rounded-xl border border-yellow-300/35 bg-yellow-300/10 px-3 py-2 text-[18px] font-black italic uppercase tracking-tighter text-yellow-100 shadow-[inset_0_0_18px_rgba(250,204,21,0.08)]">
+                <div className="flex items-center justify-center px-3 py-2 text-[18px] font-black italic uppercase tracking-tighter text-yellow-100">
                   {match.homeScore} : {match.awayScore}
                 </div>
 
                 <div className="flex min-w-0 items-center justify-start gap-3 text-left">
-                  <FlagBadge teamName={match.awayName} country={resolveCountry(match.awayName, match.awayCountry)} align="right" />
+                  <FlagBadge teamName={match.awayName} country={resolveCountry(match.awayName, match.awayCountry)} align="right" size="small" />
                   <span className={`truncate text-[14px] font-black italic uppercase tracking-tighter ${awayWon ? 'text-white' : 'text-slate-300'}`}>
                     {match.awayName}
                   </span>

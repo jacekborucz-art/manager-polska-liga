@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../../resources/static_db/clubs/ChampionsLeagueTeams';
 import CLThemeBg from '../../Graphic/themes/CL_theme.png';
+import { ClubTeamMark } from '../common/ClubTeamMark';
 
 const GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -104,10 +105,11 @@ export const CLGroupDrawView: React.FC = () => {
                     </div>
 
                     {/* Kolory klubu */}
-                    <div className="w-8 h-8 rounded-lg border border-white/10 flex flex-col overflow-hidden shrink-0 shadow-lg">
-                      <div className="flex-1" style={{ backgroundColor: club?.colorsHex[0] ?? '#333' }} />
-                      <div className="flex-1" style={{ backgroundColor: club?.colorsHex[1] ?? club?.colorsHex[0] ?? '#555' }} />
-                    </div>
+                    <ClubTeamMark
+                      club={club}
+                      className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 p-1"
+                      fallbackClassName="w-8 h-8 rounded-lg border border-white/10 flex flex-col overflow-hidden shrink-0 shadow-lg"
+                    />
 
                     {/* Nazwa + kraj */}
                     <div className="min-w-0 flex-1">

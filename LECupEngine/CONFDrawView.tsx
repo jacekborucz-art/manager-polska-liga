@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/static_db/clubs/ConferenceLeagueTeams';
 import { ViewState } from '../types';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const COUNTRY_NAMES: Record<string, string> = {
   ALB: 'Albania', ARM: 'Armenia', AUT: 'Austria', AZE: 'Azerbejdżan',
@@ -141,12 +142,11 @@ export const CONFDrawView: React.FC = () => {
                       {homeCountry}
                     </span>
                   </div>
-                  <div
-                    className="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
-                  >
-                    <div className="flex-1" style={{ backgroundColor: home.colorsHex[0] }} />
-                    <div className="flex-1" style={{ backgroundColor: home.colorsHex[1] || home.colorsHex[0] }} />
-                  </div>
+                  <ClubTeamMark
+                    club={home}
+                    className="w-10 h-10 rounded-xl p-1"
+                    fallbackClassName="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+                  />
                 </div>
 
                 {/* VS */}
@@ -158,12 +158,11 @@ export const CONFDrawView: React.FC = () => {
 
                 {/* Gość */}
                 <div className="flex-1 flex items-center justify-start gap-3 pl-3 min-w-0">
-                  <div
-                    className="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
-                  >
-                    <div className="flex-1" style={{ backgroundColor: away.colorsHex[0] }} />
-                    <div className="flex-1" style={{ backgroundColor: away.colorsHex[1] || away.colorsHex[0] }} />
-                  </div>
+                  <ClubTeamMark
+                    club={away}
+                    className="w-10 h-10 rounded-xl p-1"
+                    fallbackClassName="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+                  />
                   <div className="text-left min-w-0">
                     <span className="block text-[13px] font-black uppercase italic truncate tracking-tight text-white group-hover:text-emerald-300 transition-colors">
                       {away.name}

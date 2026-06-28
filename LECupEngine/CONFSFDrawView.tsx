@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { CONFDrawService } from './CONFDrawService';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -114,8 +115,12 @@ export const CONFSFDrawView: React.FC = () => {
                       <span className="text-sm font-black uppercase italic tracking-tight text-white text-right truncate max-w-[180px]">
                         {clubA?.name ?? pair.teamA}
                       </span>
-                      <div className="w-3 h-6 rounded-full border border-white/10 shrink-0"
-                        style={{ backgroundColor: clubA?.colorsHex?.[0] ?? '#555' }} />
+                      <ClubTeamMark
+                        club={clubA}
+                        className="w-6 h-6 rounded-lg p-0.5"
+                        fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
+                      />
                     </div>
 
                     <div className="w-20 flex flex-col items-center shrink-0">
@@ -123,8 +128,12 @@ export const CONFSFDrawView: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 flex-1 justify-start">
-                      <div className="w-3 h-6 rounded-full border border-white/10 shrink-0"
-                        style={{ backgroundColor: clubB?.colorsHex?.[0] ?? '#555' }} />
+                      <ClubTeamMark
+                        club={clubB}
+                        className="w-6 h-6 rounded-lg p-0.5"
+                        fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
+                      />
                       <span className="text-sm font-black uppercase italic tracking-tight text-white truncate max-w-[180px]">
                         {clubB?.name ?? pair.teamB}
                       </span>

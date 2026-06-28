@@ -5,9 +5,9 @@ import { KitSelectionService } from '../services/KitSelectionService';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/static_db/clubs/ConferenceLeagueTeams';
 import { PlayerPresentationService } from '../services/PlayerPresentationService';
 import { TacticRepository } from '../resources/tactics_db';
-import { getClubLogo } from '../resources/ClubLogoAssets';
 import { KitPreview } from '../components/common/KitPreview';
 import { getActiveClubKits } from '../resources/ClubKits';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 import ligaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
 
@@ -297,9 +297,11 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
           <div className="relative z-10 flex items-center justify-between">
             {/* Lewa — gospodarz */}
             <div className="flex items-center flex-1">
-              {getClubLogo(homeClub.id) && (
-                <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
-              )}
+              <ClubTeamMark
+                club={homeClub}
+                className="w-16 h-16 rounded-xl p-1"
+                fallbackClassName="w-16 h-16 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+              />
             </div>
 
             {/* Środek — tytuł */}
@@ -320,9 +322,11 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
 
             {/* Prawa — gość */}
             <div className="flex items-center flex-1 justify-end">
-              {getClubLogo(awayClub.id) && (
-                <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
-              )}
+              <ClubTeamMark
+                club={awayClub}
+                className="w-16 h-16 rounded-xl p-1"
+                fallbackClassName="w-16 h-16 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+              />
             </div>
           </div>
         </div>
@@ -457,9 +461,11 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
             {/* ETYKIETA MECZU */}
             <div className="flex-1 flex flex-col items-center justify-center gap-5">
               <div className="flex items-start gap-6">
-                {getClubLogo(homeClub.id) && (
-                  <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-20 h-20 object-contain drop-shadow-2xl opacity-90 transform -rotate-3" />
-                )}
+                <ClubTeamMark
+                  club={homeClub}
+                  className="w-20 h-20 rounded-xl p-1 opacity-90 transform -rotate-3"
+                  fallbackClassName="w-20 h-20 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0 opacity-90 transform -rotate-3"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-emerald-400 text-[9px] font-black uppercase tracking-[0.6em] text-center">UEFA Conference League</p>
                   <div className="flex items-baseline gap-4 my-1">
@@ -517,9 +523,11 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                {getClubLogo(awayClub.id) && (
-                  <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-20 h-20 object-contain drop-shadow-2xl opacity-90 transform rotate-3" />
-                )}
+                <ClubTeamMark
+                  club={awayClub}
+                  className="w-20 h-20 rounded-xl p-1 opacity-90 transform rotate-3"
+                  fallbackClassName="w-20 h-20 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0 opacity-90 transform rotate-3"
+                />
               </div>
 
               <div className="w-full border-t border-yellow-400/20 my-1" />

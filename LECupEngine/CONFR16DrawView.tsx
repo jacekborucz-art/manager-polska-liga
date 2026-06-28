@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { CompetitionType } from '../types';
 import { CONFDrawService } from './CONFDrawService';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -124,9 +125,11 @@ export const CONFR16DrawView: React.FC = () => {
                         ${pair.runnerId === userTeamId ? 'text-emerald-300' : 'text-slate-300'}`}>
                         {runner?.name ?? pair.runnerId}
                       </span>
-                      <div
-                        className="w-3 h-8 rounded-full border border-white/10 shrink-0"
-                        style={{ backgroundColor: runner?.colorsHex?.[0] ?? '#555' }}
+                      <ClubTeamMark
+                        club={runner}
+                        className="w-7 h-7 rounded-lg p-0.5"
+                        fallbackClassName="w-3 h-8 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
                       />
                       <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest shrink-0 w-8 text-center">
                         2M
@@ -141,9 +144,11 @@ export const CONFR16DrawView: React.FC = () => {
                       <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest shrink-0 w-8 text-center">
                         1M
                       </span>
-                      <div
-                        className="w-3 h-8 rounded-full border border-white/10 shrink-0"
-                        style={{ backgroundColor: winner?.colorsHex?.[0] ?? '#555' }}
+                      <ClubTeamMark
+                        club={winner}
+                        className="w-7 h-7 rounded-lg p-0.5"
+                        fallbackClassName="w-3 h-8 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
                       />
                       <span className={`text-xs font-black uppercase italic tracking-tight truncate max-w-[160px]
                         ${pair.winnerId === userTeamId ? 'text-emerald-300' : 'text-slate-300'}`}>

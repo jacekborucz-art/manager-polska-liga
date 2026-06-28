@@ -3,6 +3,8 @@ import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../../types';
 import { ChampionshipHistoryService } from '../../data/championship_history';
 import ligaMistrzowBg from '../../Graphic/themes/Liga_mistrzow.png';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { ClubTeamMark } from '../common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -39,6 +41,7 @@ export const PostMatchCLFinalView: React.FC = () => {
 
   const winnerId = getWinnerId();
   const winnerClub = winnerId ? getClub(winnerId) : null;
+  const winnerLogo = winnerClub ? getClubLogo(winnerClub.id) : undefined;
 
   // Zapisz zwycięzcę finału Ligi Mistrzów do historii (tylko raz dla każdego meczu)
   useEffect(() => {
@@ -99,9 +102,9 @@ export const PostMatchCLFinalView: React.FC = () => {
             ZWYCIĘZCA LIGI MISTRZÓW
           </p>
           <div style={{ transform: animated ? 'scale(1)' : 'scale(0)', opacity: animated ? 1 : 0, transition: 'transform 0.8s cubic-bezier(0.34,1.56,0.64,1) 0.15s, opacity 0.7s ease 0.15s' }}>
-            {winnerClub?.logoFile ? (
+            {winnerLogo || winnerClub?.logoFile ? (
               <img
-                src={new URL(`../../Graphic/logo/${winnerClub.logoFile}`, import.meta.url).href}
+                src={winnerLogo ?? new URL(`../../Graphic/logo/${winnerClub!.logoFile}`, import.meta.url).href}
                 alt=""
                 className="w-64 h-64 object-contain"
               />
@@ -175,6 +178,12 @@ export const PostMatchCLFinalView: React.FC = () => {
                         <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">🏆 MISTRZ EUROPY</span>
                       )}
                       <span className={`font-bold text-sm ${homeWins ? 'text-white' : 'text-slate-400'}`}>{home.name}</span>
+                      <ClubTeamMark
+                        club={home}
+                        className="w-8 h-8 rounded-lg bg-white/5 p-1"
+                        fallbackClassName="w-8 h-8 rounded-full bg-white/10"
+                        fallbackMode="solid"
+                      />
                     </div>
                     <div className="px-8 text-center">
                       <span className="text-2xl font-black text-white">
@@ -187,6 +196,12 @@ export const PostMatchCLFinalView: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-3 flex-1">
+                      <ClubTeamMark
+                        club={away}
+                        className="w-8 h-8 rounded-lg bg-white/5 p-1"
+                        fallbackClassName="w-8 h-8 rounded-full bg-white/10"
+                        fallbackMode="solid"
+                      />
                       <span className={`font-bold text-sm ${awayWins ? 'text-white' : 'text-slate-400'}`}>{away.name}</span>
                       {awayWins && (
                         <span className="text-amber-400 text-[9px] font-black uppercase tracking-[0.3em]">🏆 MISTRZ EUROPY</span>

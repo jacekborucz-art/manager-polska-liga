@@ -9,7 +9,7 @@ import { KitSelectionService } from '../services/KitSelectionService';
 import ligaMistrzowBg from '../Graphic/themes/Liga_mistrzow.png';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
 import ligaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
-import { getClubLogo } from '../resources/ClubLogoAssets';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
@@ -280,13 +280,11 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-right break-words leading-none flex-1">
                 {homeClub.name}
               </h2>
-              {getClubLogo(homeClub.id)
-                ? <img src={getClubLogo(homeClub.id)} alt={homeClub.name} className="w-16 h-16 object-contain shrink-0 drop-shadow-2xl transform -rotate-3" />
-                : <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform -rotate-3">
-                    <div style={{ backgroundColor: homeClub.colorsHex[0] }} className="flex-1" />
-                    <div style={{ backgroundColor: homeClub.colorsHex[1] || homeClub.colorsHex[0] }} className="flex-1" />
-                  </div>
-              }
+              <ClubTeamMark
+                club={homeClub}
+                className="w-16 h-16 rounded-2xl p-1 transform -rotate-3"
+                fallbackClassName="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform -rotate-3"
+              />
             </div>
             {renderSideEvents('HOME')}
           </div>
@@ -304,13 +302,11 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
           {/* Away Side */}
           <div className="flex-1 flex flex-col items-start gap-3 min-w-0">
             <div className="flex items-center gap-6 justify-start w-full">
-              {getClubLogo(awayClub.id)
-                ? <img src={getClubLogo(awayClub.id)} alt={awayClub.name} className="w-16 h-16 object-contain shrink-0 drop-shadow-2xl transform rotate-3" />
-                : <div className="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform rotate-3">
-                    <div style={{ backgroundColor: awayClub.colorsHex[0] }} className="flex-1" />
-                    <div style={{ backgroundColor: awayClub.colorsHex[1] || awayClub.colorsHex[0] }} className="flex-1" />
-                  </div>
-              }
+              <ClubTeamMark
+                club={awayClub}
+                className="w-16 h-16 rounded-2xl p-1 transform rotate-3"
+                fallbackClassName="w-16 h-16 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 transform rotate-3"
+              />
               <h2 className="text-3xl md:text-5xl font-black italic text-white uppercase tracking-tighter text-left break-words leading-none flex-1">
                 {awayClub.name}
               </h2>
@@ -463,7 +459,12 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
                   <span className={`text-sm font-black uppercase italic tracking-tight text-right truncate max-w-[200px] ${isMyMatch ? 'text-white' : 'text-slate-300'}`}>
                     {home.name}
                   </span>
-                  <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
+                  <ClubTeamMark
+                    club={home}
+                    className="w-6 h-6 rounded-lg p-0.5"
+                    fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                    fallbackMode="solid"
+                  />
                 </div>
                 <div className="w-28 flex flex-col items-center shrink-0 mx-4">
                   <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums">
@@ -479,7 +480,12 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-1 min-w-0 justify-start">
-                  <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: away.colorsHex[0] }} />
+                  <ClubTeamMark
+                    club={away}
+                    className="w-6 h-6 rounded-lg p-0.5"
+                    fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                    fallbackMode="solid"
+                  />
                   <span className={`text-sm font-black uppercase italic tracking-tight truncate max-w-[200px] ${isMyMatch ? 'text-white' : 'text-slate-300'}`}>
                     {away.name}
                   </span>

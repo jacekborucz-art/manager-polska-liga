@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
 import ligaMistrzowBg from '../Graphic/themes/Liga_mistrzow.png';
 import ligaEuropaBg from '../Graphic/themes/LigaEuropa.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -177,7 +178,12 @@ const isR16 = todayPairs.length > 0 &&
                       <span className="text-sm font-black uppercase italic tracking-tight text-white group-hover:text-amber-200 transition-colors text-right truncate max-w-[180px]">
                         {home.name}
                       </span>
-                      <div className="w-3 h-8 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
+                      <ClubTeamMark
+                        club={home}
+                        className="w-7 h-7 rounded-lg bg-white/5 p-0.5"
+                        fallbackClassName="w-3 h-8 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
+                      />
                     </div>
                     {/* VS */}
                     <div className="w-24 flex flex-col items-center shrink-0">
@@ -185,7 +191,12 @@ const isR16 = todayPairs.length > 0 &&
                     </div>
                     {/* Away */}
                     <div className="flex items-center gap-4 flex-1 justify-start">
-                      <div className="w-3 h-8 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: away.colorsHex[0] }} />
+                      <ClubTeamMark
+                        club={away}
+                        className="w-7 h-7 rounded-lg bg-white/5 p-0.5"
+                        fallbackClassName="w-3 h-8 rounded-full border border-white/10 shrink-0"
+                        fallbackMode="solid"
+                      />
                       <span className="text-sm font-black uppercase italic tracking-tight text-white group-hover:text-amber-200 transition-colors truncate max-w-[180px]">
                         {away.name}
                       </span>

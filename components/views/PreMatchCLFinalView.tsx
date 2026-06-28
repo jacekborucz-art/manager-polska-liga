@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../../types';
 import ligaMistrzowBg from '../../Graphic/themes/Liga_mistrzow.png';
+import { ClubTeamMark } from '../common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -73,11 +74,21 @@ export const PreMatchCLFinalView: React.FC = () => {
                 <div className="flex items-center justify-between px-6 py-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] rounded-3xl transition-colors group">
                   <div className="flex items-center gap-3 flex-1 justify-end">
                     <span className="text-white font-bold text-sm text-right">{home.name}</span>
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-base">⚽</div>
+                    <ClubTeamMark
+                      club={home}
+                      className="w-8 h-8 rounded-lg bg-white/5 p-1"
+                      fallbackClassName="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-base"
+                      fallbackMode="solid"
+                    />
                   </div>
                   <div className="px-6 text-slate-500 font-black text-lg">vs</div>
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-base">⚽</div>
+                    <ClubTeamMark
+                      club={away}
+                      className="w-8 h-8 rounded-lg bg-white/5 p-1"
+                      fallbackClassName="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-base"
+                      fallbackMode="solid"
+                    />
                     <span className="text-white font-bold text-sm">{away.name}</span>
                   </div>
                 </div>

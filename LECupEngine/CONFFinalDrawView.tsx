@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ViewState } from '../types';
 import { CONFDrawService } from './CONFDrawService';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/40 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -92,9 +93,11 @@ export const CONFFinalDrawView: React.FC = () => {
                   <span className="text-xl font-black uppercase italic tracking-tight text-white text-right truncate">
                     {clubA.name}
                   </span>
-                  <div
-                    className="w-4 h-8 rounded-full border border-white/10 shrink-0"
-                    style={{ backgroundColor: clubA.colorsHex?.[0] ?? '#555' }}
+                  <ClubTeamMark
+                    club={clubA}
+                    className="w-8 h-8 rounded-lg p-1"
+                    fallbackClassName="w-4 h-8 rounded-full border border-white/10 shrink-0"
+                    fallbackMode="solid"
                   />
                 </div>
 
@@ -105,9 +108,11 @@ export const CONFFinalDrawView: React.FC = () => {
 
                 {/* Klub B */}
                 <div className="flex items-center gap-3 flex-1 justify-start">
-                  <div
-                    className="w-4 h-8 rounded-full border border-white/10 shrink-0"
-                    style={{ backgroundColor: clubB.colorsHex?.[0] ?? '#555' }}
+                  <ClubTeamMark
+                    club={clubB}
+                    className="w-8 h-8 rounded-lg p-1"
+                    fallbackClassName="w-4 h-8 rounded-full border border-white/10 shrink-0"
+                    fallbackMode="solid"
                   />
                   <span className="text-xl font-black uppercase italic tracking-tight text-white truncate">
                     {clubB.name}

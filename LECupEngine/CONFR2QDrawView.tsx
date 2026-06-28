@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/static_db/clubs/ConferenceLeagueTeams';
 import { ViewState } from '../types';
 import LigaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const COUNTRY_NAMES: Record<string, string> = {
   ALB: 'Albania', ARM: 'Armenia', AUT: 'Austria', AZE: 'Azerbejdżan',
@@ -142,14 +143,11 @@ export const CONFR2QDrawView: React.FC = () => {
                       {homeCountry}
                     </span>
                   </div>
-                  <div className="shrink-0 p-1 rounded-xl bg-white/[0.07] backdrop-blur-sm border border-white/10 shadow-inner">
-                    <svg viewBox="0 0 24 28" className="w-9 h-9 drop-shadow-lg">
-                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={home.colorsHex[0]} />
-                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={home.colorsHex[1] || home.colorsHex[0]} fillOpacity="0.8" />
-                      <path d="M5 20 L5 27 L11 27 L11 20 Z" fill={home.colorsHex[1] || home.colorsHex[0]} />
-                      <path d="M13 20 L13 27 L19 27 L19 20 Z" fill={home.colorsHex[1] || home.colorsHex[0]} />
-                    </svg>
-                  </div>
+                  <ClubTeamMark
+                    club={home}
+                    className="w-10 h-10 rounded-xl p-1"
+                    fallbackClassName="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+                  />
                 </div>
 
                 {/* VS */}
@@ -161,14 +159,11 @@ export const CONFR2QDrawView: React.FC = () => {
 
                 {/* Gość */}
                 <div className="flex-1 flex items-center justify-start gap-3 pl-3 min-w-0">
-                  <div className="shrink-0 p-1 rounded-xl bg-white/[0.07] backdrop-blur-sm border border-white/10 shadow-inner">
-                    <svg viewBox="0 0 24 28" className="w-9 h-9 drop-shadow-lg">
-                      <path d="M7 2L2 5v4l3 1v10h14V10l3-1V5l-5-3-2 2-2-2-2 2-2-2z" fill={away.colorsHex[0]} />
-                      <path d="M12 4L10 6L12 8L14 6L12 4Z" fill={away.colorsHex[1] || away.colorsHex[0]} fillOpacity="0.8" />
-                      <path d="M5 20 L5 27 L11 27 L11 20 Z" fill={away.colorsHex[1] || away.colorsHex[0]} />
-                      <path d="M13 20 L13 27 L19 27 L19 20 Z" fill={away.colorsHex[1] || away.colorsHex[0]} />
-                    </svg>
-                  </div>
+                  <ClubTeamMark
+                    club={away}
+                    className="w-10 h-10 rounded-xl p-1"
+                    fallbackClassName="w-10 h-10 rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl shrink-0"
+                  />
                   <div className="text-left min-w-0">
                     <span className="block text-[13px] font-black uppercase italic truncate tracking-tight text-white group-hover:text-emerald-300 transition-colors">
                       {away.name}

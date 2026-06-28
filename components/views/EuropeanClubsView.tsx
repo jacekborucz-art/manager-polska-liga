@@ -397,7 +397,7 @@ const NT_FLAG_CODE_MAP_SAFE: Record<string, string> = {
   'Belgia': 'BE', 'Białoruś': 'BY', 'Bośnia i Hercegowina': 'BA', 'Bułgaria': 'BG', 'Chorwacja': 'HR',
   'Cypr': 'CY', 'Czarnogóra': 'ME', 'Czechy': 'CZ', 'Dania': 'DK', 'Estonia': 'EE',
   'Finlandia': 'FI', 'Francja': 'FR', 'Gibraltar': 'GI', 'Grecja': 'GR', 'Gruzja': 'GE',
-  'Hiszpania': 'ES', 'Holandia': 'NL', 'Irlandia': 'IE', 'Islandia': 'IS', 'Izrael': 'IL',
+  'Hiszpania': 'ES', 'Holandia': 'NL', 'Irlandia': 'IE', 'Irlandia Północna': 'GB-NIR', 'Islandia': 'IS', 'Izrael': 'IL',
   'Kazachstan': 'KZ', 'Kosovo': 'XK', 'Liechtenstein': 'LI', 'Litwa': 'LT', 'Luksemburg': 'LU',
   'Łotwa': 'LV', 'Macedonia Północna': 'MK', 'Malta': 'MT', 'Mołdawia': 'MD', 'Niemcy': 'DE',
   'Norwegia': 'NO', 'Polska': 'PL', 'Portugalia': 'PT', 'Rosja': 'RU', 'Rumunia': 'RO',

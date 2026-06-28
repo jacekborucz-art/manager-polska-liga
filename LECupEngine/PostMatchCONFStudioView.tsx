@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus } from '../types';
 import ligaKonferencjiBg from '../Graphic/themes/Liga_konferencji.png';
 import { MatchReportModal } from '../components/modals/MatchReportModal';
-import { getClubLogo } from '../resources/ClubLogoAssets';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 const GLASS_CARD = "bg-slate-950/20 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[40px] relative overflow-hidden";
 const GLOSS_LAYER = "absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none";
@@ -155,10 +155,12 @@ export const PostMatchCONFStudioView: React.FC = () => {
                         <span className={`text-sm font-black uppercase italic tracking-tight text-right truncate max-w-[180px] transition-colors ${homeWins ? 'text-white' : 'text-slate-400'}`}>
                           {home.name}
                         </span>
-                        {getClubLogo(home.id)
-                          ? <img src={getClubLogo(home.id)} alt={home.name} className="w-7 h-7 object-contain shrink-0 drop-shadow-md" />
-                          : <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: home.colorsHex[0] }} />
-                        }
+                        <ClubTeamMark
+                          club={home}
+                          className="w-7 h-7 rounded-lg p-0.5"
+                          fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                          fallbackMode="solid"
+                        />
                       </div>
                       <div className="w-28 flex flex-col items-center shrink-0">
                         <span className="text-lg font-black text-white font-mono tracking-tighter tabular-nums cursor-pointer hover:text-amber-300 transition-colors" onClick={() => setSelectedMatchId(fixture.id)}>
@@ -171,10 +173,12 @@ export const PostMatchCONFStudioView: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-3 flex-1 justify-start">
-                        {getClubLogo(away.id)
-                          ? <img src={getClubLogo(away.id)} alt={away.name} className="w-7 h-7 object-contain shrink-0 drop-shadow-md" />
-                          : <div className="w-3 h-6 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: away.colorsHex[0] }} />
-                        }
+                        <ClubTeamMark
+                          club={away}
+                          className="w-7 h-7 rounded-lg p-0.5"
+                          fallbackClassName="w-3 h-6 rounded-full border border-white/10 shrink-0"
+                          fallbackMode="solid"
+                        />
                         <span className={`text-sm font-black uppercase italic tracking-tight truncate max-w-[180px] transition-colors ${awayWins ? 'text-white' : 'text-slate-400'}`}>
                           {away.name}
                         </span>

@@ -5,6 +5,7 @@ import { ChampionshipHistoryService } from '../data/championship_history';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../resources/static_db/clubs/EuropeLeagueTeams';
 import LigaEuropaBg from '../Graphic/themes/LigaEuropa.png';
 import { MatchReportModal } from '../components/modals/MatchReportModal';
+import { ClubTeamMark } from '../components/common/ClubTeamMark';
 
 // ── Pary dwumeczowe ────────────────────────────────────────────────────────
 interface ELPair {
@@ -455,10 +456,11 @@ export const ELHistoryView: React.FC = () => {
                                       </td>
                                       <td className="px-4 py-2">
                                         <div className="flex items-center gap-2">
-                                          <div className="w-5 h-5 rounded-md border border-white/10 flex flex-col overflow-hidden shrink-0">
-                                            <div className="flex-1" style={{ backgroundColor: club?.colorsHex?.[0] ?? '#333' }} />
-                                            <div className="flex-1" style={{ backgroundColor: club?.colorsHex?.[1] ?? '#555' }} />
-                                          </div>
+                                          <ClubTeamMark
+                                            club={club}
+                                            className="w-5 h-5 rounded-md bg-white/5 p-0.5"
+                                            fallbackClassName="w-5 h-5 rounded-md border border-white/10 flex flex-col overflow-hidden shrink-0"
+                                          />
                                           <span className={`font-black uppercase italic text-[11px] truncate ${isUser ? 'text-amber-300' : promotes ? 'text-white' : 'text-slate-300'}`}>
                                             {club?.name ?? row.id}
                                           </span>
@@ -837,7 +839,12 @@ export const ELHistoryView: React.FC = () => {
                                   ${agg ? agg.winnerId === pair.teamAId ? 'text-white' : 'text-slate-500' : 'text-slate-200'}`}>
                                   {teamA?.name ?? pair.teamAId}
                                 </span>
-                                <div className="w-[3px] h-8 rounded-full shrink-0 opacity-60" style={{ backgroundColor: aColor }} />
+                                <ClubTeamMark
+                                  club={teamA}
+                                  className="w-6 h-6 rounded-lg bg-white/5 p-0.5"
+                                  fallbackClassName="w-[3px] h-8 rounded-full shrink-0 opacity-60"
+                                  fallbackMode="solid"
+                                />
                               </div>
                               {agg && (
                                 <span className="text-[9px] font-black tabular-nums text-slate-500">
@@ -909,7 +916,12 @@ export const ELHistoryView: React.FC = () => {
                             {/* TEAM B */}
                             <div className="flex-1 flex flex-col items-start gap-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <div className="w-[3px] h-8 rounded-full shrink-0 opacity-60" style={{ backgroundColor: bColor }} />
+                                <ClubTeamMark
+                                  club={teamB}
+                                  className="w-6 h-6 rounded-lg bg-white/5 p-0.5"
+                                  fallbackClassName="w-[3px] h-8 rounded-full shrink-0 opacity-60"
+                                  fallbackMode="solid"
+                                />
                                 <span className={`text-[13px] font-black uppercase italic tracking-tight truncate
                                   ${agg ? agg.winnerId === pair.teamBId ? 'text-white' : 'text-slate-500' : 'text-slate-200'}`}>
                                   {teamB?.name ?? pair.teamBId}
