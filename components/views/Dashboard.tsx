@@ -22,6 +22,9 @@ import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
 import winnerPolishImg from '../../Graphic/cup/winnerpolish.png';
 import awansEkstImg from '../../Graphic/cup/awans-do-ekst.png';
 import awans1LigiImg from '../../Graphic/cup/awans-do-1ligi.png';
+import { getRandomProcessingTip } from '../ui/ProcessingOverlay';
+import { KitPreview } from '../common/KitPreview';
+import { getActiveClubKits, getClubKits } from '../../resources/ClubKits';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -83,7 +86,6 @@ export const Dashboard: React.FC = () => {
   const [selectedMail, setSelectedMail] = useState<MailMessage | null>(null);
   const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
@@ -92,11 +94,8 @@ export const Dashboard: React.FC = () => {
   const [isWinterCampProgramOpen, setIsWinterCampProgramOpen] = useState(false);
   const [isSummerCampLocationOpen, setIsSummerCampLocationOpen] = useState(false);
   const [isSummerCampProgramOpen, setIsSummerCampProgramOpen] = useState(false);
+  const [activeHint, setActiveHint] = useState<string | null>(null);
   const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
-
-  useEffect(() => {
-    setIsProcessing(false);
-  }, [currentDate]);
 
   useEffect(() => {
     if (winterCampInvitePending) setIsWinterCampLocationOpen(true);
@@ -635,6 +634,12 @@ const boardConfidence = useMemo(() => {
   const unreadActiveMailboxMessagesCount = activeMailboxMessages.filter(mail => !mail.isRead).length;
   const clubPrimary = myClub?.colorsHex[0] ?? '#2563eb';
   const clubSecondary = myClub?.colorsHex[1] ?? '#0f172a';
+  const squadButtonKits = useMemo(() => {
+    if (!myClub) return [];
+    const activeKits = getActiveClubKits(myClub);
+    const allKits = getClubKits(myClub);
+    return [...activeKits, ...allKits.filter(kit => !activeKits.some(activeKit => activeKit.id === kit.id))].slice(0, 3);
+  }, [myClub]);
 
   type DashboardActionIcon =
     | 'squad'
@@ -663,6 +668,7 @@ const boardConfidence = useMemo(() => {
     disabled?: boolean;
     tone?: string;
     size?: 'large' | 'wide' | 'small';
+    customIcon?: React.ReactNode;
   };
 
   const renderDashboardActionIcon = (icon: DashboardActionIcon, color: string) => {
@@ -696,9 +702,12 @@ const boardConfidence = useMemo(() => {
       case 'training':
         return (
           <>
-            <path d="M27 24l10 28h20l10-28" {...common} />
-            <path d="M34 38h26M29 52h36" {...common} />
-            <path d="M66 17l9 9M74 16l-9 10" stroke={color} strokeOpacity="0.55" strokeWidth="2" />
+            <path d="M58 24l12 42H35l12-42z" {...common} fill={color} fillOpacity="0.12" />
+            <path d="M45 34h14M41 48h22M37 62h30" stroke={color} strokeOpacity="0.55" strokeWidth="2" />
+            <circle cx="27" cy="57" r="12" {...common} fill={color} fillOpacity="0.14" />
+            <path d="M27 51l5 4-2 6h-6l-2-6 5-4z" stroke={color} strokeOpacity="0.78" strokeWidth="1.7" fill={color} fillOpacity="0.2" />
+            <path d="M27 45v6M32 55l7-2M30 61l4 7M24 61l-4 7M22 55l-7-2" stroke={color} strokeOpacity="0.68" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <path d="M18 48c4-2 7-3 9-3 3 0 6 1 9 3M16 62c3 5 6 7 11 7s8-2 11-7" stroke={color} strokeOpacity="0.35" strokeWidth="1.4" fill="none" strokeLinecap="round" />
           </>
         );
       case 'competitions':
@@ -827,7 +836,7 @@ const boardConfidence = useMemo(() => {
     }
   };
 
-  const DashboardSvgButton = ({ label, icon, onClick, disabled = false, tone, size = 'small' }: DashboardSvgButtonProps) => {
+  const DashboardSvgButton = ({ label, icon, onClick, disabled = false, tone, size = 'small', customIcon }: DashboardSvgButtonProps) => {
     const accent = tone ?? clubPrimary;
     const sizeClass =
       size === 'large'
@@ -836,7 +845,7 @@ const boardConfidence = useMemo(() => {
           ? 'col-span-2 h-[92px]'
           : 'h-[92px]';
     const labelClass = size === 'small' ? 'text-[10px]' : 'text-[13px]';
-    const iconBoxClass = size === 'small' ? 'w-14 h-14' : 'w-20 h-20';
+    const iconBoxClass = customIcon && size === 'large' ? 'w-44 h-20' : size === 'small' ? 'w-14 h-14' : 'w-20 h-20';
 
     return (
       <div className={`group relative ${sizeClass}`}>
@@ -861,10 +870,12 @@ const boardConfidence = useMemo(() => {
         <div className="absolute left-4 right-4 top-2 h-px opacity-70" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
         <div className="relative z-10 flex h-full items-center justify-center">
           <div className={`${iconBoxClass} shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-2`}>
-            <svg viewBox="0 0 96 84" className="h-full w-full drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)]" aria-hidden>
-              <rect x="5" y="5" width="86" height="74" rx="20" fill="#020617" fillOpacity="0.42" stroke={accent} strokeOpacity="0.25" />
-              {renderDashboardActionIcon(icon, accent)}
-            </svg>
+            {customIcon ?? (
+              <svg viewBox="0 0 96 84" className="h-full w-full drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)]" aria-hidden>
+                <rect x="5" y="5" width="86" height="74" rx="20" fill="#020617" fillOpacity="0.42" stroke={accent} strokeOpacity="0.25" />
+                {renderDashboardActionIcon(icon, accent)}
+              </svg>
+            )}
           </div>
         </div>
       </button>
@@ -915,15 +926,6 @@ const boardConfidence = useMemo(() => {
     </div>
 
     <div className="h-[1080px] max-w-[1920px] mx-auto flex flex-col gap-4 animate-fade-in overflow-hidden relative pr-2 z-10">
-
-      {(isJumping || isProcessing) && (
-        <div className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[2px] flex items-center justify-center pointer-events-none">
-           <div className="bg-slate-900 border border-white/10 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-pulse">
-              <div className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-              <span className="text-xs font-black text-white uppercase tracking-widest">PRZETWARZANIE DANYCH...</span>
-           </div>
-        </div>
-      )}
 
       {selectedMail && (
         <MailDetailsModal 
@@ -1105,7 +1107,55 @@ const boardConfidence = useMemo(() => {
               </div>
             )}
          </div>
+
+         <button
+           type="button"
+           onClick={() => {
+             setIsSearchFocused(false);
+             setActiveHint(getRandomProcessingTip());
+           }}
+           className="group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/25 bg-slate-950/80 text-xl font-black italic text-cyan-100 shadow-[0_14px_35px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:-translate-y-0.5 hover:border-cyan-200/55 hover:bg-cyan-500/12 hover:text-white"
+           aria-label="Pokaż ciekawostkę"
+         >
+           ?
+           <span className="pointer-events-none absolute inset-x-2 bottom-1 h-px bg-cyan-200/35 opacity-0 transition-opacity group-hover:opacity-100" />
+         </button>
       </div>
+
+      {activeHint && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-fade-in" onClick={() => setActiveHint(null)}>
+          <div
+            className="relative w-full max-w-lg overflow-hidden rounded-[36px] border border-cyan-300/25 bg-slate-950/95 p-8 text-center shadow-[0_40px_90px_rgba(0,0,0,0.82),0_0_45px_rgba(34,211,238,0.13)]"
+            onClick={event => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveHint(null)}
+              className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-black text-slate-300 transition-all hover:bg-white/10 hover:text-white"
+              aria-label="Zamknij"
+            >
+              X
+            </button>
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
+            <p className="font-black italic uppercase tracking-tighter text-[10px] leading-none text-cyan-300/80">
+              Ciekawostka
+            </p>
+            <h2 className="font-black italic uppercase tracking-tighter mt-3 text-3xl leading-none text-white">
+              Czy wiesz, że?
+            </h2>
+            <p className="font-black italic uppercase tracking-tighter mx-auto mt-6 max-w-[430px] text-base leading-snug text-cyan-50">
+              {activeHint}
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveHint(getRandomProcessingTip())}
+              className="font-black italic uppercase tracking-tighter mt-7 rounded-[16px] border border-cyan-300/25 bg-cyan-500/10 px-6 py-3 text-xs text-cyan-100 transition-all hover:bg-cyan-500/16 hover:text-white"
+            >
+              Losuj kolejną
+            </button>
+          </div>
+        </div>
+      )}
       
       <div className="relative h-44 rounded-[40px] overflow-hidden shadow-2xl border border-white/10 shrink-0 z-10 group">
         <div className="absolute inset-0 z-0">
@@ -1298,7 +1348,7 @@ const boardConfidence = useMemo(() => {
 
            <div className="shrink-0 flex flex-col items-center gap-2">
               <button 
-                onClick={() => { setIsProcessing(true); setTimeout(actionConfig.action, 0); }}
+                onClick={actionConfig.action}
                 disabled={actionConfig.disabled}
                 className={`
                   relative group px-14 py-6 rounded-[32px] transition-all duration-500 transform active:translate-y-[2px]
@@ -1378,9 +1428,35 @@ const boardConfidence = useMemo(() => {
               label="Kadra"
               icon="squad"
               size="large"
-              tone="#ffffff"
+              tone={clubPrimary}
               onClick={() => navigateTo(ViewState.SQUAD_VIEW)}
               disabled={clubManagementDisabled}
+              customIcon={
+                <div className="relative flex h-full w-full items-center justify-center">
+                  <div className="absolute inset-x-3 top-3 h-12 rounded-full blur-xl opacity-40" style={{ background: `linear-gradient(90deg, ${clubPrimary}, ${clubSecondary})` }} />
+                  <div className="relative flex items-end justify-center gap-0">
+                    {squadButtonKits.map((kit, index) => (
+                      <div
+                        key={kit.id}
+                        className="relative -mx-1.5 flex h-20 w-16 items-center justify-center rounded-[18px] border border-white/10 bg-slate-950/35 shadow-[0_14px_26px_rgba(0,0,0,0.45)]"
+                        style={{
+                          transform: `translateY(${index === 1 ? -6 : 4}px) rotate(${index === 0 ? -8 : index === 1 ? 0 : 8}deg)`,
+                          zIndex: index === 1 ? 3 : 2,
+                        }}
+                      >
+                        <KitPreview
+                          shirt={kit.shirt}
+                          shirtSecondary={kit.shirtSecondary}
+                          shorts={kit.shorts}
+                          socks={kit.socks}
+                          pattern={kit.pattern}
+                          className="h-[70px] w-[64px]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              }
             />
             <DashboardSvgButton
               label="Trening"
@@ -1439,7 +1515,7 @@ const boardConfidence = useMemo(() => {
               disabled={isJumping}
             />
             <DashboardSvgButton
-              label="Europa"
+              label="Europa i świat"
               icon="world"
               tone="#f87171"
               onClick={() => navigateTo(ViewState.EUROPEAN_CLUBS)}

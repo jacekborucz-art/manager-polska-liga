@@ -4,6 +4,7 @@ import { useGame } from '../../context/GameContext';
 import { MatchCardEntry, MatchGoalEntry, NationalTeam, ViewState, WCGroup, WCGroupStanding, WCKnockoutMatch, WCState } from '../../types';
 import { WorldCupService, computeGroupStandings } from '../../services/WorldCupService';
 import { EuroTournamentService } from '../../services/EuroTournamentService';
+import { useProcessing } from '../ui/ProcessingOverlay';
 
 const GLASS_CARD = 'bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden';
 const GLOSS_LAYER = 'absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none';
@@ -778,6 +779,7 @@ function StatystykiTab({ wcState, nationalTeams }: { wcState: WCState; nationalT
 
 const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' }) => {
   const { currentDate, wcState, setWcState, euroState, setEuroState, navigateTo, matchSimulationSeed, nationalTeams, players, setPlayers, coaches } = useGame();
+  const { runWithProcessing } = useProcessing();
   const [activeTab, setActiveTab] = useState<Tab>('grupy');
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [selectedReportMatch, setSelectedReportMatch] = useState<TournamentReportMatch | null>(null);
@@ -814,13 +816,20 @@ const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' })
 
   const handleSkipToFinal = () => {
     if (!skipConfirm) { setSkipConfirm(true); return; }
-    const result = isEuro
-      ? EuroTournamentService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches)
-      : WorldCupService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches);
-    setTournamentState(result.state);
-    if (result.updatedPlayers) setPlayers(result.updatedPlayers);
-    setActiveTab('final');
-    setSkipConfirm(false);
+    void runWithProcessing(
+      () => {
+        const result = isEuro
+          ? EuroTournamentService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches)
+          : WorldCupService.simulateFullTournament(tournamentState, matchSimulationSeed, nationalTeams, players, coaches);
+        setTournamentState(result.state);
+        if (result.updatedPlayers) setPlayers(result.updatedPlayers);
+        setActiveTab('final');
+        setSkipConfirm(false);
+      },
+      {
+        status: `Symuluję cały turniej ${title.toLowerCase()}`,
+      }
+    );
   };
 
   const tabs: { id: Tab; label: string }[] = [

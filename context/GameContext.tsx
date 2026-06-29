@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useProcessing } from '../components/ui/ProcessingOverlay';
 import {
   ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
   SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, ManagerJobOffer, ManagerJobApplicationResult, MatchLiveState,
@@ -1037,6 +1038,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { runWithProcessing } = useProcessing();
   const [currentDate, setCurrentDate] = useState<Date>(START_DATE);
   const [sessionSeed, setSessionSeed] = useState<number>(() => generateRuntimeSeed());
   const [runtimeSimulationSeed, setRuntimeSimulationSeed] = useState<number>(() => generateRuntimeSeed());
@@ -11225,6 +11227,25 @@ const finalResult: SimulationOutput = {
     setLastRecoveryDate(new Date(dateToProcess));
   }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, euroState, uefaNationalRankingState]);
 
+  const advanceDayWithProcessing = useCallback(() => {
+    const processingDay = currentDate.getDate();
+    const processingMonth = currentDate.getMonth();
+    const isJulySeasonCrunch = processingMonth === 6 && (processingDay === 1 || processingDay === 2);
+    const isMonthlyCrunch = processingDay === 1;
+
+    void runWithProcessing(
+      () => advanceDay(),
+      {
+        status: isJulySeasonCrunch
+          ? 'Aktualizuję składy, kontrakty, finanse i rynek transferowy'
+          : isMonthlyCrunch
+            ? 'Przetwarzam miesięczne raporty, finanse i wydarzenia'
+            : 'Przetwarzam kolejny dzień kariery',
+        minVisibleMs: isJulySeasonCrunch ? 700 : isMonthlyCrunch ? 450 : 280,
+      }
+    );
+  }, [advanceDay, currentDate, runWithProcessing]);
+
 
    const confirmCLGroupDraw = () => {
     if (!activeGroupDraw) return;
@@ -15734,9 +15755,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     if (nextEvent) {
        const today = new Date(currentDate).setHours(0, 0, 0, 0);
        const eventDate = new Date(nextEvent.startDate).setHours(0, 0, 0, 0);
-       if (eventDate <= today) advanceDay();
+       if (eventDate <= today) advanceDayWithProcessing();
        else jumpToDate(nextEvent.startDate);
-    } else advanceDay();
+    } else advanceDayWithProcessing();
   };
 
   const viewClubDetails = (clubId: string) => { setViewedClubId(clubId); navigateTo(ViewState.CLUB_DETAILS); };
@@ -15761,7 +15782,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       lastRecoveryDate,
       managerProfile, managerJobOffers, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
-      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
+      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports,
