@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, MatchEventType, PlayerPerformance, MatchResult, MatchSummaryEvent, ClubKitPattern } from '../../types';
@@ -106,6 +106,21 @@ export const PostMatchStudioView: React.FC = () => {
     return `${originalPlayer.firstName.charAt(0)}. ${playerName}`;
   };
 
+  const getGoalFormattedName = (
+    goal: { playerName: string; scorerId?: string },
+    side: 'HOME' | 'AWAY'
+  ) => {
+    if (goal.playerName.includes('.')) return goal.playerName;
+
+    const clubId = side === 'HOME' ? homeClub.id : awayClub.id;
+    const originalPlayer = goal.scorerId
+      ? (players[clubId] || []).find(p => p.id === goal.scorerId) || Object.values(players).flat().find(p => p.id === goal.scorerId)
+      : null;
+
+    if (originalPlayer) return `${originalPlayer.firstName.charAt(0)}. ${originalPlayer.lastName}`;
+    return getEventFormattedName(goal.playerName, side);
+  };
+
   const handleReturnToDashboard = () => {
     advanceDay();
     navigateTo(ViewState.DASHBOARD);
@@ -197,7 +212,29 @@ export const PostMatchStudioView: React.FC = () => {
   };
 
   const renderSideEvents = (side: 'HOME' | 'AWAY') => {
-    const events = timeline.filter(e => e.teamSide === side);
+    const goalEvents = (side === 'HOME' ? homeGoals : awayGoals)
+      .filter(g => !g.isMiss)
+      .map(g => ({
+        minute: g.minute,
+        type: MatchEventType.GOAL,
+        playerName: getGoalFormattedName(g, side),
+        varDisallowed: g.varDisallowed,
+      }));
+
+    const timelineEvents = timeline
+      .filter(e => e.teamSide === side)
+      .filter(e => {
+        if (e.type !== MatchEventType.GOAL && e.type !== MatchEventType.PENALTY_SCORED) return true;
+        return e.varDisallowed === true;
+      })
+      .map(e => ({
+        minute: e.minute,
+        type: e.type,
+        playerName: getEventFormattedName(e.playerName, side),
+        varDisallowed: e.varDisallowed,
+      }));
+
+    const events = [...goalEvents, ...timelineEvents].sort((a, b) => a.minute - b.minute);
     if (events.length === 0) return null;
 
     return (
@@ -216,28 +253,25 @@ export const PostMatchStudioView: React.FC = () => {
             icon = '✚'; color = e.type === MatchEventType.INJURY_SEVERE ? 'text-red-600 font-bold' : 'text-slate-300';
           }
 
-          const formattedEventName = getEventFormattedName(e.playerName, side);
-
           if (e.varDisallowed) {
             return (
               <span key={i} className="text-[10px] font-black uppercase italic text-slate-500 flex items-center gap-1">
                 {side === 'HOME'
-                  ? <><s>{formattedEventName} ({e.minute}')</s>&nbsp;⚽(VAR)</>
-                  : <>⚽(VAR)&nbsp;<s>{formattedEventName} ({e.minute}')</s></>}
+                  ? <><s>{e.playerName} ({e.minute}')</s>&nbsp;⚽(VAR)</>
+                  : <>⚽(VAR)&nbsp;<s>{e.playerName} ({e.minute}')</s></>}
               </span>
             );
           }
 
           return (
             <span key={i} className={`text-[10px] font-black uppercase italic ${color} flex items-center gap-1`}>
-              {side === 'HOME' ? `${formattedEventName} (${e.minute}') ${icon}` : `${icon} ${formattedEventName} (${e.minute}')`}
+              {side === 'HOME' ? `${e.playerName} (${e.minute}') ${icon}` : `${icon} ${e.playerName} (${e.minute}')`}
             </span>
           );
         })}
       </div>
     );
   };
-
   const renderResultRow = (result: MatchResult, idx: number) => {
     const homeClubData = clubs.find(c => c.name === result.homeTeamName);
     const awayClubData = clubs.find(c => c.name === result.awayTeamName);
