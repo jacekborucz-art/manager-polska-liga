@@ -3077,7 +3077,11 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
       </button>
     </div>
   ) : (
-    <div className="relative flex flex-col items-center gap-2 bg-black/32 border-y border-white/10 py-2.5 px-6 shadow-[0_12px_36px_rgba(0,0,0,0.34)] backdrop-blur-md">
+    <div className="relative flex flex-col items-center gap-2 py-2.5 px-6 shadow-[0_12px_36px_rgba(0,0,0,0.42)] backdrop-blur-md"
+      style={{
+        background: 'linear-gradient(180deg, rgba(5, 96, 64, 0.48), rgba(3, 63, 46, 0.54))',
+        boxShadow: '0 12px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(134,239,172,0.12), inset 0 -1px 0 rgba(0,0,0,0.22)',
+      }}>
       {/* ── GÓRNY RZĄD: Tempo / Postawa / Styl gry ── */}
       <div className="relative z-10 flex gap-[3px] justify-center">
       {/* ── TEMPO ── */}
@@ -3359,7 +3363,7 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
 
     {matchState.logs.length > 0 && (
       <>
-        <div className="fixed left-1/2 -translate-x-1/2 z-30 h-[2px] w-[760px] max-w-[72vw] bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.55)]" style={{ bottom: 'calc(15rem - 22px)' }} />
+        <div className="fixed left-1/2 -translate-x-1/2 z-30 h-[2px] w-[760px] max-w-[72vw] bg-white/90 shadow-[0_0_14px_rgba(255,255,255,0.62)]" style={{ bottom: 'calc(15rem + 4px)' }} />
         <div className="fixed left-1/2 -translate-x-1/2 z-30 flex justify-center" style={{ bottom: 'calc(15rem - 62px)' }}>
           {(() => {
             const latestLog = matchState.logs[0];

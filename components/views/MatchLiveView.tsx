@@ -462,6 +462,7 @@ export const MatchLiveView = () => {
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
+  const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
   const [showBriefing, setShowBriefing] = useState(() => !matchState?.preMatchMotivation);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
@@ -512,6 +513,12 @@ export const MatchLiveView = () => {
   } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeTacticalSelect = () => setOpenTacticalSelect(null);
+    document.addEventListener('click', closeTacticalSelect);
+    return () => document.removeEventListener('click', closeTacticalSelect);
+  }, []);
 
   const getContrastColor = (hexColor: string): string => {
     const hex = hexColor.replace('#', '');
@@ -4107,31 +4114,75 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
     onPick: (value: T) => void;
   }) => {
     const widestLabelLength = Math.max(...options.map(option => option.label.length));
+    const selectId = options.map(option => option.val).join('|');
+    const isOpen = openTacticalSelect === selectId && !locked;
+    const selectedLabel = options.find(option => option.val === value)?.label ?? String(value);
+    const controlStyle = {
+      backgroundColor: locked ? 'rgba(15, 23, 42, 0.54)' : hexToRgba(accent, 0.32),
+      borderColor: locked ? 'rgba(255, 255, 255, 0.1)' : hexToRgba(accent, 0.88),
+      boxShadow: locked
+        ? 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -9px 15px rgba(0,0,0,0.35)'
+        : `0 0 18px ${hexToRgba(accent, 0.26)}, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -11px 18px rgba(0,0,0,0.48)`,
+      lineHeight: '1',
+      textShadow: locked
+        ? '0 1px 4px rgba(0,0,0,0.75)'
+        : '0 1px 2px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.85)',
+    };
 
     return (
-      <select
-        value={value}
-        onChange={(e) => onPick(e.target.value as T)}
-        disabled={locked}
-        className={`relative z-10 h-8 rounded-[4px] border px-[3px] pr-[18px] text-center [text-align-last:center] text-[8px] font-black italic uppercase tracking-tighter outline-none transition-all duration-200 ${
-          locked ? 'cursor-not-allowed text-slate-500' : 'cursor-pointer text-white hover:brightness-125 focus:brightness-125'
-        }`}
+      <div
+        className="relative z-30"
         style={{
-          width: `calc(${widestLabelLength}ch + 25px)`,
-          backgroundColor: locked ? 'rgba(15, 23, 42, 0.54)' : hexToRgba(accent, 0.22),
-          borderColor: locked ? 'rgba(255, 255, 255, 0.1)' : hexToRgba(accent, 0.72),
-          boxShadow: locked
-            ? 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -9px 15px rgba(0,0,0,0.35)'
-            : `0 0 18px ${hexToRgba(accent, 0.24)}, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 18px rgba(0,0,0,0.34)`,
-          textShadow: locked ? '0 1px 4px rgba(0,0,0,0.75)' : `0 0 10px ${hexToRgba(accent, 0.85)}`,
+          width: `calc(${widestLabelLength}ch + 42px)`,
+          minWidth: '70px',
         }}
+        onClick={(event) => event.stopPropagation()}
       >
-        {options.map(option => (
-          <option key={option.val} value={option.val} className="bg-slate-950 text-slate-100">
-            {option.label}
-          </option>
-        ))}
-      </select>
+        <button
+          type="button"
+          disabled={locked}
+          onClick={() => setOpenTacticalSelect(current => current === selectId ? null : selectId)}
+          className={`relative h-9 w-full rounded-[4px] border px-[8px] pr-[24px] text-center text-[12px] font-black italic uppercase tracking-tighter outline-none transition-all duration-200 ${
+            locked ? 'cursor-not-allowed text-slate-500' : 'cursor-pointer text-yellow-50 hover:brightness-125 focus:brightness-125'
+          }`}
+          style={controlStyle}
+        >
+          <span className="block truncate">{selectedLabel}</span>
+          <span className="absolute right-[7px] top-1/2 -translate-y-1/2 text-[12px] leading-none text-yellow-50/90">⌃</span>
+        </button>
+        {isOpen && (
+          <div
+            className="absolute bottom-[calc(100%+5px)] left-0 z-[620] w-full overflow-hidden rounded-[4px] border py-1 shadow-[0_18px_34px_rgba(0,0,0,0.9)]"
+            style={{
+              background: `linear-gradient(180deg, rgba(2,6,23,0.99), rgba(9,12,22,0.99)), linear-gradient(180deg, ${hexToRgba(accent, 0.18)}, transparent)`,
+              borderColor: hexToRgba(accent, 0.94),
+              boxShadow: `0 18px 34px rgba(0,0,0,0.92), 0 0 0 1px rgba(0,0,0,0.85), 0 0 18px ${hexToRgba(accent, 0.2)}`,
+            }}
+          >
+            {options.map(option => (
+              <button
+                key={option.val}
+                type="button"
+                onClick={() => {
+                  onPick(option.val);
+                  setOpenTacticalSelect(null);
+                }}
+                className={`block h-8 w-full px-2 text-center text-[12px] font-black italic uppercase tracking-tighter transition-colors ${
+                  option.val === value
+                    ? 'text-yellow-50'
+                    : 'text-slate-100 hover:text-yellow-50'
+                }`}
+                style={{
+                  backgroundColor: option.val === value ? hexToRgba(accent, 0.32) : 'rgba(2, 6, 23, 0.96)',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.95)',
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -4757,7 +4808,13 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
       </button>
     </div>
   ) : (
-    <div className="relative flex flex-col items-center gap-2 bg-black/32 border-y border-white/10 py-2.5 px-6 shadow-[0_12px_36px_rgba(0,0,0,0.34)] backdrop-blur-md">
+    <div
+      className="relative flex flex-col items-center gap-2 py-2.5 px-6 shadow-[0_12px_36px_rgba(0,0,0,0.42)] backdrop-blur-md"
+      style={{
+        background: 'linear-gradient(180deg, rgba(5, 96, 64, 0.48), rgba(3, 63, 46, 0.54))',
+        boxShadow: '0 12px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(134,239,172,0.12), inset 0 -1px 0 rgba(0,0,0,0.22)',
+      }}
+    >
       {/* ── GÓRNY RZĄD: Tempo / Postawa / Styl gry ── */}
       <div className="relative z-10 flex gap-[3px] justify-center">
       {/* ── TEMPO ── */}
@@ -5045,7 +5102,10 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
 
     {matchState.logs.length > 0 && (
       <>
-        <div className="fixed left-1/2 -translate-x-1/2 z-30 h-[2px] w-[760px] max-w-[72vw] bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.55)]" style={{ bottom: 'calc(15rem - 22px)' }} />
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-30 h-[2px] w-[760px] max-w-[72vw] bg-white/90 shadow-[0_0_14px_rgba(255,255,255,0.62)]"
+          style={{ bottom: 'calc(15rem + 4px)' }}
+        />
         <div className="fixed left-1/2 -translate-x-1/2 z-30 flex justify-center" style={{ bottom: 'calc(15rem - 62px)' }}>
           {(() => {
             const latestLog = matchState.logs[0];

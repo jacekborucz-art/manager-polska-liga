@@ -21,6 +21,10 @@ export const StartMenu: React.FC = () => {
       document.exitFullscreen();
     }
   };
+  const requestFullscreenSafely = () => {
+    if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    void document.documentElement.requestFullscreen().catch(() => undefined);
+  };
   useEffect(() => {
     const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleChange);
@@ -32,9 +36,12 @@ export const StartMenu: React.FC = () => {
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    requestFullscreenSafely();
     try {
       const data = await importSaveFromFile(file);
       loadGameFromFile(data);
+      requestAnimationFrame(requestFullscreenSafely);
+      window.setTimeout(requestFullscreenSafely, 150);
     } catch {
       showGameNotification({
         title: 'Nieprawidłowy zapis',
