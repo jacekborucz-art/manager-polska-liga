@@ -996,6 +996,32 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           )
         );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
+        const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
+        const isZeroShotCheckMinute = nextMinute === firstZeroShotCheckMinute || nextMinute === secondZeroShotCheckMinute;
+        const shouldRescueZeroShotSide = (side: 'HOME' | 'AWAY'): boolean => {
+          const sideStats = side === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          if (!isZeroShotCheckMinute || sideStats.shots > 0) return false;
+          const sideAttackChance = side === 'HOME' ? homeAttackChance : 1 - homeAttackChance;
+          const sideQualityGap = side === 'HOME' ? homeQualityGapLive : -homeQualityGapLive;
+          const sideSentOffs = prev.sentOffIds.filter(id => (side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length;
+          if (sideSentOffs >= 2 || sideAttackChance < 0.30 || sideQualityGap < -16) return false;
+
+          const lateCheck = nextMinute === secondZeroShotCheckMinute;
+          if (sideQualityGap >= -8 && sideAttackChance >= 0.34 && sideSentOffs === 0) return true;
+          return lateCheck && sideQualityGap >= -11 && sideAttackChance >= 0.35 && sideSentOffs <= 1;
+        };
+        let forceZeroShotChance = false;
+        const homeZeroShotRescue = shouldRescueZeroShotSide('HOME');
+        const awayZeroShotRescue = shouldRescueZeroShotSide('AWAY');
+        if (homeZeroShotRescue || awayZeroShotRescue) {
+          if (homeZeroShotRescue && awayZeroShotRescue) {
+            activeSide = activeSide === 'HOME' ? 'HOME' : 'AWAY';
+          } else {
+            activeSide = homeZeroShotRescue ? 'HOME' : 'AWAY';
+          }
+          forceZeroShotChance = true;
+        }
 
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
         const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
@@ -1522,7 +1548,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             nextAiActiveShout?.intensity ?? 'NORMAL', oPlayersList, oXIList
           );
         const uFoulThreshold = 0.043 * activeIntensityRisk.foul;
-        if (rngEvent < uFoulThreshold) { 
+        if (!forceZeroShotChance && rngEvent < uFoulThreshold) {
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
@@ -1594,7 +1620,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
            }
         } 
-       else if (rngEvent < shotThreshold) { 
+       else if (forceZeroShotChance || rngEvent < shotThreshold) {
            const team = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const oppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;

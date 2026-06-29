@@ -1649,6 +1649,32 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           )
         );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
+        const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
+        const isZeroShotCheckMinute = nextMinute === firstZeroShotCheckMinute || nextMinute === secondZeroShotCheckMinute;
+        const shouldRescueZeroShotSide = (side: 'HOME' | 'AWAY'): boolean => {
+          const sideStats = side === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          if (!isZeroShotCheckMinute || sideStats.shots > 0) return false;
+          const sideAttackChance = side === 'HOME' ? homeAttackChance : 1 - homeAttackChance;
+          const sideQualityGap = side === 'HOME' ? homeQualityGapLive : -homeQualityGapLive;
+          const sideSentOffs = prev.sentOffIds.filter(id => (side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length;
+          if (sideSentOffs >= 2 || sideAttackChance < 0.30 || sideQualityGap < -16) return false;
+
+          const lateCheck = nextMinute === secondZeroShotCheckMinute;
+          if (sideQualityGap >= -8 && sideAttackChance >= 0.34 && sideSentOffs === 0) return true;
+          return lateCheck && sideQualityGap >= -11 && sideAttackChance >= 0.35 && sideSentOffs <= 1;
+        };
+        let forceZeroShotChance = false;
+        const homeZeroShotRescue = shouldRescueZeroShotSide('HOME');
+        const awayZeroShotRescue = shouldRescueZeroShotSide('AWAY');
+        if (homeZeroShotRescue || awayZeroShotRescue) {
+          if (homeZeroShotRescue && awayZeroShotRescue) {
+            activeSide = activeSide === 'HOME' ? 'HOME' : 'AWAY';
+          } else {
+            activeSide = homeZeroShotRescue ? 'HOME' : 'AWAY';
+          }
+          forceZeroShotChance = true;
+        }
         let activePressureMods = activeSide === 'HOME' ? hLivePressure : aLivePressure;
         const counterAttackEnabled = prev.userInstructions.counterAttack === 'COUNTER';
         const userCounterTactic = TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId);
@@ -2450,7 +2476,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const activeIntensityRisk = isUserAttacking ? userIntensityRisk : aiIntensityRisk;
         const uFoulThreshold = 0.043 * activeIntensityRisk.foul * activePressureMods.cardMultiplier * (livePressureContext?.rivalryMultiplier ?? 1);
-        if (rngEvent < uFoulThreshold) { 
+        if (!forceZeroShotChance && rngEvent < uFoulThreshold) {
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
@@ -2568,7 +2594,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
            }
         } 
-       else if (rngEvent < shotThreshold) { 
+       else if (forceZeroShotChance || rngEvent < shotThreshold) {
            const team = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const oppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
@@ -4348,9 +4374,12 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                   <span className="text-8xl font-black italic text-yellow-400 tracking-tighter drop-shadow-[0_0_30px_rgba(250,204,21,1)]">GOL!</span>
                </div>
             ) : (
-               <><div className="text-8xl font-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.4)] tracking-tighter leading-none mb-1">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
+               <>
+                  <div className="invisible relative translate-y-[5px] whitespace-nowrap text-8xl font-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.4)] tracking-tighter leading-none mb-1" aria-hidden="true">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
+                  <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-8xl font-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.4)] tracking-tighter leading-none">{matchState.homeScore} <span className="text-slate-700 mx-1">&nbsp;&nbsp;&nbsp;</span> {matchState.awayScore}</div>
                   <div className="flex items-center gap-3">{!matchState.isFinished && <div className="text-xl font-mono font-bold text-emerald-400 animate-pulse bg-emerald-500/10 size-10 flex items-center justify-center rounded-full border border-emerald-500/20">{matchState.minute}</div>}
-                  {matchState.addedTime > 0 && !matchState.isFinished && <div className="text-[11px] font-black text-red-500 font-mono">+{matchState.addedTime}</div>}</div></>
+                  {matchState.addedTime > 0 && !matchState.isFinished && <div className="text-[11px] font-black text-red-500 font-mono">+{matchState.addedTime}</div>}</div>
+               </>
             )}
          </div>
          <div className="flex-1 flex flex-col justify-center pl-12 pr-4 text-right relative overflow-hidden group">

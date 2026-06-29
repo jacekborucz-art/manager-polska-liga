@@ -2431,6 +2431,35 @@ if (targetPlayer && !prev.isPausedForEvent) {
             const homeInitiativeProb = Math.max(0.22, Math.min(0.78, compressedHomeInitiative + momentumShift));
             eventSide = seededRng(currentSeed, nextMinute, 201) < homeInitiativeProb ? 'HOME' : 'AWAY';
         }
+        const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
+        const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
+        const isZeroShotCheckMinute = nextMinute === firstZeroShotCheckMinute || nextMinute === secondZeroShotCheckMinute;
+        const homePwrForZeroShot = userSide === 'HOME' ? pPower : aPower;
+        const awayPwrForZeroShot = userSide === 'AWAY' ? pPower : aPower;
+        const homeQualityGapLive = ((homePwrForZeroShot - awayPwrForZeroShot) / Math.max(1, Math.max(homePwrForZeroShot, awayPwrForZeroShot))) * 75;
+        const shouldRescueZeroShotSide = (side: 'HOME' | 'AWAY'): boolean => {
+            const sideStats = side === 'HOME' ? prev.liveStats.home : prev.liveStats.away;
+            if (!isZeroShotCheckMinute || sideStats.shots > 0) return false;
+            const sideProgressionChance = side === 'HOME' ? 1 - homeProgressionThreshold : 1 - awayProgressionThreshold;
+            const sideQualityGap = side === 'HOME' ? homeQualityGapLive : -homeQualityGapLive;
+            const sideSentOffs = nextSentOffIds.filter(id => (side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length;
+            if (sideSentOffs >= 2 || sideProgressionChance < 0.30 || sideQualityGap < -16) return false;
+
+            const lateCheck = nextMinute === secondZeroShotCheckMinute;
+            if (sideQualityGap >= -8 && sideProgressionChance >= 0.34 && sideSentOffs === 0) return true;
+            return lateCheck && sideQualityGap >= -11 && sideProgressionChance >= 0.35 && sideSentOffs <= 1;
+        };
+        let forceZeroShotChance = false;
+        const homeZeroShotRescue = shouldRescueZeroShotSide('HOME');
+        const awayZeroShotRescue = shouldRescueZeroShotSide('AWAY');
+        if (homeZeroShotRescue || awayZeroShotRescue) {
+            if (homeZeroShotRescue && awayZeroShotRescue) {
+                eventSide = eventSide === 'HOME' ? 'HOME' : 'AWAY';
+            } else {
+                eventSide = homeZeroShotRescue ? 'HOME' : 'AWAY';
+            }
+            forceZeroShotChance = true;
+        }
         // --- FAZA 2: PROGRESJA ATAKU (5-12 RZUTÓW) ---
         ///const diceRolls = 5 + Math.floor(seededRng(currentSeed, nextMinute, 444) * 1.2);
 
@@ -2477,7 +2506,7 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
         }
 
         const interceptRoll = seededRng(currentSeed, nextMinute, 555);
-        if (interceptRoll < 0.15 && successfulPasses < (diceRolls * 0.4)) {
+        if (!forceZeroShotChance && interceptRoll < 0.15 && successfulPasses < (diceRolls * 0.4)) {
             // Obrona przejęła piłkę - gwałtowny odwrót momentum (Kontra!)
             nextMomentum = (eventSide === 'HOME' ? -15 : 15);
             updatedLogs = [{ id: `intercept_${nextMinute}`, minute: nextMinute, text: `Genialny przechwyt i błyskawiczna kontra ${eventSide === 'HOME' ? ctx.awayClub.shortName : ctx.homeClub.shortName}!`, type: MatchEventType.MIDFIELD_CONTROL, teamSide: eventSide === 'HOME' ? 'AWAY' : 'HOME' }, ...updatedLogs];
@@ -2620,6 +2649,9 @@ dynamicThreshold *= undedogThresholdMultiplier;
        
        const thresholdPressureTax = isUnderdog ? 1.18 : 1.35;
        const currentThreshold = Math.min(0.95, dynamicThreshold * thresholdPressureTax);
+       if (forceZeroShotChance && successfulPasses / diceRolls <= currentThreshold) {
+            successfulPasses = Math.min(diceRolls, Math.floor(diceRolls * currentThreshold) + 1);
+       }
 
         // === GIANT KILLER: minimalna szansa przebicia dla drużyny z niższego Tier ===
         // Formuła: repGap≥5 → (11-repGap)*0.9%/min | repGap<5 → (11-repGap)*0.6%/min

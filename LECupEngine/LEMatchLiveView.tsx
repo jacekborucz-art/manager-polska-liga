@@ -827,6 +827,24 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         };
         const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
         const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
+        const getEffectiveXIStrength = (playersList: Player[], lineup: Lineup): number => {
+          const tactic = TacticRepository.getById(lineup.tacticId);
+          const activeRoleOveralls = lineup.startingXI
+            .map((id, idx) => {
+              if (!id) return null;
+              const player = playersList.find(p => p.id === id);
+              const role = tactic.slots[idx]?.role ?? player?.position;
+              return player && role ? PlayerPositionFitService.getEffectiveRoleOverall(player, role, true) : null;
+            })
+            .filter((value): value is number => value !== null);
+          if (activeRoleOveralls.length === 0) return 62;
+          const avgOverall = activeRoleOveralls.reduce((sum, overall) => sum + overall, 0) / activeRoleOveralls.length;
+          const structureFactor = Math.min(1, activeRoleOveralls.length / 11);
+          return avgOverall * structureFactor;
+        };
+        const homeAvgOverallLive = getEffectiveXIStrength(ctx.homePlayers, nextHomeLineup);
+        const awayAvgOverallLive = getEffectiveXIStrength(ctx.awayPlayers, nextAwayLineup);
+        const homeQualityGapLive = homeAvgOverallLive - awayAvgOverallLive;
 
         // Krzywa kary: kondycja 85→0 | 78→-0.005 | 70→-0.015 | 65→-0.022 | 60→-0.031 | 55→-0.040
         // ZMIANA (2026-06-09): próg podniesiony z 75 → 85, współczynnik z 0.14 → 0.17.
@@ -849,7 +867,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 220 + fatInitiativeMod));
-        const activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
+        const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
+        const isZeroShotCheckMinute = nextMinute === firstZeroShotCheckMinute || nextMinute === secondZeroShotCheckMinute;
+        const shouldRescueZeroShotSide = (side: 'HOME' | 'AWAY'): boolean => {
+          const sideStats = side === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          if (!isZeroShotCheckMinute || sideStats.shots > 0) return false;
+          const sideAttackChance = side === 'HOME' ? homeAttackChance : 1 - homeAttackChance;
+          const sideQualityGap = side === 'HOME' ? homeQualityGapLive : -homeQualityGapLive;
+          const sideSentOffs = nextSentOffIds.filter(id => (side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length;
+          if (sideSentOffs >= 2 || sideAttackChance < 0.30 || sideQualityGap < -16) return false;
+
+          const lateCheck = nextMinute === secondZeroShotCheckMinute;
+          if (sideQualityGap >= -8 && sideAttackChance >= 0.34 && sideSentOffs === 0) return true;
+          return lateCheck && sideQualityGap >= -11 && sideAttackChance >= 0.35 && sideSentOffs <= 1;
+        };
+        let forceZeroShotChance = false;
+        const homeZeroShotRescue = shouldRescueZeroShotSide('HOME');
+        const awayZeroShotRescue = shouldRescueZeroShotSide('AWAY');
+        if (homeZeroShotRescue || awayZeroShotRescue) {
+          if (homeZeroShotRescue && awayZeroShotRescue) {
+            activeSide = activeSide === 'HOME' ? 'HOME' : 'AWAY';
+          } else {
+            activeSide = homeZeroShotRescue ? 'HOME' : 'AWAY';
+          }
+          forceZeroShotChance = true;
+        }
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.18; // Bazowa szansa
@@ -1112,7 +1156,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         };
 
         const uFoulThreshold = 0.043 * (isUserAttacking ? uFoulMod : 1.0);
-        if (rngEvent < uFoulThreshold) { 
+        if (!forceZeroShotChance && rngEvent < uFoulThreshold) {
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
@@ -1184,7 +1228,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
            }
         } 
-       else if (rngEvent < shotThreshold) { 
+       else if (forceZeroShotChance || rngEvent < shotThreshold) {
            const team = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const oppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
