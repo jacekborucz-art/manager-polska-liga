@@ -213,6 +213,10 @@ const PitchBroadcastOverlay = ({
 };
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const seededValue = (seed: number, offset: number = 0) => {
+  const x = Math.sin(seed + offset) * 10000;
+  return x - Math.floor(x);
+};
 
 const getRefereeDecisionQuality = (referee: Referee) =>
   (referee.consistency * 0.6) + ((referee.experience ?? 50) * 0.4);
@@ -456,6 +460,56 @@ const getAiUserPatternBriefingEffect = (
     label: 'ROZCZYTANY SCHEMAT GRACZA',
     reactionText: '',
     wasSurprise: false,
+  };
+};
+
+const getAiRandomTacticGuessBriefingEffect = (
+  currentUserTacticId: string,
+  seed: number,
+  aiCoachAttributes: { motivation?: number; experience?: number; decisionMaking?: number } | undefined
+): { guessedTacticId: string; effect: BriefingEffect } => {
+  const allTactics = TacticRepository.getAll();
+  const guessRoll = seededValue(seed, 412);
+  const guessedTacticId = allTactics[Math.floor(guessRoll * allTactics.length)]?.id ?? '4-4-2';
+  const neutralEffect: BriefingEffect = {
+    actionMod: 0,
+    goalMod: 0,
+    momentumBonus: 0,
+    expiryMinute: 0,
+    fatigueMult: 1,
+    rivalBoost: 0,
+    label: 'NIETRAFIONE PRZEWIDYWANIE TAKTYKI',
+    reactionText: '',
+    wasSurprise: false,
+  };
+
+  if (guessedTacticId !== currentUserTacticId) {
+    return { guessedTacticId, effect: neutralEffect };
+  }
+
+  const coachRead = clampNumber(
+    ((aiCoachAttributes?.decisionMaking ?? 50) * 0.48 +
+      (aiCoachAttributes?.experience ?? 50) * 0.34 +
+      (aiCoachAttributes?.motivation ?? 50) * 0.18) / 100,
+    0.35,
+    0.92
+  );
+  const guessNoise = 0.75 + seededValue(seed, 413) * 0.35;
+  const strength = clampNumber(coachRead * guessNoise, 0.22, 0.72);
+
+  return {
+    guessedTacticId,
+    effect: {
+      actionMod: clampNumber(strength * 0.014, 0, 0.010),
+      goalMod: clampNumber(strength * 0.008, 0, 0.006),
+      momentumBonus: Math.round(strength * 5),
+      expiryMinute: 25,
+      fatigueMult: 1,
+      rivalBoost: 0,
+      label: 'TRAFIONE PRZEWIDYWANIE TAKTYKI',
+      reactionText: '',
+      wasSurprise: false,
+    },
   };
 };
 
@@ -807,13 +861,21 @@ const isPausedForSevereInjury = useMemo(() => {
         aiCoachInit?.attributes,
         opponentReport
       );
+      const aiTacticGuess = getAiRandomTacticGuessBriefingEffect(
+        userTacticIdInit,
+        sessionSeed,
+        aiCoachInit?.attributes
+      );
       const aiBriefingWithMedia = aiMediaStakesEffect.expiryMinute > 0
         ? PreMatchPressConferenceService.combineWithBriefing(aiMediaStakesEffect, aiCoachBriefingEffect)
         : aiCoachBriefingEffect;
       const aiBriefingWithPattern = aiUserPatternEffect.expiryMinute > 0
         ? PreMatchPressConferenceService.combineWithBriefing(aiUserPatternEffect, aiBriefingWithMedia)
         : aiBriefingWithMedia;
-      const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, aiBriefingWithPattern);
+      const aiBriefingWithGuess = aiTacticGuess.effect.expiryMinute > 0
+        ? PreMatchPressConferenceService.combineWithBriefing(aiTacticGuess.effect, aiBriefingWithPattern)
+        : aiBriefingWithPattern;
+      const aiBaseBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(aiConferenceEffect, aiBriefingWithGuess);
       const aiRivalryBriefingEffect = rivalryContext ? RivalryService.amplifyBriefingEffect(aiBaseBriefingEffect, rivalryContext) : aiBaseBriefingEffect;
       const aiBriefingEffect = adjustBriefingEffectForPressure(
         aiRivalryBriefingEffect,
@@ -827,6 +889,7 @@ const isPausedForSevereInjury = useMemo(() => {
         homeScore: 0, awayScore: 0, homeLineup: homeLineupInit, awayLineup: awayLineupInit,
         initialHomeTacticId: homeLineupInit.tacticId,
         initialAwayTacticId: awayLineupInit.tacticId,
+        aiTacticGuessId: aiTacticGuess.guessedTacticId,
         // TUTAJ WSTAW TEN KOD
         homeFatigue: ctx.homePlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
@@ -4100,6 +4163,7 @@ const summary: MatchSummary = {
       awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
       homeStartingTacticId: matchState.initialHomeTacticId ?? matchState.homeLineup.tacticId,
       awayStartingTacticId: matchState.initialAwayTacticId ?? matchState.awayLineup.tacticId,
+      aiTacticGuessId: matchState.aiTacticGuessId,
       homeTacticId: matchState.homeLineup.tacticId,
       awayTacticId: matchState.awayLineup.tacticId,
       cards: (() => {

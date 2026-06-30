@@ -2274,6 +2274,7 @@ isPenalties?: boolean;
   oppHalftimeMomentumBonus?: number;
   initialHomeTacticId?: string;
   initialAwayTacticId?: string;
+  aiTacticGuessId?: string;
   aiNextInstructionMinute?: number;
   preMatchMotivation?: {
     actionMod: number;
@@ -2451,6 +2452,7 @@ export interface MatchHistoryEntry {
   emergencyPlayers?: Player[];
   homeStartingTacticId?: string;
   awayStartingTacticId?: string;
+  aiTacticGuessId?: string;
   homeTacticId?: string;
   awayTacticId?: string;
   kits?: {
