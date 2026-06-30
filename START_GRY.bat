@@ -49,8 +49,10 @@ if not exist "dist\index.html" (
   exit /b 1
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\scripts\stop-fm-server.ps1" "%CD%\server.cjs" >nul 2>nul
+
 set "FM_PORT="
-for /l %%P in (4173,1,4183) do (
+for /l %%P in (4173,1,4273) do (
   if "!FM_PORT!"=="" (
     netstat -ano -p tcp | findstr /R /C:":%%P .*LISTENING" >nul 2>nul
     if errorlevel 1 set "FM_PORT=%%P"
@@ -59,7 +61,7 @@ for /l %%P in (4173,1,4183) do (
 
 if "%FM_PORT%"=="" (
   echo.
-  echo Nie udalo sie znalezc wolnego portu od 4173 do 4183.
+  echo Nie udalo sie znalezc wolnego portu od 4173 do 4273.
   echo Zamknij inne uruchomione okna gry i sprobuj ponownie.
   echo.
   pause
@@ -70,7 +72,7 @@ set "FM_URL=http://127.0.0.1:%FM_PORT%"
 set "FM_BROWSER_PROFILE=%TEMP%\FutbolManagerKiosk_%FM_PORT%_%RANDOM%"
 set "BROWSER_OPENED=0"
 
-start "Futbol Manager - lokalny serwer" /D "%CD%" "%NODE_EXE%" "%CD%\server.cjs"
+start "Futbol Manager - lokalny serwer" /D "%CD%" "%NODE_EXE%" "%CD%\server.cjs" "%FM_PORT%"
 
 call :WAIT_FOR_SERVER
 

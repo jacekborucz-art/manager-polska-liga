@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, 'dist');
-const preferredPort = Number(process.env.FM_PORT || 4173);
+const preferredPort = Number(process.argv[2] || process.env.FM_PORT || 4173);
 const host = '127.0.0.1';
 
 const mimeTypes = {
