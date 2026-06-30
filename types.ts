@@ -2435,6 +2435,7 @@ export interface MatchHistoryEntry {
   homeLineup?: string[];
   awayLineup?: string[];
   ratings?: Record<string, number>;
+  emergencyPlayers?: Player[];
   homeTacticId?: string;
   awayTacticId?: string;
   kits?: {

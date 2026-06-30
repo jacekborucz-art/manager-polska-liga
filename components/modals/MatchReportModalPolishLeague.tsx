@@ -243,18 +243,23 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
     [match, clubs, nationalTeams, teamType]
   );
 
-  const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
+  const allPlayersFlat = useMemo(
+    () => [...Object.values(players).flat(), ...(match?.emergencyPlayers ?? [])],
+    [players, match]
+  );
 
   const homePlayers = useMemo(
     () => {
       if (!homeClub) return [];
       if (teamType === 'national') {
         const team = homeClub as NationalTeam;
-        return team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+        const regularPlayers = team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+        const emergencyPlayers = (match?.emergencyPlayers ?? []).filter(p => p.assignedNationalTeamId === team.id);
+        return [...regularPlayers, ...emergencyPlayers];
       }
       return players[homeClub.id] ?? [];
     },
-    [homeClub, players, allPlayersFlat, teamType]
+    [homeClub, players, allPlayersFlat, teamType, match]
   );
 
   const awayPlayers = useMemo(
@@ -262,11 +267,13 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
       if (!awayClub) return [];
       if (teamType === 'national') {
         const team = awayClub as NationalTeam;
-        return team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+        const regularPlayers = team.squadPlayerIds.map(id => allPlayersFlat.find(p => p.id === id) ?? null).filter(Boolean) as Player[];
+        const emergencyPlayers = (match?.emergencyPlayers ?? []).filter(p => p.assignedNationalTeamId === team.id);
+        return [...regularPlayers, ...emergencyPlayers];
       }
       return players[awayClub.id] ?? [];
     },
-    [awayClub, players, allPlayersFlat, teamType]
+    [awayClub, players, allPlayersFlat, teamType, match]
   );
 
   const motmId = useMemo(() => {

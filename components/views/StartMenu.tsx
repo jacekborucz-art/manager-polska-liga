@@ -168,7 +168,7 @@ export const StartMenu: React.FC = () => {
       
 
         {/* Action Menu */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full max-w-[1180px] mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6 w-full max-w-[1180px] mx-auto">
                                                                       
           
           <button 
@@ -252,6 +252,20 @@ export const StartMenu: React.FC = () => {
                 <div className="text-center">
                   <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">KONFIGURUJ</span>
                   <span className="text-2xl font-black text-white italic uppercase tracking-tighter">OPCJE</span>
+                </div>
+             </div>
+          </button>
+
+          <button
+            onClick={() => { window.close(); window.location.href = 'about:blank'; }}
+            className="group relative h-48 bg-red-600/10 border border-red-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-red-600 hover:border-red-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(220,38,38,0.5)] overflow-hidden"
+          >
+             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+             <div className="relative z-10 flex flex-col h-full items-center justify-between">
+                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">🚪</span>
+                <div className="text-center">
+                  <span className="block text-[10px] font-black text-red-500 group-hover:text-red-100 uppercase tracking-widest mb-1">ZAKOŃCZ</span>
+                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">WYJŚCIE</span>
                 </div>
              </div>
           </button>
