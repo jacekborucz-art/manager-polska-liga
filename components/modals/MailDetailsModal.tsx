@@ -563,24 +563,34 @@ const getWCQPlayoffPolandMailData = (mail: MailMessage): WCQPlayoffPolandMailDat
     };
   }
 
-  const isLegacyPlayoffMail = mail.sender === 'Sport Express' && mail.subject.toLowerCase().includes('bara');
+  const normalizedSubject = mail.subject.toLowerCase();
+  const isLegacyPlayoffMail =
+    mail.sender === 'Sport Express' &&
+    normalizedSubject.includes('bara') &&
+    !mail.id.startsWith('WCQ_GROUPS_NEWS_') &&
+    !normalizedSubject.includes('faza grupowa kwalifikacji zakończona');
   if (!isLegacyPlayoffMail) return null;
 
   const lines = mail.body.split('\n').map(line => line.trim()).filter(Boolean);
+  const hasMatchResultSection = lines.some(line => line === 'WYNIK MECZU');
   const lead = lines.find(line => line.includes('Reprezentacja Polski')) ?? '';
   const matchLine = lines.find(line => /^Polska\s+[—-]\s+/.test(line));
   const scoreLineIndex = matchLine ? lines.indexOf(matchLine) + 1 : -1;
   const scoreLine = scoreLineIndex > 0 ? lines[scoreLineIndex] : '';
-  const opponent = matchLine?.replace(/^Polska\s+[—-]\s+/, '').trim() || 'Rywal';
+  if (!hasMatchResultSection || !matchLine || !scoreLine) return null;
+
+  const opponent = matchLine.replace(/^Polska\s+[—-]\s+/, '').trim();
   const scoreMatch = scoreLine.match(/(\d+)\s*:\s*(\d+)/);
-  const homeScore = scoreMatch ? Number(scoreMatch[1]) : 0;
-  const awayScore = scoreMatch ? Number(scoreMatch[2]) : 0;
-  const polandWon = homeScore > awayScore || mail.subject.toLowerCase().includes('finale bara') && !mail.subject.toLowerCase().includes('odpada') && !mail.subject.toLowerCase().includes('przegrywa');
+  if (!scoreMatch) return null;
+
+  const homeScore = Number(scoreMatch[1]);
+  const awayScore = Number(scoreMatch[2]);
+  const polandWon = homeScore > awayScore || (normalizedSubject.includes('finale bara') && !normalizedSubject.includes('odpada') && !normalizedSubject.includes('przegrywa'));
   const finalLine = lines.find(line => line.includes('Polska zagra z reprezentacją'));
   const finalOpponent = finalLine?.match(/reprezentacją\s+(.+?)\./)?.[1] ?? null;
 
   return {
-    stage: mail.subject.toLowerCase().includes('półfinal') ? 'SF' : 'FINAL',
+    stage: normalizedSubject.includes('półfinal') ? 'SF' : 'FINAL',
     homeTeam: 'Polska',
     awayTeam: opponent,
     homeScore,
