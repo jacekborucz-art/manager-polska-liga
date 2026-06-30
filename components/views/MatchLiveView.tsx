@@ -213,6 +213,7 @@ const PitchBroadcastOverlay = ({
 };
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+// Deterministyczny roll z seeda meczu, zeby losowania AI byly powtarzalne w ramach tej samej symulacji.
 const seededValue = (seed: number, offset: number = 0) => {
   const x = Math.sin(seed + offset) * 10000;
   return x - Math.floor(x);
@@ -418,6 +419,7 @@ const getAiUserPatternBriefingEffect = (
     return neutralPatternEffect();
   }
 
+  // AI sprawdza startowe taktyki z historii; zmiany w trakcie meczu nie powinny kasowac kary za powtarzalny plan startowy.
   const recent = MatchHistoryService.getTeamHistory(userTeamId)
     .map(entry => entry.homeTeamId === userTeamId
       ? (entry.homeStartingTacticId ?? entry.homeTacticId)
@@ -429,6 +431,7 @@ const getAiUserPatternBriefingEffect = (
     return neutralPatternEffect();
   }
 
+  // Bonus odpala dopiero przy piatym starcie tym samym ustawieniem: wymagamy 4 poprzednich meczow z rzedu.
   let sameTacticStartStreak = 0;
   for (let idx = recent.length - 1; idx >= 0; idx--) {
     if (recent[idx] !== currentUserTacticId) break;
@@ -469,6 +472,7 @@ const getAiRandomTacticGuessBriefingEffect = (
   aiCoachAttributes: { motivation?: number; experience?: number; decisionMaking?: number } | undefined
 ): { guessedTacticId: string; effect: BriefingEffect } => {
   const allTactics = TacticRepository.getAll();
+  // Przed meczem AI losuje jedna taktyke gracza; trafienie daje lekki bonus tylko do 40. minuty.
   const guessRoll = seededValue(seed, 412);
   const guessedTacticId = allTactics[Math.floor(guessRoll * allTactics.length)]?.id ?? '4-4-2';
   const neutralEffect: BriefingEffect = {
@@ -503,7 +507,7 @@ const getAiRandomTacticGuessBriefingEffect = (
       actionMod: clampNumber(strength * 0.014, 0, 0.010),
       goalMod: clampNumber(strength * 0.008, 0, 0.006),
       momentumBonus: Math.round(strength * 5),
-      expiryMinute: 25,
+      expiryMinute: 40,
       fatigueMult: 1,
       rivalBoost: 0,
       label: 'TRAFIONE PRZEWIDYWANIE TAKTYKI',
@@ -861,6 +865,7 @@ const isPausedForSevereInjury = useMemo(() => {
         aiCoachInit?.attributes,
         opponentReport
       );
+      // Osobny scouting AI: losowa proba przewidzenia startowej taktyki gracza przed pierwszym gwizdkiem.
       const aiTacticGuess = getAiRandomTacticGuessBriefingEffect(
         userTacticIdInit,
         sessionSeed,
@@ -872,6 +877,7 @@ const isPausedForSevereInjury = useMemo(() => {
       const aiBriefingWithPattern = aiUserPatternEffect.expiryMinute > 0
         ? PreMatchPressConferenceService.combineWithBriefing(aiUserPatternEffect, aiBriefingWithMedia)
         : aiBriefingWithMedia;
+      // Trafione przewidywanie doklejamy do briefingu AI jako krotki, wczesnomeczowy bonus.
       const aiBriefingWithGuess = aiTacticGuess.effect.expiryMinute > 0
         ? PreMatchPressConferenceService.combineWithBriefing(aiTacticGuess.effect, aiBriefingWithPattern)
         : aiBriefingWithPattern;
@@ -887,6 +893,7 @@ const isPausedForSevereInjury = useMemo(() => {
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
         isPausedForEvent: false, isHalfTime: false, isFinished: false, speed: 1, momentum: 0, momentumPulse: 0,
         homeScore: 0, awayScore: 0, homeLineup: homeLineupInit, awayLineup: awayLineupInit,
+        // Zapamietujemy taktyke startowa oddzielnie od aktualnej, bo gracz moze zmienic ustawienie w trakcie meczu.
         initialHomeTacticId: homeLineupInit.tacticId,
         initialAwayTacticId: awayLineupInit.tacticId,
         aiTacticGuessId: aiTacticGuess.guessedTacticId,
@@ -1312,6 +1319,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         : 0;
       const oppCoachDelta = Math.round(baseOppCoachDelta * getAiHalftimePressureMultiplier(aiPressureProfile, oppCoach) * 10) / 10;
       const oppMomentumDelta = isHome ? -oppCoachDelta : oppCoachDelta;
+      // Odprawa AI w przerwie lustrzanie daje zmeczenie i mnozniki reakcji, zeby rozmowa gracza nie byla jednostronna przewaga.
       const oppCoachQuality = ((oppCoach?.attributes.decisionMaking ?? 50) + (oppCoach?.attributes.experience ?? 50)) / 2;
       const oppTalkDirection = Math.sign(oppCoachDelta);
       const oppFatigueRegenBonus = Math.round(clampNumber(
@@ -1863,6 +1871,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let aiCounterAttackShotBonus = 0;
         const aiCounterAttackEnabled = prev.aiActiveShout?.counterAttack === 'COUNTER';
         const aiSideForCounter: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
+        // Kontra AI dostaje taki sam losowy mnoznik reakcji jak instrukcja gracza, ale liczony z seeda meczu.
         const aiCounterShoutMinute = prev.aiActiveShout?.id.startsWith('ai_')
           ? parseInt(prev.aiActiveShout.id.replace('ai_', ''))
           : 0;
@@ -2456,6 +2465,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const aiShoutMinute = nextAiActiveShout?.id.startsWith('ai_')
           ? parseInt(nextAiActiveShout.id.replace('ai_', ''))
           : 0;
+        // Instrukcje AI lacza bazowy roll z ewentualnym efektem przerwy, tak jak u gracza.
         const aiTempoRf     = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 801) * 0.8) * (nextAiActiveShout.tempoResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
         const aiMindsetRf   = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 802) * 0.8) * (nextAiActiveShout.mindsetResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
         const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
@@ -4161,6 +4171,7 @@ const summary: MatchSummary = {
       injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
       homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
       awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
+      // Historia zapisuje taktyke startowa i koncowa osobno, bo scouting AI analizuje otwarcie meczu.
       homeStartingTacticId: matchState.initialHomeTacticId ?? matchState.homeLineup.tacticId,
       awayStartingTacticId: matchState.initialAwayTacticId ?? matchState.awayLineup.tacticId,
       aiTacticGuessId: matchState.aiTacticGuessId,

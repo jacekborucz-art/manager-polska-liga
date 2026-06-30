@@ -2247,6 +2247,7 @@ isPenalties?: boolean;
     pressing?: InstructionPressing;
     counterAttack?: InstructionCounterAttack;
     passing?: InstructionPassing;
+    // Mnozniki z odprawy AI w przerwie; lustrzane do reakcji gracza na rozmowe motywacyjna.
     tempoResponseFactor?: number;
     mindsetResponseFactor?: number;
     intensityResponseFactor?: number;
@@ -2272,8 +2273,10 @@ isPenalties?: boolean;
   halftimeTalkApplied?: boolean;
   halftimeMomentumBonus?: number;
   oppHalftimeMomentumBonus?: number;
+  // Taktyka startowa jest trzymana osobno, bo live tacticId moze zmienic sie po korektach w trakcie meczu.
   initialHomeTacticId?: string;
   initialAwayTacticId?: string;
+  // Losowa przedmeczowa proba AI przewidzenia taktyki gracza, zapisana do audytu/raportu.
   aiTacticGuessId?: string;
   aiNextInstructionMinute?: number;
   preMatchMotivation?: {
@@ -2450,8 +2453,10 @@ export interface MatchHistoryEntry {
   awayLineup?: string[];
   ratings?: Record<string, number>;
   emergencyPlayers?: Player[];
+  // Historia przechowuje start i final osobno, zeby scouting AI analizowal faktyczne otwarcie meczu.
   homeStartingTacticId?: string;
   awayStartingTacticId?: string;
+  // Zapamietany typ AI z przedmeczowego zgadywania taktyki gracza.
   aiTacticGuessId?: string;
   homeTacticId?: string;
   awayTacticId?: string;
