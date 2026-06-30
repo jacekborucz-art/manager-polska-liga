@@ -688,10 +688,17 @@ const isPausedForSevereInjury = useMemo(() => {
     seed: number,
     sideOffset: number
   ) => {
-    void seed;
-    void sideOffset;
-    const shots = Math.max(0, rawStats.shots, rawStats.shotsOnTarget, goals);
-    const shotsOnTarget = Math.min(shots, Math.max(0, rawStats.shotsOnTarget, goals));
+    const statRng = (offset: number) => seededRng(seed, 45, sideOffset + offset);
+    const possessionMod = possession >= 58 ? 2 : possession >= 52 ? 1 : possession <= 42 ? -1 : 0;
+    const cornerChaos = Math.min(3, Math.floor(rawStats.corners * 0.35));
+    const openPlayFloor = 5 + Math.floor(statRng(1) * 4) + possessionMod + cornerChaos;
+    const goalFloor = goals > 0
+      ? goals * (2 + Math.floor(statRng(2) * 2)) + Math.floor(statRng(3) * 2)
+      : 0;
+    const shotFloor = Math.max(0, Math.min(16, Math.max(openPlayFloor, goalFloor)));
+    const shots = Math.max(0, rawStats.shots, rawStats.shotsOnTarget, goals, shotFloor);
+    const onTargetFloor = goals > 0 ? Math.max(goals, Math.floor(shots * (0.30 + statRng(4) * 0.12))) : 0;
+    const shotsOnTarget = Math.min(shots, Math.max(0, rawStats.shotsOnTarget, goals, onTargetFloor));
     const corners = Math.max(0, rawStats.corners);
     const fouls = Math.max(0, rawStats.fouls);
 
@@ -2801,11 +2808,68 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const statActiveIds = statLineup.filter((id): id is string => id !== null);
           const statPlayerId = statActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 914) * statActiveIds.length)];
           const statPlayer = statTeam.find(p => p.id === statPlayerId);
-          // shotShare removed — it was generating ~9 extra shots/team on top of the original shot block (~11/team), inflating totals to ~40 instead of 22-26. cornerShare raised from 0.14→0.30 to compensate for corners lost when this block crowded out the original misc block (rngEvent < 0.32).
-          const cornerShare = 0.30 + Math.max(0, Math.min(0.05, (activeStats.shots - activeStats.corners) * 0.006));
+          // Chaotyczne strzały są celowo odpięte od OVR. Nawet słabsze ligi produkują dobitki,
+          // półszanse i uderzenia po niedokładnych akcjach; jakość ma decydować głównie o bramkach.
+          const chaosShotShare = activeStats.shots < 5
+            ? 0.24
+            : activeStats.shots < 9
+              ? 0.16
+              : activeStats.shots < 13
+                ? 0.09
+                : 0.04;
+          const cornerShare = 0.26 + Math.max(0, Math.min(0.05, (activeStats.shots - activeStats.corners) * 0.006));
           const foulShare = 0.12 + Math.max(0, Math.min(0.06, (70 - attackingTacticObj.defenseBias) * 0.0015));
 
-          if (statRng < cornerShare) {
+          if (statRng < chaosShotShare) {
+            targetSideStats.shots++;
+            const strengthEdge = Math.max(-1, Math.min(1, ratingGap / 18));
+            // Chaos shot może dać bramkę, ale ma zostać rzadką dobitką/zamieszaniem:
+            // podobne siły ~3.2%, mocny faworyt do ~6.4%, wyraźny outsider min. ~1.2%.
+            const chaosGoalChance = Math.max(0.012, Math.min(0.064, 0.032 + strengthEdge * 0.022));
+            const isChaosGoal = seededRng(currentSeed, nextMinute, 920) < chaosGoalChance;
+            const onTargetChance = 0.24 + seededRng(currentSeed, nextMinute, 916) * 0.16 + (strengthEdge * 0.04);
+            const shotType = isChaosGoal || seededRng(currentSeed, nextMinute, 918) < onTargetChance
+              ? MatchEventType.SHOT_ON_TARGET
+              : MatchEventType.SHOT;
+            if (shotType === MatchEventType.SHOT_ON_TARGET) targetSideStats.shotsOnTarget++;
+            immediateEventType = shotType;
+            if (isChaosGoal && statPlayer) {
+              const goalInfo = {
+                playerName: statPlayer.lastName,
+                scorerId: statPlayer.id,
+                minute: nextMinute,
+                isPenalty: false
+              };
+              if (activeSide === 'HOME') {
+                nextHomeScore++;
+                newHomeGoals.push(goalInfo);
+              } else {
+                nextAwayScore++;
+                newAwayGoals.push(goalInfo);
+              }
+              newLog = {
+                id: `CHAOS_GOAL_${nextMinute}`,
+                minute: nextMinute,
+                text: `⚽ Chaos w polu karnym! ${statPlayer.lastName} wykorzystuje zamieszanie i pakuje piłkę do siatki!`,
+                type: MatchEventType.GOAL,
+                teamSide: activeSide,
+                playerName: statPlayer.lastName
+              };
+              goalTriggered = true;
+              priorityAiTrigger = true;
+              pauseForEvent = true;
+              immediateEventType = MatchEventType.GOAL;
+            } else if (seededRng(currentSeed, nextMinute, 922) < 0.18) {
+              newLog = {
+                id: `STAT_SHOT_${nextMinute}`,
+                minute: nextMinute,
+                text: getCommentary(shotType, statPlayer?.lastName || ''),
+                type: shotType,
+                teamSide: activeSide,
+                playerName: statPlayer?.lastName
+              };
+            }
+          } else if (statRng < chaosShotShare + cornerShare) {
             targetSideStats.corners++;
             immediateEventType = MatchEventType.CORNER;
             if (seededRng(currentSeed, nextMinute, 924) < 0.16) {
@@ -2818,7 +2882,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 playerName: statPlayer?.lastName
               };
             }
-          } else if (statRng < cornerShare + foulShare) {
+          } else if (statRng < chaosShotShare + cornerShare + foulShare) {
             targetSideStats.fouls++;
             immediateEventType = MatchEventType.FOUL;
           } else {
