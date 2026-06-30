@@ -415,24 +415,23 @@ const getAiUserPatternBriefingEffect = (
   }
 
   const recent = MatchHistoryService.getTeamHistory(userTeamId)
-    .slice(-6)
-    .map(entry => entry.homeTeamId === userTeamId ? entry.homeTacticId : entry.awayTacticId)
+    .map(entry => entry.homeTeamId === userTeamId
+      ? (entry.homeStartingTacticId ?? entry.homeTacticId)
+      : (entry.awayStartingTacticId ?? entry.awayTacticId)
+    )
     .filter((tacticId): tacticId is string => !!tacticId);
 
-  if (recent.length < 3) {
+  if (recent.length < 4) {
     return neutralPatternEffect();
   }
 
-  const sameTacticCount = recent.filter(tacticId => tacticId === currentUserTacticId).length;
-  const sameStyleCount = recent.filter(tacticId => {
-    return tacticStyleKey(tacticId) === currentStyleKey;
-  }).length;
+  let sameTacticStartStreak = 0;
+  for (let idx = recent.length - 1; idx >= 0; idx--) {
+    if (recent[idx] !== currentUserTacticId) break;
+    sameTacticStartStreak++;
+  }
 
-  const repetitionScore = Math.max(
-    sameTacticCount / recent.length,
-    sameStyleCount / recent.length * 0.82
-  );
-  if (sameTacticCount < 3 && repetitionScore < 0.58) {
+  if (sameTacticStartStreak < 4) {
     return neutralPatternEffect();
   }
 
@@ -444,7 +443,8 @@ const getAiUserPatternBriefingEffect = (
     0.95
   );
   const reportRead = clampNumber(opponentReport.confidence * (0.62 + reportAlignment * 0.38), 0.28, 0.95);
-  const strength = clampNumber(repetitionScore * coachRead * reportRead, 0, 0.78);
+  const streakPressure = clampNumber(0.54 + (sameTacticStartStreak - 4) * 0.10, 0.54, 0.88);
+  const strength = clampNumber(streakPressure * coachRead * reportRead, 0, 0.78);
 
   return {
     actionMod: clampNumber(strength * 0.024, 0, 0.020),
@@ -453,7 +453,7 @@ const getAiUserPatternBriefingEffect = (
     expiryMinute: strength >= 0.48 ? 45 : 30,
     fatigueMult: 1,
     rivalBoost: 0,
-    label: sameTacticCount >= 3 ? 'ROZCZYTANY SCHEMAT GRACZA' : 'ROZCZYTANY STYL GRACZA',
+    label: 'ROZCZYTANY SCHEMAT GRACZA',
     reactionText: '',
     wasSurprise: false,
   };
@@ -825,6 +825,8 @@ const isPausedForSevereInjury = useMemo(() => {
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
         isPausedForEvent: false, isHalfTime: false, isFinished: false, speed: 1, momentum: 0, momentumPulse: 0,
         homeScore: 0, awayScore: 0, homeLineup: homeLineupInit, awayLineup: awayLineupInit,
+        initialHomeTacticId: homeLineupInit.tacticId,
+        initialAwayTacticId: awayLineupInit.tacticId,
         // TUTAJ WSTAW TEN KOD
         homeFatigue: ctx.homePlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
@@ -1247,13 +1249,43 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         : 0;
       const oppCoachDelta = Math.round(baseOppCoachDelta * getAiHalftimePressureMultiplier(aiPressureProfile, oppCoach) * 10) / 10;
       const oppMomentumDelta = isHome ? -oppCoachDelta : oppCoachDelta;
+      const oppCoachQuality = ((oppCoach?.attributes.decisionMaking ?? 50) + (oppCoach?.attributes.experience ?? 50)) / 2;
+      const oppTalkDirection = Math.sign(oppCoachDelta);
+      const oppFatigueRegenBonus = Math.round(clampNumber(
+        oppCoachDelta >= 0
+          ? 0.4 + (oppCoachDelta / 23) * (1.8 + oppCoachQuality / 100)
+          : oppCoachDelta / 12,
+        -2.0,
+        3.2
+      ) * 10) / 10;
+      const oppResponseSwing = clampNumber((Math.abs(oppCoachDelta) / 24) * (0.45 + oppCoachQuality / 180), 0, 0.28);
+      const oppTempoResponseFactor = Number(clampNumber(1 + oppTalkDirection * oppResponseSwing * 0.85, 0.78, 1.25).toFixed(2));
+      const oppMindsetResponseFactor = Number(clampNumber(1 + oppTalkDirection * oppResponseSwing, 0.78, 1.25).toFixed(2));
+      const oppIntensityResponseFactor = Number(clampNumber(1 + oppTalkDirection * oppResponseSwing * 0.90, 0.78, 1.25).toFixed(2));
+      const oppFatigueMap = isHome ? prev.awayFatigue : prev.homeFatigue;
+      const oppXI = isHome ? prev.awayLineup.startingXI : prev.homeLineup.startingXI;
+      const nextOppFatigue = { ...oppFatigueMap };
+      if (oppFatigueRegenBonus !== 0) {
+        oppXI.forEach(pId => {
+          if (pId) nextOppFatigue[pId] = Math.min(100, Math.max(0, (nextOppFatigue[pId] || 100) + oppFatigueRegenBonus));
+        });
+      }
       return {
         ...prev,
         homeFatigue: isHome ? nextFatigue : prev.homeFatigue,
         awayFatigue: !isHome ? nextFatigue : prev.awayFatigue,
+        ...(isHome ? { awayFatigue: nextOppFatigue } : { homeFatigue: nextOppFatigue }),
         halftimeTalkApplied: true,
         halftimeMomentumBonus: pressureEffect.momentumDelta,
         oppHalftimeMomentumBonus: oppMomentumDelta,
+        aiActiveShout: prev.aiActiveShout
+          ? {
+              ...prev.aiActiveShout,
+              tempoResponseFactor: oppTempoResponseFactor,
+              mindsetResponseFactor: oppMindsetResponseFactor,
+              intensityResponseFactor: oppIntensityResponseFactor,
+            }
+          : prev.aiActiveShout,
         userInstructions: {
           ...prev.userInstructions,
           tempoResponseFactor:     pressureEffect.tempoResponseFactor,
@@ -1768,6 +1800,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let aiCounterAttackShotBonus = 0;
         const aiCounterAttackEnabled = prev.aiActiveShout?.counterAttack === 'COUNTER';
         const aiSideForCounter: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
+        const aiCounterShoutMinute = prev.aiActiveShout?.id.startsWith('ai_')
+          ? parseInt(prev.aiActiveShout.id.replace('ai_', ''))
+          : 0;
+        const aiCounterResponseFactor = aiCounterAttackEnabled
+          ? parseFloat((0.6 + seededRng(currentSeed, aiCounterShoutMinute, 806) * 0.8).toFixed(2))
+          : 1.0;
         const aiCounterTacticObj = TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
         const aiScoreDiffForCounter = userSide === 'HOME' ? prev.awayScore - prev.homeScore : prev.homeScore - prev.awayScore;
         const aiCounterShape =
@@ -1786,7 +1824,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const aiScoreFactor = aiScoreDiffForCounter > 0 ? 0.03 : 0;
           const aiCounterChance = Math.max(
             0,
-            Math.min(0.14, 0.023 + userPressFactor * 0.054 + aiShapeFactor * 0.022 + userRiskFactor * 0.022 + aiScoreFactor)
+            Math.min(0.14, (0.023 + userPressFactor * 0.054 + aiShapeFactor * 0.022 + userRiskFactor * 0.022 + aiScoreFactor) * aiCounterResponseFactor)
           );
           if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
             activeSide = aiSideForCounter;
@@ -2355,11 +2393,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const aiShoutMinute = nextAiActiveShout?.id.startsWith('ai_')
           ? parseInt(nextAiActiveShout.id.replace('ai_', ''))
           : 0;
-        const aiTempoRf     = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 801) * 0.8).toFixed(2)) : 1.0;
-        const aiMindsetRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 802) * 0.8).toFixed(2)) : 1.0;
+        const aiTempoRf     = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 801) * 0.8) * (nextAiActiveShout.tempoResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
+        const aiMindsetRf   = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 802) * 0.8) * (nextAiActiveShout.mindsetResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
         const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
         const aiPressingRf  = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 804) * 0.8).toFixed(2)) : 1.0;
-        const aiIntensityRf = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 805) * 0.8).toFixed(2)) : 1.0;
+        const aiIntensityRf = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 805) * 0.8) * (nextAiActiveShout.intensityResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
 
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
@@ -4060,6 +4098,8 @@ const summary: MatchSummary = {
       injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
       homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
       awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
+      homeStartingTacticId: matchState.initialHomeTacticId ?? matchState.homeLineup.tacticId,
+      awayStartingTacticId: matchState.initialAwayTacticId ?? matchState.awayLineup.tacticId,
       homeTacticId: matchState.homeLineup.tacticId,
       awayTacticId: matchState.awayLineup.tacticId,
       cards: (() => {

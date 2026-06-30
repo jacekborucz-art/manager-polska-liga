@@ -2247,6 +2247,9 @@ isPenalties?: boolean;
     pressing?: InstructionPressing;
     counterAttack?: InstructionCounterAttack;
     passing?: InstructionPassing;
+    tempoResponseFactor?: number;
+    mindsetResponseFactor?: number;
+    intensityResponseFactor?: number;
     isExpired?: boolean;
   } | null;
   lastGoalBoostMinute: number;
@@ -2269,6 +2272,8 @@ isPenalties?: boolean;
   halftimeTalkApplied?: boolean;
   halftimeMomentumBonus?: number;
   oppHalftimeMomentumBonus?: number;
+  initialHomeTacticId?: string;
+  initialAwayTacticId?: string;
   aiNextInstructionMinute?: number;
   preMatchMotivation?: {
     actionMod: number;
@@ -2444,6 +2449,8 @@ export interface MatchHistoryEntry {
   awayLineup?: string[];
   ratings?: Record<string, number>;
   emergencyPlayers?: Player[];
+  homeStartingTacticId?: string;
+  awayStartingTacticId?: string;
   homeTacticId?: string;
   awayTacticId?: string;
   kits?: {

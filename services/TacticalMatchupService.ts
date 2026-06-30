@@ -164,6 +164,9 @@ export const TacticalMatchupService = {
     if (tactic.defenseBias >= 82 && opponent.defCount >= 5) {
       return ['3-5-2', '4-2-3-1', '4-3-3', '4-4-2-DIAMOND'];
     }
+    if (opponent.midCount >= 5 && opponent.fwdCount <= 1 && opponent.holdingMids >= 1) {
+      return ['4-2-3-1', '3-5-2', '4-3-3', '5-2-1-2', '4-4-2-DIAMOND'];
+    }
     if (opponent.midCount <= 3) {
       return ['3-5-2', '4-2-3-1', '4-3-3'];
     }
