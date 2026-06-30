@@ -23,6 +23,22 @@ if exist "runtime\node.exe" (
   set "NODE_EXE=node"
 )
 
+where npm >nul 2>nul
+if not errorlevel 1 (
+  echo.
+  echo Aktualizuje najnowsza wersje gry...
+  echo.
+  call npm run build
+  if errorlevel 1 (
+    echo.
+    echo Nie udalo sie zbudowac najnowszej wersji gry.
+    echo Sprawdz bledy powyzej i sprobuj ponownie.
+    echo.
+    pause
+    exit /b 1
+  )
+)
+
 if not exist "dist\index.html" (
   echo.
   echo Brak gotowego buildu gry: dist\index.html
@@ -54,12 +70,19 @@ set "FM_URL=http://127.0.0.1:%FM_PORT%"
 set "FM_BROWSER_PROFILE=%TEMP%\FutbolManagerKiosk_%FM_PORT%_%RANDOM%"
 set "BROWSER_OPENED=0"
 
-set "FM_SERVER_PORT=%FM_PORT%"
-start "Futbol Manager - lokalny serwer" cmd /s /c "set FM_PORT=%FM_SERVER_PORT%&& ""%NODE_EXE%"" ""%CD%\server.cjs"""
+start "Futbol Manager - lokalny serwer" /D "%CD%" "%NODE_EXE%" "%CD%\server.cjs"
 
-timeout /t 2 /nobreak >nul
+call :WAIT_FOR_SERVER
 
 call :OPEN_BROWSER
+exit /b 0
+
+:WAIT_FOR_SERVER
+for /l %%I in (1,1,20) do (
+  "%NODE_EXE%" -e "const http=require('http');const req=http.get(process.argv[1],res=>process.exit(res.statusCode>=200&&res.statusCode<500?0:1));req.on('error',()=>process.exit(1));req.setTimeout(500,()=>{req.destroy();process.exit(1);});" "%FM_URL%" >nul 2>nul
+  if not errorlevel 1 exit /b 0
+  timeout /t 1 /nobreak >nul
+)
 exit /b 0
 
 :OPEN_BROWSER
