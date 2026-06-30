@@ -169,7 +169,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
   const { clubs, players } = useGame();
 
   const match = useMemo(
-    () => (matchId ? MatchHistoryService.getAll().find(m => m.matchId === matchId) ?? null : null),
+    () => (matchId ? [...MatchHistoryService.getAll()].reverse().find(m => m.matchId === matchId) ?? null : null),
     [matchId]
   );
 

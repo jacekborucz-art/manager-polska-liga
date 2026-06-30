@@ -221,7 +221,7 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
   }, []);
 
   const match = useMemo(
-    () => (matchId ? MatchHistoryService.getAll().find(m => m.matchId === matchId) ?? null : null),
+    () => (matchId ? [...MatchHistoryService.getAll()].reverse().find(m => m.matchId === matchId) ?? null : null),
     [matchId]
   );
 
