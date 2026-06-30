@@ -38,7 +38,7 @@
 //   kolejnych rozmowach kontraktowych i uwzględniać obietnicę w ocenie oferty. !!
 //
 //   Jeśli obietnica NIE zostanie spełniona do deadlineAt (koniec sezonu):
-//     → conflictLevel +25, coachTrust −30, morale −8
+//     → conflictLevel +25, coachTrust −30, morale −16, sufit morale 59 do czasu nowego kontraktu
 //     → mail TRANSFER_CONTRACT_PROMISE_BROKEN
 //
 //   Przypomnienie 14 dni przed deadline:
@@ -798,7 +798,7 @@ export const PlayerTransferRequestDialogService = {
    * 14 dni przed deadlineAt: wysyła mail-przypomnienie TRANSFER_CONTRACT_PROMISE_REMINDER.
    * Po deadlineAt: oznacza jako broken + wysyła mail TRANSFER_CONTRACT_PROMISE_BROKEN.
    *
-   * Kary za złamanie (conflictLevel +25, coachTrust −30, morale −8) są tu stosowane.
+   * Kary za złamanie (conflictLevel +25, coachTrust −30, morale −16) są tu stosowane.
    * Wywoływane codziennie z GameContext.advanceDay.
    */
   reviewContractPromise: (
@@ -863,10 +863,13 @@ export const PlayerTransferRequestDialogService = {
       };
       mails.push(mail);
 
-      // Kary za złamanie obietnicy: conflictLevel +25, coachTrust −30, morale −8
+      // Kary za złamanie obietnicy: conflictLevel +25, coachTrust −30, morale −16
       let penalizedPlayer = PlayerMoraleService.withMoraleChange(
-        player,
-        -8,
+        {
+          ...player,
+          transferContractPromise: { ...promise, broken: true },
+        },
+        -16,
         `Złamana obietnica kontraktu: obiecano +${promise.salaryRaisePct}%, nic nie dostał`,
         currentDate
       );

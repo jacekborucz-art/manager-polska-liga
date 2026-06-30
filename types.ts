@@ -567,7 +567,7 @@ export interface MailMessage {
   } | {
     // ── Złamana obietnica kontraktowa (deadline minął, brak podwyżki) ────────────
     // Generowane przez: PlayerTransferRequestDialogService.reviewContractPromise
-    // Skutki: conflictLevel +25, coachTrust −30, morale −8 (stosuje GameContext)
+    // Skutki: conflictLevel +25, coachTrust −30, morale −16 (stosuje GameContext)
     type: 'TRANSFER_CONTRACT_PROMISE_BROKEN';
     playerId: string;
     salaryRaisePct: number;
@@ -1259,7 +1259,7 @@ export interface PlayerLoanInfo {
 /** Obietnica kontraktowa złożona zawodnikowi po prośbie o listę transferową (ścieżka A).
  *  Zapisywana na player.transferContractPromise.
  *  Jeśli trener nie podpisze nowego kontraktu do deadlineAt:
- *    conflictLevel +25, coachTrust −30, morale −8, mail TRANSFER_CONTRACT_PROMISE_BROKEN. */
+ *    conflictLevel +25, coachTrust −30, morale −16, mail TRANSFER_CONTRACT_PROMISE_BROKEN. */
 export interface TransferContractPromise {
   /** ISO date złożenia obietnicy. */
   madeAt: string;

@@ -497,6 +497,9 @@ type PlayerMindsetKey =
 
 type PlayerMindsetDelta = Partial<Record<PlayerMindsetKey, number>>;
 
+const hasBrokenContractPromise = (player: Player): boolean =>
+  !!player.transferContractPromise?.broken;
+
 export const PlayerMoraleService = {
   clamp: (morale: number): number => Math.max(0, Math.min(100, Math.round(morale))),
 
@@ -791,8 +794,12 @@ export const PlayerMoraleService = {
         input.qualifiedForEurope ? 6 :
         5;
       const reason = `Sukces klubu zmienia nastawienie: ${stayReasonParts.join(', ')}`;
+      const isContractPromiseConflict = hasBrokenContractPromise(withMorale);
+      const effectiveMoraleBoost = isContractPromiseConflict
+        ? Math.max(1, Math.round(moraleBoost * 0.35))
+        : moraleBoost;
 
-      withMorale = PlayerMoraleService.withMoraleChange(withMorale, moraleBoost, reason, currentDate);
+      withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
       withMorale = PlayerMoraleService.withMindsetChange(
         withMorale,
         {
@@ -800,7 +807,7 @@ export const PlayerMoraleService = {
           squadBelonging: 7,
           developmentSatisfaction: input.qualifiedForEurope || input.isPromoted ? 6 : 3,
           transferOpenness: -Math.round(10 + successScore * 20),
-          conflictLevel: -6,
+          conflictLevel: isContractPromiseConflict ? 0 : -6,
         },
         reason,
         currentDate
@@ -925,7 +932,10 @@ export const PlayerMoraleService = {
   withMoraleChange: (player: Player, delta: number, reason: string, date: Date): Player => {
     const withMorale = PlayerMoraleService.ensurePlayerState(player);
     const previousMorale = withMorale.morale ?? 50;
-    const nextMorale = PlayerMoraleService.clamp(previousMorale + delta);
+    const rawNextMorale = PlayerMoraleService.clamp(previousMorale + delta);
+    const nextMorale = hasBrokenContractPromise(withMorale)
+      ? Math.min(rawNextMorale, 59)
+      : rawNextMorale;
     if (delta === 0 || nextMorale === previousMorale) return withMorale;
 
     const entry = {
