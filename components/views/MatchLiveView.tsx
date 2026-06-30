@@ -16,17 +16,37 @@ import {
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 
-const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
+const getPlayerPenaltyImpact = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
+  const ownGoals = side === 'HOME' ? state.homeGoals : state.awayGoals;
+  const oppSide = side === 'HOME' ? 'AWAY' : 'HOME';
+  return {
+    missed: ownGoals.filter((g: any) =>
+      g.isPenalty &&
+      g.isMiss &&
+      (g.scorerId ? g.scorerId === player.id : g.playerName === player.lastName)
+    ).length,
+    saved: (state.logs ?? []).filter((log: MatchLogEntry) =>
+      log.type === MatchEventType.PENALTY_MISSED &&
+      log.teamSide === oppSide &&
+      log.secondaryPlayerId === player.id
+    ).length,
+  };
+};
+
+const calculateLiveRatingNumber = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   let r = 6.0;
   const goals = (side === 'HOME' ? state.homeGoals : state.awayGoals)
     .filter((g: any) => (g.scorerId ? g.scorerId === player.id : g.playerName === player.lastName) && !g.varDisallowed && !g.isMiss)
     .length;
   const assists = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => g.assistantId === player.id).length;
+  const penaltyImpact = getPlayerPenaltyImpact(player, side, state);
   const cards = state.playerYellowCards[player.id] || 0;
   const isRed = state.sentOffIds.includes(player.id);
   
   r += goals * 1.5;
   r += assists * 0.8;
+  r -= penaltyImpact.missed * 0.8;
+  r += penaltyImpact.saved * 1.2;
   r -= cards * 0.5;
   if (isRed) r -= 3.0;
 
@@ -66,7 +86,11 @@ const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) 
   r += (PlayerMoraleService.getMatchMultiplier(player) - 1) * 5;
   r += Math.min(1.2, (state.actionContributions?.[player.id] ?? 0) * 0.85);
   
-  return Math.min(10, Math.max(1, r)).toFixed(1);
+  return Math.min(10, Math.max(1, r));
+};
+
+const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
+  return calculateLiveRatingNumber(player, side, state).toFixed(1);
 };
 
 import { Button } from '../ui/Button';
@@ -82,7 +106,6 @@ import { RefereeService } from '../../services/RefereeService';
 import { PolandWeatherService } from '../../services/PolandWeatherService';
 import { DisciplineService } from '../../services/DisciplineService';
 import { AiMatchDecisionService } from '../../services/AiMatchDecisionService';
-import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
 import { PlayerStatsService } from '../../services/PlayerStatsService';
 import { MATCH_COMMENTARY_DB } from '../../data/match_commentary_pl';
 import { KitSelectionService } from '../../services/KitSelectionService';
@@ -1079,6 +1102,8 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             text: isGoal ? `⚽ ${comment}` : `❌ ${comment}`,
             type: finalResult,
             teamSide: activePenalty.side,
+            playerId: activePenalty.kicker.id,
+            secondaryPlayerId: activePenalty.keeper.id,
             playerName: activePenalty.kicker.lastName
           };
 
@@ -3885,8 +3910,12 @@ return {
     const finalAwayStats = buildDisplayStats(matchState.liveStats.away, matchState.awayScore, awayYellowCards, awayRedCards, awayPossession, matchState.sessionSeed, 2000);
 
 const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, side: 'HOME' | 'AWAY', conceded: number, shotsAgainst: number) => {
-      // 1. Inicjalizacja bazowa
+      const teamScore = side === 'HOME' ? matchState.homeScore : matchState.awayScore;
+      const oppScore = side === 'HOME' ? matchState.awayScore : matchState.homeScore;
+      const scoreDifference = teamScore - oppScore;
+
       const perfs = teamPlayers.filter(p => playedIds.has(p.id)).map(p => {
+        const penaltyImpact = getPlayerPenaltyImpact(p, side, matchState);
         const perf: PlayerPerformance = {
           playerId: p.id, name: p.lastName, position: p.position,
           goals: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals']
@@ -3895,95 +3924,38 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
           assists: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => g.assistantId === p.id).length,
           yellowCards: matchState.playerYellowCards[p.id] || 0,
           redCards: matchState.sentOffIds.includes(p.id) ? 1 : 0,
-          missedPenalties: 0, savedPenalties: 0,
+          missedPenalties: penaltyImpact.missed,
+          savedPenalties: penaltyImpact.saved,
           healthStatus: (side === 'HOME' ? matchState.homeInjuries[p.id] : matchState.awayInjuries[p.id]) ? HealthStatus.INJURED : HealthStatus.HEALTHY,
           fatigue: Math.floor((side === 'HOME' ? matchState.homeFatigue[p.id] : matchState.awayFatigue[p.id]) || 90)
         };
-        perf.rating = PostMatchCommentSelector.calculateRating(perf, conceded);
+
+        let finalAdjustment = 0;
+        if (scoreDifference > 0) {
+          finalAdjustment += scoreDifference === 1 ? 0.15 : scoreDifference === 2 ? 0.25 : 0.35;
+        } else if (scoreDifference < 0) {
+          const absoluteLoss = Math.abs(scoreDifference);
+          finalAdjustment -= absoluteLoss === 1 ? 0.15 : absoluteLoss === 2 ? 0.25 : 0.35;
+        }
+        if (conceded === 0 && p.position === PlayerPosition.GK) {
+          finalAdjustment += Math.min(0.35, 0.15 + shotsAgainst / 80);
+        }
+        if (conceded === 0 && p.position === PlayerPosition.DEF) {
+          finalAdjustment += 0.15;
+        } else if (conceded >= 3 && p.position === PlayerPosition.DEF) {
+          finalAdjustment -= 0.15;
+        }
+        finalAdjustment += Math.min(0.35, perf.goals * 0.12);
+        finalAdjustment += Math.min(0.25, perf.assists * 0.10);
+        finalAdjustment += Math.min(0.30, perf.savedPenalties * 0.30);
+        finalAdjustment -= Math.min(0.25, perf.missedPenalties * 0.25);
+        finalAdjustment -= Math.min(0.25, perf.yellowCards * 0.10);
+        if (perf.redCards > 0) finalAdjustment -= 0.35;
+
+        perf.rating = Math.min(10, Math.max(1, parseFloat((calculateLiveRatingNumber(p, side, matchState) + finalAdjustment).toFixed(1))));
         return perf;
       });
 
-// --- ROZSZERZONY SILNIK OCEN (STAGE 1 PRO) ---
-      const teamGoalsCount = matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].length;
-      const opponentGoalsCount = side === 'HOME' ? matchState.awayScore : matchState.homeScore;
-      const scoreDifference = teamGoalsCount - opponentGoalsCount;
-
-      perfs.forEach(p => {
-        // 1. Bonus dla pomocników za bramki drużyny
-        if (p.position === PlayerPosition.MID) {
-          p.rating! += teamGoalsCount * (0.5 + Math.random() * 0.3);
-        }
-
-        // 2. Bonus za asysty
-        if (p.assists > 0) {
-          p.rating! += p.assists * (0.5 + Math.random() * 0.5);
-        }
-
-        // 3. Bonus za gole (Pozycyjny)
-        if (p.goals > 0) {
-          if (p.position === PlayerPosition.FWD) p.rating! += p.goals * 1.0;
-          else if (p.position === PlayerPosition.MID) p.rating! += p.goals * 1.2;
-          else if (p.position === PlayerPosition.DEF) p.rating! += p.goals * 1.3;
-
-          // Premia za więcej niż 2 bramki
-          if (p.goals > 2) p.rating! += 1.4;
-        }
-
-        const actionContribution = matchState.actionContributions?.[p.playerId] ?? 0;
-        if (actionContribution > 0) {
-          p.rating! += Math.min(1.4, actionContribution * 0.75);
-        }
-
-        // 4. Bonusy/Kary drużynowe za wynik
-        if (scoreDifference > 0) {
-          if (scoreDifference === 1) p.rating! += 0.5;
-          else if (scoreDifference === 2) p.rating! += 0.9;
-          else if (scoreDifference >= 3) p.rating! += 1.2;
-        } else if (scoreDifference < 0) {
-          const absoluteLoss = Math.abs(scoreDifference);
-          if (absoluteLoss === 1) p.rating! -= 0.5;
-          else if (absoluteLoss === 2) p.rating! -= 1.0;
-          else if (absoluteLoss === 3) p.rating! -= 1.3;
-          else if (absoluteLoss >= 4) p.rating! -= (1.3 + Math.random() * 0.5);
-        }
-      });
-
-      // 5. Logika Bramkarza (Czyste konto + strzały - zachowana)
-      const gk = perfs.find(p => p.position === PlayerPosition.GK);
-      if (gk && conceded === 0) {
-        gk.rating! += Math.min(1.5, 1.0 + (shotsAgainst / 20));
-      }
-
-      // Bonus za obroniony karny (+1.0 do +2.5 za każdy)
-      const oppSide = side === 'HOME' ? 'AWAY' : 'HOME';
-      const savedPenaltiesCount = matchState.logs.filter(l => l.type === MatchEventType.PENALTY_MISSED && l.teamSide === oppSide).length;
-      if (gk && savedPenaltiesCount > 0) {
-        gk.rating! += savedPenaltiesCount * (1.0 + Math.random() * 1.5);
-      }
-
-      // 6. Logika Obrońców (Zachowana)
-      const defenders = perfs.filter(p => p.position === PlayerPosition.DEF);
-      if (defenders.length > 0) {
-        if (conceded === 0) {
-          defenders.forEach(d => d.rating! += (Math.random() * 1.1 + 0.5));
-        } else if (conceded === 1) {
-          const sorted = [...defenders].sort((a,b) => {
-             const pa = teamPlayers.find(x => x.id === a.playerId)!;
-             const pb = teamPlayers.find(x => x.id === b.playerId)!;
-             return pa.overallRating - pb.overallRating;
-          });
-          const scapegoat = Math.random() < 0.7 ? sorted[0] : sorted[Math.floor(Math.random() * sorted.length)];
-          if (scapegoat) scapegoat.rating! -= (Math.random() * 0.5 + 0.5);
-        } else if (conceded >= 2 && conceded <= 3) {
-          const shuffled = [...defenders].sort(() => Math.random() - 0.5);
-          shuffled.slice(0, 2).forEach(d => d.rating! -= (Math.random() * 0.5 + 0.5));
-        } else if (conceded >= 4) {
-          defenders.forEach(d => d.rating! -= (Math.random() * 1.1 + 0.5));
-        }
-      }
-
-      // Finalny Clamp i Zaokrąglenie
-      perfs.forEach(p => p.rating = Math.min(10, Math.max(1, parseFloat(p.rating!.toFixed(1)))));
       return perfs;
     };
 
@@ -4005,6 +3977,53 @@ const summary: MatchSummary = {
       if (perf.rating) finalRatingsMap[perf.playerId] = perf.rating;
     });
     // KONIEC WSTAWKI
+
+    const buildReportLineup = (lineup: Lineup, subs: SubstitutionRecord[]) => {
+      const reportLineup = [...lineup.startingXI];
+      [...subs].sort((a, b) => b.minute - a.minute).forEach(sub => {
+        const idx = reportLineup.indexOf(sub.playerInId);
+        if (idx !== -1) reportLineup[idx] = sub.playerOutId;
+      });
+      return reportLineup.filter((id): id is string => !!id);
+    };
+
+    const buildReportSubs = (side: 'HOME' | 'AWAY') => {
+      const subs = side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return subs.map(sub => {
+        const playerOut = teamPlayers.find(p => p.id === sub.playerOutId);
+        const playerIn = teamPlayers.find(p => p.id === sub.playerInId);
+        return {
+          playerOutId: sub.playerOutId,
+          playerOutName: playerOut ? `${playerOut.firstName.charAt(0)}. ${playerOut.lastName}` : '',
+          playerInId: sub.playerInId,
+          playerInName: playerIn ? `${playerIn.firstName.charAt(0)}. ${playerIn.lastName}` : '',
+          minute: sub.minute,
+          teamId
+        };
+      });
+    };
+
+    const buildReportInjuries = (side: 'HOME' | 'AWAY') => {
+      const injuries = side === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries;
+      const injuryMinutes = side === 'HOME' ? matchState.homeInjuryMin : matchState.awayInjuryMin;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return Object.entries(injuries).map(([playerId, severity]) => {
+        const player = teamPlayers.find(p => p.id === playerId);
+        const playerName = player ? `${player.firstName.charAt(0)}. ${player.lastName}` : '';
+        return {
+          playerId,
+          playerName,
+          minute: injuryMinutes[playerId] ?? 0,
+          teamId,
+          severity,
+          days: severity === InjurySeverity.SEVERE ? 30 : 7,
+          type: severity
+        };
+      });
+    };
 
     const matchHistoryArgs = {
       matchId: ctx.fixture.id,
@@ -4037,8 +4056,10 @@ const summary: MatchSummary = {
         isMiss: g.isMiss,
       }))),
       ratings: finalRatingsMap,
-      homeLineup: summary.homePlayers.map(player => player.playerId),
-      awayLineup: summary.awayPlayers.map(player => player.playerId),
+      substitutions: buildReportSubs('HOME').concat(buildReportSubs('AWAY')),
+      injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
+      homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
+      awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
       homeTacticId: matchState.homeLineup.tacticId,
       awayTacticId: matchState.awayLineup.tacticId,
       cards: (() => {

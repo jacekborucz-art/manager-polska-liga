@@ -325,18 +325,39 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onC
     const allPlayersFlat = Object.values(players).flat();
     const findPlayer = (id: string) => teamPlayers.find(p => p.id === id) ?? allPlayersFlat.find(p => p.id === id) ?? null;
     const sortedSubs = [...subs].sort((a, b) => a.minute - b.minute);
+    const subbedOutIds = new Set(rawSubs.map(s => s.playerOutId).filter(Boolean) as string[]);
+    const injuryExits = injuries.filter(inj =>
+      !!inj.playerId &&
+      inj.severity === 'SEVERE' &&
+      lineupIds.includes(inj.playerId) &&
+      !subbedOutIds.has(inj.playerId)
+    );
     const finalLineupIds: (string | null)[] = [...lineupIds];
     sortedSubs.forEach(sub => {
       if (!sub.playerOutId) return;
       const idx = finalLineupIds.indexOf(sub.playerOutId);
       if (idx !== -1) finalLineupIds[idx] = sub.playerInId ?? null;
     });
+    injuryExits.forEach(inj => {
+      const idx = finalLineupIds.indexOf(inj.playerId!);
+      if (idx !== -1) finalLineupIds[idx] = null;
+    });
 
     const finalPlayers = finalLineupIds
       .map(id => id ? findPlayer(id) : null)
       .filter((player): player is Player => !!player);
 
-    const offSubs = sortedSubs.filter(sub => !!sub.playerOutId);
+    const offSubs = [
+      ...sortedSubs.filter(sub => !!sub.playerOutId),
+      ...injuryExits.map(inj => ({
+        playerOutId: inj.playerId!,
+        playerOutName: inj.playerName,
+        playerInId: undefined as string | undefined,
+        playerInName: '',
+        minute: inj.minute,
+        teamId: clubId,
+      }))
+    ].sort((a, b) => a.minute - b.minute);
 
     const renderPlayerRow = (
       player: Player | null,

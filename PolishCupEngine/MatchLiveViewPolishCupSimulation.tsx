@@ -911,6 +911,8 @@ useEffect(() => {
           text: `👉 RZUT KARNY!`,
           type: MatchEventType.PENALTY_AWARDED,
           teamSide: side,
+          playerId: scorer.id,
+          secondaryPlayerId: keeper?.id,
           playerName: scorer.lastName
         };
         return {
@@ -926,7 +928,10 @@ useEffect(() => {
             minute: minute,
             text: isScored ? `⚽ GOL! ${scorer.lastName} z karnego!` : `❌ Pudło! ${scorer.lastName} marnuje szansę!`,
             type: isScored ? MatchEventType.GOAL : MatchEventType.PENALTY_MISSED,
-            teamSide: side
+            teamSide: side,
+            playerId: scorer.id,
+            secondaryPlayerId: keeper?.id,
+            playerName: scorer.lastName
           }, penLog, ...latest.logs]
         };
       });
@@ -3204,8 +3209,37 @@ if (activePlayerTempo === 'SLOW') {
 
 
 
+        const restoreSevereInjurySlotsForAiDecision = (
+          currentLineup: Lineup,
+          previousLineup: Lineup,
+          injuries: Record<string, InjurySeverity>
+        ): Lineup => {
+          let restored = false;
+          const startingXI = currentLineup.startingXI.map((id, idx) => {
+            if (id !== null) return id;
+            const previousId = previousLineup.startingXI[idx];
+            if (
+              previousId &&
+              injuries[previousId] === InjurySeverity.SEVERE &&
+              !nextSentOffIds.includes(previousId)
+            ) {
+              restored = true;
+              return previousId;
+            }
+            return id;
+          });
+          return restored ? { ...currentLineup, startingXI } : currentLineup;
+        };
+
+        const decisionHomeLineup = aiSide === 'HOME'
+          ? restoreSevereInjurySlotsForAiDecision(nextHomeLineup, prev.homeLineup, nextHomeInjuries)
+          : nextHomeLineup;
+        const decisionAwayLineup = aiSide === 'AWAY'
+          ? restoreSevereInjurySlotsForAiDecision(nextAwayLineup, prev.awayLineup, nextAwayInjuries)
+          : nextAwayLineup;
+
         const decision = AiMatchDecisionCupService.makeDecisions(
-             { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: prev.lastAiActionMinute }, 
+             { ...prev, minute: nextMinute, homeLineup: decisionHomeLineup, awayLineup: decisionAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: prev.lastAiActionMinute },
              ctx, 
              aiSide, 
              isPriority, // ZMIANA: używamy isPriority zamiast isCrisis
@@ -3370,25 +3404,62 @@ if (activePlayerTempo === 'SLOW') {
           return c;
         });
 
-    const generatePerformance = (playersList: Player[], scoreAgainst: number) => {
-      return playersList.slice(0, 11).map(p => {
+    const getPlayedIds = (lineup: Lineup, history: SubstitutionRecord[]) => {
+      const currentOnPitch = lineup.startingXI.filter((id): id is string => !!id);
+      const subbedOut = history.map(s => s.playerOutId).filter((id): id is string => !!id);
+      return new Set([...currentOnPitch, ...subbedOut]);
+    };
+
+    const calculateCupRatings = (
+      playersList: Player[],
+      playedIds: Set<string>,
+      side: 'HOME' | 'AWAY',
+      scoreAgainst: number,
+      shotsAgainst: number
+    ) => {
+      const perfs = playersList.filter(p => playedIds.has(p.id)).map(p => {
         const perf: PlayerPerformance = {
           playerId: p.id,
           name: p.lastName,
           position: p.position,
-          goals: 0,
-          assists: 0,
-          yellowCards: 0,
-          redCards: 0,
+          goals: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals']
+            .filter(g => (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.varDisallowed && !g.isMiss)
+            .length,
+          assists: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => g.assistantId === p.id).length,
+          yellowCards: matchState.playerYellowCards[p.id] || 0,
+          redCards: matchState.sentOffIds.includes(p.id) ? 1 : 0,
           missedPenalties: 0,
-          savedPenalties: 0,
-          healthStatus: HealthStatus.HEALTHY,
-          fatigue: 90
+          savedPenalties: matchState.logs.filter(l =>
+            l.type === MatchEventType.PENALTY_MISSED &&
+            l.teamSide === (side === 'HOME' ? 'AWAY' : 'HOME') &&
+            l.secondaryPlayerId === p.id
+          ).length,
+          healthStatus: (side === 'HOME' ? matchState.homeInjuries[p.id] : matchState.awayInjuries[p.id])
+            ? HealthStatus.INJURED
+            : HealthStatus.HEALTHY,
+          fatigue: Math.floor((side === 'HOME' ? matchState.homeFatigue[p.id] : matchState.awayFatigue[p.id]) || 90)
         };
         perf.rating = PostMatchCommentSelector.calculateRating(perf, scoreAgainst);
+        if (p.position === PlayerPosition.GK && scoreAgainst === 0) {
+          perf.rating += Math.min(1.5, 1.0 + (shotsAgainst / 20));
+        }
+        if (p.position === PlayerPosition.GK && perf.savedPenalties > 0) {
+          perf.rating += perf.savedPenalties * 1.7;
+        }
+        if (perf.assists > 0) {
+          perf.rating += perf.assists * 0.7;
+        }
+        if (perf.goals > 0) {
+          perf.rating += perf.goals * (p.position === PlayerPosition.FWD ? 1.0 : p.position === PlayerPosition.MID ? 1.2 : 1.3);
+        }
+        perf.rating = Math.min(10, Math.max(1, parseFloat(perf.rating.toFixed(1))));
         return perf;
       });
+      return perfs;
     };
+
+    const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
+    const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
 
     const homeYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length;
     const awayYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
@@ -3413,10 +3484,15 @@ if (activePlayerTempo === 'SLOW') {
       awayGoals: matchState.awayGoals,
       homeStats: finalHomeStats,
       awayStats: finalAwayStats,
-      homePlayers: generatePerformance(ctx.homePlayers, matchState.awayScore),
-      awayPlayers: generatePerformance(ctx.awayPlayers, matchState.homeScore),
+      homePlayers: calculateCupRatings(ctx.homePlayers, playedIdsHome, 'HOME', matchState.awayScore, matchState.liveStats.away.shotsOnTarget),
+      awayPlayers: calculateCupRatings(ctx.awayPlayers, playedIdsAway, 'AWAY', matchState.homeScore, matchState.liveStats.home.shotsOnTarget),
       timeline: []
     };
+
+    const finalRatingsMap: Record<string, number> = {};
+    [...summary.homePlayers, ...summary.awayPlayers].forEach(perf => {
+      if (perf.rating) finalRatingsMap[perf.playerId] = perf.rating;
+    });
 
    if (ctx.fixture.id.includes('SUPER_CUP')) {
       if (didUserWin) {
@@ -3577,6 +3653,58 @@ if (activePlayerTempo === 'SLOW') {
       seasonNumber: seasonNumber
     };
 
+    const buildReportLineup = (lineup: Lineup, subs: SubstitutionRecord[]) => {
+      const reportLineup = [...lineup.startingXI];
+      [...subs].sort((a, b) => b.minute - a.minute).forEach(sub => {
+        const idx = reportLineup.indexOf(sub.playerInId);
+        if (idx !== -1) reportLineup[idx] = sub.playerOutId;
+      });
+      return reportLineup.filter((id): id is string => !!id);
+    };
+
+    const buildReportSubs = (side: 'HOME' | 'AWAY') => {
+      const subs = side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return subs.map(sub => {
+        const playerOut = teamPlayers.find(p => p.id === sub.playerOutId);
+        const playerIn = teamPlayers.find(p => p.id === sub.playerInId);
+        return {
+          playerOutId: sub.playerOutId,
+          playerOutName: playerOut ? getPlayerReportName(playerOut) : '',
+          playerInId: sub.playerInId,
+          playerInName: playerIn ? getPlayerReportName(playerIn) : '',
+          minute: sub.minute,
+          teamId
+        };
+      });
+    };
+
+    const buildReportInjuries = (side: 'HOME' | 'AWAY') => {
+      const injuries = side === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries;
+      const injuryMinutes = side === 'HOME' ? matchState.homeInjuryMin : matchState.awayInjuryMin;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return Object.entries(injuries).map(([playerId, severity]) => {
+        const player = teamPlayers.find(p => p.id === playerId);
+        const playerName = player ? getPlayerReportName(player) : '';
+        const injuryLog = matchState.logs.find(log =>
+          log.teamSide === side &&
+          (log.type === MatchEventType.INJURY_LIGHT || log.type === MatchEventType.INJURY_SEVERE) &&
+          (log.playerId === playerId || log.playerName === player?.lastName || log.playerName === playerName)
+        );
+        return {
+          playerId,
+          playerName,
+          minute: injuryMinutes[playerId] ?? injuryLog?.minute ?? 0,
+          teamId,
+          severity,
+          days: severity === InjurySeverity.SEVERE ? 30 : 7,
+          type: severity
+        };
+      });
+    };
+
     const cupMatchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
@@ -3591,6 +3719,13 @@ if (activePlayerTempo === 'SLOW') {
       venue: PolishCupVenueService.getVenue(ctx.fixture, ctx.homeClub).name,
       goals: matchState.homeGoals.map(g => toCupHistoryGoal(g, ctx.homeClub.id))
         .concat(matchState.awayGoals.map(g => toCupHistoryGoal(g, ctx.awayClub.id))),
+      substitutions: buildReportSubs('HOME').concat(buildReportSubs('AWAY')),
+      injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
+      homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
+      awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
+      homeTacticId: matchState.homeLineup.tacticId,
+      awayTacticId: matchState.awayLineup.tacticId,
+      ratings: finalRatingsMap,
       cards: (() => {
           const playerYellowCount: Record<string, number> = {};
           return [...matchState.logs]

@@ -2070,6 +2070,8 @@ export interface MatchLogEntry {
   text: string;
   teamSide?: 'HOME' | 'AWAY';
   type: MatchEventType;
+  playerId?: string;
+  secondaryPlayerId?: string;
   playerName?: string;
 }
 
