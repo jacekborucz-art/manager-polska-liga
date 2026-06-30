@@ -54,7 +54,8 @@ set "FM_URL=http://127.0.0.1:%FM_PORT%"
 set "FM_BROWSER_PROFILE=%TEMP%\FutbolManagerKiosk_%FM_PORT%_%RANDOM%"
 set "BROWSER_OPENED=0"
 
-start "Futbol Manager - lokalny serwer" cmd /c ""%NODE_EXE%" "%CD%\server.cjs""
+set "FM_SERVER_PORT=%FM_PORT%"
+start "Futbol Manager - lokalny serwer" cmd /s /c "set FM_PORT=%FM_SERVER_PORT%&& ""%NODE_EXE%"" ""%CD%\server.cjs"""
 
 timeout /t 2 /nobreak >nul
 
