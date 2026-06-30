@@ -2796,10 +2796,75 @@ if (userTeamId) {
     lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
   });
 
+  const repairNationalTeamSquadsForLoadedData = (
+    sourceTeams: NationalTeam[],
+    sourceCoaches: Record<string, Coach>,
+    sourcePlayers: Record<string, Player[]>
+  ): { nationalTeams: NationalTeam[]; players: Record<string, Player[]>; generatedCount: number; updateCount: number } => {
+    // National-team load/import repair:
+    // SAVE files and editor DATA PACK imports can contain national teams whose squadPlayerIds
+    // point to missing players, duplicated IDs, or fewer than the required 25 players. The
+    // normal calendar review may fix this later, but international fixtures can happen before
+    // that date, so the save/import boundary must enforce the invariant immediately.
+    //
+    // Calibration:
+    // - NationalTeamService.reviewMonthlySquad owns positional targets: 3 GK, 8 DEF, 8 MID,
+    //   6 FWD. Change those constants in NationalTeamService if the squad model changes.
+    // - Eight passes are intentionally generous because one pass may add players and the next
+    //   can then replace weak free agents with newly imported club players. Lower this if load
+    //   time ever becomes noticeable; raise it only if a future review rule needs more churn.
+    // - Generated player OVR is calibrated in NationalTeamService against team average -10/+2.
+    let currentTeams = Array.isArray(sourceTeams) ? sourceTeams : [];
+    let currentPlayers = sourcePlayers ?? {};
+    let generatedCount = 0;
+    let updateCount = 0;
+
+    for (let i = 0; i < 8; i++) {
+      const review = NationalTeamService.reviewMonthlySquad(currentTeams, sourceCoaches, currentPlayers);
+      const anyChanged =
+        review.updatedTeams.some((team, idx) => team !== currentTeams[idx]) ||
+        review.playerUpdates.length > 0 ||
+        review.newPlayers.length > 0;
+      if (!anyChanged) break;
+
+      currentTeams = review.updatedTeams;
+
+      if (review.newPlayers.length > 0) {
+        generatedCount += review.newPlayers.length;
+        currentPlayers = {
+          ...currentPlayers,
+          'FREE_AGENTS': [
+            ...(currentPlayers['FREE_AGENTS'] || []),
+            ...review.newPlayers.map(PlayerMoraleService.ensurePlayerState)
+          ]
+        };
+      }
+
+      if (review.playerUpdates.length > 0) {
+        updateCount += review.playerUpdates.length;
+        const updateMap: Record<string, string | null> = {};
+        review.playerUpdates.forEach(update => {
+          updateMap[update.id] = update.assignedNationalTeamId;
+        });
+        currentPlayers = Object.fromEntries(Object.entries(currentPlayers).map(([clubId, squad]) => [
+          clubId,
+          squad.map(player =>
+            player.id in updateMap ? { ...player, assignedNationalTeamId: updateMap[player.id] } : player
+          )
+        ]));
+      }
+    }
+
+    return { nationalTeams: currentTeams, players: currentPlayers, generatedCount, updateCount };
+  };
+
   const loadGameFromFile = (data: SaveState): void => {
     const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
     const loadedClubById = new Map(loadedClubs.map(club => [club.id, club]));
-    const loadedNtByCoachId = new Map((data.nationalTeams ?? []).filter(team => team.coachId).map(team => [team.coachId!, team]));
+    const loadedNationalTeams = Array.isArray(data.nationalTeams) && data.nationalTeams.length > 0
+      ? data.nationalTeams
+      : NationalTeamService.initializeNationalTeams();
+    const loadedNtByCoachId = new Map(loadedNationalTeams.filter(team => team.coachId).map(team => [team.coachId!, team]));
     const loadedCoaches = Object.fromEntries(Object.entries(data.coaches ?? {}).map(([id, coach]) => [
       id,
       CoachService.normalizeCoachContract(
@@ -2808,12 +2873,17 @@ if (userTeamId) {
         coach.currentNationalTeamId ? loadedNtByCoachId.get(coach.id) ?? null : null
       ),
     ])) as Record<string, Coach>;
+    const repairedNationalData = repairNationalTeamSquadsForLoadedData(
+      loadedNationalTeams,
+      loadedCoaches,
+      data.players ?? {}
+    );
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
     setClubs(loadedClubs);
     setLeagues(data.leagues);
-    setPlayers(data.players);
+    setPlayers(repairedNationalData.players);
     setReserves(data.reserves);
     setReserveCoachId(data.reserveCoachId);
     setReserveFixtures(data.reserveFixtures ?? []);
@@ -2855,8 +2925,8 @@ if (userTeamId) {
     setIncomingOffers(data.incomingOffers);
     setAiTransferLog(data.aiTransferLog);
     setEuropeanStatus(data.europeanStatus);
-    setNationalTeams(data.nationalTeams);
-    setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, data.nationalTeams));
+    setNationalTeams(repairedNationalData.nationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, repairedNationalData.nationalTeams));
     setNationsLeagueState(data.nationsLeagueState ?? null);
     setNationsLeagueArchive(Array.isArray((data as any).nationsLeagueArchive) ? (data as any).nationsLeagueArchive : []);
     setEuroHostAnnouncements(Array.isArray((data as any).euroHostAnnouncements) ? (data as any).euroHostAnnouncements : []);
@@ -3094,6 +3164,11 @@ if (userTeamId) {
             return team;
           })
       : defaultNationalTeams;
+    const repairedImportedNationalData = repairNationalTeamSquadsForLoadedData(
+      importedNationalTeams,
+      importedCoaches,
+      importedPlayers
+    );
 
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
@@ -3106,12 +3181,12 @@ if (userTeamId) {
     setRuntimeSimulationSeed(generateRuntimeSeed());
     setClubs(finalClubs);
     setLeagues(STATIC_LEAGUES);
-    setPlayers(importedPlayers);
+    setPlayers(repairedImportedNationalData.players);
     setLineups(importedLineups);
     setCoaches(importedCoaches);
     setStaffMembers(importedStaffMembers);
-    setNationalTeams(importedNationalTeams);
-    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(importedNationalTeams));
+    setNationalTeams(repairedImportedNationalData.nationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(repairedImportedNationalData.nationalTeams));
     setUserTeamId(null);
     setManagerProfile(null);
     setSeasonTemplate(template);
@@ -3184,7 +3259,7 @@ if (userTeamId) {
 
     return {
       success: true,
-      message: `Zaimportowano full pack: ${finalClubs.length} klubów i ${importedNationalTeams.length} reprezentacji.`,
+      message: `Zaimportowano full pack: ${finalClubs.length} klubów i ${repairedImportedNationalData.nationalTeams.length} reprezentacji.`,
     };
   };
 

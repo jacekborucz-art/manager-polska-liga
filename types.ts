@@ -2210,6 +2210,12 @@ export interface MatchLiveState {
   aiTacticLockUntilMinute?: number;
   aiLateTacticChanges?: number;
   aiLateTacticScoreDiffAtLastChange?: number;
+  // AI Exploit Window:
+  // Minute until which league live-match AI may keep a targeted FAST + OFFENSIVE pressure
+  // response after detecting a player mistake. -1/undefined means no active exploit window.
+  // Tune scoring and duration in AiCoachTacticsService; tune hold/expiry safety brakes in
+  // components/views/MatchLiveView.tsx.
+  aiExploitUntilMinute?: number;
   logs: MatchLogEntry[];
   events: MatchEvent[];
   homeGoals: GoalTickerInfo[];

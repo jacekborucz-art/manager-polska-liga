@@ -2,7 +2,27 @@ import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMinds
 import { TacticRepository } from '../resources/tactics_db';
 import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
 
-type AiInstructions = { tempo: InstructionTempo; mindset: InstructionMindset; intensity: InstructionIntensity; pressing?: InstructionPressing; counterAttack?: InstructionCounterAttack; passing?: InstructionPassing };
+type AiInstructions = {
+  tempo: InstructionTempo;
+  mindset: InstructionMindset;
+  intensity: InstructionIntensity;
+  pressing?: InstructionPressing;
+  counterAttack?: InstructionCounterAttack;
+  passing?: InstructionPassing;
+  // AI Exploit Window:
+  // Optional minute until which MatchLiveView may keep this in-match instruction active even
+  // if the next AI decision tick returns null. This exists because a good coach should not
+  // instantly abandon a discovered player mistake (for example no second-half substitutions,
+  // a tired defensive line, or an overcommitted FAST + OFFENSIVE setup) just because the next
+  // periodic decision cycle has no new tactical change.
+  //
+  // Calibration:
+  // - Duration is produced in decideInMatchInstructions from coachScore and a small seeded
+  //   random component. Raising the duration makes AI pressure feel more persistent.
+  // - Keep this as a minute marker rather than a boolean so MatchLiveView can expire the
+  //   pressure without coupling itself to the scoring logic below.
+  exploitUntilMinute?: number;
+};
 
 type InMatchDecisionContext = {
   aiAvgFatigue?: number;
@@ -19,6 +39,22 @@ type InMatchDecisionContext = {
   isLateSeason?: boolean;
   rivalryMultiplier?: number;
   aiSentOffCount?: number;
+  // Player-side weakness signals for the AI exploit detector. These are intentionally passed
+  // as already-normalized match facts instead of making this service inspect MatchLiveState
+  // directly. That keeps the tactical brain focused on decisions and lets MatchLiveView own
+  // live-state extraction.
+  //
+  // Calibration:
+  // - userAvgFatigue/userLowestFatigue affect how quickly AI reads tired legs.
+  // - userSubsRemaining is inverted from "subs used"; 4-5 remaining after 60' means the
+  //   player barely used the bench and should become easier to punish if AI has rotated.
+  // - userGoalkeeperCrisis is a high-confidence signal and therefore receives a large weight.
+  userAvgFatigue?: number;
+  userLowestFatigue?: number;
+  userSubsRemaining?: number;
+  userSentOffCount?: number;
+  userGoalkeeperCrisis?: boolean;
+  userTempo?: InstructionTempo;
   aiPaceAvg?: number;
   aiTechAvg?: number;
   userPaceAvg?: number;
@@ -57,6 +93,33 @@ const getStakesWeight = (stakes?: InMatchDecisionContext['aiStakes']): number =>
   if (stakes === 'EUROPE_RACE') return 0.78;
   if (stakes === 'LOW_STAKES') return 0.16;
   return 0.42;
+};
+
+const pickInMatchPassing = (
+  seed: number,
+  minute: number,
+  coachAccuracy: number,
+  paceGap: number,
+  techGap: number,
+  accurateOffset: number,
+  randomOffset: number
+): InstructionPassing => {
+  // Shared helper for in-match pass-style decisions, including the exploit branch below.
+  // The same pace/tech interpretation is used for normal AI choices and exploit windows:
+  // pace advantage favors LONG transitions, while technical superiority or pace deficit
+  // favors SHORT combinations.
+  //
+  // Calibration:
+  // - coachAccuracy is the primary knob. Higher values make strong coaches pick the
+  //   "correct" pass style more often; lower values increase random pass-style noise.
+  // - The offset arguments keep seeded random streams stable and separated by caller.
+  if (seededRng(seed, minute, accurateOffset) < coachAccuracy) {
+    if (paceGap >= 3) return 'LONG';
+    if (paceGap <= -3 || techGap >= 3) return 'SHORT';
+    return 'MIXED';
+  }
+  const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
+  return opts[Math.floor(seededRng(seed, minute, randomOffset) * 3)];
 };
 
 export const AiCoachTacticsService = {
@@ -242,6 +305,12 @@ export const AiCoachTacticsService = {
     const aiShotsOnTarget = context?.aiShotsOnTarget ?? 0;
     const userShotsOnTarget = context?.userShotsOnTarget ?? 0;
     const aiSubsRemaining = context?.aiSubsRemaining ?? 5;
+    const userAvgFatigue = context?.userAvgFatigue ?? 100;
+    const userLowestFatigue = context?.userLowestFatigue ?? 100;
+    const userSubsRemaining = context?.userSubsRemaining ?? 5;
+    const userSentOffCount = context?.userSentOffCount ?? 0;
+    const userGoalkeeperCrisis = context?.userGoalkeeperCrisis ?? false;
+    const userTempo = context?.userTempo ?? 'NORMAL';
     const aiStakes = context?.aiStakes ?? 'MID_TABLE';
     const userStakes = context?.userStakes ?? 'MID_TABLE';
     const aiRank = context?.aiRank ?? 10;
@@ -262,6 +331,77 @@ export const AiCoachTacticsService = {
     const mustProtect = aiScoreDiff > 0 && (pressureDrama >= 0.70 || userStakesWeight >= 0.75 || tablePressure);
     const mustChase = aiScoreDiff < 0 && (pressureDrama >= 0.70 || aiStakes !== 'LOW_STAKES');
     const avoidCollapse = aiScoreDiff <= -2 && (pressureDrama >= 0.90 || aiStakes === 'RELEGATION_FIGHT');
+    const paceGap = (context?.aiPaceAvg ?? 60) - (context?.userPaceAvg ?? 60);
+    const techGap = (context?.aiTechAvg ?? 60) - (context?.userTechAvg ?? 60);
+    const coachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
+    const coachAccuracy = 0.35 + coachScore * 0.50;
+    const passingForExploit = pickInMatchPassing(seed, minute, coachAccuracy, paceGap, techGap, 601, 602);
+
+    // AI Exploit Window scoring:
+    // This block lets the AI identify and temporarily attack a player mistake instead of
+    // only reacting to scoreline/momentum. It is intentionally additive and bounded:
+    // many small cues can convince an elite coach, while weak coaches require an obvious
+    // collapse or may never react.
+    //
+    // What is rewarded:
+    // - Player overcommitment: FAST + OFFENSIVE, high attackBias, or pushing while not behind.
+    // - Player fatigue and bench negligence: low average/lowest fatigue, many unused player
+    //   substitutions after 60', especially when AI has already used several changes.
+    // - Structural errors: red card while still pushing, goalkeeper crisis, or exhausted line.
+    //
+    // Calibration:
+    // - Increase individual exploitScore weights to make AI punish that mistake more often.
+    // - Lower exploitThreshold values to make coaches react more frequently.
+    // - Raise aiAvgFatigue > 58 if you want AI to avoid pressing when tired.
+    // - Lower exploitReadChance base/multiplier if exploit windows feel too deterministic.
+    // - The substitution mismatch weights are currently +0.85 for "player has 4-5 subs left,
+    //   AI has 3+ used" and +0.35 extra when AI used all 5 after 70'. These are the main knobs
+    //   for punishing a player who refuses to rotate in the second half.
+    let exploitScore = 0;
+    const userIsPushing = userMindset === 'OFFENSIVE' || userTempo === 'FAST' || userTacticAttackBias >= 68;
+    if (userMindset === 'OFFENSIVE' && userTempo === 'FAST') exploitScore += 1.05;
+    else if (userIsPushing) exploitScore += 0.45;
+    if (userTacticAttackBias >= 76) exploitScore += 0.55;
+    if (userAvgFatigue < 72) exploitScore += 0.55;
+    if (userLowestFatigue < 50) exploitScore += 0.75;
+    if (userSubsRemaining <= 1 && minute >= 60) exploitScore += 0.45;
+    if (userSubsRemaining >= 4 && aiSubsRemaining <= 2 && minute >= 60) exploitScore += 0.85;
+    if (userSubsRemaining >= 4 && aiSubsRemaining === 0 && minute >= 70) exploitScore += 0.35;
+    if (userSentOffCount > 0 && userIsPushing) exploitScore += 1.20;
+    if (userGoalkeeperCrisis) exploitScore += 1.80;
+    if (shotBalance >= -1 && sotBalance >= -1 && userIsPushing) exploitScore += 0.40;
+    if (aiMomentum > -18 && userIsPushing) exploitScore += 0.35;
+    if (aiScoreDiff >= 0 && userIsPushing) exploitScore += 0.35;
+    if (aiScoreDiff <= -2) exploitScore -= 0.40;
+    if (seriousFatigue) exploitScore -= 1.20;
+    if (aiSentOffCount > 0) exploitScore -= 2.00;
+
+    const exploitThreshold =
+      coachScore >= 0.78 ? 1.45 :
+      coachScore >= 0.62 ? 2.10 :
+      coachScore >= 0.46 ? 2.85 :
+      99;
+    const exploitReadChance = Math.max(
+      0,
+      Math.min(0.96, 0.18 + coachScore * 0.72 + Math.max(0, exploitScore - exploitThreshold) * 0.12)
+    );
+    if (
+      exploitScore >= exploitThreshold &&
+      aiAvgFatigue > 58 &&
+      aiScoreDiff > -3 &&
+      rng2 < exploitReadChance
+    ) {
+      const duration = 5 + Math.round(coachScore * 5) + Math.floor(seededRng(seed, minute, 701) * 4);
+      return {
+        mindset: 'OFFENSIVE',
+        tempo: 'FAST',
+        intensity: aiAvgFatigue > 72 ? 'AGGRESSIVE' : 'NORMAL',
+        pressing: aiAvgFatigue > 66 && coachScore >= 0.55 ? 'PRESSING' : 'NORMAL',
+        counterAttack: 'NORMAL',
+        passing: passingForExploit,
+        exploitUntilMinute: Math.min(90, minute + duration),
+      };
+    }
 
     // Szansa braku reakcji — słaby trener często się waha
     let noActionChance = decisionMaking < 40 ? 0.40 : decisionMaking < 60 ? 0.15 : 0.05;
@@ -446,18 +586,7 @@ export const AiCoachTacticsService = {
       pressing = experience >= 55 || pressureDrama >= 0.75 ? 'PRESSING' : pressing;
     }
 
-    const paceGap = (context?.aiPaceAvg ?? 60) - (context?.userPaceAvg ?? 60);
-    const techGap = (context?.aiTechAvg ?? 60) - (context?.userTechAvg ?? 60);
-    const coachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
-    const coachAccuracy = 0.35 + coachScore * 0.50;
-    let passing: InstructionPassing = 'MIXED';
-    if (seededRng(seed, minute, 601) < coachAccuracy) {
-      if (paceGap >= 3) passing = 'LONG';
-      else if (paceGap <= -3 || techGap >= 3) passing = 'SHORT';
-    } else {
-      const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
-      passing = opts[Math.floor(seededRng(seed, minute, 602) * 3)];
-    }
+    const passing = pickInMatchPassing(seed, minute, coachAccuracy, paceGap, techGap, 601, 602);
     console.log(
       `[AI IN-MATCH min=${minute}] pace gap=${paceGap.toFixed(1)} tech gap=${techGap.toFixed(1)} ` +
       `acc=${coachAccuracy.toFixed(2)} → ${passing} | mindset=${mindset} tempo=${tempo}`

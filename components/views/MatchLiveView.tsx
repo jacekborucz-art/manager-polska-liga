@@ -847,9 +847,14 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           passingResponseFactor: 1.0,
           pressingResponseFactor: 1.0,
           counterAttackResponseFactor: 1.0,
-         lastChangeMinute: -5,},
+          lastChangeMinute: -5,},
           playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
+        // AI Exploit Window state:
+        // Stores the minute until which the AI is allowed to keep an exploit instruction
+        // active after identifying a player mistake. Initial value -1 means no active window.
+        // See AiCoachTacticsService.decideInMatchInstructions for scoring and calibration.
+        aiExploitUntilMinute: -1,
         aiPreMatchMotivation: {
           actionMod:     aiBriefingEffect.actionMod,
           goalMod:       aiBriefingEffect.goalMod,
@@ -1945,6 +1950,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
         const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
         const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
+        const tiredDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 82).length;
+        const exhaustedDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 70).length;
         const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
         const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
         const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
@@ -1956,6 +1963,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               (2 - attackingSubsUsed) * 0.006 +
               tiredAttackers * 0.004 +
               Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
+            ) * Math.min(1, (nextMinute - 60) / 30)
+          : 0;
+        // Fresh-legs attack bonus:
+        // Rewards a side that used the bench (3+ substitutions) when attacking a team that
+        // barely rotated (0-1 substitutions) after minute 60. This complements the existing
+        // noRotationShotPenalty, which mostly punishes the tired team's own attacking output.
+        // Without this positive swing, an AI that correctly uses 4-5 substitutions still did
+        // not feel dangerous enough against a player who left exhausted defenders on the pitch.
+        //
+        // Calibration:
+        // - "attackingSubsUsed >= 3" defines when fresh attacking legs are considered real.
+        //   Lower to 2 if rotation should matter earlier; raise to 4 for a stricter payoff.
+        // - "defendingSubsUsed <= 1" defines negligence. Raise to 2 if you want players who
+        //   make only minimal changes to still be punished.
+        // - Cap 0.024 limits how much this can add to shotThreshold. Raise carefully; this
+        //   stacks with fatigue, momentum, tactics, and FAST + OFFENSIVE instruction bonuses.
+        // - tiredDefenders/exhaustedDefenders weights control whether the effect is mainly
+        //   about substitution count or actual tired bodies on the pitch.
+        // - The minute ramp prevents a sudden jump at 60'; changing the divisor from 30 to
+        //   20 makes the effect reach full strength around minute 80 instead of 90.
+        const rotationMismatchAttackBonus = nextMinute >= 60 && attackingSubsUsed >= 3 && defendingSubsUsed <= 1
+          ? Math.min(
+              0.024,
+              0.006 +
+                Math.max(0, attackingSubsUsed - defendingSubsUsed - 1) * 0.003 +
+                tiredDefenders * 0.003 +
+                exhaustedDefenders * 0.005
             ) * Math.min(1, (nextMinute - 60) / 30)
           : 0;
         const lateFatigueShotDrag = nextMinute >= 60
@@ -1981,6 +2015,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - goalkeeperCrisisAttackDrag
             + noGkBonus
             + redCardDefensiveBoost
+            + rotationMismatchAttackBonus
             - criticalFatPenalty
             - freshDefBonus
             - noRotationShotPenalty
@@ -2166,6 +2201,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         let nextAiActiveShout = prev.aiActiveShout;
         let nextAiNextInstructionMinute = prev.aiNextInstructionMinute ?? 10;
+        // AI Exploit Window memory:
+        // nextAiExploitUntilMinute lets AI keep a targeted pressure instruction active for a
+        // short window after the tactical brain detects a player mistake. This prevents the
+        // periodic AI decision loop from immediately clearing FAST + OFFENSIVE on the next
+        // null decision, while still forcing the pressure to expire naturally.
+        //
+        // Calibration:
+        // - Expiry duration is generated in AiCoachTacticsService. Tune it there first.
+        // - Holding conditions below (AI fatigue > 55 and score diff > -3) are safety brakes.
+        //   Raise fatigue threshold if AI should abandon pressure sooner when tired.
+        //   Tighten score diff if AI should stop exploiting when clearly losing.
+        let nextAiExploitUntilMinute = prev.aiExploitUntilMinute ?? -1;
+        if (nextAiExploitUntilMinute > 0 && nextMinute > nextAiExploitUntilMinute) {
+          nextAiExploitUntilMinute = -1;
+        }
         let aiInstructionDecisionTrigger = false;
 
         if (nextMinute >= nextAiNextInstructionMinute) {
@@ -2182,8 +2232,26 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             ? aiActiveFatigues.reduce((acc, value) => acc + value, 0) / aiActiveFatigues.length
             : 100;
           const aiLowestFatigueForDecision = aiActiveFatigues.length > 0 ? Math.min(...aiActiveFatigues) : 100;
+          const userXIForDecision = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+          const userFatigueForDecision = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
+          const userActiveFatigues = userXIForDecision
+            .filter((id): id is string => id !== null)
+            .map(id => userFatigueForDecision[id] ?? 100);
+          const userAvgFatigueForDecision = userActiveFatigues.length > 0
+            ? userActiveFatigues.reduce((acc, value) => acc + value, 0) / userActiveFatigues.length
+            : 100;
+          const userLowestFatigueForDecision = userActiveFatigues.length > 0 ? Math.min(...userActiveFatigues) : 100;
+          const userKeeperForDecision = userXIForDecision[0]
+            ? uPlayersList.find(player => player.id === userXIForDecision[0])
+            : null;
+          const userGoalkeeperCrisisForDecision = !userKeeperForDecision || userKeeperForDecision.position !== PlayerPosition.GK;
           const aiStatsForDecision = userSide === 'HOME' ? nextLiveStats.away : nextLiveStats.home;
           const userStatsForDecision = userSide === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+          // The AI coach receives a compact snapshot of player-side weaknesses:
+          // fatigue, remaining substitutions, red cards, goalkeeper crisis, current tempo,
+          // and match pressure. MatchLiveView owns extraction because it has the live lineups,
+          // current fatigue maps, and side orientation; AiCoachTacticsService owns the tactical
+          // interpretation and coach-quality thresholds.
           const decision = AiCoachTacticsService.decideInMatchInstructions(
             aiScoreDiff, aiMomentum, nextMinute,
             aiCoach?.attributes.decisionMaking ?? 50,
@@ -2201,6 +2269,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               aiShotsOnTarget: aiStatsForDecision.shotsOnTarget,
               userShotsOnTarget: userStatsForDecision.shotsOnTarget,
               aiSubsRemaining: 5 - (userSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome),
+              userAvgFatigue: userAvgFatigueForDecision,
+              userLowestFatigue: userLowestFatigueForDecision,
+              userSubsRemaining: 5 - (userSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway),
+              userSentOffCount: prev.sentOffIds.filter(id => (userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length,
+              userGoalkeeperCrisis: userGoalkeeperCrisisForDecision,
+              userTempo: prev.userInstructions.tempo,
               aiStakes: aiPressureProfile.stakes,
               userStakes: userPressureProfile.stakes,
               aiRank: aiPressureProfile.rank,
@@ -2214,7 +2288,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               userTechAvg: uAvgTech
             }
           );
-          nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;
+          const shouldHoldExploit =
+            !decision &&
+            nextAiExploitUntilMinute >= nextMinute &&
+            prev.aiActiveShout?.mindset === 'OFFENSIVE' &&
+            prev.aiActiveShout?.tempo === 'FAST' &&
+            aiAvgFatigueForDecision > 55 &&
+            aiScoreDiff > -3;
+          if (decision) {
+            const { exploitUntilMinute, ...decisionShout } = decision;
+            nextAiActiveShout = { id: `ai_${nextMinute}`, ...decisionShout, expiryMinute: -1 };
+            nextAiExploitUntilMinute = exploitUntilMinute ?? -1;
+          } else if (shouldHoldExploit) {
+            nextAiActiveShout = prev.aiActiveShout;
+          } else {
+            nextAiActiveShout = null;
+            nextAiExploitUntilMinute = -1;
+          }
           if (decision) {
             const instructionShifted =
               decision.mindset !== prev.aiActiveShout?.mindset ||
@@ -3394,6 +3484,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             activeTacticalBoost: 0, tacticalBoostExpiry: -1, lastGoalBoostMinute: nextLastGoalBoostMinute,
             aiActiveShout: nextAiActiveShout,
             aiNextInstructionMinute: nextAiNextInstructionMinute,
+            aiExploitUntilMinute: nextAiExploitUntilMinute,
           };
         }
 
@@ -3446,6 +3537,7 @@ return {
            lastGoalBoostMinute: nextLastGoalBoostMinute,
            aiActiveShout: nextAiActiveShout,
            aiNextInstructionMinute: nextAiNextInstructionMinute,
+           aiExploitUntilMinute: nextAiExploitUntilMinute,
         };
 
 

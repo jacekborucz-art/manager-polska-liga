@@ -194,6 +194,43 @@ const getSyntheticRegionProfile = (
   return REGION_PROFILE[region];
 };
 
+const getSyntheticFallbackAverage = (team: Pick<NationalTeam, 'reputation'>): number =>
+  clampSelectionValue(Math.round(45 + team.reputation * 2.2), 42, 88);
+
+const getSyntheticAnchorAverage = (
+  team: Pick<NationalTeam, 'reputation'>,
+  currentSquadPlayers: Player[]
+): number => {
+  if (currentSquadPlayers.length === 0) return getSyntheticFallbackAverage(team);
+  return currentSquadPlayers.reduce((sum, player) => sum + player.overallRating, 0) / currentSquadPlayers.length;
+};
+
+const calibrateGeneratedNationalPlayer = (
+  player: Player,
+  team: Pick<NationalTeam, 'reputation'>,
+  currentSquadPlayers: Player[]
+): Player => {
+  // Synthetic national-team player calibration:
+  // Any player generated because a national team is short on bodies is pulled toward the
+  // current squad level instead of only trusting the reputation-based generator. This is the
+  // safety rule for small nations after SAVE/DATA PACK loads: if San Marino, Liechtenstein,
+  // Luxembourg, Andorra, Gibraltar, Faroe Islands, or any other country lacks 25 players,
+  // replacements should be playable but usually weaker than the existing squad.
+  //
+  // Calibration:
+  // - The target offset is random from -10 to +2 OVR versus the current squad average.
+  //   Change the "-10" lower bound if generated players should be weaker/stronger.
+  //   Change the "+2" upper bound if emergency players may occasionally improve the team.
+  // - If a team has no valid current squad players, reputation creates a fallback average
+  //   through getSyntheticFallbackAverage. Tune that function for global strength balance.
+  // - Attributes are left as generated because match engines mostly read overallRating for
+  //   broad quality and keeping raw attributes avoids flattening player profiles by position.
+  const averageOverall = getSyntheticAnchorAverage(team, currentSquadPlayers);
+  const offset = Math.floor(Math.random() * 13) - 10;
+  const calibratedOverall = clampSelectionValue(Math.round(averageOverall + offset), 35, 99);
+  return { ...player, overallRating: calibratedOverall };
+};
+
 const isEligibleForTeam = (
   team: NationalTeam,
   player: Player,
@@ -533,6 +570,7 @@ export const NationalTeamService = {
     const squadPlayerIds: string[] = [];
     const newPlayers: Player[] = [];
     const selectedPlayerIds: string[] = [];
+    const playerById = new Map(allPlayersList.map(player => [player.id, player]));
     const usedNames = new Set<string>();
     let genIndex = 0;
     let selectedStarCount = 0;
@@ -564,11 +602,17 @@ export const NationalTeamService = {
         const np = NationalTeamService.generatePlayerForNT(
           team.id, team.region, team.name, pos, team.reputation, genIndex++, usedNames, syntheticCap
         );
-        np.assignedNationalTeamId = team.id;
-        if (isTeamStarPlayer(team, np)) selectedStarCount++;
-        newPlayers.push(np);
-        squadPlayerIds.push(np.id);
-        assignedPlayerIds.add(np.id);
+        const calibratedPlayer = calibrateGeneratedNationalPlayer(
+          np,
+          team,
+          squadPlayerIds.map(id => playerById.get(id)).filter((player): player is Player => !!player)
+        );
+        calibratedPlayer.assignedNationalTeamId = team.id;
+        if (isTeamStarPlayer(team, calibratedPlayer)) selectedStarCount++;
+        newPlayers.push(calibratedPlayer);
+        playerById.set(calibratedPlayer.id, calibratedPlayer);
+        squadPlayerIds.push(calibratedPlayer.id);
+        assignedPlayerIds.add(calibratedPlayer.id);
       }
     };
 
@@ -761,7 +805,11 @@ export const NationalTeamService = {
             const syntheticCap = selectedStarCount >= teamMaxStars && getTeamRule(team)?.starThreshold !== undefined
               ? Math.min(getTeamOvrCap(team), (getTeamRule(team)?.starThreshold ?? getTeamOvrCap(team)) - 1)
               : getTeamOvrCap(team);
-            const np = generateUniqueSyntheticPlayer(pos, syntheticCap);
+            const np = calibrateGeneratedNationalPlayer(
+              generateUniqueSyntheticPlayer(pos, syntheticCap),
+              team,
+              squadIds.map(id => playerMap[id]).filter((player): player is Player => !!player)
+            );
             np.assignedNationalTeamId = team.id;
             playerMap[np.id] = np;
             allNewPlayers.push(np);
@@ -912,9 +960,14 @@ export const NationalTeamService = {
           const np = NationalTeamService.generatePlayerForNT(
             team.id, team.region, team.name, player.position, team.reputation, genIndex++, usedNames, syntheticCap
           );
-          np.assignedNationalTeamId = team.id;
-          allNewPlayers.push(np);
-          squadIds[i] = np.id;
+          const calibratedPlayer = calibrateGeneratedNationalPlayer(
+            np,
+            team,
+            squadIds.map(id => playerMap[id]).filter((candidate): candidate is Player => !!candidate)
+          );
+          calibratedPlayer.assignedNationalTeamId = team.id;
+          allNewPlayers.push(calibratedPlayer);
+          squadIds[i] = calibratedPlayer.id;
         }
         changed = true;
       }
@@ -992,10 +1045,11 @@ export const NationalTeamService = {
           const player = NationalTeamService.generatePlayerForNT(
             team.id, team.region, team.name, pos, team.reputation, genIdx, usedNames, ovrCap
           );
-          player.id = playerId;
-          usedPlayerIds.add(player.id);
+          const calibratedPlayer = calibrateGeneratedNationalPlayer(player, team, legalSquadPlayers);
+          calibratedPlayer.id = playerId;
+          usedPlayerIds.add(calibratedPlayer.id);
           genIdx++;
-          newPlayers.push(player);
+          newPlayers.push(calibratedPlayer);
         }
       }
     }
