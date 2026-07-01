@@ -4,6 +4,8 @@ import { useGame } from '../../context/GameContext';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
 import { Club, CompetitionType, MatchStatus } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { MatchReportModal } from './MatchReportModal';
+import { MatchReportModalPolishLeague } from './MatchReportModalPolishLeague';
 
 interface TeamResultsModalProps {
   isOpen: boolean;
@@ -59,12 +61,26 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
   };
 
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen) setSelectedSeason(null);
+    if (isOpen) {
+      setSelectedSeason(null);
+      setSelectedReportId(null);
+    }
   }, [isOpen]);
 
-  const allHistory = useMemo(() => MatchHistoryService.getAll(), []);
+  const allHistory = useMemo(() => MatchHistoryService.getAll(), [isOpen, fixtures]);
+  const selectedReport = useMemo(
+    () => selectedReportId ? [...MatchHistoryService.getAll()].reverse().find(match => match.matchId === selectedReportId) ?? null : null,
+    [selectedReportId, allHistory]
+  );
+  const isSelectedReportEuropean = !!selectedReport && (
+    selectedReport.competition.startsWith('CL_') ||
+    selectedReport.competition.startsWith('EL_') ||
+    selectedReport.competition.startsWith('CONF_') ||
+    selectedReport.competition === CompetitionType.UEFA_SUPER_CUP
+  );
 
   type ScheduleItem = {
     id: string;
@@ -77,6 +93,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
     awayScore: number | null;
     neutralVenue: boolean;
     season: number;
+    reportMatchId?: string;
   };
 
   const schedule = useMemo((): ScheduleItem[] => {
@@ -87,9 +104,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
       )
       .map(f => {
         const isPast = new Date(f.date) < currentDate;
-        const histEntry = f.status !== MatchStatus.FINISHED && isPast
-          ? allHistory.find(e => e.matchId === f.id)
-          : undefined;
+        const histEntry = allHistory.find(e => e.matchId === f.id);
         const isDisplayFinished = f.status === MatchStatus.FINISHED || !!histEntry;
         return {
           id: f.id,
@@ -102,6 +117,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
           awayScore: isDisplayFinished ? (f.awayScore ?? histEntry?.awayScore ?? null) : null,
           neutralVenue: f.neutralVenue ?? false,
           season: seasonNumber,
+          reportMatchId: histEntry?.matchId,
         };
       });
 
@@ -123,6 +139,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
         awayScore: h.awayScore,
         neutralVenue: false,
         season: h.season,
+        reportMatchId: h.matchId,
       }));
 
     return [...fixtureItems, ...historyItems]
@@ -150,6 +167,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   return (
+    <>
     <div className={`fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md p-6 ${exitClass}`}>
       <div className="max-w-3xl w-full border border-white/10 rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative">
         <div className="border-b border-white/5 p-6 flex justify-between items-center bg-white/5">
@@ -249,9 +267,20 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
                       </td>
                       <td className="px-6 py-3 text-center align-middle">
                         <div className="flex items-center justify-center gap-2">
-                          <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
-                            {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
-                          </span>
+                          {isDisplayFinished && f.reportMatchId ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReportId(f.reportMatchId ?? null)}
+                              className={`rounded-md px-2 py-1 text-[13px] font-black italic tracking-tighter font-mono transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/30 ${resultColor}`}
+                              title="Otwórz raport meczowy"
+                            >
+                              {myScore}:{oppScore}
+                            </button>
+                          ) : (
+                            <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                              {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
+                            </span>
+                          )}
                           {resultLabel && (
                             <span className={`text-[9px] font-black italic ${resultColor}`}>{resultLabel}</span>
                           )}
@@ -270,5 +299,13 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
         </div>
       </div>
     </div>
+    {selectedReportId && (
+      isSelectedReportEuropean ? (
+        <MatchReportModal matchId={selectedReportId} onClose={() => setSelectedReportId(null)} />
+      ) : (
+        <MatchReportModalPolishLeague matchId={selectedReportId} onClose={() => setSelectedReportId(null)} />
+      )
+    )}
+    </>
   );
 };

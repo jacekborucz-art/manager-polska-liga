@@ -1052,6 +1052,8 @@ export interface AiFriendlyMatchReport {
   awayTacticId: string;
   homeStartingXI: string[];
   awayStartingXI: string[];
+  homeFinalXI?: string[];
+  awayFinalXI?: string[];
 }
 
 export enum TransferOfferStatus {

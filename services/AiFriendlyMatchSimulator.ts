@@ -523,6 +523,28 @@ export const AiFriendlyMatchSimulator = {
       ratings[pId] = parseFloat(Math.min(10, Math.max(1, score)).toFixed(1));
     });
 
-    return { pairId: pair.id, homeTeamId: pair.homeTeamId, awayTeamId: pair.awayTeamId, date: pair.date, homeScore, awayScore, scorers, cards, injuries, substitutions, ratings, extraTime, homeTacticId: hTactic.id, awayTacticId: aTactic.id, homeStartingXI, awayStartingXI };
+    const homeFinalXI = hLineup.starters.map(id => id ?? '');
+    const awayFinalXI = aLineup.starters.map(id => id ?? '');
+
+    return {
+      pairId: pair.id,
+      homeTeamId: pair.homeTeamId,
+      awayTeamId: pair.awayTeamId,
+      date: pair.date,
+      homeScore,
+      awayScore,
+      scorers,
+      cards,
+      injuries,
+      substitutions,
+      ratings,
+      extraTime,
+      homeTacticId: hTactic.id,
+      awayTacticId: aTactic.id,
+      homeStartingXI,
+      awayStartingXI,
+      homeFinalXI,
+      awayFinalXI,
+    };
   },
 };

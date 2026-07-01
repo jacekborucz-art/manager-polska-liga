@@ -98,6 +98,8 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
 
   const subsOutIds = new Set(report.substitutions.map(s => s.playerOutId));
   const subsInIds = new Set(report.substitutions.map(s => s.playerInId));
+  const homeSubsOutIds = new Set(report.substitutions.filter(s => s.teamId === report.homeTeamId).map(s => s.playerOutId));
+  const awaySubsOutIds = new Set(report.substitutions.filter(s => s.teamId === report.awayTeamId).map(s => s.playerOutId));
 
   const kits = homeClub && awayClub ? KitSelectionService.selectOptimalKits(homeClub, awayClub) : null;
   const homePrimary = kits?.home.primary ?? '#1a3a6e';
@@ -115,11 +117,15 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
     });
 
   const homeAllIds = Object.keys(report.ratings).filter(id => homePlayers.some(p => p.id === id));
-  const homeFinalXI = sortByPosition(homeAllIds.filter(id => !subsOutIds.has(id)));
+  const homeFinalXI = report.homeFinalXI
+    ? report.homeFinalXI.filter(Boolean)
+    : sortByPosition(homeAllIds.filter(id => !homeSubsOutIds.has(id)));
   const homeSubsOff = sortByPosition(homeAllIds.filter(id => subsOutIds.has(id)));
 
   const awayAllIds = Object.keys(report.ratings).filter(id => awayPlayers.some(p => p.id === id));
-  const awayFinalXI = sortByPosition(awayAllIds.filter(id => !subsOutIds.has(id)));
+  const awayFinalXI = report.awayFinalXI
+    ? report.awayFinalXI.filter(Boolean)
+    : sortByPosition(awayAllIds.filter(id => !awaySubsOutIds.has(id)));
   const awaySubsOff = sortByPosition(awayAllIds.filter(id => subsOutIds.has(id)));
 
   const homeTactic = TacticRepository.getById(report.homeTacticId);
@@ -297,7 +303,7 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/10 pointer-events-none" />
             <div className="absolute inset-0">
               {homeTactic?.slots.map((slot, i) => {
-                const id = report.homeStartingXI[i];
+                const id = report.homeFinalXI ? report.homeFinalXI[i] : report.homeStartingXI[i];
                 if (!id) return null;
                 const p = homePlayers.find(pl => pl.id === id);
                 const isGK = slot.role === PlayerPosition.GK;
@@ -315,7 +321,7 @@ export const AiFriendlyMatchDetailModal: React.FC<Props> = ({ report, onClose })
                 return <PitchKit key={`h-${i}`} player={p} left={`${slot.x * 100}%`} top={top} primary={primary} secondary={secondary} trim={trim} isRedCarded={isRed} />;
               })}
               {awayTactic?.slots.map((slot, i) => {
-                const id = report.awayStartingXI[i];
+                const id = report.awayFinalXI ? report.awayFinalXI[i] : report.awayStartingXI[i];
                 if (!id) return null;
                 const p = awayPlayers.find(pl => pl.id === id);
                 const isGK = slot.role === PlayerPosition.GK;

@@ -13,6 +13,8 @@ import szatnia from '../../Graphic/themes/szatnia.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
 import { WeeklyMotivationModal } from '../modals/WeeklyMotivationModal';
+import { MatchReportModal } from '../modals/MatchReportModal';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 import { WeeklyMotivationService } from '../../services/WeeklyMotivationService';
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
@@ -254,6 +256,7 @@ export const SquadView: React.FC = () => {
   const [staffNegResultOk, setStaffNegResultOk] = useState(false);
   const [staffNegSalaryStr, setStaffNegSalaryStr] = useState('');
   const [activeTab, setActiveTab] = useState<'SQUAD' | 'CONTRACT' | 'MORALE' | 'SCHEDULE' | 'TABLE' | 'LOANS'>('SQUAD');
+  const [selectedScheduleReportId, setSelectedScheduleReportId] = useState<string | null>(null);
   const [loanDetailsPlayerId, setLoanDetailsPlayerId] = useState<string | null>(null);
   const loanDetailsPlayer = useMemo(
     () => loanDetailsPlayerId ? allLeaguePlayers.find(player => player.id === loanDetailsPlayerId) ?? null : null,
@@ -459,7 +462,17 @@ export const SquadView: React.FC = () => {
   const isUnavailableForLineup = (player: Player): boolean =>
     LineupService.isUnavailableForLineup(player, { competitionId: lineupCompetitionId });
 
-  const allMatchHistory = useMemo(() => MatchHistoryService.getAll(), [seasonNumber]);
+  const allMatchHistory = useMemo(() => MatchHistoryService.getAll(), [seasonNumber, fixtures]);
+  const selectedScheduleReport = useMemo(
+    () => selectedScheduleReportId ? [...MatchHistoryService.getAll()].reverse().find(match => match.matchId === selectedScheduleReportId) ?? null : null,
+    [selectedScheduleReportId, allMatchHistory]
+  );
+  const isSelectedScheduleReportEuropean = !!selectedScheduleReport && (
+    selectedScheduleReport.competition.startsWith('CL_') ||
+    selectedScheduleReport.competition.startsWith('EL_') ||
+    selectedScheduleReport.competition.startsWith('CONF_') ||
+    selectedScheduleReport.competition === CompetitionType.UEFA_SUPER_CUP
+  );
 
   const pastScheduleSeasons = useMemo(() => {
     if (!userTeamId) return [];
@@ -516,6 +529,20 @@ export const SquadView: React.FC = () => {
   }, [nationalTeams]);
 
   const canMotivate = useMemo(() => myClub ? WeeklyMotivationService.canMotivate(myClub, currentDate) : false, [myClub, currentDate]);
+  const teamMoraleSnapshot = useMemo(() => {
+    const clubMorale = PlayerMoraleService.clamp(myClub?.morale ?? 50);
+    const moralePlayers = myPlayers.map(player => PlayerMoraleService.ensurePlayerState(player));
+    const playerAverageMorale = moralePlayers.length > 0
+      ? Math.round(moralePlayers.reduce((sum, player) => sum + (player.morale ?? 50), 0) / moralePlayers.length)
+      : clubMorale;
+    const effectiveMorale = PlayerMoraleService.clamp((clubMorale * 0.6) + (playerAverageMorale * 0.4));
+
+    return {
+      clubMorale,
+      playerAverageMorale,
+      effectiveMorale,
+    };
+  }, [myClub?.morale, myPlayers]);
   const motivationPanelText = canMotivate
     ? 'Druzyna jest gotowa na kolejna rozmowe motywacyjna.'
     : 'Regularny kontakt z szatnia ma znaczenie. Jesli atmosfera zacznie sie psuc, kapitan da Ci o tym znac w wiadomosci.';
@@ -1352,7 +1379,7 @@ export const SquadView: React.FC = () => {
             >STATUS KONTRAKTU</button>
             <button
               onClick={() => setActiveTab('MORALE')}
-              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'MORALE' ? `${getMoraleInfo(myClub.morale ?? 50).bg} border-t-white/30 border-x-white/15 border-b-black/60 ${getMoraleInfo(myClub.morale ?? 50).color}` : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+              className={`px-8 py-3 rounded-[20px] text-[10px] font-black uppercase italic tracking-widest transition-all active:translate-y-[2px] border-t border-x border-b ${activeTab === 'MORALE' ? `${getMoraleInfo(teamMoraleSnapshot.effectiveMorale).bg} border-t-white/30 border-x-white/15 border-b-black/60 ${getMoraleInfo(teamMoraleSnapshot.effectiveMorale).color}` : 'bg-white/5 border-t-white/20 border-x-white/10 border-b-black/60 text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
             >MORALE</button>
             <button
@@ -1373,7 +1400,9 @@ export const SquadView: React.FC = () => {
           </div>
 
           {activeTab === 'MORALE' && (() => {
-            const morale = myClub.morale ?? 50;
+            const morale = teamMoraleSnapshot.effectiveMorale;
+            const clubBaseMorale = teamMoraleSnapshot.clubMorale;
+            const playerAverageMorale = teamMoraleSnapshot.playerAverageMorale;
             const info = getMoraleInfo(morale);
             const form = myClub.stats.form || [];
             const moraleRows = [...myPlayers]
@@ -1410,9 +1439,26 @@ export const SquadView: React.FC = () => {
 
                 {/* MAIN MORALE CARD */}
                 <div className={`rounded-[40px] border ${info.border} ${info.bg} backdrop-blur-3xl p-10 flex flex-col gap-6`}>
-                  <div className="flex flex-col gap-1">
-                    <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500">MORALE DRUŻYNY</div>
-                    <div className={`text-4xl font-black italic uppercase tracking-tight ${info.color}`}>{info.label}</div>
+                  <div className="flex items-start justify-between gap-8">
+                    <div className="flex flex-col gap-1">
+                      <div className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500">MORALE DRUŻYNY</div>
+                      <div className={`text-4xl font-black italic uppercase tracking-tight ${info.color}`}>{info.label}</div>
+                    </div>
+
+                    <div className="grid min-w-[420px] grid-cols-3 gap-4 text-right">
+                      <div>
+                        <div className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Baza klubu</div>
+                        <div className="text-sm font-black italic uppercase tracking-tighter text-slate-200">{clubBaseMorale}</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Średnia kadry</div>
+                        <div className="text-sm font-black italic uppercase tracking-tighter text-slate-200">{playerAverageMorale}</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Wynik</div>
+                        <div className={`text-sm font-black italic uppercase tracking-tighter ${info.color}`}>{morale}</div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* BAR */}
@@ -1901,16 +1947,14 @@ export const SquadView: React.FC = () => {
                             : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
                           const isFinished = f.status === MatchStatus.FINISHED;
                           const isPast = new Date(f.date) < currentDate;
-                          const histEntry = !isFinished && isPast
-                            ? MatchHistoryService.getAll().find(e => e.matchId === f.id)
-                            : undefined;
-                          const isDisplayFinished = isFinished || !!histEntry;
+                          const reportEntry = allMatchHistory.find(e => e.matchId === f.id);
+                          const isDisplayFinished = isFinished || !!reportEntry;
                           const myScore = isHome
-                            ? (f.homeScore ?? histEntry?.homeScore ?? null)
-                            : (f.awayScore ?? histEntry?.awayScore ?? null);
+                            ? (f.homeScore ?? reportEntry?.homeScore ?? null)
+                            : (f.awayScore ?? reportEntry?.awayScore ?? null);
                           const oppScore = isHome
-                            ? (f.awayScore ?? histEntry?.awayScore ?? null)
-                            : (f.homeScore ?? histEntry?.homeScore ?? null);
+                            ? (f.awayScore ?? reportEntry?.awayScore ?? null)
+                            : (f.homeScore ?? reportEntry?.homeScore ?? null);
                           const resultColor = isDisplayFinished
                             ? myScore! > oppScore! ? 'text-emerald-400' : myScore! < oppScore! ? 'text-red-400' : 'text-slate-300'
                             : 'text-slate-600';
@@ -1935,9 +1979,20 @@ export const SquadView: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-6 py-2.5 text-center align-middle">
-                                <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
-                                  {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
-                                </span>
+                                {isDisplayFinished && reportEntry ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedScheduleReportId(reportEntry.matchId)}
+                                    className={`rounded-md px-2 py-1 text-[13px] font-black italic tracking-tighter font-mono transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/30 ${resultColor}`}
+                                    title="Otwórz raport meczowy"
+                                  >
+                                    {myScore}:{oppScore}
+                                  </button>
+                                ) : (
+                                  <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                                    {isDisplayFinished ? `${myScore}:${oppScore}` : '-:-'}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-2.5 align-middle">
                                 <div className="flex items-center gap-3">
@@ -1993,9 +2048,14 @@ export const SquadView: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-6 py-2.5 text-center align-middle">
-                                <span className={`text-[13px] font-black italic tracking-tighter font-mono ${resultColor}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedScheduleReportId(m.matchId)}
+                                  className={`rounded-md px-2 py-1 text-[13px] font-black italic tracking-tighter font-mono transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/30 ${resultColor}`}
+                                  title="Otwórz raport meczowy"
+                                >
                                   {myScore}:{oppScore}
-                                </span>
+                                </button>
                               </td>
                               <td className="px-4 py-2.5 align-middle">
                                 <div className="flex items-center gap-3">
@@ -2750,6 +2810,14 @@ export const SquadView: React.FC = () => {
           onConfirm={handleMotivationConfirm}
           onClose={() => setIsMotivationOpen(false)}
         />
+      )}
+
+      {selectedScheduleReportId && (
+        isSelectedScheduleReportEuropean ? (
+          <MatchReportModal matchId={selectedScheduleReportId} onClose={() => setSelectedScheduleReportId(null)} />
+        ) : (
+          <MatchReportModalPolishLeague matchId={selectedScheduleReportId} onClose={() => setSelectedScheduleReportId(null)} />
+        )
       )}
 
       {isStaffOpen && myClub && (() => {
