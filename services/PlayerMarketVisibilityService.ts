@@ -152,17 +152,55 @@ export const PlayerMarketVisibilityService = {
       userClubId
     );
     const candidates = hiddenFreeAgents.filter(player =>
-      Math.abs(player.overallRating - squadAverage) <= 3
+      Math.abs(player.overallRating - squadAverage) <= 5
     );
+    const scoreCandidate = (player: Player): number => {
+      const fitPenalty = Math.abs(player.overallRating - squadAverage) * 10_000;
+      const roll = PlayerMarketVisibilityService.getStableNumber(`${seedKey}|${player.id}|agent-client`, 10_000);
+      return fitPenalty + roll;
+    };
+    const bucketSelectors = [
+      (player: Player) => player.overallRating > squadAverage,
+      (player: Player) => player.overallRating === squadAverage,
+      (player: Player) => player.overallRating < squadAverage,
+    ];
+    const bucketOffset = PlayerMarketVisibilityService.getStableNumber(`${seedKey}|agent-client-bucket`, bucketSelectors.length);
+    const bucketOrder = [
+      ...bucketSelectors.slice(bucketOffset),
+      ...bucketSelectors.slice(0, bucketOffset),
+    ];
+    const picked: Player[] = [];
+    const pickedIds = new Set<string>();
+    const pickedOveralls = new Set<number>();
 
-    return candidates
+    bucketOrder.forEach(matchesBucket => {
+      const bucketPick = candidates
+        .filter(player => !pickedIds.has(player.id) && matchesBucket(player))
+        .sort((a, b) => {
+          const aOvrSeen = pickedOveralls.has(a.overallRating) ? 25_000 : 0;
+          const bOvrSeen = pickedOveralls.has(b.overallRating) ? 25_000 : 0;
+          return (scoreCandidate(a) + aOvrSeen) - (scoreCandidate(b) + bOvrSeen);
+        })[0];
+
+      if (!bucketPick || picked.length >= 3) return;
+      picked.push(bucketPick);
+      pickedIds.add(bucketPick.id);
+      pickedOveralls.add(bucketPick.overallRating);
+    });
+
+    for (const player of candidates
+      .filter(player => !pickedIds.has(player.id))
       .sort((a, b) => {
-        const aDiff = Math.abs(a.overallRating - squadAverage);
-        const bDiff = Math.abs(b.overallRating - squadAverage);
-        if (aDiff !== bDiff) return aDiff - bDiff;
-        return PlayerMarketVisibilityService.getStableNumber(`${seedKey}|${a.id}|agent-client`) -
-          PlayerMarketVisibilityService.getStableNumber(`${seedKey}|${b.id}|agent-client`);
-      })
-      .slice(0, 3);
+        const aOvrSeen = pickedOveralls.has(a.overallRating) ? 25_000 : 0;
+        const bOvrSeen = pickedOveralls.has(b.overallRating) ? 25_000 : 0;
+        return (scoreCandidate(a) + aOvrSeen) - (scoreCandidate(b) + bOvrSeen);
+      })) {
+      if (picked.length >= 3) break;
+      picked.push(player);
+      pickedIds.add(player.id);
+      pickedOveralls.add(player.overallRating);
+    }
+
+    return picked;
   },
 };

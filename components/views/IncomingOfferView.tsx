@@ -20,6 +20,7 @@ export const IncomingOfferView: React.FC = () => {
     viewedIncomingOfferId,
     incomingOffers,
     players,
+    reserves,
     clubs,
     leagues,
     userTeamId,
@@ -43,6 +44,9 @@ export const IncomingOfferView: React.FC = () => {
       const found = players[clubId].find(p => p.id === offer.playerId);
       if (found) { player = found; break; }
     }
+    if (!player) {
+      player = reserves.find(p => p.id === offer.playerId) ?? null;
+    }
     if (!player) return null;
 
     const sellerClub = clubs.find(c => c.id === userTeamId) ?? null;
@@ -58,7 +62,7 @@ export const IncomingOfferView: React.FC = () => {
     );
 
     return { player, sellerClub, buyerClub, buyerLeague, marketValue };
-  }, [offer, userTeamId, players, clubs, leagues]);
+  }, [offer, userTeamId, players, reserves, clubs, leagues]);
 
   const [counterFee, setCounterFee] = useState<number>(() => offer?.fee ?? 0);
   const [counterStep, setCounterStep] = useState<number>(50_000);
@@ -140,7 +144,7 @@ export const IncomingOfferView: React.FC = () => {
     ? SportingDirectorService.getIncomingSaleAdvisory({
         club: sellerClub,
         player,
-        squad: players[userTeamId] || [],
+        squad: reserves.some(reservePlayer => reservePlayer.id === player.id) ? reserves : players[userTeamId] || [],
         fee: currentDisplayFee,
       })
     : [];

@@ -901,6 +901,8 @@ setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]
   cancelFriendly: (fixtureId: string) => void;
   aiFriendlyPairs: AiFriendlyPair[];
   aiFriendlyReports: AiFriendlyMatchReport[];
+  aiFriendlyReportsDateFilter: string | null;
+  setAiFriendlyReportsDateFilter: React.Dispatch<React.SetStateAction<string | null>>;
   activeFriendlyFixtureId: string | null;
   activeFriendlyConditions: FriendlyMatchConditions | null;
   setActiveFriendlyConditions: React.Dispatch<React.SetStateAction<FriendlyMatchConditions | null>>;
@@ -1111,6 +1113,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
  const [activeFriendlyConditions, setActiveFriendlyConditions] = useState<FriendlyMatchConditions | null>(null);
  const [aiFriendlyPairs, setAiFriendlyPairs] = useState<AiFriendlyPair[]>([]);
  const [aiFriendlyReports, setAiFriendlyReports] = useState<AiFriendlyMatchReport[]>([]);
+ const [aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter] = useState<string | null>(null);
  const [pzpnDisciplinaryEvents, setPzpnDisciplinaryEvents] = useState<PzpnDisciplinaryEvent[]>([]);
  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
  const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
@@ -7621,7 +7624,11 @@ Asystent`,
             isRead: false,
             type: MailType.MEDIA,
             priority: 20,
-            metadata: { type: 'AI_FRIENDLY_REPORT_LINK', matches: friendlyMatches },
+            metadata: {
+              type: 'AI_FRIENDLY_REPORT_LINK',
+              reportDateKey: `${dayYear}-${String(dayMonth + 1).padStart(2, '0')}-${String(dayDate).padStart(2, '0')}`,
+              matches: friendlyMatches,
+            },
           };
           prependUniqueMessages([friendlyNewsMail]);
         }
@@ -10208,6 +10215,14 @@ const finalResult: SimulationOutput = {
     if (userTeamId && !isResigned) {
       const userSquad = players[userTeamId] || [];
       const userClub = clubs.find(c => c.id === userTeamId)!;
+      const findIncomingOfferPlayer = (playerId: string): { player?: Player; isReserve: boolean } => {
+        for (const cId in players) {
+          const found = players[cId].find(p => p.id === playerId);
+          if (found) return { player: found, isReserve: false };
+        }
+        const reservePlayer = reserves.find(p => p.id === playerId);
+        return { player: reservePlayer, isReserve: !!reservePlayer };
+      };
       const isInsideWindow = (() => {
         const m = nextDay.getMonth(); const d = nextDay.getDate();
         const isSummer = (m === 6 && d >= 1) || m === 7 || (m === 8 && d <= 8);
@@ -10217,7 +10232,82 @@ const finalResult: SimulationOutput = {
       const dateStr = nextDay.toISOString().split('T')[0];
       const newIncomingMails: MailMessage[] = [];
       const spontaneousInterestAdds = new Map<string, Set<string>>();
+      const reserveTalentInterestAdds = new Map<string, Set<string>>();
       const newOffersToAdd: IncomingTransferOffer[] = [];
+      const reserveBoardAutoSales: Array<{
+        player: Player;
+        aiClub: Club;
+        fee: number;
+        reason: 'GREED' | 'FINANCES' | 'PREMIUM';
+      }> = [];
+      const reserveBoardAutoSalePlayerIds = new Set<string>();
+      const boardLevelScore = (level?: string): number => {
+        switch (level) {
+          case 'bardzo_niska': return 0;
+          case 'niska': return 1;
+          case 'wysoka': return 3;
+          case 'bardzo_wysoka': return 4;
+          default: return 2;
+        }
+      };
+      const evaluateReserveBoardSaleDecision = (player: Player, fee: number, seed: number) => {
+        const greedScore = boardLevelScore(userClub.board?.chciwosc);
+        const marketValue = Math.max(50_000, FinanceService.calculateMarketValue(player, userClub.reputation, FinanceService.getClubTier(userClub), userClub.country));
+        const feePremium = fee / marketValue;
+        const talent = player.attributes?.talent ?? player.overallRating;
+        const moneyPressure =
+          (userClub.boardBudgetMonitorState === 'ALERT' ? 0.34 : 0) +
+          (userClub.budget < 0 ? 0.34 : userClub.budget < 1_000_000 ? 0.18 : 0) +
+          (userClub.transferBudget < 250_000 ? 0.10 : 0);
+        const talentProtection = Math.max(0, talent - 68) * 0.018 + (player.age <= 18 ? 0.06 : 0);
+        const askCoachChance = Math.max(
+          0.18,
+          Math.min(
+            0.88,
+            0.74 -
+              greedScore * 0.095 -
+              moneyPressure * 0.62 -
+              Math.max(0, feePremium - 1.15) * 0.20 +
+              talentProtection
+          )
+        );
+        const sellBehindCoachBack = IncomingTransferService.seededRandom(seed + 811) > askCoachChance;
+        const reason =
+          moneyPressure >= 0.34 ? 'FINANCES' :
+          greedScore >= 3 ? 'GREED' :
+          'PREMIUM';
+
+        return {
+          sellBehindCoachBack,
+          boardPressure: moneyPressure >= 0.20 || greedScore >= 3 || feePremium >= 1.25,
+          reason,
+        };
+      };
+      const generateReserveBoardSaleMail = (
+        player: Player,
+        buyerClub: Club,
+        fee: number,
+        reason: 'GREED' | 'FINANCES' | 'PREMIUM'
+      ): MailMessage => {
+        const reasonText =
+          reason === 'FINANCES'
+            ? 'Zarząd uznał, że sytuacja finansowa klubu wymaga przyjęcia tej propozycji bez zwłoki.'
+            : reason === 'GREED'
+              ? 'Zarząd uznał, że kwota jest zbyt atrakcyjna, aby ryzykować przeciąganie rozmów.'
+              : 'Zarząd potraktował ofertę jako wyjątkowo korzystną biznesowo.';
+
+        return {
+          id: `MAIL_RESERVE_BOARD_SALE_${player.id}_${buyerClub.id}_${dateStr}`,
+          sender: 'Zarząd Klubu',
+          role: 'Prezes Zarządu',
+          subject: `Rezerwy: sprzedano ${player.firstName} ${player.lastName}`,
+          body: `${player.firstName} ${player.lastName} został sprzedany z rezerw do klubu ${buyerClub.name} za ${fee.toLocaleString('pl-PL')} PLN.\n\n${reasonText}\n\nDecyzja została podjęta na poziomie zarządu, dlatego sztab szkoleniowy otrzymuje informację po fakcie.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 88,
+        };
+      };
       const shouldUsePreContractInsteadOfPaidOffer = (player: Player, timing: TransferTiming): boolean => {
         if (!player.contractEndDate) return false;
         const contractEnd = new Date(player.contractEndDate);
@@ -10268,11 +10358,7 @@ const finalResult: SimulationOutput = {
         actions.forEach(action => {
           const off = processed.find(o => o.id === action.offerId);
           if (!off) return;
-          let player: Player | undefined;
-          for (const cId in players) {
-            player = players[cId].find(p => p.id === off.playerId);
-            if (player) break;
-          }
+          const { player } = findIncomingOfferPlayer(off.playerId);
           const buyerClub = clubs.find(c => c.id === off.buyerClubId);
           if (!player || !buyerClub || !userClub) return;
 
@@ -10403,9 +10489,201 @@ const finalResult: SimulationOutput = {
             ));
           });
         });
+        // Monthly reserve talent lookup: rare AI interest in user reserve players aged 16-20.
+        // At most 5 clubs can become interested at once, and at most 1 real offer is created per month.
+        if (nextDay.getDate() === 1 && reserves.length > 0) {
+          const reserveTalentCandidates = rotateBySeed(
+            reserves
+              .filter(player => {
+                if (player.age < 16 || player.age > 20) return false;
+                if (player.loan || player.transferPendingClubId) return false;
+                if (player.transferLockoutUntil && nextDay < new Date(player.transferLockoutUntil)) return false;
+                if (player.transferOfferBanUntil && nextDay < new Date(player.transferOfferBanUntil)) return false;
+                if (hasActiveTransferConflict(player.id, transferOffers)) return false;
+                if (hasActiveIncomingConflict(player.id, [...newOffersToAdd, ...processed])) return false;
 
-        // 3. Prekontrakty AI: ostatni rok umowy, bez zgody klubu sprzedającego.
-        // Klub AI może dogadać się bezpośrednio z zawodnikiem, a transfer wykona się w dniu końca kontraktu.
+                const talent = player.attributes?.talent ?? player.overallRating;
+                const reserveForm = player.reserveStats && player.reserveStats.matches > 0
+                  ? player.reserveStats.totalRatingPoints / player.reserveStats.matches
+                  : 6.5;
+                return talent >= Math.max(70, player.overallRating + 8) || (talent >= 66 && reserveForm >= 7.1);
+              })
+              .sort((a, b) => {
+                const aTalent = a.attributes?.talent ?? a.overallRating;
+                const bTalent = b.attributes?.talent ?? b.overallRating;
+                if (bTalent !== aTalent) return bTalent - aTalent;
+                if (b.overallRating !== a.overallRating) return b.overallRating - a.overallRating;
+                return a.age - b.age;
+              }),
+            4301
+          );
+          const reserveRaidClubs = rotateBySeed(
+            clubs.filter(club =>
+              club.id !== userTeamId &&
+              club.reputation >= userClub.reputation + 2 &&
+              club.transferBudget > 0 &&
+              (players[club.id]?.length ?? club.rosterIds.length) < 30
+            ),
+            4701
+          );
+          const monthlyInterestLimit = Math.min(5, reserveRaidClubs.length);
+          const monthlyOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + sessionSeed + 7701);
+          const maxReserveRaidOffers = isInsideWindow && monthlyOfferRoll < 0.38 ? 1 : 0;
+          let reserveInterestCount = 0;
+          let reserveOfferCount = 0;
+
+          reserveTalentCandidates.forEach(player => {
+            if (reserveInterestCount >= monthlyInterestLimit) return;
+
+            reserveRaidClubs.forEach(aiClub => {
+              if (reserveInterestCount >= monthlyInterestLimit) return;
+              if (player.interestedClubs?.includes(aiClub.id)) return;
+
+              const buyerSquad = players[aiClub.id] || [];
+              const seed = IncomingTransferService.buildOfferSeed(
+                nextDay,
+                aiClub.id,
+                `${player.id}_RESERVE_TALENT_RAID_${sessionSeed}`
+              );
+              const interestChance = Math.min(
+                0.70,
+                0.18 +
+                  Math.max(0, (player.attributes?.talent ?? player.overallRating) - 66) * 0.018 +
+                  Math.max(0, aiClub.reputation - userClub.reputation - 2) * 0.035
+              );
+              if (IncomingTransferService.seededRandom(seed + 31) >= interestChance) return;
+
+              const existingClubs = reserveTalentInterestAdds.get(player.id) ?? new Set<string>();
+              existingClubs.add(aiClub.id);
+              reserveTalentInterestAdds.set(player.id, existingClubs);
+              reserveInterestCount += 1;
+
+              if (reserveOfferCount >= maxReserveRaidOffers) return;
+              if (hasActiveIncomingConflict(player.id, [...newOffersToAdd, ...processed], 'TRANSFER')) return;
+              if (!IncomingTransferService.isPlausibleBuyerForPlayer(player, aiClub, buyerSquad)) {
+                const talent = player.attributes?.talent ?? player.overallRating;
+                if (talent < IncomingTransferService.getBuyerIdealOverall(aiClub) - 6) return;
+              }
+
+              const offerTerms = IncomingTransferService.calculateOffer(player, aiClub, userClub, true, seed);
+              const fee = Math.max(50_000, offerTerms.fee);
+              if (fee <= 0 || fee > aiClub.budget || fee > aiClub.transferBudget) return;
+
+              const reserveBoardDecision = evaluateReserveBoardSaleDecision(player, fee, seed);
+              const boardPressure =
+                reserveBoardDecision.boardPressure ||
+                IncomingTransferService.evaluateBoardPressure({ fee }, player, userClub, aiClub, seed);
+              if (reserveBoardDecision.sellBehindCoachBack) {
+                reserveBoardAutoSales.push({
+                  player,
+                  aiClub,
+                  fee,
+                  reason: reserveBoardDecision.reason,
+                });
+                reserveBoardAutoSalePlayerIds.add(player.id);
+                reserveOfferCount += 1;
+                return;
+              }
+
+              const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
+              const newOffer: IncomingTransferOffer = {
+                id: `res_inc_${dateStr}_${player.id}_${aiClub.id}`,
+                playerId: player.id,
+                buyerClubId: aiClub.id,
+                fee,
+                timing: TransferTiming.IMMEDIATE,
+                status: IncomingOfferStatus.EMAIL_SENT,
+                createdAt: dateStr,
+                emailSentAt: dateStr,
+                aiMaxFee: Math.max(fee, offerTerms.aiMaxFee),
+                aiUrgency: offerTerms.aiUrgency,
+                negotiationRound: 0,
+                boardPressure,
+              };
+
+              newOffersToAdd.push(newOffer);
+              reserveOfferCount += 1;
+              queueIncomingMail(MailService.generateIncomingOfferMail(
+                player,
+                aiClub.name,
+                buyerLeague?.name ?? aiClub.leagueId,
+                fee,
+                IncomingTransferService.getTimingLabel(TransferTiming.IMMEDIATE),
+                userClub.name,
+                boardPressure,
+                nextDay,
+                newOffer.id
+              ));
+            });
+          });
+        }
+
+        if (reserveBoardAutoSales.length > 0) {
+          let nextClubs = clubs;
+          let nextPlayers = players;
+          let nextReserves = reserves;
+          let nextLineups = lineups;
+
+          reserveBoardAutoSales.forEach(({ player, aiClub, fee, reason }) => {
+            const sellerClub = nextClubs.find(c => c.id === userTeamId);
+            const buyerClub = nextClubs.find(c => c.id === aiClub.id);
+            if (!sellerClub || !buyerClub) return;
+
+            const estimatedSalary = Math.round(Math.max(
+              FinanceService.getFairMarketSalary(player.overallRating),
+              player.annualSalary * 1.15
+            ) / 10000) * 10000;
+            const estimatedYears = player.age <= 21 ? 4 : player.age <= 27 ? 3 : 2;
+            const syntheticOffer: TransferOffer = {
+              id: `BOARD_RESERVE_SALE_${player.id}_${buyerClub.id}_${dateStr}`,
+              playerId: player.id,
+              sellerClubId: userTeamId,
+              buyerClubId: buyerClub.id,
+              fee,
+              timing: TransferTiming.IMMEDIATE,
+              salary: estimatedSalary,
+              bonus: 0,
+              years: estimatedYears,
+              createdAt: dateStr,
+              status: TransferOfferStatus.READY_TO_FINALIZE,
+              attemptNumber: 1,
+              maxAttempts: 1,
+            };
+            const executionPlayers = {
+              ...nextPlayers,
+              [userTeamId]: [...(nextPlayers[userTeamId] || []), player],
+            };
+            const result = TransferExecutionService.finalizeTransfer(syntheticOffer, nextClubs, executionPlayers, nextDay);
+            const movedPlayer = (result.updatedPlayers[buyerClub.id] || []).some(p => p.id === player.id);
+            if (!movedPlayer) return;
+
+            nextClubs = result.updatedClubs;
+            nextPlayers = result.updatedPlayers;
+            nextReserves = nextReserves.filter(p => p.id !== player.id);
+            nextLineups = { ...nextLineups };
+            if (nextLineups[sellerClub.id]) {
+              nextLineups[sellerClub.id] = LineupService.repairLineup(
+                nextLineups[sellerClub.id],
+                nextPlayers[sellerClub.id] || []
+              );
+            }
+            if (nextLineups[buyerClub.id]) {
+              nextLineups[buyerClub.id] = LineupService.repairLineup(
+                nextLineups[buyerClub.id],
+                nextPlayers[buyerClub.id] || []
+              );
+            }
+
+            queueIncomingMail(generateReserveBoardSaleMail(player, buyerClub, fee, reason));
+          });
+
+          setClubs(nextClubs);
+          setPlayers(nextPlayers);
+          setReserves(nextReserves);
+          setLineups(nextLineups);
+        }
+
+        // 3. Loan offers for players intentionally made available by the user club.
         const dailyLoanOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + 2404);
         const maxDailyLoanOffers = isInsideWindow && dailyLoanOfferRoll < 0.24 ? 1 : 0;
         const loanCandidateSquad = rotateBySeed(
@@ -10475,6 +10753,8 @@ const finalResult: SimulationOutput = {
           });
         });
 
+        // 4. AI pre-contracts: last contract year, without seller-club approval.
+        // The AI club can agree terms directly with the player; the move executes after contract expiry.
         const hasRecentAiPreContract = transferOffers.some(offer => {
           if (!offer.id.startsWith('AI_PRECONTRACT_')) return false;
           if (offer.status !== TransferOfferStatus.AGREED_PRECONTRACT) return false;
@@ -10638,7 +10918,11 @@ const finalResult: SimulationOutput = {
           });
         });
 
-      setIncomingOffers([...newOffersToAdd, ...processed].slice(0, 200));
+      setIncomingOffers(
+        [...newOffersToAdd, ...processed]
+          .filter(offer => !reserveBoardAutoSalePlayerIds.has(offer.playerId))
+          .slice(0, 200)
+      );
 
       if (newIncomingMails.length > 0) {
         setMessages(prev => [...newIncomingMails, ...prev]);
@@ -10666,6 +10950,29 @@ const finalResult: SimulationOutput = {
 
           if (!changed) return prev;
           return { ...prev, [userTeamId]: updatedUserPlayers };
+        });
+      }
+
+      if (reserveTalentInterestAdds.size > 0) {
+        setReserves(prev => {
+          let changed = false;
+
+          const updatedReserves = prev.map(player => {
+            const clubsToAdd = reserveTalentInterestAdds.get(player.id);
+            if (!clubsToAdd || clubsToAdd.size === 0) return player;
+
+            const existingInterestedClubs = player.interestedClubs || [];
+            const mergedInterestedClubs = [
+              ...existingInterestedClubs,
+              ...Array.from(clubsToAdd).filter(clubId => !existingInterestedClubs.includes(clubId))
+            ].slice(0, 5);
+
+            if (mergedInterestedClubs.length === existingInterestedClubs.length) return player;
+            changed = true;
+            return { ...player, interestedClubs: mergedInterestedClubs };
+          });
+
+          return changed ? updatedReserves : prev;
         });
       }
     }
@@ -11300,7 +11607,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();
@@ -13226,6 +13533,13 @@ const finalResult: SimulationOutput = {
     navigateWithoutHistory(ViewState.INCOMING_OFFER);
   };
 
+  const findIncomingPlayerInUserClub = (playerId: string): { player?: Player; isReserve: boolean } => {
+    const firstTeamPlayer = (players[userTeamId || ''] || []).find(p => p.id === playerId);
+    if (firstTeamPlayer) return { player: firstTeamPlayer, isReserve: false };
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    return { player: reservePlayer, isReserve: !!reservePlayer };
+  };
+
   const getForcedLoanMoralePenalty = (player: Player, buyerClub: Club, sellerClub: Club): number => {
     const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
     const personality = moralePlayer.moralePersonality ?? 'CALM';
@@ -13725,11 +14039,7 @@ const finalResult: SimulationOutput = {
       if (idx === -1) return prev;
       const offer = prev[idx];
 
-      let player: Player | undefined;
-      for (const cId in players) {
-        player = players[cId].find(p => p.id === offer.playerId);
-        if (player) break;
-      }
+      const { player, isReserve } = findIncomingPlayerInUserClub(offer.playerId);
       const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
       const sellerClub = clubs.find(c => c.id === userTeamId);
       if (!player || !buyerClub || !sellerClub) return prev;
@@ -13785,7 +14095,7 @@ const finalResult: SimulationOutput = {
           const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
             club: sellerClub,
             player,
-            squad: players[userTeamId] || [],
+            squad: isReserve ? reserves : players[userTeamId] || [],
             buyerClub,
             fee: currentActiveFee,
             date: currentDate,
@@ -13889,11 +14199,7 @@ const finalResult: SimulationOutput = {
       setIncomingOffers(prev => prev.map(o =>
         o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
       ));
-      let player: Player | undefined;
-      for (const cId in players) {
-        player = players[cId].find(p => p.id === offer.playerId);
-        if (player) break;
-      }
+      const { player } = findIncomingPlayerInUserClub(offer.playerId);
       const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
       const sellerClub = clubs.find(c => c.id === userTeamId);
       if (player && buyerClub && sellerClub) {
@@ -13902,11 +14208,7 @@ const finalResult: SimulationOutput = {
       return;
     }
 
-    let player: Player | undefined;
-    for (const cId in players) {
-      player = players[cId].find(p => p.id === offer.playerId);
-      if (player) break;
-    }
+    const { player, isReserve } = findIncomingPlayerInUserClub(offer.playerId);
     const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
     const sellerClub = clubs.find(c => c.id === userTeamId);
     if (!player || !buyerClub || !sellerClub) return;
@@ -13927,7 +14229,7 @@ const finalResult: SimulationOutput = {
       const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
         club: sellerClub,
         player,
-        squad: players[userTeamId] || [],
+        squad: isReserve ? reserves : players[userTeamId] || [],
         buyerClub,
         fee: offer.fee,
         date: currentDate,
@@ -13994,6 +14296,18 @@ const finalResult: SimulationOutput = {
       maxAttempts: 3,
     };
 
+    if (isReserve && offer.timing !== TransferTiming.IMMEDIATE) {
+      setIncomingOffers(prev => prev.map(o =>
+        o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+      ));
+      showGameNotification({
+        title: 'Transfer zablokowany',
+        message: 'Rezerwowych można sprzedać tylko w transferze natychmiastowym.',
+        tone: 'warning',
+      });
+      return;
+    }
+
     if (offer.timing !== TransferTiming.IMMEDIATE) {
       const agreedOffer: TransferOffer = {
         ...syntheticOffer,
@@ -14032,15 +14346,28 @@ const finalResult: SimulationOutput = {
       return;
     }
 
-    const result = TransferExecutionService.finalizeTransfer(syntheticOffer, clubs, players, currentDate);
+    const executionPlayers = isReserve
+      ? {
+          ...players,
+          [userTeamId]: [...(players[userTeamId] || []), player],
+        }
+      : players;
+    const result = TransferExecutionService.finalizeTransfer(syntheticOffer, clubs, executionPlayers, currentDate);
     setClubs(result.updatedClubs);
     setPlayers(result.updatedPlayers);
+    if (isReserve) {
+      setReserves(prev => prev.filter(p => p.id !== player.id));
+    }
     setLineups(prev => {
       const next = { ...prev };
       const updatedSellerSquad = result.updatedPlayers[sellerClub.id] || [];
+      const updatedBuyerSquad = result.updatedPlayers[buyerClub.id] || [];
 
       if (next[sellerClub.id]) {
         next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], updatedSellerSquad);
+      }
+      if (next[buyerClub.id]) {
+        next[buyerClub.id] = LineupService.repairLineup(next[buyerClub.id], updatedBuyerSquad);
       }
 
       return next;
@@ -15860,7 +16187,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
-      aiFriendlyPairs, aiFriendlyReports,
+      aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,

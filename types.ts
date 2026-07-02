@@ -480,6 +480,7 @@ export interface MailMessage {
     appealType: 'RAISE' | 'TRANSFER';
   } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
+    reportDateKey?: string;
     matches?: {
       homeName: string;
       awayName: string;

@@ -715,6 +715,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     managerProfile,
     addPendingPressArticle,
     acceptManagerJobOffer,
+    setAiFriendlyReportsDateFilter,
   } = useGame();
 
   const { closeModal, exitClass } = useModalClose(onClose);
@@ -1130,7 +1131,13 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
 
             {mail.metadata?.type === 'AI_FRIENDLY_REPORT_LINK' && (
               <button
-                onClick={() => { navigateWithoutHistory(ViewState.AI_FRIENDLY_REPORTS); onClose(); }}
+                onClick={() => {
+                  const mailDate = mail.date instanceof Date ? mail.date : new Date(mail.date);
+                  const fallbackDateKey = `${mailDate.getFullYear()}-${String(mailDate.getMonth() + 1).padStart(2, '0')}-${String(mailDate.getDate()).padStart(2, '0')}`;
+                  setAiFriendlyReportsDateFilter(mail.metadata?.reportDateKey ?? fallbackDateKey);
+                  navigateWithoutHistory(ViewState.AI_FRIENDLY_REPORTS);
+                  onClose();
+                }}
                 className="mr-4 rounded-2xl bg-green-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
                 Zobacz raporty

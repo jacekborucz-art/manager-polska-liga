@@ -141,6 +141,7 @@ const mergeIncomingOffersByPair = (offers: IncomingTransferOffer[]): IncomingTra
 export const TransferNewsView: React.FC = () => {
   const {
     players,
+    reserves,
     clubs,
     currentDate,
     navigateTo,
@@ -871,6 +872,9 @@ export const TransferNewsView: React.FC = () => {
                 player = players[cId]?.find(p => p.id === offer.playerId);
                 if (player) break;
               }
+              if (!player) {
+                player = reserves.find(p => p.id === offer.playerId);
+              }
               const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
               if (!player || !buyerClub) return null;
               const isLoanOffer = offer.kind === 'LOAN';
@@ -941,6 +945,9 @@ export const TransferNewsView: React.FC = () => {
               for (const cId in players) {
                 player = players[cId]?.find(p => p.id === offer.playerId);
                 if (player) break;
+              }
+              if (!player) {
+                player = reserves.find(p => p.id === offer.playerId);
               }
               const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
               if (!player || !buyerClub) return null;
