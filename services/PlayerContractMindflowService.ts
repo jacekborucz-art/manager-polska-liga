@@ -53,6 +53,9 @@ export interface PlayerContractMindflow {
     premiumSalary: number;
     minimumBonus: number;
     expectedBonus: number;
+    expectedGoalBonus: number;
+    expectedAssistBonus: number;
+    expectedCleanSheetBonus: number;
     minimumYears: number;
     preferredYears: number;
     maximumYears: number;
@@ -106,7 +109,13 @@ export interface PlayerContractMindflow {
 export interface RenewalOfferMindflowResult {
   accepted: boolean;
   reason: string;
-  demands: { salary: number; bonus: number } | null;
+  demands: {
+    salary: number;
+    bonus: number;
+    goalBonus?: number;
+    assistBonus?: number;
+    cleanSheetBonus?: number;
+  } | null;
   offerQuality: OfferQuality;
 }
 
@@ -117,6 +126,9 @@ const roundMoney = (value: number): number => {
   const step = value >= 1_000_000 ? 100_000 : value >= 100_000 ? 10_000 : 5_000;
   return Math.max(50_000, Math.round(value / step) * step);
 };
+
+const roundPerformanceBonus = (value: number): number =>
+  Math.max(0, Math.round(value / 500) * 500);
 
 const seededUnit = (seed: string): number => {
   let hash = 2166136261;
@@ -174,6 +186,9 @@ const getCombinedGoals = (player: Player): number =>
 
 const getCombinedAssists = (player: Player): number =>
   (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0);
+
+const getCombinedCleanSheets = (player: Player): number =>
+  (player.stats?.cleanSheets || 0) + (player.cupStats?.cleanSheets || 0) + (player.euroStats?.cleanSheets || 0);
 
 const getAverageRating = (player: Player): number | null => {
   const ratings = [
@@ -384,6 +399,49 @@ const getRenewalRaiseLimit = (
   return roundMoney(player.annualSalary * clamp(multiplier, 1.30, 3.05));
 };
 
+const buildPerformanceBonusExpectations = (
+  player: Player,
+  expectedSalary: number,
+  profile: PlayerContractMindflow['profile']
+): Pick<PlayerContractMindflow['contractExpectations'], 'expectedGoalBonus' | 'expectedAssistBonus' | 'expectedCleanSheetBonus'> => {
+  const ratingFactor = clamp((player.overallRating - 55) / 35, 0.25, 1.55);
+  const starFactor = profile.qualityLevel === 'STAR_LEVEL' ? 1.18 : profile.qualityLevel === 'STARTER_LEVEL' ? 1.08 : 0.92;
+  const salaryFactor = clamp(expectedSalary / 650_000, 0.55, 2.35);
+  const matches = Math.max(1, getCombinedMatches(player));
+  const goalsPerMatch = getCombinedGoals(player) / matches;
+  const assistsPerMatch = getCombinedAssists(player) / matches;
+  const cleanSheetsPerMatch = getCombinedCleanSheets(player) / matches;
+  const base = clamp(expectedSalary * 0.014, 3_000, 22_000) * ratingFactor * starFactor * salaryFactor;
+
+  if (player.position === PlayerPosition.GK) {
+    const cleanSheetFactor = clamp(0.85 + cleanSheetsPerMatch * 1.6, 0.85, 1.45);
+    return {
+      expectedGoalBonus: 0,
+      expectedAssistBonus: 0,
+      expectedCleanSheetBonus: roundPerformanceBonus(base * 0.82 * cleanSheetFactor),
+    };
+  }
+
+  if (player.position === PlayerPosition.DEF) {
+    return {
+      expectedGoalBonus: 0,
+      expectedAssistBonus: 0,
+      expectedCleanSheetBonus: 0,
+    };
+  }
+
+  const goalPositionFactor = player.position === PlayerPosition.FWD ? 1.15 : 0.55;
+  const assistPositionFactor = player.position === PlayerPosition.MID ? 1.05 : 0.62;
+  const goalProductionFactor = clamp(0.80 + goalsPerMatch * 1.7, 0.75, 1.55);
+  const assistProductionFactor = clamp(0.82 + assistsPerMatch * 1.8, 0.75, 1.55);
+
+  return {
+    expectedGoalBonus: roundPerformanceBonus(base * goalPositionFactor * goalProductionFactor),
+    expectedAssistBonus: roundPerformanceBonus(base * assistPositionFactor * assistProductionFactor),
+    expectedCleanSheetBonus: 0,
+  };
+};
+
 const buildExpectations = (
   player: Player,
   currentClub: Club,
@@ -428,6 +486,7 @@ const buildExpectations = (
   const baseBonus = expectedSalary * bonusMultiplier * reputationBonus * qualityBonus;
   const expectedBonus = roundMoney(baseBonus * (profile.ageGroup === 'VETERAN' ? 1.10 : profile.ageGroup === 'YOUNG' ? 0.72 : 0.92));
   const minimumBonus = roundMoney(expectedBonus * (profile.ageGroup === 'VETERAN' ? 0.82 : 0.65));
+  const performanceBonuses = buildPerformanceBonusExpectations(player, expectedSalary, profile);
 
   const preferredYears =
     player.age <= 22 ? 4 :
@@ -479,6 +538,7 @@ const buildExpectations = (
     premiumSalary: finalPremiumSalary,
     minimumBonus: finalMinimumBonus,
     expectedBonus: finalExpectedBonus,
+    ...performanceBonuses,
     minimumYears: finalMinimumYears,
     preferredYears: finalPreferredYears,
     maximumYears: player.age >= 34 ? 2 : 5,
@@ -785,7 +845,14 @@ const getExternalOfferGate = (
 
 const evaluateRenewalOffer = (
   mindflow: PlayerContractMindflow,
-  offer: { salary: number; bonus: number; years: number }
+  offer: {
+    salary: number;
+    bonus: number;
+    years: number;
+    goalBonus?: number;
+    assistBonus?: number;
+    cleanSheetBonus?: number;
+  }
 ): RenewalOfferMindflowResult => {
   const expectations = mindflow.contractExpectations;
   const priorities = expectations.priorities;
@@ -800,16 +867,37 @@ const evaluateRenewalOffer = (
     ? offer.bonus / Math.max(1, expectations.expectedBonus)
     : 1;
   const yearsFit = offer.years / Math.max(1, expectations.preferredYears);
+  const bonusToSalaryCompensationRate =
+    mindflow.profile.ageGroup === 'YOUNG' ? 0.70 :
+    mindflow.profile.ageGroup === 'PRIME' ? 0.82 :
+    mindflow.profile.ageGroup === 'EXPERIENCED' ? 0.92 :
+    1.0;
+  const bonusSurplusValue = Math.max(0, offer.bonus - expectations.expectedBonus);
+  const annualizedBonusCompensation = (bonusSurplusValue * bonusToSalaryCompensationRate) / Math.max(1, offer.years);
 
   const bonusSurplus = Math.max(0, bonusFit - 1);
   const salarySurplus = Math.max(0, salaryFit - 1);
-  const effectiveSalaryFit = salaryFit + bonusSurplus * 0.08;
+  const packageAdjustedSalaryFit = (offer.salary + annualizedBonusCompensation) / Math.max(1, expectations.expectedSalary);
+  const effectiveSalaryFit = Math.max(salaryFit + bonusSurplus * 0.08, packageAdjustedSalaryFit);
   const effectiveBonusFit = bonusFit + salarySurplus * (mindflow.profile.ageGroup === 'YOUNG' ? 0.75 : 1.15);
+  const expectedPerformanceBonusTotal =
+    expectations.expectedGoalBonus +
+    expectations.expectedAssistBonus +
+    expectations.expectedCleanSheetBonus;
+  const offeredPerformanceBonusTotal =
+    (offer.goalBonus ?? 0) +
+    (offer.assistBonus ?? 0) +
+    (offer.cleanSheetBonus ?? 0);
+  const performanceBonusFit = expectedPerformanceBonusTotal > 0
+    ? offeredPerformanceBonusTotal / Math.max(1, expectedPerformanceBonusTotal)
+    : 1;
+  const performanceWeight = expectedPerformanceBonusTotal > 0 ? 0.08 : 0;
 
   const offerScore =
     clamp(effectiveSalaryFit, 0, 1.25) * salaryWeight +
     clamp(effectiveBonusFit, 0, 1.25) * bonusWeight +
-    clamp(yearsFit, 0.55, 1.15) * yearsWeight;
+    clamp(yearsFit, 0.55, 1.15) * yearsWeight +
+    clamp(performanceBonusFit, 0, 1.20) * performanceWeight;
 
   let requiredScore =
     mindflow.mindset.state === 'SUPER_HAPPY' ? 0.88 :
@@ -855,12 +943,18 @@ const evaluateRenewalOffer = (
   const demands = {
     salary: roundMoney(demandedSalary),
     bonus: roundMoney(demandedBonus),
+    goalBonus: expectations.expectedGoalBonus || undefined,
+    assistBonus: expectations.expectedAssistBonus || undefined,
+    cleanSheetBonus: expectations.expectedCleanSheetBonus || undefined,
   };
 
   if (mindflow.mindset.activeExitDemand) {
     const exitDemands = {
       salary: roundMoney(Math.max(expectations.premiumSalary, expectations.expectedSalary * 1.18)),
       bonus: roundMoney(Math.max(expectations.expectedBonus * 2.5, expectations.premiumSalary * 1.15, offer.salary * 1.5)),
+      goalBonus: expectations.expectedGoalBonus || undefined,
+      assistBonus: expectations.expectedAssistBonus || undefined,
+      cleanSheetBonus: expectations.expectedCleanSheetBonus || undefined,
     };
     const goldenHandcuffsMet =
       offer.salary >= exitDemands.salary &&
@@ -877,8 +971,16 @@ const evaluateRenewalOffer = (
     }
   }
 
-  const isSalaryDisrespectful = offer.salary < salaryFloor;
+  const salaryFloorGap = Math.max(0, salaryFloor - offer.salary);
+  const isSalaryGapCompensatedByBonus = salaryFloorGap > 0 && annualizedBonusCompensation >= salaryFloorGap;
+  const isSalaryDisrespectful = offer.salary < salaryFloor && !isSalaryGapCompensatedByBonus;
   const isBonusDisrespectful = offer.bonus < bonusFloor && offer.salary < expectations.expectedSalary * 1.12;
+  const performanceGap = Math.max(0, expectedPerformanceBonusTotal - offeredPerformanceBonusTotal);
+  const isPerformanceBonusDisrespectful =
+    expectedPerformanceBonusTotal > 0 &&
+    performanceGap > expectedPerformanceBonusTotal * 0.72 &&
+    offer.salary < expectations.expectedSalary * 1.08 &&
+    offer.bonus < expectations.expectedBonus * 1.35;
   const isTooShort = offer.years < expectations.minimumYears;
 
   if (offer.salary < expectations.minimumSalary * 0.72 || (offer.bonus < expectations.minimumBonus * 0.18 && offer.salary < expectations.minimumSalary)) {
@@ -890,10 +992,11 @@ const evaluateRenewalOffer = (
     };
   }
 
-  if (isSalaryDisrespectful || isBonusDisrespectful || isTooShort) {
+  if (isSalaryDisrespectful || isBonusDisrespectful || isPerformanceBonusDisrespectful || isTooShort) {
     const reasonParts = [
       isSalaryDisrespectful ? 'pensja jest poniżej minimalnego poziomu, jaki zawodnik uważa za uczciwy' : null,
       isBonusDisrespectful ? 'bonus za podpis nie rekompensuje ryzyka podpisania nowej umowy' : null,
+      isPerformanceBonusDisrespectful ? 'premie za wyniki są zbyt niskie względem roli zawodnika' : null,
       isTooShort ? 'długość kontraktu nie daje mu oczekiwanej stabilizacji' : null,
     ].filter(Boolean);
 

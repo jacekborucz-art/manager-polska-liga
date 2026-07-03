@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState } from '../../types';
+import { PlayerPosition, ViewState } from '../../types';
 import type { Player } from '../../types';
 import { FinanceService } from '../../services/FinanceService';
 import { MailService } from '../../services/MailService';
@@ -42,9 +42,21 @@ export const ContractManagementView: React.FC = () => {
   const [bonusStep, setBonusStep] = useState(5000);
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerBonus, setOfferBonus] = useState(0);
+  const [offerGoalBonus, setOfferGoalBonus] = useState(0);
+  const [offerAssistBonus, setOfferAssistBonus] = useState(0);
+  const [offerCleanSheetBonus, setOfferCleanSheetBonus] = useState(0);
+  const [goalBonusEnabled, setGoalBonusEnabled] = useState(true);
+  const [assistBonusEnabled, setAssistBonusEnabled] = useState(true);
+  const [cleanSheetBonusEnabled, setCleanSheetBonusEnabled] = useState(true);
   const [offerYears, setOfferYears] = useState(1);
   const [negotiationMessage, setNegotiationMessage] = useState<string | null>(null);
-  const [counterOffer, setCounterOffer] = useState<{salary: number, bonus: number} | null>(null);
+  const [counterOffer, setCounterOffer] = useState<{
+    salary: number;
+    bonus: number;
+    goalBonus?: number;
+    assistBonus?: number;
+    cleanSheetBonus?: number;
+  } | null>(null);
   const [isOfferSent, setIsOfferSent] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [renewalVeto, setRenewalVeto] = useState<string | null>(null);
@@ -76,6 +88,12 @@ export const ContractManagementView: React.FC = () => {
       const rememberedRaise = data.player.contractRaiseRequest;
       setOfferSalary(rememberedRaise?.salary ?? data.player.annualSalary);
       setOfferBonus(rememberedRaise?.bonus ?? 0);
+      setOfferGoalBonus(data.player.goalBonus ?? 0);
+      setOfferAssistBonus(data.player.assistBonus ?? 0);
+      setOfferCleanSheetBonus(data.player.cleanSheetBonus ?? 0);
+      setGoalBonusEnabled(!!data.player.goalBonus);
+      setAssistBonusEnabled(!!data.player.assistBonus);
+      setCleanSheetBonusEnabled(!!data.player.cleanSheetBonus);
       setOfferYears(rememberedRaise?.years ?? 1);
       setNegotiationMessage(null);
       setCounterOffer(null);
@@ -129,6 +147,47 @@ export const ContractManagementView: React.FC = () => {
       interestedClubs,
     });
   }, [player, club, squad, currentDate, clubs]);
+  const isGoalBonusApplicable = player.position === PlayerPosition.FWD || player.position === PlayerPosition.MID;
+  const isAssistBonusApplicable = player.position === PlayerPosition.FWD || player.position === PlayerPosition.MID;
+  const isCleanSheetBonusApplicable = player.position === PlayerPosition.GK;
+  const submittedGoalBonus = isGoalBonusApplicable && goalBonusEnabled ? offerGoalBonus : undefined;
+  const submittedAssistBonus = isAssistBonusApplicable && assistBonusEnabled ? offerAssistBonus : undefined;
+  const submittedCleanSheetBonus = isCleanSheetBonusApplicable && cleanSheetBonusEnabled ? offerCleanSheetBonus : undefined;
+  const expectedGoalBonus = contractMindflow.contractExpectations.expectedGoalBonus;
+  const expectedAssistBonus = contractMindflow.contractExpectations.expectedAssistBonus;
+  const expectedCleanSheetBonus = contractMindflow.contractExpectations.expectedCleanSheetBonus;
+  const goalBonusMax = Math.max(25_000, expectedGoalBonus * 2, offerGoalBonus);
+  const assistBonusMax = Math.max(18_000, expectedAssistBonus * 2, offerAssistBonus);
+  const cleanSheetBonusMax = Math.max(25_000, expectedCleanSheetBonus * 2, offerCleanSheetBonus);
+
+  React.useEffect(() => {
+    if (!data?.player) return;
+    const expectations = contractMindflow.contractExpectations;
+    if (data.player.position === PlayerPosition.GK) {
+      setOfferCleanSheetBonus(data.player.cleanSheetBonus ?? expectations.expectedCleanSheetBonus);
+      setCleanSheetBonusEnabled((data.player.cleanSheetBonus ?? expectations.expectedCleanSheetBonus) > 0);
+      setOfferGoalBonus(0);
+      setOfferAssistBonus(0);
+      setGoalBonusEnabled(false);
+      setAssistBonusEnabled(false);
+      return;
+    }
+    if (data.player.position === PlayerPosition.DEF) {
+      setOfferGoalBonus(0);
+      setOfferAssistBonus(0);
+      setOfferCleanSheetBonus(0);
+      setGoalBonusEnabled(false);
+      setAssistBonusEnabled(false);
+      setCleanSheetBonusEnabled(false);
+      return;
+    }
+    setOfferGoalBonus(data.player.goalBonus ?? expectations.expectedGoalBonus);
+    setOfferAssistBonus(data.player.assistBonus ?? expectations.expectedAssistBonus);
+    setOfferCleanSheetBonus(0);
+    setGoalBonusEnabled((data.player.goalBonus ?? expectations.expectedGoalBonus) > 0);
+    setAssistBonusEnabled((data.player.assistBonus ?? expectations.expectedAssistBonus) > 0);
+    setCleanSheetBonusEnabled(false);
+  }, [viewedPlayerId, contractMindflow.contractExpectations, data?.player]);
   const directorRenewalAdvisory = useMemo(() => {
     if (!club.sportingDirector || managementMode !== 'NEGOTIATE') return [];
     return SportingDirectorService.getContractRenewalAdvisory({
@@ -240,6 +299,9 @@ export const ContractManagementView: React.FC = () => {
         salary: offerSalary,
         bonus: offerBonus,
         years: offerYears,
+        goalBonus: submittedGoalBonus,
+        assistBonus: submittedAssistBonus,
+        cleanSheetBonus: submittedCleanSheetBonus,
       });
 
       if (!mindflowDecision.accepted) {
@@ -303,6 +365,9 @@ export const ContractManagementView: React.FC = () => {
             ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
             annualSalary: offerSalary, 
             contractEndDate: newEndDate,
+            goalBonus: submittedGoalBonus,
+            assistBonus: submittedAssistBonus,
+            cleanSheetBonus: submittedCleanSheetBonus,
             negotiationStep: 0,
             contractLockoutUntil: lockoutDate.toISOString() 
           }));
@@ -373,6 +438,9 @@ export const ContractManagementView: React.FC = () => {
         salary: offerSalary,
         bonus: offerBonus,
         years: offerYears,
+        goalBonus: submittedGoalBonus,
+        assistBonus: submittedAssistBonus,
+        cleanSheetBonus: submittedCleanSheetBonus,
       });
 
       if (!mindflowDecision.accepted) {
@@ -421,6 +489,9 @@ export const ContractManagementView: React.FC = () => {
           ...PlayerMoraleService.applyContractSigningMindflowReset(p, currentDate),
           annualSalary: offerSalary,
           contractEndDate: newEndDate,
+          goalBonus: submittedGoalBonus,
+          assistBonus: submittedAssistBonus,
+          cleanSheetBonus: submittedCleanSheetBonus,
           negotiationStep: 0,
           contractLockoutUntil: lockoutDate.toISOString(),
         }));
@@ -747,6 +818,24 @@ export const ContractManagementView: React.FC = () => {
                                  </span>
                               </div>
                            </div>
+                           <div className="mt-3 rounded-2xl bg-black/20 border border-white/5 p-3 text-[10px]">
+                              <span className="block font-black italic uppercase tracking-tighter text-slate-500 mb-2">Premie oczekiwane przez agenta</span>
+                              {player.position === PlayerPosition.GK ? (
+                                 <span className="font-black text-violet-300 font-mono">
+                                    Czyste konto: {expectedCleanSheetBonus.toLocaleString('pl-PL')} PLN
+                                 </span>
+                              ) : player.position === PlayerPosition.DEF ? (
+                                 <span className="font-black text-slate-400 italic">
+                                    Brak premii ofensywnych - dla obrońcy nie są kluczowym warunkiem.
+                                 </span>
+                              ) : (
+                                 <span className="font-black text-white font-mono">
+                                    Gol: <span className="text-amber-300">{expectedGoalBonus.toLocaleString('pl-PL')} PLN</span>
+                                    <span className="text-slate-600 px-2">/</span>
+                                    Asysta: <span className="text-sky-300">{expectedAssistBonus.toLocaleString('pl-PL')} PLN</span>
+                                 </span>
+                              )}
+                           </div>
                            {contractMindflow.mindset.explanation.length > 0 && (
                               <p className="mt-4 text-[11px] text-blue-100/80 italic leading-relaxed">
                                  {contractMindflow.mindset.explanation.slice(0, 2).join(' ')}
@@ -849,6 +938,99 @@ export const ContractManagementView: React.FC = () => {
                                  ))}
                               </div>
                            </div>
+
+                           {isCleanSheetBonusApplicable && (
+                              <div className="space-y-2 rounded-3xl border border-violet-500/20 bg-violet-500/5 p-4">
+                                 <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                    <span className="text-[10px] font-black italic uppercase tracking-tighter text-violet-300">Bonus za czyste konto</span>
+                                    <span className="flex items-center gap-2 text-[9px] font-black italic uppercase tracking-tighter text-slate-400">
+                                       <input
+                                          type="checkbox"
+                                          checked={cleanSheetBonusEnabled}
+                                          onChange={(e) => setCleanSheetBonusEnabled(e.target.checked)}
+                                          className="h-4 w-4 accent-violet-500"
+                                       />
+                                       {cleanSheetBonusEnabled ? 'Włączony' : 'Wyłączony'}
+                                    </span>
+                                 </label>
+                                 {cleanSheetBonusEnabled ? (
+                                    <>
+                                       <div className="flex justify-between items-end px-1">
+                                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Żądanie agenta: {expectedCleanSheetBonus.toLocaleString('pl-PL')} PLN</span>
+                                          <span className="text-xl font-black text-violet-300 font-mono italic">{offerCleanSheetBonus.toLocaleString('pl-PL')} PLN</span>
+                                       </div>
+                                       <input
+                                          type="range" min={0} max={cleanSheetBonusMax} step={500}
+                                          value={offerCleanSheetBonus} onChange={(e) => setOfferCleanSheetBonus(parseInt(e.target.value))}
+                                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                                       />
+                                    </>
+                                 ) : (
+                                    <p className="text-[10px] text-slate-500 italic">Premia za czyste konto nie będzie częścią oferty.</p>
+                                 )}
+                              </div>
+                           )}
+
+                           {(isGoalBonusApplicable || isAssistBonusApplicable) && (
+                              <div className="grid grid-cols-2 gap-3">
+                                 {isGoalBonusApplicable && (
+                                    <div className="space-y-2 rounded-3xl border border-amber-500/20 bg-amber-500/5 p-4">
+                                       <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                          <span className="text-[10px] font-black italic uppercase tracking-tighter text-amber-300">Bonus za gola</span>
+                                          <input
+                                             type="checkbox"
+                                             checked={goalBonusEnabled}
+                                             onChange={(e) => setGoalBonusEnabled(e.target.checked)}
+                                             className="h-4 w-4 accent-amber-500"
+                                          />
+                                       </label>
+                                       {goalBonusEnabled ? (
+                                          <>
+                                             <div className="flex justify-between items-end px-1">
+                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Agent: {expectedGoalBonus.toLocaleString('pl-PL')} PLN</span>
+                                                <span className="text-lg font-black text-amber-300 font-mono italic">{offerGoalBonus.toLocaleString('pl-PL')}</span>
+                                             </div>
+                                             <input
+                                                type="range" min={0} max={goalBonusMax} step={500}
+                                                value={offerGoalBonus} onChange={(e) => setOfferGoalBonus(parseInt(e.target.value))}
+                                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                             />
+                                          </>
+                                       ) : (
+                                          <p className="text-[10px] text-slate-500 italic">Bez premii za gole.</p>
+                                       )}
+                                    </div>
+                                 )}
+                                 {isAssistBonusApplicable && (
+                                    <div className="space-y-2 rounded-3xl border border-sky-500/20 bg-sky-500/5 p-4">
+                                       <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                          <span className="text-[10px] font-black italic uppercase tracking-tighter text-sky-300">Bonus za asystę</span>
+                                          <input
+                                             type="checkbox"
+                                             checked={assistBonusEnabled}
+                                             onChange={(e) => setAssistBonusEnabled(e.target.checked)}
+                                             className="h-4 w-4 accent-sky-500"
+                                          />
+                                       </label>
+                                       {assistBonusEnabled ? (
+                                          <>
+                                             <div className="flex justify-between items-end px-1">
+                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Agent: {expectedAssistBonus.toLocaleString('pl-PL')} PLN</span>
+                                                <span className="text-lg font-black text-sky-300 font-mono italic">{offerAssistBonus.toLocaleString('pl-PL')}</span>
+                                             </div>
+                                             <input
+                                                type="range" min={0} max={assistBonusMax} step={500}
+                                                value={offerAssistBonus} onChange={(e) => setOfferAssistBonus(parseInt(e.target.value))}
+                                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                             />
+                                          </>
+                                       ) : (
+                                          <p className="text-[10px] text-slate-500 italic">Bez premii za asysty.</p>
+                                       )}
+                                    </div>
+                                 )}
+                              </div>
+                           )}
                         </div>
 
                         <div className="mt-4 pb-4">
@@ -877,6 +1059,18 @@ export const ContractManagementView: React.FC = () => {
                                              onClick={() => {
                                                 setOfferSalary(counterOffer.salary);
                                                 setOfferBonus(counterOffer.bonus);
+                                                if (counterOffer.goalBonus !== undefined) {
+                                                   setOfferGoalBonus(counterOffer.goalBonus);
+                                                   setGoalBonusEnabled(true);
+                                                }
+                                                if (counterOffer.assistBonus !== undefined) {
+                                                   setOfferAssistBonus(counterOffer.assistBonus);
+                                                   setAssistBonusEnabled(true);
+                                                }
+                                                if (counterOffer.cleanSheetBonus !== undefined) {
+                                                   setOfferCleanSheetBonus(counterOffer.cleanSheetBonus);
+                                                   setCleanSheetBonusEnabled(true);
+                                                }
                                                 setIsOfferSent(false);
                                              }}
                                              className="text-[8px] font-black bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-500 transition-all shadow-lg active:scale-95"
@@ -894,6 +1088,28 @@ export const ContractManagementView: React.FC = () => {
                                              <span className="text-sm font-black text-emerald-400 font-mono">{counterOffer.bonus.toLocaleString()} PLN</span>
                                           </div>
                                        </div>
+                                       {(counterOffer.goalBonus || counterOffer.assistBonus || counterOffer.cleanSheetBonus) && (
+                                          <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-3">
+                                             {counterOffer.goalBonus ? (
+                                                <div className="flex flex-col">
+                                                   <span className="text-[8px] text-slate-500 uppercase font-bold">Gol:</span>
+                                                   <span className="text-xs font-black text-amber-300 font-mono">{counterOffer.goalBonus.toLocaleString()} PLN</span>
+                                                </div>
+                                             ) : null}
+                                             {counterOffer.assistBonus ? (
+                                                <div className="flex flex-col">
+                                                   <span className="text-[8px] text-slate-500 uppercase font-bold">Asysta:</span>
+                                                   <span className="text-xs font-black text-sky-300 font-mono">{counterOffer.assistBonus.toLocaleString()} PLN</span>
+                                                </div>
+                                             ) : null}
+                                             {counterOffer.cleanSheetBonus ? (
+                                                <div className="flex flex-col">
+                                                   <span className="text-[8px] text-slate-500 uppercase font-bold">Czyste konto:</span>
+                                                   <span className="text-xs font-black text-violet-300 font-mono">{counterOffer.cleanSheetBonus.toLocaleString()} PLN</span>
+                                                </div>
+                                             ) : null}
+                                          </div>
+                                       )}
                                        <p className="text-[9px] text-slate-500 italic mt-1">"To są nasze ostateczne warunki w tej turze negocjacji."</p>
                                     </div>
                                  )}
