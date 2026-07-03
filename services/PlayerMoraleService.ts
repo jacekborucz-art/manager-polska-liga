@@ -856,13 +856,21 @@ export const PlayerMoraleService = {
         personality === 'AMBITIOUS' ? -0.02 :
         personality === 'EGOIST' ? -0.10 :
         0;
+      const loyalty = Math.max(1, Math.min(99, Math.round(withMorale.lojalnosc ?? 50)));
+      const loyaltyStayModifier = ((loyalty - 50) / 49) * 0.16;
+      const hadExitIntent =
+        !!withMorale.isOnTransferList ||
+        !!withMorale.transferListDemandUntil ||
+        !!withMorale.developmentExitDemandUntil ||
+        !!withMorale.transferAllowAfterSeason;
       const successScore =
         (input.isChampion ? 0.24 : 0) +
         (input.isPromoted ? 0.20 : 0) +
         (input.qualifiedForEurope ? 0.22 : 0) +
         (input.wonCup ? 0.16 : 0);
       const roleBonus = withMorale.squadRole === 'KEY_PLAYER' || withMorale.isUntouchable ? 0.08 : withMorale.squadRole === 'STARTER' ? 0.04 : 0;
-      const stayChance = Math.max(0.18, Math.min(0.72, 0.24 + successScore + personalityStayBias + roleBonus));
+      const promotionReconsiderBonus = input.isPromoted && hadExitIntent ? 0.18 : 0;
+      const stayChance = Math.max(0.18, Math.min(0.84, 0.24 + successScore + personalityStayBias + loyaltyStayModifier + roleBonus + promotionReconsiderBonus));
       const moraleBoost =
         alreadyAppliedMainAchievementMorale ? (input.wonCup ? 5 : 0) :
         input.isChampion ? 8 :
@@ -903,13 +911,17 @@ export const PlayerMoraleService = {
       );
 
       if (roll < stayChance) {
-        const nextIsOnTransferList = withMorale.isOnTransferList && roll < stayChance * 0.35
-          ? false
-          : withMorale.isOnTransferList;
+        const shouldWithdrawTransferIntent =
+          input.isPromoted && hadExitIntent
+            ? true
+            : withMorale.isOnTransferList && roll < stayChance * 0.35;
+        const nextIsOnTransferList = shouldWithdrawTransferIntent ? false : withMorale.isOnTransferList;
         withMorale = {
           ...withMorale,
           transferListDemandUntil: null,
           developmentExitDemandUntil: null,
+          transferAllowAfterSeason: shouldWithdrawTransferIntent ? false : withMorale.transferAllowAfterSeason,
+          transferAllowAfterSeasonDeadline: shouldWithdrawTransferIntent ? null : withMorale.transferAllowAfterSeasonDeadline,
           lastTemptingOfferConflictDate: null,
           isOnTransferList: nextIsOnTransferList,
           transferListPrice: nextIsOnTransferList ? withMorale.transferListPrice : undefined,
@@ -938,12 +950,15 @@ export const PlayerMoraleService = {
       personality === 'LOYAL' ? -0.18 :
       personality === 'PROFESSIONAL' ? -0.06 :
       0;
+    const loyalty = Math.max(1, Math.min(99, Math.round(withMorale.lojalnosc ?? 50)));
+    const loyaltyExitModifier = ((50 - loyalty) / 49) * 0.24;
     const exitChance = Math.max(
       0.08,
       Math.min(
-        0.68,
+        0.76,
         0.16 +
         personalityExitBias +
+        loyaltyExitModifier +
         Math.max(0, withMorale.overallRating - squadAverage) * 0.025 +
         Math.min(0.16, reputationCeilingPressure * 0.04) +
         (contractDaysLeft > 365 ? 0.06 : -0.08)
@@ -1011,6 +1026,11 @@ export const PlayerMoraleService = {
     return {
       player: {
         ...withMorale,
+        isOnTransferList: true,
+        isUntouchable: false,
+        transferListPrice: withMorale.transferListPrice ?? undefined,
+        transferLockoutUntil: null,
+        transferOfferBanUntil: null,
         lastMoraleDemandDate: dateKey,
         transferListDemandUntil: deadlineKey,
       },
