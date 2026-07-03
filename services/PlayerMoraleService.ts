@@ -503,19 +503,30 @@ const hasBrokenContractPromise = (player: Player): boolean =>
 const CLINCHED_CHAMPIONSHIP_MORALE_REASON = 'Matematycznie zapewnione mistrzostwo kraju';
 const CLINCHED_PROMOTION_MORALE_REASON = 'Matematycznie zapewniony awans do wyższej ligi';
 
-const getNextMoraleBandFloor = (morale: number): number => {
-  if (morale <= 19) return 25;
-  if (morale <= 39) return 45;
-  if (morale <= 59) return 60;
-  if (morale <= 79) return 80;
-  return 100;
+const MORALE_BAND_FLOORS = [0, 25, 45, 60, 80, 100] as const;
+
+const getMoraleBandIndex = (morale: number): number => {
+  if (morale <= 19) return 0;
+  if (morale <= 39) return 1;
+  if (morale <= 59) return 2;
+  if (morale <= 79) return 3;
+  if (morale < 100) return 4;
+  return 5;
 };
 
-const getSeasonSuccessMoraleBoost = (currentMorale: number, baseBoost: number, forceLevelUp: boolean): number => {
-  if (!forceLevelUp) return baseBoost;
-  const targetMorale = getNextMoraleBandFloor(currentMorale);
+const getMoraleFloorAfterBandSteps = (morale: number, steps: number): number => {
+  const targetIndex = Math.min(MORALE_BAND_FLOORS.length - 1, getMoraleBandIndex(morale) + Math.max(0, steps));
+  return MORALE_BAND_FLOORS[targetIndex] ?? 100;
+};
+
+const getSeasonSuccessMoraleBoost = (currentMorale: number, baseBoost: number, levelUpSteps: number): number => {
+  if (levelUpSteps <= 0) return baseBoost;
+  const targetMorale = getMoraleFloorAfterBandSteps(currentMorale, levelUpSteps);
   return Math.max(baseBoost, targetMorale - currentMorale);
 };
+
+const getRandomSeasonSuccessLevelUpSteps = (seed: number, offset: number): 1 | 2 =>
+  seededRng(seed, offset) < 0.5 ? 1 : 2;
 
 const getClinchedSeasonAchievementReason = (achievement: 'championship' | 'promotion'): string =>
   achievement === 'championship' ? CLINCHED_CHAMPIONSHIP_MORALE_REASON : CLINCHED_PROMOTION_MORALE_REASON;
@@ -748,7 +759,12 @@ export const PlayerMoraleService = {
     const baseBoost = achievement === 'championship' ? 8 : 7;
     const reason = getClinchedSeasonAchievementReason(achievement);
     const currentMorale = withMorale.morale ?? 50;
-    const achievementBoost = getSeasonSuccessMoraleBoost(currentMorale, baseBoost, true);
+    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_${achievement}_CLINCHED`);
+    const achievementBoost = getSeasonSuccessMoraleBoost(
+      currentMorale,
+      baseBoost,
+      getRandomSeasonSuccessLevelUpSteps(seed, 41)
+    );
     const effectiveMoraleBoost = hasBrokenContractPromise(withMorale)
       ? Math.max(1, Math.round(achievementBoost * 0.35))
       : achievementBoost;
@@ -856,10 +872,13 @@ export const PlayerMoraleService = {
       const reason = `Sukces klubu zmienia nastawienie: ${stayReasonParts.join(', ')}`;
       const isContractPromiseConflict = hasBrokenContractPromise(withMorale);
       const currentMorale = withMorale.morale ?? 50;
+      const shouldApplyMainAchievementMorale =
+        (!!input.isChampion && !alreadyAppliedChampionshipMorale) ||
+        (!!input.isPromoted && !alreadyAppliedPromotionMorale);
       const seasonAchievementBoost = getSeasonSuccessMoraleBoost(
         currentMorale,
         moraleBoost,
-        (!!input.isChampion && !alreadyAppliedChampionshipMorale) || (!!input.isPromoted && !alreadyAppliedPromotionMorale)
+        shouldApplyMainAchievementMorale ? getRandomSeasonSuccessLevelUpSteps(seed, 83) : 0
       );
       const effectiveMoraleBoost = seasonAchievementBoost <= 0
         ? 0
