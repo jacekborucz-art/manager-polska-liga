@@ -97,6 +97,11 @@ export const Dashboard: React.FC = () => {
   const [activeHint, setActiveHint] = useState<string | null>(null);
   const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
 
+  const formatMailDate = (dateValue: MailMessage['date'] | string | number | null | undefined): string => {
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue ?? currentDate);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('pl-PL');
+  };
+
   useEffect(() => {
     if (winterCampInvitePending) setIsWinterCampLocationOpen(true);
   }, [winterCampInvitePending]);
@@ -1651,7 +1656,7 @@ const boardConfidence = useMemo(() => {
                                    {mail.sender.toUpperCase()}
                                 </span>
                                 <span className="text-[8px] text-slate-600 shrink-0 font-black italic uppercase tracking-tighter">
-                                   {mail.date.toLocaleDateString()}
+                                   {formatMailDate(mail.date)}
                                 </span>
                              </div>
                              <h4 className={`text-sm text-white mb-1 truncate font-black italic uppercase tracking-tighter ${mail.isRead ? 'opacity-75' : ''}`}>

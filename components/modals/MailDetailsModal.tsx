@@ -15,6 +15,14 @@ interface MailDetailsModalProps {
   onClose: () => void;
 }
 
+const formatMailDate = (
+  dateValue: MailMessage['date'] | string | number | null | undefined,
+  options?: Intl.DateTimeFormatOptions,
+): string => {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue ?? Date.now());
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('pl-PL', options);
+};
+
 const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
   const { players } = useGame();
 
@@ -862,7 +870,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   };
 
   const typeStyle = getTypeStyle(mail.type);
-  const sentDate = mail.date.toLocaleDateString('pl-PL', {
+  const sentDate = formatMailDate(mail.date, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
