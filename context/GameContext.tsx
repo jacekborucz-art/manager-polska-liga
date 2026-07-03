@@ -1197,11 +1197,15 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const celebrationAlreadyFiredRef = React.useRef(false);
 
   // Helper do jednorazowego uruchamiania planszy za zapewnione mistrzostwo lub awans.
-  const triggerSeasonCelebrationIfClinched = useCallback((sourceClubs: Club[], sourceFixtures: Fixture[]) => {
-    if (!userTeamId || celebrationAlreadyFiredRef.current) return;
+  const triggerSeasonCelebrationIfClinched = useCallback((
+    sourceClubs: Club[],
+    sourceFixtures: Fixture[],
+    sourcePlayers?: Record<string, Player[]>
+  ): Record<string, Player[]> | null => {
+    if (!userTeamId || celebrationAlreadyFiredRef.current) return null;
 
     const userClub = sourceClubs.find(c => c.id === userTeamId);
-    if (!userClub) return;
+    if (!userClub) return null;
 
     const remaining = (leagueId: string, teamId: string) =>
       sourceFixtures.filter(f =>
@@ -1247,10 +1251,29 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       }
     }
 
-    if (!celebration) return;
+    if (!celebration) return null;
     celebrationAlreadyFiredRef.current = true;
+    const achievement = celebration === 'championship' ? 'championship' : 'promotion';
+    const applyMoraleBoost = (playersMap: Record<string, Player[]>): Record<string, Player[]> => {
+      const squad = playersMap[userTeamId] || [];
+      if (squad.length === 0) return playersMap;
+      return {
+        ...playersMap,
+        [userTeamId]: squad.map(player =>
+          PlayerMoraleService.applyClinchedSeasonAchievementMorale(player, achievement, currentDate)
+        ),
+      };
+    };
+
+    if (sourcePlayers) {
+      setSeasonCelebration(celebration);
+      return applyMoraleBoost(sourcePlayers);
+    }
+
+    setPlayers(prev => applyMoraleBoost(prev));
     setSeasonCelebration(celebration);
-  }, [userTeamId]);
+    return null;
+  }, [currentDate, userTeamId]);
 
   // Helper do dodawania logów finansowych
   const addFinanceLog = useCallback((clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => {
@@ -3798,7 +3821,6 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       }
     }
 
-    triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures);
     setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
       prev,
       finalClubs,
@@ -3906,6 +3928,11 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
           prependUniqueMessages(transferRequestMails);
         }
       }
+    }
+
+    const playersAfterClinchedCelebration = triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures, finalPlayers);
+    if (playersAfterClinchedCelebration) {
+      finalPlayers = playersAfterClinchedCelebration;
     }
 
     setPlayers(prev => {

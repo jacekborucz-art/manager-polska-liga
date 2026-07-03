@@ -500,6 +500,31 @@ type PlayerMindsetDelta = Partial<Record<PlayerMindsetKey, number>>;
 const hasBrokenContractPromise = (player: Player): boolean =>
   !!player.transferContractPromise?.broken;
 
+const CLINCHED_CHAMPIONSHIP_MORALE_REASON = 'Matematycznie zapewnione mistrzostwo kraju';
+const CLINCHED_PROMOTION_MORALE_REASON = 'Matematycznie zapewniony awans do wyższej ligi';
+
+const getNextMoraleBandFloor = (morale: number): number => {
+  if (morale <= 19) return 25;
+  if (morale <= 39) return 45;
+  if (morale <= 59) return 60;
+  if (morale <= 79) return 80;
+  return 100;
+};
+
+const getSeasonSuccessMoraleBoost = (currentMorale: number, baseBoost: number, forceLevelUp: boolean): number => {
+  if (!forceLevelUp) return baseBoost;
+  const targetMorale = getNextMoraleBandFloor(currentMorale);
+  return Math.max(baseBoost, targetMorale - currentMorale);
+};
+
+const getClinchedSeasonAchievementReason = (achievement: 'championship' | 'promotion'): string =>
+  achievement === 'championship' ? CLINCHED_CHAMPIONSHIP_MORALE_REASON : CLINCHED_PROMOTION_MORALE_REASON;
+
+const hasClinchedSeasonAchievementMorale = (player: Player, achievement: 'championship' | 'promotion'): boolean => {
+  const reason = getClinchedSeasonAchievementReason(achievement);
+  return (player.moraleHistory ?? []).some(entry => entry.reason === reason);
+};
+
 export const PlayerMoraleService = {
   clamp: (morale: number): number => Math.max(0, Math.min(100, Math.round(morale))),
 
@@ -712,6 +737,37 @@ export const PlayerMoraleService = {
     !!player.reserveProtestUntil ||
     !!player.boardAppealDeadline,
 
+  applyClinchedSeasonAchievementMorale: (
+    player: Player,
+    achievement: 'championship' | 'promotion',
+    currentDate: Date
+  ): Player => {
+    let withMorale = PlayerMoraleService.ensurePlayerState(player);
+    if (hasClinchedSeasonAchievementMorale(withMorale, achievement)) return withMorale;
+
+    const baseBoost = achievement === 'championship' ? 8 : 7;
+    const reason = getClinchedSeasonAchievementReason(achievement);
+    const currentMorale = withMorale.morale ?? 50;
+    const achievementBoost = getSeasonSuccessMoraleBoost(currentMorale, baseBoost, true);
+    const effectiveMoraleBoost = hasBrokenContractPromise(withMorale)
+      ? Math.max(1, Math.round(achievementBoost * 0.35))
+      : achievementBoost;
+
+    withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
+    return PlayerMoraleService.withMindsetChange(
+      withMorale,
+      {
+        clubHappiness: achievement === 'championship' ? 10 : 8,
+        squadBelonging: achievement === 'championship' ? 9 : 7,
+        developmentSatisfaction: achievement === 'promotion' ? 7 : 4,
+        transferOpenness: achievement === 'championship' ? -16 : -14,
+        conflictLevel: hasBrokenContractPromise(withMorale) ? 0 : -7,
+      },
+      reason,
+      currentDate
+    );
+  },
+
   applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
     ...player,
     playerMindset: PlayerMoraleService.withMindsetChange(
@@ -774,6 +830,9 @@ export const PlayerMoraleService = {
     ].filter(Boolean);
 
     if (stayReasonParts.length > 0) {
+      const alreadyAppliedChampionshipMorale = input.isChampion && hasClinchedSeasonAchievementMorale(withMorale, 'championship');
+      const alreadyAppliedPromotionMorale = input.isPromoted && hasClinchedSeasonAchievementMorale(withMorale, 'promotion');
+      const alreadyAppliedMainAchievementMorale = !!alreadyAppliedChampionshipMorale || !!alreadyAppliedPromotionMorale;
       const personalityStayBias =
         personality === 'LOYAL' ? 0.18 :
         personality === 'PROFESSIONAL' ? 0.12 :
@@ -789,17 +848,28 @@ export const PlayerMoraleService = {
       const roleBonus = withMorale.squadRole === 'KEY_PLAYER' || withMorale.isUntouchable ? 0.08 : withMorale.squadRole === 'STARTER' ? 0.04 : 0;
       const stayChance = Math.max(0.18, Math.min(0.72, 0.24 + successScore + personalityStayBias + roleBonus));
       const moraleBoost =
+        alreadyAppliedMainAchievementMorale ? (input.wonCup ? 5 : 0) :
         input.isChampion ? 8 :
         input.isPromoted ? 7 :
         input.qualifiedForEurope ? 6 :
         5;
       const reason = `Sukces klubu zmienia nastawienie: ${stayReasonParts.join(', ')}`;
       const isContractPromiseConflict = hasBrokenContractPromise(withMorale);
-      const effectiveMoraleBoost = isContractPromiseConflict
-        ? Math.max(1, Math.round(moraleBoost * 0.35))
-        : moraleBoost;
+      const currentMorale = withMorale.morale ?? 50;
+      const seasonAchievementBoost = getSeasonSuccessMoraleBoost(
+        currentMorale,
+        moraleBoost,
+        (!!input.isChampion && !alreadyAppliedChampionshipMorale) || (!!input.isPromoted && !alreadyAppliedPromotionMorale)
+      );
+      const effectiveMoraleBoost = seasonAchievementBoost <= 0
+        ? 0
+        : isContractPromiseConflict
+          ? Math.max(1, Math.round(seasonAchievementBoost * 0.35))
+          : seasonAchievementBoost;
 
-      withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
+      if (effectiveMoraleBoost > 0) {
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
+      }
       withMorale = PlayerMoraleService.withMindsetChange(
         withMorale,
         {
