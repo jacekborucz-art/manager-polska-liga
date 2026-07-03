@@ -79,6 +79,9 @@ const getNationalTeamRecoveryUntil = (date: Date): string => {
   return recoveryUntil.toISOString();
 };
 
+const isMajorNationalTournament = (competitionLabel: string): boolean =>
+  competitionLabel === 'FIFA World Cup' || competitionLabel === 'UEFA EURO';
+
 const playerOverall = (p: Player): number => {
   if (p.position === PlayerPosition.GK) {
     return clamp((p.attributes.goalkeeping * 6 + p.attributes.positioning * 2 + p.attributes.mentality + p.attributes.passing) / 10, 0, 100);
@@ -461,7 +464,7 @@ const fatigueTick = (lt: LiveTeam, minute: number, weatherInt: number, trailing:
   });
 };
 
-const maybeInjury = (lt: LiveTeam, minute: number, weatherInt: number, homeScore: number, awayScore: number, rng: Rng, injuries: MatchInjuryEntry[], subs: MatchSubstitutionEntry[], timeline: MatchEvent[]) => {
+const maybeInjury = (lt: LiveTeam, minute: number, weatherInt: number, homeScore: number, awayScore: number, rng: Rng, injuries: MatchInjuryEntry[], subs: MatchSubstitutionEntry[], timeline: MatchEvent[], lightInjuryMultiplier = 1) => {
   const act = activePlayers(lt).filter(p => p.position !== PlayerPosition.GK);
   if (!act.length) return;
   const avgFat = act.reduce((s, p) => s + (lt.fatigue[p.id] ?? 100), 0) / act.length;
@@ -471,6 +474,7 @@ const maybeInjury = (lt: LiveTeam, minute: number, weatherInt: number, homeScore
   if (!injured) return;
   const f = lt.fatigue[injured.id] ?? 100;
   const severe = rng.next() < (0.2 + Math.max(0, 52 - f) * 0.008 + weatherInt * 0.1);
+  if (!severe && lightInjuryMultiplier < 1 && rng.next() >= lightInjuryMultiplier) return;
   const { days, type } = rollInjuryBySeverity(severe ? InjurySeverity.SEVERE : InjurySeverity.LIGHT, () => rng.next());
   injuries.push({ playerId: injured.id, playerName: nameOf(injured), minute, teamId: lt.team.id, severity: severe ? InjurySeverity.SEVERE : InjurySeverity.LIGHT, days, type });
   eventPush(timeline, minute, lt.side, severe ? MatchEventType.INJURY_SEVERE : MatchEventType.INJURY_LIGHT, `${nameOf(injured)} injured for ${lt.team.name}`, injured.id);
@@ -664,7 +668,7 @@ const buildRatings = (
   return ratings;
 };
 
-const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, Loc>, date: Date, home: LiveTeam, away: LiveTeam, goals: MatchGoalEntry[], cards: MatchCardEntry[], injuries: MatchInjuryEntry[], ratings: Record<string, number>) => {
+const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, Loc>, date: Date, home: LiveTeam, away: LiveTeam, goals: MatchGoalEntry[], cards: MatchCardEntry[], injuries: MatchInjuryEntry[], ratings: Record<string, number>, majorTournamentRecovery = false) => {
   const goalBy: Record<string, number> = {}; const assistBy: Record<string, number> = {}; const yellowBy: Record<string, number> = {}; const redBy: Record<string, number> = {}; const injBy: Record<string, MatchInjuryEntry> = {};
   goals.forEach(g => { if (g.playerId) goalBy[g.playerId] = (goalBy[g.playerId] ?? 0) + 1; if (g.assistantId) assistBy[g.assistantId] = (assistBy[g.assistantId] ?? 0) + 1; });
   cards.forEach(c => { if (!c.playerId) return; if (c.type === 'YELLOW') yellowBy[c.playerId] = (yellowBy[c.playerId] ?? 0) + 1; else if (c.type === 'SECOND_YELLOW') { yellowBy[c.playerId] = (yellowBy[c.playerId] ?? 0) + 1; redBy[c.playerId] = (redBy[c.playerId] ?? 0) + 1; } else redBy[c.playerId] = (redBy[c.playerId] ?? 0) + 1; });
@@ -688,7 +692,11 @@ const updatePlayers = (updated: Record<string, Player[]>, locs: Record<string, L
       if ((redBy[id] ?? 0) > 0) next.nationalSuspensionMatches += 2;
       if (lt.fatigue[id] !== undefined) next.condition = clamp(lt.fatigue[id], 0, 100);
       if (lt.debt[id] !== undefined) { next.fatigueDebt = clamp((next.fatigueDebt ?? 0) + lt.debt[id], 0, 100); next.condition = Math.min(next.condition, 100 - next.fatigueDebt); }
-      if (mins > 0) next.nationalTeamRecoveryUntil = getNationalTeamRecoveryUntil(date);
+      if (mins > 0) {
+        const recoveryUntil = getNationalTeamRecoveryUntil(date);
+        next.nationalTeamRecoveryUntil = recoveryUntil;
+        if (majorTournamentRecovery) next.nationalTeamMajorTournamentRecoveryUntil = recoveryUntil;
+      }
       if (injBy[id]) {
         const injury = injBy[id];
         next.health = { status: HealthStatus.INJURED, injury: { type: injury.type, daysRemaining: injury.days, severity: injury.severity, injuryDate: date.toISOString(), totalDays: injury.days, conditionAtInjury: next.condition } };
@@ -775,6 +783,7 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
   const away: LiveTeam = { side: 'AWAY', team: awayTeam, coach: awayCoach, squad: awaySquad, activeXI: [...as.lineup.startingXI], bench: [...as.lineup.bench], tacticId: as.lineup.tacticId, fatigue: Object.fromEntries(awaySquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: as.penaltyTakerId };
   const goals: MatchGoalEntry[] = []; const cards: MatchCardEntry[] = []; const injuries: MatchInjuryEntry[] = []; const substitutions: MatchSubstitutionEntry[] = []; const timeline: MatchEvent[] = [];
   const homeScore = { value: 0 }; const awayScore = { value: 0 };
+  const lightInjuryMultiplier = md.competitionLabel === 'FIFA World Cup' ? 0.5 : 1;
   let addedTime = 2; let stop = 0.5;
   for (let minute = 1; minute <= 90 + addedTime; minute++) {
     if (minute === 46 || (minute >= 58 && minute <= 88 && minute % 7 === 0)) { maybeSub(home, minute, homeScore.value, awayScore.value, substitutions, timeline, rng); maybeSub(away, minute, homeScore.value, awayScore.value, substitutions, timeline, rng); }
@@ -794,8 +803,8 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
         if (last?.minute === minute && (last.type === MatchEventType.GOAL || last.type === MatchEventType.PENALTY_SCORED)) stop += 0.22;
       }
     }
-    maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
-    maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
+    maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, lightInjuryMultiplier);
+    maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, lightInjuryMultiplier);
     fatigueTick(home, minute, weather.weatherIntensity ?? 0, homeScore.value < awayScore.value);
     fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
     addedTime = clamp(2 + Math.floor(stop), 2, 7);
@@ -828,8 +837,8 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
           if (last?.minute === minute && (last.type === MatchEventType.GOAL || last.type === MatchEventType.PENALTY_SCORED)) stop += 0.22;
         }
       }
-      maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
-      maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
+      maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, lightInjuryMultiplier);
+      maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, lightInjuryMultiplier);
       fatigueTick(home, minute, weather.weatherIntensity ?? 0, homeScore.value < awayScore.value);
       fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
       addedTime = clamp(2 + Math.floor(stop), 2, 7);
@@ -873,7 +882,7 @@ const singleMatch = (match: NTGroupMatch, md: NTMatchDay, date: Date, seed: numb
     penaltyWinner = homePenaltyScore > awayPenaltyScore ? homeTeam.name : awayTeam.name;
   }
   const ratings = buildRatings(home, away, homeScore.value, awayScore.value, goals, cards, injuries, seed);
-  updatePlayers(updated, locs, date, home, away, goals, cards, injuries, ratings);
+  updatePlayers(updated, locs, date, home, away, goals, cards, injuries, ratings, isMajorNationalTournament(match.competitionLabel ?? md.competitionLabel));
   delete updated[NT_EMERGENCY_CLUB_ID];
   const result: NTMatchResult = { home: homeTeam.name, away: awayTeam.name, homeGoals: homeScore.value, awayGoals: awayScore.value, competitionLabel: (match.competitionLabel ?? md.competitionLabel), group: match.group, matchId, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venue: homeTeam.stadiumName, attendance, weather, addedTime, refereeName: `${referee.firstName} ${referee.lastName}`, goals: [...goals].sort((a, b) => a.minute - b.minute), cards: [...cards].sort((a, b) => a.minute - b.minute), substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [...injuries].sort((a, b) => a.minute - b.minute), timeline: [...timeline].sort((a, b) => a.minute - b.minute), kits, isExtraTime: needsExtraTime, homePenaltyScore, awayPenaltyScore, penaltyWinner };
   const history: MatchHistoryEntry = { matchId, date: date.toDateString(), season, competition: (match.competitionLabel ?? md.competitionLabel), homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, homeScore: homeScore.value, awayScore: awayScore.value, homePenaltyScore, awayPenaltyScore, isExtraTime: needsExtraTime, attendance, venue: homeTeam.stadiumName, weather, addedTime, goals: result.goals ?? [], cards: result.cards ?? [], substitutions: result.substitutions ?? [], injuries: result.injuries ?? [], timeline: result.timeline ?? [], refereeName: result.refereeName, homeLineup: hs.lineup.startingXI.filter(Boolean) as string[], awayLineup: as.lineup.startingXI.filter(Boolean) as string[], ratings, emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId, kits };
@@ -1021,7 +1030,7 @@ export function simulateSinglePlayoffMatch(
 
   const goalsAfterAET = { home: homeScore.value, away: awayScore.value };
   const ratings = buildRatings(home, away, goalsAfterAET.home, goalsAfterAET.away, goals, cards, [], seed);
-  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, [], ratings);
+  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, [], ratings, isMajorNationalTournament(competitionLabel));
   delete updatedPlayers[NT_EMERGENCY_CLUB_ID];
 
   // ── Rzuty karne jeśli remis po dogrywce ───────────────────────────────────
@@ -1060,7 +1069,11 @@ export function simulateSinglePlayoffMatch(
       homeScore: goalsAfterAET.home, awayScore: goalsAfterAET.away,
       homePenaltyScore: homePK, awayPenaltyScore: awayPK,
       isExtraTime: true, attendance, venue: homeTeam.stadiumName, weather,
-      goals: sortedGoals, cards: sortedCards, refereeName, emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined, kits,
+      goals: sortedGoals, cards: sortedCards, substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [], timeline: [...timeline].sort((a, b) => a.minute - b.minute),
+      refereeName, emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined,
+      homeLineup: hs.lineup.startingXI.filter(Boolean) as string[],
+      awayLineup: as.lineup.startingXI.filter(Boolean) as string[],
+      ratings, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId, kits,
     };
     return {
       homeGoals: goalsAfter90.home,
@@ -1093,7 +1106,11 @@ export function simulateSinglePlayoffMatch(
     homeTeamId: homeTeam.id, awayTeamId: awayTeam.id,
     homeScore: goalsAfterAET.home, awayScore: goalsAfterAET.away,
     isExtraTime: wentToET, attendance, venue: homeTeam.stadiumName, weather,
-    goals: sortedGoals, cards: sortedCards, refereeName, emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined, kits,
+    goals: sortedGoals, cards: sortedCards, substitutions: [...substitutions].sort((a, b) => a.minute - b.minute), injuries: [], timeline: [...timeline].sort((a, b) => a.minute - b.minute),
+    refereeName, emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined,
+    homeLineup: hs.lineup.startingXI.filter(Boolean) as string[],
+    awayLineup: as.lineup.startingXI.filter(Boolean) as string[],
+    ratings, homeTacticId: hs.lineup.tacticId, awayTacticId: as.lineup.tacticId, kits,
   };
   return {
     homeGoals: goalsAfter90.home,
@@ -1114,10 +1131,16 @@ export function simulateSinglePlayoffMatch(
 }
 
 export interface WCGroupMatchSimResult {
+  matchId?: string;
   homeGoals: number;
   awayGoals: number;
   goals: MatchGoalEntry[];
   cards: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
+  matchHistoryEntry?: MatchHistoryEntry;
   updatedPlayers?: Record<string, Player[]>;
 }
 
@@ -1152,9 +1175,12 @@ export function simulateWCGroupMatch(
   const awayCoach = awayTeam.coachId ? (coaches[awayTeam.coachId] ?? fallbackCoach(awayTeam.id)) : fallbackCoach(awayTeam.id);
   const hs = NationalTeamLineupService.buildMatchSelection(homeTeam, homeSquad, homeCoach);
   const as = NationalTeamLineupService.buildMatchSelection(awayTeam, awaySquad, awayCoach);
+  const kits = KitSelectionService.selectOptimalNationalTeamKits(homeTeam, awayTeam);
   const envSeed = `${seed}|${homeTeam.id}|${awayTeam.id}`;
   const weather = NationalTeamEnvironmentService.getWeather(matchDate, homeTeam, awayTeam, 'FIFA World Cup', envSeed);
+  const attendance = NationalTeamEnvironmentService.estimateAttendance(homeTeam, awayTeam, 'FIFA World Cup', weather, envSeed);
   const wcReferee = RefereeService.assignEuropeanRefereeByRegion(`${envSeed}|WC`, homeTeam.region, awayTeam.region, new Set());
+  const refereeName = `${wcReferee.firstName} ${wcReferee.lastName}`;
   const rng = new Rng(hash(`${envSeed}|WC_GROUP`));
 
   const home: LiveTeam = { side: 'HOME', team: homeTeam, coach: homeCoach, squad: homeSquad, activeXI: [...hs.lineup.startingXI], bench: [...hs.lineup.bench], tacticId: hs.lineup.tacticId, fatigue: Object.fromEntries(homeSquad.map(p => [p.id, p.condition ?? 100])), debt: {}, minutes: {}, yellows: {}, sentOff: new Set<string>(), subs: 0, redCardPenalty: 1, penaltyTakerId: hs.penaltyTakerId };
@@ -1194,21 +1220,58 @@ export function simulateWCGroupMatch(
         if (last?.minute === minute && (last.type === MatchEventType.GOAL || last.type === MatchEventType.PENALTY_SCORED)) stop += 0.22;
       }
     }
-    maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
-    maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline);
+    maybeInjury(home, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, 0.5);
+    maybeInjury(away, minute, weather.weatherIntensity ?? 0, homeScore.value, awayScore.value, rng, injuries, substitutions, timeline, 0.5);
     fatigueTick(home, minute, weather.weatherIntensity ?? 0, homeScore.value < awayScore.value);
     fatigueTick(away, minute, weather.weatherIntensity ?? 0, awayScore.value < homeScore.value);
     addedTime = clamp(2 + Math.floor(stop), 2, 7);
   }
   const ratings = buildRatings(home, away, homeScore.value, awayScore.value, goals, cards, injuries, seed);
-  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, injuries, ratings);
+  updatePlayers(updatedPlayers, locs, matchDate, home, away, goals, cards, injuries, ratings, true);
+  const emergencyPlayers = [...(updatedPlayers[NT_EMERGENCY_CLUB_ID] ?? [])];
   delete updatedPlayers[NT_EMERGENCY_CLUB_ID];
+  const matchId = ['WC_GROUP', matchDate.getFullYear(), String(matchDate.getMonth() + 1).padStart(2, '0'), String(matchDate.getDate()).padStart(2, '0'), homeTeam.id, awayTeam.id, seed].join('_');
+  const sortedGoals = [...goals].sort((a, b) => a.minute - b.minute);
+  const sortedCards = [...cards].sort((a, b) => a.minute - b.minute);
+  const matchHistoryEntry: MatchHistoryEntry = {
+    matchId,
+    date: matchDate.toDateString(),
+    season: matchDate.getFullYear(),
+    competition: 'FIFA World Cup',
+    homeTeamId: homeTeam.id,
+    awayTeamId: awayTeam.id,
+    homeScore: homeScore.value,
+    awayScore: awayScore.value,
+    attendance,
+    venue: homeTeam.stadiumName,
+    weather,
+    addedTime,
+    goals: sortedGoals,
+    cards: sortedCards,
+    substitutions: [...substitutions].sort((a, b) => a.minute - b.minute),
+    injuries: [...injuries].sort((a, b) => a.minute - b.minute),
+    timeline: [...timeline].sort((a, b) => a.minute - b.minute),
+    refereeName,
+    homeLineup: hs.lineup.startingXI.filter(Boolean) as string[],
+    awayLineup: as.lineup.startingXI.filter(Boolean) as string[],
+    ratings,
+    emergencyPlayers: emergencyPlayers.length > 0 ? emergencyPlayers : undefined,
+    homeTacticId: hs.lineup.tacticId,
+    awayTacticId: as.lineup.tacticId,
+    kits,
+  };
 
   return {
+    matchId,
     homeGoals: homeScore.value,
     awayGoals: awayScore.value,
-    goals: [...goals].sort((a, b) => a.minute - b.minute),
-    cards: [...cards].sort((a, b) => a.minute - b.minute),
+    goals: sortedGoals,
+    cards: sortedCards,
+    venue: homeTeam.stadiumName,
+    attendance,
+    weather,
+    refereeName,
+    matchHistoryEntry,
     updatedPlayers,
   };
 }

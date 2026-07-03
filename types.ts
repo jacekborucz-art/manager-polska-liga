@@ -1401,6 +1401,7 @@ export interface Player {
   assignedNationalTeamId?: string | null;
   /** Data ISO końca krótkiej odnowy po występie w reprezentacji. */
   nationalTeamRecoveryUntil?: string | null;
+  nationalTeamMajorTournamentRecoveryUntil?: string | null;
   /** Lista ID klubów aktualnie zainteresowanych pozyskaniem tego zawodnika (aktualizowana ~1x/miesiąc przez AI) */
   interestedClubs?: string[];
   /** ID klubu AI który aktualnie negocjuje z tym wolnym agentem */
@@ -2933,6 +2934,7 @@ export interface WCTeam {
 }
 
 export interface WCGroupMatch {
+  matchId?: string;
   home: string;
   away: string;
   homeGoals: number;
@@ -2940,6 +2942,10 @@ export interface WCGroupMatch {
   date: string;
   goals?: MatchGoalEntry[];
   cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
 }
 
 export interface WCGroup {
@@ -2961,6 +2967,7 @@ export interface WCGroupStanding {
 
 export interface WCKnockoutMatch {
   id: string;
+  matchId?: string;
   round: WCKnockoutRound;
   home: string | null;
   away: string | null;
@@ -2976,6 +2983,10 @@ export interface WCKnockoutMatch {
   date: string;
   goals?: MatchGoalEntry[];
   cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
 }
 
 export interface WCPlayerEffect {

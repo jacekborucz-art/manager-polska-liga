@@ -7022,8 +7022,9 @@ Asystent`,
 
           if (!p0home || !p0away || !p1home || !p1away) { break; } // bezpieczeństwo
 
-          // Seed unikalny per data + para — gwarantuje powtarzalność przy tym samym dniu
-          const dateSeed26 = dateToProcess.getTime() + sessionSeed;
+          // Seed unikalny per data + para, ale z runtime'owym składnikiem symulacji.
+          // Dzięki temu reload save'a sprzed barażu nie wymusza zawsze tego samego wyniku.
+          const dateSeed26 = dateToProcess.getTime() + matchSimulationSeed;
           const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
 
           // Sprawdzenie czy drużyna gracza gra w barażu
@@ -7081,7 +7082,7 @@ Asystent`,
 
           if (!p0homeR || !p0awayR || !p1homeR || !p1awayR) { break; }
 
-          const dateSeed29 = dateToProcess.getTime() + sessionSeed;
+          const dateSeed29 = dateToProcess.getTime() + matchSimulationSeed;
           const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
 
           // clubs z 2.Ligi — para 0 i para 1 (homeId w leg1 = klub 2.Ligi)

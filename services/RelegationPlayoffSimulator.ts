@@ -1,4 +1,4 @@
-import { Club, Coach, Lineup, Player, RelegationPlayoffLegResult, RelegationPlayoffPenalties, RelegationPlayoffPairOutcome } from '../types';
+import { Club, Coach, Lineup, MatchCardEntry, MatchEvent, MatchEventType, MatchSubstitutionEntry, Player, RelegationPlayoffLegResult, RelegationPlayoffPenalties, RelegationPlayoffPairOutcome } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { AiMatchPreparationService } from './AiMatchPreparationService';
 import { LineupService } from './LineupService';
@@ -162,6 +162,43 @@ const getMinuteGoalChance = (
   return clamp(0.0132 * Math.pow(attackingPower / Math.max(25, defensivePower), 1.28) * dailyForm * homeMultiplier * saturationMultiplier, 0.0025, 0.065);
 };
 
+const formatPlayerName = (player: Player | undefined): string =>
+  player ? `${player.firstName.charAt(0)}. ${player.lastName}` : 'Nieznany';
+
+const buildReportRatings = (
+  homeLineup: Lineup,
+  awayLineup: Lineup,
+  goals: Array<{ playerId?: string; assistantId?: string; teamId: string }>,
+  cards: MatchCardEntry[],
+  homeGoals: number,
+  awayGoals: number,
+  seed: number
+): Record<string, number> => {
+  const starters = [
+    ...homeLineup.startingXI.filter((id): id is string => !!id),
+    ...awayLineup.startingXI.filter((id): id is string => !!id),
+  ];
+  const ratings: Record<string, number> = {};
+  starters.forEach((id, index) => {
+    ratings[id] = 6.0 + ((seed + index * 17) % 16) / 10;
+  });
+
+  goals.forEach(goal => {
+    if (goal.playerId) ratings[goal.playerId] = Math.min(10, (ratings[goal.playerId] ?? 6.5) + 0.8);
+    if (goal.assistantId) ratings[goal.assistantId] = Math.min(10, (ratings[goal.assistantId] ?? 6.4) + 0.35);
+  });
+  cards.forEach(card => {
+    if (!card.playerId) return;
+    const penalty = card.type === 'YELLOW' ? 0.15 : 0.9;
+    ratings[card.playerId] = Math.max(3.5, (ratings[card.playerId] ?? 6.0) - penalty);
+  });
+
+  if (homeGoals === 0 && awayLineup.startingXI[0]) ratings[awayLineup.startingXI[0]] = Math.min(10, (ratings[awayLineup.startingXI[0]] ?? 6.5) + 0.45);
+  if (awayGoals === 0 && homeLineup.startingXI[0]) ratings[homeLineup.startingXI[0]] = Math.min(10, (ratings[homeLineup.startingXI[0]] ?? 6.5) + 0.45);
+
+  return ratings;
+};
+
 const simulatePeriod = (
   homeClub: Club,
   awayClub: Club,
@@ -182,36 +219,111 @@ const simulatePeriod = (
   const homeIds = homeLineup?.startingXI.filter((id): id is string => !!id) ?? [];
   const awayIds = awayLineup?.startingXI.filter((id): id is string => !!id) ?? [];
   const goals: { playerId?: string; playerName: string; minute: number; teamId: string; isPenalty: boolean; assistantId?: string; assistantName?: string }[] = [];
+  const cards: MatchCardEntry[] = [];
+  const substitutions: MatchSubstitutionEntry[] = [];
+  const timeline: MatchEvent[] = [];
+  const yellowCounts: Record<string, number> = {};
+  let homeActiveIds = [...homeIds];
+  let awayActiveIds = [...awayIds];
   let homeGoals = 0;
   let awayGoals = 0;
 
   const addGoal = (club: Club, squad: Player[], ids: string[], minute: number) => {
     const scorer = GoalAttributionService.pickScorer(squad, ids, false, rng);
     const assistant = scorer ? GoalAttributionService.pickAssistant(squad, ids, scorer.id, false, rng) : null;
+    const playerName = formatPlayerName(scorer);
+    const assistantName = assistant ? formatPlayerName(assistant) : undefined;
     goals.push({
       playerId: scorer?.id,
-      playerName: scorer ? `${scorer.firstName.charAt(0)}. ${scorer.lastName}` : 'Nieznany',
+      playerName,
       minute,
       teamId: club.id,
       isPenalty: false,
       assistantId: assistant?.id,
-      assistantName: assistant ? `${assistant.firstName.charAt(0)}. ${assistant.lastName}` : undefined,
+      assistantName,
+    });
+    timeline.push({
+      minute,
+      teamSide: club.id === homeClub.id ? 'HOME' : 'AWAY',
+      type: MatchEventType.GOAL,
+      primaryPlayerId: scorer?.id,
+      secondaryPlayerId: assistant?.id,
+      text: assistantName ? `${playerName} zdobywa bramkę po podaniu ${assistantName}` : `${playerName} zdobywa bramkę`,
     });
   };
 
+  const addCard = (club: Club, squad: Player[], ids: string[], minute: number, directRed = false) => {
+    if (ids.length === 0) return;
+    const playerId = ids[Math.floor(rng() * ids.length)];
+    const player = squad.find(candidate => candidate.id === playerId);
+    yellowCounts[playerId] = directRed ? (yellowCounts[playerId] ?? 0) : (yellowCounts[playerId] ?? 0) + 1;
+    const type: MatchCardEntry['type'] = directRed ? 'RED' : yellowCounts[playerId] > 1 ? 'SECOND_YELLOW' : 'YELLOW';
+    const playerName = formatPlayerName(player);
+    cards.push({ playerId, playerName, minute, teamId: club.id, type });
+    timeline.push({
+      minute,
+      teamSide: club.id === homeClub.id ? 'HOME' : 'AWAY',
+      type: type === 'YELLOW' ? MatchEventType.YELLOW_CARD : MatchEventType.RED_CARD,
+      primaryPlayerId: playerId,
+      text: `${playerName} ${type === 'YELLOW' ? 'otrzymuje żółtą kartkę' : type === 'SECOND_YELLOW' ? 'otrzymuje drugą żółtą kartkę' : 'otrzymuje czerwoną kartkę'}`,
+    });
+  };
+
+  const addSubstitution = (club: Club, squad: Player[], lineup: Lineup | null, activeIds: string[], minute: number) => {
+    if (!lineup || activeIds.length < 11) return activeIds;
+    const benchCandidate = lineup.bench
+      .map(id => squad.find(player => player.id === id))
+      .filter((player): player is Player => !!player && !activeIds.includes(player.id) && player.condition >= 58)
+      .sort((a, b) => b.condition - a.condition)[0];
+    const outgoing = activeIds
+      .map(id => squad.find(player => player.id === id))
+      .filter((player): player is Player => !!player && player.position !== 'GK')
+      .sort((a, b) => a.condition - b.condition)[0];
+    if (!benchCandidate || !outgoing) return activeIds;
+
+    const sub: MatchSubstitutionEntry = {
+      playerOutId: outgoing.id,
+      playerOutName: formatPlayerName(outgoing),
+      playerInId: benchCandidate.id,
+      playerInName: formatPlayerName(benchCandidate),
+      minute,
+      teamId: club.id,
+    };
+    substitutions.push(sub);
+    timeline.push({
+      minute,
+      teamSide: club.id === homeClub.id ? 'HOME' : 'AWAY',
+      type: MatchEventType.SUBSTITUTION,
+      primaryPlayerId: benchCandidate.id,
+      secondaryPlayerId: outgoing.id,
+      text: `${sub.playerInName} wchodzi za ${sub.playerOutName}`,
+    });
+    return activeIds.map(id => id === outgoing.id ? benchCandidate.id : id);
+  };
+
   for (let minute = 1; minute <= minutes; minute++) {
+    const absoluteMinute = minuteOffset + minute;
+    if (minuteOffset === 0 && (minute === 62 || minute === 76)) {
+      if (rng() < 0.78) homeActiveIds = addSubstitution(homeClub, homeSquad, homeLineup, homeActiveIds, absoluteMinute);
+      if (rng() < 0.78) awayActiveIds = addSubstitution(awayClub, awaySquad, awayLineup, awayActiveIds, absoluteMinute);
+    }
+    if (rng() < 0.009) addCard(homeClub, homeSquad, homeActiveIds, absoluteMinute);
+    if (rng() < 0.009) addCard(awayClub, awaySquad, awayActiveIds, absoluteMinute);
+    if (rng() < 0.0008) addCard(homeClub, homeSquad, homeActiveIds, absoluteMinute, true);
+    if (rng() < 0.0008) addCard(awayClub, awaySquad, awayActiveIds, absoluteMinute, true);
+
     const totalGoals = homeGoals + awayGoals;
     if (rng() < getMinuteGoalChance(homeProfile, awayProfile, homeDailyForm, 1.08, totalGoals)) {
       homeGoals++;
-      addGoal(homeClub, homeSquad, homeIds, minuteOffset + minute);
+      addGoal(homeClub, homeSquad, homeActiveIds, absoluteMinute);
     }
     if (rng() < getMinuteGoalChance(awayProfile, homeProfile, awayDailyForm, 1, totalGoals)) {
       awayGoals++;
-      addGoal(awayClub, awaySquad, awayIds, minuteOffset + minute);
+      addGoal(awayClub, awaySquad, awayActiveIds, absoluteMinute);
     }
   }
 
-  return { homeGoals, awayGoals, goals, homeLineup, awayLineup };
+  return { homeGoals, awayGoals, goals, cards, substitutions, timeline, homeLineup, awayLineup };
 };
 
 export const RelegationPlayoffSimulator = {
@@ -229,11 +341,15 @@ export const RelegationPlayoffSimulator = {
     if (context?.currentDate && context.seasonNumber !== undefined && result.homeLineup && result.awayLineup) {
       const weather = PolandWeatherService.getWeather(context.currentDate, matchId);
       const referee = RefereeService.assignPolishReferee(matchId, 4);
-      const allStarters = [
-        ...result.homeLineup.startingXI.filter((id): id is string => !!id),
-        ...result.awayLineup.startingXI.filter((id): id is string => !!id),
-      ];
-      const ratings = Object.fromEntries(allStarters.map((id, index) => [id, 6.1 + ((seed + index * 17) % 18) / 10]));
+      const ratings = buildReportRatings(
+        result.homeLineup,
+        result.awayLineup,
+        result.goals,
+        result.cards,
+        result.homeGoals,
+        result.awayGoals,
+        seed
+      );
       MatchHistoryService.logMatch({
         matchId,
         date: context.currentDate.toDateString(),
@@ -249,10 +365,10 @@ export const RelegationPlayoffSimulator = {
         addedTime: 5,
         refereeName: `${referee.firstName} ${referee.lastName}`,
         goals: result.goals,
-        cards: [],
-        substitutions: [],
+        cards: result.cards,
+        substitutions: result.substitutions,
         injuries: [],
-        timeline: [],
+        timeline: result.timeline.sort((a, b) => a.minute - b.minute),
         homeLineup: result.homeLineup.startingXI.filter((id): id is string => !!id),
         awayLineup: result.awayLineup.startingXI.filter((id): id is string => !!id),
         ratings,
@@ -327,6 +443,9 @@ export const RelegationPlayoffSimulator = {
         awayScore: leg2WithExtraTime.awayGoals,
         isExtraTime: true,
         goals: [...(report?.goals ?? []), ...extraTime.goals],
+        cards: [...(report?.cards ?? []), ...extraTime.cards],
+        substitutions: [...(report?.substitutions ?? []), ...extraTime.substitutions],
+        timeline: [...(report?.timeline ?? []), ...extraTime.timeline].sort((a, b) => a.minute - b.minute),
       });
     }
     if (extraTime.homeGoals !== extraTime.awayGoals) {

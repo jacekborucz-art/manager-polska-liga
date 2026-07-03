@@ -47,12 +47,20 @@ export const RecoveryService = {
         const recoveryUntil = player.nationalTeamRecoveryUntil
           ? new Date(player.nationalTeamRecoveryUntil).setHours(23, 59, 59, 999)
           : 0;
+        const majorTournamentRecoveryUntil = player.nationalTeamMajorTournamentRecoveryUntil
+          ? new Date(player.nationalTeamMajorTournamentRecoveryUntil).setHours(23, 59, 59, 999)
+          : 0;
         const currentRecoveryDay = new Date(currentDate).setHours(0, 0, 0, 0);
-        const hasNationalTeamRecovery = recoveryUntil >= currentRecoveryDay;
-        const nationalTeamDebtRecoveryMult = hasNationalTeamRecovery ? 2.0 : 1.0;
-        const nationalTeamConditionRecoveryMult = hasNationalTeamRecovery ? 1.35 : 1.0;
+        const isInjured = player.health.status === HealthStatus.INJURED;
+        const hasNationalTeamRecovery = !isInjured && recoveryUntil >= currentRecoveryDay;
+        const hasMajorTournamentRecovery = !isInjured && majorTournamentRecoveryUntil >= currentRecoveryDay;
+        const nationalTeamDebtRecoveryMult = hasMajorTournamentRecovery ? 3.0 : hasNationalTeamRecovery ? 2.0 : 1.0;
+        const nationalTeamConditionRecoveryMult = hasMajorTournamentRecovery ? 1.85 : hasNationalTeamRecovery ? 1.35 : 1.0;
         if (player.nationalTeamRecoveryUntil && !hasNationalTeamRecovery) {
           updated.nationalTeamRecoveryUntil = null;
+        }
+        if (player.nationalTeamMajorTournamentRecoveryUntil && !hasMajorTournamentRecovery) {
+          updated.nationalTeamMajorTournamentRecoveryUntil = null;
         }
 
 // TUTAJ WSTAW TEN KOD
@@ -67,7 +75,7 @@ export const RecoveryService = {
           ageModifier = 0.3 + 0.3 * physicalFactor;
         }
 
-        const injuryModifier = player.health.status === HealthStatus.INJURED ? 0.5 : 1.0;
+        const injuryModifier = isInjured ? 0.5 : 1.0;
 
         // 2. SPŁATA DŁUGU PRZEMĘCZENIA (Fatigue Debt Recovery)
         // Bazowa spłata zależy od Siły (99 STR = ~1.1 pkt długu / doba)

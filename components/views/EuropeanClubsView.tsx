@@ -5,7 +5,7 @@ import saWorldBgImg from '../../Graphic/themes/innekluby.png';
 import allTeamsBgImg from '../../Graphic/themes/allteams.png';
 import allCupsBgImg from '../../Graphic/themes/allcups.png';
 import { useGame } from '../../context/GameContext';
-import { ViewState, NationalTeam, Player, PlayerPosition, PlayerAttributes, WCQPlayoffState } from '../../types';
+import { ViewState, NationalTeam, Player, PlayerPosition, PlayerAttributes, WCQPlayoffState, MatchHistoryEntry } from '../../types';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../../resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../../resources/static_db/clubs/EuropeLeagueTeams';
 import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../../resources/static_db/clubs/ConferenceLeagueTeams';
@@ -603,6 +603,23 @@ interface TeamScheduleItem {
 
 const NT_MONTH_SHORT = ['STY', 'LUT', 'MAR', 'KWI', 'MAJ', 'CZE', 'LIP', 'SIE', 'WRZ', 'PAŹ', 'LIS', 'GRU'];
 
+const parseHistoryDate = (entry: MatchHistoryEntry): Date => {
+  const parsed = new Date(entry.date);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  return new Date(entry.season, 0, 1);
+};
+
+const historyCompetitionLabel = (competition: string): string => {
+  if (competition === 'FIFA World Cup') return 'Mistrzostwa Świata';
+  if (competition === 'UEFA EURO') return 'Mistrzostwa Europy';
+  return competition;
+};
+
+const historyGroupLabel = (competition: string): string | undefined => {
+  const match = competition.match(/(?:Grupa|Gr\.|Group)\s+([A-Z0-9]+)/i);
+  return match?.[1]?.toUpperCase();
+};
+
 interface TacticalLineupSlot {
   slot: {
     index: number;
@@ -745,9 +762,9 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
   const shortsColor = kitPrimary.toLowerCase() === '#ffffff' ? kitSecondary : kitPrimary;
   const teamSchedule = useMemo<TeamScheduleItem[]>(() => {
     const seasonStartYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
-    const historyById = new Map(
-      MatchHistoryService.getTeamHistory(team.id).map(entry => [entry.matchId, entry] as const)
-    );
+    const teamHistory = MatchHistoryService.getTeamHistory(team.id);
+    const historyById = new Map(teamHistory.map(entry => [entry.matchId, entry] as const));
+    const teamNameById = new Map(nationalTeams.map(nationalTeam => [nationalTeam.id, nationalTeam.name] as const));
 
     const toScheduleItems = (matchDay: (typeof NT_SCHEDULE_BY_YEAR)[number][number]): TeamScheduleItem[] => {
       const matchYear = matchDay.month >= 6 ? seasonStartYear : seasonStartYear + 1;
@@ -777,6 +794,25 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         });
     };
 
+    const toHistoryItem = (entry: MatchHistoryEntry): TeamScheduleItem | null => {
+      const home = teamNameById.get(entry.homeTeamId);
+      const away = teamNameById.get(entry.awayTeamId);
+      if (!home || !away) return null;
+      const date = parseHistoryDate(entry);
+
+      return {
+        id: entry.matchId,
+        date,
+        dateLabel: `${date.getDate()} ${NT_MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`,
+        home,
+        away,
+        competitionLabel: historyCompetitionLabel(entry.competition),
+        group: historyGroupLabel(entry.competition),
+        result: { homeGoals: entry.homeScore, awayGoals: entry.awayScore },
+        played: true,
+      };
+    };
+
     const baseMatchDays = NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [];
     const worldFriendlyMatchDays = baseMatchDays
       .map(matchDay => WorldNationalFriendlyService.generateMatchDay(matchDay, nationalTeams, seasonStartYear, matchSimulationSeed))
@@ -787,12 +823,18 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
       matchSimulationSeed
     );
 
-    return [
+    const scheduledItems = [
       ...baseMatchDays.flatMap(toScheduleItems),
       ...worldFriendlyMatchDays.flatMap(toScheduleItems),
       ...playoffWindowFriendlyMatchDays.flatMap(toScheduleItems),
-    ]
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    ];
+    const scheduledIds = new Set(scheduledItems.map(item => item.id));
+    const historyItems = teamHistory
+      .filter(entry => !scheduledIds.has(entry.matchId))
+      .map(toHistoryItem)
+      .filter((item): item is TeamScheduleItem => Boolean(item));
+
+    return [...scheduledItems, ...historyItems].sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [currentDate, matchSimulationSeed, nationalTeamIdByName, nationalTeams, team.id, team.name, wcqPlayoffState]);
 
   const filteredSchedule = useMemo(() => {

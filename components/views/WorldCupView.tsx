@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import wcBgImg from '../../Graphic/themes/worldcup.png';
 import { useGame } from '../../context/GameContext';
-import { MatchCardEntry, MatchGoalEntry, NationalTeam, ViewState, WCGroup, WCGroupStanding, WCKnockoutMatch, WCState } from '../../types';
+import { MatchCardEntry, MatchGoalEntry, NationalTeam, ViewState, WCGroup, WCGroupStanding, WCKnockoutMatch, WCState, WeatherSnapshot } from '../../types';
 import { WorldCupService, computeGroupStandings } from '../../services/WorldCupService';
 import { EuroTournamentService } from '../../services/EuroTournamentService';
 import { useProcessing } from '../ui/ProcessingOverlay';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 const GLASS_CARD = 'bg-slate-950/20 border border-white/[0.07] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[40px] relative overflow-hidden';
 const GLOSS_LAYER = 'absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none';
@@ -93,6 +94,39 @@ function filterCards(cards: MatchCardEntry[] | undefined, teamName: string, nati
   return cards.filter(c => c.teamId === nt?.id || c.teamId === teamName);
 }
 
+function translateWeather(description: string): string {
+  const map: Record<string, string> = {
+    'Clear sky': 'Bezchmurnie',
+    'Snow storm': 'Burza śnieżna',
+    Thunderstorm: 'Burza',
+    Snowfall: 'Opady śniegu',
+    'Heavy rain': 'Ulewa',
+    Sleet: 'Deszcz ze śniegiem',
+    'Light rain': 'Lekki deszcz',
+    'Strong wind': 'Silny wiatr',
+    Heat: 'Upał',
+    Frost: 'Mróz',
+    Cloudy: 'Pochmurno',
+  };
+  return map[description] ?? description;
+}
+
+function formatMinute(minute: number, wentToET?: boolean): string {
+  if (!wentToET && minute > 90) return `90+${minute - 90}`;
+  if (wentToET && minute > 120) return `120+${minute - 120}`;
+  return `${minute}`;
+}
+
+function cardLabel(card: MatchCardEntry): string {
+  if (card.type === 'YELLOW') return 'Żółta kartka';
+  if (card.type === 'SECOND_YELLOW') return 'Druga żółta';
+  return 'Czerwona kartka';
+}
+
+function cardColorClass(card: MatchCardEntry): string {
+  return card.type === 'YELLOW' ? 'text-yellow-300' : 'text-red-300';
+}
+
 interface WCMatchRowProps {
   home: string;
   away: string;
@@ -114,6 +148,10 @@ type TournamentReportMatch = {
   label: string;
   goals?: MatchGoalEntry[];
   cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
   homeGoalsAET?: number;
   awayGoalsAET?: number;
   homePenalties?: number;
@@ -243,7 +281,7 @@ function WCGroupMatchResultRow({ home, away, homeGoals, awayGoals, onClick }: Pi
   );
 }
 
-function WCGroupResults({ group, onOpenReport }: { group: WCGroup; onOpenReport: (match: TournamentReportMatch) => void }) {
+function WCGroupResults({ group, onOpenReport }: { group: WCGroup; onOpenReport: (matchId: string) => void }) {
   const matchesByDate = group.matches.reduce<Record<string, WCGroup['matches']>>((acc, match) => {
     if (!acc[match.date]) acc[match.date] = [];
     acc[match.date].push(match);
@@ -265,16 +303,7 @@ function WCGroupResults({ group, onOpenReport }: { group: WCGroup; onOpenReport:
                 away={m.away}
                 homeGoals={m.homeGoals}
                 awayGoals={m.awayGoals}
-                onClick={() => onOpenReport({
-                  home: m.home,
-                  away: m.away,
-                  homeGoals: m.homeGoals,
-                  awayGoals: m.awayGoals,
-                  date: m.date,
-                  label: `Grupa ${group.label}`,
-                  goals: m.goals,
-                  cards: m.cards,
-                })}
+                onClick={m.matchId ? () => onOpenReport(m.matchId as string) : undefined}
               />
             ))}
           </div>
@@ -288,7 +317,7 @@ interface WCKOMatchRowProps {
   m: WCKnockoutMatch;
   wcState: WCState;
   nationalTeams: NationalTeam[];
-  onOpenReport?: (match: TournamentReportMatch) => void;
+  onOpenReport?: (matchId: string) => void;
 }
 
 function WCKOMatchRow({ m, wcState, nationalTeams, onOpenReport }: WCKOMatchRowProps) {
@@ -343,23 +372,7 @@ function WCKOMatchRow({ m, wcState, nationalTeams, onOpenReport }: WCKOMatchRowP
   return (
     <button
       type="button"
-      onClick={() => onOpenReport?.({
-        home: m.home as string,
-        away: m.away as string,
-        homeGoals: m.homeGoals ?? 0,
-        awayGoals: m.awayGoals ?? 0,
-        date: m.date,
-        label: ROUND_LABEL[m.round] ?? m.round,
-        goals: m.goals,
-        cards: m.cards,
-        homeGoalsAET: m.homeGoalsAET,
-        awayGoalsAET: m.awayGoalsAET,
-        homePenalties: m.homePenalties,
-        awayPenalties: m.awayPenalties,
-        wentToET: m.wentToET,
-        wentToPenalties: m.wentToPenalties,
-        winner: m.winner,
-      })}
+      onClick={() => m.matchId && onOpenReport?.(m.matchId)}
       className="w-full px-8 py-4 rounded-2xl mb-3 border border-white/[0.08] text-left transition-all hover:border-white/20 hover:brightness-110"
       style={{ background: gradient }}
     >
@@ -452,6 +465,20 @@ function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: 
   const homeCards = filterCards(match.cards, match.home, nationalTeams);
   const awayCards = filterCards(match.cards, match.away, nationalTeams);
   const hasDetails = homeGoals.length > 0 || awayGoals.length > 0 || homeCards.length > 0 || awayCards.length > 0;
+  const redCardsHome = homeCards.filter(card => card.type !== 'YELLOW').length;
+  const redCardsAway = awayCards.filter(card => card.type !== 'YELLOW').length;
+  const allEvents = [
+    ...homeGoals.map(goal => ({ kind: 'goal' as const, minute: goal.minute, team: match.home, goal })),
+    ...awayGoals.map(goal => ({ kind: 'goal' as const, minute: goal.minute, team: match.away, goal })),
+    ...homeCards.map(card => ({ kind: 'card' as const, minute: card.minute, team: match.home, card })),
+    ...awayCards.map(card => ({ kind: 'card' as const, minute: card.minute, team: match.away, card })),
+  ].sort((a, b) => a.minute - b.minute);
+  const metaParts = [
+    match.venue,
+    match.attendance ? `${match.attendance.toLocaleString('pl-PL')} widzów` : null,
+    match.weather ? `${translateWeather(match.weather.description)} ${match.weather.tempC}°C` : null,
+    match.refereeName ? `Sędzia: ${match.refereeName}` : null,
+  ].filter((part): part is string => Boolean(part));
   const extraLabel = match.wentToPenalties
     ? `Karne ${match.homePenalties ?? 0}:${match.awayPenalties ?? 0}`
     : match.wentToET
@@ -465,14 +492,14 @@ function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: 
         {goals.map((goal, index) => (
           <div key={`g-${index}`} className="flex items-center justify-between gap-3 text-xs text-slate-200">
             <span>{goal.playerName}{goal.isPenalty ? ' (k.)' : ''}</span>
-            <span className="font-black text-emerald-300">{goal.minute}' GOL</span>
+            <span className="font-black text-emerald-300">{formatMinute(goal.minute, match.wentToET)}' GOL</span>
           </div>
         ))}
         {cards.map((card, index) => (
           <div key={`c-${index}`} className="flex items-center justify-between gap-3 text-xs text-slate-300">
             <span>{card.playerName}</span>
-            <span className={`font-black ${card.type === 'YELLOW' ? 'text-yellow-300' : 'text-red-300'}`}>
-              {card.minute}' {card.type === 'YELLOW' ? 'ŻÓŁTA' : card.type === 'SECOND_YELLOW' ? 'DRUGA ŻÓŁTA' : 'CZERWONA'}
+            <span className={`font-black ${cardColorClass(card)}`}>
+              {formatMinute(card.minute, match.wentToET)}' {cardLabel(card).toUpperCase()}
             </span>
           </div>
         ))}
@@ -485,7 +512,7 @@ function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: 
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[32px] border border-white/15 bg-slate-950 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.65)]" onClick={event => event.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[32px] border border-white/15 bg-slate-950 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.65)]" onClick={event => event.stopPropagation()}>
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-300">{match.label} · {match.date}</div>
@@ -509,16 +536,61 @@ function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: 
           </div>
         </div>
 
+        {metaParts.length > 0 && (
+          <div className="mb-5 grid gap-2 sm:grid-cols-2">
+            {metaParts.map(part => (
+              <div key={part} className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-xs font-bold text-slate-300">
+                {part}
+              </div>
+            ))}
+          </div>
+        )}
+
         {match.winner && (
           <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-emerald-200">
             Awans / zwycięzca: {match.winner}
           </div>
         )}
 
+        <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] text-center">
+          <div className="p-4">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bramki</div>
+            <div className="mt-1 text-lg font-black tabular-nums text-white">{homeGoals.length} : {awayGoals.length}</div>
+          </div>
+          <div className="border-x border-white/10 p-4">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Kartki</div>
+            <div className="mt-1 text-lg font-black tabular-nums text-white">{homeCards.length} : {awayCards.length}</div>
+          </div>
+          <div className="p-4">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Czerwone</div>
+            <div className="mt-1 text-lg font-black tabular-nums text-white">{redCardsHome} : {redCardsAway}</div>
+          </div>
+        </div>
+
         {hasDetails ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            <EventList title={match.home} goals={homeGoals} cards={homeCards} />
-            <EventList title={match.away} goals={awayGoals} cards={awayCards} />
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className={`${HEADING_FONT} mb-3 text-sm text-white`}>Przebieg meczu</div>
+              <div className="space-y-2">
+                {allEvents.map((event, index) => (
+                  <div key={`${event.kind}-${event.minute}-${index}`} className="grid grid-cols-[54px_minmax(0,1fr)_minmax(0,auto)] items-center gap-3 rounded-xl bg-slate-950/55 px-3 py-2 text-xs">
+                    <span className="font-black tabular-nums text-amber-200">{formatMinute(event.minute, match.wentToET)}'</span>
+                    <span className="min-w-0 truncate text-slate-200">
+                      {event.kind === 'goal'
+                        ? `${event.goal.playerName}${event.goal.isPenalty ? ' (karny)' : ''}`
+                        : `${event.card.playerName} · ${cardLabel(event.card)}`}
+                    </span>
+                    <span className={`font-black uppercase ${event.kind === 'goal' ? 'text-emerald-300' : cardColorClass(event.card)}`}>
+                      {event.kind === 'goal' ? 'Gol' : event.team}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <EventList title={match.home} goals={homeGoals} cards={homeCards} />
+              <EventList title={match.away} goals={awayGoals} cards={awayCards} />
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-center text-sm font-bold text-slate-400">
@@ -530,7 +602,7 @@ function TournamentMatchReportModal({ match, nationalTeams, onClose }: { match: 
   );
 }
 
-function GroupCard({ group, wcState, nationalTeams, onOpenReport }: { group: WCGroup; wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
+function GroupCard({ group, wcState, nationalTeams, onOpenReport }: { group: WCGroup; wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (matchId: string) => void }) {
   const standings = computeGroupStandings(group);
   return (
     <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-3">
@@ -604,7 +676,7 @@ function GroupCard({ group, wcState, nationalTeams, onOpenReport }: { group: WCG
   );
 }
 
-function BracketTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
+function BracketTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (matchId: string) => void }) {
   const rounds: Array<'R32' | 'R16' | 'QF' | 'SF' | 'THIRD' | 'FINAL'> = ['R32', 'R16', 'QF', 'SF', 'THIRD', 'FINAL'];
   return (
     <div className="flex flex-col gap-8">
@@ -633,7 +705,7 @@ function BracketTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState
   );
 }
 
-function FinalTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (match: TournamentReportMatch) => void }) {
+function FinalTab({ wcState, nationalTeams, onOpenReport }: { wcState: WCState; nationalTeams: NationalTeam[]; onOpenReport: (matchId: string) => void }) {
   const finalMatch = wcState.knockoutMatches.find(m => m.round === 'FINAL');
   const thirdMatch = wcState.knockoutMatches.find(m => m.round === 'THIRD');
 
@@ -782,7 +854,7 @@ const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' })
   const { runWithProcessing } = useProcessing();
   const [activeTab, setActiveTab] = useState<Tab>('grupy');
   const [skipConfirm, setSkipConfirm] = useState(false);
-  const [selectedReportMatch, setSelectedReportMatch] = useState<TournamentReportMatch | null>(null);
+  const [selectedReportMatchId, setSelectedReportMatchId] = useState<string | null>(null);
   const isEuro = mode === 'euro';
   const tournamentState = isEuro ? euroState : wcState;
   const setTournamentState = isEuro ? setEuroState : setWcState;
@@ -963,14 +1035,14 @@ const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' })
             {activeTab === 'grupy' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {tournamentState.groups.map(g => (
-                  <GroupCard key={g.label} group={g} wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />
+                  <GroupCard key={g.label} group={g} wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatchId} />
                 ))}
               </div>
             )}
 
-            {activeTab === 'drabinka' && <BracketTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />}
+            {activeTab === 'drabinka' && <BracketTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatchId} />}
 
-            {activeTab === 'final' && <FinalTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatch} />}
+            {activeTab === 'final' && <FinalTab wcState={tournamentState} nationalTeams={nationalTeams} onOpenReport={setSelectedReportMatchId} />}
 
             {activeTab === 'statystyki' && <StatystykiTab wcState={tournamentState} nationalTeams={nationalTeams} />}
 
@@ -979,13 +1051,11 @@ const WorldCupView: React.FC<{ mode?: 'world' | 'euro' }> = ({ mode = 'world' })
 
       </div>
 
-      {selectedReportMatch && (
-        <TournamentMatchReportModal
-          match={selectedReportMatch}
-          nationalTeams={nationalTeams}
-          onClose={() => setSelectedReportMatch(null)}
-        />
-      )}
+      <MatchReportModalPolishLeague
+        matchId={selectedReportMatchId}
+        teamType="national"
+        onClose={() => setSelectedReportMatchId(null)}
+      />
     </div>
   );
 };

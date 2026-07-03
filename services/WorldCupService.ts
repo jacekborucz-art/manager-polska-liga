@@ -28,6 +28,7 @@ import {
 } from '../types';
 import { WCQPlayoffService } from './WCQPlayoffService';
 import { simulateWCGroupMatch, simulateSinglePlayoffMatch } from './NationalTeamSimulator';
+import { MatchHistoryService } from './MatchHistoryService';
 import { NATIONAL_TEAMS_AFRICA } from '../resources/static_db/NationalTeams/NationalTeamsAfrica';
 import { NATIONAL_TEAMS_AFC } from '../resources/static_db/NationalTeams/NationalTeamsAFC';
 import { NATIONAL_TEAMS_CONMEBOL } from '../resources/static_db/NationalTeams/NationalTeamsCONMEBOL';
@@ -465,7 +466,21 @@ export const WorldCupService = {
         if (nationalTeams && updatedPlayers && coaches) {
           const full = simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
           updatedPlayers = full.updatedPlayers ?? updatedPlayers;
-          group.matches.push({ home, away, homeGoals: full.homeGoals, awayGoals: full.awayGoals, date: dateStr, goals: full.goals, cards: full.cards });
+          if (full.matchHistoryEntry) MatchHistoryService.logMatch(full.matchHistoryEntry);
+          group.matches.push({
+            matchId: full.matchId,
+            home,
+            away,
+            homeGoals: full.homeGoals,
+            awayGoals: full.awayGoals,
+            date: dateStr,
+            goals: full.goals,
+            cards: full.cards,
+            venue: full.venue,
+            attendance: full.attendance,
+            weather: full.weather,
+            refereeName: full.refereeName,
+          });
         } else {
           const rng = new Rng(matchSeed);
           const result = simulateGroupMatchResult(getTeamRep(home), getTeamRep(away), rng);
@@ -571,8 +586,9 @@ export const WorldCupService = {
       const matchSeed = seed ^ strHash(`WC_KO_${m.id}_${m.home}_${m.away}`);
 
       if (nationalTeams && updatedPlayers && coaches) {
-        const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
+        const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches, year);
         updatedPlayers = full.updatedPlayers ?? updatedPlayers;
+        if (full.matchHistoryEntry) MatchHistoryService.logMatch(full.matchHistoryEntry);
         const wentToET = full.homeGoals === full.awayGoals;
         const wentToPenalties = full.penaltyWinner !== undefined;
         const winner = full.penaltyWinner
@@ -581,6 +597,7 @@ export const WorldCupService = {
             : (full.homeGoals > full.awayGoals ? m.home : m.away));
         return {
           ...m,
+          matchId: full.matchHistoryEntry?.matchId,
           homeGoals: full.homeGoals,
           awayGoals: full.awayGoals,
           homeGoalsAET: full.homeGoalsAET,
@@ -592,6 +609,10 @@ export const WorldCupService = {
           winner,
           goals: full.goals,
           cards: full.cards,
+          venue: full.venue,
+          attendance: full.attendance,
+          weather: full.weather,
+          refereeName: full.refereeName,
         };
       }
 

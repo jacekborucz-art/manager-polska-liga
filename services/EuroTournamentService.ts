@@ -14,6 +14,7 @@ import {
 import { simulateSinglePlayoffMatch, simulateWCGroupMatch } from './NationalTeamSimulator';
 import { RecoveryService } from './RecoveryService';
 import { computeGroupStandings } from './WorldCupService';
+import { MatchHistoryService } from './MatchHistoryService';
 
 interface EuroGroupDaySimulation {
   groups: WCGroup[];
@@ -222,7 +223,14 @@ export const EuroTournamentService = {
           ? simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, updatedPlayers, coaches)
           : { homeGoals: 0, awayGoals: 0, goals: [], cards: [] };
         updatedPlayers = result.updatedPlayers ?? updatedPlayers;
+        if (result.matchHistoryEntry) {
+          MatchHistoryService.logMatch({
+            ...result.matchHistoryEntry,
+            competition: 'UEFA EURO',
+          });
+        }
         group.matches.push({
+          matchId: result.matchId,
           home,
           away,
           homeGoals: result.homeGoals,
@@ -230,6 +238,10 @@ export const EuroTournamentService = {
           date: dateStr(year, day),
           goals: result.goals,
           cards: result.cards,
+          venue: result.venue,
+          attendance: result.attendance,
+          weather: result.weather,
+          refereeName: result.refereeName,
         });
       });
     });
@@ -284,8 +296,9 @@ export const EuroTournamentService = {
       if (match.date !== targetDate || match.winner || !match.home || !match.away) return match;
       const matchSeed = seed ^ strHash(`EURO_KO_${match.id}_${match.home}_${match.away}`);
       if (nationalTeams && updatedPlayers && coaches) {
-        const result = simulateSinglePlayoffMatch(match.home, match.away, 'UEFA EURO', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
+        const result = simulateSinglePlayoffMatch(match.home, match.away, 'UEFA EURO', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches, year);
         updatedPlayers = result.updatedPlayers ?? updatedPlayers;
+        if (result.matchHistoryEntry) MatchHistoryService.logMatch(result.matchHistoryEntry);
         const wentToET = result.homeGoals === result.awayGoals;
         const wentToPenalties = result.penaltyWinner !== undefined;
         const winner = result.penaltyWinner
@@ -294,6 +307,7 @@ export const EuroTournamentService = {
             : (result.homeGoals > result.awayGoals ? match.home : match.away));
         return {
           ...match,
+          matchId: result.matchHistoryEntry?.matchId,
           homeGoals: result.homeGoals,
           awayGoals: result.awayGoals,
           homeGoalsAET: result.homeGoalsAET,
@@ -305,6 +319,10 @@ export const EuroTournamentService = {
           winner,
           goals: result.goals,
           cards: result.cards,
+          venue: result.venue,
+          attendance: result.attendance,
+          weather: result.weather,
+          refereeName: result.refereeName,
         };
       }
       return match;
