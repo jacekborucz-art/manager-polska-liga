@@ -180,6 +180,12 @@ export const TransferSellerLogicService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
     const sellerNeedsCash = sellerClub.budget < Math.max(askingPrice * 0.7, 4_000_000);
+    const buyerAvailableCash = Math.max(buyerClub.budget || 0, buyerClub.transferBudget || 0);
+    const getExceptionalAskingPrice = (multiplier: number): number =>
+      Math.max(
+        askingPrice,
+        applyTransferCap(Math.max(askingPrice, baseAskingPrice) * multiplier, sellerClub, player)
+      );
 
     if (timing !== TransferTiming.CONTRACT_END && daysLeft > 0 && daysLeft <= PRE_CONTRACT_PRIORITY_DAYS) {
       return {
@@ -210,6 +216,17 @@ export const TransferSellerLogicService = {
       blocksShortDelaySale &&
       reputationGap < 5
     ) {
+      const exceptionalAskingPrice = getExceptionalAskingPrice(coachSeesAsImportant ? 2.35 : 2.10);
+      if (buyerAvailableCash >= exceptionalAskingPrice * 0.85) {
+        return {
+          allowTalks: true,
+          askingPrice: exceptionalAskingPrice,
+          reason: coachSeesAsImportant
+            ? `Zarzad nie chce sprzedawac ulubienca trenera, ale przy bardzo wysokiej ofercie dopusci rozmowy. Cena wyjsciowa wynosi ${exceptionalAskingPrice.toLocaleString()} PLN.`
+            : `Klub traktuje zawodnika jako czesc rdzenia skladu, ale przy bardzo wysokiej ofercie dopusci rozmowy. Cena wyjsciowa wynosi ${exceptionalAskingPrice.toLocaleString()} PLN.`
+        };
+      }
+
       return {
         allowTalks: false,
         askingPrice,
@@ -237,6 +254,15 @@ export const TransferSellerLogicService = {
       daysLeft > PRE_CONTRACT_PRIORITY_DAYS;
 
     if (protectedRivalSale && blocksShortDelaySale) {
+      const rivalAskingPrice = getExceptionalAskingPrice(2.45);
+      if (buyerAvailableCash >= rivalAskingPrice * 0.90) {
+        return {
+          allowTalks: true,
+          askingPrice: rivalAskingPrice,
+          reason: `Klub nie chce wzmacniac ligowego rywala, ale bardzo wysoka oferta moze przelamac opor. Cena wyjsciowa wynosi ${rivalAskingPrice.toLocaleString()} PLN.`
+        };
+      }
+
       return {
         allowTalks: false,
         askingPrice,
@@ -253,6 +279,15 @@ export const TransferSellerLogicService = {
       daysLeft > PRE_CONTRACT_PRIORITY_DAYS;
 
     if (protectedTopElevenSale && blocksShortDelaySale) {
+      const protectedAskingPrice = getExceptionalAskingPrice(1.85);
+      if (buyerAvailableCash >= protectedAskingPrice * 0.90) {
+        return {
+          allowTalks: true,
+          askingPrice: protectedAskingPrice,
+          reason: `Klub nie planuje sprzedazy waznego zawodnika, ale przy wyraznej nadplacie dopusci rozmowy. Cena wyjsciowa wynosi ${protectedAskingPrice.toLocaleString()} PLN.`
+        };
+      }
+
       return {
         allowTalks: false,
         askingPrice,

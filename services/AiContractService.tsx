@@ -326,6 +326,71 @@ const _getRecruitmentReputationBonus = (
   return _getPlayerReputationScore(player) * strategyMultiplier * urgencyMultiplier;
 };
 
+const _getTargetDepthCount = (position: PlayerPosition): number =>
+  position === PlayerPosition.GK ? 3 : position === PlayerPosition.FWD ? 6 : 8;
+
+const _isQuantityDepthNeed = (
+  need: ClubNeedAssessment,
+  squad: Player[],
+  position: PlayerPosition
+): boolean => {
+  if (need.reason !== 'SHORTAGE') return false;
+  const positionCount = squad.filter(player => player.position === position).length;
+  return (
+    squad.length < AI_MIN_SQUAD_SIZE ||
+    positionCount < MIN_SQUAD_POSITION_COUNTS[position] ||
+    positionCount < _getTargetDepthCount(position)
+  );
+};
+
+const _shuffleMarketOrder = <T,>(
+  items: T[],
+  seed: string,
+  getId: (item: T, index: number) => string
+): T[] =>
+  [...items]
+    .map((item, index) => ({
+      item,
+      roll: _seededRandom(`${seed}_${getId(item, index)}_${index}`)
+    }))
+    .sort((a, b) => a.roll - b.roll)
+    .map(entry => entry.item);
+
+const _pickDiscoveredMarketPlayer = <T extends Player>(
+  players: T[],
+  seed: string,
+  scorePlayer: (player: T) => number,
+  options: { discoveryShare?: number; maxPool?: number; noise?: number } = {}
+): T | null => {
+  if (players.length === 0) return null;
+
+  const discoveryShare = options.discoveryShare ?? 0.40;
+  const maxPool = options.maxPool ?? 10;
+  const noise = options.noise ?? 5;
+  const discovered = players
+    .map((player, index) => {
+      const score = scorePlayer(player);
+      const roll = _seededRandom(`${seed}_SCAN_${player.id}_${index}`);
+      return {
+        player,
+        score,
+        discoveryScore: score + (roll - 0.5) * noise
+      };
+    })
+    .sort((a, b) => b.discoveryScore - a.discoveryScore);
+
+  const visibleCount = Math.min(
+    discovered.length,
+    Math.max(1, Math.min(maxPool, Math.ceil(discovered.length * discoveryShare)))
+  );
+  const visible = discovered
+    .slice(0, visibleCount)
+    .sort((a, b) => b.score - a.score);
+  const pickRoll = _seededRandom(`${seed}_PICK`);
+  const pickIndex = Math.min(visible.length - 1, Math.floor(Math.pow(pickRoll, 1.35) * visible.length));
+  return visible[pickIndex]?.player ?? null;
+};
+
 const _hashToUnit = (seed: string): number => _seededRandom(seed);
 
 const _getCoachCoreAssessment = (coach: Coach | null): { experience: number; decisionMaking: number; quality: number } => {
@@ -1038,8 +1103,9 @@ processAiRecruitment: (
       const freeAgentCandidates = (updatedPlayersMap['FREE_AGENTS'] || []).filter(fa => {
         const needFA = needsFA.find(n => n.position === fa.position);
         if (!needFA) return false;
-        const faMinOvr = needFA.reason === 'SHORTAGE' ? idealOvr - 30 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
-        const faMaxOvr = needFA.reason === 'SHORTAGE' ? idealOvr + 12 : idealOvr + 7;
+        const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
+        const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
+        const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
         if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
         if (fa.aiNegotiationClubId) return false;
         if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
@@ -1047,9 +1113,10 @@ processAiRecruitment: (
         const posSquad = squad.filter(p => p.position === fa.position);
         const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
         const hasShortage = posSquad.length < minCounts[fa.position];
+        const needsSquadBody = isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE;
         const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
 
-        return hasShortage || isUpgrade;
+        return hasShortage || needsSquadBody || isUpgrade;
       }).sort((a, b) => {
         const needA = needsFA.find(n => n.position === a.position);
         const needB = needsFA.find(n => n.position === b.position);
@@ -1057,7 +1124,20 @@ processAiRecruitment: (
         const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
         return scoreB - scoreA || a.age - b.age;
       });
-      const candidate = gulfStarCandidate || freeAgentCandidates[0];
+      const candidate = gulfStarCandidate || _pickDiscoveredMarketPlayer(
+        freeAgentCandidates,
+        `AI_FA_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
+        player => {
+          const need = needsFA.find(n => n.position === player.position);
+          return AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: need?.urgency }) +
+            _getRecruitmentReputationBonus(player, 3, need);
+        },
+        {
+          discoveryShare: hasCriticalShortage ? 0.60 : 0.42,
+          maxPool: hasCriticalShortage ? 12 : 8,
+          noise: hasCriticalShortage ? 7 : 10
+        }
+      );
 
       if (!candidate) return club;
 
@@ -1392,7 +1472,11 @@ processAiRecruitment: (
 
     const sellerClubMap = new Map(updatedClubs.map(c => [c.id, c]));
 
-    for (const club of clubs) {
+    for (const club of _shuffleMarketOrder(
+      clubs,
+      `AI_TL_CLUB_ORDER_${currentDate.toISOString().slice(0, 10)}`,
+      item => item.id
+    )) {
       if (club.id === userTeamId) continue;
 
       // Stagger: w oknie co 2 dni (pilność), poza oknem co 12 dni (przyszłe okno)
@@ -1429,11 +1513,12 @@ processAiRecruitment: (
         // OVR range zależy od pilności: CRITICAL szuka szerzej (desperacja), LOW tylko wąski upgrade
         // ovrCap: idealOvr powyżej 95 jest nieosiągalne — klampujemy by top kluby w ogóle widziały kandydatów
         const ovrCap = Math.min(idealOvr, 95);
-        const ovrLow = needTL.reason === 'SHORTAGE' ? ovrCap - 30 :
+        const isQuantityNeed = _isQuantityDepthNeed(needTL, squad, p.position);
+        const ovrLow = isQuantityNeed ? 45 :
                        needTL.urgency === 'CRITICAL' ? ovrCap - 14 :
                        needTL.urgency === 'HIGH'     ? ovrCap - 11 :
                        needTL.urgency === 'LOW'      ? ovrCap - 4  : ovrCap - 8;
-        const ovrHigh = needTL.reason === 'SHORTAGE' ? ovrCap + 12 : needTL.urgency === 'LOW' ? ovrCap + 5 : ovrCap + 10;
+        const ovrHigh = isQuantityNeed ? Math.max(ovrCap + 12, 99) : needTL.urgency === 'LOW' ? ovrCap + 5 : ovrCap + 10;
         const normalRange = p.overallRating >= ovrLow && p.overallRating <= ovrHigh;
         const bargainRange = p.overallRating > ovrHigh && p.overallRating <= ovrCap + 20;
         if (!normalRange && !bargainRange) return false;
@@ -1441,7 +1526,7 @@ processAiRecruitment: (
         // Kandydat musi być lepszy od obecnego najsłabszego na tej pozycji (upgrade check)
         const posSquad = (updatedPlayersMap[club.id] || []).filter(sq => sq.position === p.position);
         const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
-        if (posSquad.length >= minCounts[p.position] && weakestExisting && p.overallRating <= weakestExisting.overallRating) return false;
+        if (!isQuantityNeed && posSquad.length >= minCounts[p.position] && weakestExisting && p.overallRating <= weakestExisting.overallRating) return false;
 
         const sellerClub = sellerClubMap.get(p.clubId || '');
         if (!sellerClub) return false;
@@ -1524,7 +1609,17 @@ processAiRecruitment: (
           return bScore - aScore;
         });
       }
-      const best = sortedCandidates[0];
+      const rankScores = new Map(sortedCandidates.map((player, index) => [player.id, sortedCandidates.length - index]));
+      const best = _pickDiscoveredMarketPlayer(
+        sortedCandidates,
+        `AI_TL_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}_${clubStrategy}`,
+        player => rankScores.get(player.id) ?? 0,
+        {
+          discoveryShare: hasCriticalShortageTL ? 0.65 : 0.38,
+          maxPool: hasCriticalShortageTL ? 14 : 9,
+          noise: hasCriticalShortageTL ? 4 : 6
+        }
+      ) || sortedCandidates[0];
       const sellerClub = sellerClubMap.get(best.clubId || '');
       if (!sellerClub) continue;
 
@@ -1658,7 +1753,11 @@ processAiRecruitment: (
 
     const sellerClubMap = new Map(updatedClubs.map(c => [c.id, c]));
 
-    for (const club of clubs) {
+    for (const club of _shuffleMarketOrder(
+      clubs,
+      `AI_IT_CLUB_ORDER_${currentDate.toISOString().slice(0, 10)}`,
+      item => item.id
+    )) {
       if (club.id === userTeamId) continue;
       // Stagger: w oknie co 3 dni, poza oknem co 15 dni
       const staggerInt = windowOpen ? 3 : 15;
@@ -1700,21 +1799,42 @@ processAiRecruitment: (
             _isExpiringBigClubVeteranStar(p, sellerClub, currentDate);
           if (isGulfVeteranStarTarget) return true;
 
-          if (!(p.interestedClubs || []).includes(club.id)) return false;
-          if (!needsITMap.has(p.position)) return false;
+          const isShortlisted = (p.interestedClubs || []).includes(club.id);
+          const need = needsITMap.get(p.position);
+          if (!need) return false;
 
-          const need = needsITMap.get(p.position)!;
+          const buyerPositionAverage = _getPositionAverageOverall(squad, p.position);
+          const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
+          const isOpenMarketTarget =
+            !isShortlisted &&
+            (
+              isQuantityNeed ||
+              p.overallRating >= buyerPositionAverage + (need.starterRequired ? 2 : 3) ||
+              (club.reputation >= (sellerClub?.reputation ?? 0) + 2 && p.overallRating >= buyerPositionAverage + 1)
+            );
+          if (!isShortlisted && !isOpenMarketTarget) return false;
+
           const ovrCap = Math.min(idealOvr, 95);
-          const low = need.reason === 'SHORTAGE' ? ovrCap - 30 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8;
-          return p.overallRating >= low && p.overallRating <= ovrCap + 12;
+          const low = isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8;
+          const high = isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + (isShortlisted ? 12 : 8);
+          return p.overallRating >= low && p.overallRating <= high;
         });
 
       if (targets.length === 0) continue;
 
-      const target = [...targets].sort((a, b) =>
-        (AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needsITMap.get(b.position)?.urgency }) + _getRecruitmentReputationBonus(b, 2, needsITMap.get(b.position))) -
-        (AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needsITMap.get(a.position)?.urgency }) + _getRecruitmentReputationBonus(a, 2, needsITMap.get(a.position)))
-      )[0];
+      const target = _pickDiscoveredMarketPlayer(
+        targets,
+        `AI_IT_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
+        player =>
+          AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: needsITMap.get(player.position)?.urgency }) +
+          _getRecruitmentReputationBonus(player, 2, needsITMap.get(player.position)),
+        {
+          discoveryShare: hasCriticalShortageIT ? 0.62 : 0.34,
+          maxPool: hasCriticalShortageIT ? 14 : 8,
+          noise: hasCriticalShortageIT ? 5 : 9
+        }
+      );
+      if (!target) continue;
       const sellerClub = sellerClubMap.get(target.clubId || '');
       if (!sellerClub) continue;
 
@@ -1742,7 +1862,16 @@ processAiRecruitment: (
       );
       if (!stance.allowTalks) continue;
 
-      const bidInput: TransferClubBidInput = { fee: stance.askingPrice, timing: transferTimingInt };
+      const agreedFee = stance.askingPrice;
+      const finalBudgetCapIT = AiClubTransferStrategyService.budgetCap(
+        isGulfVeteranStarTarget ? 0.92 : hasCriticalShortageIT ? 0.94 : Math.min(0.82, 0.55 + club.reputation * 0.018),
+        aiStrategy,
+        { needUrgency: needsITMap.get(target.position)?.urgency, askingPrice: agreedFee }
+      );
+      if (club.budget < agreedFee + proposedSalary * 0.5) continue;
+      if (agreedFee > club.budget * finalBudgetCapIT) continue;
+
+      const bidInput: TransferClubBidInput = { fee: agreedFee, timing: transferTimingInt };
       const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
         bidInput, target, sellerClub, club, sellerSquad, currentDate, undefined, sellerFavoritesIT
       );
@@ -1778,7 +1907,7 @@ processAiRecruitment: (
           toClub: club.name,
           status: 'PLAYER_REJECTED',
           reason: playerDecision.reason,
-          fee: askingPrice,
+          fee: agreedFee,
           playerId: target.id,
           fromClubId: sellerClub.id,
           toClubId: club.id,
@@ -1798,7 +1927,7 @@ processAiRecruitment: (
               ...p,
               transferPendingClubId: club.id,
               transferReportDate: reportDate.toISOString(),
-              transferPendingFee: askingPrice,
+              transferPendingFee: agreedFee,
               transferPendingSalary: proposedSalaryIT,
               transferPendingBonus: proposedBonus,
               transferPendingContractYears: contractYears,
@@ -1816,7 +1945,7 @@ processAiRecruitment: (
         fromClub: sellerClub.name,
         toClub: club.name,
         status: 'OFFER_MADE',
-        fee: askingPrice,
+        fee: agreedFee,
         playerId: target.id,
         fromClubId: sellerClub.id,
         toClubId: club.id,
@@ -1828,8 +1957,8 @@ processAiRecruitment: (
 
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
       updatedClubs = updatedClubs.map(c => {
-        if (c.id === club.id) return { ...c, budget: c.budget - askingPrice };
-        if (c.id === sellerClubId) return { ...c, budget: c.budget + askingPrice };
+        if (c.id === club.id) return { ...c, budget: c.budget - agreedFee };
+        if (c.id === sellerClubId) return { ...c, budget: c.budget + agreedFee };
         return c;
       });
     }
