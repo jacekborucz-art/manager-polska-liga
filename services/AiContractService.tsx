@@ -75,13 +75,15 @@ const GULF_MEGA_OFFER_MAX_ANNUAL_EUR = 125_000_000;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR = 90;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION = 17;
 const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
-  [PlayerPosition.GK]: 2,
-  [PlayerPosition.DEF]: 6,
-  [PlayerPosition.MID]: 6,
-  [PlayerPosition.FWD]: 4,
+  [PlayerPosition.GK]: 3,
+  [PlayerPosition.DEF]: 7,
+  [PlayerPosition.MID]: 7,
+  [PlayerPosition.FWD]: 5,
 };
+const AI_MIN_SQUAD_SIZE = 26;
+const AI_TARGET_SQUAD_SIZE = 28;
 const AI_MAX_SQUAD_SIZE = 32;
-const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = 25;
+const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = AI_TARGET_SQUAD_SIZE;
 const TRANSFER_LIST_MAX_SHARE = 0.25;
 const HIGH_REPUTATION_RELEASE_THRESHOLD = 80;
 const HIGH_REPUTATION_RELEASE_CHANCE = 0.03;
@@ -278,7 +280,7 @@ const _countByPosition = (squad: Player[]): Record<PlayerPosition, number> => ({
 
 const _hasCriticalDepthShortage = (squad: Player[]): boolean => {
   const counts = _countByPosition(squad);
-  return (Object.keys(MIN_SQUAD_POSITION_COUNTS) as PlayerPosition[])
+  return squad.length < AI_MIN_SQUAD_SIZE || (Object.keys(MIN_SQUAD_POSITION_COUNTS) as PlayerPosition[])
     .some(pos => counts[pos] < MIN_SQUAD_POSITION_COUNTS[pos]);
 };
 
@@ -501,8 +503,8 @@ const _shouldAiTryRenewContract = (
   if (positionCount <= MIN_SQUAD_POSITION_COUNTS[player.position]) return true;
 
   const monthKey = `${currentDate.getFullYear()}_${currentDate.getMonth()}`;
-  const conservativeClub = club.reputation <= 7 && squadSize < 25;
-  const depthChance = conservativeClub ? 0.55 : 0.25;
+  const conservativeClub = club.reputation <= 7 && squadSize < AI_TARGET_SQUAD_SIZE;
+  const depthChance = squadSize < AI_MIN_SQUAD_SIZE ? 0.75 : conservativeClub ? 0.55 : 0.25;
   return daysLeft <= PRE_CONTRACT_PRIORITY_DAYS && _seededRandom(`AI_RENEW_DEPTH_${club.id}_${player.id}_${monthKey}`) < depthChance;
 };
 
@@ -705,6 +707,36 @@ const _assessClubNeeds = (
     const impulseMultiplier = aiStrategy ? Math.max(0.55, aiStrategy.budgetAggression) : 1.0;
     if (seededRand(i * 113 + 7) < 0.06 * budgetAggression * impulseMultiplier) {
       results.push({ position: pos, urgency: 'LOW', reason: 'IMPULSE', starterRequired: false });
+    }
+  }
+
+  if (squad.length < AI_TARGET_SQUAD_SIZE) {
+    const depthPositions = positions
+      .filter(pos => !results.some(result => result.position === pos))
+      .map((pos, index) => {
+        const posSquad = squad.filter(p => p.position === pos);
+        const targetShare = Math.max(
+          MIN_SQUAD_POSITION_COUNTS[pos],
+          pos === PlayerPosition.GK ? 3 : pos === PlayerPosition.FWD ? 6 : 8
+        );
+        const weakest = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
+        const shortageRatio = (targetShare - posSquad.length) / targetShare;
+        const qualityGap = weakest ? Math.max(0, idealOvr - weakest.overallRating) / 20 : 1;
+        return {
+          pos,
+          score: shortageRatio * 8 + qualityGap + seededRand(700 + index) * 0.25
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const depthNeed = depthPositions.find(entry => entry.score > 0);
+    if (depthNeed) {
+      results.push({
+        position: depthNeed.pos,
+        urgency: squad.length < AI_MIN_SQUAD_SIZE ? 'CRITICAL' : 'HIGH',
+        reason: 'SHORTAGE',
+        starterRequired: false
+      });
     }
   }
 
@@ -2167,6 +2199,7 @@ processAiRecruitment: (
       if (club.id === userTeamId) continue;
       const squad = updatedPlayersMap[club.id];
       if (!squad || squad.length === 0) continue;
+      if (squad.length <= AI_TARGET_SQUAD_SIZE) continue;
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       // Liczniki głębokości składu (ochrona minimalna)
@@ -2258,6 +2291,7 @@ performSeasonSquadReview: (
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length === 0) return club;
+      if (squad.length <= AI_TARGET_SQUAD_SIZE) return club;
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       const counts = {
@@ -2377,7 +2411,7 @@ performSeasonSquadReview: (
       if (club.id === userTeamId) continue;
 
       const squad = updatedPlayersMap[club.id] || [];
-      if (squad.length < 12) continue;
+      if (squad.length <= AI_TARGET_SQUAD_SIZE) continue;
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
       const eligible = squad.filter(p =>
@@ -2425,7 +2459,9 @@ performSeasonSquadReview: (
           if (Math.random() < 0.5 && _canAiReleasePlayer(player, club, currentDate, 'WEAK_CONTRACT_CUT')) {
             const releaseCost = Math.floor(player.annualSalary * 0.4);
             const posCountAfter = finalSquad.filter(p => p.position === player.position && p.id !== player.id).length;
-            const canRelease = currentClubCopy.budget >= releaseCost && posCountAfter >= (minDepth[player.position] || 3);
+            const canRelease = currentClubCopy.budget >= releaseCost &&
+              finalSquad.length - 1 >= AI_MIN_SQUAD_SIZE &&
+              posCountAfter >= (minDepth[player.position] || 3);
 
             if (canRelease) {
               const currentYear = currentDate.getFullYear();
@@ -2454,12 +2490,12 @@ performSeasonSquadReview: (
               finalSquad = finalSquad.filter(p => p.id !== player.id);
               updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
               currentClubCopy.budget -= releaseCost;
-            } else if (!_isInLastContractYear(player, currentDate)) {
+            } else if (finalSquad.length > AI_TARGET_SQUAD_SIZE && !_isInLastContractYear(player, currentDate)) {
               finalSquad = finalSquad.map(p =>
                 p.id === player.id ? { ...p, isOnTransferList: true } : p
               );
             }
-          } else if (!_isInLastContractYear(player, currentDate)) {
+          } else if (finalSquad.length > AI_TARGET_SQUAD_SIZE && !_isInLastContractYear(player, currentDate)) {
             finalSquad = finalSquad.map(p =>
               p.id === player.id ? { ...p, isOnTransferList: true } : p
             );

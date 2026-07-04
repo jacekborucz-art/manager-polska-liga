@@ -5,6 +5,52 @@ import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { pickNationalityForRegion } from './NationalityService';
 
+const AI_TRANSITION_MIN_SQUAD_SIZE = 26;
+const AI_TRANSITION_MIN_POSITION_COUNTS: Record<PlayerPosition, number> = {
+  [PlayerPosition.GK]: 3,
+  [PlayerPosition.DEF]: 7,
+  [PlayerPosition.MID]: 7,
+  [PlayerPosition.FWD]: 5,
+};
+
+const countByPosition = (squad: Player[]): Record<PlayerPosition, number> => ({
+  [PlayerPosition.GK]: squad.filter(player => player.position === PlayerPosition.GK).length,
+  [PlayerPosition.DEF]: squad.filter(player => player.position === PlayerPosition.DEF).length,
+  [PlayerPosition.MID]: squad.filter(player => player.position === PlayerPosition.MID).length,
+  [PlayerPosition.FWD]: squad.filter(player => player.position === PlayerPosition.FWD).length,
+});
+
+const buildProtectedAiExpiredContractIds = (squad: Player[], seasonEndDate: Date): Set<string> => {
+  const expiredCandidates = squad.filter(player =>
+    player.contractEndDate &&
+    new Date(player.contractEndDate) <= seasonEndDate &&
+    !player.transferPendingClubId
+  );
+
+  const expiredIds = new Set(expiredCandidates.map(player => player.id));
+  const retained = squad.filter(player => !expiredIds.has(player.id));
+  const counts = countByPosition(retained);
+  const protectedIds = new Set<string>();
+
+  const candidatesByUsefulness = [...expiredCandidates].sort((a, b) => {
+    const needA = counts[a.position] < AI_TRANSITION_MIN_POSITION_COUNTS[a.position] ? 1 : 0;
+    const needB = counts[b.position] < AI_TRANSITION_MIN_POSITION_COUNTS[b.position] ? 1 : 0;
+    return needB - needA || b.overallRating - a.overallRating || a.age - b.age;
+  });
+
+  for (const candidate of candidatesByUsefulness) {
+    const needsTotalDepth = retained.length < AI_TRANSITION_MIN_SQUAD_SIZE;
+    const needsPositionDepth = counts[candidate.position] < AI_TRANSITION_MIN_POSITION_COUNTS[candidate.position];
+    if (!needsTotalDepth && !needsPositionDepth) continue;
+
+    protectedIds.add(candidate.id);
+    retained.push(candidate);
+    counts[candidate.position]++;
+  }
+
+  return protectedIds;
+};
+
 export const SeasonTransitionService = {
   /**
    * Przetwarza przejście zawodników między sezonami: emerytury i nowi gracze.
@@ -30,11 +76,14 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
 
       const currentSquad = updatedMap[clubId];
       const nextSquad: Player[] = [];
+      const protectedAiExpiredContractIds = clubId !== userTeamId
+        ? buildProtectedAiExpiredContractIds(currentSquad, seasonEndDate)
+        : new Set<string>();
 
            currentSquad.forEach(player => {
         // NOWA LOGIKA: Wygasły kontrakt → wolny agent (tylko AI-kluby)
         const contractExpired = player.contractEndDate && new Date(player.contractEndDate) <= seasonEndDate;
-        if (contractExpired && clubId !== userTeamId && !player.transferPendingClubId) {
+        if (contractExpired && clubId !== userTeamId && !player.transferPendingClubId && !protectedAiExpiredContractIds.has(player.id)) {
           const released = {
             ...PlayerCareerService.resetClubStatsForNewEntry(player),
             clubId: 'FREE_AGENTS',
@@ -117,6 +166,15 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
           nextSquad.push({
             ...player,
             age: player.age + 1,
+            contractEndDate: contractExpired && protectedAiExpiredContractIds.has(player.id)
+              ? new Date(seasonEndDate.getFullYear() + 1, 5, 30).toISOString()
+              : player.contractEndDate,
+            negotiationStep: contractExpired && protectedAiExpiredContractIds.has(player.id) ? 0 : player.negotiationStep,
+            negotiationLockoutUntil: contractExpired && protectedAiExpiredContractIds.has(player.id) ? null : player.negotiationLockoutUntil,
+            isNegotiationPermanentBlocked: contractExpired && protectedAiExpiredContractIds.has(player.id)
+              ? false
+              : player.isNegotiationPermanentBlocked,
+            isOnTransferList: contractExpired && protectedAiExpiredContractIds.has(player.id) ? false : player.isOnTransferList,
             retirementLockUntil: player.retirementLockUntil && new Date(player.retirementLockUntil) <= seasonEndDate
               ? null
               : player.retirementLockUntil,
