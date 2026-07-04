@@ -6,6 +6,16 @@ const WORLD_PLAYOFF_WINDOW_FRIENDLY_LABEL = 'Mecze towarzyskie reprezentacji - o
 export const WORLD_FRIENDLY_GROUP = 'WORLD_FRIENDLY';
 const MAX_WORLD_FRIENDLY_PAIRS = 30;
 const MARCH_PLAYOFF_FRIENDLY_PAIRS = 38;
+const REGULAR_WORLD_FRIENDLY_DATES = [
+  { day: 4, month: 8 },
+  { day: 7, month: 8 },
+  { day: 8, month: 9 },
+  { day: 11, month: 9 },
+  { day: 14, month: 10 },
+  { day: 17, month: 10 },
+];
+
+type FriendlyDateSlot = { day: number; month: number };
 
 class Rng {
   private seed: number;
@@ -43,9 +53,21 @@ const isWorldFriendlyDate = (matchDay: NTMatchDay): boolean =>
   (matchDay.eventType === undefined || matchDay.eventType === 'GROUP_MATCH') &&
   matchDay.matches.length > 0;
 
-const isEarlierMatchDay = (candidate: NTMatchDay, current: NTMatchDay): boolean =>
+const isEarlierFriendlySlot = (candidate: FriendlyDateSlot, current: FriendlyDateSlot): boolean =>
   candidate.month < current.month ||
   (candidate.month === current.month && candidate.day < current.day);
+
+const getRegularFriendlySlots = (seasonStartYear: number): FriendlyDateSlot[] => {
+  const byKey = new Map<string, FriendlyDateSlot>();
+  const addSlot = (slot: FriendlyDateSlot) => byKey.set(`${slot.month}_${slot.day}`, slot);
+
+  REGULAR_WORLD_FRIENDLY_DATES.forEach(addSlot);
+  (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
+    .filter(isWorldFriendlyDate)
+    .forEach(matchDay => addSlot({ day: matchDay.day, month: matchDay.month }));
+
+  return [...byKey.values()].sort((a, b) => a.month - b.month || a.day - b.day);
+};
 
 const getPlayoffTeamNames = (playoffState: WCQPlayoffState | null): Set<string> => new Set(
   (playoffState?.paths ?? []).flatMap(path => [
@@ -131,11 +153,10 @@ const collectRegularFriendlyPairHistory = (
   const usedPairKeys = new Set<string>();
   const eligibleTeams = getStableTeamPool(nationalTeams.filter(team => team.continent !== 'Europe'));
 
-  (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
-    .filter(isWorldFriendlyDate)
-    .filter(matchDay => isEarlierMatchDay(matchDay, currentMatchDay))
-    .forEach(matchDay => {
-      const rng = new Rng(hash(`${seasonStartYear}|${sessionSeed}|WORLD_NT_FRIENDLIES|${matchDay.month}|${matchDay.day}`));
+  getRegularFriendlySlots(seasonStartYear)
+    .filter(slot => isEarlierFriendlySlot(slot, currentMatchDay))
+    .forEach(slot => {
+      const rng = new Rng(hash(`${seasonStartYear}|${sessionSeed}|WORLD_NT_FRIENDLIES|${slot.month}|${slot.day}`));
       buildReputationBalancedMatches(
         eligibleTeams,
         MAX_WORLD_FRIENDLY_PAIRS,
@@ -186,9 +207,8 @@ const buildMarchPlayoffFriendlyMatchDays = (
 
 export const WorldNationalFriendlyService = {
   getPlannedFriendlyDates(seasonStartYear: number): Date[] {
-    return (NT_SCHEDULE_BY_YEAR[seasonStartYear] ?? [])
-      .filter(isWorldFriendlyDate)
-      .map(matchDay => new Date(seasonStartYear, matchDay.month, matchDay.day));
+    return getRegularFriendlySlots(seasonStartYear)
+      .map(slot => new Date(seasonStartYear, slot.month, slot.day));
   },
 
   generateMatchDay(matchDay: NTMatchDay, nationalTeams: NationalTeam[], seasonStartYear: number, sessionSeed: number): NTMatchDay | null {

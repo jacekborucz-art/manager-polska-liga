@@ -855,7 +855,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
       .filter((matchDay): matchDay is NonNullable<typeof matchDay> => Boolean(matchDay));
     const playoffWindowFriendlyMatchDays = WorldNationalFriendlyService.generatePlayoffWindowMatchDays(
       nationalTeams,
-      wcqPlayoffState,
+      seasonStartYear === 2025 ? wcqPlayoffState : null,
       matchSimulationSeed
     );
 
