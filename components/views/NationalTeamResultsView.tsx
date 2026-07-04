@@ -183,6 +183,25 @@ function formatCard(card: MatchCardEntry): string {
   return `${card.minute}' ${card.playerName}`;
 }
 
+function formatCompetitionHeader(results: NTMatchResult[] | null): string {
+  const label = results?.find(result => result.competitionLabel && result.group !== WORLD_FRIENDLY_GROUP)?.competitionLabel
+    ?? results?.find(result => result.competitionLabel)?.competitionLabel
+    ?? 'Mecze reprezentacji';
+  const baseLabel = label
+    .replace(/\s+-\s+(?:Grupa\s+)?[A-D]\d?\s+-\s+Kolejka\s+\d+$/i, '')
+    .replace(/\s+-\s+Kolejka\s+\d+$/i, '')
+    .replace(/\s+-\s+Baraż\s+.+$/i, '')
+    .replace(/\s+-\s+(Ćwierćfinały i baraże|Ćwierćfinały|Baraże|Finały)$/i, ' $1')
+    .trim();
+
+  if (/^Eliminacje\s+/i.test(baseLabel)) {
+    return baseLabel.replace(/^Eliminacje/i, 'Kwalifikacje');
+  }
+
+  if (baseLabel === WORLD_FRIENDLY_GROUP) return 'Mecze towarzyskie świata';
+  return baseLabel;
+}
+
 const NTFlagBadge: React.FC<{ teamName: string; className?: string }> = ({ teamName, className = '' }) => {
   const code = getNTFlagImageCode(teamName);
 
@@ -400,6 +419,7 @@ const NationalTeamResultsView: React.FC = () => {
 
   const polandMatch = lastNTMatchResults?.find(r => isPlayerTeam(r.home) || isPlayerTeam(r.away)) ?? null;
   const otherResults = lastNTMatchResults?.filter(r => !isPlayerTeam(r.home) && !isPlayerTeam(r.away)) ?? [];
+  const competitionHeader = formatCompetitionHeader(lastNTMatchResults);
 
   const resultsByGroup = otherResults.reduce<Record<string, NTMatchResult[]>>((acc, r) => {
     const g = r.group ?? '?';
@@ -454,7 +474,7 @@ const NationalTeamResultsView: React.FC = () => {
           </button>
           <p className="text-xs text-slate-400 tracking-[0.2em] uppercase mb-1">{dateLabel}</p>
           <h1 className={`${HEADING_FONT} text-white text-2xl mb-1`}>Wyniki Reprezentacji</h1>
-          <p className="text-sm text-slate-300 tracking-widest uppercase font-semibold">Kwalifikacje MŚ 2026</p>
+          <p className={`${HEADING_FONT} text-sm text-slate-300`}>{competitionHeader}</p>
         </div>
 
         <div className="h-px bg-white/10 my-6" />

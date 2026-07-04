@@ -13,6 +13,7 @@ import {
   ViewState,
 } from '../../types';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { NationsLeagueService } from '../../services/NationsLeagueService';
 
 const HEADING_FONT = 'font-black italic uppercase tracking-tighter';
 const BTN_FONT = 'font-black italic uppercase tracking-widest';
@@ -228,8 +229,8 @@ const NationsLeagueView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('tabele');
   const editions = useMemo(() => {
     const byYear = new Map<number, NationsLeagueState>();
-    nationsLeagueArchive.forEach(entry => byYear.set(entry.editionStartYear, entry));
-    if (nationsLeagueState) byYear.set(nationsLeagueState.editionStartYear, nationsLeagueState);
+    nationsLeagueArchive.forEach(entry => byYear.set(entry.editionStartYear, NationsLeagueService.repairLeaguePhaseStandings(entry)));
+    if (nationsLeagueState) byYear.set(nationsLeagueState.editionStartYear, NationsLeagueService.repairLeaguePhaseStandings(nationsLeagueState));
     return [...byYear.values()].sort((a, b) => b.editionStartYear - a.editionStartYear);
   }, [nationsLeagueArchive, nationsLeagueState]);
   const [selectedEditionStartYear, setSelectedEditionStartYear] = useState<number | null>(

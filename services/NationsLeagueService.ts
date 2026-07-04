@@ -381,42 +381,36 @@ const markFixturePlayed = (fixture: NationsLeagueFixture, result: NTMatchResult)
   isExtraTime: result.isExtraTime,
 });
 
-const refreshStandingsFromResults = (state: NationsLeagueState, results: NTMatchResult[]): NationsLeagueState => {
-  if (results.length === 0) return state;
+const rebuildLeaguePhaseStandings = (
+  state: NationsLeagueState,
+  fixtures: NationsLeagueFixture[] = state.fixtures,
+  touchTimestamp = false
+): NationsLeagueState => {
   const groups = state.groups.map(group => ({
     ...group,
     standings: group.teams.map(EMPTY_STANDING),
   }));
   const standingByGroup = new Map(groups.map(group => [group.id, new Map(group.standings.map(row => [row.teamName, row]))]));
-  const fixtures = state.fixtures.map(fixture => ({ ...fixture }));
 
-  results.forEach(result => {
-    const resultRound = Number(result.competitionLabel.match(/Kolejka (\d+)/)?.[1] ?? 0);
-    const fixtureIndex = fixtures.findIndex(item =>
-      item.home === result.home &&
-      item.away === result.away &&
-      item.groupId === result.group &&
-      item.round === resultRound
-    );
-    const fixture = fixtureIndex >= 0 ? fixtures[fixtureIndex] : undefined;
-    if (!fixture?.groupId) return;
-    fixtures[fixtureIndex] = markFixturePlayed(fixture, result);
-
+  getPlayedGroupFixtures(fixtures).forEach(fixture => {
+    if (!fixture.groupId) return;
     const table = standingByGroup.get(fixture.groupId);
-    const home = table?.get(result.home);
-    const away = table?.get(result.away);
+    const home = table?.get(fixture.home);
+    const away = table?.get(fixture.away);
     if (!home || !away) return;
+    const homeGoals = fixture.homeGoals ?? 0;
+    const awayGoals = fixture.awayGoals ?? 0;
 
     home.played += 1;
     away.played += 1;
-    home.goalsFor += result.homeGoals;
-    home.goalsAgainst += result.awayGoals;
-    away.goalsFor += result.awayGoals;
-    away.goalsAgainst += result.homeGoals;
+    home.goalsFor += homeGoals;
+    home.goalsAgainst += awayGoals;
+    away.goalsFor += awayGoals;
+    away.goalsAgainst += homeGoals;
 
-    if (result.homeGoals > result.awayGoals) {
+    if (homeGoals > awayGoals) {
       home.wins += 1; home.points += 3; away.losses += 1;
-    } else if (result.awayGoals > result.homeGoals) {
+    } else if (awayGoals > homeGoals) {
       away.wins += 1; away.points += 3; home.losses += 1;
     } else {
       home.draws += 1; away.draws += 1; home.points += 1; away.points += 1;
@@ -432,8 +426,28 @@ const refreshStandingsFromResults = (state: NationsLeagueState, results: NTMatch
       standings: sortStandings(group.standings, fixtures.filter(fixture => fixture.groupId === group.id)),
     })),
     fixtures,
-    lastUpdatedIso: new Date().toISOString(),
+    lastUpdatedIso: touchTimestamp ? new Date().toISOString() : state.lastUpdatedIso,
   };
+};
+
+const refreshStandingsFromResults = (state: NationsLeagueState, results: NTMatchResult[]): NationsLeagueState => {
+  if (results.length === 0) return state;
+  const fixtures = state.fixtures.map(fixture => ({ ...fixture }));
+
+  results.forEach(result => {
+    const resultRound = Number(result.competitionLabel.match(/Kolejka (\d+)/)?.[1] ?? 0);
+    const fixtureIndex = fixtures.findIndex(item =>
+      item.home === result.home &&
+      item.away === result.away &&
+      item.groupId === result.group &&
+      (resultRound > 0 ? item.round === resultRound : !item.played)
+    );
+    const fixture = fixtureIndex >= 0 ? fixtures[fixtureIndex] : undefined;
+    if (!fixture?.groupId) return;
+    fixtures[fixtureIndex] = markFixturePlayed(fixture, result);
+  });
+
+  return rebuildLeaguePhaseStandings(state, fixtures, true);
 };
 
 const getLeaguePhaseMatchDay = (state: NationsLeagueState, date: Date): NTMatchDay | null => {
@@ -802,6 +816,10 @@ const refreshKnockout = (state: NationsLeagueState, date: Date, results: NTMatch
 
 export const NationsLeagueService = {
   isNationsLeagueSeason,
+
+  repairLeaguePhaseStandings(state: NationsLeagueState): NationsLeagueState {
+    return rebuildLeaguePhaseStandings(state);
+  },
 
   isPotentialMatchDate(date: Date): boolean {
     const seasonStartYear = getSeasonStartYear(date);
