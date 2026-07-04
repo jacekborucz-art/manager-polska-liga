@@ -535,15 +535,27 @@ export const MatchHistoryView: React.FC = () => {
     }
   }, [refreshTrigger]);
 
-  // PUCHAR POLSKI - Ostatni mecz (finał)
+  // PUCHAR POLSKI - historia zdobywców + rozegrany finał, jeśli nie został jeszcze zapisany po końcu sezonu
   const pucharWinner = useMemo(() => {
+    const winners: Record<string, any> = {};
+
+    championshipHistory
+      .filter(entry => entry.competition === 'PUCHAR_POLSKI')
+      .forEach(entry => {
+        winners[entry.season] = {
+          season: entry.season,
+          winner: entry.winner,
+          year: entry.year
+        };
+      });
+
     const cupMatches = history.filter(m => 
-      m.competition.includes('PUCHAR') && 
+      (m.competition === CompetitionType.POLISH_CUP || m.competition.includes('POLISH_CUP') || m.competition.includes('PUCHAR')) &&
       !m.competition.includes('SUPER') &&
+      m.matchId.includes('FINAŁ') &&
       m.homeScore !== null
     );
     
-    const winners: Record<string, any> = {};
     cupMatches.forEach(match => {
       let winnerId: string | null = null;
       
@@ -576,7 +588,7 @@ export const MatchHistoryView: React.FC = () => {
     const result = Object.values(winners);
     console.log('🏆 Puchar Polski winners:', result);
     return result;
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // LIGA MISTRZÓW - Finał (ostatni mecz CL_FINAL)
   const clWinner = useMemo(() => {

@@ -1065,6 +1065,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
               text: `🟥 DRUGA ŻÓŁTA! ${activePenaltyReview.defender.lastName} wylatuje z boiska po interwencji w polu karnym!`,
               type: MatchEventType.RED_CARD,
               teamSide: activePenaltyReview.defendingSide,
+              playerId: defenderId,
               playerName: activePenaltyReview.defender.lastName
             };
           } else {
@@ -1074,6 +1075,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
               text: `🟨 Żółta kartka: ${activePenaltyReview.defender.lastName} za interwencję w polu karnym.`,
               type: MatchEventType.YELLOW_CARD,
               teamSide: activePenaltyReview.defendingSide,
+              playerId: defenderId,
               playerName: activePenaltyReview.defender.lastName
             };
           }
@@ -1091,6 +1093,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             text: `🟥 CZERWONA KARTKA! ${activePenaltyReview.defender.lastName} za faul w polu karnym!`,
             type: MatchEventType.RED_CARD,
             teamSide: activePenaltyReview.defendingSide,
+            playerId: defenderId,
             playerName: activePenaltyReview.defender.lastName
           };
         }
@@ -2808,19 +2811,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                     nextSentOffIds.push(pId);
                     if (activeSide === 'HOME') nextHomeLineup.startingXI = nextHomeLineup.startingXI.map(id => id === pId ? null : id);
                     else nextAwayLineup.startingXI = nextAwayLineup.startingXI.map(id => id === pId ? null : id);
-                    newLog = { id: `RED_${nextMinute}`, minute: nextMinute, text: `🟥 DRUGA ŻÓŁTA! ${player.lastName} wylatuje z boiska!`, type: MatchEventType.RED_CARD, teamSide: activeSide, playerName: player.lastName };
+                    newLog = { id: `RED_${nextMinute}`, minute: nextMinute, text: `🟥 DRUGA ŻÓŁTA! ${player.lastName} wylatuje z boiska!`, type: MatchEventType.RED_CARD, teamSide: activeSide, playerId: pId, playerName: player.lastName };
                     priorityAiTrigger = true;
                     immediateEventType = MatchEventType.RED_CARD;
                     if (activeSide === userSide) nextIsPaused = true;
                  } else if (nextPlayerYellowCards[pId] !== 2) {
-                    newLog = { id: `YEL_${nextMinute}`, minute: nextMinute, text: `🟨 Żółta kartka: ${player.lastName}`, type: MatchEventType.YELLOW_CARD, teamSide: activeSide, playerName: player.lastName };
+                    newLog = { id: `YEL_${nextMinute}`, minute: nextMinute, text: `🟨 Żółta kartka: ${player.lastName}`, type: MatchEventType.YELLOW_CARD, teamSide: activeSide, playerId: pId, playerName: player.lastName };
                  }
               } else if (card === MatchEventType.RED_CARD && !prev.sentOffIds.includes(pId)) {
                  nextSentOffIds.push(pId);
                  immediateEventType = MatchEventType.RED_CARD;
                  if (activeSide === 'HOME') nextHomeLineup.startingXI = nextHomeLineup.startingXI.map(id => id === pId ? null : id);
                  else nextAwayLineup.startingXI = nextAwayLineup.startingXI.map(id => id === pId ? null : id);
-                 newLog = { id: `RED_DIR_${nextMinute}`, minute: nextMinute, text: `🟥 CZERWONA KARTKA! ${player.lastName}!`, type: MatchEventType.RED_CARD, teamSide: activeSide, playerName: player.lastName };
+                 newLog = { id: `RED_DIR_${nextMinute}`, minute: nextMinute, text: `🟥 CZERWONA KARTKA! ${player.lastName}!`, type: MatchEventType.RED_CARD, teamSide: activeSide, playerId: pId, playerName: player.lastName };
                  priorityAiTrigger = true;
                  if (activeSide === userSide) nextIsPaused = true;
              } else {
@@ -4183,13 +4186,14 @@ const summary: MatchSummary = {
             .filter(l => l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD)
             .sort((a, b) => a.minute - b.minute)
             .map(l => {
-               const pId = l.playerName || '?';
+               const pId = l.playerId || l.playerName || '?';
                let finalType: 'YELLOW' | 'RED' | 'SECOND_YELLOW' = l.type === MatchEventType.RED_CARD ? 'RED' : 'YELLOW';
                if (finalType === 'YELLOW') {
                   playerYellowCount[pId] = (playerYellowCount[pId] || 0) + 1;
                   if (playerYellowCount[pId] === 2) finalType = 'SECOND_YELLOW';
                }
                return {
+                  playerId: l.playerId,
                   playerName: l.playerName || '?',
                   minute: l.minute,
                   teamId: l.teamSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id,
@@ -4225,7 +4229,15 @@ const summary: MatchSummary = {
 
   const renderTicker = (side: 'HOME' | 'AWAY') => {
     const goals = side === 'HOME' ? matchState.homeGoals : matchState.awayGoals;
-    const cards = matchState.logs.filter(l => l.teamSide === side && (l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD));
+    const rawCards = matchState.logs.filter(l => l.teamSide === side && (l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD));
+    const cards = rawCards.filter(card => {
+      if (card.type !== MatchEventType.YELLOW_CARD) return true;
+      return !rawCards.some(other => {
+        if (other.type !== MatchEventType.RED_CARD || other.minute !== card.minute) return false;
+        if (card.playerId && other.playerId) return card.playerId === other.playerId;
+        return card.playerName === other.playerName;
+      });
+    });
     const injs = matchState.logs.filter(l => l.teamSide === side && (l.type === MatchEventType.INJURY_LIGHT || l.type === MatchEventType.INJURY_SEVERE));
     
     return (
@@ -4251,7 +4263,9 @@ const summary: MatchSummary = {
 
         {cards.map((c, i) => {
           const playersList = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-          const foundPlayer = playersList.find(px => px.lastName === c.playerName);
+          const foundPlayer = c.playerId
+            ? playersList.find(px => px.id === c.playerId)
+            : playersList.find(px => px.lastName === c.playerName);
           const cardName = foundPlayer ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}` : c.playerName;
           return (
             <span key={`c-${i}`} className="text-[9px] font-bold text-white flex items-center gap-1">

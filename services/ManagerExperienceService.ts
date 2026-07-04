@@ -76,16 +76,54 @@ export function getExperienceProgress(expPoints: number): ManagerExperienceProgr
   };
 }
 
+function buildPromotionAchievementFromExp(entry: ManagerExpEntry): ManagerAchievement | null {
+  if (!entry.sourceKey.startsWith('season:') || !entry.sourceKey.includes(':promotion:')) return null;
+  if (entry.label !== 'Awans do Ekstraklasy' && entry.label !== 'Awans do 1. Ligi') return null;
+
+  const parts = entry.sourceKey.split(':');
+  const seasonLabel = parts[1] || String(entry.season);
+  const clubId = parts[3] || 'club';
+  const promotedToEkstraklasa = entry.label === 'Awans do Ekstraklasy';
+
+  return {
+    id: `achievement:${seasonLabel}:promotion-${promotedToEkstraklasa ? 'ekstraklasa' : '1liga'}:${clubId}`,
+    seasonLabel,
+    title: `${entry.label} ${seasonLabel}`,
+    competition: 'Liga Polska',
+  };
+}
+
+function backfillAchievementsFromExpHistory(profile: ManagerProfile): ManagerAchievement[] {
+  const existingIds = new Set(profile.achievements.map(entry => entry.id));
+  const backfilled: ManagerAchievement[] = [];
+
+  profile.expHistory.forEach(entry => {
+    const achievement = buildPromotionAchievementFromExp(entry);
+    if (!achievement || existingIds.has(achievement.id)) return;
+    existingIds.add(achievement.id);
+    backfilled.push(achievement);
+  });
+
+  return backfilled.length > 0
+    ? [...backfilled, ...profile.achievements]
+    : profile.achievements;
+}
+
 export function ensureManagerExperience(profile: ManagerProfile | null): ManagerProfile | null {
   if (!profile) return null;
   const expPoints = Math.max(MIN_EXP_POINTS, Number.isFinite(profile.expPoints) ? profile.expPoints : MIN_EXP_POINTS);
-  return {
+  const safeProfile = {
     ...profile,
     expPoints,
     experience: Number.isFinite(profile.experience) ? profile.experience : getExperienceRating(expPoints),
     expHistory: Array.isArray(profile.expHistory) ? profile.expHistory : [],
     careerHistory: Array.isArray(profile.careerHistory) ? profile.careerHistory : [],
     achievements: Array.isArray(profile.achievements) ? profile.achievements : [],
+  };
+
+  return {
+    ...safeProfile,
+    achievements: backfillAchievementsFromExpHistory(safeProfile),
   };
 }
 

@@ -2040,6 +2040,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       }
 
       if (promoteFromL2Ids.includes(userTeamId) || promoteFromL3Ids.includes(userTeamId)) {
+        const promotedToEkstraklasa = promoteFromL2Ids.includes(userTeamId);
         const promotionDelta = ManagerExperienceService.promotionExpForReputation(userClubBeforeSeasonEnd?.reputation ?? 5);
         managerAwards.push({
           sourceKey: `season:${seasonLabel}:promotion:${userTeamId}`,
@@ -2047,7 +2048,13 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
           season: seasonNumber,
           delta: promotionDelta,
           competition: 'Liga Polska',
-          label: promoteFromL2Ids.includes(userTeamId) ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi',
+          label: promotedToEkstraklasa ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:promotion-${promotedToEkstraklasa ? 'ekstraklasa' : '1liga'}:${userTeamId}`,
+          seasonLabel,
+          title: `${promotedToEkstraklasa ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi'} ${seasonLabel}`,
+          competition: 'Liga Polska',
         });
       }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Player, Club, Lineup, Tactic, NationalTeam, StaffRole, StaffMember } from '../../types';
+import { ViewState, Player, Club, Lineup, Tactic, NationalTeam, StaffRole, StaffMember, TransferOfferStatus, IncomingOfferStatus } from '../../types';
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { LineupService } from '../../services/LineupService';
@@ -60,6 +60,32 @@ const isDarkKitColor = (hex: string) => {
 
 const TOP_BUTTON_SHADOW = {
   boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+};
+
+type ClubTransferModalEntry = {
+  id: string;
+  date: Date;
+  playerId: string;
+  playerName: string;
+  type: string;
+  fee?: number;
+};
+
+const formatTransferDate = (date: Date) => {
+  if (Number.isNaN(date.getTime())) return '--.--.----';
+  return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatTransferFee = (fee?: number) => {
+  if (!fee || fee <= 0) return '';
+  return `${fee.toLocaleString('pl-PL')} PLN`;
+};
+
+const getTransferDisplayLabel = (entry: ClubTransferModalEntry) => {
+  const feeLabel = formatTransferFee(entry.fee);
+  if (entry.type === 'Zwolniony') return 'ZWOLNIONY';
+  if (entry.type === 'Wypożyczenie') return feeLabel || 'WYPOŻYCZENIE';
+  return feeLabel || 'WOLNY TRANSFER';
 };
 
 const StaffChalkboardBackdrop: React.FC = () => (
@@ -131,7 +157,25 @@ const StaffAttributeRadar: React.FC<{ values: { label: string; value: number }[]
 };
 
 export const ClubDetails: React.FC = () => {
-   const { viewedClubId, clubs, getOrGenerateSquad, lineups, updateLineup, navigateTo, viewPlayerDetails, coaches, viewCoachDetails, currentDate, previousViewState, nationalTeams, staffMembers } = useGame();
+   const {
+     viewedClubId,
+     clubs,
+     players,
+     getOrGenerateSquad,
+     lineups,
+     updateLineup,
+     navigateTo,
+     viewPlayerDetails,
+     coaches,
+     viewCoachDetails,
+     currentDate,
+     previousViewState,
+     nationalTeams,
+     staffMembers,
+     transferOffers,
+     incomingOffers,
+     aiTransferLog,
+   } = useGame();
   
   const [startingXI, setStartingXI] = useState<Player[]>([]);
   const [bench, setBench] = useState<Player[]>([]);
@@ -140,6 +184,7 @@ export const ClubDetails: React.FC = () => {
   const [currentLineup, setCurrentLineup] = useState<Lineup | null>(null);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
   const nationalTeamByPlayerId = useMemo(() => {
@@ -151,6 +196,139 @@ export const ClubDetails: React.FC = () => {
   }, [nationalTeams]);
 
   const club = useMemo(() => clubs.find(c => c.id === viewedClubId), [clubs, viewedClubId]);
+
+  const allPlayers = useMemo(() => Object.values(players).flat(), [players]);
+
+  const seasonStart = useMemo(() => {
+    const date = new Date(currentDate);
+    return date.getMonth() >= 6
+      ? new Date(date.getFullYear(), 6, 1)
+      : new Date(date.getFullYear() - 1, 6, 1);
+  }, [currentDate]);
+
+  const clubTransferActivity = useMemo(() => {
+    if (!club) return { incoming: [] as ClubTransferModalEntry[], outgoing: [] as ClubTransferModalEntry[] };
+
+    const incoming: ClubTransferModalEntry[] = [];
+    const outgoing: ClubTransferModalEntry[] = [];
+    const added = new Set<string>();
+    const playerName = (player: Player) => `${player.lastName} ${player.firstName}`.trim();
+    const addEntry = (direction: 'incoming' | 'outgoing', entry: ClubTransferModalEntry) => {
+      const key = `${direction}_${entry.id}`;
+      if (added.has(key)) return;
+      added.add(key);
+      (direction === 'incoming' ? incoming : outgoing).push(entry);
+    };
+
+    const completedOfferFees = new Map<string, number>();
+    transferOffers
+      .filter(offer => offer.status === TransferOfferStatus.COMPLETED)
+      .forEach(offer => {
+        completedOfferFees.set(`${offer.playerId}::${offer.sellerClubId}::${offer.buyerClubId}`, offer.fee);
+      });
+
+    const incomingOfferFees = new Map<string, number>();
+    incomingOffers
+      .filter(offer => offer.status === IncomingOfferStatus.COMPLETED)
+      .forEach(offer => {
+        incomingOfferFees.set(`${offer.playerId}::${offer.buyerClubId}`, offer.kind === 'LOAN' ? (offer.loanFee ?? offer.fee) : offer.fee);
+      });
+
+    const aiLogFees = new Map<string, number>();
+    aiTransferLog
+      .filter(entry => entry.status === 'TRANSFER_SIGNED')
+      .forEach(entry => {
+        aiLogFees.set(`${entry.playerName}::${entry.fromClubId ?? entry.fromClub}::${entry.toClubId ?? entry.toClub}`, entry.fee ?? 0);
+      });
+
+    allPlayers.forEach(player => {
+      const history = player.history || [];
+      if (history.length < 2) return;
+
+      for (let i = 1; i < history.length; i++) {
+        const entry = history[i];
+        const previousEntry = history[i - 1];
+        if (!entry.fromYear || !entry.fromMonth) continue;
+
+        const entryDate = new Date(entry.fromYear, entry.fromMonth - 1, 1);
+        if (entryDate < seasonStart) continue;
+
+        const baseFee =
+          entry.transferFee ??
+          completedOfferFees.get(`${player.id}::${previousEntry.clubId}::${entry.clubId}`) ??
+          incomingOfferFees.get(`${player.id}::${entry.clubId}`) ??
+          aiLogFees.get(`${playerName(player)}::${previousEntry.clubId}::${entry.clubId}`) ??
+          aiLogFees.get(`${playerName(player)}::${previousEntry.clubName}::${entry.clubName}`);
+
+        if (entry.isLoan) {
+          if (entry.clubId === club.id) {
+            addEntry('incoming', {
+              id: `${player.id}_${i}_loan_in`,
+              date: entryDate,
+              playerId: player.id,
+              playerName: playerName(player),
+              type: 'Wypożyczenie',
+              fee: baseFee,
+            });
+          }
+          if (entry.parentClubId === club.id || previousEntry.clubId === club.id) {
+            addEntry('outgoing', {
+              id: `${player.id}_${i}_loan_out`,
+              date: entryDate,
+              playerId: player.id,
+              playerName: playerName(player),
+              type: 'Wypożyczenie',
+              fee: baseFee,
+            });
+          }
+          continue;
+        }
+
+        if (entry.clubId === 'FREE_AGENTS') {
+          if (previousEntry.clubId === club.id) {
+            addEntry('outgoing', {
+              id: `${player.id}_${i}_released`,
+              date: entryDate,
+              playerId: player.id,
+              playerName: playerName(player),
+              type: 'Zwolniony',
+            });
+          }
+          continue;
+        }
+
+        if (entry.clubId === club.id) {
+          addEntry('incoming', {
+            id: `${player.id}_${i}_in`,
+            date: entryDate,
+            playerId: player.id,
+            playerName: playerName(player),
+            type: previousEntry.clubId === 'FREE_AGENTS' ? 'Wolny transfer' : 'Kupno',
+            fee: previousEntry.clubId === 'FREE_AGENTS' ? undefined : baseFee,
+          });
+        }
+
+        if (previousEntry.clubId === club.id) {
+          addEntry('outgoing', {
+            id: `${player.id}_${i}_out`,
+            date: entryDate,
+            playerId: player.id,
+            playerName: playerName(player),
+            type: 'Sprzedaż',
+            fee: baseFee,
+          });
+        }
+      }
+    });
+
+    const sortEntries = (a: ClubTransferModalEntry, b: ClubTransferModalEntry) =>
+      b.date.getTime() - a.date.getTime() || a.playerName.localeCompare(b.playerName);
+
+    return {
+      incoming: incoming.sort(sortEntries),
+      outgoing: outgoing.sort(sortEntries),
+    };
+  }, [aiTransferLog, allPlayers, club, incomingOffers, seasonStart, transferOffers]);
 
   const getMoraleInfo = (morale: number): { stars: number; color: string; label: string } => {
     if (morale <= 20) return { stars: 1, color: 'text-red-500', label: 'Bardzo niskie' };
@@ -339,6 +517,40 @@ export const ClubDetails: React.FC = () => {
     );
   };
 
+  const renderTransferColumn = (title: string, entries: ClubTransferModalEntry[], accentClass: string) => (
+    <div className="min-h-0 flex-1 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
+      <div className="px-5 py-4 border-b border-white/10 bg-white/[0.03]">
+        <h3 className={`text-[11px] font-black italic uppercase tracking-tighter ${accentClass}`}>{title}</h3>
+      </div>
+      <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
+        {entries.length === 0 ? (
+          <div className="px-5 py-10 text-center text-[10px] font-black italic uppercase tracking-tighter text-slate-600">
+            Brak ruchów transferowych
+          </div>
+        ) : entries.map((entry, index) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => viewPlayerDetails(entry.playerId)}
+            className={`grid w-full grid-cols-[88px_minmax(0,1fr)_170px] items-center gap-3 border-b border-white/5 px-5 py-3 text-left transition-colors hover:bg-white/[0.06] ${
+              index % 2 === 0 ? 'bg-white/[0.015]' : 'bg-white/[0.045]'
+            }`}
+          >
+            <span className="font-mono text-[10px] font-black text-slate-500">{formatTransferDate(entry.date)}</span>
+            <span className="min-w-0 truncate text-[12px] font-black italic uppercase tracking-tighter text-white">
+              {entry.playerName}
+            </span>
+            <span className={`text-right text-[10px] font-black italic uppercase tracking-tighter ${
+              entry.fee && entry.fee > 0 ? 'font-mono not-italic tracking-normal text-emerald-300' : 'text-slate-300'
+            }`}>
+              {getTransferDisplayLabel(entry)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="h-[calc(100vh-3rem)] max-w-[1600px] mx-auto flex flex-col gap-4 animate-fade-in relative" style={{ paddingTop: '80px' }}>
       
@@ -411,6 +623,13 @@ export const ClubDetails: React.FC = () => {
               style={TOP_BUTTON_SHADOW}
             >
               Terminarz
+            </button>
+            <button
+              onClick={() => setIsTransferModalOpen(true)}
+              className="px-8 py-4 rounded-[20px] bg-emerald-500/10 border-t border-x border-b border-t-emerald-400/45 border-x-emerald-500/20 border-b-black/60 text-[10px] font-black italic uppercase tracking-tighter text-emerald-300 transition-all hover:bg-emerald-500/20 active:translate-y-[2px]"
+              style={TOP_BUTTON_SHADOW}
+            >
+              Transfery
             </button>
             <button
               onClick={() => setIsStaffModalOpen(true)}
@@ -558,6 +777,50 @@ export const ClubDetails: React.FC = () => {
         onClose={() => setIsResultsModalOpen(false)}
         club={club}
       />
+
+      {isTransferModalOpen && (
+        <div
+          className="fixed inset-0 z-[320] flex items-start justify-center bg-black/75 px-8 pb-8 pt-[120px] backdrop-blur-lg"
+          onClick={() => setIsTransferModalOpen(false)}
+        >
+          <div
+            className="relative flex max-h-[calc(100vh-152px)] w-full max-w-5xl flex-col overflow-hidden rounded-[36px] border border-white/10 bg-slate-950/95 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center justify-between border-b border-white/10 px-8 py-6">
+              <div>
+                <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Transfery</h2>
+                <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                  {club.name} · bieżący sezon
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 text-lg font-black text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="relative z-10 grid min-h-0 grid-cols-2 gap-5 p-6">
+              {renderTransferColumn('Przyszli', clubTransferActivity.incoming, 'text-emerald-300')}
+              {renderTransferColumn('Odeszli', clubTransferActivity.outgoing, 'text-rose-300')}
+            </div>
+
+            <div className="relative z-10 border-t border-white/10 px-8 py-4">
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-[10px] font-black italic uppercase tracking-tighter text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isStaffModalOpen && (() => {
         const ROLE_COLORS: Record<string, string> = {
