@@ -11,6 +11,7 @@ import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
 interface MatchReportModalProps {
   matchId: string | null;
+  seasonNumber?: number;
   onClose: () => void;
   teamType?: 'club' | 'national';
 }
@@ -190,7 +191,7 @@ const getCompetitionName = (comp: string) => {
   return comp;
 };
 
-export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, onClose, teamType = 'club' }) => {
+export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ matchId, seasonNumber, onClose, teamType = 'club' }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, players, nationalTeams } = useGame();
 
@@ -221,8 +222,13 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
   }, []);
 
   const match = useMemo(
-    () => (matchId ? [...MatchHistoryService.getAll()].reverse().find(m => m.matchId === matchId) ?? null : null),
-    [matchId]
+    () => (matchId
+      ? [...MatchHistoryService.getAll()].reverse().find(m =>
+          m.matchId === matchId &&
+          (seasonNumber === undefined || m.season === seasonNumber)
+        ) ?? null
+      : null),
+    [matchId, seasonNumber]
   );
 
   const homeClub = useMemo(

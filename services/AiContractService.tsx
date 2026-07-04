@@ -67,6 +67,11 @@ const VETERAN_STAR_MIN_AGE = 33;
 const VETERAN_STAR_MIN_OVR = 85;
 const GULF_SHOWPIECE_STAR_MIN_REPUTATION = 80;
 const GULF_MEGA_OFFER_ACCEPTANCE_CHANCE = 0.75;
+const GULF_MEGA_OFFER_EUR_TO_PLN = 4.3;
+const GULF_MEGA_OFFER_MIN_ANNUAL_EUR = 50_000_000;
+const GULF_MEGA_OFFER_ELITE_REPUTATION = 97;
+const GULF_MEGA_OFFER_ELITE_ANNUAL_EUR = 100_000_000;
+const GULF_MEGA_OFFER_MAX_ANNUAL_EUR = 125_000_000;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR = 90;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION = 17;
 const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
@@ -210,19 +215,26 @@ const _isExpiringBigClubVeteranStar = (
     daysLeft <= PRE_CONTRACT_PRIORITY_DAYS;
 };
 
-const _getGulfShowpieceSalaryFloor = (player: Player, club: Club): number => {
+const _getGulfMegaOfferSalaryFloor = (player: Player, club: Club): number => {
   const reputation = _clamp(_getPlayerReputation(player), GULF_SHOWPIECE_STAR_MIN_REPUTATION, 100);
-  const reputationFactor = (reputation - GULF_SHOWPIECE_STAR_MIN_REPUTATION) / 20;
-  const countryFloor =
-    club.country === 'KSA' ? 4_000_000 :
-    club.country === 'QAT' ? 3_400_000 :
-    2_900_000;
-  const countryCeiling =
-    club.country === 'KSA' ? 9_000_000 :
-    club.country === 'QAT' ? 7_500_000 :
-    6_500_000;
+  const baseEliteFactor = _clamp(
+    (reputation - GULF_SHOWPIECE_STAR_MIN_REPUTATION) /
+      (GULF_MEGA_OFFER_ELITE_REPUTATION - GULF_SHOWPIECE_STAR_MIN_REPUTATION),
+    0,
+    1
+  );
+  const legendFactor = _clamp((reputation - GULF_MEGA_OFFER_ELITE_REPUTATION) / 3, 0, 1);
+  const annualEuro =
+    GULF_MEGA_OFFER_MIN_ANNUAL_EUR +
+    (GULF_MEGA_OFFER_ELITE_ANNUAL_EUR - GULF_MEGA_OFFER_MIN_ANNUAL_EUR) * baseEliteFactor +
+    (GULF_MEGA_OFFER_MAX_ANNUAL_EUR - GULF_MEGA_OFFER_ELITE_ANNUAL_EUR) * legendFactor;
+  const countryMultiplier =
+    club.country === 'KSA' ? 1.12 :
+    club.country === 'QAT' ? 1.06 :
+    1.0;
+  const clubAmbitionMultiplier = 1 + Math.max(0, club.reputation - 8) * 0.012;
 
-  return Math.round((countryFloor + (countryCeiling - countryFloor) * reputationFactor) / 100_000) * 100_000;
+  return Math.round((annualEuro * GULF_MEGA_OFFER_EUR_TO_PLN * countryMultiplier * clubAmbitionMultiplier) / 1_000_000) * 1_000_000;
 };
 
 const _buildGulfStarOffer = (player: Player, club: Club, currentDate: Date) => {
@@ -238,12 +250,12 @@ const _buildGulfStarOffer = (player: Player, club: Club, currentDate: Date) => {
     player.annualSalary || 0
   );
   const proposedSalary = Math.max(
-    _isGulfShowpieceStar(player) ? _getGulfShowpieceSalaryFloor(player, club) : 0,
+    _getGulfMegaOfferSalaryFloor(player, club),
     Math.round((salaryBase * countryPremium * reputationPremium * showpiecePremium) / 100_000) * 100_000
   );
   const proposedBonus = Math.max(
     Math.round((salaryBase * ageBonusPremium * countryPremium * showpiecePremium) / 100_000) * 100_000,
-    _isGulfShowpieceStar(player) ? Math.round((proposedSalary * 1.15) / 100_000) * 100_000 : 0
+    Math.round((proposedSalary * (_isGulfShowpieceStar(player) ? 1.15 : 0.45)) / 100_000) * 100_000
   );
   const contractYears = player.age >= 36 ? 1 : 2;
   const newEndDate = new Date(currentDate.getFullYear() + contractYears, 5, 30).toISOString();

@@ -12,6 +12,7 @@ import { PolishCupVenueService } from '../../services/PolishCupVenueService';
 
 interface MatchReportModalProps {
   matchId: string | null;
+  seasonNumber?: number;
   onClose: () => void;
 }
 
@@ -164,13 +165,18 @@ const getCompetitionName = (comp: string) => {
   return comp;
 };
 
-export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, onClose }) => {
+export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, seasonNumber, onClose }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
   const { clubs, players } = useGame();
 
   const match = useMemo(
-    () => (matchId ? [...MatchHistoryService.getAll()].reverse().find(m => m.matchId === matchId) ?? null : null),
-    [matchId]
+    () => (matchId
+      ? [...MatchHistoryService.getAll()].reverse().find(m =>
+          m.matchId === matchId &&
+          (seasonNumber === undefined || m.season === seasonNumber)
+        ) ?? null
+      : null),
+    [matchId, seasonNumber]
   );
 
   const homeClub = useMemo(

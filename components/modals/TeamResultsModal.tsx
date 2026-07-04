@@ -71,9 +71,15 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
   }, [isOpen]);
 
   const allHistory = useMemo(() => MatchHistoryService.getAll(), [isOpen, fixtures]);
+  const selectedReportSeason = selectedSeason ?? seasonNumber;
   const selectedReport = useMemo(
-    () => selectedReportId ? [...MatchHistoryService.getAll()].reverse().find(match => match.matchId === selectedReportId) ?? null : null,
-    [selectedReportId, allHistory]
+    () => selectedReportId
+      ? [...allHistory].reverse().find(match =>
+          match.matchId === selectedReportId &&
+          match.season === selectedReportSeason
+        ) ?? null
+      : null,
+    [selectedReportId, selectedReportSeason, allHistory]
   );
   const isSelectedReportEuropean = !!selectedReport && (
     selectedReport.competition.startsWith('CL_') ||
@@ -104,7 +110,7 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
       )
       .map(f => {
         const isPast = new Date(f.date) < currentDate;
-        const histEntry = allHistory.find(e => e.matchId === f.id);
+        const histEntry = allHistory.find(e => e.matchId === f.id && e.season === seasonNumber);
         const isDisplayFinished = f.status === MatchStatus.FINISHED || !!histEntry;
         return {
           id: f.id,
@@ -301,9 +307,9 @@ export const TeamResultsModal: React.FC<TeamResultsModalProps> = ({ isOpen, onCl
     </div>
     {selectedReportId && (
       isSelectedReportEuropean ? (
-        <MatchReportModal matchId={selectedReportId} onClose={() => setSelectedReportId(null)} />
+        <MatchReportModal matchId={selectedReportId} seasonNumber={selectedReportSeason} onClose={() => setSelectedReportId(null)} />
       ) : (
-        <MatchReportModalPolishLeague matchId={selectedReportId} onClose={() => setSelectedReportId(null)} />
+        <MatchReportModalPolishLeague matchId={selectedReportId} seasonNumber={selectedReportSeason} onClose={() => setSelectedReportId(null)} />
       )
     )}
     </>

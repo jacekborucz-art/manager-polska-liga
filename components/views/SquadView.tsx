@@ -463,9 +463,15 @@ export const SquadView: React.FC = () => {
     LineupService.isUnavailableForLineup(player, { competitionId: lineupCompetitionId });
 
   const allMatchHistory = useMemo(() => MatchHistoryService.getAll(), [seasonNumber, fixtures]);
+  const selectedScheduleReportSeason = scheduleSeasonFilter ?? seasonNumber;
   const selectedScheduleReport = useMemo(
-    () => selectedScheduleReportId ? [...MatchHistoryService.getAll()].reverse().find(match => match.matchId === selectedScheduleReportId) ?? null : null,
-    [selectedScheduleReportId, allMatchHistory]
+    () => selectedScheduleReportId
+      ? [...allMatchHistory].reverse().find(match =>
+          match.matchId === selectedScheduleReportId &&
+          match.season === selectedScheduleReportSeason
+        ) ?? null
+      : null,
+    [selectedScheduleReportId, selectedScheduleReportSeason, allMatchHistory]
   );
   const isSelectedScheduleReportEuropean = !!selectedScheduleReport && (
     selectedScheduleReport.competition.startsWith('CL_') ||
@@ -1947,7 +1953,7 @@ export const SquadView: React.FC = () => {
                             : (compCupColors[compLabel] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/30');
                           const isFinished = f.status === MatchStatus.FINISHED;
                           const isPast = new Date(f.date) < currentDate;
-                          const reportEntry = allMatchHistory.find(e => e.matchId === f.id);
+                          const reportEntry = allMatchHistory.find(e => e.matchId === f.id && e.season === seasonNumber);
                           const isDisplayFinished = isFinished || !!reportEntry;
                           const myScore = isHome
                             ? (f.homeScore ?? reportEntry?.homeScore ?? null)
@@ -2814,9 +2820,9 @@ export const SquadView: React.FC = () => {
 
       {selectedScheduleReportId && (
         isSelectedScheduleReportEuropean ? (
-          <MatchReportModal matchId={selectedScheduleReportId} onClose={() => setSelectedScheduleReportId(null)} />
+          <MatchReportModal matchId={selectedScheduleReportId} seasonNumber={selectedScheduleReportSeason} onClose={() => setSelectedScheduleReportId(null)} />
         ) : (
-          <MatchReportModalPolishLeague matchId={selectedScheduleReportId} onClose={() => setSelectedScheduleReportId(null)} />
+          <MatchReportModalPolishLeague matchId={selectedScheduleReportId} seasonNumber={selectedScheduleReportSeason} onClose={() => setSelectedScheduleReportId(null)} />
         )
       )}
 

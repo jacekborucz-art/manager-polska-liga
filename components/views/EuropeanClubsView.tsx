@@ -23,6 +23,7 @@ import { CLUBS_ASIAN, generateAsianClubId } from '../../resources/static_db/club
 import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../../resources/static_db/clubs/northAME_teams';
 import { KitPreview } from '../common/KitPreview';
 import { getActiveNationalTeamKits } from '../../resources/ClubKits';
+import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
 
 const FLAG_COLUMNS = 5;
 
@@ -584,8 +585,6 @@ const NT_FLAG_MAP: Record<string, string> = {
 
 const getNTFlag = (name: string): string => NT_FLAG_MAP[name] ?? '🏳';
 
-type NTScheduleFilter = 'upcoming' | 'played' | 'all';
-
 interface TeamScheduleItem {
   id: string;
   date: Date;
@@ -599,6 +598,7 @@ interface TeamScheduleItem {
     awayGoals: number;
   };
   played: boolean;
+  reportMatchId?: string;
 }
 
 const NT_MONTH_SHORT = ['STY', 'LUT', 'MAR', 'KWI', 'MAJ', 'CZE', 'LIP', 'SIE', 'WRZ', 'PAŹ', 'LIS', 'GRU'];
@@ -614,6 +614,40 @@ const historyCompetitionLabel = (competition: string): string => {
   if (competition === 'UEFA EURO') return 'Mistrzostwa Europy';
   return competition;
 };
+
+const competitionShortLabel = (label: string): string => {
+  const normalized = label.toUpperCase();
+  if (normalized.includes('NATIONS') || normalized.includes('LIGA NAROD')) return 'LN';
+  if (normalized.includes('EURO') || normalized.includes('MISTRZOSTWA EUROP')) {
+    if (normalized.includes('KWALIF') || normalized.includes('ELIMIN')) return 'EME';
+    return 'ME';
+  }
+  if (normalized.includes('WORLD CUP') || normalized.includes('MISTRZOSTWA') || normalized.includes('MŚ') || normalized.includes('MS')) {
+    if (normalized.includes('KWALIF') || normalized.includes('ELIMIN')) return 'EMŚ';
+    return 'MŚ';
+  }
+  if (normalized.includes('FRIENDLY') || normalized.includes('TOWARZYS')) return 'TOW';
+  return label.split(/\s+/).map(part => part[0]).join('').slice(0, 4).toUpperCase() || 'TOW';
+};
+
+const competitionTypeClass = (shortLabel: string): string => {
+  if (shortLabel === 'EMŚ' || shortLabel === 'MŚ') return 'border-amber-300/40 bg-amber-400/15 text-amber-200 shadow-[0_0_14px_rgba(251,191,36,0.12)]';
+  if (shortLabel === 'EME' || shortLabel === 'ME') return 'border-sky-300/35 bg-sky-400/15 text-sky-200 shadow-[0_0_14px_rgba(56,189,248,0.10)]';
+  if (shortLabel === 'LN') return 'border-violet-300/35 bg-violet-400/15 text-violet-200 shadow-[0_0_14px_rgba(167,139,250,0.10)]';
+  if (shortLabel === 'TOW') return 'border-emerald-300/35 bg-emerald-400/12 text-emerald-200 shadow-[0_0_14px_rgba(52,211,153,0.08)]';
+  return 'border-white/[0.10] bg-white/[0.04] text-slate-200';
+};
+
+const isWorldCupType = (shortLabel: string): boolean => shortLabel === 'MŚ';
+
+const WorldCupMiniIcon: React.FC = () => (
+  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+    <path d="M6 3h8v2.2c0 2.6-1.5 4.8-3.6 5.4v2.1h2.3v1.7H7.3v-1.7h2.3v-2.1C7.5 10 6 7.8 6 5.2V3Z" fill="currentColor" opacity="0.96" />
+    <path d="M5.8 4.4H3.7c.1 2.5 1.1 4.2 3.2 4.9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.72" />
+    <path d="M14.2 4.4h2.1c-.1 2.5-1.1 4.2-3.2 4.9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.72" />
+    <path d="M7.1 16.1h5.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.85" />
+  </svg>
+);
 
 const historyGroupLabel = (competition: string): string | undefined => {
   const match = competition.match(/(?:Grupa|Gr\.|Group)\s+([A-Z0-9]+)/i);
@@ -705,7 +739,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
   const GRID = '52px 1fr minmax(0,140px) 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 36px 52px';
 
   const T = 'font-black italic uppercase tracking-wide text-white';
-  const [scheduleFilter, setScheduleFilter] = useState<NTScheduleFilter>('upcoming');
+  const [selectedNTReportId, setSelectedNTReportId] = useState<string | null>(null);
   const positionCounts = squad.reduce<Record<PlayerPosition, number>>((acc, player) => {
     acc[player.position] += 1;
     return acc;
@@ -790,6 +824,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
             group: match.group,
             result: historyEntry ? { homeGoals: historyEntry.homeScore, awayGoals: historyEntry.awayScore } : undefined,
             played: Boolean(historyEntry),
+            reportMatchId: historyEntry?.matchId,
           };
         });
     };
@@ -810,6 +845,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         group: historyGroupLabel(entry.competition),
         result: { homeGoals: entry.homeScore, awayGoals: entry.awayScore },
         played: true,
+        reportMatchId: entry.matchId,
       };
     };
 
@@ -837,17 +873,13 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
     return [...scheduledItems, ...historyItems].sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [currentDate, matchSimulationSeed, nationalTeamIdByName, nationalTeams, team.id, team.name, wcqPlayoffState]);
 
-  const filteredSchedule = useMemo(() => {
-    const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).getTime();
-    const upcoming = teamSchedule.filter(match => !match.played && match.date.getTime() >= today);
-    const played = teamSchedule.filter(match => match.played || match.date.getTime() < today);
-
-    if (scheduleFilter === 'upcoming') return upcoming;
-    if (scheduleFilter === 'played') return [...played].sort((a, b) => b.date.getTime() - a.date.getTime());
-    return [...teamSchedule].sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [currentDate, scheduleFilter, teamSchedule]);
+  const displayedSchedule = useMemo(
+    () => [...teamSchedule].sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [teamSchedule]
+  );
 
   return (
+    <>
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.92fr)] gap-5 items-start">
       <div className="min-w-0">
       {/* ── Nagłówek drużyny ── */}
@@ -1087,64 +1119,79 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Terminarz</div>
-                  <div className={`text-sm mt-1 ${T}`}>{team.name}</div>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {[
-                  { id: 'upcoming' as const, label: 'Nadchodzące' },
-                  { id: 'played' as const, label: 'Wyniki' },
-                  { id: 'all' as const, label: 'Wszystkie' },
-                ].map(filter => (
-                  <button
-                    key={filter.id}
-                    onClick={() => setScheduleFilter(filter.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] border transition-all ${MANAGER_BUTTON_FONT} ${
-                      scheduleFilter === filter.id
-                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300'
-                        : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
               </div>
             </div>
             <div className="p-3 max-h-[300px] overflow-y-auto">
-              {filteredSchedule.length === 0 ? (
+              {displayedSchedule.length === 0 ? (
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-6 text-center">
                   <div className="text-[10px] font-black italic uppercase tracking-[0.22em] text-slate-500">Brak spotkań</div>
                   <div className="mt-2 text-xs font-black italic uppercase tracking-[0.16em] text-slate-300">
-                    Dla wybranego filtra nie ma jeszcze meczów do pokazania.
+                    Ta reprezentacja nie ma jeszcze meczów do pokazania.
                   </div>
                 </div>
               ) : (
                 <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-                  {filteredSchedule.map(match => {
+                  <div className="grid grid-cols-[58px_78px_46px_56px_minmax(150px,1fr)] gap-1.5 px-3 py-2 border-b border-white/[0.06] bg-white/[0.03] text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                    <span>Typ</span>
+                    <span>Data</span>
+                    <span>Gdzie</span>
+                    <span className="text-center">Wynik</span>
+                    <span>Przeciwnik</span>
+                  </div>
+                  {displayedSchedule.map((match, index) => {
                     const opponent = match.home === team.name ? match.away : match.home;
                     const isHome = match.home === team.name;
+                    const scoreText = match.result
+                      ? `${isHome ? match.result.homeGoals : match.result.awayGoals}:${isHome ? match.result.awayGoals : match.result.homeGoals}`
+                      : '-:-';
+                    const matchType = competitionShortLabel(match.competitionLabel);
+                    const isNeutralVenue = matchType === 'MŚ' || matchType === 'ME';
+                    const rowTone = index % 2 === 0
+                      ? 'bg-slate-950/[0.72]'
+                      : 'bg-sky-900/[0.24] shadow-[inset_3px_0_0_rgba(56,189,248,0.18)]';
                     return (
                       <div
                         key={match.id}
-                        className={`px-4 py-3 border-b last:border-b-0 ${
+                        className={`grid grid-cols-[58px_78px_46px_56px_minmax(150px,1fr)] gap-1.5 items-center px-3 py-2.5 border-b last:border-b-0 ${
                           match.result
-                            ? 'border-white/[0.06] bg-amber-400/[0.04]'
-                            : 'border-white/[0.05] bg-white/[0.02]'
+                            ? `border-white/[0.06] ${rowTone}`
+                            : `border-white/[0.05] ${rowTone}`
                         }`}
                       >
-                        <div className="text-[11px] font-black italic uppercase tracking-[0.08em] text-slate-100 break-words">
-                          <span className="text-slate-300">{match.dateLabel}</span>
-                          <span className={`mx-1.5 ${isHome ? 'text-emerald-300' : 'text-sky-300'}`}>
-                            ({isHome ? 'DOM' : 'WYJ.'})
-                          </span>
-                          <span className="text-white">{opponent}</span>
-                          <span className={`mx-1.5 ${match.result ? 'text-amber-300' : 'text-slate-500'}`}>-</span>
-                          <span className={match.result ? 'text-amber-300' : 'text-slate-500'}>
-                            {match.result ? `${match.result.homeGoals}:${match.result.awayGoals}` : '—'}
+                        <div>
+                          <span className={`inline-flex min-w-[52px] items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-[9px] font-black italic uppercase tracking-tighter ${competitionTypeClass(matchType)}`} title={match.competitionLabel}>
+                            {isWorldCupType(matchType) && <WorldCupMiniIcon />}
+                            {matchType}
                           </span>
                         </div>
-                        <div className="mt-1 text-[10px] font-black italic uppercase tracking-[0.16em] text-slate-500 truncate">
-                            {match.competitionLabel}{match.group ? ` · GRUPA ${match.group}` : ''}
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-300 tabular-nums">
+                          {match.dateLabel}
+                        </div>
+                        <div className={`text-[8px] font-black italic uppercase tracking-tighter ${isNeutralVenue ? 'text-amber-300' : isHome ? 'text-emerald-300' : 'text-sky-300'}`}>
+                          {isNeutralVenue ? 'NEU' : isHome ? 'Dom' : 'Wyj.'}
+                        </div>
+                        <div className="text-center">
+                          {match.result && match.reportMatchId ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedNTReportId(match.reportMatchId ?? null)}
+                              className="rounded-md px-2 py-1 text-[12px] font-black italic uppercase tracking-tighter font-mono text-amber-300 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/30"
+                              title="Otwórz raport meczowy"
+                            >
+                              {scoreText}
+                            </button>
+                          ) : (
+                            <span className="text-[12px] font-black italic uppercase tracking-tighter font-mono text-slate-500">
+                              {scoreText}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <NTFlagBadge teamName={opponent} className="w-7 h-5 rounded" />
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-black italic uppercase tracking-tighter text-white truncate">{opponent}</div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1254,6 +1301,14 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
         }
       `}</style>
     </div>
+    {selectedNTReportId && (
+      <MatchReportModalPolishLeague
+        matchId={selectedNTReportId}
+        onClose={() => setSelectedNTReportId(null)}
+        teamType="national"
+      />
+    )}
+    </>
   );
 };
 

@@ -99,7 +99,7 @@ export const LeagueScheduleGenerator = {
           const awayId = isSecondHalf ? pair.home : pair.away;
           
           return {
-             id: `FIX_${leagueId}_R${roundNum}_M${idx}`,
+             id: `FIX_${seasonTemplate.seasonStartYear}_${leagueId}_R${roundNum}_M${idx}`,
              leagueId: leagueId,
              homeTeamId: homeId,
              awayTeamId: awayId,

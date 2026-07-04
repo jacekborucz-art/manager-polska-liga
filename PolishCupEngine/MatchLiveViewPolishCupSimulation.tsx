@@ -2542,13 +2542,13 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
  // Kierunkowy momentum: bonus obniża próg tylko dla strony dominującej
         // HOME dominuje (dodatni) → obniża próg HOME | AWAY dominuje (ujemny) → obniża próg AWAY
         const directionalMomentum = eventSide === 'HOME' ? Math.max(0, nextMomentum) : Math.max(0, -nextMomentum);
-        const momentumBonus = Math.min(0.10, directionalMomentum / 300);
+        const momentumBonus = Math.min(0.07, directionalMomentum / 360);
 
 
  // REKALIBRACJA PRO: Obniżamy bazowy próg z 0.55 na 0.42. 
         // Przy równych siłach szansa na wejście w pole karne rośnie z ~37% do ~65%.
         const activeBaseThreshold = eventSide === 'HOME' ? homeProgressionThreshold : awayProgressionThreshold;
-       let dynamicThreshold = Math.max(0.25, (activeBaseThreshold - momentumBonus) * 1.03);
+       let dynamicThreshold = Math.max(0.25, (activeBaseThreshold - momentumBonus) * 1.14);
 // Podnosimy szanse słabszej drużyny w sposób stopniowany — im większa dysproporcja, tym większa ulga
 const attackerPwr = eventSide === userSide ? pPower : aPower;
 const defenderSidePwr = eventSide === userSide ? aPower : pPower;
@@ -2652,7 +2652,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
            dynamicThreshold *= (1 + nextPostGoalPenaltyPct);
         }
        
-       const thresholdPressureTax = isUnderdog ? 1.18 : 1.35;
+       const thresholdPressureTax = isUnderdog ? 1.36 : 1.58;
        const currentThreshold = Math.min(0.95, dynamicThreshold * thresholdPressureTax);
        if (forceZeroShotChance && successfulPasses / diceRolls <= currentThreshold) {
             successfulPasses = Math.min(diceRolls, Math.floor(diceRolls * currentThreshold) + 1);
