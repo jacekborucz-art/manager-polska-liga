@@ -8794,11 +8794,25 @@ Asystent`,
       const weakReviewSummer = AiContractService.processWeakPlayerContractCuts(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
       postReviewClubs = weakReviewSummer.updatedClubs;
       postReviewPlayers = weakReviewSummer.updatedPlayers;
+      // Sezonowy nabór wychowanków AI jest wykonywany po porządkach kontraktowych,
+      // ale przed startową decyzją transferową. Taka kolejność jest istotna:
+      // - najpierw klub usuwa lub wystawia zawodników, których i tak nie chce trzymać,
+      // - potem akademia AI może uzupełnić realne braki do 4 zawodników,
+      // - dopiero na końcu skauci i dyrektor sportowy decydują, czy nadal trzeba
+      //   kupować na rynku transferowym, liście transferowej albo wśród wolnych agentów.
+      // Dzięki temu wychowankowie pomagają w głębi kadry, ale nie blokują progresywnie
+      // silniejszych transferów tam, gdzie klub nadal ma za małą jakość.
+      const youthIntake = AiContractService.generateSeasonYouthIntakeForAiClubs(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = youthIntake.updatedClubs;
+      postReviewPlayers = youthIntake.updatedPlayers;
       postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
       const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, updatedCoachesJuly, dateToProcess, userTeamId);
       postReviewClubs = seasonDecision.updatedClubs;
       postReviewPlayers = AiContractService.enforceTransferListLimits(seasonDecision.updatedPlayers, dateToProcess, userTeamId);
       setCoaches(updatedCoachesJuly);
+      if (youthIntake.generatedCount > 0) {
+        DebugLoggerService.log('SQUAD_REVIEW', `Nabór wychowanków AI (2 lipca): ${youthIntake.generatedCount} nowych zawodników.`, true);
+      }
       DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
       
       // Wyplata pensji zawodników na start sezonu
@@ -8844,6 +8858,36 @@ Asystent`,
           financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50)
         };
       });
+    }
+
+    const isAiYouthLateSummerIntakeDay =
+      (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 31) ||
+      (dateToProcess.getMonth() === 7 && dateToProcess.getDate() === 31) ||
+      (dateToProcess.getMonth() === 8 && dateToProcess.getDate() === 30);
+
+    if (isAiYouthLateSummerIntakeDay) {
+      // Późnoletni nabór AI działa jako dodatkowa kontrola po kilku tygodniach rynku.
+      // Na początku sezonu klub może wyglądać stabilnie, ale po sprzedażach, wypożyczeniach,
+      // wygasających kontraktach albo nieudanych transferach może znowu spaść poniżej
+      // zdrowej głębi kadry. Dlatego pod koniec lipca, sierpnia i września AI ponownie
+      // uruchamia ten sam generator wychowanków, zamiast czekać bezczynnie do zimy.
+      //
+      // Generator sam pilnuje limitu 4 wychowanków na klub w danym sezonie przez stały
+      // prefiks ID zawodnika. To oznacza, że późniejsze wywołanie nie produkuje duplikatów:
+      // jeśli klub dostał już komplet w lipcu, ten blok tylko przejdzie po danych i nic
+      // nie dopisze. Jeśli jednak kadra skurczyła się po transferach, klub może dobrać
+      // brakujące sloty, nadal zgodnie z zasadą "im mniejsza kadra, tym większa szansa".
+      const lateYouthIntake = AiContractService.generateSeasonYouthIntakeForAiClubs(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = lateYouthIntake.updatedClubs;
+      postReviewPlayers = lateYouthIntake.updatedPlayers;
+
+      if (lateYouthIntake.generatedCount > 0) {
+        DebugLoggerService.log(
+          'SQUAD_REVIEW',
+          `Dodatkowy nabór wychowanków AI (${dateToProcess.toLocaleDateString('pl-PL')}): ${lateYouthIntake.generatedCount} nowych zawodników.`,
+          true
+        );
+      }
     }
 
     if (userTeamId) {

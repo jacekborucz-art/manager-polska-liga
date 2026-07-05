@@ -1,4 +1,4 @@
-import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput, AiTransferLogEntry, Coach } from '../types';
+import { Club, Player, PendingNegotiation, PlayerPosition, TransferTiming, TransferClubBidInput, TransferContractInput, AiTransferLogEntry, Coach, HealthStatus, Region, PlayerAttributes } from '../types';
 import { FinanceService as FinanceLogic } from './FinanceService';
 import { TransferSellerLogicService } from './TransferSellerLogicService';
 import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
@@ -8,6 +8,10 @@ import { PlayerContractMindflowService } from './PlayerContractMindflowService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
 import { AiClubTransferStrategy, AiClubTransferStrategyService } from './AiClubTransferStrategyService';
+import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
+import { NameGeneratorService } from './NameGeneratorService';
+import { pickNationalityForRegion } from './NationalityService';
+import { calcReputacja } from './SquadGeneratorService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -83,6 +87,8 @@ const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
 const AI_MIN_SQUAD_SIZE = 26;
 const AI_TARGET_SQUAD_SIZE = 28;
 const AI_MAX_SQUAD_SIZE = 32;
+const AI_SEASON_YOUTH_MAX_INTAKE = 4;
+const AI_SEASON_YOUTH_ID_PREFIX = 'AI_YOUTH_INTAKE';
 const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = AI_TARGET_SQUAD_SIZE;
 const TRANSFER_LIST_MAX_SHARE = 0.25;
 const HIGH_REPUTATION_RELEASE_THRESHOLD = 80;
@@ -343,6 +349,326 @@ const _isQuantityDepthNeed = (
   );
 };
 
+const AI_YOUTH_COUNTRY_REGION: Partial<Record<string, Region>> = {
+  POL: Region.POLAND,
+  ENG: Region.ENGLAND,
+  SCO: Region.ENGLAND,
+  WAL: Region.ENGLAND,
+  NIR: Region.ENGLAND,
+  IRL: Region.ENGLAND,
+  GER: Region.GERMANY,
+  AUT: Region.GERMANY,
+  SUI: Region.GERMANY,
+  LIE: Region.GERMANY,
+  LUX: Region.FRANCE,
+  ESP: Region.SPAIN,
+  AND: Region.IBERIA,
+  POR: Region.IBERIA,
+  GIB: Region.IBERIA,
+  FRA: Region.FRANCE,
+  ITA: Region.ITALY,
+  SMR: Region.ITALY,
+  NED: Region.BENELUX,
+  BEL: Region.BENELUX,
+  NOR: Region.SCANDINAVIA,
+  DEN: Region.SCANDINAVIA,
+  ISL: Region.SCANDINAVIA,
+  FRO: Region.SCANDINAVIA,
+  SWE: Region.SWEDEN,
+  FIN: Region.FINLAND,
+  CZE: Region.CZ_SK,
+  SVK: Region.CZ_SK,
+  HUN: Region.HUNGARIAN,
+  ROU: Region.ROMANIA,
+  SRB: Region.BALKANS,
+  CRO: Region.BALKANS,
+  BIH: Region.BALKANS,
+  MKD: Region.BALKANS,
+  MNE: Region.BALKANS,
+  BUL: Region.BALKANS,
+  SVN: Region.BALKANS,
+  ALB: Region.ALBANIA,
+  KOS: Region.ALBANIA,
+  GRE: Region.GREEK,
+  TUR: Region.TURKEY,
+  UKR: Region.EX_USSR,
+  RUS: Region.EX_USSR,
+  BLR: Region.EX_USSR,
+  MDA: Region.EX_USSR,
+  GEO: Region.GEORGIA,
+  ARM: Region.ARMENIA,
+  AZE: Region.AZERBAIJANI,
+  KAZ: Region.KAZAKH,
+  LTU: Region.BALTIC,
+  LAT: Region.BALTIC,
+  EST: Region.BALTIC,
+  MLT: Region.MALTESE,
+  ISR: Region.ISRAELI,
+  ARG: Region.ARGENTINA,
+  BRA: Region.BRAZIL,
+  MEX: Region.MEXICO,
+  USA: Region.NORTH_AMERICA,
+  CAN: Region.NORTH_AMERICA,
+  JPN: Region.JAPAN,
+  KOR: Region.KOREA,
+};
+
+const AI_YOUTH_FOREIGN_REGIONS: Region[] = [
+  Region.POLAND,
+  Region.ENGLAND,
+  Region.GERMANY,
+  Region.FRANCE,
+  Region.SPAIN,
+  Region.ITALY,
+  Region.IBERIA,
+  Region.BENELUX,
+  Region.SCANDINAVIA,
+  Region.SWEDEN,
+  Region.CZ_SK,
+  Region.BALKANS,
+  Region.TURKEY,
+  Region.EX_USSR,
+  Region.ROMANIA,
+  Region.HUNGARIAN,
+  Region.BRAZIL,
+  Region.ARGENTINA,
+  Region.SSA,
+];
+
+const AI_YOUTH_TUNING_ATTRS: Record<PlayerPosition, (keyof PlayerAttributes)[]> = {
+  [PlayerPosition.GK]: ['goalkeeping', 'positioning', 'mentality', 'strength', 'stamina', 'workRate'],
+  [PlayerPosition.DEF]: ['defending', 'heading', 'strength', 'positioning', 'stamina', 'mentality', 'workRate'],
+  [PlayerPosition.MID]: ['passing', 'vision', 'technique', 'stamina', 'workRate', 'dribbling', 'mentality'],
+  [PlayerPosition.FWD]: ['finishing', 'attacking', 'pace', 'dribbling', 'positioning', 'technique', 'mentality'],
+};
+
+const _buildAiYouthSeasonPrefix = (seasonYear: number, clubId: string): string =>
+  `${AI_SEASON_YOUTH_ID_PREFIX}_${seasonYear}_${clubId}`;
+
+/**
+ * Wylicza, ilu wychowanków klub AI ma prawo wygenerować na starcie sezonu.
+ *
+ * Logika jest celowo progresywna:
+ * - bardzo małe kadry prawie zawsze dostają komplet 4 miejsc,
+ * - kadry blisko minimum 26 zawodników dostają zwykle 1-3 nazwiska,
+ * - szerokie kadry nadal mogą dostać pojedynczy talent, ale szansa jest dużo niższa.
+ *
+ * Dzięki temu generator nie jest twardym workaroundiem na liczbę 26. To raczej
+ * realistyczny nabór akademii: im większy problem z głębią składu, tym większa
+ * presja dyrektora sportowego, żeby podpisać kilku gotowych juniorów do kadry.
+ */
+const _getAiSeasonYouthIntakeCount = (squadSize: number, seed: string): number => {
+  const roll = _seededRandom(`${seed}_COUNT`);
+
+  if (squadSize <= 20) return roll < 0.85 ? 4 : 3;
+  if (squadSize <= 22) return roll < 0.70 ? 4 : 3;
+  if (squadSize <= 24) return roll < 0.45 ? 4 : roll < 0.80 ? 3 : 2;
+  if (squadSize <= 25) return roll < 0.25 ? 4 : roll < 0.60 ? 3 : roll < 0.88 ? 2 : 1;
+  if (squadSize <= 27) return roll < 0.10 ? 3 : roll < 0.38 ? 2 : roll < 0.78 ? 1 : 0;
+  if (squadSize <= 30) return roll < 0.10 ? 2 : roll < 0.35 ? 1 : 0;
+  return roll < 0.08 ? 1 : 0;
+};
+
+/**
+ * Wybiera pozycję dla kolejnego wychowanka.
+ *
+ * Priorytet 1: realny brak względem minimalnej głębi pozycji.
+ * Priorytet 2: brak rotacji względem docelowej głębi kadry.
+ * Priorytet 3: losowa, ale ważona pozycja, żeby kluby nie produkowały zawsze
+ * tego samego profilu zawodnika, gdy nie mają już oczywistej dziury w składzie.
+ */
+const _pickAiYouthPosition = (squad: Player[], seed: string, slot: number): PlayerPosition => {
+  const positions: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+  const counts = _countByPosition(squad);
+
+  const hardShortages = positions
+    .map(position => ({
+      position,
+      shortage: MIN_SQUAD_POSITION_COUNTS[position] - counts[position],
+      roll: _seededRandom(`${seed}_HARD_${slot}_${position}`)
+    }))
+    .filter(entry => entry.shortage > 0)
+    .sort((a, b) => b.shortage - a.shortage || a.roll - b.roll);
+  if (hardShortages.length > 0) return hardShortages[0].position;
+
+  const depthShortages = positions
+    .map(position => ({
+      position,
+      shortage: _getTargetDepthCount(position) - counts[position],
+      roll: _seededRandom(`${seed}_DEPTH_${slot}_${position}`)
+    }))
+    .filter(entry => entry.shortage > 0)
+    .sort((a, b) => b.shortage - a.shortage || a.roll - b.roll);
+  if (depthShortages.length > 0) return depthShortages[0].position;
+
+  const weightedPool: PlayerPosition[] = [
+    PlayerPosition.GK,
+    PlayerPosition.DEF,
+    PlayerPosition.DEF,
+    PlayerPosition.DEF,
+    PlayerPosition.MID,
+    PlayerPosition.MID,
+    PlayerPosition.MID,
+    PlayerPosition.FWD,
+    PlayerPosition.FWD,
+  ];
+  return weightedPool[Math.floor(_seededRandom(`${seed}_FREE_${slot}`) * weightedPool.length)] ?? PlayerPosition.MID;
+};
+
+const _pickAiYouthRegion = (club: Club, seed: string, slot: number): Region => {
+  const localRegion = AI_YOUTH_COUNTRY_REGION[club.country || ''] ?? Region.POLAND;
+  const foreignRoll = _seededRandom(`${seed}_REGION_FOREIGN_${slot}`);
+  if (foreignRoll >= 0.08) return localRegion;
+
+  const foreignPool = AI_YOUTH_FOREIGN_REGIONS.filter(region => region !== localRegion);
+  return foreignPool[Math.floor(_seededRandom(`${seed}_REGION_POOL_${slot}`) * foreignPool.length)] ?? localRegion;
+};
+
+const _buildAiYouthContractEnd = (currentDate: Date): string => {
+  const endDate = new Date(currentDate);
+  endDate.setFullYear(endDate.getFullYear() + 3);
+  endDate.setMonth(5, 30);
+  return endDate.toISOString().split('T')[0];
+};
+
+const _roundAiYouthMoney = (value: number, step = 5_000): number =>
+  Math.max(step, Math.round(value / step) * step);
+
+const _emptyAiYouthStats = () => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: [],
+});
+
+/**
+ * Dopasowuje wygenerowane atrybuty do docelowego overallu wychowanka.
+ *
+ * Sam generator atrybutów jest używany po to, żeby zawodnik zachował naturalny
+ * profil pozycji: bramkarz ma bramkarskie parametry, napastnik wykończenie itd.
+ * Potem robimy kilka małych korekt tylko na kluczowych atrybutach pozycji, aby
+ * spełnić warunek projektu: overall wychowanka ma być blisko średniej drużyny,
+ * ale nadal wyglądać jak piłkarz z prawdziwym profilem, a nie płaska tabela liczb.
+ */
+const _tuneAiYouthAttributesToOverall = (
+  attributes: PlayerAttributes,
+  position: PlayerPosition,
+  targetOverall: number
+): { attributes: PlayerAttributes; overall: number } => {
+  let tuned: PlayerAttributes = { ...attributes };
+  let currentOverall = PlayerAttributesGenerator.calculateOverall(tuned, position);
+  const tunedKeys = AI_YOUTH_TUNING_ATTRS[position];
+
+  for (let attempt = 0; attempt < 8 && Math.abs(currentOverall - targetOverall) > 1; attempt++) {
+    const diff = targetOverall - currentOverall;
+    const step = diff > 0 ? Math.min(3, diff) : Math.max(-3, diff);
+    tuned = tunedKeys.reduce((next, key) => ({
+      ...next,
+      [key]: _clamp((next[key] || 1) + step, 1, 99)
+    }), tuned);
+    currentOverall = PlayerAttributesGenerator.calculateOverall(tuned, position);
+  }
+
+  return { attributes: tuned, overall: currentOverall };
+};
+
+const _buildAiSeasonYouthPlayer = (
+  club: Club,
+  squad: Player[],
+  position: PlayerPosition,
+  currentDate: Date,
+  seasonYear: number,
+  slot: number
+): Player => {
+  const seed = `${seasonYear}_${club.id}_${slot}`;
+  const averageOverall = Math.round(_getAverageOverall(squad) || (30 + club.reputation * 3.5));
+  const targetOverall = _clamp(
+    averageOverall - 3 + Math.floor(_seededRandom(`${seed}_OVR`) * 7),
+    35,
+    99
+  );
+  const age = 17 + Math.floor(_seededRandom(`${seed}_AGE`) * 4);
+  const tier = FinanceLogic.getClubTier(club);
+  const region = _pickAiYouthRegion(club, seed, slot);
+  const name = NameGeneratorService.getRandomName(region);
+  const generated = PlayerAttributesGenerator.generateAttributes(
+    position,
+    tier,
+    club.reputation,
+    age,
+    club.country !== 'POL',
+    {
+      minBase: _clamp(targetOverall - 4, 1, 99),
+      maxBase: _clamp(targetOverall + 4, 1, 99),
+      hardCap: 99,
+    }
+  );
+  const tuned = _tuneAiYouthAttributesToOverall(generated.attributes, position, targetOverall);
+  const overallRating = _clamp(tuned.overall, Math.max(35, averageOverall - 3), Math.min(99, averageOverall + 3));
+  const salaryBase = FinanceLogic.getFairMarketSalary(overallRating);
+  const salaryMultiplier = 0.16 + _clamp(club.reputation / 20, 0, 1) * 0.14 + _seededRandom(`${seed}_SALARY`) * 0.08;
+  const annualSalary = _roundAiYouthMoney(Math.max(20_000, salaryBase * salaryMultiplier));
+
+  const newPlayer: Player = {
+    id: `${_buildAiYouthSeasonPrefix(seasonYear, club.id)}_${slot}`,
+    firstName: name.firstName,
+    lastName: name.lastName,
+    age,
+    clubId: club.id,
+    nationality: region,
+    nationalityCountry: pickNationalityForRegion(region),
+    position,
+    overallRating,
+    attributes: {
+      ...tuned.attributes,
+      talent: _clamp(Math.max(tuned.attributes.talent || 1, overallRating + 8 + Math.floor(_seededRandom(`${seed}_TALENT`) * 14)), 1, 99),
+    },
+    stats: _emptyAiYouthStats(),
+    cupStats: _emptyAiYouthStats(),
+    euroStats: _emptyAiYouthStats(),
+    nationalStats: _emptyAiYouthStats(),
+    health: { status: HealthStatus.HEALTHY },
+    condition: 100,
+    suspensionMatches: 0,
+    contractEndDate: _buildAiYouthContractEnd(currentDate),
+    annualSalary,
+    isOnTransferList: false,
+    isAvailableForLoan: false,
+    marketValue: 0,
+    history: [{
+      clubName: club.name,
+      clubId: club.id,
+      fromYear: currentDate.getFullYear(),
+      fromMonth: currentDate.getMonth() + 1,
+      toYear: null,
+      toMonth: null,
+    }],
+    boardLockoutUntil: null,
+    isUntouchable: false,
+    negotiationStep: 0,
+    negotiationLockoutUntil: null,
+    contractLockoutUntil: null,
+    moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
+    fatigueDebt: 0,
+    reputacja: calcReputacja(overallRating, club.reputation),
+    lojalnosc: 45 + Math.floor(_seededRandom(`${seed}_LOYALTY`) * 55),
+    isNegotiationPermanentBlocked: false,
+    transferLockoutUntil: null,
+    freeAgentLockoutUntil: null,
+    freeAgentClubLockouts: {},
+  };
+
+  return {
+    ...newPlayer,
+    marketValue: FinanceLogic.calculateMarketValue(newPlayer, club.reputation, tier, club.country)
+  };
+};
+
 const _shuffleMarketOrder = <T,>(
   items: T[],
   seed: string,
@@ -356,18 +682,29 @@ const _shuffleMarketOrder = <T,>(
     .sort((a, b) => a.roll - b.roll)
     .map(entry => entry.item);
 
+const _getScoutingProfile = (club: Club, hasCriticalShortage = false) => {
+  const reputationFactor = _clamp((club.reputation - 1) / 19, 0, 1);
+  return {
+    discoveryShare: _clamp(0.28 + reputationFactor * 0.34 + (hasCriticalShortage ? 0.14 : 0), 0.28, 0.80),
+    maxPool: Math.round(6 + reputationFactor * 18 + (hasCriticalShortage ? 4 : 0)),
+    noise: _clamp(12 - reputationFactor * 8 - (hasCriticalShortage ? 2 : 0), 2, 12),
+    qualityBand: _clamp((hasCriticalShortage ? 18 : 14) - reputationFactor * 9, 5, 18)
+  };
+};
+
 const _pickDiscoveredMarketPlayer = <T extends Player>(
   players: T[],
   seed: string,
   scorePlayer: (player: T) => number,
-  options: { discoveryShare?: number; maxPool?: number; noise?: number } = {}
+  options: { discoveryShare?: number; maxPool?: number; noise?: number; qualityBand?: number } = {}
 ): T | null => {
   if (players.length === 0) return null;
 
   const discoveryShare = options.discoveryShare ?? 0.40;
   const maxPool = options.maxPool ?? 10;
   const noise = options.noise ?? 5;
-  const discovered = players
+  const qualityBand = options.qualityBand ?? Number.POSITIVE_INFINITY;
+  const scored = players
     .map((player, index) => {
       const score = scorePlayer(player);
       const roll = _seededRandom(`${seed}_SCAN_${player.id}_${index}`);
@@ -376,7 +713,10 @@ const _pickDiscoveredMarketPlayer = <T extends Player>(
         score,
         discoveryScore: score + (roll - 0.5) * noise
       };
-    })
+    });
+  const bestScore = scored.reduce((best, entry) => Math.max(best, entry.score), Number.NEGATIVE_INFINITY);
+  const discovered = scored
+    .filter(entry => entry.score >= bestScore - qualityBand)
     .sort((a, b) => b.discoveryScore - a.discoveryScore);
 
   const visibleCount = Math.min(
@@ -390,6 +730,57 @@ const _pickDiscoveredMarketPlayer = <T extends Player>(
   const pickIndex = Math.min(visible.length - 1, Math.floor(Math.pow(pickRoll, 1.35) * visible.length));
   return visible[pickIndex]?.player ?? null;
 };
+
+const _roundContractMoney = (value: number): number =>
+  Math.max(50_000, Math.round(value / 10_000) * 10_000);
+
+const _buildAiTransferContractOffer = (
+  player: Player,
+  sellerClub: Club,
+  buyerClub: Club,
+  sellerSquad: Player[],
+  buyerSquad: Player[],
+  currentDate: Date,
+  need?: ClubNeedAssessment
+): TransferContractInput | null => {
+  const plan = TransferPlayerDecisionService.buildNegotiationPlan(
+    player,
+    sellerClub,
+    buyerClub,
+    sellerSquad,
+    buyerSquad,
+    currentDate
+  );
+  if (!plan.willingToTalk) return null;
+
+  const reputationFactor = _clamp((buyerClub.reputation - 1) / 19, 0, 1);
+  const urgencyPremium =
+    need?.urgency === 'CRITICAL' ? 0.07 :
+    need?.urgency === 'HIGH' ? 0.04 :
+    need?.urgency === 'MEDIUM' ? 0.02 :
+    0;
+  const starPremium = player.overallRating >= 85 ? 0.04 : player.overallRating >= 78 ? 0.02 : 0;
+  const salaryPremium = 1 + reputationFactor * 0.08 + urgencyPremium + starPremium;
+  const bonusPremium = 1 + reputationFactor * 0.12 + urgencyPremium + starPremium;
+
+  return {
+    salary: _roundContractMoney(Math.max(
+      FinanceLogic.getFairMarketSalary(player.overallRating),
+      plan.desiredSalary * salaryPremium
+    )),
+    bonus: _roundContractMoney(plan.desiredBonus * bonusPremium),
+    years: plan.desiredYears
+  };
+};
+
+const _getAiTransferSpendingPower = (club: Club): number =>
+  Math.max(club.budget || 0, club.transferBudget || 0);
+
+const _chargeAiTransferFee = (club: Club, fee: number): Club => ({
+  ...club,
+  budget: Math.max(0, (club.budget || 0) - fee),
+  transferBudget: Math.max(0, (club.transferBudget || 0) - fee)
+});
 
 const _hashToUnit = (seed: string): number => _seededRandom(seed);
 
@@ -1124,6 +1515,7 @@ processAiRecruitment: (
         const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
         return scoreB - scoreA || a.age - b.age;
       });
+      const faScouting = _getScoutingProfile(club, hasCriticalShortage);
       const candidate = gulfStarCandidate || _pickDiscoveredMarketPlayer(
         freeAgentCandidates,
         `AI_FA_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
@@ -1133,9 +1525,10 @@ processAiRecruitment: (
             _getRecruitmentReputationBonus(player, 3, need);
         },
         {
-          discoveryShare: hasCriticalShortage ? 0.60 : 0.42,
-          maxPool: hasCriticalShortage ? 12 : 8,
-          noise: hasCriticalShortage ? 7 : 10
+          discoveryShare: faScouting.discoveryShare,
+          maxPool: faScouting.maxPool,
+          noise: faScouting.noise,
+          qualityBand: faScouting.qualityBand
         }
       );
 
@@ -1490,7 +1883,8 @@ processAiRecruitment: (
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(squad)) continue;
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
-      if (club.budget <= 250_000) continue;
+      const transferSpendingPower = _getAiTransferSpendingPower(club);
+      if (transferSpendingPower <= 250_000) continue;
 
       const minCounts = MIN_SQUAD_POSITION_COUNTS;
       const idealOvr = 30 + club.reputation * 4.5;
@@ -1551,15 +1945,25 @@ processAiRecruitment: (
           isTransferListed: true,
           askingPrice
         });
-        if (bargainRange && askingPrice > club.budget * budgetCapBargain) return false;
-        if (normalRange && askingPrice > club.budget * budgetCapNormal) return false;
+        if (bargainRange && askingPrice > transferSpendingPower * budgetCapBargain) return false;
+        if (normalRange && askingPrice > transferSpendingPower * budgetCapNormal) return false;
         if (!hasCriticalShortageTL && clubStrategy === 1 && p.age > 26 && aiStrategy.ageProfile === 'YOUTH') return false;
-        if (club.budget < askingPrice + proposedSalary * 0.5) return false;
+        if (transferSpendingPower < askingPrice + proposedSalary * 0.5) return false;
 
         return true;
       });
 
       if (candidates.length === 0) continue;
+
+      const scoreTransferListedCandidate = (candidate: Player): number => {
+        const candidateSeller = sellerClubMap.get(candidate.clubId || '');
+        const need = needsTLMap.get(candidate.position);
+        return AiClubTransferStrategyService.candidateScore(candidate, club, aiStrategy, { needUrgency: need?.urgency, isTransferListed: true }) +
+          (candidateSeller ? _getTransferListOpportunity(candidate, club, candidateSeller).scoreBonus : 0) +
+          _getRecruitmentReputationBonus(candidate, clubStrategy, need) +
+          (clubStrategy === 1 ? Math.max(0, 28 - candidate.age) * 0.35 : 0) +
+          (clubStrategy === 0 && candidate.isOnTransferList ? 4 : 0);
+      };
 
       // Wybierz kandydata wg strategii agenta rekrutacyjnego
       let sortedCandidates = [...candidates];
@@ -1609,15 +2013,16 @@ processAiRecruitment: (
           return bScore - aScore;
         });
       }
-      const rankScores = new Map(sortedCandidates.map((player, index) => [player.id, sortedCandidates.length - index]));
+      const tlScouting = _getScoutingProfile(club, hasCriticalShortageTL);
       const best = _pickDiscoveredMarketPlayer(
         sortedCandidates,
         `AI_TL_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}_${clubStrategy}`,
-        player => rankScores.get(player.id) ?? 0,
+        scoreTransferListedCandidate,
         {
-          discoveryShare: hasCriticalShortageTL ? 0.65 : 0.38,
-          maxPool: hasCriticalShortageTL ? 14 : 9,
-          noise: hasCriticalShortageTL ? 4 : 6
+          discoveryShare: tlScouting.discoveryShare,
+          maxPool: tlScouting.maxPool,
+          noise: tlScouting.noise,
+          qualityBand: tlScouting.qualityBand
         }
       ) || sortedCandidates[0];
       const sellerClub = sellerClubMap.get(best.clubId || '');
@@ -1638,7 +2043,20 @@ processAiRecruitment: (
       if (!stance.allowTalks) continue;
 
       // AI płaci pełną cenę wywoławczą
-      const bidInput: TransferClubBidInput = { fee: stance.askingPrice, timing: transferTiming };
+      const agreedFee = stance.askingPrice;
+      const contractInput = _buildAiTransferContractOffer(
+        best,
+        sellerClub,
+        club,
+        sellerSquad,
+        squad,
+        currentDate,
+        needsTLMap.get(best.position)
+      );
+      if (!contractInput) continue;
+      if (transferSpendingPower < agreedFee + contractInput.salary * 0.5) continue;
+
+      const bidInput: TransferClubBidInput = { fee: agreedFee, timing: transferTiming };
       const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
         bidInput, best, sellerClub, club, sellerSquad, currentDate, undefined, sellerFavoritesTL
       );
@@ -1646,16 +2064,6 @@ processAiRecruitment: (
 
       // Sprawdź czy zawodnik chce przejść
       // Bonus zależy od kierunku ruchu reputacyjnego: ruch w dół wymaga wyższego bonusu by zawodnik zaakceptował
-      const repDeltaTL = club.reputation - sellerClub.reputation;
-      const salaryMultAI_TL = repDeltaTL <= -2 ? 1.40 : repDeltaTL === -1 ? 1.25 : 1.12;
-      const proposedSalary = Math.max(FinanceLogic.getFairMarketSalary(best.overallRating), Math.round(best.annualSalary * salaryMultAI_TL));
-      const ageBonusMult_TL = best.age < 24 ? 0.40 : best.age <= 29 ? 0.65 : best.age <= 33 ? 1.00 : 1.30;
-      const repBonusPremium_TL = repDeltaTL < 0 ? 0.40 : repDeltaTL === 0 ? 0.10 : 0;
-      const negRandTL = 0.75 + Math.random() * 0.50;
-      const proposedBonus = Math.floor(best.annualSalary * (ageBonusMult_TL + repBonusPremium_TL) * negRandTL);
-      const contractYears = best.age <= 27 ? 4 : best.age <= 30 ? 3 : best.age <= 34 ? 2 : 1;
-      const contractInput: TransferContractInput = { salary: proposedSalary, bonus: proposedBonus, years: contractYears };
-
       const playerDecision = TransferPlayerDecisionService.evaluateMove(
         contractInput, best, sellerClub, club, sellerSquad, squad, currentDate
       );
@@ -1670,7 +2078,7 @@ processAiRecruitment: (
           toClub: club.name,
           status: 'PLAYER_REJECTED',
           reason: playerDecision.reason,
-          fee: askingPrice,
+          fee: agreedFee,
           playerId: best.id,
           fromClubId: sellerClub.id,
           toClubId: club.id,
@@ -1687,7 +2095,15 @@ processAiRecruitment: (
       const sellerClubId = best.clubId || '';
       updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
         p.id === best.id
-          ? { ...p, transferPendingClubId: club.id, transferReportDate: reportDate.toISOString(), transferPendingFee: askingPrice }
+          ? {
+              ...p,
+              transferPendingClubId: club.id,
+              transferReportDate: reportDate.toISOString(),
+              transferPendingFee: agreedFee,
+              transferPendingSalary: contractInput.salary,
+              transferPendingBonus: contractInput.bonus,
+              transferPendingContractYears: contractInput.years,
+            }
           : p
       );
 
@@ -1700,7 +2116,7 @@ processAiRecruitment: (
         fromClub: sellerClub.name,
         toClub: club.name,
         status: 'OFFER_MADE',
-        fee: askingPrice,
+        fee: agreedFee,
         playerId: best.id,
         fromClubId: sellerClub.id,
         toClubId: club.id,
@@ -1712,8 +2128,8 @@ processAiRecruitment: (
 
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
       updatedClubs = updatedClubs.map(c => {
-        if (c.id === club.id) return { ...c, budget: c.budget - askingPrice };
-        if (c.id === sellerClubId) return { ...c, budget: c.budget + askingPrice };
+        if (c.id === club.id) return _chargeAiTransferFee(c, agreedFee);
+        if (c.id === sellerClubId) return { ...c, budget: c.budget + agreedFee };
         return c;
       });
     }
@@ -1762,7 +2178,8 @@ processAiRecruitment: (
       // Stagger: w oknie co 3 dni, poza oknem co 15 dni
       const staggerInt = windowOpen ? 3 : 15;
       if ((dayOfYear + hashClubInt(club.id)) % staggerInt !== 0) continue;
-      if (club.budget <= 500_000) continue;
+      const transferSpendingPower = _getAiTransferSpendingPower(club);
+      if (transferSpendingPower <= 500_000) continue;
 
       const squad = updatedPlayersMap[club.id] || [];
       if (squad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(squad)) continue;
@@ -1822,6 +2239,7 @@ processAiRecruitment: (
 
       if (targets.length === 0) continue;
 
+      const itScouting = _getScoutingProfile(club, hasCriticalShortageIT);
       const target = _pickDiscoveredMarketPlayer(
         targets,
         `AI_IT_DISCOVERY_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
@@ -1829,9 +2247,10 @@ processAiRecruitment: (
           AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: needsITMap.get(player.position)?.urgency }) +
           _getRecruitmentReputationBonus(player, 2, needsITMap.get(player.position)),
         {
-          discoveryShare: hasCriticalShortageIT ? 0.62 : 0.34,
-          maxPool: hasCriticalShortageIT ? 14 : 8,
-          noise: hasCriticalShortageIT ? 5 : 9
+          discoveryShare: itScouting.discoveryShare,
+          maxPool: itScouting.maxPool,
+          noise: itScouting.noise,
+          qualityBand: itScouting.qualityBand
         }
       );
       if (!target) continue;
@@ -1840,18 +2259,37 @@ processAiRecruitment: (
 
       const sellerSquad = updatedPlayersMap[target.clubId || ''] || [];
       const askingPrice = TransferSellerLogicService.estimateAskingPrice(target, sellerClub, sellerSquad, currentDate);
-      const proposedSalary = FinanceLogic.getFairMarketSalary(target.overallRating);
       const isGulfVeteranStarTarget = isGulfStarHunter &&
         _isExpiringBigClubVeteranStar(target, sellerClub, currentDate);
+      const gulfVeteranStarOffer = isGulfVeteranStarTarget
+        ? _buildGulfStarOffer(target, club, currentDate)
+        : null;
+      const aiContractOffer = gulfVeteranStarOffer
+        ? {
+            salary: gulfVeteranStarOffer.proposedSalary,
+            bonus: gulfVeteranStarOffer.proposedBonus,
+            years: gulfVeteranStarOffer.contractYears
+          }
+        : _buildAiTransferContractOffer(
+            target,
+            sellerClub,
+            club,
+            sellerSquad,
+            squad,
+            currentDate,
+            needsITMap.get(target.position)
+          );
+      if (!aiContractOffer) continue;
+      const proposedSalary = aiContractOffer.salary;
 
-      if (club.budget < askingPrice + proposedSalary * 0.5) continue;
+      if (transferSpendingPower < askingPrice + proposedSalary * 0.5) continue;
       // Bogatsze kluby mogą przeznaczyć większy % budżetu na jeden transfer: rep=10→60%, rep=15→67.5%, rep=20→70%
       const budgetCapIT = AiClubTransferStrategyService.budgetCap(
         isGulfVeteranStarTarget ? 0.88 : hasCriticalShortageIT ? 0.90 : Math.min(0.70, 0.45 + club.reputation * 0.015),
         aiStrategy,
         { needUrgency: needsITMap.get(target.position)?.urgency, askingPrice }
       );
-      if (askingPrice > club.budget * budgetCapIT) continue;
+      if (askingPrice > transferSpendingPower * budgetCapIT) continue;
 
       // Poza oknem: timing IN_SIX_MONTHS — poprawna premia cenowa i klasyfikacja ochrony rywala.
       const transferTimingInt = windowOpen ? TransferTiming.IMMEDIATE : TransferTiming.IN_SIX_MONTHS;
@@ -1868,8 +2306,8 @@ processAiRecruitment: (
         aiStrategy,
         { needUrgency: needsITMap.get(target.position)?.urgency, askingPrice: agreedFee }
       );
-      if (club.budget < agreedFee + proposedSalary * 0.5) continue;
-      if (agreedFee > club.budget * finalBudgetCapIT) continue;
+      if (transferSpendingPower < agreedFee + proposedSalary * 0.5) continue;
+      if (agreedFee > transferSpendingPower * finalBudgetCapIT) continue;
 
       const bidInput: TransferClubBidInput = { fee: agreedFee, timing: transferTimingInt };
       const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
@@ -1878,18 +2316,7 @@ processAiRecruitment: (
       if (sellerDecision.verdict !== 'ACCEPT') continue;
 
       // Bonus zależy od kierunku ruchu reputacyjnego: ruch w dół wymaga wyższego bonusu by zawodnik zaakceptował
-      const repDeltaIT = club.reputation - sellerClub.reputation;
-      const salaryMultAI_IT = repDeltaIT <= -2 ? 1.40 : repDeltaIT === -1 ? 1.25 : 1.12;
-      const gulfVeteranStarOffer = isGulfVeteranStarTarget
-        ? _buildGulfStarOffer(target, club, currentDate)
-        : null;
-      const proposedSalaryIT = gulfVeteranStarOffer?.proposedSalary ?? Math.max(FinanceLogic.getFairMarketSalary(target.overallRating), Math.round(target.annualSalary * salaryMultAI_IT));
-      const ageBonusMult_IT = target.age < 24 ? 0.40 : target.age <= 29 ? 0.65 : target.age <= 33 ? 1.00 : 1.30;
-      const repBonusPremium_IT = repDeltaIT < 0 ? 0.40 : repDeltaIT === 0 ? 0.10 : 0;
-      const negRandIT = 0.75 + Math.random() * 0.50;
-      const proposedBonus = gulfVeteranStarOffer?.proposedBonus ?? Math.floor(target.annualSalary * (ageBonusMult_IT + repBonusPremium_IT) * negRandIT);
-      const contractYears = gulfVeteranStarOffer?.contractYears ?? (target.age <= 27 ? 4 : target.age <= 30 ? 3 : target.age <= 34 ? 2 : 1);
-      const contractInput: TransferContractInput = { salary: proposedSalaryIT, bonus: proposedBonus, years: contractYears };
+      const contractInput: TransferContractInput = aiContractOffer;
 
       const playerDecision = TransferPlayerDecisionService.evaluateMove(
         contractInput, target, sellerClub, club, sellerSquad, squad, currentDate
@@ -1928,9 +2355,9 @@ processAiRecruitment: (
               transferPendingClubId: club.id,
               transferReportDate: reportDate.toISOString(),
               transferPendingFee: agreedFee,
-              transferPendingSalary: proposedSalaryIT,
-              transferPendingBonus: proposedBonus,
-              transferPendingContractYears: contractYears,
+              transferPendingSalary: contractInput.salary,
+              transferPendingBonus: contractInput.bonus,
+              transferPendingContractYears: contractInput.years,
               retirementLockUntil: gulfVeteranStarOffer?.newEndDate ?? p.retirementLockUntil,
             }
           : p
@@ -1950,14 +2377,14 @@ processAiRecruitment: (
         fromClubId: sellerClub.id,
         toClubId: club.id,
         isGulfMegaOffer: isGulfVeteranStarTarget,
-        salary: isGulfVeteranStarTarget ? proposedSalaryIT : undefined,
-        bonus: isGulfVeteranStarTarget ? proposedBonus : undefined,
-        contractYears: isGulfVeteranStarTarget ? contractYears : undefined,
+        salary: isGulfVeteranStarTarget ? contractInput.salary : undefined,
+        bonus: isGulfVeteranStarTarget ? contractInput.bonus : undefined,
+        contractYears: isGulfVeteranStarTarget ? contractInput.years : undefined,
       });
 
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
       updatedClubs = updatedClubs.map(c => {
-        if (c.id === club.id) return { ...c, budget: c.budget - agreedFee };
+        if (c.id === club.id) return _chargeAiTransferFee(c, agreedFee);
         if (c.id === sellerClubId) return { ...c, budget: c.budget + agreedFee };
         return c;
       });
@@ -2404,6 +2831,88 @@ processAiRecruitment: (
     }
 
     return { updatedPlayers: updatedPlayersMap };
+  },
+
+  generateSeasonYouthIntakeForAiClubs: (
+    clubs: Club[],
+    playersMap: Record<string, Player[]>,
+    currentDate: Date,
+    userTeamId: string | null
+  ): { updatedClubs: Club[], updatedPlayers: Record<string, Player[]>, generatedCount: number } => {
+    let updatedPlayersMap = { ...playersMap };
+    let generatedCount = 0;
+    const seasonYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+
+    const updatedClubs = clubs.map(club => {
+      /**
+       * Ten nabór jest wyłącznie dla klubów AI.
+       *
+       * Gracz ma własny, ręcznie zarządzany system akademii i osobny nabór 1 sierpnia.
+       * Gdybyśmy generowali tych zawodników także dla klubu gracza, omijalibyśmy decyzje
+       * użytkownika w panelu Akademii. Dlatego tu pomijamy userTeamId, wolnych agentów
+       * oraz obiekty bez ligi, bo nie są normalnym klubem ligowym w świecie gry.
+       */
+      if (club.id === userTeamId || club.id === 'FREE_AGENTS' || !club.leagueId) return club;
+
+      const existingSquad = updatedPlayersMap[club.id] || [];
+      if (existingSquad.length === 0) return club;
+
+      const intakePrefix = _buildAiYouthSeasonPrefix(seasonYear, club.id);
+      const alreadyGeneratedThisSeason = existingSquad.filter(player => player.id.startsWith(intakePrefix)).length;
+      if (alreadyGeneratedThisSeason >= AI_SEASON_YOUTH_MAX_INTAKE) return club;
+
+      /**
+       * Liczba miejsc zależy od rozmiaru kadry, ale jest losowana stabilnym seedem.
+       * Stabilność oznacza, że cofnięcie/przeliczenie tego samego dnia nie będzie
+       * bez końca tworzyć nowych juniorów. Losowość oznacza, że dwa kluby z taką samą
+       * liczbą zawodników nie muszą dostać identycznego naboru.
+       */
+      const desiredCount = _getAiSeasonYouthIntakeCount(existingSquad.length, `${seasonYear}_${club.id}`);
+      const missingCount = _clamp(
+        desiredCount - alreadyGeneratedThisSeason,
+        0,
+        AI_SEASON_YOUTH_MAX_INTAKE - alreadyGeneratedThisSeason
+      );
+      if (missingCount <= 0) return club;
+
+      let workingSquad = [...existingSquad];
+      const createdPlayers: Player[] = [];
+
+      for (let localSlot = 0; localSlot < missingCount; localSlot++) {
+        /**
+         * Slot jest szukany po pełnym zakresie 0-3, a nie po samej liczbie brakujących
+         * zawodników. Dzięki temu, jeżeli zapis gry ma już np. slot 0 i 2, generator
+         * uzupełni slot 1 albo 3, zamiast nadpisać istniejącego wychowanka.
+         */
+        const slot = Array.from({ length: AI_SEASON_YOUTH_MAX_INTAKE }, (_, index) => index)
+          .find(index => !workingSquad.some(player => player.id === `${intakePrefix}_${index}`));
+        if (slot === undefined) break;
+
+        const position = _pickAiYouthPosition(workingSquad, `${seasonYear}_${club.id}`, slot);
+        const youthPlayer = _buildAiSeasonYouthPlayer(club, workingSquad, position, currentDate, seasonYear, slot);
+        workingSquad = [...workingSquad, youthPlayer];
+        createdPlayers.push(youthPlayer);
+      }
+
+      if (createdPlayers.length === 0) return club;
+
+      generatedCount += createdPlayers.length;
+      updatedPlayersMap[club.id] = workingSquad;
+
+      /**
+       * rosterIds jest aktualizowane razem z mapą zawodników, bo część widoków i usług
+       * czyta skład przez playersMap, a część przez klubowy indeks ID. Utrzymanie obu
+       * struktur w synchronizacji zapobiega sytuacji, w której wychowanek istnieje w
+       * danych, ale nie pojawia się w wybranych widokach albo raportach.
+       */
+      const rosterIdSet = new Set([...(club.rosterIds || []), ...createdPlayers.map(player => player.id)]);
+      return {
+        ...club,
+        rosterIds: Array.from(rosterIdSet),
+      };
+    });
+
+    return { updatedClubs, updatedPlayers: updatedPlayersMap, generatedCount };
   },
 
 performSeasonSquadReview: (
