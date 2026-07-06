@@ -175,18 +175,32 @@ function buildScorers(history: MatchHistoryEntry[]) {
   return [...rows.values()].sort((a, b) => b.goals - a.goals || a.playerName.localeCompare(b.playerName)).slice(0, 12);
 }
 
-function buildDiscipline(history: MatchHistoryEntry[]) {
-  const rows = new Map<string, { teamId: string; yellow: number; red: number }>();
+function buildTeamNameById(fixtures: NationsLeagueFixture[], history: MatchHistoryEntry[]) {
+  const names = new Map<string, string>();
+
+  // Match history stores technical national-team IDs, while Nations League fixtures keep the readable team names used in the UI.
+  history.forEach(match => {
+    const fixture = fixtures.find(item => item.matchId === match.matchId);
+    if (!fixture) return;
+    names.set(match.homeTeamId, fixture.home);
+    names.set(match.awayTeamId, fixture.away);
+  });
+
+  return names;
+}
+
+function buildDiscipline(history: MatchHistoryEntry[], teamNameById: Map<string, string>) {
+  const rows = new Map<string, { teamId: string; teamName: string; yellow: number; red: number }>();
   history.forEach(match => {
     match.cards.forEach((card: MatchCardEntry) => {
-      const current = rows.get(card.teamId) ?? { teamId: card.teamId, yellow: 0, red: 0 };
+      const current = rows.get(card.teamId) ?? { teamId: card.teamId, teamName: teamNameById.get(card.teamId) ?? card.teamId, yellow: 0, red: 0 };
       if (card.type === 'YELLOW') current.yellow += 1;
       else current.red += 1;
       rows.set(card.teamId, current);
     });
   });
   return [...rows.values()]
-    .sort((a, b) => (b.red * 3 + b.yellow) - (a.red * 3 + a.yellow) || a.teamId.localeCompare(b.teamId))
+    .sort((a, b) => (b.red * 3 + b.yellow) - (a.red * 3 + a.yellow) || a.teamName.localeCompare(b.teamName))
     .slice(0, 10);
 }
 
@@ -258,7 +272,8 @@ const NationsLeagueView: React.FC = () => {
   const playoffFixtures = fixtures.filter(fixture => fixture.stage === 'PLAYOFFS');
   const knockoutFixtures = fixtures.filter(fixture => fixture.stage === 'QUARTER_FINALS' || fixture.stage === 'FINALS');
   const scorers = useMemo(() => buildScorers(history), [history]);
-  const discipline = useMemo(() => buildDiscipline(history), [history]);
+  const teamNameById = useMemo(() => buildTeamNameById(fixtures, history), [fixtures, history]);
+  const discipline = useMemo(() => buildDiscipline(history, teamNameById), [history, teamNameById]);
 
   if (!displayState) {
     return (
@@ -456,7 +471,10 @@ const NationsLeagueView: React.FC = () => {
                 <div className="space-y-2">
                   {discipline.length > 0 ? discipline.map(row => (
                     <div key={row.teamId} className="grid grid-cols-[minmax(0,1fr)_70px_70px] items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
-                      <span className="truncate text-sm font-bold uppercase text-white/80">{row.teamId}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <TeamFlag name={row.teamName} />
+                        <span className="truncate text-sm font-bold uppercase text-white/80">{row.teamName}</span>
+                      </span>
                       <span className="text-right font-mono text-yellow-300">{row.yellow} ŻK</span>
                       <span className="text-right font-mono text-rose-300">{row.red} CK</span>
                     </div>
