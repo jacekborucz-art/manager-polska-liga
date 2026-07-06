@@ -45,8 +45,9 @@ export const TransferExecutionService = {
     }
 
     const newEndDate = new Date(currentDate.getFullYear() + offer.years, 5, 30).toISOString();
+    // Po transferze zawodnik jest chroniony przez 6 miesięcy przed natychmiastową odsprzedażą lub wypchnięciem z klubu.
     const transferLockoutDate = new Date(currentDate);
-    transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
+    transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 6);
     const transferOfferBanDate = new Date(currentDate);
     transferOfferBanDate.setFullYear(transferOfferBanDate.getFullYear() + 1);
     const currentYear = currentDate.getFullYear();

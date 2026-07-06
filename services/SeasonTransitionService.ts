@@ -5,13 +5,13 @@ import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { pickNationalityForRegion } from './NationalityService';
 
-const AI_TRANSITION_MIN_SQUAD_SIZE = 26;
 const AI_TRANSITION_MIN_POSITION_COUNTS: Record<PlayerPosition, number> = {
   [PlayerPosition.GK]: 3,
-  [PlayerPosition.DEF]: 7,
-  [PlayerPosition.MID]: 7,
-  [PlayerPosition.FWD]: 5,
+  [PlayerPosition.DEF]: 8,
+  [PlayerPosition.MID]: 8,
+  [PlayerPosition.FWD]: 4,
 };
+const AI_TRANSITION_MIN_SQUAD_SIZE = Object.values(AI_TRANSITION_MIN_POSITION_COUNTS).reduce((sum, count) => sum + count, 0);
 
 const countByPosition = (squad: Player[]): Record<PlayerPosition, number> => ({
   [PlayerPosition.GK]: squad.filter(player => player.position === PlayerPosition.GK).length,
@@ -105,11 +105,9 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
         // Logika emerytury: > 35 lat + losowa decyzja (0,1)
         if (player.age >= 35 && !retirementLocked && Math.random() < 0.5) {
           // Zawodnik odchodzi - generujemy Newgena na jego miejsce
-          const retPositions = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
-          const retRandomPos = retPositions[Math.floor(Math.random() * retPositions.length)];
           const newgen = SeasonTransitionService.generateNewgen(
             clubId,
-            retRandomPos,
+            player.position,
             leagueTier,
             club.reputation,
             club.budget,

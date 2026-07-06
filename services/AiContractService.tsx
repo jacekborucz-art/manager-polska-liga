@@ -53,11 +53,16 @@ const _hasActiveTransferLockout = (player: Player, currentDate: Date): boolean =
   return !!player.transferLockoutUntil && currentDate < new Date(player.transferLockoutUntil);
 };
 
+// Nowy nabytek ma pół roku ochrony przed automatyczną sprzedażą, wypożyczeniem lub zwolnieniem przez AI.
 const _buildTransferLockoutUntil = (currentDate: Date): string => {
   const lockoutDate = new Date(currentDate);
-  lockoutDate.setMonth(lockoutDate.getMonth() + 3);
+  lockoutDate.setMonth(lockoutDate.getMonth() + 6);
   return lockoutDate.toISOString();
 };
+
+// Używane w przeglądach kadry: ochrona obejmuje każdy typ automatycznego "wypychania" zawodnika z klubu.
+const _isProtectedNewSigning = (player: Player, currentDate: Date): boolean =>
+  _hasActiveTransferLockout(player, currentDate);
 
 const _buildTransferOfferBanUntil = (currentDate: Date): string => {
   const banDate = new Date(currentDate);
@@ -80,13 +85,19 @@ const ELITE_PRE_CONTRACT_WATCHLIST_MIN_OVR = 90;
 const ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION = 17;
 const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
   [PlayerPosition.GK]: 3,
-  [PlayerPosition.DEF]: 7,
-  [PlayerPosition.MID]: 7,
-  [PlayerPosition.FWD]: 5,
+  [PlayerPosition.DEF]: 8,
+  [PlayerPosition.MID]: 8,
+  [PlayerPosition.FWD]: 4,
 };
-const AI_MIN_SQUAD_SIZE = 26;
+const AI_MIN_SQUAD_SIZE = Object.values(MIN_SQUAD_POSITION_COUNTS).reduce((sum, count) => sum + count, 0);
 const AI_TARGET_SQUAD_SIZE = 28;
 const AI_MAX_SQUAD_SIZE = 32;
+const AI_SOFT_MAX_POSITION_COUNTS: Record<PlayerPosition, number> = {
+  [PlayerPosition.GK]: 3,
+  [PlayerPosition.DEF]: 9,
+  [PlayerPosition.MID]: 9,
+  [PlayerPosition.FWD]: 6,
+};
 const AI_SEASON_YOUTH_MAX_INTAKE = 4;
 const AI_SEASON_YOUTH_ID_PREFIX = 'AI_YOUTH_INTAKE';
 const TRANSFER_LIST_CAP_MIN_SQUAD_SIZE = AI_TARGET_SQUAD_SIZE;
@@ -333,7 +344,70 @@ const _getRecruitmentReputationBonus = (
 };
 
 const _getTargetDepthCount = (position: PlayerPosition): number =>
-  position === PlayerPosition.GK ? 3 : position === PlayerPosition.FWD ? 6 : 8;
+  MIN_SQUAD_POSITION_COUNTS[position];
+
+// Rekrutacja AI może uzupełniać braki i rozsądną rotację, ale nie powinna dalej pompować przepełnionej pozycji.
+const _canAddBalancedDepth = (squad: Player[], position: PlayerPosition): boolean => {
+  const counts = _countByPosition(squad);
+  if (counts[position] < MIN_SQUAD_POSITION_COUNTS[position]) return true;
+  return counts[position] < AI_SOFT_MAX_POSITION_COUNTS[position];
+};
+
+// Elastyczny limit sezonowy: klub czasem toleruje jednego dodatkowego gracza w linii, ale bez nierealnych kominów.
+const _getAiSeasonalPositionLimit = (club: Club, position: PlayerPosition, currentDate: Date): number => {
+  if (position === PlayerPosition.GK) return 3;
+
+  const seasonYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+  const roll = _seededRandom(`AI_POSITION_LIMIT_${club.id}_${position}_${seasonYear}`);
+
+  if (position === PlayerPosition.DEF || position === PlayerPosition.MID) return roll < 0.45 ? 9 : 8;
+  return roll < 0.55 ? 6 : 5;
+};
+
+const _shouldRunAiSurplusSelection = (
+  club: Club,
+  position: PlayerPosition,
+  surplus: number,
+  currentDate: Date
+): boolean => {
+  if (surplus <= 0) return false;
+  if (surplus >= 2) return true;
+
+  const monthKey = `${currentDate.getFullYear()}_${currentDate.getMonth() + 1}`;
+  const chance = _clamp(0.50 + club.boardStrictness * 0.03 + surplus * 0.12, 0.45, 0.88);
+  return _seededRandom(`AI_SURPLUS_SELECTION_${club.id}_${position}_${monthKey}`) < chance;
+};
+
+// Decyzja zarządu dla nadmiarowego zawodnika: młodzi/talentowani częściej idą na wypożyczenie,
+// kosztowni lub słabi częściej są zwalniani, reszta trafia na listę transferową.
+const _chooseAiSurplusExit = (
+  player: Player,
+  club: Club,
+  currentDate: Date
+): 'TRANSFER_LIST' | 'LOAN' | 'RELEASE' => {
+  const rng = (_seededRandom(`AI_SURPLUS_EXIT_${club.id}_${player.id}_${currentDate.getFullYear()}_${currentDate.getMonth()}`) - 0.5) * 20;
+  const talent = player.attributes?.talent || 50;
+  const salaryPressure = player.annualSalary / Math.max(1, FinanceLogic.getFairMarketSalary(player.overallRating));
+  const reputation = _getPlayerReputation(player);
+
+  const loanScore =
+    (player.age <= 21 ? 24 : player.age <= 23 ? 14 : player.age <= 25 ? 5 : -12) +
+    (talent - 50) * 0.45 +
+    (player.overallRating < 30 + club.reputation * 4.5 ? 8 : -4) +
+    rng;
+
+  const releaseScore =
+    (player.age >= 32 ? 16 : player.age >= 29 ? 8 : -10) +
+    (salaryPressure > 1.2 ? 14 : salaryPressure > 0.9 ? 6 : -4) +
+    (reputation < 45 ? 8 : reputation > 70 ? -18 : 0) +
+    (player.overallRating < 45 ? 10 : 0) -
+    talent * 0.12 +
+    rng;
+
+  if (releaseScore >= 18) return 'RELEASE';
+  if (loanScore >= 16) return 'LOAN';
+  return 'TRANSFER_LIST';
+};
 
 const _isQuantityDepthNeed = (
   need: ClubNeedAssessment,
@@ -511,7 +585,8 @@ const _pickAiYouthPosition = (squad: Player[], seed: string, slot: number): Play
     PlayerPosition.MID,
     PlayerPosition.FWD,
     PlayerPosition.FWD,
-  ];
+  ].filter(position => _canAddBalancedDepth(squad, position));
+  if (weightedPool.length === 0) return PlayerPosition.MID;
   return weightedPool[Math.floor(_seededRandom(`${seed}_FREE_${slot}`) * weightedPool.length)] ?? PlayerPosition.MID;
 };
 
@@ -994,7 +1069,7 @@ const _buildAiPreContractOffer = (
   return { salary, bonus, years };
 };
 
-const _findWeakestSurplusPlayer = (squad: Player[], skippedIds: Set<string> = new Set()): Player | null => {
+const _findWeakestSurplusPlayer = (squad: Player[], skippedIds: Set<string> = new Set(), currentDate: Date = new Date()): Player | null => {
   const counts = _countByPosition(squad);
   return [...squad]
     .filter(p =>
@@ -1002,6 +1077,7 @@ const _findWeakestSurplusPlayer = (squad: Player[], skippedIds: Set<string> = ne
       !p.isUntouchable &&
       !p.loan &&
       !p.transferPendingClubId &&
+      !_isProtectedNewSigning(p, currentDate) &&
       counts[p.position] > MIN_SQUAD_POSITION_COUNTS[p.position]
     )
     .sort((a, b) => {
@@ -1171,16 +1247,15 @@ const _assessClubNeeds = (
       .filter(pos => !results.some(result => result.position === pos))
       .map((pos, index) => {
         const posSquad = squad.filter(p => p.position === pos);
-        const targetShare = Math.max(
-          MIN_SQUAD_POSITION_COUNTS[pos],
-          pos === PlayerPosition.GK ? 3 : pos === PlayerPosition.FWD ? 6 : 8
-        );
+        const targetShare = MIN_SQUAD_POSITION_COUNTS[pos];
         const weakest = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
         const shortageRatio = (targetShare - posSquad.length) / targetShare;
         const qualityGap = weakest ? Math.max(0, idealOvr - weakest.overallRating) / 20 : 1;
         return {
           pos,
-          score: shortageRatio * 8 + qualityGap + seededRand(700 + index) * 0.25
+          score: _canAddBalancedDepth(squad, pos)
+            ? shortageRatio * 8 + qualityGap + seededRand(700 + index) * 0.25
+            : Number.NEGATIVE_INFINITY
         };
       })
       .sort((a, b) => b.score - a.score);
@@ -1258,12 +1333,12 @@ export const AiContractService = {
 
       const skippedReleaseIds = new Set<string>();
       while (squad.length >= AI_MAX_SQUAD_SIZE && _hasCriticalDepthShortage(squad)) {
-        const playerToRelease = _findWeakestSurplusPlayer(squad, skippedReleaseIds);
+        const playerToRelease = _findWeakestSurplusPlayer(squad, skippedReleaseIds, currentDate);
         if (!playerToRelease) break;
 
         if (!_canAiReleasePlayer(playerToRelease, club, currentDate, 'SQUAD_DEPTH')) {
           skippedReleaseIds.add(playerToRelease.id);
-          if (!_isInLastContractYear(playerToRelease, currentDate)) {
+          if (!_isInLastContractYear(playerToRelease, currentDate) && !_isProtectedNewSigning(playerToRelease, currentDate)) {
             squad = squad.map(p =>
               p.id === playerToRelease.id ? { ...p, isOnTransferList: true } : p
             );
@@ -1309,11 +1384,98 @@ export const AiContractService = {
       }
 
       const counts = _countByPosition(squad);
-      updatedPlayersMap[club.id] = squad.map(p =>
-        counts[p.position] > MIN_SQUAD_POSITION_COUNTS[p.position]
+      const surplusActions = new Map<string, 'TRANSFER_LIST' | 'LOAN' | 'RELEASE'>();
+
+      // Selekcja nadmiaru działa naprawczo na istniejące zapisy, ale omija nowych nabytków chronionych 6 miesięcy.
+      (Object.keys(AI_SOFT_MAX_POSITION_COUNTS) as PlayerPosition[]).forEach(position => {
+        const seasonalLimit = _getAiSeasonalPositionLimit(club, position, currentDate);
+        const surplus = counts[position] - seasonalLimit;
+        if (!_shouldRunAiSurplusSelection(club, position, surplus, currentDate)) return;
+
+        [...squad]
+          .filter(player =>
+            player.position === position &&
+            !player.isUntouchable &&
+            !player.loan &&
+            player.squadRole !== 'KEY_PLAYER' &&
+            !player.transferPendingClubId &&
+            !_isProtectedNewSigning(player, currentDate) &&
+            !_isInLastContractYear(player, currentDate)
+          )
+          .sort((a, b) => _getSquadReviewScore(a) - _getSquadReviewScore(b))
+          .slice(0, surplus)
+          .forEach(player => surplusActions.set(player.id, _chooseAiSurplusExit(player, club, currentDate)));
+      });
+
+      for (const [playerId, action] of surplusActions) {
+        if (action !== 'RELEASE') continue;
+
+        const playerToRelease = squad.find(player => player.id === playerId);
+        if (!playerToRelease) {
+          surplusActions.delete(playerId);
+          continue;
+        }
+
+        const posCountAfter = squad.filter(player => player.position === playerToRelease.position && player.id !== playerId).length;
+        const releaseCost = Math.floor(playerToRelease.annualSalary * 0.35);
+        const currentClub = updatedClubs.find(c => c.id === club.id) || club;
+        const canRelease =
+          posCountAfter >= MIN_SQUAD_POSITION_COUNTS[playerToRelease.position] &&
+          squad.length - 1 >= AI_MIN_SQUAD_SIZE &&
+          currentClub.budget >= releaseCost &&
+          _canAiReleasePlayer(playerToRelease, club, currentDate, 'POSITION_SURPLUS');
+
+        if (!canRelease) {
+          surplusActions.set(playerId, _chooseAiSurplusExit(playerToRelease, club, currentDate) === 'LOAN' ? 'LOAN' : 'TRANSFER_LIST');
+          continue;
+        }
+
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+        const updatedHistory = PlayerCareerService.movePlayer(
+          playerToRelease,
+          { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+          currentYear,
+          currentMonth,
+          { clubName: club.name, clubId: club.id }
+        );
+
+        const releasedPlayer: Player = {
+          ...PlayerCareerService.resetClubStatsForNewEntry(playerToRelease),
+          clubId: 'FREE_AGENTS',
+          annualSalary: 0,
+          contractEndDate: '',
+          marketValue: 0,
+          negotiationStep: 0,
+          isNegotiationPermanentBlocked: false,
+          isOnTransferList: false,
+          isAvailableForLoan: false,
+          interestedClubs: [],
+          transferPendingClubId: undefined,
+          transferReportDate: undefined,
+          transferPendingFee: undefined,
+          transferPendingSalary: undefined,
+          transferPendingBonus: undefined,
+          transferPendingContractYears: undefined,
+          history: updatedHistory,
+        };
+
+        squad = squad.filter(player => player.id !== playerId);
+        counts[playerToRelease.position]--;
+        updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+        updatedClubs = updatedClubs.map(c =>
+          c.id === club.id ? { ...c, budget: Math.max(0, c.budget - releaseCost) } : c
+        );
+      }
+
+      updatedPlayersMap[club.id] = squad.map(p => {
+        const surplusAction = surplusActions.get(p.id);
+        if (surplusAction === 'TRANSFER_LIST') return { ...p, isOnTransferList: true, isAvailableForLoan: false };
+        if (surplusAction === 'LOAN') return { ...p, isAvailableForLoan: true, isOnTransferList: false };
+        return counts[p.position] > MIN_SQUAD_POSITION_COUNTS[p.position]
           ? p
-          : { ...p, isOnTransferList: false }
-      );
+          : { ...p, isOnTransferList: false, isAvailableForLoan: false };
+      });
     }
 
     return { updatedClubs, updatedPlayers: updatedPlayersMap };
@@ -1369,7 +1531,7 @@ export const AiContractService = {
           contractMindflow.mindset.state === 'READY_TO_LEAVE' ||
           contractMindflow.mindset.state === 'PRECONTRACT_READY'
         ) {
-          return _isInLastContractYear(p, currentDate) ? p : { ...p, isOnTransferList: true };
+          return _isInLastContractYear(p, currentDate) || _isProtectedNewSigning(p, currentDate) ? p : { ...p, isOnTransferList: true };
         }
 
         const isLocked = p.negotiationLockoutUntil && currentDate < new Date(p.negotiationLockoutUntil);
@@ -1504,10 +1666,10 @@ processAiRecruitment: (
         const posSquad = squad.filter(p => p.position === fa.position);
         const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
         const hasShortage = posSquad.length < minCounts[fa.position];
-        const needsSquadBody = isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE;
+        const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
         const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
 
-        return hasShortage || needsSquadBody || isUpgrade;
+        return hasShortage || needsSquadBody || (isUpgrade && _canAddBalancedDepth(squad, fa.position));
       }).sort((a, b) => {
         const needA = needsFA.find(n => n.position === a.position);
         const needB = needsFA.find(n => n.position === b.position);
@@ -1638,6 +1800,15 @@ processAiRecruitment: (
 
       if (aiClub.budget + gulfOwnerShortfallCover < proposedBonus + proposedSalary) {
         // Brak środków — wyczyść flagę
+        updatedPlayersMap['FREE_AGENTS'] = (updatedPlayersMap['FREE_AGENTS'] || []).map(p =>
+          p.id === fa.id ? { ...p, aiNegotiationClubId: undefined, aiNegotiationResponseDate: undefined } : p
+        );
+        continue;
+      }
+
+      const currentSquad = updatedPlayersMap[aiClub.id] || [];
+      const positionStillShort = currentSquad.filter(player => player.position === fa.position).length < MIN_SQUAD_POSITION_COUNTS[fa.position];
+      if (!gulfStarOffer && !positionStillShort && !_canAddBalancedDepth(currentSquad, fa.position)) {
         updatedPlayersMap['FREE_AGENTS'] = (updatedPlayersMap['FREE_AGENTS'] || []).map(p =>
           p.id === fa.id ? { ...p, aiNegotiationClubId: undefined, aiNegotiationResponseDate: undefined } : p
         );
@@ -1790,6 +1961,7 @@ processAiRecruitment: (
           !p.isOnTransferList &&
           !p.loan &&
           !p.transferPendingClubId &&
+          !_isProtectedNewSigning(p, currentDate) &&
           !_isInLastContractYear(p, currentDate) &&
           squad.filter(s => s.position === p.position).length > minCounts[p.position]
         )
@@ -1903,6 +2075,7 @@ processAiRecruitment: (
         if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
         const needTL = needsTLMap.get(p.position);
         if (!needTL) return false;
+        if (!_canAddBalancedDepth(squad, p.position) && needTL.reason !== 'SHORTAGE') return false;
 
         // OVR range zależy od pilności: CRITICAL szuka szerzej (desperacja), LOW tylko wąski upgrade
         // ovrCap: idealOvr powyżej 95 jest nieosiągalne — klampujemy by top kluby w ogóle widziały kandydatów
@@ -2219,6 +2392,7 @@ processAiRecruitment: (
           const isShortlisted = (p.interestedClubs || []).includes(club.id);
           const need = needsITMap.get(p.position);
           if (!need) return false;
+          if (!_canAddBalancedDepth(squad, p.position) && need.reason !== 'SHORTAGE') return false;
 
           const buyerPositionAverage = _getPositionAverageOverall(squad, p.position);
           const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
@@ -2451,6 +2625,7 @@ processAiRecruitment: (
             const stepUp = buyer.reputation >= sellerClub.reputation + 1;
 
             if (isEliteWatchlistOpportunity) return player.overallRating >= buyerPositionAverage - 2;
+            if (!_canAddBalancedDepth(buyerSquad, player.position) && !hasPosNeed) return false;
             return (hasPosNeed || isShortlisted || stepUp) && sportingUpgrade;
           })
           .sort((a, b) => {
@@ -2772,6 +2947,7 @@ processAiRecruitment: (
         // Nie listujemy więcej niż 2 w miesiącu
         if (listedThisMonth >= 2) return player;
         if (player.loan) return player;
+        if (_isProtectedNewSigning(player, currentDate)) return player;
 
         // Pomijamy zawodników już na liście, nietykalnych lub z uzgodnionym transferem
         if (player.isOnTransferList || player.isUntouchable || !!player.transferPendingClubId) return player;
@@ -2952,7 +3128,7 @@ performSeasonSquadReview: (
 
       for (const candidate of rankedSquad) {
         if (removedCount >= numToRemove) break;
-        if (candidate.loan || candidate.isUntouchable || candidate.squadRole === 'KEY_PLAYER' || candidate.transferPendingClubId) continue;
+        if (candidate.loan || candidate.isUntouchable || candidate.squadRole === 'KEY_PLAYER' || candidate.transferPendingClubId || _isProtectedNewSigning(candidate, currentDate)) continue;
 
         let canRemove = false;
         if (candidate.position === 'GK' && counts.GK > MIN_SQUAD_POSITION_COUNTS[PlayerPosition.GK]) canRemove = true;
@@ -3058,6 +3234,7 @@ performSeasonSquadReview: (
         !p.loan &&
         p.squadRole !== 'KEY_PLAYER' &&
         !p.transferPendingClubId &&
+        !_isProtectedNewSigning(p, currentDate) &&
         !p.isNegotiationPermanentBlocked
       );
       if (eligible.length === 0) continue;
