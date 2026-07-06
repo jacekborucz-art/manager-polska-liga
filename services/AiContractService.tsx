@@ -53,7 +53,7 @@ const _hasActiveTransferLockout = (player: Player, currentDate: Date): boolean =
   return !!player.transferLockoutUntil && currentDate < new Date(player.transferLockoutUntil);
 };
 
-// Nowy nabytek ma pół roku ochrony przed automatyczną sprzedażą, wypożyczeniem lub zwolnieniem przez AI.
+// New signings get a six-month shield from automatic AI sale, loan listing, or release.
 const _buildTransferLockoutUntil = (currentDate: Date): string => {
   const lockoutDate = new Date(currentDate);
   lockoutDate.setMonth(lockoutDate.getMonth() + 6);
@@ -353,7 +353,7 @@ const _canAddBalancedDepth = (squad: Player[], position: PlayerPosition): boolea
   return counts[position] < AI_SOFT_MAX_POSITION_COUNTS[position];
 };
 
-// Elastyczny limit sezonowy: klub czasem toleruje jednego dodatkowego gracza w linii, ale bez nierealnych kominów.
+// Seasonal position limits stay flexible, allowing one extra player in a line without creating unrealistic stockpiles.
 const _getAiSeasonalPositionLimit = (club: Club, position: PlayerPosition, currentDate: Date): number => {
   if (position === PlayerPosition.GK) return 3;
 
@@ -1386,7 +1386,7 @@ export const AiContractService = {
       const counts = _countByPosition(squad);
       const surplusActions = new Map<string, 'TRANSFER_LIST' | 'LOAN' | 'RELEASE'>();
 
-      // Selekcja nadmiaru działa naprawczo na istniejące zapisy, ale omija nowych nabytków chronionych 6 miesięcy.
+      // Surplus selection repairs existing saves while skipping new signings protected by the six-month shield.
       (Object.keys(AI_SOFT_MAX_POSITION_COUNTS) as PlayerPosition[]).forEach(position => {
         const seasonalLimit = _getAiSeasonalPositionLimit(club, position, currentDate);
         const surplus = counts[position] - seasonalLimit;

@@ -138,6 +138,71 @@ const getTimingLabel = (timing: TransferTiming): string => {
 };
 
 const PRE_CONTRACT_PRIORITY_DAYS = 330;
+const ELITE_CLUB_REPUTATION_MIN = 18;
+const SUPER_CLUB_REPUTATION_MIN = 19;
+const ABSOLUTE_TOP_CLUB_REPUTATION = 20;
+const YOUNG_CORE_AGE_MAX = 23;
+const VETERAN_SALE_AGE_MIN = 29;
+
+const hashString = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  return Math.abs(hash);
+};
+
+const seededChance = (seed: string): number => {
+  const hash = hashString(seed);
+  return (hash % 10_000) / 10_000;
+};
+
+const isYoungHighOverallCore = (player: Player, sellerClub: Club, sellerSquad: Player[]): boolean => {
+  if (sellerClub.reputation < ELITE_CLUB_REPUTATION_MIN || player.age > YOUNG_CORE_AGE_MAX) return false;
+
+  const eliteOverallThreshold = Math.max(74, sellerClub.reputation + 55);
+  if (player.overallRating < eliteOverallThreshold) return false;
+
+  const squadRank = [...sellerSquad]
+    .sort((a, b) => b.overallRating - a.overallRating)
+    .findIndex(item => item.id === player.id);
+
+  return squadRank >= 0 && squadRank <= 10;
+};
+
+const isSuperClubHighOverallPlayer = (player: Player, sellerClub: Club): boolean => {
+  if (sellerClub.reputation < SUPER_CLUB_REPUTATION_MIN) return false;
+  const highOverallThreshold = Math.max(78, sellerClub.reputation + 59);
+  return player.overallRating >= highOverallThreshold;
+};
+
+const isSuperVeteranExceptionPosition = (position: PlayerPosition): boolean =>
+  position === PlayerPosition.GK || position === PlayerPosition.MID || position === PlayerPosition.FWD;
+
+const isSuperVeteranStillProtected = (player: Player, sellerClub: Club): boolean => {
+  if (player.age < VETERAN_SALE_AGE_MIN || !isSuperVeteranExceptionPosition(player.position)) return false;
+  const superVeteranThreshold = Math.max(83, sellerClub.reputation + 63);
+  return player.overallRating >= superVeteranThreshold;
+};
+
+const hasSeriousFinancialPressure = (club: Club, askingPrice: number): boolean =>
+  club.budget < Math.max(askingPrice * 0.70, 4_000_000);
+
+const canEliteClubConsiderYoungCoreSale = (
+  player: Player,
+  sellerClub: Club,
+  buyerClub: Club,
+  currentDate: Date
+): boolean => {
+  if (buyerClub.reputation < ABSOLUTE_TOP_CLUB_REPUTATION) return false;
+  if (sellerClub.reputation >= ABSOLUTE_TOP_CLUB_REPUTATION) return false;
+
+  const reputationJump = buyerClub.reputation - sellerClub.reputation;
+  if (reputationJump <= 0 || reputationJump > 2) return false;
+
+  // Keep elite-club young core sales rare, but allow a stable monthly exception for moves into the absolute top.
+  const monthlySeed = `${sellerClub.id}_${buyerClub.id}_${player.id}_${currentDate.getFullYear()}_${currentDate.getMonth()}`;
+  const chance = sellerClub.reputation === 18 ? 0.28 : 0.16;
+  return seededChance(monthlySeed) < chance;
+};
 
 export const TransferSellerLogicService = {
   generateNegotiationAttemptLimit: (): number => Math.floor(Math.random() * 7) + 1,
@@ -179,7 +244,7 @@ export const TransferSellerLogicService = {
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
-    const sellerNeedsCash = sellerClub.budget < Math.max(askingPrice * 0.7, 4_000_000);
+    const sellerNeedsCash = hasSeriousFinancialPressure(sellerClub, askingPrice);
     const buyerAvailableCash = Math.max(buyerClub.budget || 0, buyerClub.transferBudget || 0);
     const getExceptionalAskingPrice = (multiplier: number): number =>
       Math.max(
@@ -205,6 +270,59 @@ export const TransferSellerLogicService = {
 
     const blocksShortDelaySale =
       timing === TransferTiming.IMMEDIATE || timing === TransferTiming.IN_SIX_MONTHS;
+
+    const protectedEliteYoungCore =
+      !player.isOnTransferList &&
+      isYoungHighOverallCore(player, sellerClub, sellerSquad) &&
+      daysLeft > PRE_CONTRACT_PRIORITY_DAYS &&
+      blocksShortDelaySale;
+
+    if (protectedEliteYoungCore && !sellerNeedsCash) {
+      const eliteJumpAllowed = canEliteClubConsiderYoungCoreSale(player, sellerClub, buyerClub, currentDate);
+      const eliteAskingPrice = getExceptionalAskingPrice(eliteJumpAllowed ? 3.15 : 3.50);
+
+      if (eliteJumpAllowed && buyerAvailableCash >= eliteAskingPrice * 0.92) {
+        return {
+          allowTalks: true,
+          askingPrice: eliteAskingPrice,
+          reason: `Zarzad chroni mlody rdzen skladu, ale wyjatkowy awans sportowy do klubu o reputacji 20 otwiera rozmowy. Cena wyjsciowa wynosi ${eliteAskingPrice.toLocaleString()} PLN.`
+        };
+      }
+
+      return {
+        allowTalks: false,
+        askingPrice,
+        reason: `Zarzad odrzucil zapytanie. Klub o reputacji ${sellerClub.reputation} nie sprzedaje mlodego zawodnika z wysokim overall bez powaznej presji finansowej.`
+      };
+    }
+
+    const protectedSuperClubHighOverall =
+      !player.isOnTransferList &&
+      isSuperClubHighOverallPlayer(player, sellerClub) &&
+      daysLeft > PRE_CONTRACT_PRIORITY_DAYS &&
+      blocksShortDelaySale &&
+      (player.age < VETERAN_SALE_AGE_MIN || isSuperVeteranStillProtected(player, sellerClub));
+
+    if (protectedSuperClubHighOverall && !sellerNeedsCash) {
+      const superClubAskingPrice = getExceptionalAskingPrice(isSuperVeteranStillProtected(player, sellerClub) ? 3.20 : 3.75);
+      const monthlySeed = `${sellerClub.id}_${buyerClub.id}_${player.id}_super_core_${currentDate.getFullYear()}_${currentDate.getMonth()}`;
+      const rareBoardApproval = buyerClub.reputation > sellerClub.reputation && buyerClub.reputation >= ABSOLUTE_TOP_CLUB_REPUTATION && seededChance(monthlySeed) < 0.08;
+
+      // Reputation 19-20 clubs almost never sell high-overall players unless the board approves a rare step into the absolute top.
+      if (rareBoardApproval && buyerAvailableCash >= superClubAskingPrice * 0.95) {
+        return {
+          allowTalks: true,
+          askingPrice: superClubAskingPrice,
+          reason: `Zarzad bardzo niechetnie dopuszcza rozmowy o zawodniku z wysokim overall, ale wyjatkowy ruch do klubu o reputacji 20 moze przejsc. Cena wyjsciowa wynosi ${superClubAskingPrice.toLocaleString()} PLN.`
+        };
+      }
+
+      return {
+        allowTalks: false,
+        askingPrice,
+        reason: `Zarzad odrzucil zapytanie. Klub o reputacji ${sellerClub.reputation} nie oddaje zawodnika z wysokim overall bez tarapatu finansowego albo bardzo szczegolnego ukladu sportowego.`
+      };
+    }
 
     const protectedByCorePlan = !!player.isUntouchable;
     const coachSeesAsImportant = !!coachFavoriteIds?.includes(player.id);
@@ -364,6 +482,16 @@ export const TransferSellerLogicService = {
     if (player.squadRole === 'KEY_PLAYER') multiplier += 0.18;
     else if (player.squadRole === 'STARTER') multiplier += 0.08;
 
+    // Elite clubs treat young high-overall players as project core, so the asking price should deter casual super offers.
+    if (!player.isOnTransferList && isYoungHighOverallCore(player, sellerClub, sellerSquad)) {
+      multiplier += 0.45;
+    }
+
+    // Reputation 19-20 clubs protect high-overall players heavily; older players may leave, but not at a normal market price.
+    if (!player.isOnTransferList && isSuperClubHighOverallPlayer(player, sellerClub)) {
+      multiplier += isSuperVeteranStillProtected(player, sellerClub) ? 0.55 : 0.32;
+    }
+
     const sortedSquad = [...sellerSquad].sort((a, b) => b.overallRating - a.overallRating);
     const top11Ids = sortedSquad.slice(0, 11).map(p => p.id);
     if (top11Ids.includes(player.id)) multiplier += 0.14;
@@ -392,6 +520,12 @@ export const TransferSellerLogicService = {
     if (player.squadRole === 'KEY_PLAYER') minimumMultiplier = Math.max(minimumMultiplier, 1.20);
     else if (player.squadRole === 'STARTER') minimumMultiplier = Math.max(minimumMultiplier, 1.10);
     if (daysLeft >= 730 && !player.isOnTransferList) minimumMultiplier = Math.max(minimumMultiplier, 1.10);
+    if (!player.isOnTransferList && isYoungHighOverallCore(player, sellerClub, sellerSquad)) {
+      minimumMultiplier = Math.max(minimumMultiplier, 1.65);
+    }
+    if (!player.isOnTransferList && isSuperClubHighOverallPlayer(player, sellerClub)) {
+      minimumMultiplier = Math.max(minimumMultiplier, isSuperVeteranStillProtected(player, sellerClub) ? 1.75 : 1.45);
+    }
 
     const rawPrice = Math.max(100_000, baseValue * Math.max(multiplier, minimumMultiplier));
     const guardedPrice = applyInternationalAskingGuardrail(rawPrice, baseValue, player, daysLeft, sellerClub);
