@@ -850,6 +850,53 @@ export const PlayerMoraleService = {
     );
   },
 
+  applyPresidentTeamBonusMorale: (
+    player: Player,
+    totalBonusAmount: number,
+    squadSize: number,
+    currentDate: Date
+  ): Player => {
+    let withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const mindset = PlayerMoraleService.normalizeMindset(withMorale);
+    const personality = withMorale.moralePersonality ?? 'CALM';
+    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_${totalBonusAmount}_PRESIDENT_TEAM_BONUS`);
+    const shareValue = totalBonusAmount / Math.max(1, squadSize);
+    const amountBonus =
+      shareValue >= 100_000 ? 2 :
+      shareValue >= 50_000 ? 1 :
+      0;
+    const gratitudeScore =
+      (withMorale.morale ?? 50) * 0.14 +
+      mindset.clubHappiness * 0.24 +
+      mindset.squadBelonging * 0.18 +
+      mindset.coachTrust * 0.10 -
+      mindset.conflictLevel * 0.18 +
+      (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? 10 : 0) +
+      (personality === 'EGOIST' || personality === 'AMBITIOUS' ? -4 : 0) +
+      seededRng(seed, 31) * 24;
+    const moraleDelta =
+      gratitudeScore >= 66 ? Math.min(6, 4 + amountBonus) :
+      gratitudeScore >= 50 ? Math.min(4, 2 + amountBonus) :
+      gratitudeScore >= 36 ? 1 :
+      0;
+    const reason = moraleDelta > 0
+      ? 'Premia drużynowa prezesa poprawiła morale'
+      : 'Premia drużynowa prezesa przyjęta neutralnie';
+
+    if (moraleDelta > 0) {
+      withMorale = PlayerMoraleService.withMoraleChange(withMorale, moraleDelta, reason, currentDate);
+    }
+
+    return PlayerMoraleService.withMindsetChange(
+      withMorale,
+      moraleDelta > 0
+        ? { clubHappiness: 4 + moraleDelta, squadBelonging: 2 + Math.ceil(moraleDelta / 2), conflictLevel: -2 }
+        : { clubHappiness: 1, squadBelonging: 1 },
+      reason,
+      currentDate
+    );
+  },
+
   applyContractSigningMindflowReset: (player: Player, currentDate: Date): Player => ({
     ...player,
     playerMindset: PlayerMoraleService.withMindsetChange(
@@ -2476,8 +2523,13 @@ export const PlayerMoraleService = {
           (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? 12 : 0) +
           (personality === 'EGOIST' || personality === 'AMBITIOUS' ? -6 : 0) +
           reactionRoll * 18;
-        const delighted = gratitudeScore >= 44;
-        const moraleDelta = delighted ? 6 : 2;
+        const delighted = gratitudeScore >= 58;
+        const pleased = gratitudeScore >= 44;
+        const moraleDelta = delighted ? 6 : pleased ? 3 : 0;
+        const bonusReactionReason =
+          delighted ? 'Zawodnik zadowolony z jednorazowej premii' :
+          pleased ? 'Zawodnik pozytywnie przyjął jednorazową premię' :
+          'Zawodnik neutralnie przyjął jednorazową premię';
 
         withMorale = PlayerMoraleService.withMindsetChange(
           PlayerMoraleService.withMoraleChange(
@@ -2487,12 +2539,14 @@ export const PlayerMoraleService = {
               oneTimeBonusAwardedSeason: seasonNumber,
             },
             moraleDelta,
-            delighted ? 'Zawodnik zadowolony z jednorazowej premii' : 'Zawodnik neutralnie przyjął jednorazową premię',
+            bonusReactionReason,
             currentDate
           ),
           delighted
             ? { clubHappiness: 8, coachTrust: 5, conflictLevel: -4, transferOpenness: -3 }
-            : { clubHappiness: 3, coachTrust: 2 },
+            : pleased
+              ? { clubHappiness: 5, coachTrust: 3, conflictLevel: -2, transferOpenness: -1 }
+              : { clubHappiness: 1, coachTrust: 1 },
           'Decyzja zarządu o jednorazowej premii',
           currentDate
         );

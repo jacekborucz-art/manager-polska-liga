@@ -1356,9 +1356,12 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       if (squad.length === 0) return playersMap;
       return {
         ...playersMap,
-        [userTeamId]: squad.map(player =>
-          PlayerMoraleService.applyClinchedSeasonAchievementMorale(player, achievement, currentDate)
-        ),
+        [userTeamId]: squad.map(player => {
+          const afterAchievement = PlayerMoraleService.applyClinchedSeasonAchievementMorale(player, achievement, currentDate);
+          return bonusAwarded
+            ? PlayerMoraleService.applyPresidentTeamBonusMorale(afterAchievement, presidentBonus, squad.length, currentDate)
+            : afterAchievement;
+        }),
       };
     };
 
