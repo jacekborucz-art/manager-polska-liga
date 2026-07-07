@@ -25,6 +25,163 @@ const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>):
 
 const clampAiMatchMoraleDelta = (delta: number): number => Math.max(-10, Math.min(10, delta));
 
+const clampMorale = (value: number): number => Math.max(5, Math.min(95, Math.round(value)));
+
+const boardAttributeScore = (level?: string): number => {
+  if (level === 'bardzo_wysoka') return 4;
+  if (level === 'wysoka') return 3;
+  if (level === 'przecietna') return 2;
+  if (level === 'niska') return 1;
+  if (level === 'bardzo_niska') return 0;
+  return 2;
+};
+
+const seededChance = (seed: number, offset: number): number => {
+  const x = Math.sin(seed * 9301 + offset * 49297 + 233280) * 10000;
+  return x - Math.floor(x);
+};
+
+const stableHash = (input: string): number => {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+type AiPresidentMotivationContext = {
+  importance: number;
+  label: 'mistrzostwo' | 'awans';
+};
+
+const getRemainingLeagueMatches = (fixtures: Fixture[], leagueId: string, clubId: string): number =>
+  fixtures.filter(f =>
+    f.leagueId === leagueId &&
+    f.status === MatchStatus.SCHEDULED &&
+    (f.homeTeamId === clubId || f.awayTeamId === clubId)
+  ).length;
+
+const getAiPresidentMotivationContext = (
+  club: Club,
+  standings: Club[],
+  fixtures: Fixture[]
+): AiPresidentMotivationContext | null => {
+  if (!['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(String(club.leagueId))) return null;
+
+  const rank = standings.findIndex(c => c.id === club.id) + 1;
+  if (rank <= 0) return null;
+
+  const remaining = getRemainingLeagueMatches(fixtures, club.leagueId, club.id);
+  if (remaining > 8) return null;
+
+  if (club.leagueId === 'L_PL_1') {
+    const leader = standings[0];
+    if (!leader) return null;
+    const gapToLeader = leader.stats.points - club.stats.points;
+    const inTitleRace = rank <= 3 && gapToLeader <= Math.max(3, remaining * 2);
+    if (!inTitleRace) return null;
+
+    const importance = Math.min(100, 55 + (8 - remaining) * 5 + (rank === 1 ? 18 : Math.max(0, 16 - gapToLeader * 3)));
+    return { importance, label: 'mistrzostwo' };
+  }
+
+  const promotionBoundary = standings[1];
+  if (!promotionBoundary) return null;
+  const gapToPromotion = rank <= 2
+    ? Math.max(0, standings[2] ? standings[2].stats.points - club.stats.points : 0)
+    : club.stats.points - promotionBoundary.stats.points;
+  const inPromotionRace = rank <= 5 && gapToPromotion <= Math.max(4, remaining * 2);
+  if (!inPromotionRace) return null;
+
+  const importance = Math.min(100, 52 + (8 - remaining) * 5 + (rank <= 2 ? 16 : Math.max(0, 14 - Math.abs(gapToPromotion) * 2)));
+  return { importance, label: 'awans' };
+};
+
+const shouldAiPresidentMotivateTeam = (
+  club: Club,
+  context: AiPresidentMotivationContext,
+  currentDate: Date,
+  fixtureId: string,
+  sessionSeed: number
+): { approved: boolean; moraleDelta: number } => {
+  const generosity = boardAttributeScore(club.board?.hojnosc);
+  const ambition = boardAttributeScore(club.board?.ambicja);
+  const competence = boardAttributeScore(club.board?.kompetencja);
+  const greed = boardAttributeScore(club.board?.chciwosc);
+  const seed = stableHash(`${club.id}_${fixtureId}_${currentDate.toISOString().split('T')[0]}_AI_PRE_MATCH_BONUS_${sessionSeed}`);
+  const rngWeight = 10 + seededChance(seed, 7) * 5;
+  const decisionScore =
+    context.importance * 0.42 +
+    generosity * 8 +
+    ambition * 7 +
+    competence * 3 -
+    greed * 6 +
+    seededChance(seed, 13) * rngWeight;
+  const approved = decisionScore >= 66;
+  if (!approved) return { approved: false, moraleDelta: 0 };
+
+  const moraleDelta = Math.max(1, Math.min(6, Math.round(2 + context.importance / 30 + generosity * 0.35 + seededChance(seed, 29) * 1.5)));
+  return { approved: true, moraleDelta };
+};
+
+const applyAiPresidentPreMatchMotivation = (
+  clubs: Club[],
+  playersMap: Record<string, Player[]>,
+  fixtures: Fixture[],
+  todayFixtures: Fixture[],
+  standingsMap: Record<string, Club[]>,
+  currentDate: Date,
+  userTeamId: string | null,
+  sessionSeed: number
+): { clubs: Club[]; players: Record<string, Player[]> } => {
+  let nextClubs = clubs;
+  let nextPlayers = playersMap;
+  const boostedClubs = new Set<string>();
+
+  todayFixtures.forEach(fixture => {
+    [fixture.homeTeamId, fixture.awayTeamId].forEach(clubId => {
+      if (clubId === userTeamId || boostedClubs.has(clubId)) return;
+
+      const club = nextClubs.find(c => c.id === clubId);
+      if (!club) return;
+
+      const context = getAiPresidentMotivationContext(club, standingsMap[club.leagueId] || [], fixtures);
+      if (!context) return;
+
+      const motivation = shouldAiPresidentMotivateTeam(club, context, currentDate, fixture.id, sessionSeed);
+      if (!motivation.approved || motivation.moraleDelta <= 0) return;
+
+      boostedClubs.add(clubId);
+      const reason = context.label === 'mistrzostwo'
+        ? 'Prezes obiecał premię za zwycięstwo w meczu o mistrzostwo'
+        : 'Prezes obiecał premię za zwycięstwo w meczu o awans';
+
+      nextClubs = nextClubs.map(c =>
+        c.id === clubId
+          ? { ...c, morale: clampMorale((c.morale ?? 50) + motivation.moraleDelta) }
+          : c
+      );
+
+      const squad = nextPlayers[clubId] || [];
+      if (squad.length === 0) return;
+
+      nextPlayers = {
+        ...nextPlayers,
+        [clubId]: squad.map(player => {
+          const playerDelta =
+            player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER'
+              ? motivation.moraleDelta
+              : Math.max(0, Math.round(motivation.moraleDelta * 0.55));
+          return PlayerMoraleService.withMoraleChange(player, playerDelta, reason, currentDate);
+        }),
+      };
+    });
+  });
+
+  return { clubs: nextClubs, players: nextPlayers };
+};
+
 const getLossCrisisPenalty = (form: ('W' | 'R' | 'P')[], resultChar: 'W' | 'R' | 'P'): number => {
   if (resultChar !== 'P') return 0;
 
@@ -329,15 +486,29 @@ if (todayFixtures.length === 0) {
       'L_PL_3': getStandings('L_PL_3'),
     };
 
+    let currentFixtures = [...fixtures];
+    let currentClubs = [...clubs];
+    let currentPlayers = playersAfterEmergencyGoalkeepers;
+    const aiPresidentMotivation = applyAiPresidentPreMatchMotivation(
+      currentClubs,
+      currentPlayers,
+      fixtures,
+      todayFixtures,
+      standingsMap,
+      currentDate,
+      userTeamId,
+      sessionSeed
+    );
+    currentClubs = aiPresidentMotivation.clubs;
+    currentPlayers = aiPresidentMotivation.players;
+
     // 2. Generujemy pogodę dla całego dnia meczowego
     const weather = PolandWeatherService.getWeather(currentDate, currentDate.toDateString());
     
-    let currentFixtures = [...fixtures];
-    let currentClubs = [...clubs];
-    let currentPlayers = ThirdLeagueBackgroundService.simulateMatchday(
+    currentPlayers = ThirdLeagueBackgroundService.simulateMatchday(
       currentDate,
       currentClubs,
-      playersAfterEmergencyGoalkeepers,
+      currentPlayers,
       newLineups,
       coaches,
       weather,
