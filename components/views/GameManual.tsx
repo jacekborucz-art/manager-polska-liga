@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 
-type ManualCategory = 'INTRO' | 'ENGINE' | 'CUP_LOGIC' | 'TACTICS' | 'PLAYERS' | 'REFEREE' | 'LEAGUE' | 'MATCHDAY' | 'FINANCE' | 'CONTRACTS' | 'INJURIES' | 'TRAINING' | 'CALENDAR' | 'TIPS';
+type ManualCategory = 'INTRO' | 'ENGINE' | 'CUP_LOGIC' | 'TACTICS' | 'PLAYERS' | 'MINDSET' | 'REFEREE' | 'LEAGUE' | 'MATCHDAY' | 'FINANCE' | 'CONTRACTS' | 'INJURIES' | 'TRAINING' | 'CALENDAR' | 'TIPS';
 
 const PLAYER_ATTRIBUTE_GROUPS = [
   {
@@ -202,6 +202,7 @@ export const GameManual: React.FC = () => {
     { id: 'CUP_LOGIC', label: 'Symulacja Meczu', icon: '🏆' },
     { id: 'TACTICS', label: 'Encyklopedia Taktyki', icon: '📋' },
     { id: 'PLAYERS', label: 'Atrybuty i Rozwój', icon: '👕' },
+    { id: 'MINDSET', label: 'Morale i Mindset', icon: 'M' },
     { id: 'INJURIES', label: 'Kontuzje i Regeneracja', icon: '🏥' },
     { id: 'TRAINING', label: 'Trening i Rozwój', icon: '🎯' },
     { id: 'FINANCE', label: 'Finanse Klubu i Transfery', icon: '💰' },
@@ -665,6 +666,147 @@ export const GameManual: React.FC = () => {
                       <p><span className="text-white font-bold">Po 30. roku życia:</span> rotuj rozsądniej i nie ignoruj braku minut. Fizyczność zaczyna spadać pierwsza, więc weteranów trzeba chronić rolą, nie tylko reputacją.</p>
                       <p><span className="text-white font-bold">Czytaj kartę kontekstowo:</span> napastnik z gorszym OVR, ale lepszym wykończeniem i atakiem, może być skuteczniejszy od bardziej "pełnego" rywala. To samo dotyczy obrońcy z mocnym ustawianiem i grą głową.</p>
                    </div>
+                </div>
+             </section>
+          </div>
+        );
+
+      case 'MINDSET':
+        return (
+          <div className="space-y-10 animate-fade-in pb-20">
+             <div className="bg-violet-950/20 p-10 rounded-[45px] border border-violet-500/20 shadow-2xl">
+                <h3 className="text-3xl text-white mb-4 font-black italic uppercase tracking-tighter">Morale i Mindset Zawodnika</h3>
+                <p className="text-slate-300 text-[15px] leading-relaxed">
+                  Karta zawodnika pokazuje dwie warstwy psychiki. Morale jest aktualnym paliwem mentalnym, które silnik wykorzystuje w meczu, treningu i wyborze składu. Mindset tłumaczy, skąd bierze się spokój albo kryzys: czy zawodnik ufa trenerowi, czuje się potrzebny, rozumie rolę, widzi rozwój i czy myśli o transferze.
+                </p>
+             </div>
+
+             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-slate-900/55 p-8 rounded-[35px] border border-white/5 space-y-5">
+                   <h4 className="text-violet-300 text-sm flex items-center gap-3 font-black italic uppercase tracking-tighter">
+                      <span className="w-6 h-px bg-violet-400/30" /> Morale
+                   </h4>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Morale jest liczbą 0-100 i działa natychmiastowo. Niskie morale obniża efektywną jakość zawodnika, pogarsza jego wkład w akcje bramkowe i spowalnia rozwój. Wysokie morale potrafi sprawić, że piłkarz gra powyżej bazowego OVR.
+                   </p>
+                   <div className="space-y-3">
+                      {[
+                        { range: '0-19', label: 'Bardzo słabe', text: 'mecz x0.92, skład x0.80, rozwój x0.45, regres x2.20', color: 'text-red-400' },
+                        { range: '20-39', label: 'Słabe', text: 'mecz x0.96, skład x0.92, rozwój x0.65, regres x1.65', color: 'text-orange-400' },
+                        { range: '40-59', label: 'Normalne', text: 'brak premii i brak kary, zawodnik gra zgodnie z bazą', color: 'text-slate-200' },
+                        { range: '60-79', label: 'Wysokie', text: 'mecz x1.03, skład x1.06, rozwój x1.08, regres x0.92', color: 'text-emerald-400' },
+                        { range: '80-100', label: 'Bardzo wysokie', text: 'mecz x1.06, skład x1.12, rozwój x1.15, regres x0.85', color: 'text-yellow-300' },
+                      ].map(row => (
+                        <div key={row.range} className="grid grid-cols-[70px_120px_1fr] gap-3 items-center bg-black/25 p-4 rounded-2xl border border-white/5">
+                           <span className={`text-xs font-black ${row.color}`}>{row.range}</span>
+                           <span className="text-[10px] text-white font-black uppercase tracking-widest">{row.label}</span>
+                           <span className="text-[11px] text-slate-400 leading-relaxed">{row.text}</span>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="bg-slate-900/55 p-8 rounded-[35px] border border-white/5 space-y-5">
+                   <h4 className="text-cyan-300 text-sm flex items-center gap-3 font-black italic uppercase tracking-tighter">
+                      <span className="w-6 h-px bg-cyan-400/30" /> Mindset
+                   </h4>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Mindset nie jest jednym ukrytym morale. To mapa relacji zawodnika z trenerem i klubem. Większość zdarzeń najpierw zmienia morale, a gra automatycznie dopisuje do tego zmianę odpowiednich pasków mindsetu.
+                   </p>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Raz w tygodniu działa też sprzężenie zwrotne: pozytywny mindset może delikatnie podnieść morale, a negatywny mindset może je obniżyć. Najmocniej ważą niskie zaufanie, brak minut, słaba rola, wysoka otwartość transferowa i wysoki konflikt.
+                   </p>
+                   <div className="bg-blue-950/25 p-5 rounded-3xl border border-blue-500/20">
+                      <p className="text-[12px] text-slate-300 leading-relaxed">
+                        Przykład: niespełniona obietnica minut obniża morale, ale jednocześnie uderza w zaufanie, satysfakcję z minut i konflikt. Udana rozmowa z trenerem podnosi morale, a przy okazji poprawia zaufanie i obniża napięcie.
+                      </p>
+                   </div>
+                   <div className="space-y-3 text-[12px] text-slate-300 leading-relaxed">
+                      <p><span className="text-white font-bold">Zielone paski</span> zwykle są dobre: zaufanie, klub, rola, minuty i rozwój.</p>
+                      <p><span className="text-white font-bold">Transfer i konflikt</span> czytaj odwrotnie. Im wyżej, tym większe ryzyko odejścia, protestu albo eskalacji rozmów.</p>
+                      <p><span className="text-white font-bold">Data aktualizacji</span> mówi, kiedy ostatnio zdarzenie realnie zmieniło mindset zawodnika.</p>
+                   </div>
+                </div>
+             </section>
+
+             <section className="space-y-6">
+                <div>
+                   <h4 className="text-white text-xl mb-3 font-black italic uppercase tracking-tighter">Paski Mindsetu na Karcie</h4>
+                   <p className="text-sm text-slate-400 leading-relaxed">
+                     Każdy pasek opisuje inną przyczynę nastroju. Dobry manager nie patrzy tylko na morale, bo zawodnik z wysokim morale może nadal być w konflikcie po złamanej obietnicy albo po wystawieniu na listę transferową bez rozmowy.
+                   </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {[
+                     { title: 'Zaufanie', text: 'Wiara w trenera, rozmowy i obietnice. Spada po ignorowaniu próśb, przerwanych dialogach i niespełnionych deklaracjach. Przy bardzo niskim zaufaniu każda kolejna rozmowa jest trudniejsza.' },
+                     { title: 'Klub', text: 'Ogólne zadowolenie z bycia w klubie. Rośnie po sukcesach, awansie, pucharach, kontrakcie i spełnionych prośbach. Spada po spadku, blokadach i decyzjach przeciw zawodnikowi.' },
+                     { title: 'Rola', text: 'Czy piłkarz rozumie swój status i uważa go za uczciwy. Niska wartość zwiększa ryzyko prośby o status podstawowego albo kluczowego zawodnika.' },
+                     { title: 'Minuty', text: 'Satysfakcja z gry. Jeśli zawodnik jest gotowy, ma argument sportowy i nie gra, może poprosić o minuty. Zignorowanie tej prośby często eskaluje problem.' },
+                     { title: 'Rozwój', text: 'Poczucie, że klub pomaga zawodnikowi rosnąć. Szczególnie ważne u młodych. Brak minut po wcześniejszej prośbie może skończyć się żądaniem wypożyczenia albo transferu.' },
+                     { title: 'Transfer', text: 'Gotowość do słuchania ofert. Wysoka wartość jest ostrzeżeniem. Podbijają ją niskie morale, zainteresowanie mocniejszych klubów, lista transferowa i konflikt z klubem.' },
+                     { title: 'Konflikt', text: 'Poziom napięcia z trenerem albo klubem. Rośnie po odrzuceniu próśb, złamanych obietnicach, wymuszonych ruchach i złych rozmowach. Wysoki konflikt potrafi zablokować spokój nawet przy dobrych wynikach.' },
+                   ].map(item => (
+                     <div key={item.title} className="bg-slate-900/55 p-6 rounded-[30px] border border-white/5">
+                        <h5 className="text-white text-xs mb-3 font-black italic uppercase tracking-tighter">{item.title}</h5>
+                        <p className="text-[12px] text-slate-400 leading-relaxed">{item.text}</p>
+                     </div>
+                   ))}
+                </div>
+             </section>
+
+             <section className="bg-slate-950 p-10 rounded-[50px] border border-white/10 shadow-2xl space-y-7">
+                <div>
+                   <h4 className="text-2xl text-white mb-3 font-black italic uppercase tracking-tighter">Co Zmienia Morale i Mindset</h4>
+                   <p className="text-sm text-slate-400 leading-relaxed">
+                     System regularnie przegląda kadrę. Jeśli zawodnik ma sportowy argument, niskie morale albo niespełnioną obietnicę, może wysłać mail do trenera i rozpocząć ścieżkę żądania.
+                   </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {[
+                     { title: 'Rozmowy indywidualne', text: 'Pochwała, motywacja, wsparcie, krytyka, obietnica minut i wymaganie cięższej pracy mogą dać bonus albo mocno zaszkodzić. Osobowość zawodnika zmienia reakcję.' },
+                     { title: 'Minuty i status', text: 'Zawodnik z rolą STARTER lub KEY_PLAYER oczekuje gry. Brak minut obniża morale, psuje zaufanie i może wywołać prośbę o rozmowę.' },
+                     { title: 'Obietnice', text: 'Spełniona obietnica minut daje mały bonus. Niespełniona obietnica u ambitnych i egoistycznych zawodników potrafi mocno podnieść konflikt.' },
+                     { title: 'Lista transferowa', text: 'Jeśli piłkarz sam prosił o listę, zgoda poprawia morale. Jeśli wystawisz go bez zgody, dostaje karę do morale i może wysłać protest.' },
+                     { title: 'Kontrakty', text: 'Podpisanie kontraktu wycisza żądania, poprawia zaufanie, klub, rolę i obniża otwartość transferową. Przez rok blokuje nowe żądania morale.' },
+                     { title: 'Sukces i spadek', text: 'Mistrzostwo, awans, puchary i Europa poprawiają klub, rozwój i zmniejszają chęć odejścia. Spadek robi odwrotnie, zwłaszcza u zawodników za dobrych na ligę.' },
+                   ].map(item => (
+                     <div key={item.title} className="bg-slate-900/50 p-6 rounded-[30px] border border-white/5">
+                        <h5 className="text-emerald-300 text-xs mb-3 font-black italic uppercase tracking-tighter">{item.title}</h5>
+                        <p className="text-[12px] text-slate-400 leading-relaxed">{item.text}</p>
+                     </div>
+                   ))}
+                </div>
+             </section>
+
+             <section className="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-8">
+                <div className="bg-rose-950/20 p-8 rounded-[35px] border border-rose-500/20 space-y-5">
+                   <h4 className="text-rose-300 text-sm font-black italic uppercase tracking-tighter">Alarm Kryzysowy</h4>
+                   <p className="text-[13px] text-slate-300 leading-relaxed">
+                     Najgroźniejszy profil to niskie zaufanie, wysoki konflikt i wysoka otwartość transferowa. Taki zawodnik może nadal lubić klub, ale nie ufa trenerowi i mentalnie przygotowuje się do odejścia.
+                   </p>
+                   <div className="space-y-3">
+                      {[
+                        'Zaufanie 0-20: nie składaj pustych obietnic, bo kolejna wpadka pogłębi kryzys.',
+                        'Konflikt 70-100: najpierw uspokój relację, potem negocjuj rolę albo transfer.',
+                        'Transfer 65-100: licz się z prośbą o listę, ofertami i presją agenta.',
+                        'Minuty poniżej 40: daj realną szansę albo uczciwie otwórz ścieżkę wypożyczenia.',
+                      ].map(text => (
+                        <div key={text} className="bg-black/25 p-4 rounded-2xl border border-rose-500/10 text-[12px] text-slate-300 leading-relaxed">
+                          {text}
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="bg-slate-900/55 p-8 rounded-[35px] border border-white/5 space-y-5">
+                   <h4 className="text-amber-300 text-sm font-black italic uppercase tracking-tighter">Instrukcja Naprawy Relacji</h4>
+                   <ol className="space-y-4 text-[12px] text-slate-300 leading-relaxed">
+                      <li><span className="text-white font-bold">1. Sprawdź, o co chodzi.</span> Jeśli niskie są minuty, problemem jest gra. Jeśli rola, problemem jest status. Jeśli transfer i konflikt są wysokie, problem jest już strategiczny.</li>
+                      <li><span className="text-white font-bold">2. Spełnij aktywne żądanie.</span> Prośba o minuty wymaga występu, prośba o rolę wymaga statusu, prośba o listę wymaga decyzji transferowej.</li>
+                      <li><span className="text-white font-bold">3. Nie obiecuj bez planu.</span> Obietnica gry w następnym meczu jest dobra tylko wtedy, gdy naprawdę zamierzasz go wystawić.</li>
+                      <li><span className="text-white font-bold">4. Użyj kontraktu jako resetu.</span> Nowa umowa poprawia kilka pól mindsetu i czyści wiele żądań, ale kosztuje budżet oraz musi przejść logikę negocjacji.</li>
+                      <li><span className="text-white font-bold">5. Przy wysokim transferze wybierz drogę.</span> Albo odbudowujesz zawodnika minutami i sukcesem klubu, albo ustalasz rozsądną sprzedaż, zanim konflikt zniszczy morale.</li>
+                   </ol>
                 </div>
              </section>
           </div>

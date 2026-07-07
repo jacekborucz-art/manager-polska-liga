@@ -1,4 +1,4 @@
-import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMindsetState, PlayerMoralePersonality, TrainingIntensity } from '../types';
+import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMindsetState, PlayerMoralePersonality, PlayerPosition, TrainingIntensity } from '../types';
 import { FinanceService } from './FinanceService';
 
 export interface PlayerMoraleInfo {
@@ -23,6 +23,12 @@ export interface PromiseReviewResult {
 }
 
 export interface MoraleDemandProcessResult {
+  players: Player[];
+  mails: MailMessage[];
+}
+
+export interface OneTimeBonusReviewResult {
+  club: Club;
   players: Player[];
   mails: MailMessage[];
 }
@@ -87,6 +93,11 @@ export const INDIVIDUAL_TALK_OPTIONS: IndividualTalkOption[] = [
     type: 'PROMISE_MINUTES',
     title: 'Obiecaj więcej minut',
     description: 'Dostaniesz więcej minut. Bądź gotowy, bo będę chciał dać ci szansę.',
+  },
+  {
+    type: 'PROMISE_ONE_TIME_BONUS',
+    title: 'Obiecaj rozmowę o premii',
+    description: 'Porozmawiam z zarządem o jednorazowej premii za twój wkład w sezon.',
   },
   {
     type: 'DEMAND_WORK',
@@ -212,6 +223,7 @@ const shouldBoardSupportProtectedExit = (
 interface SeasonOutputProfile {
   goals: number;
   assists: number;
+  cleanSheets: number;
   goalContributions: number;
   matches: number;
   averageRating: number | null;
@@ -221,6 +233,7 @@ const getSeasonOutputProfile = (player: Player): SeasonOutputProfile => {
   const statGroups = [player.stats, player.cupStats, player.euroStats].filter(Boolean);
   const goals = statGroups.reduce((sum, stats) => sum + (stats?.goals ?? 0), 0);
   const assists = statGroups.reduce((sum, stats) => sum + (stats?.assists ?? 0), 0);
+  const cleanSheets = statGroups.reduce((sum, stats) => sum + (stats?.cleanSheets ?? 0), 0);
   const matches = statGroups.reduce((sum, stats) => sum + (stats?.matchesPlayed ?? 0), 0);
   const ratings = statGroups.flatMap(stats => stats?.ratingHistory ?? []);
   const averageRating = ratings.length > 0
@@ -230,10 +243,56 @@ const getSeasonOutputProfile = (player: Player): SeasonOutputProfile => {
   return {
     goals,
     assists,
+    cleanSheets,
     goalContributions: goals + assists,
     matches,
     averageRating,
   };
+};
+
+const roundOneTimeBonusAmount = (value: number): number =>
+  Math.max(20_000, Math.min(100_000, Math.round(value / 5_000) * 5_000));
+
+const getOneTimeBonusPerformanceScore = (player: Player, profile: SeasonOutputProfile): number => {
+  if (profile.matches < 20) return 0;
+
+  const matchScore = Math.min(24, (profile.matches - 20) * 1.2);
+  const ratingScore = profile.averageRating !== null
+    ? Math.max(-8, Math.min(24, (profile.averageRating - 6.55) * 28))
+    : 0;
+
+  if (player.position === PlayerPosition.FWD) {
+    const goalsPerMatch = profile.goals / Math.max(1, profile.matches);
+    return Math.max(0, Math.min(100, 38 + matchScore + ratingScore + goalsPerMatch * 70 + (profile.assists / Math.max(1, profile.matches)) * 18));
+  }
+
+  if (player.position === PlayerPosition.MID) {
+    const assistsPerMatch = profile.assists / Math.max(1, profile.matches);
+    return Math.max(0, Math.min(100, 36 + matchScore + ratingScore + assistsPerMatch * 78 + (profile.goals / Math.max(1, profile.matches)) * 18));
+  }
+
+  if (player.position === PlayerPosition.DEF) {
+    return Math.max(0, Math.min(100, 34 + matchScore + ratingScore * 1.25 + (profile.goalContributions / Math.max(1, profile.matches)) * 24));
+  }
+
+  const cleanSheetRate = profile.cleanSheets / Math.max(1, profile.matches);
+  return Math.max(0, Math.min(100, 34 + matchScore + ratingScore + cleanSheetRate * 70));
+};
+
+const getOneTimeBonusStatsLine = (player: Player, profile: SeasonOutputProfile): string => {
+  const ratingPart = profile.averageRating !== null
+    ? `, średnia ocen ${profile.averageRating.toFixed(2).replace('.', ',')}`
+    : '';
+  if (player.position === PlayerPosition.GK) {
+    return `${profile.matches} meczów, ${profile.cleanSheets} czystych kont${ratingPart}`;
+  }
+  if (player.position === PlayerPosition.FWD) {
+    return `${profile.matches} meczów, ${profile.goals} goli${ratingPart}`;
+  }
+  if (player.position === PlayerPosition.MID) {
+    return `${profile.matches} meczów, ${profile.assists} asyst${ratingPart}`;
+  }
+  return `${profile.matches} meczów, średnia ocen ${profile.averageRating !== null ? profile.averageRating.toFixed(2).replace('.', ',') : 'brak'}, ${profile.cleanSheets} czystych kont zespołu`;
 };
 
 const hasStandoutSeasonOutput = (player: Player, profile: SeasonOutputProfile): boolean => {
@@ -465,6 +524,10 @@ const getPlayerTalkResponse = (talkType: IndividualTalkType, isPositive: boolean
     PROMISE_MINUTES: {
       positive: 'Dobrze, trenerze. Będę gotowy, kiedy dostanę swoją szansę.',
       negative: 'Chcę w to wierzyć, ale muszę zobaczyć, że naprawdę dostanę okazję.',
+    },
+    PROMISE_ONE_TIME_BONUS: {
+      positive: 'Doceniam to, trenerze. Poczekam na decyzję zarządu.',
+      negative: 'Rozumiem, ale sama rozmowa z zarządem jeszcze niczego nie rozwiązuje.',
     },
     DEMAND_WORK: {
       positive: 'Ma pan rację. Podkręcę tempo na treningach.',
@@ -712,7 +775,10 @@ export const PlayerMoraleService = {
     lastTemptingOfferConflictDate: player.lastTemptingOfferConflictDate ?? null,
     roleDemandUntil: player.roleDemandUntil ?? null,
     requestedSquadRole: player.requestedSquadRole ?? null,
+    squadRoleMindsetLockUntil: player.squadRoleMindsetLockUntil ?? null,
     transferListDemandUntil: player.transferListDemandUntil ?? null,
+    oneTimeBonusPromise: player.oneTimeBonusPromise ?? null,
+    oneTimeBonusAwardedSeason: player.oneTimeBonusAwardedSeason ?? null,
     contractRaiseDemandUntil: player.contractRaiseDemandUntil ?? null,
     contractRaiseRequest: player.contractRaiseRequest ?? null,
     contractRaiseReminderUntil: player.contractRaiseReminderUntil ?? null,
@@ -1159,6 +1225,13 @@ export const PlayerMoraleService = {
       if (personality === 'LOYAL') successChance -= 0.05;
     }
 
+    if (talkType === 'PROMISE_ONE_TIME_BONUS') {
+      base = 1;
+      successChance = 0.72;
+      if (personality === 'LOYAL' || personality === 'PROFESSIONAL') successChance += 0.08;
+      if (personality === 'EGOIST' || personality === 'AMBITIOUS') successChance -= 0.08;
+    }
+
     if (talkType === 'DEMAND_WORK') {
       base = 4;
       successChance = 0.50;
@@ -1241,6 +1314,68 @@ export const PlayerMoraleService = {
     const morale = player.morale ?? PlayerMoraleService.getInitialMorale(player);
     const drift = morale > 60 ? -1 : morale < 40 ? 1 : 0;
     return { ...player, morale: PlayerMoraleService.clamp(morale + drift) };
+  },
+
+  getMindsetMoraleFeedback: (player: Player): { delta: number; reason: string } | null => {
+    const mindset = PlayerMoraleService.normalizeMindset(player);
+    const morale = player.morale ?? 50;
+
+    const low = (value: number, threshold: number, weight: number): number =>
+      Math.max(0, threshold - value) * weight;
+    const high = (value: number, threshold: number, weight: number): number =>
+      Math.max(0, value - threshold) * weight;
+
+    const pressure =
+      low(mindset.coachTrust, 45, 0.050) +
+      low(mindset.clubHappiness, 42, 0.040) +
+      low(mindset.roleClarity, 40, 0.035) +
+      low(mindset.playingTimeSatisfaction, 42, 0.045) +
+      low(mindset.developmentSatisfaction, 42, 0.035) +
+      high(mindset.transferOpenness, 60, 0.040) +
+      high(mindset.conflictLevel, 55, 0.060);
+
+    const comfort =
+      high(mindset.coachTrust, 70, 0.035) +
+      high(mindset.clubHappiness, 68, 0.040) +
+      high(mindset.roleClarity, 65, 0.025) +
+      high(mindset.playingTimeSatisfaction, 65, 0.030) +
+      high(mindset.developmentSatisfaction, 68, 0.030) +
+      low(mindset.transferOpenness, 35, 0.025) +
+      low(mindset.conflictLevel, 30, 0.035);
+
+    const personality = player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player);
+    const negativePersonalityMod =
+      personality === 'SENSITIVE' || personality === 'NERVOUS' ? 1.18 :
+      personality === 'EGOIST' || personality === 'AMBITIOUS' ? 1.10 :
+      personality === 'PROFESSIONAL' || personality === 'LOYAL' ? 0.86 :
+      1;
+    const positivePersonalityMod =
+      personality === 'PROFESSIONAL' || personality === 'LOYAL' || personality === 'CALM' ? 1.12 :
+      personality === 'EGOIST' ? 0.88 :
+      1;
+
+    const raw = (comfort * positivePersonalityMod) - (pressure * negativePersonalityMod);
+    const damped =
+      raw > 0 && morale >= 80 ? raw * 0.60 :
+      raw < 0 && morale <= 19 ? raw * 0.70 :
+      raw;
+
+    const delta =
+      damped >= 2.20 ? 2 :
+      damped >= 1.05 ? 1 :
+      damped <= -3.20 ? -3 :
+      damped <= -2.00 ? -2 :
+      damped <= -0.90 ? -1 :
+      0;
+
+    if (delta === 0) return null;
+
+    return {
+      delta,
+      reason: delta > 0
+        ? 'Pozytywny mindset stabilizuje morale'
+        : 'Negatywny mindset obniża morale',
+    };
   },
 
   getTotalMinutesPlayed: (player: Player): number =>
@@ -1332,9 +1467,15 @@ export const PlayerMoraleService = {
     const reviewedPlayers = players.map(player => {
       const demandReview = PlayerMoraleService.reviewPlayerDemands(player, currentDate);
       const promiseReview = PlayerMoraleService.reviewMinutePromise(demandReview, currentDate);
-      const drifted = PlayerMoraleService.applyNaturalDrift(promiseReview.player);
-      if ((drifted.morale ?? 50) !== (promiseReview.player.morale ?? 50)) {
-        return PlayerMoraleService.withMoraleChange(promiseReview.player, (drifted.morale ?? 50) - (promiseReview.player.morale ?? 50), 'Naturalna stabilizacja morale', currentDate);
+      const mindsetFeedback = currentDate.getDay() === 1
+        ? PlayerMoraleService.getMindsetMoraleFeedback(promiseReview.player)
+        : null;
+      const afterMindsetFeedback = mindsetFeedback
+        ? PlayerMoraleService.withMoraleChange(promiseReview.player, mindsetFeedback.delta, mindsetFeedback.reason, currentDate)
+        : promiseReview.player;
+      const drifted = PlayerMoraleService.applyNaturalDrift(afterMindsetFeedback);
+      if ((drifted.morale ?? 50) !== (afterMindsetFeedback.morale ?? 50)) {
+        return PlayerMoraleService.withMoraleChange(afterMindsetFeedback, (drifted.morale ?? 50) - (afterMindsetFeedback.morale ?? 50), 'Naturalna stabilizacja morale', currentDate);
       }
       return drifted;
     });
@@ -2220,6 +2361,246 @@ export const PlayerMoraleService = {
     }
 
     return withMorale;
+  },
+
+  getOneTimeBonusRequestBlockReason: (player: Player, club: Club, seasonNumber: number): string | null => {
+    const withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const profile = getSeasonOutputProfile(withMorale);
+
+    if (profile.matches < 20) {
+      return `Zawodnik musi rozegrać co najmniej 20 meczów w sezonie. Teraz ma ${profile.matches}.`;
+    }
+
+    if (withMorale.oneTimeBonusAwardedSeason === seasonNumber) {
+      return 'Ten zawodnik dostał już jednorazową premię w tym sezonie.';
+    }
+
+    if (withMorale.oneTimeBonusPromise?.seasonNumber === seasonNumber) {
+      return 'Wniosek o premię dla tego zawodnika jest już u zarządu.';
+    }
+
+    if ((club.oneTimePlayerBonusesThisSeason ?? 0) >= 11) {
+      return 'Zarząd wykorzystał już limit 11 jednorazowych premii dla zawodników w tym sezonie.';
+    }
+
+    return null;
+  },
+
+  createOneTimeBonusPromise: (player: Player, currentDate: Date, seasonNumber: number): Player => {
+    const decisionDueAt = new Date(currentDate);
+    decisionDueAt.setDate(decisionDueAt.getDate() + 3);
+
+    const withMorale = PlayerMoraleService.withMoraleChange(
+      PlayerMoraleService.ensurePlayerState(player),
+      1,
+      'Trener obiecał rozmowę z zarządem o jednorazowej premii',
+      currentDate
+    );
+
+    return PlayerMoraleService.withMindsetChange(
+      {
+        ...withMorale,
+        oneTimeBonusPromise: {
+          requestedAt: toDateKey(currentDate),
+          decisionDueAt: toDateKey(decisionDueAt),
+          seasonNumber,
+        },
+      },
+      { coachTrust: 2, clubHappiness: 1 },
+      'Obietnica rozmowy z zarządem o premii',
+      currentDate
+    );
+  },
+
+  reviewOneTimeBonusPromises: (
+    club: Club,
+    squad: Player[],
+    currentDate: Date,
+    seasonNumber: number,
+    seed: number
+  ): OneTimeBonusReviewResult => {
+    const dateKey = toDateKey(currentDate);
+    let nextClub = club;
+    const mails: MailMessage[] = [];
+
+    const nextPlayers = squad.map(player => {
+      let withMorale = PlayerMoraleService.ensurePlayerState(player);
+      const promise = withMorale.oneTimeBonusPromise;
+      if (!promise || promise.seasonNumber !== seasonNumber) return withMorale;
+
+      const decisionDate = new Date(promise.decisionDueAt);
+      const decisionDue = !Number.isNaN(decisionDate.getTime()) &&
+        dateOnly(currentDate).getTime() >= dateOnly(decisionDate).getTime();
+      if (!decisionDue) return withMorale;
+
+      const profile = getSeasonOutputProfile(withMorale);
+      const performanceScore = getOneTimeBonusPerformanceScore(withMorale, profile);
+      const boardCompetence = boardAttributeScore(nextClub.board?.kompetencja);
+      const generosity = boardAttributeScore(nextClub.board?.hojnosc);
+      const ambition = boardAttributeScore(nextClub.board?.ambicja);
+      const greed = boardAttributeScore(nextClub.board?.chciwosc);
+      const localSeed = seed + stableHash(`${withMorale.id}_${dateKey}_ONE_TIME_BONUS`);
+      const accuracy = 0.58 + boardCompetence * 0.09;
+      const budgetNoise = (seededRng(localSeed, 11) - 0.5) * 0.20 * (1.25 - accuracy);
+      const perceivedBudget = Math.max(0, nextClub.budget * (1 + budgetNoise));
+      const rawAmount = 20_000 + performanceScore * 650 + generosity * 5_000 + (seededRng(localSeed, 17) - 0.5) * 20_000;
+      const amount = roundOneTimeBonusAmount(rawAmount);
+      const budgetScore = Math.max(0, Math.min(100, (perceivedBudget / Math.max(1, amount)) * 42));
+      const rngScore = (seededRng(localSeed, 23) - 0.5) * 20;
+      const decisionScore =
+        performanceScore * 0.55 +
+        budgetScore * 0.25 +
+        generosity * 6 +
+        ambition * 4 -
+        greed * 6 +
+        rngScore;
+      const seasonLimitReached = (nextClub.oneTimePlayerBonusesThisSeason ?? 0) >= 11;
+      const alreadyAwarded = withMorale.oneTimeBonusAwardedSeason === seasonNumber;
+      const hasEnoughBudget = nextClub.budget >= amount;
+      const approved = !seasonLimitReached && !alreadyAwarded && hasEnoughBudget && performanceScore >= 48 && decisionScore >= 62;
+      const ceoName = nextClub.management?.ceo
+        ? `${nextClub.management.ceo.firstName} ${nextClub.management.ceo.lastName}`
+        : 'Zarząd Klubu';
+      const statsLine = getOneTimeBonusStatsLine(withMorale, profile);
+      const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+
+      if (approved) {
+        const reactionRoll = seededRng(localSeed, 37);
+        const mindset = PlayerMoraleService.normalizeMindset(withMorale);
+        const personality = withMorale.moralePersonality ?? 'CALM';
+        const gratitudeScore =
+          (withMorale.morale ?? 50) * 0.22 +
+          mindset.coachTrust * 0.22 +
+          mindset.clubHappiness * 0.24 -
+          mindset.conflictLevel * 0.18 +
+          (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? 12 : 0) +
+          (personality === 'EGOIST' || personality === 'AMBITIOUS' ? -6 : 0) +
+          reactionRoll * 18;
+        const delighted = gratitudeScore >= 44;
+        const moraleDelta = delighted ? 6 : 2;
+
+        withMorale = PlayerMoraleService.withMindsetChange(
+          PlayerMoraleService.withMoraleChange(
+            {
+              ...withMorale,
+              oneTimeBonusPromise: null,
+              oneTimeBonusAwardedSeason: seasonNumber,
+            },
+            moraleDelta,
+            delighted ? 'Zawodnik zadowolony z jednorazowej premii' : 'Zawodnik neutralnie przyjął jednorazową premię',
+            currentDate
+          ),
+          delighted
+            ? { clubHappiness: 8, coachTrust: 5, conflictLevel: -4, transferOpenness: -3 }
+            : { clubHappiness: 3, coachTrust: 2 },
+          'Decyzja zarządu o jednorazowej premii',
+          currentDate
+        );
+
+        nextClub = {
+          ...nextClub,
+          budget: nextClub.budget - amount,
+          oneTimePlayerBonusesThisSeason: (nextClub.oneTimePlayerBonusesThisSeason ?? 0) + 1,
+          financeHistory: [{
+            id: `ONE_TIME_BONUS_${withMorale.id}_${dateKey}`,
+            date: dateKey,
+            amount: -amount,
+            type: 'EXPENSE' as const,
+            description: `Jednorazowa premia dla zawodnika: ${playerName}`,
+            previousBalance: nextClub.budget,
+          }, ...(nextClub.financeHistory || [])].slice(0, 50),
+        };
+      } else {
+        const reason =
+          alreadyAwarded ? 'zawodnik otrzymał już premię w tym sezonie' :
+          seasonLimitReached ? 'klub wykorzystał limit 11 premii w sezonie' :
+          !hasEnoughBudget ? 'zarząd uznał, że budżet nie pozwala na dodatkowy wydatek' :
+          performanceScore < 48 ? 'zarząd uznał, że wkład sportowy nie uzasadnia premii' :
+          'zarząd nie zatwierdził wniosku po analizie sportowej i finansowej';
+        const personality = withMorale.moralePersonality ?? 'CALM';
+        const moralePenalty = personality === 'EGOIST' || personality === 'AMBITIOUS' ? -5 : personality === 'SENSITIVE' || personality === 'NERVOUS' ? -4 : -2;
+
+        withMorale = PlayerMoraleService.withMindsetChange(
+          PlayerMoraleService.withMoraleChange(
+            {
+              ...withMorale,
+              oneTimeBonusPromise: null,
+            },
+            moralePenalty,
+            'Zarząd odrzucił prośbę o jednorazową premię',
+            currentDate
+          ),
+          { clubHappiness: -7, coachTrust: -2, conflictLevel: 4 },
+          'Odrzucona prośba o jednorazową premię',
+          currentDate
+        );
+
+        mails.push({
+          id: `ONE_TIME_BONUS_REJECTED_${withMorale.id}_${dateKey}`,
+          sender: ceoName,
+          role: 'Zarząd',
+          subject: `PREMIA ODRZUCONA: ${withMorale.lastName}`,
+          body: [
+            'Trenerze,',
+            '',
+            `Przeanalizowaliśmy wniosek o jednorazową premię dla zawodnika ${playerName}.`,
+            `Liczby zawodnika: ${statsLine}.`,
+            '',
+            `Decyzja: odmowa, ponieważ ${reason}.`,
+            '',
+            ceoName,
+            `Zarząd ${nextClub.name}`,
+          ].join('\n'),
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 6,
+          metadata: {
+            type: 'ONE_TIME_BONUS_DECISION',
+            playerId: withMorale.id,
+            approved: false,
+            amount: 0,
+            seasonNumber,
+          },
+        });
+
+        return withMorale;
+      }
+
+      mails.push({
+        id: `ONE_TIME_BONUS_APPROVED_${withMorale.id}_${dateKey}`,
+        sender: ceoName,
+        role: 'Zarząd',
+        subject: `PREMIA ZATWIERDZONA: ${withMorale.lastName}`,
+        body: [
+          'Trenerze,',
+          '',
+          `Przeanalizowaliśmy wniosek o jednorazową premię dla zawodnika ${playerName}.`,
+          `Liczby zawodnika: ${statsLine}.`,
+          '',
+          `Decyzja: zgoda na premię w wysokości ${amount.toLocaleString('pl-PL')} PLN.`,
+          'Kwota została odjęta z budżetu klubu.',
+          '',
+          ceoName,
+          `Zarząd ${nextClub.name}`,
+        ].join('\n'),
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 7,
+        metadata: {
+          type: 'ONE_TIME_BONUS_DECISION',
+          playerId: withMorale.id,
+          approved: true,
+          amount,
+          seasonNumber,
+        },
+      });
+
+      return withMorale;
+    });
+
+    return { club: nextClub, players: nextPlayers, mails };
   },
 
   processBoardAppeals: (

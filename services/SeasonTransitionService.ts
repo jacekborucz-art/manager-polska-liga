@@ -186,6 +186,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             },
             cupSuspensionMatches: 0,
             euroSuspensionMatches: 0,
+            oneTimeBonusPromise: null,
             seasonHistory: [...prevSeasonHistory, seasonEntry]
           });
         }

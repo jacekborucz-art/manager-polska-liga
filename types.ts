@@ -479,6 +479,12 @@ export interface MailMessage {
     decision: 'SELL' | 'RAISE' | 'VETO';
     appealType: 'RAISE' | 'TRANSFER';
   } | {
+    type: 'ONE_TIME_BONUS_DECISION';
+    playerId: string;
+    approved: boolean;
+    amount: number;
+    seasonNumber: number;
+  } | {
     type: 'AI_FRIENDLY_REPORT_LINK';
     reportDateKey?: string;
     matches?: {
@@ -883,7 +889,14 @@ export type IndividualTalkType =
   | 'SUPPORT'
   | 'CRITICIZE'
   | 'PROMISE_MINUTES'
+  | 'PROMISE_ONE_TIME_BONUS'
   | 'DEMAND_WORK';
+
+export interface PlayerOneTimeBonusPromise {
+  requestedAt: string;
+  decisionDueAt: string;
+  seasonNumber: number;
+}
 
 export interface ReserveProgressEntry {
   date: string;
@@ -1359,7 +1372,10 @@ export interface Player {
   lastTemptingOfferConflictDate?: string | null;
   roleDemandUntil?: string | null;
   requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  squadRoleMindsetLockUntil?: string | null;
   transferListDemandUntil?: string | null;
+  oneTimeBonusPromise?: PlayerOneTimeBonusPromise | null;
+  oneTimeBonusAwardedSeason?: number | null;
   // ─── Transfer Request Dialog (ścieżki A–D po prośbie o listę transferową) ────
   // Serwis:    services/PlayerTransferRequestDialogService.ts
   // Modal:     components/modals/PlayerTransferRequestModal.tsx
@@ -1746,6 +1762,7 @@ export interface Club {
   reserveBudget?: number;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
+  oneTimePlayerBonusesThisSeason?: number;
   boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
   boardBudgetLastShiftDate?: string;
   boardBudgetLastShiftAction?: 'REDUCE' | 'RESTORE' | 'RESERVE_SUPPORT';

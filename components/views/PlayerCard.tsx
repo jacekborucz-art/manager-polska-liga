@@ -295,19 +295,55 @@ export const PlayerCard: React.FC = () => {
   const canTalk = PlayerMoraleService.canTalk(playerMorale, currentDate);
   const nextTalkDate = PlayerMoraleService.getNextTalkDate(playerMorale);
   const promisedMinutesDeadline = playerMorale.promisedMinutesUntil ? new Date(playerMorale.promisedMinutesUntil) : null;
+  const oneTimeBonusDecisionDeadline = playerMorale.oneTimeBonusPromise?.decisionDueAt ? new Date(playerMorale.oneTimeBonusPromise.decisionDueAt) : null;
   const minutesDemandDeadline = playerMorale.minutesDemandUntil ? new Date(playerMorale.minutesDemandUntil) : null;
   const roleDemandDeadline = playerMorale.roleDemandUntil ? new Date(playerMorale.roleDemandUntil) : null;
   const transferListDemandDeadline = playerMorale.transferListDemandUntil ? new Date(playerMorale.transferListDemandUntil) : null;
   const developmentExitDemandDeadline = playerMorale.developmentExitDemandUntil ? new Date(playerMorale.developmentExitDemandUntil) : null;
   const playerMindset = playerMorale.playerMindset ?? PlayerMoraleService.getInitialMindset(playerMorale);
   const mindsetRows = [
-    { label: 'Zaufanie', value: playerMindset.coachTrust, tone: playerMindset.coachTrust >= 60 ? 'good' : playerMindset.coachTrust <= 35 ? 'bad' : 'neutral' },
-    { label: 'Klub', value: playerMindset.clubHappiness, tone: playerMindset.clubHappiness >= 60 ? 'good' : playerMindset.clubHappiness <= 35 ? 'bad' : 'neutral' },
-    { label: 'Rola', value: playerMindset.roleClarity, tone: playerMindset.roleClarity >= 60 ? 'good' : playerMindset.roleClarity <= 35 ? 'bad' : 'neutral' },
-    { label: 'Minuty', value: playerMindset.playingTimeSatisfaction, tone: playerMindset.playingTimeSatisfaction >= 60 ? 'good' : playerMindset.playingTimeSatisfaction <= 35 ? 'bad' : 'neutral' },
-    { label: 'Rozwój', value: playerMindset.developmentSatisfaction, tone: playerMindset.developmentSatisfaction >= 60 ? 'good' : playerMindset.developmentSatisfaction <= 35 ? 'bad' : 'neutral' },
-    { label: 'Transfer', value: playerMindset.transferOpenness, tone: playerMindset.transferOpenness >= 65 ? 'bad' : playerMindset.transferOpenness <= 35 ? 'good' : 'neutral' },
-    { label: 'Konflikt', value: playerMindset.conflictLevel, tone: playerMindset.conflictLevel >= 60 ? 'bad' : playerMindset.conflictLevel <= 30 ? 'good' : 'neutral' },
+    {
+      label: 'Zaufanie',
+      value: playerMindset.coachTrust,
+      tone: playerMindset.coachTrust >= 60 ? 'good' : playerMindset.coachTrust <= 35 ? 'bad' : 'neutral',
+      hint: 'Zaufanie do trenera, rozmów i obietnic. Wysoko = zawodnik wierzy w plan. Nisko = trudniejsze rozmowy i większe ryzyko kryzysu.',
+    },
+    {
+      label: 'Klub',
+      value: playerMindset.clubHappiness,
+      tone: playerMindset.clubHappiness >= 60 ? 'good' : playerMindset.clubHappiness <= 35 ? 'bad' : 'neutral',
+      hint: 'Ogólne zadowolenie z klubu. Wysoko = dobrze czuje się w projekcie. Nisko = klubowa sytuacja ciąży na morale.',
+    },
+    {
+      label: 'Rola',
+      value: playerMindset.roleClarity,
+      tone: playerMindset.roleClarity >= 60 ? 'good' : playerMindset.roleClarity <= 35 ? 'bad' : 'neutral',
+      hint: 'Czy zawodnik rozumie i akceptuje swój status. Nisko = może domagać się roli podstawowego albo kluczowego zawodnika.',
+    },
+    {
+      label: 'Minuty',
+      value: playerMindset.playingTimeSatisfaction,
+      tone: playerMindset.playingTimeSatisfaction >= 60 ? 'good' : playerMindset.playingTimeSatisfaction <= 35 ? 'bad' : 'neutral',
+      hint: 'Satysfakcja z gry. Nisko = ryzyko prośby o występy, a potem eskalacji do wypożyczenia lub transferu.',
+    },
+    {
+      label: 'Rozwój',
+      value: playerMindset.developmentSatisfaction,
+      tone: playerMindset.developmentSatisfaction >= 60 ? 'good' : playerMindset.developmentSatisfaction <= 35 ? 'bad' : 'neutral',
+      hint: 'Poczucie, że klub pomaga mu się rozwijać. Ważne zwłaszcza u młodych. Nisko = brak gry lub ścieżki rozwoju zaczyna frustrować.',
+    },
+    {
+      label: 'Transfer',
+      value: playerMindset.transferOpenness,
+      tone: playerMindset.transferOpenness >= 65 ? 'bad' : playerMindset.transferOpenness <= 35 ? 'good' : 'neutral',
+      hint: 'Gotowość do słuchania ofert. Tu wysoko = źle dla klubu, bo zawodnik myśli o odejściu. Nisko = raczej chce zostać.',
+    },
+    {
+      label: 'Konflikt',
+      value: playerMindset.conflictLevel,
+      tone: playerMindset.conflictLevel >= 60 ? 'bad' : playerMindset.conflictLevel <= 30 ? 'good' : 'neutral',
+      hint: 'Napięcie z trenerem lub klubem. Tu wysoko = źle. Wysoki konflikt obniża morale i utrudnia uspokojenie sytuacji.',
+    },
   ];
   const hasActiveTransferListDemand = !!transferListDemandDeadline && !Number.isNaN(transferListDemandDeadline.getTime());
   const activeFreeAgentLockoutUntil = useMemo(() => {
@@ -602,6 +638,13 @@ export const PlayerCard: React.FC = () => {
                     </span>
                   </div>
                 )}
+                {oneTimeBonusDecisionDeadline && !Number.isNaN(oneTimeBonusDecisionDeadline.getTime()) && (
+                  <div className="mt-2 rounded-[12px] border border-sky-500/30 bg-sky-500/10 px-2 py-1.5">
+                    <span className="block text-[7px] font-black italic uppercase tracking-tighter text-sky-300">
+                      Wniosek o premię u zarządu do {oneTimeBonusDecisionDeadline.toLocaleDateString('pl-PL')}
+                    </span>
+                  </div>
+                )}
                 {minutesDemandDeadline && !Number.isNaN(minutesDemandDeadline.getTime()) && (
                   <div className="mt-2 rounded-[12px] border border-orange-500/30 bg-orange-500/10 px-2 py-1.5">
                     <span className="block text-[7px] font-black italic uppercase tracking-tighter text-orange-300">
@@ -680,12 +723,20 @@ export const PlayerCard: React.FC = () => {
                         : 'text-amber-300';
 
                     return (
-                      <div key={row.label} className="grid grid-cols-[74px_1fr_30px] items-center gap-2">
+                      <div
+                        key={row.label}
+                        className="group/mindset relative grid grid-cols-[74px_1fr_30px] items-center gap-2 rounded-lg px-1 py-0.5 outline-none transition-colors hover:bg-white/5 focus-visible:bg-white/5"
+                        title={row.hint}
+                        tabIndex={0}
+                      >
                         <span className="text-[7px] font-black italic uppercase tracking-tighter text-slate-400">{row.label}</span>
                         <div className="h-1.5 rounded-full bg-black/40 overflow-hidden border border-white/5">
                           <div className={`h-full ${colorClass}`} style={{ width: `${row.value}%` }} />
                         </div>
                         <span className={`text-right text-[8px] font-black italic uppercase tracking-tighter ${textClass}`}>{row.value}</span>
+                        <div className="pointer-events-none absolute left-0 right-0 bottom-full z-50 mb-2 rounded-xl border border-white/10 bg-slate-950/95 px-3 py-2 text-[9px] font-black italic uppercase tracking-tighter text-slate-200 opacity-0 shadow-2xl backdrop-blur-md transition-opacity duration-150 group-hover/mindset:opacity-100 group-focus-visible/mindset:opacity-100">
+                          {row.hint}
+                        </div>
                       </div>
                     );
                   })}

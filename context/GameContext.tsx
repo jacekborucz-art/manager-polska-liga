@@ -739,6 +739,11 @@ interface SimulationOutput {
 }
 
 type SeasonCelebrationType = 'championship' | 'promotion-ekst' | 'promotion-1liga';
+type SeasonCelebrationTriggerResult = {
+  players: Record<string, Player[]>;
+  clubs: Club[];
+  mails: MailMessage[];
+};
 
 type GameNotificationTone = 'success' | 'info' | 'warning' | 'error';
 
@@ -1195,13 +1200,40 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   // Guard: zapobiega wielokrotnemu uruchomieniu processLeagueEvent dla tej samej daty
   const lastProcessedLeagueDateRef = React.useRef<string | null>(null);
   const celebrationAlreadyFiredRef = React.useRef(false);
+  const boardLevelScore = (level: Club['board'] extends infer B ? B extends undefined ? never : B[keyof B] : never): number => {
+    if (level === 'bardzo_wysoka') return 4;
+    if (level === 'wysoka') return 3;
+    if (level === 'przecietna') return 2;
+    if (level === 'niska') return 1;
+    if (level === 'bardzo_niska') return 0;
+    return 2;
+  };
+  const roundTeamPresidentBonus = (value: number): number => {
+    const step = value >= 5_000_000 ? 250_000 : value >= 1_000_000 ? 100_000 : 50_000;
+    return Math.max(step, Math.round(value / step) * step);
+  };
+  const calculatePresidentTeamBonus = (club: Club, celebration: SeasonCelebrationType): number => {
+    const base =
+      celebration === 'championship' ? 1_000_000 :
+      celebration === 'promotion-ekst' ? 500_000 :
+      100_000;
+    const generosity = boardLevelScore(club.board?.hojnosc);
+    const ambition = boardLevelScore(club.board?.ambicja);
+    const greed = boardLevelScore(club.board?.chciwosc);
+    const generosityMultiplier = 0.70 + generosity * 0.28 + ambition * 0.08 - greed * 0.08;
+    const wealthMultiplier = Math.max(1, Math.min(5.5, Math.sqrt(Math.max(1, club.budget) / Math.max(1, base * 10)) + 0.75));
+    const reputationMultiplier = 0.85 + Math.max(1, Math.min(10, club.reputation)) * 0.035;
+    const raw = base * generosityMultiplier * wealthMultiplier * reputationMultiplier;
+    const maxAffordable = Math.floor(Math.max(0, club.budget) * 0.12);
+    return roundTeamPresidentBonus(Math.max(base, Math.min(raw, maxAffordable)));
+  };
 
   // Helper do jednorazowego uruchamiania planszy za zapewnione mistrzostwo lub awans.
   const triggerSeasonCelebrationIfClinched = useCallback((
     sourceClubs: Club[],
     sourceFixtures: Fixture[],
     sourcePlayers?: Record<string, Player[]>
-  ): Record<string, Player[]> | null => {
+  ): SeasonCelebrationTriggerResult | null => {
     if (!userTeamId || celebrationAlreadyFiredRef.current) return null;
 
     const userClub = sourceClubs.find(c => c.id === userTeamId);
@@ -1254,6 +1286,71 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     if (!celebration) return null;
     celebrationAlreadyFiredRef.current = true;
     const achievement = celebration === 'championship' ? 'championship' : 'promotion';
+    const todayKey = currentDate.toISOString().split('T')[0];
+    const clinchingWinFixture = sourceFixtures.find(fixture => {
+      const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+      if (Number.isNaN(fixtureDate.getTime()) || fixtureDate.toISOString().split('T')[0] !== todayKey) return false;
+      if (fixture.status !== MatchStatus.FINISHED || fixture.homeScore === null || fixture.awayScore === null) return false;
+      if (fixture.homeTeamId === userTeamId) return fixture.homeScore > fixture.awayScore;
+      if (fixture.awayTeamId === userTeamId) return fixture.awayScore > fixture.homeScore;
+      return false;
+    });
+    const bonusId = `PRESIDENT_TEAM_BONUS_${seasonNumber}_${userTeamId}_${celebration}`;
+    const canAwardPresidentBonus =
+      !!clinchingWinFixture &&
+      !userClub.financeHistory?.some(entry => entry.id === bonusId);
+    const presidentBonus = canAwardPresidentBonus ? calculatePresidentTeamBonus(userClub, celebration) : 0;
+    const generosityScore = boardLevelScore(userClub.board?.hojnosc);
+    const wealthChanceBonus = Math.min(0.18, Math.max(0, userClub.budget / Math.max(1, presidentBonus * 25)));
+    const presidentBonusChance = Math.min(0.94, Math.max(0.16, 0.22 + generosityScore * 0.16 + wealthChanceBonus));
+    const bonusAwarded = presidentBonus > 0 && userClub.budget >= presidentBonus && Math.random() < presidentBonusChance;
+    const nextClubs = bonusAwarded
+      ? sourceClubs.map(club => {
+          if (club.id !== userTeamId) return club;
+          return {
+            ...club,
+            budget: club.budget - presidentBonus,
+            financeHistory: [{
+              id: bonusId,
+              date: todayKey,
+              amount: -presidentBonus,
+              type: 'EXPENSE' as const,
+              description: celebration === 'championship'
+                ? 'Premia prezesa dla drużyny za zwycięstwo dające mistrzostwo'
+                : 'Premia prezesa dla drużyny za zwycięstwo dające awans',
+              previousBalance: club.budget,
+            }, ...(club.financeHistory || [])].slice(0, 50),
+          };
+        })
+      : sourceClubs;
+    const presidentMails: MailMessage[] = bonusAwarded ? [{
+      id: `PRESIDENT_TEAM_BONUS_MAIL_${seasonNumber}_${userTeamId}_${celebration}`,
+      sender: userClub.management?.owner
+        ? `${userClub.management.owner.firstName} ${userClub.management.owner.lastName}`
+        : 'Prezes Klubu',
+      role: 'Prezes',
+      subject: celebration === 'championship'
+        ? 'Premia za mecz mistrzowski'
+        : 'Premia za mecz o awans',
+      body: [
+        'Trenerze,',
+        '',
+        celebration === 'championship'
+          ? 'To zwycięstwo przypieczętowało mistrzostwo. Taki mecz wymaga konkretnej reakcji klubu.'
+          : 'To zwycięstwo przypieczętowało awans. Drużyna udźwignęła presję i zasłużyła na konkretny sygnał od klubu.',
+        '',
+        `Przyznaję jednorazową premię drużynową w wysokości ${presidentBonus.toLocaleString('pl-PL')} PLN.`,
+        'Kwota została odjęta z budżetu klubu. Proszę przekazać zawodnikom, że zarząd docenia ten wynik.',
+        '',
+        userClub.management?.owner
+          ? `${userClub.management.owner.firstName} ${userClub.management.owner.lastName}`
+          : 'Prezes Klubu',
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 8,
+    }] : [];
     const applyMoraleBoost = (playersMap: Record<string, Player[]>): Record<string, Player[]> => {
       const squad = playersMap[userTeamId] || [];
       if (squad.length === 0) return playersMap;
@@ -1267,13 +1364,19 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
 
     if (sourcePlayers) {
       setSeasonCelebration(celebration);
-      return applyMoraleBoost(sourcePlayers);
+      return {
+        players: applyMoraleBoost(sourcePlayers),
+        clubs: nextClubs,
+        mails: presidentMails,
+      };
     }
 
     setPlayers(prev => applyMoraleBoost(prev));
+    if (nextClubs !== sourceClubs) setClubs(nextClubs);
+    if (presidentMails.length > 0) setMessages(prev => [...presidentMails, ...prev]);
     setSeasonCelebration(celebration);
     return null;
-  }, [currentDate, userTeamId]);
+  }, [currentDate, seasonNumber, userTeamId]);
 
   // Helper do dodawania logów finansowych
   const addFinanceLog = useCallback((clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => {
@@ -2391,6 +2494,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
           newReputation
         ),
         boardBudgetRequestsThisSeason: 0,
+        oneTimePlayerBonusesThisSeason: 0,
         financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
         stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
         europeanBonusPoints: 0,
@@ -3865,6 +3969,15 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         if (appealResult.mails.length > 0) {
           prependUniqueMessages(appealResult.mails);
         }
+        const bonusReview = PlayerMoraleService.reviewOneTimeBonusPromises(userClub, finalPlayers[userTeamId], currentDate, seasonNumber, sessionSeed ?? 1);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: bonusReview.players,
+        };
+        finalClubs = finalClubs.map(club => club.id === userTeamId ? bonusReview.club : club);
+        if (bonusReview.mails.length > 0) {
+          prependUniqueMessages(bonusReview.mails);
+        }
 
         // ── Transfer Request Dialog checks ─────────────────────────────────────
         // Trzy codzienne sprawdzenia dla systemu dialogu transferowego (A/B/C):
@@ -3937,10 +4050,16 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       }
     }
 
-    const playersAfterClinchedCelebration = triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures, finalPlayers);
-    if (playersAfterClinchedCelebration) {
-      finalPlayers = playersAfterClinchedCelebration;
+    const clinchedCelebrationResult = triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures, finalPlayers);
+    if (clinchedCelebrationResult) {
+      finalPlayers = clinchedCelebrationResult.players;
+      finalClubs = clinchedCelebrationResult.clubs;
+      if (clinchedCelebrationResult.mails.length > 0) {
+        prependUniqueMessages(clinchedCelebrationResult.mails);
+      }
     }
+
+    setClubs(finalClubs);
 
     setPlayers(prev => {
       return { ...prev, ...finalPlayers };
@@ -5124,6 +5243,51 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     const withMorale = PlayerMoraleService.ensurePlayerState(target);
     if (!PlayerMoraleService.canTalk(withMorale, currentDate)) return null;
 
+    if (talkType === 'PROMISE_ONE_TIME_BONUS') {
+      if (!firstTeamPlayer) {
+        return {
+          moraleDelta: 0,
+          newMorale: withMorale.morale ?? 50,
+          isPositive: false,
+          reactionText: 'Jednorazowa premia od zarządu jest dostępna tylko dla zawodników pierwszej drużyny.',
+        };
+      }
+
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (!userClub) return null;
+
+      const blockReason = PlayerMoraleService.getOneTimeBonusRequestBlockReason(withMorale, userClub, seasonNumber);
+      if (blockReason) {
+        return {
+          moraleDelta: 0,
+          newMorale: withMorale.morale ?? 50,
+          isPositive: false,
+          reactionText: blockReason,
+        };
+      }
+
+      const updatedPlayer = {
+        ...PlayerMoraleService.createOneTimeBonusPromise(withMorale, currentDate, seasonNumber),
+        lastIndividualTalkDate: todayIso,
+      };
+
+      if (firstTeamPlayer) {
+        setPlayers(prev => ({
+          ...prev,
+          [userTeamId]: (prev[userTeamId] || []).map(p => p.id === playerId ? updatedPlayer : p),
+        }));
+      } else {
+        setReserves(prev => prev.map(p => p.id === playerId ? updatedPlayer : p));
+      }
+
+      return {
+        moraleDelta: (updatedPlayer.morale ?? 50) - (withMorale.morale ?? 50),
+        newMorale: updatedPlayer.morale ?? 50,
+        isPositive: true,
+        reactionText: 'Porozmawiam z zarządem o jednorazowej premii. Decyzja nie należy do mnie, ale przekażę im twoje liczby i wkład w sezon.',
+      };
+    }
+
     const result = PlayerMoraleService.calculateTalkResult(withMorale, talkType, currentDate, seed);
     const withTalkHistory = PlayerMoraleService.withMoraleChange(
       withMorale,
@@ -5152,7 +5316,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     }
 
     return result;
-  }, [currentDate, players, reserves, sessionSeed, userTeamId]);
+  }, [clubs, currentDate, players, reserves, seasonNumber, sessionSeed, userTeamId]);
 
   const resolvePlayerRoleConversation = useCallback((playerId: string, result: PlayerRoleConversationResult): void => {
     if (!userTeamId) return;
@@ -13598,7 +13762,91 @@ const finalResult: SimulationOutput = {
     const squad = players[userTeamId] || [];
     const player = squad.find(p => p.id === playerId);
     if (!player) return;
-    const updates: Partial<Player> = { squadRole: role };
+    if ((player.squadRole ?? null) === role) return;
+
+    const roleRank = (r: 'STARTER' | 'KEY_PLAYER' | null | undefined): number =>
+      r === 'KEY_PLAYER' ? 2 : r === 'STARTER' ? 1 : 0;
+    const roleLabel = (r: 'STARTER' | 'KEY_PLAYER' | null | undefined): string =>
+      r === 'KEY_PLAYER' ? 'kluczowy zawodnik' : r === 'STARTER' ? 'podstawowa jedenastka' : 'bez roli';
+
+    const previousRole = player.squadRole ?? null;
+    const previousRank = roleRank(previousRole);
+    const nextRank = roleRank(role);
+    const isPromotion = nextRank > previousRank;
+    const isDemotion = nextRank < previousRank;
+    const lockUntilDate = player.squadRoleMindsetLockUntil ? new Date(player.squadRoleMindsetLockUntil) : null;
+    const positiveRoleEffectLocked =
+      !!lockUntilDate &&
+      !Number.isNaN(lockUntilDate.getTime()) &&
+      new Date(currentDate).setHours(0, 0, 0, 0) < lockUntilDate.setHours(0, 0, 0, 0);
+
+    let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+    let nextRoleMindsetLockUntil = moraleAdjustedPlayer.squadRoleMindsetLockUntil ?? null;
+
+    if (isPromotion && !positiveRoleEffectLocked) {
+      const lockUntil = new Date(currentDate);
+      lockUntil.setDate(lockUntil.getDate() + 60);
+      nextRoleMindsetLockUntil = lockUntil.toISOString();
+
+      const moraleDelta =
+        previousRank === 0 && role === 'KEY_PLAYER' ? 3 :
+        previousRank === 0 && role === 'STARTER' ? 2 :
+        role === 'KEY_PLAYER' ? 1 :
+        0;
+      const mindsetDeltas =
+        previousRank === 0 && role === 'KEY_PLAYER'
+          ? { roleClarity: 14, playingTimeSatisfaction: 6, coachTrust: 4, clubHappiness: 2, conflictLevel: -4 }
+          : previousRank === 0 && role === 'STARTER'
+            ? { roleClarity: 10, playingTimeSatisfaction: 4, coachTrust: 3, conflictLevel: -3 }
+            : { roleClarity: 6, playingTimeSatisfaction: 2, coachTrust: 2, conflictLevel: -2 };
+
+      moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+        moraleAdjustedPlayer,
+        moraleDelta,
+        `Nadanie roli: ${roleLabel(role)}`,
+        currentDate
+      );
+      moraleAdjustedPlayer = PlayerMoraleService.withMindsetChange(
+        moraleAdjustedPlayer,
+        mindsetDeltas,
+        `Nadanie roli: ${roleLabel(role)}`,
+        currentDate
+      );
+    } else if (isDemotion) {
+      const moraleDelta =
+        previousRole === 'KEY_PLAYER' && role === null ? -6 :
+        previousRole === 'KEY_PLAYER' && role === 'STARTER' ? -2 :
+        previousRole === 'STARTER' && role === null ? -3 :
+        -1;
+      const mindsetDeltas =
+        previousRole === 'KEY_PLAYER' && role === null
+          ? { roleClarity: -16, playingTimeSatisfaction: -8, coachTrust: -6, clubHappiness: -3, conflictLevel: 10 }
+          : previousRole === 'KEY_PLAYER' && role === 'STARTER'
+            ? { roleClarity: -6, playingTimeSatisfaction: -3, coachTrust: -2, conflictLevel: 3 }
+            : { roleClarity: -9, playingTimeSatisfaction: -5, coachTrust: -3, conflictLevel: 5 };
+
+      moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+        moraleAdjustedPlayer,
+        moraleDelta,
+        `Zmiana roli: ${roleLabel(previousRole)} → ${roleLabel(role)}`,
+        currentDate
+      );
+      moraleAdjustedPlayer = PlayerMoraleService.withMindsetChange(
+        moraleAdjustedPlayer,
+        mindsetDeltas,
+        `Zmiana roli: ${roleLabel(previousRole)} → ${roleLabel(role)}`,
+        currentDate
+      );
+    }
+
+    const updates: Partial<Player> = {
+      squadRole: role,
+      morale: moraleAdjustedPlayer.morale,
+      moralePersonality: moraleAdjustedPlayer.moralePersonality,
+      moraleHistory: moraleAdjustedPlayer.moraleHistory,
+      playerMindset: moraleAdjustedPlayer.playerMindset,
+      squadRoleMindsetLockUntil: nextRoleMindsetLockUntil,
+    };
     if (role === 'STARTER' || role === 'KEY_PLAYER') {
       updates.isOnTransferList = false;
       updates.transferListPrice = undefined;
