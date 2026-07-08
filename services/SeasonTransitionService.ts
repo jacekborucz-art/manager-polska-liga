@@ -181,6 +181,7 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             stats: PlayerCareerService.emptyStats(),
             cupStats: PlayerCareerService.emptyStats(),
             euroStats: PlayerCareerService.emptyStats(),
+            friendlyStats: PlayerCareerService.emptyStats(),
             cupSuspensionMatches: 0,
             euroSuspensionMatches: 0,
             oneTimeBonusPromise: null,

@@ -1440,6 +1440,7 @@ export interface Player {
   reserveHistory?: ReserveHistoryEntry[];
   cupStats?: PlayerStats;
   euroStats?: PlayerStats;
+  friendlyStats?: PlayerStats;
   nationalStats?: PlayerStats;
   cupSuspensionMatches?: number;
   euroSuspensionMatches?: number;

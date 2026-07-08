@@ -8,6 +8,7 @@ Coach, TrainingIntensity, IndividualTalkType,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
 HealthStatus, InjurySeverity,
 PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
+PlayerStats,
 TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
 IncomingTransferOffer, IncomingOfferStatus,
 LoanOfferSubmissionInput, LoanOfferSubmissionResult,
@@ -193,6 +194,72 @@ export interface ImportedSquadPlayer {
     mentality: number; workRate: number;
   };
 }
+
+const getAiFriendlyPlayedIds = (report: AiFriendlyMatchReport, teamId: string, startingXI: string[]): Set<string> => new Set([
+  ...startingXI.filter(Boolean),
+  ...report.substitutions
+    .filter(sub => sub.teamId === teamId)
+    .map(sub => sub.playerInId)
+    .filter(Boolean),
+]);
+
+const applyAiFriendlyStatsToPlayers = (
+  playersMap: Record<string, Player[]>,
+  reports: AiFriendlyMatchReport[]
+): Record<string, Player[]> => {
+  let nextPlayers = playersMap;
+
+  const updateTeamStats = (
+    report: AiFriendlyMatchReport,
+    teamId: string,
+    playedIds: Set<string>,
+    conceded: number
+  ) => {
+    const squad = nextPlayers[teamId];
+    if (!squad || playedIds.size === 0) return;
+
+    let changed = false;
+    const updatedSquad = squad.map(player => {
+      if (!playedIds.has(player.id)) return player;
+
+      changed = true;
+      const friendlyStats: PlayerStats = { ...(player.friendlyStats ?? PlayerCareerService.emptyStats()) };
+      const goals = report.scorers.filter(s => s.teamId === teamId && s.playerId === player.id && !s.isMiss).length;
+      const assists = report.scorers.filter(s => s.teamId === teamId && s.assistId === player.id && !s.isMiss).length;
+      const yellowCards = report.cards.filter(c =>
+        c.playerId === player.id && (c.type === 'YELLOW_CARD' || c.type === 'SECOND_YELLOW')
+      ).length;
+      const redCards = report.cards.filter(c => c.playerId === player.id && c.type === 'RED_CARD').length;
+      const rating = report.ratings[player.id];
+
+      return {
+        ...player,
+        friendlyStats: {
+          ...friendlyStats,
+          matchesPlayed: friendlyStats.matchesPlayed + 1,
+          minutesPlayed: friendlyStats.minutesPlayed + 90,
+          goals: friendlyStats.goals + goals,
+          assists: friendlyStats.assists + assists,
+          yellowCards: friendlyStats.yellowCards + yellowCards,
+          redCards: friendlyStats.redCards + redCards,
+          cleanSheets: friendlyStats.cleanSheets + (player.position === PlayerPosition.GK && conceded === 0 ? 1 : 0),
+          ratingHistory: rating ? [...(friendlyStats.ratingHistory || []), rating] : (friendlyStats.ratingHistory || []),
+        },
+      };
+    });
+
+    if (changed) {
+      nextPlayers = { ...nextPlayers, [teamId]: updatedSquad };
+    }
+  };
+
+  reports.forEach(report => {
+    updateTeamStats(report, report.homeTeamId, getAiFriendlyPlayedIds(report, report.homeTeamId, report.homeStartingXI), report.awayScore);
+    updateTeamStats(report, report.awayTeamId, getAiFriendlyPlayedIds(report, report.awayTeamId, report.awayStartingXI), report.homeScore);
+  });
+
+  return nextPlayers;
+};
 
 const sanitizeImportedLoan = (
   loan: ImportedSquadPlayer['loan'],
@@ -7741,6 +7808,7 @@ Asystent`,
           newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, homeCoach, awayCoach, pairSeed));
         });
         if (newReports.length > 0) {
+          setPlayers(prev => applyAiFriendlyStatsToPlayers(prev, newReports));
           setAiFriendlyReports(prev => [...prev, ...newReports]);
           newReports.forEach(r => {
             const cardTypeMap: Record<string, 'YELLOW' | 'RED' | 'SECOND_YELLOW'> = {

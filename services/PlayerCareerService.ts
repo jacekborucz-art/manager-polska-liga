@@ -26,6 +26,7 @@ export const PlayerCareerService = {
       stats: this.emptyStats(),
       cupStats: this.emptyStats(),
       euroStats: this.emptyStats(),
+      friendlyStats: this.emptyStats(),
       reserveStats: undefined
     };
   },

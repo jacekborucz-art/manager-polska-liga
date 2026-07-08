@@ -3,7 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { 
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
   MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity, 
-  Player, HealthStatus, MatchSummary, MatchSummaryEvent, MatchResult,
+  Player, PlayerStats, HealthStatus, MatchSummary, MatchSummaryEvent, MatchResult,
   Lineup,
   PlayerPerformance,
   MatchEvent,
@@ -51,7 +51,6 @@ import { PolandWeatherService } from '../../services/PolandWeatherService';
 import { DisciplineService } from '../../services/DisciplineService';
 import { AiMatchDecisionServiceFriendlyMatch } from '../../services/AiMatchDecisionServiceFriendlyMatch';
 import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchCommentSelector';
-import { PlayerStatsService } from '../../services/PlayerStatsService';
 import { MATCH_COMMENTARY_DB } from '../../data/match_commentary_pl';
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { InjuryEventGenerator } from '../../services/InjuryEventGenerator';
@@ -2065,6 +2064,18 @@ return {
     const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
     const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
 
+    const emptyStats = (): PlayerStats => ({
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+      cleanSheets: 0,
+      matchesPlayed: 0,
+      minutesPlayed: 0,
+      seasonalChanges: {},
+      ratingHistory: []
+    });
+
   const applyFatigueDebtToSquad = (squad: Player[], playedIds: Set<string>) => {
       return squad.map(p => {
         if (playedIds.has(p.id)) {
@@ -2080,12 +2091,6 @@ return {
     };
     updatedPlayers[ctx.homeClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.homeClub.id], playedIdsHome);
     updatedPlayers[ctx.awayClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.awayClub.id], playedIdsAway);
-
-
-    Object.entries(matchState.playerYellowCards).forEach(([pId, count]) => {
-       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD);
-    });
-    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD));
 
     const applyInjuriesToSquad = (squad: Player[], sideInjuries: Record<string, InjurySeverity>, sideInMins: Record<string, number>) => {
       return squad.map(p => {
@@ -2375,6 +2380,41 @@ const summary: MatchSummary = {
       if (perf.rating) finalRatingsMap[perf.playerId] = perf.rating;
     });
     // KONIEC WSTAWKI
+
+    const applyFriendlyStatsToSquad = (squad: Player[], side: 'HOME' | 'AWAY', playedIds: Set<string>) => {
+      const sideGoals = (side === 'HOME' ? summary.homeGoals : summary.awayGoals).filter(g => !g.varDisallowed && !g.isMiss);
+      const conceded = side === 'HOME' ? summary.awayScore : summary.homeScore;
+
+      return squad.map(player => {
+        if (!playedIds.has(player.id)) return player;
+
+        const friendlyStats = { ...(player.friendlyStats ?? emptyStats()) };
+        const nameWithInitial = `${player.firstName.charAt(0)}. ${player.lastName}`;
+        const goals = sideGoals.filter(g => g.scorerId === player.id || g.playerName === player.lastName || g.playerName === nameWithInitial).length;
+        const assists = sideGoals.filter(g => g.assistantId === player.id).length;
+        const yellowCards = matchState.playerYellowCards[player.id] || 0;
+        const redCards = matchState.sentOffIds.includes(player.id) ? 1 : 0;
+        const rating = finalRatingsMap[player.id];
+
+        return {
+          ...player,
+          friendlyStats: {
+            ...friendlyStats,
+            matchesPlayed: friendlyStats.matchesPlayed + 1,
+            minutesPlayed: friendlyStats.minutesPlayed + 90,
+            goals: friendlyStats.goals + goals,
+            assists: friendlyStats.assists + assists,
+            yellowCards: friendlyStats.yellowCards + yellowCards,
+            redCards: friendlyStats.redCards + redCards,
+            cleanSheets: friendlyStats.cleanSheets + (player.position === PlayerPosition.GK && conceded === 0 ? 1 : 0),
+            ratingHistory: rating ? [...(friendlyStats.ratingHistory || []), rating] : (friendlyStats.ratingHistory || [])
+          }
+        };
+      });
+    };
+
+    updatedPlayers[ctx.homeClub.id] = applyFriendlyStatsToSquad(updatedPlayers[ctx.homeClub.id], 'HOME', playedIdsHome);
+    updatedPlayers[ctx.awayClub.id] = applyFriendlyStatsToSquad(updatedPlayers[ctx.awayClub.id], 'AWAY', playedIdsAway);
 
     const matchHistoryArgs = {
       matchId: ctx.fixture.id,
