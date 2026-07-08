@@ -413,6 +413,94 @@ function reconcileCupStatsFromHistory(players: Record<string, any[]>, matchHisto
   );
 }
 
+const emptyPlayerStats = () => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: [],
+});
+
+function reconcileFriendlyStatsFromHistory(players: Record<string, any[]>, matchHistory: any[], seasonNumber: number): Record<string, any[]> {
+  const playerFriendlyTotals = new Map<string, ReturnType<typeof emptyPlayerStats>>();
+
+  const ensureTotals = (playerId: string) => {
+    if (!playerFriendlyTotals.has(playerId)) playerFriendlyTotals.set(playerId, emptyPlayerStats());
+    return playerFriendlyTotals.get(playerId)!;
+  };
+
+  (matchHistory || []).forEach(match => {
+    if (String(match?.competition || '') !== 'FRIENDLY') return;
+    if (Number(match?.season) !== seasonNumber) return;
+
+    const homePlayedIds = new Set<string>([
+      ...asArray<string>(match.homeLineup).filter(Boolean),
+      ...asArray<any>(match.substitutions).filter(sub => sub?.teamId === match.homeTeamId).map(sub => sub.playerInId).filter(Boolean),
+    ]);
+    const awayPlayedIds = new Set<string>([
+      ...asArray<string>(match.awayLineup).filter(Boolean),
+      ...asArray<any>(match.substitutions).filter(sub => sub?.teamId === match.awayTeamId).map(sub => sub.playerInId).filter(Boolean),
+    ]);
+
+    const applyPlayed = (playerId: string) => {
+      const totals = ensureTotals(playerId);
+      totals.matchesPlayed += 1;
+      totals.minutesPlayed += 90;
+      const rating = match.ratings?.[playerId];
+      if (typeof rating === 'number') totals.ratingHistory.push(rating);
+    };
+
+    homePlayedIds.forEach(applyPlayed);
+    awayPlayedIds.forEach(applyPlayed);
+
+    asArray<any>(match.goals).forEach(goal => {
+      if (goal?.isMiss) return;
+      const scorerId = goal.playerId || goal.scorerId;
+      if (scorerId) ensureTotals(scorerId).goals += 1;
+      if (goal.assistantId) ensureTotals(goal.assistantId).assists += 1;
+    });
+
+    asArray<any>(match.cards).forEach(card => {
+      if (!card?.playerId) return;
+      const totals = ensureTotals(card.playerId);
+      if (card.type === 'RED' || card.type === 'RED_CARD') totals.redCards += 1;
+      if (card.type === 'YELLOW' || card.type === 'YELLOW_CARD' || card.type === 'SECOND_YELLOW') totals.yellowCards += 1;
+    });
+  });
+
+  if (playerFriendlyTotals.size === 0) return players;
+
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player: any) => {
+        const totals = playerFriendlyTotals.get(player.id);
+        if (!totals) return player;
+        const currentFriendly = player.friendlyStats ?? emptyPlayerStats();
+        if ((currentFriendly.matchesPlayed ?? 0) >= totals.matchesPlayed) return player;
+        return {
+          ...player,
+          friendlyStats: {
+            ...currentFriendly,
+            matchesPlayed: totals.matchesPlayed,
+            minutesPlayed: totals.minutesPlayed,
+            goals: totals.goals,
+            assists: totals.assists,
+            yellowCards: totals.yellowCards,
+            redCards: totals.redCards,
+            cleanSheets: Math.max(currentFriendly.cleanSheets ?? 0, totals.cleanSheets),
+            ratingHistory: totals.ratingHistory,
+          },
+        };
+      }),
+    ])
+  );
+}
+
 function normalizeSaveState(data: SaveState): SaveState {
   const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
   const normalizedClubs = (data.clubs || []).map((rawClub: any) => {
@@ -482,9 +570,14 @@ function normalizeSaveState(data: SaveState): SaveState {
       }),
     ])
   );
-  const normalizedPlayers = reconcileCupStatsFromHistory(
+  const normalizedPlayersWithCup = reconcileCupStatsFromHistory(
     normalizedPlayersBase,
     normalizedMatchHistory
+  );
+  const normalizedPlayers = reconcileFriendlyStatsFromHistory(
+    normalizedPlayersWithCup,
+    normalizedMatchHistory,
+    Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1
   );
 
   return {

@@ -32,13 +32,18 @@ export const PlayerCareerService = {
   },
 
   buildStatsSnapshot(player: Player): PlayerCareerStatsSnapshot {
-    const ratingHistory = player.stats?.ratingHistory || [];
-    const averageRating = ratingHistory.length > 0
+    const matchesPlayed = (player.stats?.matchesPlayed || 0) + (player.cupStats?.matchesPlayed || 0) + (player.euroStats?.matchesPlayed || 0);
+    const ratingHistory = [
+      ...(player.stats?.ratingHistory || []),
+      ...(player.cupStats?.ratingHistory || []),
+      ...(player.euroStats?.ratingHistory || [])
+    ].slice(-(matchesPlayed || 0));
+    const averageRating = matchesPlayed > 0 && ratingHistory.length > 0
       ? parseFloat((ratingHistory.reduce((sum, rating) => sum + rating, 0) / ratingHistory.length).toFixed(1))
       : null;
 
     return {
-      matchesPlayed: (player.stats?.matchesPlayed || 0) + (player.cupStats?.matchesPlayed || 0) + (player.euroStats?.matchesPlayed || 0),
+      matchesPlayed,
       goals: (player.stats?.goals || 0) + (player.cupStats?.goals || 0) + (player.euroStats?.goals || 0),
       assists: (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0),
       yellowCards: (player.stats?.yellowCards || 0) + (player.cupStats?.yellowCards || 0) + (player.euroStats?.yellowCards || 0),

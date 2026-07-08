@@ -479,6 +479,19 @@ export const PlayerCard: React.FC = () => {
     return [...historyRows, ...seasonRows].sort((a, b) => b.sortKey - a.sortKey);
   }, [clubs, player, club, currentDate, isReserve]);
 
+  const formatStatsAverageRating = (ratingHistory: number[] | undefined, matchesPlayed: number): string => {
+    const ratings = (ratingHistory || [])
+      .slice(-(matchesPlayed || 0))
+      .filter(rating => Number.isFinite(rating));
+    if (matchesPlayed <= 0 || ratings.length === 0) return '—';
+    return (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1);
+  };
+
+  const formatReserveAverageRating = (stats: typeof player.reserveStats): string => {
+    if (!stats || stats.matches <= 0) return '—';
+    return ((stats.totalRatingPoints || 0) / stats.matches).toFixed(1);
+  };
+
 
 
   return (
@@ -818,18 +831,19 @@ export const PlayerCard: React.FC = () => {
                       <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-r border-white/20">⚽</th>
                       <th className="px-2 py-1.5 text-center text-[8px] font-black italic uppercase tracking-tighter text-sky-400 drop-shadow border-b border-r border-white/20">A</th>
                       <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-r border-white/20">🟨</th>
-                      <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-white/20">🟥</th>
+                      <th className="px-2 py-1.5 text-center text-[11px] drop-shadow border-b border-r border-white/20">🟥</th>
+                      <th className="px-2 py-1.5 text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-300 drop-shadow border-b border-white/20">ŚR</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(() => {
-                      const rows: { label: string; labelClass: string; m: number; g: number; a: number; y: number; r: number }[] = [];
-                      rows.push({ label: 'Liga', labelClass: 'text-emerald-400', m: player.stats.matchesPlayed, g: player.stats.goals, a: player.stats.assists, y: player.stats.yellowCards, r: player.stats.redCards });
-                      if (player.reserveStats) rows.push({ label: 'Rezerwy', labelClass: 'text-violet-400', m: player.reserveStats.matches, g: player.reserveStats.goals, a: player.reserveStats.assists, y: player.reserveStats.yellowCards ?? 0, r: player.reserveStats.redCards ?? 0 });
-                      if ((player.cupStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Puchar PL', labelClass: 'text-orange-400', m: player.cupStats!.matchesPlayed, g: player.cupStats!.goals, a: player.cupStats!.assists, y: player.cupStats!.yellowCards, r: player.cupStats!.redCards });
-                      if ((player.euroStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Europejskie', labelClass: 'text-blue-400', m: player.euroStats!.matchesPlayed, g: player.euroStats!.goals, a: player.euroStats!.assists, y: player.euroStats!.yellowCards, r: player.euroStats!.redCards });
-                      if ((player.friendlyStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Sparingi', labelClass: 'text-fuchsia-400', m: player.friendlyStats!.matchesPlayed, g: player.friendlyStats!.goals, a: player.friendlyStats!.assists, y: player.friendlyStats!.yellowCards, r: player.friendlyStats!.redCards });
-                      if ((player.nationalStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Reprezentacja', labelClass: 'text-red-400', m: player.nationalStats!.matchesPlayed, g: player.nationalStats!.goals, a: player.nationalStats!.assists, y: player.nationalStats!.yellowCards, r: player.nationalStats!.redCards });
+                      const rows: { label: string; labelClass: string; m: number; g: number; a: number; y: number; r: number; avg: string }[] = [];
+                      rows.push({ label: 'Liga', labelClass: 'text-emerald-400', m: player.stats.matchesPlayed, g: player.stats.goals, a: player.stats.assists, y: player.stats.yellowCards, r: player.stats.redCards, avg: formatStatsAverageRating(player.stats.ratingHistory, player.stats.matchesPlayed) });
+                      if (player.reserveStats) rows.push({ label: 'Rezerwy', labelClass: 'text-violet-400', m: player.reserveStats.matches, g: player.reserveStats.goals, a: player.reserveStats.assists, y: player.reserveStats.yellowCards ?? 0, r: player.reserveStats.redCards ?? 0, avg: formatReserveAverageRating(player.reserveStats) });
+                      if ((player.cupStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Puchar PL', labelClass: 'text-orange-400', m: player.cupStats!.matchesPlayed, g: player.cupStats!.goals, a: player.cupStats!.assists, y: player.cupStats!.yellowCards, r: player.cupStats!.redCards, avg: formatStatsAverageRating(player.cupStats!.ratingHistory, player.cupStats!.matchesPlayed) });
+                      if ((player.euroStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Europejskie', labelClass: 'text-blue-400', m: player.euroStats!.matchesPlayed, g: player.euroStats!.goals, a: player.euroStats!.assists, y: player.euroStats!.yellowCards, r: player.euroStats!.redCards, avg: formatStatsAverageRating(player.euroStats!.ratingHistory, player.euroStats!.matchesPlayed) });
+                      if ((player.friendlyStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Sparingi', labelClass: 'text-fuchsia-400', m: player.friendlyStats!.matchesPlayed, g: player.friendlyStats!.goals, a: player.friendlyStats!.assists, y: player.friendlyStats!.yellowCards, r: player.friendlyStats!.redCards, avg: formatStatsAverageRating(player.friendlyStats!.ratingHistory, player.friendlyStats!.matchesPlayed) });
+                      if ((player.nationalStats?.matchesPlayed ?? 0) >= 1) rows.push({ label: 'Reprezentacja', labelClass: 'text-red-400', m: player.nationalStats!.matchesPlayed, g: player.nationalStats!.goals, a: player.nationalStats!.assists, y: player.nationalStats!.yellowCards, r: player.nationalStats!.redCards, avg: formatStatsAverageRating(player.nationalStats!.ratingHistory, player.nationalStats!.matchesPlayed) });
                       return rows.map((row, i) => (
                         <tr key={row.label} className={i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800'}>
                           <td className={`px-2 py-1.5 text-[9px] font-black italic uppercase tracking-tighter drop-shadow border-r border-white/20 ${row.labelClass} ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.label}</td>
@@ -837,7 +851,8 @@ export const PlayerCard: React.FC = () => {
                           <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-emerald-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.g}</td>
                           <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-sky-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.a}</td>
                           <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-yellow-400 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.y}</td>
-                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-red-500 drop-shadow ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.r}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-red-500 drop-shadow border-r border-white/20 ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.r}</td>
+                          <td className={`px-2 py-1.5 text-center text-[11px] font-black font-mono text-slate-100 drop-shadow ${i < rows.length - 1 ? 'border-b border-white/10' : ''}`}>{row.avg}</td>
                         </tr>
                       ));
                     })()}

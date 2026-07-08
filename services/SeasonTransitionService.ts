@@ -137,15 +137,19 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
           const totalAssists = (player.stats?.assists || 0) + (player.cupStats?.assists || 0) + (player.euroStats?.assists || 0);
           const totalYellow = (player.stats?.yellowCards || 0) + (player.cupStats?.yellowCards || 0) + (player.euroStats?.yellowCards || 0);
           const totalRed = (player.stats?.redCards || 0) + (player.cupStats?.redCards || 0) + (player.euroStats?.redCards || 0);
-          const ratingHistory = player.stats?.ratingHistory || [];
-          const seasonAvgRating = ratingHistory.length > 0
-            ? parseFloat((ratingHistory.reduce((s: number, r: number) => s + r, 0) / ratingHistory.length).toFixed(1))
-            : null;
           const lastHistEntry = [...(player.history || [])].reverse().find(h => h.clubId === player.clubId && h.toYear === null);
           const seasonYear = seasonEndDate.getFullYear() - 1;
           const isFirstSeasonAtClub = prevForThisClub.length === 0;
           const fromYear = isFirstSeasonAtClub && lastHistEntry ? lastHistEntry.fromYear : seasonYear;
           const fromMonth = isFirstSeasonAtClub && lastHistEntry ? lastHistEntry.fromMonth : 7;
+          const competitiveRatingHistory = [
+            ...(player.stats?.ratingHistory || []),
+            ...(player.cupStats?.ratingHistory || []),
+            ...(player.euroStats?.ratingHistory || [])
+          ].slice(-(totalMatches || 0));
+          const seasonAvgRating = totalMatches > 0 && competitiveRatingHistory.length > 0
+            ? parseFloat((competitiveRatingHistory.reduce((s: number, r: number) => s + r, 0) / competitiveRatingHistory.length).toFixed(1))
+            : null;
           const seasonEntry: PlayerSeasonHistoryEntry = {
             season: seasonYear,
             clubId: player.clubId,

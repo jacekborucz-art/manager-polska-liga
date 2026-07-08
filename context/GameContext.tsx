@@ -205,9 +205,10 @@ const getAiFriendlyPlayedIds = (report: AiFriendlyMatchReport, teamId: string, s
 
 const applyAiFriendlyStatsToPlayers = (
   playersMap: Record<string, Player[]>,
-  reports: AiFriendlyMatchReport[]
+  reports: AiFriendlyMatchReport[],
+  knownSquads: Record<string, Player[]> = {}
 ): Record<string, Player[]> => {
-  let nextPlayers = playersMap;
+  let nextPlayers = { ...knownSquads, ...playersMap };
 
   const updateTeamStats = (
     report: AiFriendlyMatchReport,
@@ -7796,10 +7797,13 @@ Asystent`,
           return isSameFriendlyDate(d, dateToProcess);
         });
         const newReports: AiFriendlyMatchReport[] = [];
+        const generatedSquads: Record<string, Player[]> = {};
         dayPairs.forEach((pair, idx) => {
           const homePlayers = getOrGenerateSquad(pair.homeTeamId);
           const awayPlayers = getOrGenerateSquad(pair.awayTeamId);
-          if (homePlayers.length < 11 || awayPlayers.length < 11) return;
+        if (homePlayers.length < 11 || awayPlayers.length < 11) return;
+          generatedSquads[pair.homeTeamId] = homePlayers;
+          generatedSquads[pair.awayTeamId] = awayPlayers;
           const homeClub = clubs.find(c => c.id === pair.homeTeamId);
           const awayClub = clubs.find(c => c.id === pair.awayTeamId);
           const homeCoach = homeClub?.coachId ? (coaches[homeClub.coachId] ?? null) : null;
@@ -7808,7 +7812,7 @@ Asystent`,
           newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, homeCoach, awayCoach, pairSeed));
         });
         if (newReports.length > 0) {
-          setPlayers(prev => applyAiFriendlyStatsToPlayers(prev, newReports));
+          setPlayers(prev => applyAiFriendlyStatsToPlayers(prev, newReports, generatedSquads));
           setAiFriendlyReports(prev => [...prev, ...newReports]);
           newReports.forEach(r => {
             const cardTypeMap: Record<string, 'YELLOW' | 'RED' | 'SECOND_YELLOW'> = {
