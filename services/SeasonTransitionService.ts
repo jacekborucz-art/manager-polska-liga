@@ -178,12 +178,9 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
               : player.retirementLockUntil,
             condition: 100, // Pełna regeneracja na start sezonu
             suspensionMatches: 0, // Reset kar ligowych
-            stats: {
-              ...player.stats,
-              seasonalChanges: {},
-              seasonalGrowthPoints: 0,
-              ratingHistory: []  // Reset limitu rozwoju treningowego
-            },
+            stats: PlayerCareerService.emptyStats(),
+            cupStats: PlayerCareerService.emptyStats(),
+            euroStats: PlayerCareerService.emptyStats(),
             cupSuspensionMatches: 0,
             euroSuspensionMatches: 0,
             oneTimeBonusPromise: null,
