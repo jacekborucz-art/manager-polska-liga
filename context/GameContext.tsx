@@ -10796,7 +10796,7 @@ const finalResult: SimulationOutput = {
                 0.18 +
                   Math.max(0, (player.attributes?.talent ?? player.overallRating) - 66) * 0.018 +
                   Math.max(0, aiClub.reputation - userClub.reputation - 2) * 0.035
-              );
+              ) * IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(player, aiClub, userClub);
               if (IncomingTransferService.seededRandom(seed + 31) >= interestChance) return;
 
               const existingClubs = reserveTalentInterestAdds.get(player.id) ?? new Set<string>();
@@ -11068,6 +11068,7 @@ const finalResult: SimulationOutput = {
             if (p.isNegotiationPermanentBlocked) chance *= 2.0;
             chance *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(p, aiClub, userClub);
             chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
+            chance *= IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(p, aiClub, userClub);
 
             if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(isEliteWatchlistOpportunity ? 0.60 : 0.18, chance)) return;
 

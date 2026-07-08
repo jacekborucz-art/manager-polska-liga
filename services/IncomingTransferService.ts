@@ -6,6 +6,7 @@ import {
   LoanOfferDuration,
   TransferTiming,
   PlayerPosition,
+  Region,
 } from '../types';
 import { FinanceService } from './FinanceService';
 
@@ -464,6 +465,23 @@ export const IncomingTransferService = {
     return strongRecentForm;
   },
 
+  getStrongForeignBuyerPolishLowOvrMultiplier(player: Player, buyerClub: Club, sellerClub: Club): number {
+    const isPolishPlayer =
+      player.nationality === Region.POLAND ||
+      player.nationalityCountry === 'Polska' ||
+      player.nationalityCountry === 'Poland';
+    const isForeignBuyer =
+      !!buyerClub.country &&
+      !!sellerClub.country &&
+      buyerClub.country !== sellerClub.country;
+
+    if (isPolishPlayer && isForeignBuyer && buyerClub.reputation > 9 && player.overallRating < 65) {
+      return 0.08;
+    }
+
+    return 1;
+  },
+
   getBuyerFitProbabilityMultiplier(player: Player, buyerClub: Club, buyerSquad?: Player[]): number {
     const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
     const ovrDelta = player.overallRating - idealOvr;
@@ -725,6 +743,7 @@ export const IncomingTransferService = {
     }
 
     if (player.squadRole === 'KEY_PLAYER') prob = Math.min(prob, 0.05);
+    prob *= IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(player, buyerClub, sellerClub);
 
     const rng = IncomingTransferService.seededRandom(seed);
     const shouldGenerate = rng < prob;

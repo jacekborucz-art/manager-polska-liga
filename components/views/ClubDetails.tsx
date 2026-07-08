@@ -67,6 +67,8 @@ type ClubTransferModalEntry = {
   date: Date;
   playerId: string;
   playerName: string;
+  relatedClubName?: string;
+  relatedClubPrefix?: 'Z' | 'Do';
   type: string;
   fee?: number;
 };
@@ -207,12 +209,17 @@ export const ClubDetails: React.FC = () => {
   }, [currentDate]);
 
   const clubTransferActivity = useMemo(() => {
-    if (!club) return { incoming: [] as ClubTransferModalEntry[], outgoing: [] as ClubTransferModalEntry[] };
+    if (!club) return { incoming: [] as ClubTransferModalEntry[], outgoing: [] as ClubTransferModalEntry[], pending: [] as ClubTransferModalEntry[] };
 
     const incoming: ClubTransferModalEntry[] = [];
     const outgoing: ClubTransferModalEntry[] = [];
+    const pending: ClubTransferModalEntry[] = [];
     const added = new Set<string>();
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
     const playerName = (player: Player) => `${player.lastName} ${player.firstName}`.trim();
+    const clubNameById = (clubId?: string | null) =>
+      clubId ? clubs.find(c => c.id === clubId)?.name ?? clubId : undefined;
     const addEntry = (direction: 'incoming' | 'outgoing', entry: ClubTransferModalEntry) => {
       const key = `${direction}_${entry.id}`;
       if (added.has(key)) return;
@@ -242,6 +249,27 @@ export const ClubDetails: React.FC = () => {
       });
 
     allPlayers.forEach(player => {
+      if (player.transferPendingClubId === club.id && player.transferReportDate && player.clubId !== club.id) {
+        const reportDate = new Date(player.transferReportDate);
+        reportDate.setHours(0, 0, 0, 0);
+        if (!Number.isNaN(reportDate.getTime()) && reportDate > today) {
+          const key = `pending_${player.id}_${player.transferReportDate}`;
+          if (!added.has(key)) {
+            added.add(key);
+            pending.push({
+              id: key,
+              date: reportDate,
+              playerId: player.id,
+              playerName: playerName(player),
+              relatedClubName: clubNameById(player.clubId),
+              relatedClubPrefix: 'Z',
+              type: 'Zakontraktowany',
+              fee: player.transferPendingFee,
+            });
+          }
+        }
+      }
+
       const history = player.history || [];
       if (history.length < 2) return;
 
@@ -267,6 +295,8 @@ export const ClubDetails: React.FC = () => {
               date: entryDate,
               playerId: player.id,
               playerName: playerName(player),
+              relatedClubName: entry.parentClubName ?? clubNameById(entry.parentClubId) ?? previousEntry.clubName,
+              relatedClubPrefix: 'Z',
               type: 'Wypożyczenie',
               fee: baseFee,
             });
@@ -277,6 +307,8 @@ export const ClubDetails: React.FC = () => {
               date: entryDate,
               playerId: player.id,
               playerName: playerName(player),
+              relatedClubName: entry.clubName,
+              relatedClubPrefix: 'Do',
               type: 'Wypożyczenie',
               fee: baseFee,
             });
@@ -303,6 +335,9 @@ export const ClubDetails: React.FC = () => {
             date: entryDate,
             playerId: player.id,
             playerName: playerName(player),
+            ...(previousEntry.clubId !== 'FREE_AGENTS'
+              ? { relatedClubName: previousEntry.clubName, relatedClubPrefix: 'Z' as const }
+              : {}),
             type: previousEntry.clubId === 'FREE_AGENTS' ? 'Wolny transfer' : 'Kupno',
             fee: previousEntry.clubId === 'FREE_AGENTS' ? undefined : baseFee,
           });
@@ -314,6 +349,8 @@ export const ClubDetails: React.FC = () => {
             date: entryDate,
             playerId: player.id,
             playerName: playerName(player),
+            relatedClubName: entry.clubName,
+            relatedClubPrefix: 'Do',
             type: 'Sprzedaż',
             fee: baseFee,
           });
@@ -327,8 +364,9 @@ export const ClubDetails: React.FC = () => {
     return {
       incoming: incoming.sort(sortEntries),
       outgoing: outgoing.sort(sortEntries),
+      pending: pending.sort((a, b) => a.date.getTime() - b.date.getTime() || a.playerName.localeCompare(b.playerName)),
     };
-  }, [aiTransferLog, allPlayers, club, incomingOffers, seasonStart, transferOffers]);
+  }, [aiTransferLog, allPlayers, club, clubs, currentDate, incomingOffers, seasonStart, transferOffers]);
 
   const getMoraleInfo = (morale: number): { stars: number; color: string; label: string } => {
     if (morale <= 20) return { stars: 1, color: 'text-red-500', label: 'Bardzo niskie' };
@@ -517,33 +555,42 @@ export const ClubDetails: React.FC = () => {
     );
   };
 
-  const renderTransferColumn = (title: string, entries: ClubTransferModalEntry[], accentClass: string) => (
-    <div className="min-h-0 flex-1 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
+  const renderTransferColumn = (title: string, entries: ClubTransferModalEntry[], accentClass: string, emptyLabel = 'Brak ruchów transferowych') => (
+    <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
       <div className="px-5 py-4 border-b border-white/10 bg-white/[0.03]">
         <h3 className={`text-[11px] font-black italic uppercase tracking-tighter ${accentClass}`}>{title}</h3>
       </div>
-      <div className="max-h-[520px] overflow-y-auto custom-scrollbar">
+      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
         {entries.length === 0 ? (
           <div className="px-5 py-10 text-center text-[10px] font-black italic uppercase tracking-tighter text-slate-600">
-            Brak ruchów transferowych
+            {emptyLabel}
           </div>
         ) : entries.map((entry, index) => (
           <button
             key={entry.id}
             type="button"
             onClick={() => viewPlayerDetails(entry.playerId)}
-            className={`grid w-full grid-cols-[88px_minmax(0,1fr)_170px] items-center gap-3 border-b border-white/5 px-5 py-3 text-left transition-colors hover:bg-white/[0.06] ${
+            className={`grid w-full grid-cols-[92px_minmax(150px,1fr)_150px] items-center gap-3 border-b border-white/5 px-5 py-3 text-left transition-colors hover:bg-white/[0.06] ${
               index % 2 === 0 ? 'bg-white/[0.015]' : 'bg-white/[0.045]'
             }`}
           >
             <span className="font-mono text-[10px] font-black text-slate-500">{formatTransferDate(entry.date)}</span>
-            <span className="min-w-0 truncate text-[12px] font-black italic uppercase tracking-tighter text-white">
-              {entry.playerName}
+            <span className="min-w-0">
+              <span className="block truncate text-[12px] font-black italic uppercase tracking-tighter text-white">
+                {entry.playerName}
+              </span>
             </span>
-            <span className={`text-right text-[10px] font-black italic uppercase tracking-tighter ${
-              entry.fee && entry.fee > 0 ? 'font-mono not-italic tracking-normal text-emerald-300' : 'text-slate-300'
-            }`}>
-              {getTransferDisplayLabel(entry)}
+            <span className="min-w-0 text-right">
+              <span className={`block truncate text-[10px] font-black italic uppercase tracking-tighter ${
+                entry.fee && entry.fee > 0 ? 'font-mono not-italic tracking-normal text-emerald-300' : 'text-slate-300'
+              }`}>
+                {getTransferDisplayLabel(entry)}
+              </span>
+              {entry.relatedClubName && (
+                <span className="mt-0.5 block truncate text-[11px] font-black italic uppercase tracking-tighter text-amber-300">
+                  {entry.relatedClubPrefix}: {entry.relatedClubName}
+                </span>
+              )}
             </span>
           </button>
         ))}
@@ -780,11 +827,11 @@ export const ClubDetails: React.FC = () => {
 
       {isTransferModalOpen && (
         <div
-          className="fixed inset-0 z-[320] flex items-start justify-center bg-black/75 px-8 pb-8 pt-[120px] backdrop-blur-lg"
+          className="fixed inset-0 z-[320] flex items-center justify-center bg-black/75 p-6 backdrop-blur-lg"
           onClick={() => setIsTransferModalOpen(false)}
         >
           <div
-            className="relative flex max-h-[calc(100vh-152px)] w-full max-w-5xl flex-col overflow-hidden rounded-[36px] border border-white/10 bg-slate-950/95 shadow-2xl"
+            className="relative flex h-[calc(100vh-72px)] max-h-[900px] w-full max-w-[1500px] flex-col overflow-hidden rounded-[36px] border border-white/10 bg-slate-950/95 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent pointer-events-none" />
@@ -804,9 +851,10 @@ export const ClubDetails: React.FC = () => {
               </button>
             </div>
 
-            <div className="relative z-10 grid min-h-0 grid-cols-2 gap-5 p-6">
+            <div className={`relative z-10 grid min-h-0 flex-1 gap-5 p-6 ${clubTransferActivity.pending.length > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
               {renderTransferColumn('Przyszli', clubTransferActivity.incoming, 'text-emerald-300')}
               {renderTransferColumn('Odeszli', clubTransferActivity.outgoing, 'text-rose-300')}
+              {clubTransferActivity.pending.length > 0 && renderTransferColumn('Zakontraktowane transfery', clubTransferActivity.pending, 'text-cyan-300', 'Brak zakontraktowanych transferów')}
             </div>
 
             <div className="relative z-10 border-t border-white/10 px-8 py-4">
