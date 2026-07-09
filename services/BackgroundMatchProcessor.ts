@@ -18,6 +18,7 @@ import { SeasonTransitionService } from './SeasonTransitionService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerFormService } from './PlayerFormService';
 import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
+import { SquadGeneratorService } from './SquadGeneratorService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
@@ -353,6 +354,27 @@ const ensureEmergencyGoalkeepers = (
   return updatedPlayers;
 };
 
+const ensureFourthLeagueSquads = (
+  clubs: Club[],
+  playersMap: Record<string, Player[]>,
+  userTeamId: string | null
+): Record<string, Player[]> => {
+  let changed = false;
+  const nextPlayers = { ...playersMap };
+
+  clubs
+    .filter(club => club.leagueId === 'L_PL_4' && club.isDefaultActive && club.id !== userTeamId)
+    .forEach(club => {
+      const squad = nextPlayers[club.id] || [];
+      if (squad.length >= 18) return;
+      nextPlayers[club.id] = SquadGeneratorService.generateSquadForClub(club.id)
+        .map(player => PlayerMoraleService.ensurePlayerState(player));
+      changed = true;
+    });
+
+  return changed ? nextPlayers : playersMap;
+};
+
 export const BackgroundMatchProcessor = {
   processLeagueEvent: (
     currentDate: Date,
@@ -412,7 +434,8 @@ export const BackgroundMatchProcessor = {
     
     // DEBUG
     DebugLoggerService.log('BMP', `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures.length}`, true);
-    const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersMap, fixtures, currentDate, userTeamId);
+    const playersAfterFourthLeagueEnsure = ensureFourthLeagueSquads(clubs, playersMap, userTeamId);
+    const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures, currentDate, userTeamId);
     const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches);
 if (todayFixtures.length === 0) {
       const contractUpdate = AiContractService.processClubsContracts(clubs, playersAfterEmergencyGoalkeepers, currentDate, userTeamId);

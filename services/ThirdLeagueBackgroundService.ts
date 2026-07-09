@@ -3,6 +3,8 @@ import { LeagueBackgroundMatchEngineV2 } from './LeagueBackgroundMatchEngine-ver
 import { PlayerStatsService } from './PlayerStatsService';
 import { PlayerFormService } from './PlayerFormService';
 import { RefereeService } from './RefereeService';
+import { LineupService } from './LineupService';
+import { SquadGeneratorService } from './SquadGeneratorService';
 
 const THIRD_LEAGUE_ID = 'L_PL_4';
 
@@ -49,6 +51,46 @@ const hasUsableStartingXI = (lineup: Lineup | undefined, squad: Player[]): lineu
   const availableIds = new Set(squad.filter(canPlayHiddenMatch).map(player => player.id));
   const starters = lineup.startingXI.filter((id): id is string => !!id && availableIds.has(id));
   return starters.length >= 11 && starters.some(id => squad.find(player => player.id === id)?.position === PlayerPosition.GK);
+};
+
+const ensureHiddenMatchReadySquad = (club: Club, squad: Player[]): Player[] => {
+  const baseSquad = squad.length >= 18 ? squad : SquadGeneratorService.generateSquadForClub(club.id);
+  const readyPlayers = baseSquad.filter(canPlayHiddenMatch);
+  const hasReadyGk = readyPlayers.some(player => player.position === PlayerPosition.GK);
+  if (readyPlayers.length >= 11 && hasReadyGk) return baseSquad;
+
+  let gkPrepared = hasReadyGk;
+  let preparedCount = readyPlayers.length;
+  return baseSquad.map(player => {
+    const needsGk = !gkPrepared && player.position === PlayerPosition.GK;
+    const needsOutfield = preparedCount < 11 && player.position !== PlayerPosition.GK && !canPlayHiddenMatch(player);
+    if (!needsGk && !needsOutfield) return player;
+
+    if (needsGk) gkPrepared = true;
+    preparedCount += canPlayHiddenMatch(player) ? 0 : 1;
+    return {
+      ...player,
+      condition: Math.max(player.condition ?? 0, 70),
+      suspensionMatches: 0,
+      health: { status: HealthStatus.HEALTHY },
+    };
+  });
+};
+
+const ensureHiddenMatchReadyLineup = (
+  club: Club,
+  squad: Player[],
+  lineup: Lineup | undefined,
+  coach: Coach | null,
+  dateKey: string
+): Lineup => {
+  const repaired = lineup ? LineupService.repairLineup(lineup, squad) : undefined;
+  if (hasUsableStartingXI(repaired, squad)) return repaired;
+
+  return LineupService.autoPickLineup(club.id, squad, repaired?.tacticId ?? '4-4-2', coach, {
+    formAware: true,
+    selectionSeed: `${club.id}_${dateKey}_L_PL_4_hidden`,
+  });
 };
 
 const fallbackCoach = (): Coach => ({
@@ -208,18 +250,21 @@ export const ThirdLeagueBackgroundService = {
     for (let i = 0; i < shuffledClubs.length - 1; i += 2) {
       const home = shuffledClubs[i];
       const away = shuffledClubs[i + 1];
-      const homePlayers = currentPlayers[home.id] || [];
-      const awayPlayers = currentPlayers[away.id] || [];
-      const homeLineup = lineups[home.id];
-      const awayLineup = lineups[away.id];
-
-      if (!hasUsableStartingXI(homeLineup, homePlayers) || !hasUsableStartingXI(awayLineup, awayPlayers)) continue;
-
       const fixture = createHiddenFixture(home, away, currentDate, i / 2);
       const referee = RefereeService.assignPolishReferee(fixture.id, 4);
       const seed = hashString(`${fixture.id}_${sessionSeed}_${home.id}_${away.id}`);
       const homeCoach = coaches[home.coachId || ''] || fallbackCoach();
       const awayCoach = coaches[away.coachId || ''] || fallbackCoach();
+      const homePlayers = ensureHiddenMatchReadySquad(home, currentPlayers[home.id] || []);
+      const awayPlayers = ensureHiddenMatchReadySquad(away, currentPlayers[away.id] || []);
+      const homeLineup = ensureHiddenMatchReadyLineup(home, homePlayers, lineups[home.id], homeCoach, dateKey);
+      const awayLineup = ensureHiddenMatchReadyLineup(away, awayPlayers, lineups[away.id], awayCoach, dateKey);
+
+      currentPlayers = {
+        ...currentPlayers,
+        [home.id]: homePlayers,
+        [away.id]: awayPlayers,
+      };
 
       const result = LeagueBackgroundMatchEngineV2.simulate(
         fixture,
