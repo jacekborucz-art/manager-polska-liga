@@ -121,6 +121,21 @@ const getBackgroundTargetRounds = (date: Date): number => {
   return clamp(monthIndex * 2 + (date.getDate() >= 15 ? 2 : 1), 0, 34);
 };
 
+const getSeasonStartYear = (date: Date): number =>
+  date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1;
+
+const getBackgroundProgressKey = (clubId: string, seasonStartYear: number): string =>
+  `europeanLeagueBackground:${clubId}:${seasonStartYear}`;
+
+const getCurrentBackgroundAppearances = (player: Player, progressKey: string): number => {
+  const savedProgress = player.stats?.backgroundLeagueProgress?.[progressKey];
+  if (typeof savedProgress === 'number' && Number.isFinite(savedProgress)) {
+    return Math.max(0, savedProgress);
+  }
+
+  return (player.history?.length ?? 0) > 0 ? 0 : Math.max(0, player.stats?.matchesPlayed ?? 0);
+};
+
 const getPlayerTargetAppearances = (targetRounds: number, rank: number, player: Player): number => {
   const ageRotation = player.age <= 21 ? 0.08 : player.age >= 33 ? -0.08 : 0;
   const roleFactor = rank < 11 ? 0.92 : rank < 16 ? 0.68 : rank < 21 ? 0.38 : 0.16;
@@ -177,6 +192,8 @@ const applyBackgroundLeagueStatsToSquad = (
 ): Player[] => {
   const targetRounds = getBackgroundTargetRounds(date);
   if (targetRounds <= 0) return squad.map(player => PlayerFormService.withUpdatedForm(player));
+  const seasonStartYear = getSeasonStartYear(date);
+  const progressKey = getBackgroundProgressKey(club.id, seasonStartYear);
 
   const rankedIds = [...squad]
     .sort((a, b) => (b.overallRating ?? 0) - (a.overallRating ?? 0))
@@ -186,9 +203,21 @@ const applyBackgroundLeagueStatsToSquad = (
     const rank = Math.max(0, rankedIds.indexOf(player.id));
     const targetAppearances = getPlayerTargetAppearances(targetRounds, rank, player);
     let updated = player;
-    const currentAppearances = player.stats?.matchesPlayed ?? 0;
+    const currentAppearances = getCurrentBackgroundAppearances(player, progressKey);
     for (let round = currentAppearances; round < targetAppearances; round += 1) {
       updated = addBackgroundAppearance(updated, club, round, seedBase);
+    }
+    if (targetAppearances > currentAppearances) {
+      updated = {
+        ...updated,
+        stats: {
+          ...updated.stats,
+          backgroundLeagueProgress: {
+            ...(updated.stats?.backgroundLeagueProgress ?? {}),
+            [progressKey]: targetAppearances,
+          },
+        },
+      };
     }
     return PlayerFormService.withUpdatedForm(updated);
   });
