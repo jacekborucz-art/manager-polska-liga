@@ -53,7 +53,8 @@ const updateSquadEuroStats = (
   goalsFor: MatchLiveState['homeGoals'],
   goalsAgainst: number,
   yellowCards: Record<string, number>,
-  redIds: string[]
+  redIds: string[],
+  ratings: Record<string, number> = {}
 ) => {
   return squad.map(player => {
     const referencePlayer = referenceSquad.find(p => p.id === player.id) ?? player;
@@ -63,6 +64,10 @@ const updateSquadEuroStats = (
     if (playedIds.has(player.id)) {
       euroStats.matchesPlayed += 1;
       euroStats.minutesPlayed += 90;
+      const rating = ratings[player.id];
+      if (typeof rating === 'number' && Number.isFinite(rating)) {
+        euroStats.ratingHistory = [...(euroStats.ratingHistory ?? []), rating];
+      }
       if (goalsAgainst === 0 && referencePlayer.position === PlayerPosition.GK) {
         euroStats.cleanSheets += 1;
       }
@@ -203,7 +208,8 @@ export const EuropeanPlayerStatsService = {
     homeClubId: string,
     awayClubId: string,
     homePlayers: Player[],
-    awayPlayers: Player[]
+    awayPlayers: Player[],
+    ratings: Record<string, number> = {}
   ): Record<string, Player[]> => {
     const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
     const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
@@ -217,7 +223,8 @@ export const EuropeanPlayerStatsService = {
         matchState.homeGoals,
         matchState.awayScore,
         matchState.playerYellowCards,
-        matchState.sentOffIds
+        matchState.sentOffIds,
+        ratings
       ),
       [awayClubId]: updateSquadEuroStats(
         players[awayClubId] ?? [],
@@ -226,7 +233,8 @@ export const EuropeanPlayerStatsService = {
         matchState.awayGoals,
         matchState.homeScore,
         matchState.playerYellowCards,
-        matchState.sentOffIds
+        matchState.sentOffIds,
+        ratings
       )
     };
   }

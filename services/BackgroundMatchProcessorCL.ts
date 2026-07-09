@@ -1257,6 +1257,10 @@ export const BackgroundMatchProcessorCL = {
           const eur = { ...(p.euroStats ?? emptyS()) };
           eur.matchesPlayed += 1;
           eur.minutesPlayed += minutesPlayed;
+          const rating = result.ratings[p.id];
+          if (typeof rating === 'number' && Number.isFinite(rating)) {
+            eur.ratingHistory = [...(eur.ratingHistory ?? []), rating];
+          }
           return { ...p, euroStats: eur };
         });
       }

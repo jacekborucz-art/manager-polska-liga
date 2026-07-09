@@ -503,6 +503,60 @@ function reconcileFriendlyStatsFromHistory(players: Record<string, any[]>, match
   );
 }
 
+function isEuropeanCupCompetition(competition: unknown): boolean {
+  const value = String(competition || '');
+  return value === 'UEFA_SUPER_CUP' ||
+    value.startsWith('CL_') ||
+    value.startsWith('EL_') ||
+    value.startsWith('CONF_');
+}
+
+function reconcileEuroRatingHistoryFromHistory(players: Record<string, any[]>, matchHistory: any[], seasonNumber: number): Record<string, any[]> {
+  const playerRatings = new Map<string, number[]>();
+
+  (matchHistory || []).forEach(match => {
+    if (!isEuropeanCupCompetition(match?.competition)) return;
+    if (Number(match?.season) !== seasonNumber) return;
+
+    const playedIds = new Set<string>([
+      ...asArray<string>(match.homeLineup).filter(Boolean),
+      ...asArray<string>(match.awayLineup).filter(Boolean),
+      ...asArray<any>(match.substitutions).map(sub => sub?.playerInId).filter(Boolean),
+      ...asArray<any>(match.substitutions).map(sub => sub?.playerOutId).filter(Boolean),
+      ...Object.keys(asRecord(match.ratings)),
+    ]);
+
+    playedIds.forEach(playerId => {
+      const rating = match.ratings?.[playerId];
+      if (typeof rating !== 'number' || !Number.isFinite(rating)) return;
+      if (!playerRatings.has(playerId)) playerRatings.set(playerId, []);
+      playerRatings.get(playerId)!.push(rating);
+    });
+  });
+
+  if (playerRatings.size === 0) return players;
+
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player: any) => {
+        const ratings = playerRatings.get(player.id);
+        if (!ratings || ratings.length === 0) return player;
+        const currentEuro = player.euroStats ?? emptyPlayerStats();
+        const currentHistory = asArray<number>(currentEuro.ratingHistory).filter(rating => typeof rating === 'number' && Number.isFinite(rating));
+        if (currentHistory.length >= ratings.length) return player;
+        return {
+          ...player,
+          euroStats: {
+            ...currentEuro,
+            ratingHistory: ratings,
+          },
+        };
+      }),
+    ])
+  );
+}
+
 function normalizeSaveState(data: SaveState): SaveState {
   const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
   const normalizedClubs = (data.clubs || []).map((rawClub: any) => {
@@ -577,8 +631,13 @@ function normalizeSaveState(data: SaveState): SaveState {
     normalizedPlayersBase,
     normalizedMatchHistory
   );
-  const normalizedPlayers = reconcileFriendlyStatsFromHistory(
+  const normalizedPlayersWithFriendlies = reconcileFriendlyStatsFromHistory(
     normalizedPlayersWithCup,
+    normalizedMatchHistory,
+    Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1
+  );
+  const normalizedPlayers = reconcileEuroRatingHistoryFromHistory(
+    normalizedPlayersWithFriendlies,
     normalizedMatchHistory,
     Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1
   );

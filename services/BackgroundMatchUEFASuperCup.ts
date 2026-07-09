@@ -19,6 +19,44 @@ const emptyEuroStats = (): PlayerStats => ({
   ratingHistory: []
 });
 
+const applyEuropeanAppearance = (
+  playersMap: Record<string, Player[]>,
+  clubId: string,
+  lineup: Lineup,
+  substitutions: { playerOutName: string; playerInName: string; minute: number; teamId: string }[],
+  ratings: Record<string, number>
+): Record<string, Player[]> => {
+  const squad = playersMap[clubId];
+  if (!squad) return playersMap;
+
+  const playedNames = new Set<string>();
+  lineup.startingXI.forEach(playerId => {
+    const player = squad.find(p => p.id === playerId);
+    if (player) playedNames.add(`${player.firstName} ${player.lastName}`);
+  });
+  substitutions
+    .filter(sub => sub.teamId === clubId)
+    .forEach(sub => {
+      if (sub.playerInName) playedNames.add(sub.playerInName);
+      if (sub.playerOutName) playedNames.add(sub.playerOutName);
+    });
+
+  return {
+    ...playersMap,
+    [clubId]: squad.map(player => {
+      if (!playedNames.has(`${player.firstName} ${player.lastName}`)) return player;
+      const euroStats = { ...(player.euroStats ?? emptyEuroStats()) };
+      euroStats.matchesPlayed += 1;
+      euroStats.minutesPlayed += 90;
+      const rating = ratings[player.id];
+      if (typeof rating === 'number' && Number.isFinite(rating)) {
+        euroStats.ratingHistory = [...(euroStats.ratingHistory ?? []), rating];
+      }
+      return { ...player, euroStats };
+    })
+  };
+};
+
 const applyEuropeanCard = (
   playersMap: Record<string, Player[]>,
   playerId: string,
@@ -916,6 +954,9 @@ export const BackgroundMatchUEFASuperCup = {
         [fixture.homeTeamId]: applyFatigueToTeam(result.updatedHomePlayers),
         [fixture.awayTeamId]: applyFatigueToTeam(result.updatedAwayPlayers),
       };
+
+      updatedPlayersMap = applyEuropeanAppearance(updatedPlayersMap, fixture.homeTeamId, homeLineup, result.substitutions, result.ratings);
+      updatedPlayersMap = applyEuropeanAppearance(updatedPlayersMap, fixture.awayTeamId, awayLineup, result.substitutions, result.ratings);
 
       result.cards.forEach(card => {
         const eventType = card.type === 'RED' || card.type === 'SECOND_YELLOW'
