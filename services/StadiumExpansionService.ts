@@ -32,12 +32,12 @@ const MIN_REPUTATION: Record<StadiumStand, number> = {
 };
 
 const COST_PER_SEAT: Record<StadiumStand, number> = {
-  MAIN_STAND:     4500,
-  OPPOSITE_STAND: 3200,
-  NORTH_END:      2800,
-  SOUTH_END:      2800,
-  LIGHTING:       600000,
-  VIP_BOXES:      12000,
+  MAIN_STAND:     24000,
+  OPPOSITE_STAND: 18000,
+  NORTH_END:      14000,
+  SOUTH_END:      14000,
+  LIGHTING:       3500000,
+  VIP_BOXES:      45000,
 };
 
 const DEFAULT_INCREASE: Record<StadiumStand, number> = {
@@ -80,11 +80,18 @@ const addDays = (dateStr: string, days: number): string => {
 };
 
 const getConstructionDays = (stand: StadiumStand, increase: number, seed: number): number => {
-  if (stand === 'LIGHTING' || stand === 'VIP_BOXES') return 60 + Math.floor(seed * 30);
-  if (increase <= 500)  return 120 + Math.floor(seed * 60);
-  if (increase <= 1500) return 180 + Math.floor(seed * 90);
-  if (increase <= 3000) return 270 + Math.floor(seed * 150);
-  return 420 + Math.floor(seed * 120);
+  if (stand === 'LIGHTING') return 120 + Math.floor(seed * 90);
+  if (stand === 'VIP_BOXES') return 150 + Math.floor(seed * 90);
+  if (increase <= 500)  return 180 + Math.floor(seed * 90);
+  if (increase <= 1500) return 240 + Math.floor(seed * 150);
+  if (increase <= 3000) return 330 + Math.floor(seed * 210);
+  return 540 + Math.floor(seed * 180);
+};
+
+const getFeasibilityCost = (stand: StadiumStand, requestedIncrease: number, seed: number): number => {
+  const estimatedProjectCost = StadiumExpansionService.estimateCost(stand, requestedIncrease);
+  const designShare = 0.012 + seed * 0.018;
+  return Math.round(Math.max(120000, Math.min(1800000, estimatedProjectCost * designShare)));
 };
 
 const advancePhase = (
@@ -151,7 +158,7 @@ const advancePhase = (
     }
 
     case 'FEASIBILITY_STUDY': {
-      const feasCost = Math.round(50000 + s1 * 200000);
+      const feasCost = getFeasibilityCost(project.stand, project.requestedCapacityIncrease, s1);
       const permDays = 56 + Math.floor(s2 * 84);
       const updatedProject: StadiumExpansionProject = {
         ...project,
@@ -278,7 +285,7 @@ const advancePhase = (
         event: {
           projectId: project.id, stand: project.stand, newPhase: 'CONSTRUCTION',
           subject: `Budowa rozpoczęta — ${standLabel}`,
-          body: `Szanowny Panie Menedżerze,\n\nWyłoniono wykonawcę rozbudowy stadionu (${standLabel}).\n\nCalkowity koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN.\nSzacowany czas budowy: ok. ${Math.round(constructDays / 30)} miesięcy.\n\nFinansowanie zostanie omówione przez zarząd przed wystawieniem pierwszej faktury.\n\nZ poważaniem,\nZarząd Klubu`,
+          body: `Szanowny Panie Menedżerze,\n\nWyłoniono wykonawcę rozbudowy stadionu (${standLabel}).\n\nCałkowity koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN.\nSzacowany czas budowy: ok. ${Math.round(constructDays / 30)} miesięcy.\n\nFinansowanie zostanie omówione przez zarząd przed wystawieniem pierwszej faktury.\n\nZ poważaniem,\nZarząd Klubu`,
           isGoodNews: true,
         },
       };

@@ -123,7 +123,7 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
           <div className="rounded-[18px] border border-white/5 bg-black/20 p-4">
             <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Informacja</p>
             <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
-              Podane koszty są szacunkowe. Ostateczna wycena zostanie ustalona po analizie wykonalności i przetargu. Rozbudowa przebiega w kilku etapach i trwa od kilku miesięcy do ponad roku.
+              Podane koszty są szacunkowe i uwzględniają realia rynku budowlanego 2026. Ostateczna wycena zostanie ustalona po analizie wykonalności i przetargu. Rozbudowa przebiega etapami i może trwać od kilku miesięcy do dwóch sezonów.
             </p>
           </div>
 
