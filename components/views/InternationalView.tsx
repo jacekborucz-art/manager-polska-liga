@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { EuroQualifiersFixture, EuroQualifiersPlayoffPath, WCQPlayoffPath, WorldCupQualifiersFixture, WorldCupQualifiersPlayoffPath } from '../../types';
+import { EuroQualifiersFixture, EuroQualifiersPlayoffPath, NationsLeagueState, ViewState, WCQPlayoffPath, WorldCupQualifiersFixture, WorldCupQualifiersPlayoffPath } from '../../types';
 import polskaBgImg from '../../Graphic/themes/polska.png';
 
 const SUBHEADING = 'text-[10px] font-black uppercase tracking-[0.25em] text-slate-500';
@@ -41,6 +41,7 @@ interface GroupTeam {
 }
 
 const TOURNAMENTS: Tournament[] = [
+  { id: 'nationsLeague', label: 'Liga Narodów' },
   { id: 'wcqDynamic', label: 'Eliminacje MŚ' },
   { id: 'euroq2028', label: 'Eliminacje EURO 2028' },
   { id: 'wcq2026', label: 'Kwalifikacje do MŚ 2026' },
@@ -679,7 +680,7 @@ const EuroPlayoffCard: React.FC<{
 };
 
 const InternationalView: React.FC = () => {
-  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState, worldCupQualifiersState } = useGame();
+  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState, worldCupQualifiersState, nationsLeagueState, nationsLeagueArchive, navigateTo } = useGame();
   const [activeTournament, setActiveTournament] = useState<string>('wcq2026');
   const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
@@ -692,6 +693,13 @@ const InternationalView: React.FC = () => {
   const worldCupQualifiersLabel = worldCupQualifiersState?.editionLabel
     ? `Eliminacje ${worldCupQualifiersState.editionLabel}`
     : 'Eliminacje MŚ 2030';
+
+  const nationsLeagueEditions = useMemo(() => {
+    const byYear = new Map<number, NationsLeagueState>();
+    nationsLeagueArchive.forEach(edition => byYear.set(edition.editionStartYear, edition));
+    if (nationsLeagueState) byYear.set(nationsLeagueState.editionStartYear, nationsLeagueState);
+    return [...byYear.values()].sort((a, b) => b.editionStartYear - a.editionStartYear);
+  }, [nationsLeagueArchive, nationsLeagueState]);
 
   const { standings, playedRounds, scheduledResults, maxPlayedRound } = useMemo(() => {
     const scheduleMeta = new Map<string, { round: number; dateLabel: string }>();
@@ -936,6 +944,89 @@ const InternationalView: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {activeTournament === 'nationsLeague' && (
+        <div className="relative z-10 flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+            <div className="flex items-center gap-3">
+              <span className={SUBHEADING}>Liga Narodów UEFA</span>
+              <div className="h-px flex-1 bg-white/5" />
+              <button
+                type="button"
+                onClick={() => navigateTo(ViewState.NATIONS_LEAGUE)}
+                className="rounded-xl border border-sky-300/30 bg-sky-300/10 px-5 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-sky-200 transition-all hover:border-sky-200/60 hover:bg-sky-300/20"
+              >
+                Otwórz centrum LN
+              </button>
+            </div>
+
+            {nationsLeagueEditions.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {nationsLeagueEditions.map(edition => {
+                  const played = edition.fixtures.filter(fixture => fixture.played).length;
+                  const total = edition.fixtures.length;
+                  const stageLabel = edition.completed
+                    ? 'Zakończona'
+                    : edition.stage === 'LEAGUE_PHASE'
+                      ? 'Faza ligowa'
+                      : edition.stage === 'QUARTER_FINALS'
+                        ? 'Ćwierćfinały i baraże'
+                        : edition.stage === 'PLAYOFFS'
+                          ? 'Baraże'
+                          : 'Final Four';
+
+                  return (
+                    <button
+                      key={edition.editionStartYear}
+                      type="button"
+                      onClick={() => navigateTo(ViewState.NATIONS_LEAGUE)}
+                      className="group overflow-hidden rounded-[24px] border border-white/[0.07] bg-black/20 p-5 text-left transition-all hover:border-sky-300/35 hover:bg-white/[0.04]"
+                    >
+                      <div className="mb-5 flex items-start justify-between gap-4">
+                        <div>
+                          <p className="mb-1 text-[9px] font-black uppercase tracking-[0.3em] text-sky-300">UEFA Nations League</p>
+                          <h3 className="font-black italic uppercase tracking-tighter text-3xl text-white">
+                            {edition.editionLabel}
+                          </h3>
+                        </div>
+                        <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-300">
+                          {stageLabel}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                          <p className={SUBHEADING}>Mecze</p>
+                          <p className="mt-2 font-mono text-lg font-black text-white">{played}/{total}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                          <p className={SUBHEADING}>Final Four</p>
+                          <p className="mt-2 truncate text-sm font-black uppercase tracking-tight text-slate-200">
+                            {edition.semiFinalists.length ? edition.semiFinalists.join(', ') : 'Do ustalenia'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                          <p className={SUBHEADING}>Triumfator</p>
+                          <p className="mt-2 truncate text-sm font-black uppercase tracking-tight text-amber-300">
+                            {edition.finals?.champion ?? 'Do ustalenia'}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-black/20">
+                <p className="font-black italic uppercase tracking-tighter text-3xl text-white">Liga Narodów UEFA</p>
+                <p className="max-w-xl text-center text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Pierwsza edycja pojawi się po losowaniu 17 lipca 2026.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeTournament === 'wcqDynamic' && (
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden px-6 py-6">

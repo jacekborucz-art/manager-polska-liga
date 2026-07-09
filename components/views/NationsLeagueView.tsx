@@ -162,17 +162,19 @@ function FixtureRow({ state, fixture, compact = false }: { state: NationsLeagueS
 }
 
 function buildScorers(history: MatchHistoryEntry[], teamNameById: Map<string, string>) {
-  const rows = new Map<string, { playerName: string; teamId: string; teamName: string; goals: number }>();
+  const rows = new Map<string, { playerName: string; playerId?: string; teamId: string; teamName: string; goals: number }>();
   history.forEach(match => {
     match.goals.forEach(goal => {
       if ((goal as MatchGoalEntry).isOwnGoal || (goal as MatchGoalEntry).isMiss) return;
       const key = `${goal.playerName}_${goal.teamId}`;
       const current = rows.get(key) ?? {
         playerName: goal.playerName,
+        playerId: goal.playerId,
         teamId: goal.teamId,
         teamName: teamNameById.get(goal.teamId) ?? goal.teamId,
         goals: 0
       };
+      current.playerId = current.playerId ?? goal.playerId;
       current.teamName = teamNameById.get(goal.teamId) ?? current.teamName;
       current.goals += 1;
       rows.set(key, current);
@@ -245,7 +247,7 @@ function RankingTab({ rankingState }: { rankingState: UefaNationalRankingState |
 }
 
 const NationsLeagueView: React.FC = () => {
-  const { nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState, navigateTo } = useGame();
+  const { nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState, navigateTo, viewPlayerDetails } = useGame();
   const [activeTab, setActiveTab] = useState<TabId>('tabele');
   const editions = useMemo(() => {
     const byYear = new Map<number, NationsLeagueState>();
@@ -463,14 +465,20 @@ const NationsLeagueView: React.FC = () => {
                 <h3 className={`${HEADING_FONT} mb-4 text-2xl text-white`}>Strzelcy</h3>
                 <div className="space-y-2">
                   {scorers.length > 0 ? scorers.map((row, index) => (
-                    <div key={`${row.playerName}-${row.teamId}`} className="grid grid-cols-[40px_28px_minmax(0,1fr)_60px] items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
+                    <button
+                      key={`${row.playerName}-${row.teamId}`}
+                      type="button"
+                      disabled={!row.playerId}
+                      onClick={() => row.playerId && viewPlayerDetails(row.playerId)}
+                      className={`grid w-full grid-cols-[40px_28px_minmax(0,1fr)_60px] items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2 text-left transition-all ${row.playerId ? 'cursor-pointer hover:bg-white/[0.08] hover:ring-1 hover:ring-sky-300/30' : 'cursor-default'}`}
+                    >
                       <span className="font-mono text-white/35">#{index + 1}</span>
                       <span className="flex h-5 w-7 items-center justify-center">
                         <TeamFlag name={row.teamName} className="h-4 w-7" />
                       </span>
-                      <span className="truncate text-sm font-bold text-white/80">{row.playerName}</span>
+                      <span className={`truncate text-sm font-bold text-white/80 ${row.playerId ? 'hover:text-sky-200' : ''}`}>{row.playerName}</span>
                       <span className="text-right font-mono font-black text-emerald-300">{row.goals}</span>
-                    </div>
+                    </button>
                   )) : <p className={`${BTN_FONT} py-8 text-center text-[10px] text-white/25`}>Brak goli w tej edycji</p>}
                 </div>
               </section>
