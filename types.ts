@@ -1709,6 +1709,7 @@ export type StadiumStand =
 
 export type StadiumExpansionPhase =
   | 'BOARD_REVIEW'
+  | 'CITY_AID_REVIEW'
   | 'FEASIBILITY_STUDY'
   | 'PLANNING_PERMISSION'
   | 'TENDER'
@@ -1734,6 +1735,8 @@ export interface StadiumExpansionProject {
   feasibilityCost?: number;
   totalCost?: number;
   financeType?: 'BUDGET' | 'INSTALLMENTS' | 'BANK_CREDIT' | 'CITY_AID';
+  cityAidAmount?: number;
+  cityAidShare?: number;
   contractorTier?: 'CHEAP' | 'BALANCED' | 'PREMIUM';
   tempCapacityReduction?: number;
   log: StadiumExpansionEvent[];

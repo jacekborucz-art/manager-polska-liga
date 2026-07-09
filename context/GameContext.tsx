@@ -13567,19 +13567,22 @@ const finalResult: SimulationOutput = {
     const dateStr = currentDate instanceof Date
       ? currentDate.toISOString().split('T')[0]
       : String(currentDate);
-    const project = StadiumExpansionService.createRequest(userTeamId, stand, requestedIncrease, dateStr);
+    const project = StadiumExpansionService.createRequest(userTeamId, stand, requestedIncrease, dateStr, userClub);
     setClubs(prev => prev.map(c =>
       c.id === userTeamId
         ? { ...c, stadiumExpansionProjects: [...(c.stadiumExpansionProjects ?? []), project] }
         : c
     ));
     const standLabel = StadiumExpansionService.getStandLabel(stand);
+    const needsCityAid = project.financeType === 'CITY_AID';
     setMessages(prev => [{
       id: `STADIUM_REQ_${project.id}`,
       sender: 'Zarząd Klubu',
       role: 'Sekretariat',
       subject: `Wniosek o rozbudowę przyjęty — ${standLabel}`,
-      body: `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWniosek zostanie rozpatrzony przez zarząd w ciągu 2–4 tygodni. O decyzji zostanie Pan niezwłocznie poinformowany drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
+      body: needsCityAid
+        ? `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWstępna analiza wskazuje, że klub będzie potrzebował udziału miasta w finansowaniu projektu. Wniosek zostanie najpierw rozpatrzony przez zarząd, a w przypadku pozytywnej rekomendacji trafi do urzędu miejskiego.\n\nZ poważaniem,\nSekretariat Klubu`
+        : `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWniosek zostanie rozpatrzony przez zarząd w ciągu 2–4 tygodni. O decyzji zostanie Pan niezwłocznie poinformowany drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
       date: new Date(dateStr),
       isRead: false,
       type: MailType.BOARD,
@@ -13587,7 +13590,9 @@ const finalResult: SimulationOutput = {
     }, ...prev]);
     showGameNotification({
       title: 'Wniosek złożony',
-      message: `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Odpowiedź w ciągu 2–4 tygodni.`,
+      message: needsCityAid
+        ? `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Możliwa będzie prośba o pomoc miasta.`
+        : `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Odpowiedź w ciągu 2–4 tygodni.`,
       tone: 'info',
     });
   }, [clubs, currentDate, showGameNotification, userTeamId]);

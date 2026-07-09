@@ -49,6 +49,7 @@ const getStandsBreakdown = (capacity: number) => {
 
 const PHASE_COLOR: Record<string, string> = {
   BOARD_REVIEW:        'border-sky-400/25 bg-sky-500/15 text-sky-300',
+  CITY_AID_REVIEW:     'border-cyan-400/25 bg-cyan-500/15 text-cyan-300',
   FEASIBILITY_STUDY:   'border-amber-400/25 bg-amber-500/15 text-amber-300',
   PLANNING_PERMISSION: 'border-yellow-400/25 bg-yellow-500/15 text-yellow-300',
   TENDER:              'border-purple-400/25 bg-purple-500/15 text-purple-300',
@@ -170,6 +171,11 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({ club, onClose, onReq
                   <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
                     Termin fazy: {new Date(project.phaseEndDate).toLocaleDateString('pl-PL')}
                   </p>
+                  {project.financeType === 'CITY_AID' && (
+                    <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-cyan-300/80">
+                      Finansowanie z udziałem miasta{project.cityAidAmount ? `: ${project.cityAidAmount.toLocaleString('pl-PL')} PLN` : ''}
+                    </p>
+                  )}
                   {project.log.length > 0 && (
                     <p className="mt-2 text-[9px] font-black italic uppercase tracking-tighter text-slate-400 border-t border-white/5 pt-2">
                       {project.log[project.log.length - 1].message}

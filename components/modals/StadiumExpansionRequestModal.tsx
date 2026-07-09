@@ -110,6 +110,11 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
                   <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-amber-300/80">
                     ~{cost.toLocaleString('pl-PL')} PLN
                   </p>
+                  {eligibility.eligible && eligibility.requiresCityAid && (
+                    <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-sky-300/80">
+                      Wymagana pomoc miasta. Szansa: {Math.round((eligibility.cityAidChance ?? 0) * 100)}%
+                    </p>
+                  )}
                   {!eligibility.eligible && (
                     <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-red-400/80">
                       {eligibility.reasons[0]}
@@ -123,7 +128,7 @@ export const StadiumExpansionRequestModal: React.FC<StadiumExpansionRequestModal
           <div className="rounded-[18px] border border-white/5 bg-black/20 p-4">
             <p className="text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Informacja</p>
             <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
-              Podane koszty są szacunkowe i uwzględniają realia rynku budowlanego 2026. Ostateczna wycena zostanie ustalona po analizie wykonalności i przetargu. Rozbudowa przebiega etapami i może trwać od kilku miesięcy do dwóch sezonów.
+              Podane koszty są szacunkowe i uwzględniają realia rynku budowlanego 2026. Jeśli klub nie ma wymaganego wkładu własnego, zarząd może wystąpić o pomoc miasta, ale decyzja samorządu nie jest gwarantowana.
             </p>
           </div>
 

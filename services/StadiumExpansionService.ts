@@ -4,6 +4,9 @@ import { BoardAttributeLevel, Club, StadiumExpansionPhase, StadiumExpansionProje
 export interface ExpansionEligibility {
   eligible: boolean;
   reasons: string[];
+  requiresCityAid?: boolean;
+  minimumClubContribution?: number;
+  cityAidChance?: number;
 }
 
 export interface StadiumPhaseAdvanceEvent {
@@ -48,6 +51,8 @@ const DEFAULT_INCREASE: Record<StadiumStand, number> = {
   LIGHTING:       0,
   VIP_BOXES:      200,
 };
+
+const MIN_CLUB_SELF_FUNDING_SHARE = 0.2;
 
 export const STAND_OPTIONS: { stand: StadiumStand }[] = [
   { stand: 'MAIN_STAND' },
@@ -94,6 +99,16 @@ const getFeasibilityCost = (stand: StadiumStand, requestedIncrease: number, seed
   return Math.round(Math.max(120000, Math.min(1800000, estimatedProjectCost * designShare)));
 };
 
+const getCityAidChance = (club: Club, stand: StadiumStand, requestedIncrease: number): number => {
+  const estimatedCost = StadiumExpansionService.estimateCost(stand, requestedIncrease);
+  const minContribution = Math.round(estimatedCost * MIN_CLUB_SELF_FUNDING_SHARE);
+  const shortfallRatio = Math.max(0, minContribution - club.budget) / Math.max(1, minContribution);
+  const standBonus = stand === 'LIGHTING' ? 0.12 : stand === 'MAIN_STAND' || stand === 'OPPOSITE_STAND' ? 0.08 : 0.04;
+  const reputationBonus = Math.min(0.24, club.reputation * 0.028);
+  const hardshipPenalty = shortfallRatio * 0.18;
+  return Math.max(0.12, Math.min(0.68, 0.18 + reputationBonus + standBonus - hardshipPenalty));
+};
+
 const advancePhase = (
   club: Club,
   project: StadiumExpansionProject,
@@ -134,6 +149,38 @@ const advancePhase = (
       }
 
       const feasDays = 42 + Math.floor(s2 * 28);
+      if (project.financeType === 'CITY_AID') {
+        const cityDays = 21 + Math.floor(s2 * 35);
+        const estimatedCost = StadiumExpansionService.estimateCost(project.stand, project.requestedCapacityIncrease);
+        const minContribution = Math.round(estimatedCost * MIN_CLUB_SELF_FUNDING_SHARE);
+        const shortfall = Math.max(0, minContribution - club.budget);
+        const updatedProject: StadiumExpansionProject = {
+          ...project,
+          phase: 'CITY_AID_REVIEW',
+          phaseEndDate: addDays(currentDate, cityDays),
+          log: [...project.log, {
+            date: currentDate,
+            message: `Zarząd warunkowo poparł projekt. Klubowi brakuje około ${shortfall.toLocaleString('pl-PL')} PLN wkładu własnego, więc wystąpiono o pomoc miasta.`,
+            type: 'INFO',
+          }],
+        };
+        return {
+          updatedProject,
+          updatedClub: {
+            ...club,
+            stadiumExpansionProjects: (club.stadiumExpansionProjects ?? []).map(p =>
+              p.id === project.id ? updatedProject : p
+            ),
+          },
+          event: {
+            projectId: project.id, stand: project.stand, newPhase: 'CITY_AID_REVIEW',
+            subject: `Wniosek do miasta — ${standLabel}`,
+            body: `Szanowny Panie Menedżerze,\n\nZarząd po analizie projektu (${standLabel}) uważa inwestycję za sportowo uzasadnioną, ale obecny budżet klubu nie pozwala bezpiecznie sfinansować wymaganego wkładu własnego.\n\nWystąpiliśmy do miasta o współfinansowanie rozbudowy stadionu. Decyzja urzędu powinna zapaść w ciągu około ${Math.round(cityDays / 7)} tygodni.\n\nZ poważaniem,\nZarząd Klubu`,
+            isGoodNews: true,
+          },
+        };
+      }
+
       const updatedProject: StadiumExpansionProject = {
         ...project,
         phase: 'FEASIBILITY_STUDY',
@@ -152,6 +199,71 @@ const advancePhase = (
           projectId: project.id, stand: project.stand, newPhase: 'FEASIBILITY_STUDY',
           subject: `Zarząd zaakceptował wniosek — ${standLabel}`,
           body: `Szanowny Panie Menedżerze,\n\nZarząd po rozpatrzeniu wniosku wyraża zgodę na zlecenie analizy wykonalności rozbudowy (${standLabel}).\n\nAnaliza potrwa około ${Math.round(feasDays / 7)} tygodni. Po jej zakończeniu zostanie Pan poinformowany o wynikach i kosztach wstępnych.\n\nZ poważaniem,\nZarząd Klubu`,
+          isGoodNews: true,
+        },
+      };
+    }
+
+    case 'CITY_AID_REVIEW': {
+      const estimatedCost = StadiumExpansionService.estimateCost(project.stand, project.requestedCapacityIncrease);
+      const chance = getCityAidChance(club, project.stand, project.requestedCapacityIncrease);
+      const approved = s1 < chance;
+
+      if (!approved) {
+        const updatedProject: StadiumExpansionProject = {
+          ...project,
+          phase: 'REJECTED',
+          phaseEndDate: currentDate,
+          log: [...project.log, {
+            date: currentDate,
+            message: 'Miasto odmówiło współfinansowania. Projekt zostaje wstrzymany ze względu na brak zabezpieczenia finansowego.',
+            type: 'WARNING',
+          }],
+        };
+        return {
+          updatedProject,
+          updatedClub: {
+            ...club,
+            stadiumExpansionProjects: (club.stadiumExpansionProjects ?? []).map(p =>
+              p.id === project.id ? updatedProject : p
+            ),
+          },
+          event: {
+            projectId: project.id, stand: project.stand, newPhase: 'REJECTED',
+            subject: `Miasto odmawia wsparcia — ${standLabel}`,
+            body: `Szanowny Panie Menedżerze,\n\nMiasto odmówiło współfinansowania rozbudowy stadionu (${standLabel}). Bez udziału samorządu klub nie jest w stanie bezpiecznie zabezpieczyć wkładu własnego, dlatego projekt zostaje wstrzymany.\n\nDo tematu będzie można wrócić po poprawie sytuacji finansowej klubu lub po zmianie priorytetów inwestycyjnych miasta.\n\nZ poważaniem,\nZarząd Klubu`,
+            isGoodNews: false,
+          },
+        };
+      }
+
+      const aidShare = 0.25 + hashSeed(project.id + 'city_aid_share') * 0.4;
+      const aidAmount = Math.round(estimatedCost * aidShare);
+      const feasDays = 35 + Math.floor(s2 * 35);
+      const updatedProject: StadiumExpansionProject = {
+        ...project,
+        phase: 'FEASIBILITY_STUDY',
+        phaseEndDate: addDays(currentDate, feasDays),
+        cityAidShare: aidShare,
+        cityAidAmount: aidAmount,
+        log: [...project.log, {
+          date: currentDate,
+          message: `Miasto zadeklarowało udział w finansowaniu: około ${aidAmount.toLocaleString('pl-PL')} PLN. Zlecono analizę wykonalności.`,
+          type: 'SUCCESS',
+        }],
+      };
+      return {
+        updatedProject,
+        updatedClub: {
+          ...club,
+          stadiumExpansionProjects: (club.stadiumExpansionProjects ?? []).map(p =>
+            p.id === project.id ? updatedProject : p
+          ),
+        },
+        event: {
+          projectId: project.id, stand: project.stand, newPhase: 'FEASIBILITY_STUDY',
+          subject: `Miasto wesprze rozbudowę — ${standLabel}`,
+          body: `Szanowny Panie Menedżerze,\n\nMiasto pozytywnie rozpatrzyło prośbę klubu i zadeklarowało udział w finansowaniu rozbudowy stadionu (${standLabel}).\n\nWstępna deklaracja wsparcia: około ${aidAmount.toLocaleString('pl-PL')} PLN.\n\nDzięki temu projekt może przejść do analizy wykonalności. Po jej zakończeniu otrzymamy dokładniejszą wycenę i harmonogram.\n\nZ poważaniem,\nZarząd Klubu`,
           isGoodNews: true,
         },
       };
@@ -261,16 +373,23 @@ const advancePhase = (
       const finalIncrease = project.approvedCapacityIncrease ?? project.requestedCapacityIncrease;
       const baseCost = StadiumExpansionService.estimateCost(project.stand, finalIncrease);
       const totalCost = Math.round(baseCost * (0.88 + s1 * 0.24));
+      const cityAidAmount = project.financeType === 'CITY_AID' && project.cityAidShare
+        ? Math.round(totalCost * project.cityAidShare)
+        : project.cityAidAmount;
+      const clubCost = cityAidAmount ? Math.max(0, totalCost - cityAidAmount) : totalCost;
       const constructDays = getConstructionDays(project.stand, finalIncrease, s2);
       const updatedProject: StadiumExpansionProject = {
         ...project,
         phase: 'CONSTRUCTION',
         phaseEndDate: addDays(currentDate, constructDays),
         totalCost,
+        cityAidAmount,
         contractorTier: 'BALANCED',
         log: [...project.log, {
           date: currentDate,
-          message: `Wyłoniono wykonawcę. Koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN. Czas budowy: ok. ${Math.round(constructDays / 30)} mies.`,
+          message: cityAidAmount
+            ? `Wyłoniono wykonawcę. Koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN, w tym pomoc miasta: ${cityAidAmount.toLocaleString('pl-PL')} PLN. Czas budowy: ok. ${Math.round(constructDays / 30)} mies.`
+            : `Wyłoniono wykonawcę. Koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN. Czas budowy: ok. ${Math.round(constructDays / 30)} mies.`,
           type: 'INFO',
         }],
       };
@@ -285,7 +404,9 @@ const advancePhase = (
         event: {
           projectId: project.id, stand: project.stand, newPhase: 'CONSTRUCTION',
           subject: `Budowa rozpoczęta — ${standLabel}`,
-          body: `Szanowny Panie Menedżerze,\n\nWyłoniono wykonawcę rozbudowy stadionu (${standLabel}).\n\nCałkowity koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN.\nSzacowany czas budowy: ok. ${Math.round(constructDays / 30)} miesięcy.\n\nFinansowanie zostanie omówione przez zarząd przed wystawieniem pierwszej faktury.\n\nZ poważaniem,\nZarząd Klubu`,
+          body: cityAidAmount
+            ? `Szanowny Panie Menedżerze,\n\nWyłoniono wykonawcę rozbudowy stadionu (${standLabel}).\n\nCałkowity koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN.\nUdział miasta: ${cityAidAmount.toLocaleString('pl-PL')} PLN.\nSzacowany koszt po stronie klubu: ${clubCost.toLocaleString('pl-PL')} PLN.\nSzacowany czas budowy: ok. ${Math.round(constructDays / 30)} miesięcy.\n\nZ poważaniem,\nZarząd Klubu`
+            : `Szanowny Panie Menedżerze,\n\nWyłoniono wykonawcę rozbudowy stadionu (${standLabel}).\n\nCałkowity koszt inwestycji: ${totalCost.toLocaleString('pl-PL')} PLN.\nSzacowany czas budowy: ok. ${Math.round(constructDays / 30)} miesięcy.\n\nFinansowanie zostanie omówione przez zarząd przed wystawieniem pierwszej faktury.\n\nZ poważaniem,\nZarząd Klubu`,
           isGoodNews: true,
         },
       };
@@ -399,6 +520,7 @@ export class StadiumExpansionService {
   static getPhaseLabel(phase: StadiumExpansionPhase): string {
     const labels: Record<StadiumExpansionPhase, string> = {
       BOARD_REVIEW:       'Rozpatrzenie przez zarząd',
+      CITY_AID_REVIEW:    'Decyzja miasta',
       FEASIBILITY_STUDY:  'Analiza wykonalności',
       PLANNING_PERMISSION:'Pozwolenie na budowę',
       TENDER:             'Przetarg wykonawcy',
@@ -455,11 +577,19 @@ export class StadiumExpansionService {
       reasons.push('Rozbudowa tej trybuny już jest w toku');
     }
 
-    if (club.budget < StadiumExpansionService.estimateCost(stand, DEFAULT_INCREASE[stand]) * 0.2) {
-      reasons.push('Niewystarczający budżet klubu');
-    }
+    const estimatedCost = StadiumExpansionService.estimateCost(stand, DEFAULT_INCREASE[stand]);
+    const minimumClubContribution = Math.round(estimatedCost * MIN_CLUB_SELF_FUNDING_SHARE);
+    const requiresCityAid = club.budget < minimumClubContribution;
 
-    return { eligible: reasons.length === 0, reasons };
+    return {
+      eligible: reasons.length === 0,
+      reasons,
+      requiresCityAid,
+      minimumClubContribution,
+      cityAidChance: requiresCityAid
+        ? getCityAidChance(club, stand, DEFAULT_INCREASE[stand])
+        : undefined,
+    };
   }
 
   static createRequest(
@@ -467,9 +597,12 @@ export class StadiumExpansionService {
     stand: StadiumStand,
     requestedIncrease: number,
     currentDate: string,
+    club?: Club,
   ): StadiumExpansionProject {
     const id = `exp_${clubId}_${stand}_${Date.now()}`;
     const end = addDays(currentDate, 14 + Math.floor(hashSeed(id) * 14));
+    const estimatedCost = StadiumExpansionService.estimateCost(stand, requestedIncrease);
+    const needsCityAid = club ? club.budget < estimatedCost * MIN_CLUB_SELF_FUNDING_SHARE : false;
     return {
       id,
       stand,
@@ -477,6 +610,7 @@ export class StadiumExpansionService {
       startDate: currentDate,
       phaseEndDate: end,
       requestedCapacityIncrease: requestedIncrease,
+      financeType: needsCityAid ? 'CITY_AID' : 'BUDGET',
       log: [{ date: currentDate, message: 'Wniosek o rozbudowę złożony do zarządu.', type: 'INFO' }],
     };
   }
