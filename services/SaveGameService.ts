@@ -52,6 +52,7 @@ export interface SaveState {
   nationsLeagueArchive: any[];
   euroHostAnnouncements: any[];
   euroQualifiersState: any;
+  worldCupQualifiersState: any;
   uefaNationalRankingState: any;
   wcqPlayoffState: any;
   wcState: any;
@@ -626,6 +627,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     nationsLeagueArchive: asArray(data.nationsLeagueArchive).map(normalizeNationsLeagueState).filter(Boolean),
     euroHostAnnouncements: asArray((data as any).euroHostAnnouncements),
     euroQualifiersState: normalizeEuroQualifiersState(data.euroQualifiersState),
+    worldCupQualifiersState: normalizeEuroQualifiersState((data as any).worldCupQualifiersState),
     uefaNationalRankingState: data.uefaNationalRankingState ?? null,
     wcqPlayoffState: data.wcqPlayoffState ?? null,
     wcState: normalizeTournamentState(data.wcState),

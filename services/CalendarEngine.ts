@@ -31,6 +31,7 @@ import {
 import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
 import { NationsLeagueService } from './NationsLeagueService';
 import { EuroQualifiersService } from './EuroQualifiersService';
+import { WorldCupQualifiersService } from './WorldCupQualifiersService';
 import { EuroTournamentService } from './EuroTournamentService';
 
 // ─── Typy publiczne ──────────────────────────────────────────────────────────
@@ -1102,10 +1103,17 @@ export const CalendarEngine = {
             ? yearSchedule.find(md => md.day === slotDay && md.month === slotMonth)
             : undefined;
           const hasMatchDay = !!matchDayEntry;
+          // Dynamic qualification cycles are not written into NT_SCHEDULE_BY_YEAR.
+          // They reuse the generic REPREZENTACJA slots, so the calendar must ask
+          // each tournament service whether this date can host generated national
+          // team fixtures. Without this guard the World Cup qualifiers could be
+          // created correctly, but GameContext would never receive a
+          // NATIONAL_TEAM_MATCH event on those dates.
           const hasNationsLeagueMatchDay = NationsLeagueService.isPotentialMatchDate(slot.start);
           const hasEuroQualifiersMatchDay = EuroQualifiersService.isPotentialMatchDate(slot.start);
+          const hasWorldCupQualifiersMatchDay = WorldCupQualifiersService.isPotentialMatchDate(slot.start);
 
-          if ((hasMatchDay && matchDayEntry) || hasNationsLeagueMatchDay || hasEuroQualifiersMatchDay) {
+          if ((hasMatchDay && matchDayEntry) || hasNationsLeagueMatchDay || hasEuroQualifiersMatchDay || hasWorldCupQualifiersMatchDay) {
             // Określ targetView na podstawie eventType w NTMatchDay
             let targetView: ViewState = ViewState.NATIONAL_TEAM_RESULTS;
             if (matchDayEntry?.eventType === 'WCQ_PLAYOFF_DRAW') {

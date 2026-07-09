@@ -23,6 +23,8 @@ import { CoachService } from './CoachService';
 import { PlayerAttributesGenerator, REGION_PROFILE } from './PlayerAttributesGenerator';
 import { createDefaultNationalTeamKits } from '../resources/ClubKits';
 import { NationsLeagueService } from './NationsLeagueService';
+import { EuroQualifiersService } from './EuroQualifiersService';
+import { WorldCupQualifiersService } from './WorldCupQualifiersService';
 
 // Skład kadry: 3 GK + 8 DEF + 8 MID + 6 FWD = 25 zawodników
 const NT_GK = 3;
@@ -1076,7 +1078,14 @@ export const NationalTeamService = {
     for (let offset = 0; offset <= NT_FREEZE_DAYS; offset += 1) {
       const probe = new Date(today);
       probe.setDate(today.getDate() + offset);
+      // The squad lock must follow every dynamic national-team competition that
+      // can occupy an international slot. World Cup qualifiers from 2030 onward
+      // are generated outside the fixed NT schedule, so checking only static
+      // schedule rows or Nations League dates would allow squad edits during an
+      // active qualification window.
       if (NationsLeagueService.isPotentialMatchDate(probe)) return true;
+      if (EuroQualifiersService.isPotentialMatchDate(probe)) return true;
+      if (WorldCupQualifiersService.isPotentialMatchDate(probe)) return true;
     }
 
     return false;

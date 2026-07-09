@@ -2705,6 +2705,24 @@ export interface EuroQualifiersState {
   lastUpdatedIso?: string;
 }
 
+// World Cup qualifiers intentionally reuse the same table/fixture/playoff shapes
+// as the EURO qualifiers. The two competitions have different qualification rules
+// and different tournament hosts, but the UI, save-game normalization and match-day
+// simulation all benefit from a shared data contract: groups contain standings,
+// fixtures become NTMatchDay entries, and playoff paths are resolved from simulated
+// national-team match reports. Keeping this as a named alias makes future expansion
+// possible without forcing every consumer to know that the first implementation is
+// powered by the EURO-style scheduling engine.
+export type WorldCupQualifiersStage = EuroQualifiersStage;
+export type WorldCupQualifiersTeamStanding = EuroQualifiersTeamStanding;
+export type WorldCupQualifiersGroup = EuroQualifiersGroup;
+export type WorldCupQualifiersFixture = EuroQualifiersFixture;
+export type WorldCupQualifiersPlayoffPath = EuroQualifiersPlayoffPath;
+
+export interface WorldCupQualifiersState extends EuroQualifiersState {
+  editionLabel: string;
+}
+
 export interface UefaNationalRankingEntry {
   teamName: string;
   points: number;

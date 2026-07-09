@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { NT_SCHEDULE_BY_YEAR } from '../../resources/NationalTeamSchedule';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { EuroQualifiersFixture, EuroQualifiersPlayoffPath, WCQPlayoffPath } from '../../types';
+import { EuroQualifiersFixture, EuroQualifiersPlayoffPath, WCQPlayoffPath, WorldCupQualifiersFixture, WorldCupQualifiersPlayoffPath } from '../../types';
 import polskaBgImg from '../../Graphic/themes/polska.png';
 
 const SUBHEADING = 'text-[10px] font-black uppercase tracking-[0.25em] text-slate-500';
@@ -41,6 +41,7 @@ interface GroupTeam {
 }
 
 const TOURNAMENTS: Tournament[] = [
+  { id: 'wcqDynamic', label: 'Eliminacje MŚ' },
   { id: 'euroq2028', label: 'Eliminacje EURO 2028' },
   { id: 'wcq2026', label: 'Kwalifikacje do MŚ 2026' },
 ];
@@ -642,8 +643,8 @@ const PlayoffPathCard: React.FC<{ path: WCQPlayoffPath }> = ({ path }) => {
 };
 
 const EuroPlayoffCard: React.FC<{
-  path: EuroQualifiersPlayoffPath;
-  fixtures: Array<EuroQualifiersFixture & { dateLabel: string }>;
+  path: EuroQualifiersPlayoffPath | WorldCupQualifiersPlayoffPath;
+  fixtures: Array<(EuroQualifiersFixture | WorldCupQualifiersFixture) & { dateLabel: string }>;
 }> = ({ path, fixtures }) => {
   const col = PATH_COLORS[path.label] ?? PATH_COLORS['A'];
   const isPolandIn = path.teams.includes('Polska');
@@ -678,15 +679,19 @@ const EuroPlayoffCard: React.FC<{
 };
 
 const InternationalView: React.FC = () => {
-  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState } = useGame();
+  const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState, worldCupQualifiersState } = useGame();
   const [activeTournament, setActiveTournament] = useState<string>('wcq2026');
   const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
   const [activeEuroGroup, setActiveEuroGroup] = useState<string>('A');
+  const [activeWorldCupGroup, setActiveWorldCupGroup] = useState<string>('A');
   const upcomingSchedule = NT_SCHEDULE_BY_YEAR[2025] ?? [];
   const euroQualifiersLabel = euroQualifiersState?.editionLabel
     ? `Eliminacje ${euroQualifiersState.editionLabel}`
     : 'Eliminacje EURO 2028';
+  const worldCupQualifiersLabel = worldCupQualifiersState?.editionLabel
+    ? `Eliminacje ${worldCupQualifiersState.editionLabel}`
+    : 'Eliminacje MŚ 2030';
 
   const { standings, playedRounds, scheduledResults, maxPlayedRound } = useMemo(() => {
     const scheduleMeta = new Map<string, { round: number; dateLabel: string }>();
@@ -869,6 +874,45 @@ const InternationalView: React.FC = () => {
     }));
   }, [euroQualifiersState]);
 
+  const activeWorldCupGroupData = useMemo(() => {
+    const group = worldCupQualifiersState?.groups.find(item => item.id === activeWorldCupGroup)
+      ?? worldCupQualifiersState?.groups[0]
+      ?? null;
+    if (!group || !worldCupQualifiersState) return null;
+    const standingsForView: GroupTeam[] = group.standings.map(row => ({
+      name: row.teamName,
+      M: row.played,
+      W: row.wins,
+      D: row.draws,
+      L: row.losses,
+      GF: row.goalsFor,
+      GA: row.goalsAgainst,
+      pts: row.points,
+    }));
+    const fixtures = worldCupQualifiersState.fixtures
+      .filter(fixture => (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE' && fixture.groupId === group.id)
+      .map(fixture => ({
+        ...fixture,
+        dateLabel: `${fixture.day} ${MONTH_SHORT[fixture.month] ?? '???'} ${String(fixture.year).slice(2)}`,
+      }))
+      .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round);
+    return { group, standingsForView, fixtures };
+  }, [activeWorldCupGroup, worldCupQualifiersState]);
+
+  const worldCupPlayoffData = useMemo(() => {
+    if (!worldCupQualifiersState?.playoffPaths.length) return [];
+    return worldCupQualifiersState.playoffPaths.map(path => ({
+      path,
+      fixtures: worldCupQualifiersState.fixtures
+        .filter(fixture => fixture.playoffPathId === path.id)
+        .map(fixture => ({
+          ...fixture,
+          dateLabel: `${fixture.day} ${MONTH_SHORT[fixture.month] ?? '???'} ${String(fixture.year).slice(2)}`,
+        }))
+        .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round),
+    }));
+  }, [worldCupQualifiersState]);
+
   return (
     <div className="relative flex-1 bg-slate-900/30 rounded-[40px] border border-white/5 shadow-2xl flex flex-col overflow-hidden">
       <div
@@ -888,10 +932,128 @@ const InternationalView: React.FC = () => {
                 : 'border-transparent text-slate-500 hover:text-slate-300'
             }`}
           >
-            {tournament.id === 'euroq2028' ? euroQualifiersLabel : tournament.label}
+            {tournament.id === 'euroq2028' ? euroQualifiersLabel : tournament.id === 'wcqDynamic' ? worldCupQualifiersLabel : tournament.label}
           </button>
         ))}
       </div>
+
+      {activeTournament === 'wcqDynamic' && (
+        <div className="relative z-10 flex-1 flex flex-col overflow-hidden px-6 py-6">
+          {!worldCupQualifiersState?.drawCompleted ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
+              <p className="font-black italic uppercase tracking-tighter text-3xl text-white">{worldCupQualifiersLabel}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Losowanie: 6 grudnia 2028</p>
+              <p className="max-w-xl text-center text-xs font-bold uppercase tracking-widest text-slate-500">
+                Od cyklu 2030 europejskie eliminacje mają pełne losowanie, grupy, terminarz i baraże w oknach reprezentacyjnych.
+              </p>
+            </div>
+          ) : activeWorldCupGroupData ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex gap-2 pb-4 shrink-0 flex-wrap border-b border-white/5">
+                {worldCupQualifiersState.groups.map(group => (
+                  <button
+                    key={group.id}
+                    onClick={() => setActiveWorldCupGroup(group.id)}
+                    className={`px-4 h-11 text-[11px] font-black uppercase tracking-[0.18em] rounded-xl transition-all border flex items-center justify-center whitespace-nowrap ${
+                      activeWorldCupGroupData.group.id === group.id
+                        ? 'bg-gradient-to-b from-emerald-500/30 to-emerald-800/20 border-emerald-300/60 text-emerald-200'
+                        : 'bg-gradient-to-b from-slate-800/60 to-slate-900/60 border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'
+                    }`}
+                  >
+                    Grupa {group.id}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar pt-6">
+                <div className="max-w-5xl w-full mx-auto">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className={SUBHEADING}>Eliminacje {worldCupQualifiersState.editionLabel} — Grupa {activeWorldCupGroupData.group.id}</span>
+                    <div className="flex-1 h-px bg-white/5" />
+                    <span className={SUBHEADING}>{worldCupQualifiersState.completed ? 'Zakończone' : 'W toku'}</span>
+                  </div>
+
+                  <div className="bg-black/20 rounded-[28px] border border-white/5 overflow-hidden mb-6">
+                    <table className="w-full text-left border-separate border-spacing-y-0 table-fixed">
+                      <thead>
+                        <tr className={`${SUBHEADING} h-10`}>
+                          <th className="pl-6 w-12">#</th>
+                          <th className="text-left min-w-[140px]">Drużyna</th>
+                          <th className="text-center w-10">M</th>
+                          <th className="text-center w-10">W</th>
+                          <th className="text-center w-10">R</th>
+                          <th className="text-center w-10">P</th>
+                          <th className="text-center w-16">Bramki</th>
+                          <th className="text-center w-14">+/-</th>
+                          <th className="text-center w-16 pr-6 text-amber-400">Pkt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeWorldCupGroupData.standingsForView.map((team, index) => (
+                          <StandingRow key={team.name} team={team} rank={index + 1} allStandings={activeWorldCupGroupData.standingsForView} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {worldCupQualifiersState.stage !== 'GROUP_STAGE' && (
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                        <p className={SUBHEADING}>Bezpośredni awans</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-100">{worldCupQualifiersState.directQualifiers.join(', ')}</p>
+                      </div>
+                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                        <p className={SUBHEADING}>Gospodarze UEFA</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-amber-100">{worldCupQualifiersState.hostReservedQualifiers.join(', ') || 'Brak'}</p>
+                      </div>
+                      <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
+                        <p className={SUBHEADING}>Baraże</p>
+                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-sky-100">{worldCupQualifiersState.playoffTeams.join(', ') || 'Do ustalenia'}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {worldCupPlayoffData.length > 0 && (
+                    <section className="pb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className={SUBHEADING}>Baraże eliminacji {worldCupQualifiersState.editionLabel}</span>
+                        <div className="flex-1 h-px bg-white/5" />
+                        <span className={SUBHEADING}>{worldCupQualifiersState.completed ? 'Rozstrzygnięte' : 'Marzec ' + worldCupQualifiersState.tournamentYear}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {worldCupPlayoffData.map(({ path, fixtures }) => (
+                          <EuroPlayoffCard key={path.id} path={path} fixtures={fixtures} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  <section className="pb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={SUBHEADING}>Terminarz — Grupa {activeWorldCupGroupData.group.id}</span>
+                      <div className="flex-1 h-px bg-white/5" />
+                    </div>
+                    {activeWorldCupGroupData.fixtures.map(fixture => (
+                      <ScheduleCard
+                        key={fixture.id}
+                        home={fixture.home}
+                        away={fixture.away}
+                        dateLabel={fixture.dateLabel}
+                        played={!!fixture.played}
+                        homeGoals={fixture.homeGoals}
+                        awayGoals={fixture.awayGoals}
+                        homePenaltyScore={fixture.homePenaltyScore}
+                        awayPenaltyScore={fixture.awayPenaltyScore}
+                        isExtraTime={fixture.isExtraTime}
+                      />
+                    ))}
+                  </section>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {activeTournament === 'wcq2026' && (
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">

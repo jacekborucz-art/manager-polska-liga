@@ -22,6 +22,7 @@ import {
   WCState,
   WCTeam,
   WCQPlayoffState,
+  WorldCupQualifiersState,
   HealthStatus,
   InjurySeverity,
   TrainingIntensity,
@@ -35,6 +36,11 @@ import { NATIONAL_TEAMS_CONMEBOL } from '../resources/static_db/NationalTeams/Na
 import { NATIONAL_TEAMS_CONCACAF } from '../resources/static_db/NationalTeams/NationalTeamsCONCACAF';
 import { NATIONAL_TEAMS_OFC } from '../resources/static_db/NationalTeams/NationalTeamsOFC';
 import { NATIONAL_TEAMS_EUROPE } from '../resources/static_db/NationalTeams/NationalTeamsEurope';
+import {
+  getWorldCupHostConfederationForName,
+  getWorldCupHostsForYear,
+  pickWorldCupStadiumForMatch,
+} from '../resources/WorldCupTournamentData';
 import { RecoveryService } from './RecoveryService';
 
 export interface WorldCupGroupDaySimulation {
@@ -77,11 +83,47 @@ function strHash(v: string): number {
 
 // ─── HOSTY MŚ ─────────────────────────────────────────────────────────────────
 
-const WC_HOSTS_2026 = ['Meksyk', 'Kanada', 'Stany Zjednoczone'];
 const WC_HOST_GROUPS_2026: Record<string, number> = {
   Meksyk: 0,
   Kanada: 1,
   'Stany Zjednoczone': 3,
+};
+
+const formatWorldCupVenue = (stadium: { name: string; city: string; country: string }): string =>
+  `${stadium.name} (${stadium.city}, ${stadium.country})`;
+
+const estimateWorldCupVenueAttendance = (capacity: number, year: number, matchKey: string): number => {
+  const rng = new Rng(strHash(`WORLD_CUP_ATTENDANCE_${year}_${matchKey}`));
+  return Math.max(0, Math.round(capacity * (0.78 + rng.next() * 0.19)));
+};
+
+const applyWorldCupTournamentVenue = <T extends {
+  venue?: string;
+  attendance?: number;
+  matchHistoryEntry?: { venue?: string; attendance?: number };
+}>(
+  result: T,
+  year: number,
+  matchKey: string
+): T => {
+  const stadium = pickWorldCupStadiumForMatch(year, matchKey);
+  if (!stadium) return result;
+  const venue = formatWorldCupVenue(stadium);
+  const attendance = estimateWorldCupVenueAttendance(stadium.capacity, year, matchKey);
+
+  // NationalTeamSimulator uses the nominal home team's stadium because it is
+  // shared by friendlies, qualifiers and neutral tournament matches. World Cup
+  // matches are neutral events hosted in the tournament country/countries, so we
+  // patch both the immediate simulation result and the persisted MatchHistoryEntry
+  // before the report is logged.
+  return {
+    ...result,
+    venue,
+    attendance,
+    matchHistoryEntry: result.matchHistoryEntry
+      ? { ...result.matchHistoryEntry, venue, attendance }
+      : result.matchHistoryEntry,
+  };
 };
 
 // ─── POISSON SAMPLING ────────────────────────────────────────────────────────
@@ -288,8 +330,7 @@ export const WorldCupService = {
   },
 
   getHosts(year: number): string[] {
-    if (year === 2026) return [...WC_HOSTS_2026];
-    return [];
+    return getWorldCupHostsForYear(year);
   },
 
   /**
@@ -303,7 +344,8 @@ export const WorldCupService = {
     wcqPlayoffState: WCQPlayoffState | null,
     seasonNumber: number,
     year: number,
-    seed: number
+    seed: number,
+    worldCupQualifiersState?: WorldCupQualifiersState | null
   ): WCTeam[] {
     const rng = new Rng(seed ^ strHash(`WC_ASSEMBLE_${year}`));
     const usedNames = new Set<string>();
@@ -319,14 +361,28 @@ export const WorldCupService = {
     };
 
     // ── UEFA: 12 zwycięzców grup ──────────────────────────────────────────────
-    const summary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
-    for (const winner of summary.directQualifiers) {
-      const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
-      addTeam(winner, 'UEFA', rep);
+    // UEFA qualification has two modes. The first season still uses the bespoke
+    // 2026 WCQPlayoffService because it contains pre-game real results. From 2030
+    // onward, WorldCupQualifiersState stores the full draw, standings, fixtures and
+    // playoff results generated inside the career. The branch below keeps 2026
+    // stable while allowing later World Cups to be driven by simulated qualifiers.
+    if (worldCupQualifiersState?.tournamentYear === year) {
+      const hostSet = new Set(WorldCupService.getHosts(year));
+      for (const qualifier of worldCupQualifiersState.qualifiedTeams) {
+        if (hostSet.has(qualifier)) continue;
+        const rep = nationalTeams.find(t => t.name === qualifier)?.reputation ?? 10;
+        addTeam(qualifier, 'UEFA', rep);
+      }
+    } else {
+      const summary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
+      for (const winner of summary.directQualifiers) {
+        const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
+        addTeam(winner, 'UEFA', rep);
+      }
     }
 
     // ── UEFA: 4 zwycięzców baraży ─────────────────────────────────────────────
-    if (wcqPlayoffState) {
+    if (worldCupQualifiersState?.tournamentYear !== year && wcqPlayoffState) {
       for (const path of wcqPlayoffState.paths) {
         if (path.qualifier) {
           const rep = nationalTeams.find(t => t.name === path.qualifier)?.reputation ?? 10;
@@ -336,7 +392,8 @@ export const WorldCupService = {
     }
 
     // ── UEFA: fallback — uzupełnij do 16 jeśli brakuje kwalifikantów ─────────
-    const uefaCount = teams.filter(t => t.confederation === 'UEFA').length;
+    const uefaHostCount = WorldCupService.getHosts(year).filter(h => getWorldCupHostConfederationForName(h) === 'UEFA' && !usedNames.has(h)).length;
+    const uefaCount = teams.filter(t => t.confederation === 'UEFA').length + uefaHostCount;
     if (uefaCount < 16) {
       const euFallback = NATIONAL_TEAMS_EUROPE
         .filter(t => !usedNames.has(t.name))
@@ -348,31 +405,40 @@ export const WorldCupService = {
     // ── Hosty (CONCACAF dla 2026) ─────────────────────────────────────────────
     const hosts = WorldCupService.getHosts(year);
     for (const h of hosts) {
-      const ntHost = NATIONAL_TEAMS_CONCACAF.find(t => t.name === h);
-      addTeam(h, 'CONCACAF', ntHost?.reputation ?? 12, true);
+      const conf = getWorldCupHostConfederationForName(h);
+      const ntHost = nationalTeams.find(t => t.name === h);
+      addTeam(h, conf, ntHost?.reputation ?? 12, true);
     }
 
     // ── CAF: 9 ───────────────────────────────────────────────────────────────
-    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
+    const cafNeeded = 9 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CAF').length;
+    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, Math.max(0, cafNeeded), rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
     cafPicks.forEach(t => addTeam(t.name, 'CAF', t.reputation));
 
     // ── AFC: 8 ───────────────────────────────────────────────────────────────
-    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
+    // AFC host places are counted inside the same continental allocation, just
+    // like the CONCACAF hosts in 2026. Saudi Arabia is the confirmed 2034 host,
+    // so this keeps the final World Cup field at 48 teams instead of adding one
+    // extra Asian team on top of the host.
+    const afcNeeded = 8 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'AFC').length;
+    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, Math.max(0, afcNeeded), rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
     afcPicks.forEach(t => addTeam(t.name, 'AFC', t.reputation));
 
     // ── CONMEBOL: 6 ──────────────────────────────────────────────────────────
-    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
+    const conmebolNeeded = 6 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CONMEBOL').length;
+    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, Math.max(0, conmebolNeeded), rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
     saPicks.forEach(t => addTeam(t.name, 'CONMEBOL', t.reputation));
 
     // ── CONCACAF: dopełnienie do 6 (hosty już wstawione) ─────────────────────
-    const concacacNeeded = 6 - hosts.filter(h => NATIONAL_TEAMS_CONCACAF.some(t => t.name === h)).length;
+    const concacacNeeded = 6 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CONCACAF').length;
     if (concacacNeeded > 0) {
       const concPicks = qualifiedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 10 });
       concPicks.forEach(t => addTeam(t.name, 'CONCACAF', t.reputation));
     }
 
     // ── OFC: 1 ───────────────────────────────────────────────────────────────
-    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, 1, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
+    const ofcNeeded = 1 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'OFC').length;
+    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, Math.max(0, ofcNeeded), rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
     ofcPicks.forEach(t => addTeam(t.name, 'OFC', t.reputation));
 
     // ── Intercontinental: 2 najlepsze pozostałe ────────────────────────────
@@ -464,7 +530,11 @@ export const WorldCupService = {
         const matchSeed = seed ^ strHash(`WC_GROUP_${groupLabel}_R${round}_${home}_${away}`);
 
         if (nationalTeams && updatedPlayers && coaches) {
-          const full = simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, updatedPlayers, coaches);
+          const full = applyWorldCupTournamentVenue(
+            simulateWCGroupMatch(home, away, matchDate, matchSeed, nationalTeams, updatedPlayers, coaches),
+            year,
+            `GROUP_${groupLabel}_R${round}_${home}_${away}_${dateStr}`
+          );
           updatedPlayers = full.updatedPlayers ?? updatedPlayers;
           if (full.matchHistoryEntry) MatchHistoryService.logMatch(full.matchHistoryEntry);
           group.matches.push({
@@ -586,7 +656,11 @@ export const WorldCupService = {
       const matchSeed = seed ^ strHash(`WC_KO_${m.id}_${m.home}_${m.away}`);
 
       if (nationalTeams && updatedPlayers && coaches) {
-        const full = simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches, year);
+        const full = applyWorldCupTournamentVenue(
+          simulateSinglePlayoffMatch(m.home, m.away, 'FIFA World Cup', matchDate, matchSeed, nationalTeams, updatedPlayers, coaches, year),
+          year,
+          `KO_${m.id}_${m.home}_${m.away}_${dateStr}`
+        );
         updatedPlayers = full.updatedPlayers ?? updatedPlayers;
         if (full.matchHistoryEntry) MatchHistoryService.logMatch(full.matchHistoryEntry);
         const wentToET = full.homeGoals === full.awayGoals;
@@ -779,7 +853,8 @@ export const WorldCupService = {
     nationalTeams: NationalTeam[],
     seasonNumber: number,
     year: number,
-    seed: number
+    seed: number,
+    worldCupQualifiersState?: WorldCupQualifiersState | null
   ): WCTeam[] {
     const rng = new Rng(seed ^ strHash(`WC_DRAW_ASSEMBLE_${year}`));
     const usedNames = new Set<string>();
@@ -795,14 +870,31 @@ export const WorldCupService = {
     };
 
     // ── UEFA: 12 zwycięzców grup (bezpośredni kwalifikanci) ───────────────────
-    const summary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
-    for (const winner of summary.directQualifiers) {
-      const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
-      addTeam(winner, 'UEFA', rep);
+    // During draw month the later-career WCQ state has already resolved group
+    // winners but may still have March playoff slots open. We add only the known
+    // non-host UEFA qualifiers here; hosts are inserted below with isHost=true, and
+    // unresolved playoff paths stay as TBD placeholders for the existing World Cup
+    // group-draw ceremony.
+    if (worldCupQualifiersState?.tournamentYear === year) {
+      const hostSet = new Set(WorldCupService.getHosts(year));
+      for (const winner of worldCupQualifiersState.directQualifiers) {
+        if (hostSet.has(winner)) continue;
+        const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
+        addTeam(winner, 'UEFA', rep);
+      }
+    } else {
+      const summary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
+      for (const winner of summary.directQualifiers) {
+        const rep = nationalTeams.find(t => t.name === winner)?.reputation ?? 10;
+        addTeam(winner, 'UEFA', rep);
+      }
     }
 
     // ── UEFA: 4 TBD placeholdery (zwycięzcy baraży — nieznani w grudniu) ─────
-    for (const path of ['A', 'B', 'C', 'D']) {
+    const uefaPlayoffPathLabels = worldCupQualifiersState?.tournamentYear === year && worldCupQualifiersState.playoffPaths.length > 0
+      ? worldCupQualifiersState.playoffPaths.map(path => path.label)
+      : ['A', 'B', 'C', 'D'];
+    for (const path of uefaPlayoffPathLabels) {
       const tbdName = `TBD_PATH_${path}`;
       usedNames.add(tbdName);
       teams.push({ name: tbdName, confederation: 'UEFA', reputation: 0, colors: ['#475569', '#64748b', '#475569'], isHost: false, isPlayoffSlot: true });
@@ -817,31 +909,40 @@ export const WorldCupService = {
     // ── Hosty (CONCACAF dla 2026) ─────────────────────────────────────────────
     const hosts = WorldCupService.getHosts(year);
     for (const h of hosts) {
-      const ntHost = NATIONAL_TEAMS_CONCACAF.find(t => t.name === h);
-      addTeam(h, 'CONCACAF', ntHost?.reputation ?? 12, true);
+      const conf = getWorldCupHostConfederationForName(h);
+      const ntHost = nationalTeams.find(t => t.name === h);
+      addTeam(h, conf, ntHost?.reputation ?? 12, true);
     }
 
     // ── CAF: 9 ───────────────────────────────────────────────────────────────
-    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, 9, rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
+    const cafNeeded = 9 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CAF').length;
+    const cafPicks = qualifiedPick(NATIONAL_TEAMS_AFRICA, Math.max(0, cafNeeded), rng, usedNames, t => t.name, { minReputation: 7, shortlistSize: 18 });
     cafPicks.forEach(t => addTeam(t.name, 'CAF', t.reputation));
 
     // ── AFC: 8 ───────────────────────────────────────────────────────────────
-    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, 8, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
+    // AFC host places are counted inside the same continental allocation, just
+    // like the CONCACAF hosts in 2026. Saudi Arabia is the confirmed 2034 host,
+    // so the pre-tournament draw receives 48 teams/placeholders with no hidden
+    // overbooking from the Asian allocation.
+    const afcNeeded = 8 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'AFC').length;
+    const afcPicks = qualifiedPick(NATIONAL_TEAMS_AFC, Math.max(0, afcNeeded), rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 16 });
     afcPicks.forEach(t => addTeam(t.name, 'AFC', t.reputation));
 
     // ── CONMEBOL: 6 ──────────────────────────────────────────────────────────
-    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, 6, rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
+    const conmebolNeeded = 6 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CONMEBOL').length;
+    const saPicks = qualifiedPick(NATIONAL_TEAMS_CONMEBOL, Math.max(0, conmebolNeeded), rng, usedNames, t => t.name, { minReputation: 9, shortlistSize: 10 });
     saPicks.forEach(t => addTeam(t.name, 'CONMEBOL', t.reputation));
 
     // ── CONCACAF: dopełnienie do 6 (hosty już wstawione) ─────────────────────
-    const concacacNeeded = 6 - hosts.filter(h => NATIONAL_TEAMS_CONCACAF.some(t => t.name === h)).length;
+    const concacacNeeded = 6 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'CONCACAF').length;
     if (concacacNeeded > 0) {
       const concPicks = qualifiedPick(NATIONAL_TEAMS_CONCACAF, concacacNeeded, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 10 });
       concPicks.forEach(t => addTeam(t.name, 'CONCACAF', t.reputation));
     }
 
     // ── OFC: 1 ───────────────────────────────────────────────────────────────
-    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, 1, rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
+    const ofcNeeded = 1 - hosts.filter(h => getWorldCupHostConfederationForName(h) === 'OFC').length;
+    const ofcPicks = qualifiedPick(NATIONAL_TEAMS_OFC, Math.max(0, ofcNeeded), rng, usedNames, t => t.name, { minReputation: 8, shortlistSize: 3 });
     ofcPicks.forEach(t => addTeam(t.name, 'OFC', t.reputation));
 
     return teams;
@@ -876,10 +977,15 @@ export const WorldCupService = {
       if (hostGroup !== undefined && hostGroup < LABELS.length) placeInGroup(h, hostGroup);
     });
 
+    // Pot 1 cannot assume the 2026 setup of three hosts plus nine seeded teams.
+    // The 2030 tournament has six hosts, and future data may define a different
+    // host count. The draw therefore fills Pot 1 up to the number of World Cup
+    // groups that are not already occupied by pre-assigned hosts.
+    const nonHostPot1Slots = Math.max(0, LABELS.length - Math.min(hostsOrdered.length, LABELS.length));
     const nonHostPot1 = [...teams]
       .filter(t => !t.isHost && !t.isPlayoffSlot)
       .sort((a, b) => b.reputation - a.reputation)
-      .slice(0, 9);
+      .slice(0, nonHostPot1Slots);
     const pot1Shuffled = rng.shuffle(nonHostPot1);
     const freePot1Groups = LABELS.map((_, i) => i).filter(i => groupTeams[i].length === 0);
     pot1Shuffled.forEach((t, i) => placeInGroup(t, freePot1Groups[i]));

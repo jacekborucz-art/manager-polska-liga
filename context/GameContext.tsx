@@ -33,6 +33,7 @@ NationsLeagueState,
 NationsLeagueArchiveEntry,
 EuroHostAnnouncement,
 EuroQualifiersState,
+WorldCupQualifiersState,
 UefaNationalRankingState,
 CoachSeasonStats,
 AiTransferLogEntry,
@@ -122,6 +123,7 @@ import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
 import { NationsLeagueService } from '../services/NationsLeagueService';
 import { EuroQualifiersService } from '../services/EuroQualifiersService';
+import { WorldCupQualifiersService } from '../services/WorldCupQualifiersService';
 import { EuroTournamentService } from '../services/EuroTournamentService';
 import { UefaNationalRankingService } from '../services/UefaNationalRankingService';
 import { getNTMatchDayForDate, NTMatchDay } from '../resources/NationalTeamSchedule';
@@ -1036,6 +1038,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   euroHostAnnouncements: EuroHostAnnouncement[];
   euroQualifiersState: EuroQualifiersState | null;
   setEuroQualifiersState: React.Dispatch<React.SetStateAction<EuroQualifiersState | null>>;
+  worldCupQualifiersState: WorldCupQualifiersState | null;
+  setWorldCupQualifiersState: React.Dispatch<React.SetStateAction<WorldCupQualifiersState | null>>;
   uefaNationalRankingState: UefaNationalRankingState | null;
   setUefaNationalRankingState: React.Dispatch<React.SetStateAction<UefaNationalRankingState | null>>;
   wcState: WCState | null;
@@ -1204,6 +1208,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [nationsLeagueArchive, setNationsLeagueArchive] = useState<NationsLeagueArchiveEntry[]>([]);
   const [euroHostAnnouncements, setEuroHostAnnouncements] = useState<EuroHostAnnouncement[]>([]);
   const [euroQualifiersState, setEuroQualifiersState] = useState<EuroQualifiersState | null>(null);
+  const [worldCupQualifiersState, setWorldCupQualifiersState] = useState<WorldCupQualifiersState | null>(null);
   const [uefaNationalRankingState, setUefaNationalRankingState] = useState<UefaNationalRankingState | null>(null);
   const [wcState, setWcState] = useState<WCState | null>(null);
   const [euroState, setEuroState] = useState<WCState | null>(null);
@@ -1933,6 +1938,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setNationsLeagueArchive([]);
     setEuroHostAnnouncements([]);
     setEuroQualifiersState(null);
+    setWorldCupQualifiersState(null);
     const worldCupBackfill = WorldCupHistoryBackfillService.simulateSkippedWorldCups(
       startYear,
       ntSquadResult.updatedTeams,
@@ -2959,6 +2965,7 @@ if (userTeamId) {
     nationsLeagueArchive,
     euroHostAnnouncements,
     euroQualifiersState,
+    worldCupQualifiersState,
     uefaNationalRankingState,
     wcqPlayoffState,
     wcState,
@@ -3139,6 +3146,7 @@ if (userTeamId) {
     setNationsLeagueArchive(Array.isArray((data as any).nationsLeagueArchive) ? (data as any).nationsLeagueArchive : []);
     setEuroHostAnnouncements(Array.isArray((data as any).euroHostAnnouncements) ? (data as any).euroHostAnnouncements : []);
     setEuroQualifiersState(data.euroQualifiersState ?? null);
+    setWorldCupQualifiersState((data as any).worldCupQualifiersState ?? null);
     setWcqPlayoffState(data.wcqPlayoffState);
     setWcState(data.wcState ?? null);
     setEuroState((data as any).euroState ?? null);
@@ -3452,6 +3460,7 @@ if (userTeamId) {
     setNationsLeagueArchive([]);
     setEuroHostAnnouncements([]);
     setEuroQualifiersState(null);
+    setWorldCupQualifiersState(null);
     setWcState(null);
     setEuroState(null);
     setReserves([]);
@@ -6215,12 +6224,15 @@ Asystent`,
 
       if (wcMonth === 3 && wcDay === 21 && nextWcState && !nextWcState.playoffSlotsResolved) {
         const wcFillKey = `WC_FILL_SLOTS_${wcYear}`;
-        if (!sentMailIdsRef.current.has(wcFillKey) && wcqPlayoffState?.finalCompleted) {
-          const winners = wcqPlayoffState.paths
-            .map(p => p.qualifier)
-            .filter((q): q is string => !!q);
+        const dynamicWcqWinners = worldCupQualifiersState?.tournamentYear === wcYear && worldCupQualifiersState.completed
+          ? worldCupQualifiersState.playoffPaths.map(path => path.winner).filter((q): q is string => !!q)
+          : [];
+        const legacyWcqWinners = wcqPlayoffState?.finalCompleted
+          ? wcqPlayoffState.paths.map(p => p.qualifier).filter((q): q is string => !!q)
+          : [];
+        const winners = dynamicWcqWinners.length > 0 ? dynamicWcqWinners : legacyWcqWinners;
+        if (!sentMailIdsRef.current.has(wcFillKey) && winners.length > 0) {
 
-          if (winners.length > 0) {
             sentMailIdsRef.current.add(wcFillKey);
             nextWcState = WorldCupService.fillPlayoffSlots(nextWcState, winners, nationalTeams);
             wcChanged = true;
@@ -6236,7 +6248,6 @@ Asystent`,
               priority: 90,
             };
             setMessages(prev => [fillMail, ...prev]);
-          }
         }
       }
 
@@ -6244,7 +6255,7 @@ Asystent`,
         const wcStartFallbackKey = `WC_START_FALLBACK_${wcYear}`;
         if (!sentMailIdsRef.current.has(wcStartFallbackKey)) {
           sentMailIdsRef.current.add(wcStartFallbackKey);
-          const wcTeams = WorldCupService.assembleTeams(nationalTeams, wcqPlayoffState, seasonNumber, wcYear, sessionSeed);
+          const wcTeams = WorldCupService.assembleTeams(nationalTeams, wcqPlayoffState, seasonNumber, wcYear, sessionSeed, worldCupQualifiersState);
           const wcGroups = WorldCupService.drawGroups(wcTeams, sessionSeed, wcYear);
           nextWcState = WorldCupService.createInitialState(wcTeams, wcGroups, wcYear);
           wcChanged = true;
@@ -8346,6 +8357,7 @@ Asystent`,
         ? null
         : NationsLeagueService.getMatchDayForDate(ensuredNationsLeagueState, dateToProcess);
       const euroQualifiersMatchDay = EuroQualifiersService.getMatchDayForDate(euroQualifiersState, dateToProcess);
+      const worldCupQualifiersMatchDay = WorldCupQualifiersService.getMatchDayForDate(worldCupQualifiersState, dateToProcess);
       const mergeMatchDays = (matchDays: (NTMatchDay | null)[]): NTMatchDay | null => {
         const active = matchDays.filter((item): item is NTMatchDay => !!item);
         if (active.length === 0) return null;
@@ -8365,9 +8377,10 @@ Asystent`,
           eventType: active.find(item => item.eventType)?.eventType,
         };
       };
-      const matchDay = mergeMatchDays([scheduledMatchDay, nationsLeagueMatchDay, euroQualifiersMatchDay]);
+      const matchDay = mergeMatchDays([scheduledMatchDay, nationsLeagueMatchDay, euroQualifiersMatchDay, worldCupQualifiersMatchDay]);
       const isNationsLeagueMatchDay = !!nationsLeagueMatchDay;
       const isEuroQualifiersMatchDay = !!euroQualifiersMatchDay;
+      const isWorldCupQualifiersMatchDay = !!worldCupQualifiersMatchDay;
       if (matchDay) {
         const dateSeed = dateToProcess.getTime();
         const ntCareerSeed = buildCareerScopedSeed(
@@ -8665,6 +8678,66 @@ Asystent`,
             }
           }
         }
+        if (isWorldCupQualifiersMatchDay && worldCupQualifiersState) {
+          const nextWorldCupQualifiersState = WorldCupQualifiersService.applyResults(
+            worldCupQualifiersState,
+            ntSimulation.results,
+            ensuredUefaRankingState
+          );
+          setWorldCupQualifiersState(nextWorldCupQualifiersState);
+
+          // The new WCQ cycle mirrors the existing EURO qualifier reporting: the
+          // player receives a clear summary when group play creates playoff paths,
+          // then another one when the March finals determine the last UEFA World Cup
+          // places. Match-level reports are already written by NationalTeamSimulator
+          // and remain available from the results screen and match history modal.
+          if (nextWorldCupQualifiersState.stage === 'PLAYOFFS' && worldCupQualifiersState.stage === 'GROUP_STAGE') {
+            const wcqGroupSummaryKey = `WCQ_DYNAMIC_GROUP_SUMMARY_${nextWorldCupQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(wcqGroupSummaryKey)) {
+              sentMailIdsRef.current.add(wcqGroupSummaryKey);
+              const directLines = nextWorldCupQualifiersState.directQualifiers.map(team => `- ${team}`);
+              const hostLines = nextWorldCupQualifiersState.hostReservedQualifiers.map(team => `- ${team}`);
+              const playoffLines = nextWorldCupQualifiersState.playoffPaths.map(path =>
+                `Ścieżka ${path.label}: ${path.teams.join(', ')}`
+              );
+              const wcqSummaryMail: MailMessage = {
+                id: wcqGroupSummaryKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextWorldCupQualifiersState.editionLabel} - faza grupowa zakończona`,
+                body: `Zakończono fazę grupową europejskich eliminacji ${nextWorldCupQualifiersState.editionLabel}.\n\nBezpośredni awans:\n${directLines.join('\n') || 'Brak rozstrzygnięć.'}\n\nGospodarze z automatycznym udziałem:\n${hostLines.join('\n') || 'Brak europejskich gospodarzy.'}\n\nPary barażowe:\n${playoffLines.join('\n') || 'Baraże nie są potrzebne.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 86,
+              };
+              setMessages(prev => [wcqSummaryMail, ...prev]);
+            }
+          }
+
+          if (nextWorldCupQualifiersState.completed && !worldCupQualifiersState.completed) {
+            const wcqFinalKey = `WCQ_DYNAMIC_FINAL_${nextWorldCupQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(wcqFinalKey)) {
+              sentMailIdsRef.current.add(wcqFinalKey);
+              const playoffWinners = nextWorldCupQualifiersState.playoffPaths
+                .map(path => `Ścieżka ${path.label}: ${path.winner ?? 'brak rozstrzygnięcia'}`)
+                .join('\n');
+              const qualifiedLines = nextWorldCupQualifiersState.qualifiedTeams.map(team => `- ${team}`);
+              const wcqFinalMail: MailMessage = {
+                id: wcqFinalKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextWorldCupQualifiersState.editionLabel} - znamy finalistów z Europy`,
+                body: `Zakończono baraże europejskich eliminacji ${nextWorldCupQualifiersState.editionLabel}.\n\nZwycięzcy ścieżek:\n${playoffWinners || 'Brak baraży.'}\n\nZakwalifikowane reprezentacje UEFA:\n${qualifiedLines.join('\n')}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 90,
+              };
+              setMessages(prev => [wcqFinalMail, ...prev]);
+            }
+          }
+        }
         setPlayers(finalNTPlayers);
         finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
         setCoaches(prev => CoachService.applyNationalTeamExpForResults(prev, nationalTeams, finalNTResults));
@@ -8768,6 +8841,47 @@ Asystent`,
         }
       }
 
+      const wcqTournamentYear = dateToProcess.getFullYear() + 2;
+      const worldCupQualifiersDrawKey = `WCQ_DYNAMIC_DRAW_${wcqTournamentYear}`;
+      if (
+        WorldCupService.isWorldCupYear(wcqTournamentYear) &&
+        WorldCupQualifiersService.isDrawDay(dateToProcess) &&
+        worldCupQualifiersState?.tournamentYear !== wcqTournamentYear &&
+        !processedDrawIds.includes(worldCupQualifiersDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const drawState = WorldCupQualifiersService.createInitialState(
+          nationalTeams,
+          wcqTournamentYear,
+          ensuredUefaRankingState
+        );
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setWorldCupQualifiersState(drawState);
+        setProcessedDrawIds(prev => prev.includes(worldCupQualifiersDrawKey) ? prev : [...prev, worldCupQualifiersDrawKey]);
+
+        if (!sentMailIdsRef.current.has(worldCupQualifiersDrawKey)) {
+          sentMailIdsRef.current.add(worldCupQualifiersDrawKey);
+          const allHosts = WorldCupQualifiersService.getHostsForTournament(wcqTournamentYear, nationalTeams);
+          const europeanHosts = drawState.hostTeams;
+          const qualifyingYear = drawState.tournamentYear - 1;
+          const groupLines = drawState.groups.map(group =>
+            `Grupa ${group.id}: ${group.teams.join(', ')}`
+          );
+          const wcqDrawMail: MailMessage = {
+            id: worldCupQualifiersDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie eliminacji ${drawState.editionLabel}`,
+            body: `Odbyło się losowanie europejskich eliminacji ${drawState.editionLabel}.\n\nGospodarze turnieju: ${allHosts.join(', ') || 'do ustalenia'}.\nEuropejscy gospodarze z automatycznym udziałem: ${europeanHosts.join(', ') || 'brak'}.\n\n${groupLines.join('\n')}\n\nTerminarz korzysta z istniejących okien reprezentacyjnych ${qualifyingYear}. Drużyny z innych kontynentów na potrzeby MŚ nadal są wybierane z najlepszych dostępnych reprezentacji, co zostawia miejsce na pełniejsze eliminacje kontynentalne w przyszłości.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 90,
+          };
+          setMessages(prev => [wcqDrawMail, ...prev]);
+        }
+      }
+
       const nextYear = dateToProcess.getFullYear() + 1;
       const curMonth = dateToProcess.getMonth() + 1;
       const curDay = dateToProcess.getDate();
@@ -8775,7 +8889,7 @@ Asystent`,
         const wcDrawKey = `WC_DRAW_${nextYear}`;
         if (!sentMailIdsRef.current.has(wcDrawKey)) {
           sentMailIdsRef.current.add(wcDrawKey);
-          const wcTeams = WorldCupService.assembleTeamsForDraw(nationalTeams, seasonNumber, nextYear, sessionSeed);
+          const wcTeams = WorldCupService.assembleTeamsForDraw(nationalTeams, seasonNumber, nextYear, sessionSeed, worldCupQualifiersState);
           const { groups: wcGroups } = WorldCupService.drawGroupsWithFIFARules(wcTeams, sessionSeed, nextYear);
           const newWcState: WCState = {
             year: nextYear,
@@ -11926,7 +12040,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();
@@ -16601,6 +16715,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     nationsLeagueArchive,
     euroHostAnnouncements,
     euroQualifiersState, setEuroQualifiersState,
+    worldCupQualifiersState, setWorldCupQualifiersState,
     uefaNationalRankingState, setUefaNationalRankingState,
     wcqPlayoffState, setWcqPlayoffState,
     wcState, setWcState,
