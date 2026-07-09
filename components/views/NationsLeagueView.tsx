@@ -161,13 +161,19 @@ function FixtureRow({ state, fixture, compact = false }: { state: NationsLeagueS
   );
 }
 
-function buildScorers(history: MatchHistoryEntry[]) {
-  const rows = new Map<string, { playerName: string; teamId: string; goals: number }>();
+function buildScorers(history: MatchHistoryEntry[], teamNameById: Map<string, string>) {
+  const rows = new Map<string, { playerName: string; teamId: string; teamName: string; goals: number }>();
   history.forEach(match => {
     match.goals.forEach(goal => {
       if ((goal as MatchGoalEntry).isOwnGoal || (goal as MatchGoalEntry).isMiss) return;
       const key = `${goal.playerName}_${goal.teamId}`;
-      const current = rows.get(key) ?? { playerName: goal.playerName, teamId: goal.teamId, goals: 0 };
+      const current = rows.get(key) ?? {
+        playerName: goal.playerName,
+        teamId: goal.teamId,
+        teamName: teamNameById.get(goal.teamId) ?? goal.teamId,
+        goals: 0
+      };
+      current.teamName = teamNameById.get(goal.teamId) ?? current.teamName;
       current.goals += 1;
       rows.set(key, current);
     });
@@ -271,8 +277,8 @@ const NationsLeagueView: React.FC = () => {
   const leagueFixtures = fixtures.filter(fixture => fixture.stage === 'LEAGUE_PHASE');
   const playoffFixtures = fixtures.filter(fixture => fixture.stage === 'PLAYOFFS');
   const knockoutFixtures = fixtures.filter(fixture => fixture.stage === 'QUARTER_FINALS' || fixture.stage === 'FINALS');
-  const scorers = useMemo(() => buildScorers(history), [history]);
   const teamNameById = useMemo(() => buildTeamNameById(fixtures, history), [fixtures, history]);
+  const scorers = useMemo(() => buildScorers(history, teamNameById), [history, teamNameById]);
   const discipline = useMemo(() => buildDiscipline(history, teamNameById), [history, teamNameById]);
 
   if (!displayState) {
@@ -457,8 +463,11 @@ const NationsLeagueView: React.FC = () => {
                 <h3 className={`${HEADING_FONT} mb-4 text-2xl text-white`}>Strzelcy</h3>
                 <div className="space-y-2">
                   {scorers.length > 0 ? scorers.map((row, index) => (
-                    <div key={`${row.playerName}-${row.teamId}`} className="grid grid-cols-[40px_minmax(0,1fr)_60px] items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
+                    <div key={`${row.playerName}-${row.teamId}`} className="grid grid-cols-[40px_28px_minmax(0,1fr)_60px] items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
                       <span className="font-mono text-white/35">#{index + 1}</span>
+                      <span className="flex h-5 w-7 items-center justify-center">
+                        <TeamFlag name={row.teamName} className="h-4 w-7" />
+                      </span>
                       <span className="truncate text-sm font-bold text-white/80">{row.playerName}</span>
                       <span className="text-right font-mono font-black text-emerald-300">{row.goals}</span>
                     </div>
