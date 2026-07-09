@@ -1354,6 +1354,7 @@ export interface Player {
   /** Data ISO końca rocznego okresu bez nowych żądań po podpisaniu kontraktu. */
   moraleDemandLockoutUntil?: string | null;
   fatigueDebt: number; 
+  form?: number;
   morale?: number;
   moralePersonality?: PlayerMoralePersonality;
   moraleHistory?: PlayerMoraleHistoryEntry[];
@@ -1800,6 +1801,9 @@ export interface Club {
   matchPrepFocusId?: string;
   matchPrepFocusStartDate?: string;
   aiWeeklyTraining?: AiWeeklyTrainingState;
+  aiWinterCampDecisionYear?: number;
+  aiWinterCampFormAdjustment?: number;
+  aiWinterCampType?: 'AWAY' | 'LOCAL';
   userWeeklyTrainingWeekKey?: string;
   assistantTrainingSuggestionWeekKey?: string;
   assistantTrainingSuggestionCount?: number;
@@ -1857,6 +1861,7 @@ export interface WinterCampState {
   inviteSent: boolean;
   programChosen: boolean;
   effectsApplied: boolean;
+  winterFriendlyFormPenaltyYear?: number;
 }
 
 export type SummerCampLocation = 'poland' | 'czech_republic' | 'slovakia' | 'austria' | 'switzerland';

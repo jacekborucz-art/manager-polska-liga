@@ -6,6 +6,7 @@ import { PlayerPresentationService } from '../../services/PlayerPresentationServ
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { PlayerFormLevel, PlayerFormService } from '../../services/PlayerFormService';
 import { PlayerRoleMindflowModal } from '../modals/PlayerRoleMindflowModal';
 import { PlayerTransferMindflowModal } from '../modals/PlayerTransferMindflowModal';
 // ── Transfer Request Dialog ──────────────────────────────────────────────────
@@ -130,6 +131,32 @@ const getCountryFlagCode = (country: string, region: Region): string | null => {
   const directCode = country.trim().replace(/[.]+$/, '').split(/\s+/)[0]?.toUpperCase();
   if (directCode && COUNTRY_CODE_LABELS[directCode]) return directCode === 'POL' ? 'PL' : directCode;
   return COUNTRY_FLAG_CODES[formatted] ?? REGION_FLAG_CODES[region] ?? null;
+};
+
+const PlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> = ({ level, className = '' }) => {
+  const config: Record<PlayerFormLevel, { line: [number, number, number, number]; head: string; stroke: string }> = {
+    VERY_HIGH: { line: [13, 22, 13, 5], head: 'M8 10 L13 5 L18 10', stroke: '#34d399' },
+    RISING: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#a3e635' },
+    STABLE: { line: [5, 13, 21, 13], head: 'M16 8 L21 13 L16 18', stroke: '#cbd5e1' },
+    FALLING: { line: [6, 6, 20, 20], head: 'M13 20 L20 20 L20 13', stroke: '#fb923c' },
+    VERY_LOW: { line: [13, 4, 13, 21], head: 'M8 16 L13 21 L18 16', stroke: '#f87171' },
+  };
+  const { line, head, stroke } = config[level];
+
+  return (
+    <svg viewBox="0 0 26 26" className={className} aria-hidden="true">
+      <line
+        x1={line[0]}
+        y1={line[1]}
+        x2={line[2]}
+        y2={line[3]}
+        stroke={stroke}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path d={head} fill="none" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 };
 
 export const PlayerCard: React.FC = () => {
@@ -292,6 +319,7 @@ export const PlayerCard: React.FC = () => {
   const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
   const playerMorale = PlayerMoraleService.ensurePlayerState(player);
   const moraleInfo = PlayerMoraleService.getInfo(playerMorale.morale);
+  const formInfo = PlayerFormService.getInfo(player.form ?? PlayerFormService.calculate(player).score);
   const canTalk = PlayerMoraleService.canTalk(playerMorale, currentDate);
   const nextTalkDate = PlayerMoraleService.getNextTalkDate(playerMorale);
   const promisedMinutesDeadline = playerMorale.promisedMinutesUntil ? new Date(playerMorale.promisedMinutesUntil) : null;
@@ -712,6 +740,24 @@ export const PlayerCard: React.FC = () => {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className={`p-3 rounded-[20px] border ${formInfo.borderClass} ${formInfo.bgClass}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Forma zawodnika</span>
+                    <span className={`block text-xs font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.score}</span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-white/10 bg-black/25">
+                      <PlayerFormArrow level={formInfo.level} className="h-7 w-7 drop-shadow" />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full border border-white/5 bg-black/35">
+                  <div className="h-full rounded-full bg-current transition-all duration-700" style={{ width: `${formInfo.score}%`, color: formInfo.level === 'VERY_LOW' ? '#f87171' : formInfo.level === 'FALLING' ? '#fb923c' : formInfo.level === 'STABLE' ? '#cbd5e1' : formInfo.level === 'RISING' ? '#a3e635' : '#34d399' }} />
+                </div>
               </div>
 
               {player.clubId === userTeamId && (

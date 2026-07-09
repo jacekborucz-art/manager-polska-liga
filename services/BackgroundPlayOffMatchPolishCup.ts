@@ -10,6 +10,7 @@ import { KitSelectionService } from './KitSelectionService';
 import { MatchHistoryService } from './MatchHistoryService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { CoachPreMatchMoraleService } from './CoachPreMatchMoraleService';
+import { TeamFormImpactService } from './TeamFormImpactService';
 
 interface PlayoffEngineResult {
   homeScore: number;
@@ -157,10 +158,16 @@ const simulatePlayoffMatchEngine = (
 
     const homeXGWeather = homeXGAfterRed * weatherEqualizer;
     const awayXGWeather = awayXGAfterRed * weatherEqualizer;
+    const formImpact = TeamFormImpactService.calculateMatchImpact(
+      hPlayers,
+      aPlayers,
+      { ...hLineup, startingXI: homeXI },
+      { ...aLineup, startingXI: awayXI }
+    );
 
     return {
-      home: Math.max(0.003, homeXGWeather),
-      away: Math.max(0.003, awayXGWeather)
+      home: Math.max(0.003, homeXGWeather * formImpact.homeGoalChanceMultiplier),
+      away: Math.max(0.003, awayXGWeather * formImpact.awayGoalChanceMultiplier)
     };
   };
 
@@ -477,7 +484,10 @@ export const BackgroundPlayOffMatchPolishCup = {
       if (squad.length === 0) return;
 
       const clubCoach = club.coachId ? (coaches[club.coachId] ?? null) : null;
-      const fallbackLineup = LineupService.autoPickLineup(club.id, squad, '4-4-2', clubCoach);
+      const fallbackLineup = LineupService.autoPickLineup(club.id, squad, '4-4-2', clubCoach, {
+        formAware: true,
+        selectionSeed: `${club.id}_playoff`
+      });
       const sourceLineup = preparedLineups[club.id] || currentLineups[club.id] || fallbackLineup;
       preparedLineups[club.id] = LineupService.repairLineup(sourceLineup, squad);
     });

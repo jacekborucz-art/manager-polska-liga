@@ -2,10 +2,13 @@ import { Lineup, Player, PlayerPosition, Tactic, InjurySeverity, HealthStatus, C
 import { TacticRepository } from '../resources/tactics_db';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerPositionFitService } from './PlayerPositionFitService';
+import { TeamFormImpactService } from './TeamFormImpactService';
 
 type AutoPickOptions = {
   useSecondaryPositions?: boolean;
   competitionId?: string;
+  selectionSeed?: string;
+  formAware?: boolean;
 };
 
 type FitScoreOptions = {
@@ -55,11 +58,37 @@ const checkTacticFeasibility = (players: Player[], tacticId: string): boolean =>
   return Object.entries(required).every(([pos, count]) => (available[pos] || 0) >= count);
 };
 
-const getSelectionScore = (player: Player): number => {
+const hashString = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const getCoachQuality = (coach: Coach | null): number => {
+  if (!coach) return 50;
+  return (
+    (coach.attributes.experience ?? 50) * 0.4 +
+    (coach.attributes.decisionMaking ?? 50) * 0.4 +
+    (coach.attributes.training ?? 50) * 0.2
+  );
+};
+
+const getSelectionNoise = (player: Player, coachQuality: number, seedKey: string): number => {
+  const range = Math.max(1.8, 9 - coachQuality * 0.065);
+  const roll = (hashString(`${seedKey}_${player.id}`) % 10000) / 10000;
+  return (roll - 0.5) * 2 * range;
+};
+
+const getSelectionScore = (player: Player, coach: Coach | null = null, seedKey: string = 'lineup', formAware: boolean = false): number => {
   const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
   const moraleScore = PlayerMoraleService.getEffectiveOverall(moralePlayer);
   const roleBonus = player.squadRole === 'KEY_PLAYER' ? 1.2 : player.squadRole === 'STARTER' ? 0.7 : 0;
-  return moraleScore + roleBonus;
+  const coachQuality = getCoachQuality(coach);
+  const formBonus = formAware ? TeamFormImpactService.getSelectionFormBonus(player, coachQuality) : 0;
+  const noise = formAware ? getSelectionNoise(player, coachQuality, seedKey) : 0;
+  return moraleScore + roleBonus + formBonus + noise;
 };
 
 const isEuropeanCompetition = (competitionId?: string): boolean => {
@@ -106,6 +135,8 @@ export const LineupService = {
   autoPickLineup: (clubId: string, players: Player[], tacticId: string = '4-4-2', coach: Coach | null = null, options: AutoPickOptions = {}): Lineup => {
     const useSecondaryPositions = options.useSecondaryPositions ?? false;
     const competitionId = options.competitionId;
+    const formAware = options.formAware ?? false;
+    const selectionSeed = options.selectionSeed ?? `${clubId}_${tacticId}`;
     // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive)
     if (coach?.favoriteTactics) {
       const preferred = [
@@ -131,7 +162,9 @@ export const LineupService = {
     );
         const COND_XI    = 90;
     const COND_BENCH = 85;
-    const sortedAll   = [...availablePlayers].sort((a, b) => getSelectionScore(b) - getSelectionScore(a));
+    const sortedAll   = [...availablePlayers].sort((a, b) =>
+      getSelectionScore(b, coach, selectionSeed, formAware) - getSelectionScore(a, coach, selectionSeed, formAware)
+    );
     const poolXI      = sortedAll.filter(p => p.condition >= COND_XI);
     const poolBench   = sortedAll.filter(p => p.condition >= COND_BENCH && p.condition < COND_XI);
     const poolRest    = sortedAll.filter(p => p.condition < COND_BENCH);
@@ -234,7 +267,7 @@ export const LineupService = {
     const roleOverallAdjustment = (effectiveRoleOverall - player.overallRating) * 1.15;
 
     if ((isGkPlayer && !isGkRole) || (!isGkPlayer && isGkRole)) {
-      return -2000 + getSelectionScore(player);
+        return -2000 + getSelectionScore(player);
     }
 
     switch (role) {

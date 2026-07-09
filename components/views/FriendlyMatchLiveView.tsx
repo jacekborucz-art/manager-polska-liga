@@ -71,6 +71,9 @@ import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/P
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 import { BroadcastMomentumBar, MatchLiveBroadcastStyles, PitchBroadcastOverlay } from '../match/MatchLiveBroadcastChrome';
+import { TeamFormImpactService } from '../../services/TeamFormImpactService';
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
@@ -298,14 +301,22 @@ const isPausedForSevereInjury = useMemo(() => {
       const sessionSeed = Math.abs(Math.floor(Date.now() * Math.random()));
       setShowBriefing(true);
       
-      const homeLineupData = lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers);
-      const awayLineupData = lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers);
       const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
       const aiClubInit = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
       const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
-      const userLineupInit = userClubInit.id === ctx.homeClub.id ? homeLineupData : awayLineupData;
       const aiCoachInit = aiClubInit.coachId ? coaches[aiClubInit.coachId] : null;
       const aiPlayersInit = ctx.homeClub.id === userTeamId ? ctx.awayPlayers : ctx.homePlayers;
+      const aiLineupData = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, '4-4-2', aiCoachInit, {
+        formAware: true,
+        selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_friendly_live_ai`
+      });
+      const homeLineupData = ctx.homeClub.id === aiClubInit.id
+        ? aiLineupData
+        : (lineups[ctx.homeClub.id] || LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers));
+      const awayLineupData = ctx.awayClub.id === aiClubInit.id
+        ? aiLineupData
+        : (lineups[ctx.awayClub.id] || LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers));
+      const userLineupInit = userClubInit.id === ctx.homeClub.id ? homeLineupData : awayLineupData;
       const opponentReport = AiOpponentAnalysisService.generateReport({
         aiClub: aiClubInit,
         aiCoach: aiCoachInit,
@@ -437,7 +448,20 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     } 
     else if (activePenalty.phase === 'EXECUTING') {
       const t = setTimeout(() => {
-        const isGoal = GoalAttributionService.checkShotSuccess(activePenalty.kicker, activePenalty.keeper, [], false, () => Math.random(), true);
+        const penaltyKickerFormMod = clampNumber(0.92 + (TeamFormImpactService.getPlayerForm(activePenalty.kicker) / 100) * 0.16, 0.92, 1.08);
+        const penaltyKeeperFormMod = clampNumber(0.93 + (TeamFormImpactService.getPlayerForm(activePenalty.keeper) / 100) * 0.14, 0.93, 1.07);
+        const isGoal = GoalAttributionService.checkShotSuccess(
+          activePenalty.kicker,
+          activePenalty.keeper,
+          [],
+          false,
+          () => Math.random(),
+          true,
+          100,
+          100,
+          penaltyKickerFormMod,
+          penaltyKeeperFormMod
+        );
         const finalResult = isGoal ? MatchEventType.PENALTY_SCORED : MatchEventType.PENALTY_MISSED;
         
         setActivePenalty(prev => prev ? { ...prev, phase: 'RESULT', result: finalResult } : null);
@@ -987,6 +1011,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           return Math.sign(gap) * Math.pow(normalized, 1.35);
         };
         const qualityInitiativeMod = getQualityGapCurve(homeQualityGapLive) * 0.055;
+        const playerFormImpact = TeamFormImpactService.calculateMatchImpact(
+          ctx.homePlayers,
+          ctx.awayPlayers,
+          nextHomeLineup,
+          nextAwayLineup
+        );
+        const playerFormInitiativeMod = clampNumber(
+          (playerFormImpact.homeGoalChanceMultiplier - playerFormImpact.awayGoalChanceMultiplier) * 0.055,
+          -0.060,
+          0.060
+        );
         const shotGapLive = nextLiveStats.home.shots - nextLiveStats.away.shots;
         const shotDominanceInitiativeMod =
           nextMinute < 25 || Math.abs(shotGapLive) < 8
@@ -998,7 +1033,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           0.72,
           Math.max(
             0.28,
-            0.5 + prev.momentum / 280 + fatInitiativeMod + qualityInitiativeMod + shotDominanceInitiativeMod
+            0.5 + prev.momentum / 280 + fatInitiativeMod + qualityInitiativeMod + playerFormInitiativeMod + shotDominanceInitiativeMod
           )
         );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
@@ -1133,6 +1168,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Kara zmęczenia atakującej drużyny na shotThreshold
         const activeFatPenalty = activeSide === 'HOME' ? homeFatPenalty : awayFatPenalty;
+        const activePlayerFormImpact = activeSide === 'HOME' ? playerFormImpact.home : playerFormImpact.away;
+        const defendingPlayerFormImpact = activeSide === 'HOME' ? playerFormImpact.away : playerFormImpact.home;
+        const activePlayerFormChanceMultiplier = activeSide === 'HOME'
+          ? playerFormImpact.homeGoalChanceMultiplier
+          : playerFormImpact.awayGoalChanceMultiplier;
 
         // ─── KARA: OSŁABIONY SKŁAD + OFENSYWNA TAKTYKA ────────────────────────
         // Liczba "dziur" w XI (null = brak zawodnika po czerwonej lub kontuzji bez zmiany)
@@ -1486,7 +1526,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold += aiCounterAttackShotBonus;
         }
         // ───────────────────────────────────────────────────────────────────────
-        shotThreshold = Math.max(0.04, Math.min(0.155, shotThreshold - shotVolumeDrag));
+        shotThreshold = Math.max(
+          0.04,
+          Math.min(
+            0.155,
+            (shotThreshold - shotVolumeDrag) * clampNumber(activePlayerFormChanceMultiplier, 0.66, 1.34)
+          )
+        );
 
         let pauseForEvent = false;
         let newLog: MatchLogEntry | null = null;
@@ -1667,7 +1713,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
-           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod * activeFinishingFitMod, gkFitMod, oppFatigueMap);
+           const playerFormFinishingBoost = clampNumber(activePlayerFormImpact.performanceMultiplier, 0.78, 1.22);
+           const playerFormGoalkeepingBoost = clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.82, 1.18);
+           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod * activeFinishingFitMod * playerFormFinishingBoost, gkFitMod * playerFormGoalkeepingBoost, oppFatigueMap);
           
 
            if (isGoal) {
@@ -1767,7 +1815,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),
-                  false, hScorerFat, hGkFat, 1.0, hGkFitMod, cornerOppFatigue
+                  false,
+                  hScorerFat,
+                  hGkFat,
+                  clampNumber(activePlayerFormImpact.performanceMultiplier, 0.80, 1.20),
+                  hGkFitMod * clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.84, 1.16),
+                  cornerOppFatigue
                 );
                 if (isHeaderGoal) {
                   if (activeSide === 'HOME') {

@@ -1,4 +1,5 @@
 import { Player, MatchEventType } from '../types';
+import { PlayerFormService } from './PlayerFormService';
 
 export const PlayerStatsService = {
   applyGoal: (players: Record<string, Player[]>, scorerId: string, assistId?: string): Record<string, Player[]> => {
@@ -7,16 +8,16 @@ export const PlayerStatsService = {
     for (const clubId in newPlayers) {
       newPlayers[clubId] = newPlayers[clubId].map(p => {
         if (p.id === scorerId) {
-          return {
+          return PlayerFormService.withUpdatedForm({
             ...p,
             stats: { ...p.stats, goals: p.stats.goals + 1 }
-          };
+          });
         }
         if (assistId && p.id === assistId) {
-          return {
+          return PlayerFormService.withUpdatedForm({
             ...p,
             stats: { ...p.stats, assists: p.stats.assists + 1 }
-          };
+          });
         }
         return p;
       });
@@ -47,11 +48,11 @@ export const PlayerStatsService = {
             suspensionMatches += 2;
           }
 
-          return {
+          return PlayerFormService.withUpdatedForm({
             ...p,
             stats: { ...p.stats, yellowCards, redCards },
             suspensionMatches
-          };
+          });
         }
         return p;
       });
@@ -80,6 +81,7 @@ export const PlayerStatsService = {
              matchesPlayed: updated.stats.matchesPlayed + 1,
              minutesPlayed: updated.stats.minutesPlayed + 90
            };
+           updated = PlayerFormService.withUpdatedForm(updated);
         }
 
         // 2. Redukcja zawieszenia
@@ -99,7 +101,7 @@ export const PlayerStatsService = {
     if (newPlayers[clubId]) {
       newPlayers[clubId] = newPlayers[clubId].map(p => {
         if (gkIds.includes(p.id)) {
-          return { ...p, stats: { ...p.stats, cleanSheets: (p.stats.cleanSheets || 0) + 1 } };
+          return PlayerFormService.withUpdatedForm({ ...p, stats: { ...p.stats, cleanSheets: (p.stats.cleanSheets || 0) + 1 } });
         }
         return p;
       });
@@ -114,10 +116,10 @@ export const PlayerStatsService = {
     for (const clubId in newPlayers) {
       newPlayers[clubId] = newPlayers[clubId].map(p => {
         if (idSet.has(p.id)) {
-          return {
+          return PlayerFormService.withUpdatedForm({
             ...p,
             stats: { ...p.stats, matchesPlayed: p.stats.matchesPlayed + 1 }
-          };
+          });
         }
         return p;
       });

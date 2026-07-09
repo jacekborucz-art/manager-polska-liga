@@ -1,5 +1,6 @@
 import { BoardAttributeLevel, Club, Fixture, HealthStatus, IndividualTalkType, MailMessage, MailType, MatchStatus, Player, PlayerMindsetState, PlayerMoralePersonality, PlayerPosition, TrainingIntensity } from '../types';
 import { FinanceService } from './FinanceService';
+import { PlayerFormService } from './PlayerFormService';
 
 export interface PlayerMoraleInfo {
   label: string;
@@ -757,6 +758,7 @@ export const PlayerMoraleService = {
 
   ensurePlayerState: (player: Player): Player => ({
     ...player,
+    form: typeof player.form === 'number' ? player.form : PlayerFormService.calculate(player).score,
     morale: player.morale ?? PlayerMoraleService.getInitialMorale(player),
     moralePersonality: player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player),
     moraleHistory: player.moraleHistory ?? [],
@@ -1175,12 +1177,12 @@ export const PlayerMoraleService = {
       date
     );
 
-    return {
+    return PlayerFormService.withUpdatedForm({
       ...withMorale,
       playerMindset: withUpdatedMindset.playerMindset,
       morale: nextMorale,
       moraleHistory: [entry, ...(withMorale.moraleHistory ?? [])].slice(0, 12),
-    };
+    });
   },
 
   getInfo: (morale: number = 50): PlayerMoraleInfo => {

@@ -1,6 +1,7 @@
 
 import { FinanceService } from './FinanceService';
 import { ManagerExperienceService } from './ManagerExperienceService';
+import { PlayerFormService } from './PlayerFormService';
 
 export const SAVE_VERSION = '2.0';
 
@@ -532,7 +533,7 @@ function normalizeSaveState(data: SaveState): SaveState {
           : null;
         const hasPendingTransfer = typeof player.transferPendingClubId === 'string' && player.transferPendingClubId.length > 0;
 
-        return {
+        const normalizedPlayer = {
           ...player,
           clubId: typeof player.clubId === 'string' && player.clubId.length > 0 ? player.clubId : clubId,
           secondaryPosition,
@@ -568,6 +569,7 @@ function normalizeSaveState(data: SaveState): SaveState {
           reputacja: player.reputacja ?? 50,
           lojalnosc: (typeof player.lojalnosc === 'number' && player.lojalnosc >= 1) ? player.lojalnosc : Math.floor(Math.random() * 99) + 1,
         };
+        return PlayerFormService.withUpdatedForm(normalizedPlayer as any);
       }),
     ])
   );

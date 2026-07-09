@@ -31,10 +31,24 @@ export const AiMatchPreparationService = {
 
       // 2. Pobierz aktualny skład lub stwórz nowy z inteligentnie dobraną taktyką
       const clubCoach = club.coachId ? (coaches[club.coachId] ?? null) : null;
-      let lineup = updatedLineups[club.id];
-      if (!lineup || lineup.tacticId === '4-4-2') {
+      const seedParts = [
+        club.id,
+        bestTacticId,
+        club.stats?.played ?? 0,
+        club.stats?.points ?? 0,
+        club.stats?.goalsFor ?? 0,
+        club.stats?.goalsAgainst ?? 0
+      ];
+      let lineup = LineupService.autoPickLineup(club.id, squad, bestTacticId, clubCoach, {
+        formAware: true,
+        selectionSeed: seedParts.join('_')
+      });
+      if (!lineup) {
         // Brak składu lub utknięcie w domyślnym 4-4-2 — trener dobiera skład pod swoje taktyki
-        lineup = LineupService.autoPickLineup(club.id, squad, bestTacticId, clubCoach);
+        lineup = LineupService.autoPickLineup(club.id, squad, bestTacticId, clubCoach, {
+          formAware: true,
+          selectionSeed: seedParts.join('_')
+        });
       }
 
       // 3. Napraw skład (wywal zawieszonych/rannych i wypełnij luki inteligentnie)

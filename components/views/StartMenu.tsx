@@ -8,6 +8,110 @@ import { useGameScaler } from '../GameScaler';
 
 const EDITOR_DATAPACK_IMPORTED_STORAGE_KEY = 'polish_league_editor_datapack_imported';
 
+const MenuIcon: React.FC<{ type: string }> = ({ type }) => {
+  const common = {
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const
+  };
+  switch (type) {
+    case 'trophy':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M8 21h8" />
+          <path d="M12 17v4" />
+          <path d="M7 4h10v4a5 5 0 0 1-10 0V4z" />
+          <path d="M17 5h2.5a.5.5 0 0 1 .5.5C20 8 18.5 9.6 16.5 10" />
+          <path d="M7 5H4.5a.5.5 0 0 0-.5.5C4 8 5.5 9.6 7.5 10" />
+        </svg>
+      );
+    case 'book':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          <path d="M9 7h7" />
+          <path d="M9 11h5" />
+        </svg>
+      );
+    case 'database':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+          <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+        </svg>
+      );
+    case 'package':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <path d="M3.27 6.96L12 12.01l8.73-5.05" />
+          <path d="M12 22.08V12" />
+        </svg>
+      );
+    case 'save':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <path d="M17 21v-8H7v8" />
+          <path d="M7 3v5h8" />
+        </svg>
+      );
+    case 'gear':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case 'exit':
+      return (
+        <svg viewBox="0 0 24 24" className="w-12 h-12" {...common}>
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <path d="M16 17l5-5-5-5" />
+          <path d="M21 12H9" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
+const BallSvg: React.FC = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)]">
+    <defs>
+      <radialGradient id="menuBallShine" cx="35%" cy="28%" r="80%">
+        <stop offset="0%" stopColor="#ffffff" />
+        <stop offset="65%" stopColor="#e2e8f0" />
+        <stop offset="100%" stopColor="#94a3b8" />
+      </radialGradient>
+      <clipPath id="menuBallClip">
+        <circle cx="50" cy="50" r="47" />
+      </clipPath>
+    </defs>
+    <circle cx="50" cy="50" r="47" fill="url(#menuBallShine)" stroke="#0f172a" strokeWidth="2.5" />
+    <g clipPath="url(#menuBallClip)">
+      <polygon points="50,32.5 66.6,44.6 60.3,64.2 39.7,64.2 33.4,44.6" fill="#0f172a" />
+      <g stroke="#0f172a" strokeWidth="2.5" fill="none">
+        <path d="M50 32.5 L50 3" />
+        <path d="M66.6 44.6 L94.7 35.5" />
+        <path d="M60.3 64.2 L77.6 88" />
+        <path d="M39.7 64.2 L22.4 88" />
+        <path d="M33.4 44.6 L5.3 35.5" />
+      </g>
+      <polygon points="50,11 37.6,2 42.4,-12.5 57.6,-12.5 62.4,2" fill="#0f172a" />
+      <polygon points="87.1,37.9 91.9,23.4 107.1,23.4 111.9,37.9 99.5,46.9" fill="#0f172a" />
+      <polygon points="73,81.6 88.2,81.6 93,96.1 80.6,105.1 68.2,96.1" fill="#0f172a" />
+      <polygon points="27,81.6 31.8,96.1 19.4,105.1 7,96.1 11.8,81.6" fill="#0f172a" />
+      <polygon points="12.9,37.9 0.5,46.9 -11.9,37.9 -7.1,23.4 8.1,23.4" fill="#0f172a" />
+      <ellipse cx="36" cy="26" rx="11" ry="6" fill="#ffffff" opacity="0.3" />
+    </g>
+  </svg>
+);
+
 export const StartMenu: React.FC = () => {
   const { startNewGame, navigateTo, loadGameFromFile, importEditorFullPack, showGameNotification } = useGame();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -33,6 +137,46 @@ export const StartMenu: React.FC = () => {
   const { mobileMode, toggleMobile } = useGameScaler();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fullPackInputRef = useRef<HTMLInputElement>(null);
+
+  // --- BALL STATE ---
+  const [ballX, setBallX] = useState<number | null>(null);
+  const [hopKey, setHopKey] = useState(0);
+  const [kick, setKick] = useState<{ x: number } | null>(null);
+  const menuAreaRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const lastBallXRef = useRef<number | null>(null);
+  const kickTimeoutRef = useRef<number | null>(null);
+
+  const hopBallTo = (index: number) => {
+    if (kick) return;
+    const area = menuAreaRef.current;
+    const btn = buttonRefs.current[index];
+    if (!area || !btn) return;
+    const areaRect = area.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const x = btnRect.left + btnRect.width / 2 - areaRect.left;
+    if (lastBallXRef.current === null || Math.abs(lastBallXRef.current - x) > 2) {
+      lastBallXRef.current = x;
+      setBallX(x);
+      setHopKey(k => k + 1);
+    }
+  };
+
+  const kickBall = () => {
+    if (kick) return;
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    setKick({ x: dir * (140 + Math.random() * 180) });
+    if (kickTimeoutRef.current) window.clearTimeout(kickTimeoutRef.current);
+    kickTimeoutRef.current = window.setTimeout(() => {
+      setKick(null);
+      setHopKey(k => k + 1);
+    }, 1000);
+  };
+
+  useEffect(() => () => {
+    if (kickTimeoutRef.current) window.clearTimeout(kickTimeoutRef.current);
+  }, []);
+
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -79,6 +223,86 @@ export const StartMenu: React.FC = () => {
   const handleNewGameClick = () => {
     startNewGame(2025);
   };
+
+  const menuItems = [
+    {
+      key: 'new-game',
+      tag: 'ROZPOCZNIJ',
+      title: 'NOWA GRA',
+      icon: 'trophy',
+      accent: '#34d399',
+      className: 'bg-emerald-600/10 border-emerald-500/20 hover:bg-emerald-600 hover:border-emerald-400 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)]',
+      tagClass: 'text-emerald-500 group-hover:text-emerald-100',
+      iconClass: 'text-emerald-400 group-hover:text-white',
+      onClick: handleNewGameClick
+    },
+    {
+      key: 'manual',
+      tag: 'GUIDE',
+      title: 'INSTRUKCJA',
+      icon: 'book',
+      accent: '#60a5fa',
+      className: 'bg-blue-600/10 border-blue-500/20 hover:bg-blue-600 hover:border-blue-400 hover:shadow-[0_30px_60px_-15px_rgba(59,130,246,0.5)]',
+      tagClass: 'text-blue-500 group-hover:text-blue-100',
+      iconClass: 'text-blue-400 group-hover:text-white',
+      onClick: () => navigateTo(ViewState.GAME_MANUAL)
+    },
+    {
+      key: 'editor',
+      tag: 'BAZA GRY',
+      title: 'EDYTOR',
+      icon: 'database',
+      accent: '#facc15',
+      className: 'bg-yellow-600/10 border-yellow-500/20 hover:bg-yellow-600 hover:border-yellow-300 hover:shadow-[0_30px_60px_-15px_rgba(234,179,8,0.5)]',
+      tagClass: 'text-yellow-400 group-hover:text-yellow-100',
+      iconClass: 'text-yellow-400 group-hover:text-white',
+      onClick: () => navigateTo(ViewState.PREGAME_DATAPACK_EDITOR)
+    },
+    {
+      key: 'datapack',
+      tag: 'ZAŁADUJ',
+      title: 'DATAPACK',
+      icon: 'package',
+      accent: '#34d399',
+      className: 'bg-emerald-900/20 border-emerald-500/20 hover:bg-emerald-700 hover:border-emerald-300 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)]',
+      tagClass: 'text-emerald-400 group-hover:text-emerald-100',
+      iconClass: 'text-emerald-400 group-hover:text-white',
+      onClick: () => fullPackInputRef.current?.click()
+    },
+    {
+      key: 'load',
+      tag: 'KONTYNUUJ',
+      title: 'WCZYTAJ',
+      icon: 'save',
+      accent: '#94a3b8',
+      className: 'bg-slate-600/10 border-slate-500/20 hover:bg-slate-600 hover:border-slate-400 hover:shadow-[0_30px_60px_-15px_rgba(100,116,139,0.5)]',
+      tagClass: 'text-slate-400 group-hover:text-slate-100',
+      iconClass: 'text-slate-300 group-hover:text-white',
+      onClick: () => fileInputRef.current?.click()
+    },
+    {
+      key: 'options',
+      tag: 'KONFIGURUJ',
+      title: 'OPCJE',
+      icon: 'gear',
+      accent: '#cbd5e1',
+      className: 'bg-slate-900/60 border-white/5 hover:bg-white/5 hover:border-white/20 shadow-xl',
+      tagClass: 'text-slate-500 group-hover:text-slate-200',
+      iconClass: 'text-slate-300 group-hover:text-white group-hover:rotate-90',
+      onClick: () => setShowOptions(true)
+    },
+    {
+      key: 'exit',
+      tag: 'ZAKOŃCZ',
+      title: 'WYJŚCIE',
+      icon: 'exit',
+      accent: '#f87171',
+      className: 'bg-red-600/10 border-red-500/20 hover:bg-red-600 hover:border-red-400 hover:shadow-[0_30px_60px_-15px_rgba(220,38,38,0.5)]',
+      tagClass: 'text-red-500 group-hover:text-red-100',
+      iconClass: 'text-red-400 group-hover:text-white',
+      onClick: () => { window.close(); window.location.href = 'about:blank'; }
+    }
+  ];
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-end bg-slate-950 overflow-hidden relative">
@@ -151,7 +375,7 @@ export const StartMenu: React.FC = () => {
         {/* Overlays */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/60 to-slate-950" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-transparent to-slate-950 opacity-70" />
-        
+
         {/* Dynamic Glows */}
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/10 blur-[150px] animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[150px] animate-pulse" style={{ animationDelay: '2s' }} />
@@ -159,117 +383,91 @@ export const StartMenu: React.FC = () => {
         {/* Cyber Grid */}
         <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
       </div>
-      
+
       {/* 2. CENTRAL CONTENT */}
-      <div className="relative z-10 flex flex-col items-center max-w-[1180px] w-full px-6 text-center animate-fade-in pb-8">
-        
-        
+      <div className="relative z-10 flex flex-col items-center max-w-[1320px] w-full px-6 text-center animate-fade-in pb-8">
 
-      
+        {/* Action Menu + Bouncing Ball */}
+        <div ref={menuAreaRef} className="relative w-full pt-24">
 
-        {/* Action Menu */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6 w-full max-w-[1180px] mx-auto">
-                                                                      
-          
-          <button 
-            onClick={handleNewGameClick}
-            className="group relative h-48 bg-emerald-600/10 border border-emerald-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-emerald-600 hover:border-emerald-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)] overflow-hidden"
+          {/* BOUNCING BALL */}
+          <div
+            className="absolute top-6 z-20 w-12 pointer-events-none"
+            style={{
+              left: ballX ?? '50%',
+              transform: 'translateX(-50%)',
+              transition: 'left 0.5s cubic-bezier(0.4, 1.1, 0.55, 1)'
+            }}
           >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">🏆</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black text-emerald-500 group-hover:text-emerald-100 uppercase tracking-widest mb-1">ROZPOCZNIJ</span>
-                  <span className="text-2xl font-black italic uppercase tracking-tighter whitespace-nowrap text-white">NOWA GRA</span>
+            {kick ? (
+              <div className="menu-ball-kick" style={{ '--kick-x': `${kick.x}px` } as React.CSSProperties}>
+                <BallSvg />
+              </div>
+            ) : (
+              <div key={hopKey} className="menu-ball-hop">
+                <div className="menu-ball-idle">
+                  <BallSvg />
                 </div>
-             </div>
-          </button>
-
-          <button 
-            onClick={() => navigateTo(ViewState.GAME_MANUAL)}
-            className="group relative h-48 bg-blue-600/10 border border-blue-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-blue-600 hover:border-blue-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(59,130,246,0.5)] overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">📚</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black text-blue-500 group-hover:text-blue-100 uppercase tracking-widest mb-1">GUIDE</span>
-                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">INSTRUKCJA</span>
-                </div>
-             </div>
-          </button>
-
-          <button
-            onClick={() => navigateTo(ViewState.PREGAME_DATAPACK_EDITOR)}
-            className="group relative h-48 bg-yellow-600/10 border border-yellow-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-yellow-600 hover:border-yellow-300 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(234,179,8,0.5)] overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">DB</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-yellow-400 group-hover:text-yellow-100 mb-1">BAZA GRY</span>
-                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">EDYTOR</span>
-                </div>
-             </div>
-          </button>
+              </div>
+            )}
+            {!kick && (
+              <div className="menu-ball-shadow absolute left-1/2 -ml-5 w-10 h-2 rounded-full bg-black/50 blur-[3px]" style={{ top: 56 }} />
+            )}
+          </div>
 
           <input ref={fullPackInputRef} type="file" accept=".json" className="hidden" onChange={handleFullPackLoad} />
-          <button
-            onClick={() => fullPackInputRef.current?.click()}
-            className="group relative h-48 bg-emerald-900/20 border border-emerald-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-emerald-700 hover:border-emerald-300 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.5)] overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">📦</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black italic uppercase tracking-tighter text-emerald-400 group-hover:text-emerald-100 mb-1">ZAŁADUJ</span>
-                  <span className="text-2xl font-black italic uppercase tracking-tighter text-white">DATAPACK</span>
-                </div>
-             </div>
-          </button>
-
           <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileLoad} />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="group relative h-48 bg-slate-600/10 border border-slate-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-slate-600 hover:border-slate-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(100,116,139,0.5)] overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">💾</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black text-slate-400 group-hover:text-slate-100 uppercase tracking-widest mb-1">KONTYNUUJ</span>
-                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">WCZYTAJ</span>
-                </div>
-             </div>
-          </button>
 
-          <button
-            onClick={() => setShowOptions(true)}
-            className="group relative h-48 bg-slate-900/60 border border-white/5 rounded-[32px] p-6 transition-all duration-500 hover:bg-white/5 hover:border-white/20 hover:-translate-y-2 overflow-hidden shadow-xl"
-          >
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:rotate-90 transition-transform duration-700">⚙️</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">KONFIGURUJ</span>
-                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">OPCJE</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6 w-full">
+            {menuItems.map((item, i) => (
+              <button
+                key={item.key}
+                ref={el => { buttonRefs.current[i] = el; }}
+                onMouseEnter={() => hopBallTo(i)}
+                onClick={() => { kickBall(); item.onClick(); }}
+                className={`group relative h-52 border rounded-[28px] p-6 transition-all duration-500 hover:-translate-y-2 overflow-hidden ${item.className}`}
+              >
+                {/* SVG pitch lines */}
+                <svg
+                  className="absolute inset-0 w-full h-full text-white opacity-[0.08] group-hover:opacity-25 transition-opacity duration-500 pointer-events-none"
+                  viewBox="0 0 100 145"
+                  preserveAspectRatio="none"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                >
+                  <path d="M26 0 V15 H74 V0" vectorEffect="non-scaling-stroke" />
+                  <path d="M38 0 V6 H62 V0" vectorEffect="non-scaling-stroke" />
+                  <path d="M38 15 A 14 8 0 0 0 62 15" vectorEffect="non-scaling-stroke" />
+                  <circle cx="50" cy="145" r="22" vectorEffect="non-scaling-stroke" />
+                  <circle cx="50" cy="122" r="1.5" fill="currentColor" stroke="none" />
+                </svg>
+                {/* Hover sheen */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                {/* Running neon border */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                  <rect
+                    pathLength={100}
+                    fill="none"
+                    strokeWidth="2"
+                    strokeDasharray="16 9"
+                    strokeLinecap="round"
+                    className="menu-run-stroke opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{ x: 3, y: 3, width: 'calc(100% - 6px)', height: 'calc(100% - 6px)', rx: 25, stroke: item.accent }}
+                  />
+                </svg>
+                <div className="relative z-10 flex flex-col h-full items-center justify-between">
+                  <span className={`flex items-center justify-center transition-all duration-500 group-hover:scale-110 ${item.iconClass}`}>
+                    <MenuIcon type={item.icon} />
+                  </span>
+                  <div className="text-center">
+                    <span className={`block text-[11px] font-black uppercase tracking-widest mb-1 ${item.tagClass}`}>{item.tag}</span>
+                    <span className="text-2xl font-black italic uppercase tracking-tighter whitespace-nowrap text-white">{item.title}</span>
+                  </div>
                 </div>
-             </div>
-          </button>
-
-          <button
-            onClick={() => { window.close(); window.location.href = 'about:blank'; }}
-            className="group relative h-48 bg-red-600/10 border border-red-500/20 rounded-[32px] p-6 transition-all duration-500 hover:bg-red-600 hover:border-red-400 hover:-translate-y-2 hover:shadow-[0_30px_60px_-15px_rgba(220,38,38,0.5)] overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-             <div className="relative z-10 flex flex-col h-full items-center justify-between">
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500">🚪</span>
-                <div className="text-center">
-                  <span className="block text-[10px] font-black text-red-500 group-hover:text-red-100 uppercase tracking-widest mb-1">ZAKOŃCZ</span>
-                  <span className="text-2xl font-black text-white italic uppercase tracking-tighter">WYJŚCIE</span>
-                </div>
-             </div>
-          </button>
-
+              </button>
+            ))}
+          </div>
         </div>
 
         {showOptions && (
@@ -327,7 +525,7 @@ export const StartMenu: React.FC = () => {
           50% { transform: scale(1.15); }
         }
         .animate-pulse-slow { animation: pulse-slow 20s infinite ease-in-out; }
-        
+
         @keyframes fade-in {
           from { opacity: 0; transform: translateY(30px); }
           to { opacity: 1; transform: translateY(0); }
@@ -345,6 +543,38 @@ export const StartMenu: React.FC = () => {
           50% { box-shadow: 0 0 30px rgba(20,184,166,0.7), 0 0 60px rgba(20,184,166,0.3); border-color: rgba(20,184,166,0.8); }
         }
         .animate-mobile-pulse { animation: mobile-pulse 2.5s ease-in-out infinite; }
+
+        @keyframes menu-ball-hop {
+          0% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-90px) rotate(180deg); }
+          75% { transform: translateY(0) rotate(300deg); }
+          87% { transform: translateY(-22px) rotate(330deg); }
+          100% { transform: translateY(0) rotate(360deg); }
+        }
+        .menu-ball-hop { animation: menu-ball-hop 0.55s cubic-bezier(0.3, 0.9, 0.4, 1); }
+
+        @keyframes menu-ball-idle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-12px); }
+        }
+        .menu-ball-idle { animation: menu-ball-idle 1.6s ease-in-out infinite; }
+
+        @keyframes menu-ball-shadow {
+          0%, 100% { transform: scaleX(1); opacity: 0.45; }
+          50% { transform: scaleX(0.72); opacity: 0.25; }
+        }
+        .menu-ball-shadow { animation: menu-ball-shadow 1.6s ease-in-out infinite; }
+
+        @keyframes menu-ball-kick {
+          0% { transform: translate(0, 0) rotate(0deg); }
+          100% { transform: translate(var(--kick-x), -110vh) rotate(900deg); }
+        }
+        .menu-ball-kick { animation: menu-ball-kick 0.9s cubic-bezier(0.2, 0.6, 0.35, 1) forwards; }
+
+        @keyframes menu-run-stroke {
+          to { stroke-dashoffset: -100; }
+        }
+        .menu-run-stroke { animation: menu-run-stroke 1.2s linear infinite; }
       `}</style>
     </div>
   );

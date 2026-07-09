@@ -2,6 +2,7 @@ import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, Substitut
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService, FAVORITE_TACTIC_MAP } from './LineupService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { TeamFormImpactService } from './TeamFormImpactService';
 
 const MAX_LEAGUE_SUBS = 5;
 
@@ -102,15 +103,16 @@ const getReadinessMultiplier = (player: Player): number =>
 // KALIBRACJA: siła bonusu za pozycję pomocniczą NIE jest tu — jest w PlayerPositionFitService
 // (getFitScoreBonus/getPenaltyFactor), żeby był jeden, wspólny punkt prawdy dla całej gry (AI i silnik
 // meczu liczą to tak samo). Zmieniaj tam, nie tutaj.
-const getEmergencyFieldScore = (player: Player, role: PlayerPosition, useSecondaryPositions: boolean = false): number => {
-  if (player.position !== PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions });
-  if (role === PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions });
+const getEmergencyFieldScore = (player: Player, role: PlayerPosition, useSecondaryPositions: boolean = false, coachQuality: number = 50): number => {
+  const formBonus = TeamFormImpactService.getSelectionFormBonus(player, coachQuality) * 0.7;
+  if (player.position !== PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions }) + formBonus;
+  if (role === PlayerPosition.GK) return LineupService.calculateFitScore(player, role, { useSecondaryPositions }) + formBonus;
   return (
     player.overallRating * 0.35 +
     player.attributes.positioning * 0.25 +
     player.attributes.strength * 0.2 +
     player.attributes.mentality * 0.2
-  ) * getReadinessMultiplier(player);
+  ) * getReadinessMultiplier(player) + formBonus;
 };
 
 // [AI-COACH-CALIBRATION] getLineupFitScore — suma dopasowania całego składu do danej taktyki.

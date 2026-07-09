@@ -80,6 +80,8 @@ function buildNeglectPenalty(
   const fatigueDebtDelta = severity === 'declined' ? 8 : 5;
   const maxConditionDrop = severity === 'declined' ? 5 : 3;
   const attrPenaltyChance = severity === 'declined' ? 0.18 : 0.12;
+  const baseFormDrop = severity === 'declined' ? 20 : 9;
+  const formDropRange = severity === 'declined' ? 8 : 6;
   const riskyAttrs: AttributeKey[] = ['stamina', 'mentality', 'workRate', 'positioning', 'strength'];
 
   players.forEach((player, i) => {
@@ -93,6 +95,7 @@ function buildNeglectPenalty(
     }
 
     const conditionDrop = 1 + Math.floor(Math.abs(Math.sin(seed + 500 + i) * 10000) % maxConditionDrop);
+    const formDrop = baseFormDrop + Math.floor(Math.abs(Math.sin(seed + 900 + i) * 10000) % formDropRange);
     effects.push({
       playerId: player.id,
       firstName: player.firstName,
@@ -101,6 +104,7 @@ function buildNeglectPenalty(
       injured: false,
       fatigueDebtDelta,
       conditionDelta: -conditionDrop,
+      formDelta: -formDrop,
     });
   });
 
@@ -117,6 +121,7 @@ export interface WinterCampEffect {
   injured: boolean;
   fatigueDebtDelta: number;
   conditionDelta?: number;
+  formDelta?: number;
 }
 
 export interface WinterCampResult {

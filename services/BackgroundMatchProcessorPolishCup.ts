@@ -9,6 +9,7 @@ import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { KitSelectionService } from './KitSelectionService';
 import { PolishCupVenueService } from './PolishCupVenueService';
+import { TeamFormImpactService } from './TeamFormImpactService';
 // ============================================================
 //  WBUDOWANY SILNIK PUCHAROWY — symulacja minuta po minucie
 //  Zastępuje wywołanie LeagueBackgroundMatchEngine.simulate()
@@ -167,10 +168,16 @@ const simulateCupMatch = (
     // ── Pogoda (zła pogoda wyrównuje nieco szanse — chaos terenu) ──
     const homeXGWeather = homeXGAfterRed * weatherEqualizer;
     const awayXGWeather = awayXGAfterRed * weatherEqualizer;
+    const formImpact = TeamFormImpactService.calculateMatchImpact(
+      hPlayers,
+      aPlayers,
+      { ...hLineup, startingXI: homeXI },
+      { ...aLineup, startingXI: awayXI }
+    );
 
     return {
-      home: Math.max(0.003, homeXGWeather),
-      away: Math.max(0.003, awayXGWeather)
+      home: Math.max(0.003, homeXGWeather * formImpact.homeGoalChanceMultiplier),
+      away: Math.max(0.003, awayXGWeather * formImpact.awayGoalChanceMultiplier)
     };
   };
 

@@ -5,6 +5,7 @@ import { LineupService } from './LineupService';
 import { EuropeanWeatherService } from './EuropeanWeatherService';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
+import { TeamFormImpactService } from './TeamFormImpactService';
 
 // ============================================================
 //  NEUTRALNE STADIONY FINAŁÓW
@@ -778,6 +779,7 @@ const simulateCLMatchFull = (
   let awayMinutesPlayedMap = awayTimeline.minutesPlayedMap;
   const homeShortHanded = getShortHandedImpact(homeRedExits);
   const awayShortHanded = getShortHandedImpact(awayRedExits);
+  const formImpact = TeamFormImpactService.calculateMatchImpact(homePlayersAll, awayPlayersAll, homeLineup, awayLineup);
 
   // ── Siła zawodników (ważona czasem gry) ──────────────────────────────
   const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeAllSubs, [...homeInjuryData.forcedExits, ...homeRedExits]);
@@ -807,8 +809,8 @@ const simulateCLMatchFull = (
   if (xgAway > xgHome + 1.2) xgAway += 0.5;
 
   // Aplikacja modyfikatorów taktyki, trenerów, czerwonych kartek, pogody
-  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod);
-  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod);
+  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod * formImpact.homeGoalChanceMultiplier);
+  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod * formImpact.awayGoalChanceMultiplier);
 
   // ── Generowanie goli 90 min (Poisson z nasyceniem) ───────────────────
   let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
@@ -1110,8 +1112,8 @@ export const BackgroundMatchProcessorCL = {
       // Pobierz lub wygeneruj składy
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
-      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
-      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string });
+      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_home` });
+      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_away` });
 
       const isReturnLeg = fixture.leagueId === CompetitionType.CL_R1Q_RETURN
                        || fixture.leagueId === CompetitionType.CL_R2Q_RETURN

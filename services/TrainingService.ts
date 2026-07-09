@@ -4,6 +4,7 @@ import { FinanceService } from './FinanceService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerDevelopmentService } from './PlayerDevelopmentService';
+import { PlayerFormService } from './PlayerFormService';
 import { getTrainableAttributesForPosition } from './TrainingAttributeRules';
 import { findTeamTrainingCycle, getDefaultTeamTrainingCycle } from './TrainingProgramRules';
 
@@ -363,6 +364,9 @@ export const TrainingService = {
       const conditionDrift = (!hasGeneralPlan && Math.random() < 0.12 ? -1 : 0) + fitnessCondDrift;
       const fatigueDrift = (!hasGeneralPlan && Math.random() < 0.10 ? 1 : 0) + fitnessFatigueDrift;
       const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, intensity);
+      const nextMorale = PlayerMoraleService.clamp((updated.morale ?? 50) + moraleDelta);
+      const nextCondition = Math.max(1, Math.min(100, updated.condition + conditionDrift));
+      const nextFatigueDebt = Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift));
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },
         clubReputation,
@@ -370,13 +374,13 @@ export const TrainingService = {
         clubCountry
       );
 
-      return {
+      const nextPlayer = {
         ...updated,
         attributes,
         overallRating: newOvr,
-        morale: PlayerMoraleService.clamp((updated.morale ?? 50) + moraleDelta),
-        condition: Math.max(1, Math.min(100, updated.condition + conditionDrift)),
-        fatigueDebt: Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift)),
+        morale: nextMorale,
+        condition: nextCondition,
+        fatigueDebt: nextFatigueDebt,
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],
@@ -385,6 +389,7 @@ export const TrainingService = {
         },
         marketValue: updatedMarketValue
       };
+      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, intensity));
     });
 
     return updatedMap;
@@ -511,6 +516,7 @@ export const TrainingService = {
       });
 
       const newOvr = PlayerAttributesGenerator.calculateOverall(attributes, player.position);
+      const nextMorale = PlayerMoraleService.clamp((updated.morale ?? 50) + PlayerMoraleService.applyTrainingMood(updated, TrainingIntensity.NORMAL));
       const updatedMarketValue = FinanceService.calculateMarketValue(
         { ...updated, overallRating: newOvr },
         clubReputation,
@@ -518,11 +524,11 @@ export const TrainingService = {
         clubCountry
       );
 
-      return {
+      const nextPlayer = {
         ...updated,
         attributes,
         overallRating: newOvr,
-        morale: PlayerMoraleService.clamp((updated.morale ?? 50) + PlayerMoraleService.applyTrainingMood(updated, TrainingIntensity.NORMAL)),
+        morale: nextMorale,
         stats: {
           ...player.stats,
           ratingHistory: player.stats.ratingHistory || [],
@@ -531,6 +537,7 @@ export const TrainingService = {
         },
         marketValue: updatedMarketValue
       };
+      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, TrainingIntensity.NORMAL));
     });
   }
 };

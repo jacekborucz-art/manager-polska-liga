@@ -16,6 +16,7 @@ import { AiScoutingService } from './AiScoutingService';
 import { buildMatchPressureContext } from './MatchPressureService';
 import { SeasonTransitionService } from './SeasonTransitionService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { PlayerFormService } from './PlayerFormService';
 import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
@@ -930,6 +931,7 @@ if (todayFixtures.length === 0) {
    if (result.ratings && result.ratings[p.id]) {
                  if (!updatedP.stats.ratingHistory) updatedP.stats.ratingHistory = [];
                  updatedP.stats.ratingHistory.push(result.ratings[p.id]);
+                 updatedP = PlayerFormService.withUpdatedForm(updatedP);
               }
 
               const injury = result.injuries.find(inj => inj.playerId === p.id);

@@ -1,6 +1,7 @@
 import { Club, Coach, Fixture, HealthStatus, InjurySeverity, Lineup, MatchStatus, Player, PlayerPosition, WeatherSnapshot } from '../types';
 import { LeagueBackgroundMatchEngineV2 } from './LeagueBackgroundMatchEngine-ver2';
 import { PlayerStatsService } from './PlayerStatsService';
+import { PlayerFormService } from './PlayerFormService';
 import { RefereeService } from './RefereeService';
 
 const THIRD_LEAGUE_ID = 'L_PL_4';
@@ -173,7 +174,7 @@ const applyHiddenMatchPlayerState = (
     };
   }
 
-  return updated;
+  return PlayerFormService.withUpdatedForm(updated);
 };
 
 const createHiddenFixture = (home: Club, away: Club, currentDate: Date, roundIndex: number): Fixture => ({

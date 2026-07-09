@@ -144,6 +144,8 @@ import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
 import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
 import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
 import { PlayerDevelopmentService } from '../services/PlayerDevelopmentService';
+import { PlayerFormService } from '../services/PlayerFormService';
+import { EuropeanPlayerStatsService } from '../services/EuropeanPlayerStatsService';
 import { pickNationalityForRegion } from '../services/NationalityService';
 import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
 import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowService';
@@ -235,7 +237,7 @@ const applyAiFriendlyStatsToPlayers = (
       const redCards = report.cards.filter(c => c.playerId === player.id && c.type === 'RED_CARD').length;
       const rating = report.ratings[player.id];
 
-      return {
+      return PlayerFormService.withUpdatedForm({
         ...player,
         friendlyStats: {
           ...friendlyStats,
@@ -248,7 +250,7 @@ const applyAiFriendlyStatsToPlayers = (
           cleanSheets: friendlyStats.cleanSheets + (player.position === PlayerPosition.GK && conceded === 0 ? 1 : 0),
           ratingHistory: rating ? [...(friendlyStats.ratingHistory || []), rating] : (friendlyStats.ratingHistory || []),
         },
-      };
+      });
     });
 
     if (changed) {
@@ -263,6 +265,46 @@ const applyAiFriendlyStatsToPlayers = (
 
   return nextPlayers;
 };
+
+const getAiWinterCampCost = (club: Club): number => {
+  const tier = club.tier ?? (parseInt(club.leagueId?.split('_')[2] || '2') || 2);
+  const tierMultiplier = tier <= 1 ? 1.35 : tier === 2 ? 1.1 : tier === 3 ? 0.85 : 0.65;
+  const rawCost = (70000 + (club.reputation ?? 50) * 2600) * tierMultiplier;
+  return Math.round(rawCost / 10000) * 10000;
+};
+
+const getAiWinterCampFormAdjustment = (club: Club, cost: number): number =>
+  club.budget >= cost * 1.12 ? 3 : -12;
+
+const isPolishLeagueClub = (club: Club): boolean =>
+  club.leagueId?.startsWith('L_PL') || club.country === 'POL';
+
+const isEuropeanCupClub = (club: Club): boolean =>
+  ['L_CL', 'L_EL', 'L_CONF'].includes(club.leagueId) && club.country !== 'POL';
+
+const getEuropeanBackgroundFormScore = (player: Player, club: Club, date: Date): number => {
+  const currentScore = player.form ?? PlayerFormService.calculate(player).score;
+  const seed = Array.from(`${club.id}_${player.id}_${date.getFullYear()}_${date.getMonth()}`).reduce(
+    (sum, char, index) => sum + char.charCodeAt(0) * (index + 3),
+    0
+  );
+  const variation = (seed % 11) - 5;
+  const reputationAdjustment = ((club.reputation ?? 60) - 65) * 0.12;
+  const qualityAdjustment = ((player.overallRating ?? 60) - 62) * 0.22;
+  const moraleAdjustment = ((player.morale ?? 50) - 50) * 0.08;
+  const conditionPenalty = (player.condition ?? 100) < 65 ? -5 : 0;
+  const fatiguePenalty = (player.fatigueDebt ?? 0) > 60 ? -4 : 0;
+  const targetScore = Math.max(42, Math.min(76, 54 + reputationAdjustment + qualityAdjustment + moraleAdjustment + conditionPenalty + fatiguePenalty + variation));
+
+  if (currentScore >= targetScore) return currentScore;
+  return Math.round(currentScore + (targetScore - currentScore) * 0.65);
+};
+
+const applyEuropeanBackgroundForm = (squad: Player[], club: Club, date: Date): Player[] =>
+  EuropeanPlayerStatsService.applyBackgroundLeagueStatsToDate(squad, club, date, date.getFullYear()).map(player => ({
+    ...player,
+    form: getEuropeanBackgroundFormScore(player, club, date),
+  }));
 
 const sanitizeImportedLoan = (
   loan: ImportedSquadPlayer['loan'],
@@ -1709,15 +1751,29 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (players[clubId]) return players[clubId];
     if (generatedSquadCacheRef.current[clubId]) return generatedSquadCacheRef.current[clubId];
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
+    const withAiWinterCampState = (squad: Player[]) => {
+        const club = clubs.find(c => c.id === clubId);
+        if (club && isEuropeanCupClub(club)) {
+          return applyEuropeanBackgroundForm(squad, club, currentDate);
+        }
+        const adjustment = club?.aiWinterCampFormAdjustment ?? 0;
+        const decisionYear = club?.aiWinterCampDecisionYear;
+        const isAfterWinterCamp =
+          decisionYear === currentDate.getFullYear() &&
+          (currentDate.getMonth() > 0 || (currentDate.getMonth() === 0 && currentDate.getDate() >= 15));
+        if (!club || !isPolishLeagueClub(club) || club.id === userTeamId || adjustment === 0 || !isAfterWinterCamp) return squad;
+        return squad.map(player => PlayerFormService.withUpdatedForm(player, adjustment));
+    };
     const queueGeneratedSquad = (squad: Player[]) => {
-        generatedSquadCacheRef.current[clubId] = squad;
+        const preparedSquad = withAiWinterCampState(squad);
+        generatedSquadCacheRef.current[clubId] = preparedSquad;
         queueMicrotask(() => {
             setPlayers(prev => {
                 if (prev[clubId]) return prev;
-                return { ...prev, [clubId]: squad };
+                return { ...prev, [clubId]: preparedSquad };
             });
         });
-        return squad;
+        return preparedSquad;
     };
 
     // Sprawdź czy to klub europejski (CL)
@@ -1765,7 +1821,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     const newSquad = withMoraleState(SquadGeneratorService.generateSquadForClub(clubId));
     return queueGeneratedSquad(newSquad);
-}, [players]);
+}, [players, clubs, currentDate, userTeamId]);
 
   const navigateTo = useCallback((view: ViewState) => {
     setPreviousViewState(viewState);
@@ -3803,7 +3859,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         finalPlayers[clubId] = finalPlayers[clubId].map(p => {
           if (simulation.ratings && simulation.ratings[p.id]) {
             const hist = p.stats.ratingHistory || [];
-            return { ...p, stats: { ...p.stats, ratingHistory: [...hist, simulation.ratings[p.id]] } };
+            return PlayerFormService.withUpdatedForm({ ...p, stats: { ...p.stats, ratingHistory: [...hist, simulation.ratings[p.id]] } });
           }
           return p;
         });
@@ -7921,6 +7977,27 @@ Asystent`,
     }
 
     // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
+    if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
+      const europeanClubs = clubs.filter(isEuropeanCupClub);
+      if (europeanClubs.length > 0) {
+        setPlayers(prev => {
+          let changed = false;
+          const next = { ...prev };
+          europeanClubs.forEach(club => {
+            const squad = prev[club.id] ?? generatedSquadCacheRef.current[club.id];
+            if (!squad?.length) return;
+            const updatedSquad = applyEuropeanBackgroundForm(squad, club, dateToProcess);
+            generatedSquadCacheRef.current[club.id] = updatedSquad;
+            if (prev[club.id]) {
+              next[club.id] = updatedSquad;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
+    }
+
     if (hasCompetitionToday(CompetitionType.WINTER_CAMP_INVITE) && userTeamId && !isResigned) {
       const campInviteKey = `WINTER_CAMP_INVITE_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campInviteKey)) {
@@ -7988,6 +8065,64 @@ Asystent`,
     }
 
     // ── OBÓZ ZIMOWY: ZAKOŃCZENIE (15 stycznia) ───────────────────────────────
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_END) && userTeamId) {
+      const winterYear = dateToProcess.getFullYear();
+      const aiCampDecisions = clubs
+        .filter(c => c.id !== userTeamId && isPolishLeagueClub(c) && c.aiWinterCampDecisionYear !== winterYear)
+        .map(club => {
+          const cost = getAiWinterCampCost(club);
+          const formAdjustment = getAiWinterCampFormAdjustment(club, cost);
+          return {
+            clubId: club.id,
+            cost,
+            formAdjustment,
+            type: formAdjustment >= 0 ? 'AWAY' as const : 'LOCAL' as const,
+          };
+        });
+
+      if (aiCampDecisions.length > 0) {
+        setPlayers(prev => {
+          let changed = false;
+          const next = { ...prev };
+          aiCampDecisions.forEach(decision => {
+            const squad = prev[decision.clubId] ?? generatedSquadCacheRef.current[decision.clubId];
+            if (!squad?.length) return;
+            const updatedSquad = squad.map(player => PlayerFormService.withUpdatedForm(player, decision.formAdjustment));
+            generatedSquadCacheRef.current[decision.clubId] = updatedSquad;
+            if (prev[decision.clubId]) {
+              next[decision.clubId] = updatedSquad;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+
+        setClubs(prev => prev.map(club => {
+          const decision = aiCampDecisions.find(item => item.clubId === club.id);
+          if (!decision) return club;
+          const attendsCamp = decision.type === 'AWAY';
+          const nextBudget = attendsCamp ? Math.max(0, club.budget - decision.cost) : club.budget;
+          const financeEntry = attendsCamp ? {
+            id: `AI_WINTER_CAMP_${winterYear}_${club.id}`,
+            date: dateToProcess.toISOString().split('T')[0],
+            amount: -decision.cost,
+            type: 'EXPENSE' as const,
+            description: 'Obóz zimowy AI',
+            previousBalance: club.budget,
+          } : null;
+          return {
+            ...club,
+            budget: nextBudget,
+            morale: Math.max(0, Math.min(100, (club.morale ?? 70) + (attendsCamp ? 1 : -2))),
+            aiWinterCampDecisionYear: winterYear,
+            aiWinterCampFormAdjustment: decision.formAdjustment,
+            aiWinterCampType: decision.type,
+            financeHistory: financeEntry ? [financeEntry, ...(club.financeHistory || [])].slice(0, 50) : club.financeHistory,
+          };
+        }));
+      }
+    }
+
     if (hasCompetitionToday(CompetitionType.WINTER_CAMP_END) && userTeamId && !isResigned) {
       const campEndKey = `WINTER_CAMP_END_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campEndKey)) {
@@ -8066,10 +8201,11 @@ Asystent`,
                 seasonalChanges,
                 seasonalGrowthPoints,
               };
+              const nextPlayer = { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
               if (effect.injured) {
-                return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+                return PlayerFormService.withUpdatedForm({ ...nextPlayer, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } }, effect.formDelta ?? 0);
               }
-              return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
+              return PlayerFormService.withUpdatedForm(nextPlayer, effect.formDelta ?? 0);
             });
             return { ...prev, [userTeamId]: updatedSquad };
           });
@@ -8094,6 +8230,41 @@ Asystent`,
             };
           }));
         }
+      }
+    }
+
+    // Zimowe sparingi: kara do formy za zbyt mało meczów kontrolnych.
+    if (dateToProcess.getMonth() === 0 && dateToProcess.getDate() === 19 && userTeamId && !isResigned) {
+      const winterYear = dateToProcess.getFullYear();
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub?.winterCamp?.winterFriendlyFormPenaltyYear !== winterYear) {
+        const winterFriendliesPlayed = allFixtures.filter(f => {
+          if (f.leagueId !== CompetitionType.FRIENDLY || f.status !== MatchStatus.PLAYED) return false;
+          if (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId) return false;
+          const fixtureDate = f.date instanceof Date ? f.date : new Date(f.date);
+          return fixtureDate.getFullYear() === winterYear && fixtureDate.getMonth() === 0 && fixtureDate.getDate() >= 2 && fixtureDate.getDate() <= 18;
+        }).length;
+        const friendlyFormPenalty = winterFriendliesPlayed >= 4
+          ? 0
+          : winterFriendliesPlayed === 3
+            ? -4
+            : winterFriendliesPlayed === 2
+              ? -8
+              : winterFriendliesPlayed === 1
+                ? -13
+                : -18;
+
+        if (friendlyFormPenalty < 0) {
+          setPlayers(prev => ({
+            ...prev,
+            [userTeamId]: (prev[userTeamId] || []).map(player => PlayerFormService.withUpdatedForm(player, friendlyFormPenalty)),
+          }));
+        }
+
+        setClubs(prev => prev.map(c => c.id === userTeamId
+          ? { ...c, winterCamp: c.winterCamp ? { ...c.winterCamp, winterFriendlyFormPenaltyYear: winterYear } : c.winterCamp }
+          : c
+        ));
       }
     }
 
@@ -9631,11 +9802,15 @@ const finalResult: SimulationOutput = {
                 redCards: (prev2.redCards ?? 0) + playerRedCards,
                 totalRatingPoints: (prev2.totalRatingPoints ?? 0) + (rating ?? 6.0),
               };
-              return {
+              const reserveFormAdjustment =
+                (rating >= 7.5 ? 5 : rating >= 7.0 ? 3 : rating <= 5.8 ? -4 : rating <= 6.1 ? -2 : 0) +
+                Math.min(3, playerGoals * 2 + playerAssists) -
+                (gotRedCard ? 3 : 0);
+              return PlayerFormService.withUpdatedForm({
                 ...basePlayer,
                 reserveStats: newStats,
                 suspensionMatches: gotRedCard ? 1 : baseSuspension
-              };
+              }, reserveFormAdjustment);
             });
           });
         }

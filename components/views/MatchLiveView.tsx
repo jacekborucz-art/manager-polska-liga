@@ -132,6 +132,7 @@ import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
 import { TacticalMatchupService } from '../../services/TacticalMatchupService';
+import { TeamFormImpactService } from '../../services/TeamFormImpactService';
 import {
   adjustBriefingEffectForPressure,
   adjustDebriefEffectForPressure,
@@ -816,7 +817,10 @@ const isPausedForSevereInjury = useMemo(() => {
       const aiPlayersInit = ctx.homeClub.id === userTeamId ? ctx.awayPlayers : ctx.homePlayers;
       const userLineupInit = lineups[userClubInit.id];
       const userTacticIdInit = userLineupInit?.tacticId ?? '4-4-2';
-      const aiLineupBase = lineups[aiClubInit.id] ?? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, '4-4-2', aiCoachInit);
+      const aiLineupBase = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, '4-4-2', aiCoachInit, {
+        formAware: true,
+        selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_live_ai`
+      });
       const opponentReport = userLineupInit
         ? AiOpponentAnalysisService.generateReport({
             aiClub: aiClubInit,
@@ -832,7 +836,10 @@ const isPausedForSevereInjury = useMemo(() => {
         ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit, aiClubInit.id !== ctx.homeClub.id, aiCoachInit)
         : aiLineupBase.tacticId;
       const aiLineupPrepared = aiPreparedTacticId !== aiLineupBase.tacticId
-        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, null)
+        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
+            formAware: true,
+            selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_${aiPreparedTacticId}_live_ai`
+          })
         : aiLineupBase;
       const homeLineupInit = aiClubInit.id === ctx.homeClub.id
         ? aiLineupPrepared
@@ -1140,7 +1147,20 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     } 
     else if (activePenalty.phase === 'EXECUTING') {
       const t = setTimeout(() => {
-        const isGoal = GoalAttributionService.checkShotSuccess(activePenalty.kicker, activePenalty.keeper, [], false, () => Math.random(), true);
+        const penaltyKickerFormMod = clampNumber(0.92 + (TeamFormImpactService.getPlayerForm(activePenalty.kicker) / 100) * 0.16, 0.92, 1.08);
+        const penaltyKeeperFormMod = clampNumber(0.93 + (TeamFormImpactService.getPlayerForm(activePenalty.keeper) / 100) * 0.14, 0.93, 1.07);
+        const isGoal = GoalAttributionService.checkShotSuccess(
+          activePenalty.kicker,
+          activePenalty.keeper,
+          [],
+          false,
+          () => Math.random(),
+          true,
+          100,
+          100,
+          penaltyKickerFormMod,
+          penaltyKeeperFormMod
+        );
         const finalResult = isGoal ? MatchEventType.PENALTY_SCORED : MatchEventType.PENALTY_MISSED;
         
         setActivePenalty(prev => prev ? { ...prev, phase: 'RESULT', result: finalResult } : null);
@@ -1681,6 +1701,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const awayFatPenalty = _fatiguePenalty(avgFatigueAway) + _rotationPenalty(nextAwayLineup.startingXI, localAwayFatigue, nextSubsCountAway, nextSubsCountHome);
         const homeFormImpact = teamFormImpact.home;
         const awayFormImpact = teamFormImpact.away;
+        const playerFormImpact = TeamFormImpactService.calculateMatchImpact(
+          ctx.homePlayers,
+          ctx.awayPlayers,
+          nextHomeLineup,
+          nextAwayLineup
+        );
         const getFormStackingMultiplier = (side: 'HOME' | 'AWAY'): number => {
           const sideMomentum = side === 'HOME' ? prev.momentum : -prev.momentum;
           if (sideMomentum <= 10) return 1;
@@ -1769,6 +1795,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 3.0; // [było *0.6 — zbyt słabe, zmęczona drużyna traciła inicjatywę o <1%; teraz ~11-14% różnicy przy braku zmian]
         const pressureInitiativeMod = ((hLivePressure.initiativeMultiplier - 1) - (aLivePressure.initiativeMultiplier - 1)) * 0.42;
         const formInitiativeMod = (homeFormImpact.initiativeModifier * homeFormStacking) - (awayFormImpact.initiativeModifier * awayFormStacking);
+        const playerFormInitiativeMod = clampNumber(
+          (playerFormImpact.homeGoalChanceMultiplier - playerFormImpact.awayGoalChanceMultiplier) * 0.055,
+          -0.060,
+          0.060
+        );
         const getGoalkeeperCrisisInitiativePenalty = (lineup: Lineup, players: Player[]): number => {
           const keeper = lineup.startingXI[0] ? players.find(p => p.id === lineup.startingXI[0]) : null;
           if (!keeper) return 0.040;
@@ -1792,6 +1823,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               fatInitiativeMod +
               pressureInitiativeMod +
               formInitiativeMod +
+              playerFormInitiativeMod +
               midfieldInitiativeMod +
               qualityInitiativeMod +
               shotDominanceInitiativeMod +
@@ -1980,6 +2012,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const moraleDebuffMultiplier = Math.max(0.15, 1 - moraleTeamPenalty);
         const activeFormImpact = activeSide === 'HOME' ? homeFormImpact : awayFormImpact;
         const defendingFormImpact = activeSide === 'HOME' ? awayFormImpact : homeFormImpact;
+        const activePlayerFormImpact = activeSide === 'HOME' ? playerFormImpact.home : playerFormImpact.away;
+        const defendingPlayerFormImpact = activeSide === 'HOME' ? playerFormImpact.away : playerFormImpact.home;
+        const activePlayerFormChanceMultiplier = activeSide === 'HOME'
+          ? playerFormImpact.homeGoalChanceMultiplier
+          : playerFormImpact.awayGoalChanceMultiplier;
         const activeFormStacking = activeSide === 'HOME' ? homeFormStacking : awayFormStacking;
         const defendingFormStacking = activeSide === 'HOME' ? awayFormStacking : homeFormStacking;
 
@@ -2629,6 +2666,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           Math.min(
             0.155,
             (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) *
+              clampNumber(activePlayerFormChanceMultiplier, 0.66, 1.34) *
               activePressureMods.shotMultiplier *
               (livePressureContext?.rivalryMultiplier ?? 1)
           )
@@ -2891,6 +2929,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               : scorerBriefingFitMod;
             const scorerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
             const gkFormBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
+            const playerFormFinishingBoost = clampNumber(activePlayerFormImpact.performanceMultiplier, 0.78, 1.22);
+            const playerFormGoalkeepingBoost = clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.82, 1.18);
             const actionProfile = MatchActionService.evaluateOpenPlayAction({
               attackingPlayers: team,
               defendingPlayers: oppTeam,
@@ -2905,8 +2945,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               isCounterAttack: (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide),
               rng: () => seededRng(currentSeed, nextMinute, 760),
             });
-            const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * actionProfile.finishingFitMod;
-            const gkTeamFormFitMod = gkFitMod * gkFormBoost;
+            const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * playerFormFinishingBoost * actionProfile.finishingFitMod;
+            const gkTeamFormFitMod = gkFitMod * gkFormBoost * playerFormGoalkeepingBoost;
 
             // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
             const isGoal = GoalAttributionService.checkShotSuccess(
@@ -3174,8 +3214,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   : 1.0;
                 const headerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
                 const headerGkBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
-                const headerTeamFormFitMod = headerBriefingFitMod * headerFormBoost;
-                const headerGkFormFitMod = hGkFitMod * headerGkBoost;
+                const headerTeamFormFitMod = headerBriefingFitMod * headerFormBoost * clampNumber(activePlayerFormImpact.performanceMultiplier, 0.80, 1.20);
+                const headerGkFormFitMod = hGkFitMod * headerGkBoost * clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.84, 1.16);
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),

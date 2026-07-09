@@ -1,6 +1,7 @@
 import { MatchLiveState, MatchContext, Player, PlayerPosition, Lineup, SubstitutionRecord, InjurySeverity } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService } from './LineupService';
+import { TeamFormImpactService } from './TeamFormImpactService';
 // [AI-COACH-FIX] applyTacticReassignment — ten sam mechanizm naprawy "remapowania składu" co w
 // silniku ligowym (AiMatchDecisionService.ts). Patrz tam obszerny komentarz przy definicji: bez
 // tego, zmiana taktyki w trakcie meczu tylko zmieniała nazwę taktyki, a 11 zawodników zostawało na
@@ -8,6 +9,12 @@ import { LineupService } from './LineupService';
 // na boisku znaczy inną rolę w nowej taktyce) bez żadnej faktycznej zmiany ustawienia, i dostawać
 // karę za grę nie na swojej pozycji.
 import { applyTacticReassignment } from './AiMatchDecisionService';
+
+const getFormAwareFitScore = (player: Player, role: PlayerPosition): number =>
+  LineupService.calculateFitScore(player, role) + TeamFormImpactService.getSelectionFormBonus(player, 50) * 0.7;
+
+const getFormAwareOverall = (player: Player): number =>
+  player.overallRating + TeamFormImpactService.getSelectionFormBonus(player, 50) * 0.7;
 
 const FRIENDLY_OFFENSIVE_TACTICS = ['4-4-2-OFF', '4-3-3', '3-5-2', '4-3-2-1', '4-3-3-F9', '3-4-2-1', '3-4-3'];
 const FRIENDLY_DEFENSIVE_TACTICS = ['5-4-1', '4-4-2-DEF', '5-3-2', '6-3-1', '5-2-1-2', '4-5-1'];
@@ -18,7 +25,7 @@ const getLineupFitForTactic = (lineup: Lineup, players: Player[], tacticId: stri
     if (!playerId) return sum;
     const player = players.find(p => p.id === playerId);
     if (!player) return sum;
-    return sum + LineupService.calculateFitScore(player, tactic.slots[idx].role);
+    return sum + getFormAwareFitScore(player, tactic.slots[idx].role);
   }, 0);
 };
 
@@ -133,7 +140,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
       const bestGkOnBench = newLineup.bench
         .map(id => myPlayers.find(p => p.id === id)).filter((p): p is Player => !!p)
         .filter(p => p && p.position === PlayerPosition.GK && !outIds.has(p.id))
-        .sort((a, b) => b.overallRating - a.overallRating)[0];
+        .sort((a, b) => getFormAwareOverall(b) - getFormAwareOverall(a))[0];
 
       // OPCJA A: Mamy zmiany i bramkarza na ławce -> Standardowa procedura
       if (bestGkOnBench && currentSubsCount < maxSubs) {
@@ -200,7 +207,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
           const bestDefOnBench = newLineup.bench
             .map(id => myPlayers.find(p => p.id === id)).filter((p): p is Player => !!p)
             .filter(p => p.position === PlayerPosition.DEF && !outIds.has(p.id))
-            .sort((a, b) => b.overallRating - a.overallRating)[0];
+            .sort((a, b) => getFormAwareOverall(b) - getFormAwareOverall(a))[0];
 
           if (bestDefOnBench) {
             let sacrificeIdx = -1;
@@ -265,7 +272,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
           } else {
             bestSub = benchPool
               .filter(p => p.position !== PlayerPosition.GK)
-              .sort((a, b) => LineupService.calculateFitScore(b, requiredRole) - LineupService.calculateFitScore(a, requiredRole))[0];
+              .sort((a, b) => getFormAwareFitScore(b, requiredRole) - getFormAwareFitScore(a, requiredRole))[0];
           }
 
           if (bestSub) {
@@ -308,7 +315,7 @@ export const AiMatchDecisionServiceFriendlyMatch = {
             .filter(id => id !== null)
             .map(id => myPlayers.find(p => p.id === id))
             .filter((p): p is Player => p !== undefined)
-            .sort((a, b) => a.overallRating - b.overallRating);
+            .sort((a, b) => getFormAwareOverall(a) - getFormAwareOverall(b));
 
           if (fieldPlayers.length > 0) {
             playerOutId = fieldPlayers[0].id;
@@ -328,13 +335,13 @@ export const AiMatchDecisionServiceFriendlyMatch = {
 
         let bestSub = null;
         if (requiredRole === PlayerPosition.GK) {
-          bestSub = benchPool.filter(p => p.position === PlayerPosition.GK).sort((a, b) => b.overallRating - a.overallRating)[0];
+          bestSub = benchPool.filter(p => p.position === PlayerPosition.GK).sort((a, b) => getFormAwareOverall(b) - getFormAwareOverall(a))[0];
         } else {
           bestSub = benchPool
             .filter(p => p.position !== PlayerPosition.GK)
             .sort((a, b) => {
-              let scoreA = LineupService.calculateFitScore(a, requiredRole);
-              let scoreB = LineupService.calculateFitScore(b, requiredRole);
+              let scoreA = getFormAwareFitScore(a, requiredRole);
+              let scoreB = getFormAwareFitScore(b, requiredRole);
               if (scoreDiff < 0 && b.position === PlayerPosition.FWD) scoreB += 25;
               return scoreB - scoreA;
             })[0];
