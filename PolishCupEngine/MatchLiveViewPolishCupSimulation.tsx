@@ -51,6 +51,7 @@ import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
 import { LineupService } from '../services/LineupService';
 import { LiveMatchInstructionBalanceService } from '../services/LiveMatchInstructionBalanceService';
 import { BroadcastMomentumBar, MatchLiveBroadcastStyles, PitchBroadcastOverlay } from '../components/match/MatchLiveBroadcastChrome';
+import { TeamFormImpactService } from '../services/TeamFormImpactService';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-12 h-12" }: { primary: string, secondary: string, size?: string }) => (
   <div className={`relative ${size} flex items-center justify-center p-1.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl overflow-hidden`}>
@@ -884,7 +885,9 @@ useEffect(() => {
       const dramaticMiss = Math.random() < 0.05;
       const attackerScore = (scorer.attributes.penalties || 50) * 0.45 + (scorer.attributes.finishing || 50) * 0.35 + (scorer.attributes.mentality || 50) * 0.20;
       const keeperScore = keeper ? ((keeper.attributes.goalkeeping || 50) * 0.50 + (keeper.attributes.defending || 50) * 0.20 + (keeper.attributes.mentality || 50) * 0.30) : 50;
-      const isScored = !dramaticMiss && Math.random() < Math.max(0.50, Math.min(0.95, 0.76 + (attackerScore - keeperScore) / 200));
+      const penaltyKickerFormMod = clamp(0.92 + (TeamFormImpactService.getPlayerForm(scorer) / 100) * 0.16, 0.92, 1.08);
+      const penaltyKeeperFormMod = clamp(0.93 + (TeamFormImpactService.getPlayerForm(keeper) / 100) * 0.14, 0.93, 1.07);
+      const isScored = !dramaticMiss && Math.random() < Math.max(0.50, Math.min(0.95, 0.76 + ((attackerScore * penaltyKickerFormMod) - (keeperScore * penaltyKeeperFormMod)) / 200));
       if (!isScored) {
         setShowMissedPenalty(true);
         setTimeout(() => setShowMissedPenalty(false), 4000);
@@ -1495,6 +1498,12 @@ useEffect(() => {
         let nextIsPausedForEvent = prev.isPausedForEvent;       
         let localHomeFatigue = { ...prev.homeFatigue };
          let localAwayFatigue = { ...prev.awayFatigue };
+        const playerFormImpact = TeamFormImpactService.calculateMatchImpact(
+          ctx.homePlayers,
+          ctx.awayPlayers,
+          nextHomeLineup,
+          nextAwayLineup
+        );
 
         // === NADPROGRAMOWY DRENAŻ ZMĘCZENIA ZA NIEDOBÓR GRACZY ===
         // Gracze w niepełnym składzie muszą biec za 2 — każda minuta kosztuje więcej
@@ -2433,7 +2442,8 @@ if (targetPlayer && !prev.isPausedForEvent) {
             const rawHomeInitiative = homeWins / totalWins;
             const compressedHomeInitiative = 0.22 + (rawHomeInitiative * 0.56);
             const momentumShift = Math.max(-0.06, Math.min(0.06, nextMomentum / 500));
-            const homeInitiativeProb = Math.max(0.22, Math.min(0.78, compressedHomeInitiative + momentumShift));
+            const formInitiativeShift = clamp((playerFormImpact.homeGoalChanceMultiplier - playerFormImpact.awayGoalChanceMultiplier) * 0.04, -0.055, 0.055);
+            const homeInitiativeProb = Math.max(0.22, Math.min(0.78, compressedHomeInitiative + momentumShift + formInitiativeShift));
             eventSide = seededRng(currentSeed, nextMinute, 201) < homeInitiativeProb ? 'HOME' : 'AWAY';
         }
         const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
@@ -2549,6 +2559,12 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
         // Przy równych siłach szansa na wejście w pole karne rośnie z ~37% do ~65%.
         const activeBaseThreshold = eventSide === 'HOME' ? homeProgressionThreshold : awayProgressionThreshold;
        let dynamicThreshold = Math.max(0.25, (activeBaseThreshold - momentumBonus) * 1.14);
+        const activePlayerFormImpact = eventSide === 'HOME' ? playerFormImpact.home : playerFormImpact.away;
+        const defendingPlayerFormImpact = eventSide === 'HOME' ? playerFormImpact.away : playerFormImpact.home;
+        const activePlayerFormChanceMultiplier = eventSide === 'HOME'
+          ? playerFormImpact.homeGoalChanceMultiplier
+          : playerFormImpact.awayGoalChanceMultiplier;
+        dynamicThreshold = clamp(dynamicThreshold / clamp(activePlayerFormChanceMultiplier, 0.74, 1.26), 0.20, 0.95);
 // Podnosimy szanse słabszej drużyny w sposób stopniowany — im większa dysproporcja, tym większa ulga
 const attackerPwr = eventSide === userSide ? pPower : aPower;
 const defenderSidePwr = eventSide === userSide ? aPower : pPower;
@@ -2671,7 +2687,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
                 : 1.00;
             const gkBaseFactor = giantKillerRepGap >= 5 ? 0.009 : 0.006;
             const rivalBoostMod = eventSide !== userSide ? (prev.preMatchMotivation?.rivalBoost ?? 0) : 0;
-            const giantKillerChance = Math.max(0.004, Math.min(0.050, (11 - giantKillerRepGap) * gkBaseFactor)) * giantKillerTacticMod * (1 + rivalBoostMod);
+            const giantKillerFormMod = clamp(activePlayerFormChanceMultiplier, 0.82, 1.18);
+            const giantKillerChance = Math.max(0.004, Math.min(0.050, (11 - giantKillerRepGap) * gkBaseFactor)) * giantKillerTacticMod * (1 + rivalBoostMod) * giantKillerFormMod;
             const alreadyGettingShot = successfulPasses / diceRolls > currentThreshold;
             if (!alreadyGettingShot && seededRng(currentSeed, nextMinute, 9988) < giantKillerChance) {
                 successfulPasses = Math.ceil(diceRolls * (currentThreshold + 0.05));
@@ -2697,6 +2714,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
             const scorerFatigue = (eventSide === 'HOME' ? localHomeFatigue : localAwayFatigue)[scorer.id] ?? scorer.condition;
             // Floor 0.38 zamiast 0.50: kontuzjowany strzelec nie strzela pełną siłą
             const scorerFatigueMod = Math.max(0.38, scorerFatigue / 100);
+            const playerFormFinishingBoost = clamp(activePlayerFormImpact.performanceMultiplier, 0.78, 1.22);
+            const playerFormGoalkeepingBoost = clamp(defendingPlayerFormImpact.performanceMultiplier, 0.82, 1.18);
             const shotPowerCore =
               (scorer.attributes.finishing * 0.52) +
               (scorer.attributes.attacking * 0.16) +
@@ -2704,7 +2723,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
               (scorer.attributes.positioning * 0.10) +
               (scorer.attributes.dribbling * 0.07) +
               (scorer.attributes.mentality * 0.05);
-            const shotPower = shotPowerCore * humanFactor() * 0.92 * randomShot * scorerFatigueMod;
+            const shotPower = shotPowerCore * humanFactor() * 0.92 * randomShot * scorerFatigueMod * playerFormFinishingBoost;
             
             // Zmęczenie bramkarza obniża reflexy i decyzyjność przy wyjściu:
             // cond=100→1.00, cond=80→0.88, cond=60→0.76, cond=40→0.64 (nie spada poniżej 0.42)
@@ -2718,7 +2737,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
               keeper.attributes.positioning * 0.16 +
               (keeper.attributes.mentality || 50) * 0.07 +
               (keeper.attributes.leadership || 50) * 0.05
-            ) * (0.88 + (seededRng(currentSeed, nextMinute, 999) * 0.20)) * keeperFatigueMod;
+            ) * (0.88 + (seededRng(currentSeed, nextMinute, 999) * 0.20)) * keeperFatigueMod * playerFormGoalkeepingBoost;
             if (!isRealKeeper) savePower *= 0.18;
 
  if (env.weather.description.toLowerCase().includes('deszcz') && scorer.attributes.technique < 50) {
@@ -2781,7 +2800,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
         } else if (leadDiff === 1) {
             satietyMult = 0.91; // lekkie hamowanie przy prowadzeniu 1 bramką
         }
-        let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult + luckyBonus;
+        let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult * clamp(activePlayerFormChanceMultiplier, 0.76, 1.24) + luckyBonus;
         // Giant Killer: bramkarz zostaje zaskoczony — gwarantowany minimalny próg konwersji.
         // Bez flooru: T3 napastnik vs T1 bramkarz → ~18% → niknie w n=10. Z floorem 0.22 → ~1 niespodzianka/20 meczów.
         if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.22);
@@ -2937,7 +2956,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
             if (upsetPowerGap > 1.15 && upsetRepGap >= 2) {
                 const homeCupEdge = eventSide === 'HOME' && attackingClubRep < defendingClubRep ? 1.35 : 1.0;
                 const closeTierEdge = upsetRepGap <= 3 ? 1.25 : 1.0;
-                const upsetActionChance = Math.min(0.12, (0.080 / upsetPowerGap) * homeCupEdge * closeTierEdge);
+                const upsetActionChance = Math.min(0.12, (0.080 / upsetPowerGap) * homeCupEdge * closeTierEdge * clamp(activePlayerFormChanceMultiplier, 0.84, 1.16));
                 if (seededRng(currentSeed, nextMinute, 9991) < upsetActionChance) {
                     const upsetAttTeam = eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
                     const upsetAttLineup = (eventSide === 'HOME' ? nextHomeLineup : nextAwayLineup).startingXI;
@@ -2945,7 +2964,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                     if (upsetScorer) {
                         const upsetAssistant = GoalAttributionService.pickAssistant(upsetAttTeam, upsetAttLineup as string[], upsetScorer.id, false, () => seededRng(currentSeed, nextMinute, 9995));
                         // Konwersja na gola spada wraz z rosnącą przewagą obrony
-                        const goalConvRate = Math.max(0.11, 0.28 / upsetPowerGap);
+                        const goalConvRate = Math.max(0.11, (0.28 / upsetPowerGap) * clamp(activePlayerFormChanceMultiplier, 0.86, 1.14));
                         if (seededRng(currentSeed, nextMinute, 9993) < goalConvRate) {
                             eventType = MatchEventType.GOAL;
                             const formattedName = getPlayerReportName(upsetScorer);

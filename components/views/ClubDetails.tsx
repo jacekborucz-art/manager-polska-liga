@@ -10,6 +10,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { getClubKitVariantsForClub } from '../../resources/PlayerCardAssets';
 import { KitPreview } from '../common/KitPreview';
 import bojoPitch from '../../Graphic/themes/bojo.png';
+import { PlayerFormLevel, PlayerFormService } from '../../services/PlayerFormService';
 
 const ROLE_LABELS: Record<string, string> = {
   [StaffRole.ASSISTANT_COACH]:  'Asystent trenera',
@@ -31,6 +32,33 @@ const STAFF_ROLE_ORDER: StaffRole[] = [
 
 const staffAttrColor = (v: number) =>
   v >= 17 ? '#34d399' : v >= 13 ? '#60a5fa' : v >= 9 ? '#facc15' : v >= 5 ? '#fb923c' : '#fb7185';
+
+const ClubPlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> = ({ level, className = '' }) => {
+  const config: Record<PlayerFormLevel, { line: [number, number, number, number]; head: string; stroke: string }> = {
+    VERY_HIGH: { line: [13, 22, 13, 5], head: 'M8 10 L13 5 L18 10', stroke: '#34d399' },
+    HIGH: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#84cc16' },
+    RISING: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#a3e635' },
+    STABLE: { line: [5, 13, 21, 13], head: 'M16 8 L21 13 L16 18', stroke: '#cbd5e1' },
+    FALLING: { line: [6, 6, 20, 20], head: 'M13 20 L20 20 L20 13', stroke: '#fb923c' },
+    VERY_LOW: { line: [13, 4, 13, 21], head: 'M8 16 L13 21 L18 16', stroke: '#f87171' },
+  };
+  const { line, head, stroke } = config[level];
+
+  return (
+    <svg viewBox="0 0 26 26" className={className} aria-hidden="true">
+      <line
+        x1={line[0]}
+        y1={line[1]}
+        x2={line[2]}
+        y2={line[3]}
+        stroke={stroke}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path d={head} fill="none" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
 
 const MONTHS_PL = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
 
@@ -452,6 +480,7 @@ export const ClubDetails: React.FC = () => {
     const healthInfo = PlayerPresentationService.getHealthDisplay(player);
     const condColor = PlayerPresentationService.getConditionColorClass(player.condition);
     const playerMoraleInfo = getMoraleInfo(player.morale ?? 50);
+    const playerFormInfo = PlayerFormService.getInfo(player.form ?? PlayerFormService.calculate(player).score);
 
     const isNegotiationBlocked = player.isNegotiationPermanentBlocked;
     const isCooldownActive = player.negotiationLockoutUntil && new Date(currentDate) < new Date(player.negotiationLockoutUntil);
@@ -516,6 +545,14 @@ export const ClubDetails: React.FC = () => {
                 <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[6px] font-black rounded-sm border border-blue-500/30">📝</span>
               )}
            </div>
+        </td>
+        <td className="w-12 text-center relative z-10">
+          <span
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-black/20"
+            title={`Forma: ${playerFormInfo.label}`}
+          >
+            <ClubPlayerFormArrow level={playerFormInfo.level} className="h-5 w-5 drop-shadow" />
+          </span>
         </td>
         <td className="w-16 text-center relative z-10">
           <div className="flex items-center justify-center gap-0.5" title={`Morale: ${playerMoraleInfo.label}`}>
@@ -789,21 +826,21 @@ export const ClubDetails: React.FC = () => {
                  <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur-md">
                        <tr className="text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5">
-                           <th className="py-3 pl-6">TYP</th>
-                           <th className="py-3">POZ</th>
-                           <th className="py-3">NAZWISKO</th>
-                           <th className="py-3 text-center w-16 text-[10px] opacity-60">MOR</th>
-                            <th className="py-3 text-center w-10 text-[10px] opacity-60">ME</th>
+                           <th className="py-3 pl-6 align-middle">TYP</th>
+                           <th className="py-3 align-middle">POZ</th>
+                           <th className="py-3 align-middle">NAZWISKO</th>
+                           <th className="py-3 text-center w-12 text-[10px] opacity-60 align-middle">FORMA</th>
+                           <th className="py-3 text-center w-16 text-[10px] opacity-60 align-middle">MOR</th>
+                            <th className="py-3 text-center w-10 text-[10px] opacity-60 align-middle">ME</th>
                           <th className="py-3 text-center w-10 text-[10px] opacity-60">⚽</th>
                           <th className="py-3 text-center w-10 text-[10px] opacity-60">AS</th>
                           <th className="py-3 text-center w-10 text-[10px] opacity-60">🟨</th>
-                          <th className="py-3 text-center w-10 text-[10px] opacity-60">ŚOC</th>
-                          <th className="py-3 text-center">OVR</th>
-                           <th className="py-3 text-center">NOTA</th> 
-                          <th className="py-3 text-center">ZDROWIE</th>
+                          <th className="py-3 text-center align-middle">OVR</th>
+                           <th className="py-3 text-center align-middle">NOTA</th> 
+                          <th className="py-3 text-center align-middle">ZDROWIE</th>
                          
-                          <th className="py-3 pr-6">FORMA</th>
-                          <th className="py-3 px-6 w-28 text-center">KONTRAKT DO</th>
+                          <th className="py-3 pr-6 align-middle">KONDYCJA</th>
+                          <th className="py-3 px-6 w-28 text-center align-middle">KONTRAKT DO</th>
                        </tr>
                     </thead>
                     <tbody>
@@ -1127,7 +1164,6 @@ export const ClubDetails: React.FC = () => {
       })()}
 
       <style>{`
-        .custom-scrollbar table thead th:nth-child(8) { display: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }

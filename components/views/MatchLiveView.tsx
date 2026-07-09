@@ -1268,16 +1268,24 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           ? { id: `VAR_DISALLOWED_${activeVAR.minute}`, minute: activeVAR.minute, text: `🚫 VAR: Bramka ${activeVAR.scorerName} NIEUZNANA! SPALONY!`, type: MatchEventType.GENERIC, teamSide: activeVAR.side }
           : { id: `VAR_CONFIRMED_${activeVAR.minute}`, minute: activeVAR.minute, text: `✅ VAR: Bramka ${activeVAR.scorerName} ZATWIERDZONA! Gol uznany.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side };
         if (activeVAR.verdict === 'NO_GOAL') {
+          let didDisallowGoal = false;
+          const markDisallowedGoal = (goal: typeof prev.homeGoals[number]) => {
+            if (!didDisallowGoal && goal.playerName === activeVAR.scorerName && goal.minute === activeVAR.minute && !goal.varDisallowed) {
+              didDisallowGoal = true;
+              return { ...goal, varDisallowed: true };
+            }
+            return goal;
+          };
           const newHomeGoals = isVarHome
-            ? prev.homeGoals.map(g => g.playerName === activeVAR.scorerName && g.minute === activeVAR.minute && !g.varDisallowed ? { ...g, varDisallowed: true } : g)
+            ? prev.homeGoals.map(markDisallowedGoal)
             : prev.homeGoals;
           const newAwayGoals = !isVarHome
-            ? prev.awayGoals.map(g => g.playerName === activeVAR.scorerName && g.minute === activeVAR.minute && !g.varDisallowed ? { ...g, varDisallowed: true } : g)
+            ? prev.awayGoals.map(markDisallowedGoal)
             : prev.awayGoals;
           return {
             ...prev,
-            homeScore: isVarHome ? prev.homeScore - 1 : prev.homeScore,
-            awayScore: !isVarHome ? prev.awayScore - 1 : prev.awayScore,
+            homeScore: isVarHome && didDisallowGoal ? Math.max(0, prev.homeScore - 1) : prev.homeScore,
+            awayScore: !isVarHome && didDisallowGoal ? Math.max(0, prev.awayScore - 1) : prev.awayScore,
             homeGoals: newHomeGoals,
             awayGoals: newAwayGoals,
             logs: [varLog, ...prev.logs]

@@ -25,6 +25,7 @@ import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { generatePlayerReport } from '../../services/TrainingAssistantService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { ManagerExperienceService } from '../../services/ManagerExperienceService';
+import { PlayerFormLevel, PlayerFormService } from '../../services/PlayerFormService';
 
 const NATIONALITY_FLAG_MAP: Record<string, string> = {
   'Albania': '🇦🇱', 'Andora': '🇦🇩', 'Austria': '🇦🇹', 'Belgia': '🇧🇪',
@@ -58,6 +59,33 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
 
 const staffAttrColor = (v: number) =>
   v >= 17 ? '#34d399' : v >= 13 ? '#60a5fa' : v >= 9 ? '#facc15' : v >= 5 ? '#fb923c' : '#fb7185';
+
+const SquadPlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> = ({ level, className = '' }) => {
+  const config: Record<PlayerFormLevel, { line: [number, number, number, number]; head: string; stroke: string }> = {
+    VERY_HIGH: { line: [13, 22, 13, 5], head: 'M8 10 L13 5 L18 10', stroke: '#34d399' },
+    HIGH: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#84cc16' },
+    RISING: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#a3e635' },
+    STABLE: { line: [5, 13, 21, 13], head: 'M16 8 L21 13 L16 18', stroke: '#cbd5e1' },
+    FALLING: { line: [6, 6, 20, 20], head: 'M13 20 L20 20 L20 13', stroke: '#fb923c' },
+    VERY_LOW: { line: [13, 4, 13, 21], head: 'M8 16 L13 21 L18 16', stroke: '#f87171' },
+  };
+  const { line, head, stroke } = config[level];
+
+  return (
+    <svg viewBox="0 0 26 26" className={className} aria-hidden="true">
+      <line
+        x1={line[0]}
+        y1={line[1]}
+        x2={line[2]}
+        y2={line[3]}
+        stroke={stroke}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path d={head} fill="none" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
 
 const StaffChalkboardBackdrop: React.FC = () => (
   <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 700" aria-hidden>
@@ -853,7 +881,7 @@ export const SquadView: React.FC = () => {
           <td className="w-6 text-center text-slate-700">
             <span className="inline-flex items-center justify-center text-[10px] font-black">→</span>
           </td>
-          <td colSpan={isContractTab ? 9 : 8} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
+          <td colSpan={isContractTab ? 9 : 9} className="px-4 text-[11px] font-black text-red-500 italic uppercase tracking-widest">
             &gt; WSTAW ZAWODNIKA &lt;
           </td>
         </tr>
@@ -887,6 +915,7 @@ export const SquadView: React.FC = () => {
       : null;
     const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
     const playerMoraleInfo = PlayerMoraleService.getInfo(moralePlayer.morale);
+    const playerFormInfo = PlayerFormService.getInfo(player.form ?? PlayerFormService.calculate(player).score);
     const effectiveOverall = PlayerMoraleService.getEffectiveOverall(moralePlayer);
     const contractRemaining = getContractRemainingInfo(player.contractEndDate);
     const squadRoleInfo = getSquadRoleInfo(player.squadRole);
@@ -1057,6 +1086,14 @@ export const SquadView: React.FC = () => {
               </div>
             ))}
           </div>
+        </td>
+        <td className="w-12 text-center relative z-10">
+          <span
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-black/20"
+            title={`Forma: ${playerFormInfo.label}`}
+          >
+            <SquadPlayerFormArrow level={playerFormInfo.level} className="h-5 w-5 drop-shadow" />
+          </span>
         </td>
         <td className="w-20 text-center relative z-10">
            <span
@@ -2101,8 +2138,8 @@ export const SquadView: React.FC = () => {
                         <th className="pl-6 w-12 py-2" />
                         <th className="w-6 py-2" />
                         <th className="w-14 py-2" />
-                        <th className="w-52 py-2">
-                          <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">Zawodnik</span>
+                        <th className="w-52 py-2 align-middle">
+                          <span className="inline-flex h-5 items-center text-[8px] font-black uppercase tracking-[0.3em] text-slate-500">Zawodnik</span>
                         </th>
                         {activeTab === 'CONTRACT' ? (
                           <>
@@ -2130,31 +2167,34 @@ export const SquadView: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <th className="px-2 w-36 py-2">
-                              <div className="flex gap-[6px]">
+                            <th className="px-2 w-36 py-2 align-middle">
+                              <div className="flex h-5 items-center gap-[6px]">
                                 {([['M','text-slate-400'],['G','text-emerald-600'],['A','text-blue-600'],['ŻK','text-yellow-600'],['CK','text-red-700']] as [string,string][]).map(([lbl,cls]) => (
-                                  <div key={lbl} className={`w-[22px] text-center text-[8px] font-black uppercase tracking-tighter ${cls}`}>{lbl}</div>
+                                  <div key={lbl} className={`inline-flex h-5 w-[22px] items-center justify-center text-center text-[8px] font-black uppercase tracking-tighter ${cls}`}>{lbl}</div>
                                 ))}
                               </div>
                             </th>
-                            <th className="px-3 py-2">
-                              <div className="flex gap-[6px]">
+                            <th className="px-3 py-2 align-middle">
+                              <div className="flex h-5 items-center gap-[6px]">
                                 {(['PAC','PAS','DEF','ATK','LDR','AGR'] as const).map(lbl => (
-                                  <div key={lbl} className="w-[22px] text-center text-[8px] font-black uppercase tracking-tighter text-slate-400">{lbl}</div>
+                                  <div key={lbl} className="inline-flex h-5 w-[22px] items-center justify-center text-center text-[8px] font-black uppercase tracking-tighter text-slate-400">{lbl}</div>
                                 ))}
                               </div>
                             </th>
-                            <th className="w-20 text-center py-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Morale</span>
+                            <th className="w-12 text-center py-2 align-middle">
+                              <span className="inline-flex h-5 items-center justify-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Forma</span>
                             </th>
-                            <th className="w-24 text-center py-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Zdrowie</span>
+                            <th className="w-20 text-center py-2 align-middle">
+                              <span className="inline-flex h-5 items-center justify-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Morale</span>
                             </th>
-                            <th className="w-16 text-center py-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Ocena</span>
+                            <th className="w-24 text-center py-2 align-middle">
+                              <span className="inline-flex h-5 items-center justify-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Zdrowie</span>
                             </th>
-                            <th className="pr-6 w-32 py-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Kondycja</span>
+                            <th className="w-16 text-center py-2 align-middle">
+                              <span className="inline-flex h-5 items-center justify-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Ocena</span>
+                            </th>
+                            <th className="pr-6 w-32 py-2 align-middle">
+                              <span className="inline-flex h-5 items-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">Kondycja</span>
                             </th>
                           </>
                         )}
@@ -2217,6 +2257,7 @@ export const SquadView: React.FC = () => {
                                 ))}
                               </div>
                             </th>
+                            <th className="w-12" />
                             <th className="w-20" />
                             <th className="w-24" />
                             <th className="w-16" />
@@ -2283,6 +2324,7 @@ export const SquadView: React.FC = () => {
                                 ))}
                               </div>
                             </th>
+                            <th className="w-12" />
                             <th className="w-20" />
                             <th className="w-24" />
                             <th className="w-16" />

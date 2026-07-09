@@ -133,6 +133,10 @@ export const AcademyView: React.FC = () => {
     () => sortedYouth.find(yp => yp.id === selectedYouthId) ?? null,
     [sortedYouth, selectedYouthId]
   );
+  const promoteChoiceYouth = useMemo(
+    () => sortedYouth.find(yp => yp.id === showPromoteMenu) ?? null,
+    [sortedYouth, showPromoteMenu]
+  );
 
   const userClub = clubs.find(c => c.id === userTeamId);
   const budget = userClub?.budget ?? 0;
@@ -401,22 +405,6 @@ export const AcademyView: React.FC = () => {
                                       >
                                         ↑
                                       </button>
-                                      {showPromoteMenu === youth.id && (
-                                        <div className="absolute right-0 top-8 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-2 min-w-[180px]">
-                                          <button
-                                            onClick={() => { promoteYouthPlayer(youth.id, 'RESERVES'); setShowPromoteMenu(null); }}
-                                            className="w-full text-left px-3 py-2 text-xs text-blue-300 hover:bg-white/5 rounded-lg transition-all font-black"
-                                          >
-                                            ↑ Do Rezerw
-                                          </button>
-                                          <button
-                                            onClick={() => { promoteYouthPlayer(youth.id, 'FIRST_TEAM'); setShowPromoteMenu(null); }}
-                                            className="w-full text-left px-3 py-2 text-xs text-emerald-300 hover:bg-white/5 rounded-lg transition-all font-black"
-                                          >
-                                            ↑↑ Do Pierwszego Składu
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
                                     {/* Zwolnij */}
                                     <button
@@ -1072,6 +1060,60 @@ export const AcademyView: React.FC = () => {
 
         </div>
       </div>
+
+      {promoteChoiceYouth && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-[32px] border border-emerald-500/25 bg-slate-950/95 p-8 shadow-[0_40px_100px_rgba(0,0,0,0.75)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
+            <div className="absolute -right-20 -top-20 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div className="relative flex flex-col items-center gap-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[24px] border border-emerald-400/30 bg-emerald-500/15 text-3xl text-emerald-200 shadow-[0_0_32px_rgba(16,185,129,0.22)]">
+                ↑
+              </div>
+              <div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-emerald-300">
+                  Awans wychowanka
+                </p>
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
+                  {promoteChoiceYouth.firstName} {promoteChoiceYouth.lastName}
+                </h3>
+                <p className="mt-3 text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Wybierz docelową kadrę
+                </p>
+              </div>
+              <div className="grid w-full gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    promoteYouthPlayer(promoteChoiceYouth.id, 'RESERVES');
+                    setShowPromoteMenu(null);
+                  }}
+                  className="rounded-2xl border border-blue-400/35 bg-blue-600/20 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-blue-100 transition-all hover:bg-blue-600/30"
+                >
+                  Do rezerw
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    promoteYouthPlayer(promoteChoiceYouth.id, 'FIRST_TEAM');
+                    setShowPromoteMenu(null);
+                  }}
+                  className="rounded-2xl border border-emerald-400/35 bg-emerald-600/25 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-100 transition-all hover:bg-emerald-600/35"
+                >
+                  Do pierwszej drużyny
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPromoteMenu(null)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+                >
+                  Anuluj
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {youthConfirm && (
         <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">

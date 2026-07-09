@@ -136,6 +136,7 @@ const getCountryFlagCode = (country: string, region: Region): string | null => {
 const PlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> = ({ level, className = '' }) => {
   const config: Record<PlayerFormLevel, { line: [number, number, number, number]; head: string; stroke: string }> = {
     VERY_HIGH: { line: [13, 22, 13, 5], head: 'M8 10 L13 5 L18 10', stroke: '#34d399' },
+    HIGH: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#84cc16' },
     RISING: { line: [20, 22, 6, 8], head: 'M6 8 L7 15 L13 9', stroke: '#a3e635' },
     STABLE: { line: [5, 13, 21, 13], head: 'M16 8 L21 13 L16 18', stroke: '#cbd5e1' },
     FALLING: { line: [6, 6, 20, 20], head: 'M13 20 L20 20 L20 13', stroke: '#fb923c' },
@@ -745,18 +746,17 @@ export const PlayerCard: React.FC = () => {
               <div className={`p-3 rounded-[20px] border ${formInfo.borderClass} ${formInfo.bgClass}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Forma zawodnika</span>
+                    <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Forma</span>
                     <span className={`block text-xs font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.label}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-lg font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.score}</span>
                     <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-white/10 bg-black/25">
                       <PlayerFormArrow level={formInfo.level} className="h-7 w-7 drop-shadow" />
                     </div>
                   </div>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full border border-white/5 bg-black/35">
-                  <div className="h-full rounded-full bg-current transition-all duration-700" style={{ width: `${formInfo.score}%`, color: formInfo.level === 'VERY_LOW' ? '#f87171' : formInfo.level === 'FALLING' ? '#fb923c' : formInfo.level === 'STABLE' ? '#cbd5e1' : formInfo.level === 'RISING' ? '#a3e635' : '#34d399' }} />
+                  <div className="h-full rounded-full bg-current transition-all duration-700" style={{ width: `${formInfo.score}%`, color: formInfo.level === 'VERY_LOW' ? '#f87171' : formInfo.level === 'FALLING' ? '#fb923c' : formInfo.level === 'STABLE' ? '#cbd5e1' : formInfo.level === 'RISING' ? '#a3e635' : formInfo.level === 'HIGH' ? '#84cc16' : '#34d399' }} />
                 </div>
               </div>
 

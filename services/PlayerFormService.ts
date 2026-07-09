@@ -1,6 +1,6 @@
 import { HealthStatus, Player, PlayerPosition, PlayerStats, TrainingIntensity } from '../types';
 
-export type PlayerFormLevel = 'VERY_HIGH' | 'RISING' | 'STABLE' | 'FALLING' | 'VERY_LOW';
+export type PlayerFormLevel = 'VERY_HIGH' | 'HIGH' | 'RISING' | 'STABLE' | 'FALLING' | 'VERY_LOW';
 
 export interface PlayerFormInfo {
   score: number;
@@ -184,11 +184,22 @@ export const PlayerFormService = {
       };
     }
 
+    if (safeScore >= 75) {
+      return {
+        score: safeScore,
+        level: 'HIGH',
+        label: 'Wysoka',
+        colorClass: 'text-lime-300',
+        borderClass: 'border-lime-400/35',
+        bgClass: 'bg-lime-500/12',
+      };
+    }
+
     if (safeScore >= 51) {
       return {
         score: safeScore,
         level: 'RISING',
-        label: 'Wysoka / wzrastająca',
+        label: 'Wzrastająca',
         colorClass: 'text-lime-300',
         borderClass: 'border-lime-400/35',
         bgClass: 'bg-lime-500/12',
