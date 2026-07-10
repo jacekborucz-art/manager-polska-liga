@@ -203,11 +203,17 @@ export const ELMatchLiveView = () => {
   const [activeVAR, setActiveVAR] = useState<{
     side: 'HOME' | 'AWAY',
     scorerName: string,
+    scorerId?: string,
+    teamName: string,
     minute: number,
     phase: 'CHECKING' | 'VERDICT',
     verdict?: 'GOAL' | 'NO_GOAL'
   } | null>(null);
-  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, minute: number } | null>(null);
+  // VAR needs the exact scorer id and team label, not only the display surname.
+  // European matches can contain duplicate surnames and repeated goals in the same minute-like
+  // flow, so carrying this stable context prevents the review from losing who scored and which
+  // side the decision belongs to.
+  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -638,12 +644,13 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
       setMatchState(prev => {
         if (!prev) return prev;
         const varLog: MatchLogEntry = activeVAR.verdict === 'NO_GOAL'
-          ? { id: `VAR_DISALLOWED_${activeVAR.minute}`, minute: activeVAR.minute, text: `🚫 VAR: Bramka ${activeVAR.scorerName} NIEUZNANA! SPALONY!`, type: MatchEventType.GENERIC, teamSide: activeVAR.side }
-          : { id: `VAR_CONFIRMED_${activeVAR.minute}`, minute: activeVAR.minute, text: `✅ VAR: Bramka ${activeVAR.scorerName} ZATWIERDZONA! Gol uznany.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side };
+          ? { id: `VAR_DISALLOWED_${activeVAR.minute}_${activeVAR.scorerId ?? activeVAR.scorerName}`, minute: activeVAR.minute, text: `🚫 VAR: Gol ${activeVAR.scorerName} dla ${activeVAR.teamName} anulowany. Spalony.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side, playerId: activeVAR.scorerId, playerName: activeVAR.scorerName }
+          : { id: `VAR_CONFIRMED_${activeVAR.minute}_${activeVAR.scorerId ?? activeVAR.scorerName}`, minute: activeVAR.minute, text: `✅ VAR: Gol ${activeVAR.scorerName} dla ${activeVAR.teamName} uznany.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side, playerId: activeVAR.scorerId, playerName: activeVAR.scorerName };
         if (activeVAR.verdict === 'NO_GOAL') {
           let didDisallowGoal = false;
           const markDisallowedGoal = (goal: typeof prev.homeGoals[number]) => {
-            if (!didDisallowGoal && goal.playerName === activeVAR.scorerName && goal.minute === activeVAR.minute && !goal.varDisallowed) {
+            const sameScorer = activeVAR.scorerId ? goal.scorerId === activeVAR.scorerId : goal.playerName === activeVAR.scorerName;
+            if (!didDisallowGoal && sameScorer && goal.minute === activeVAR.minute && !goal.varDisallowed) {
               didDisallowGoal = true;
               return { ...goal, varDisallowed: true };
             }
@@ -1750,6 +1757,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            if (isGoal) {
               const goalInfo = { 
                 playerName: scorer.lastName, 
+                scorerId: scorer.id,
                 minute: nextMinute, 
                 isPenalty: false,
                 assistantName: assistant?.lastName,
@@ -1768,7 +1776,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 nextLiveStats.away.shots++;
                 nextLiveStats.away.shotsOnTarget++;
               }
-              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
+              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: scorer.id, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
           } else {
               const failRng = seededRng(currentSeed, nextMinute, 780);
@@ -1858,16 +1866,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 if (isHeaderGoal) {
                   if (activeSide === 'HOME') {
                     nextHomeScore++;
-                    newHomeGoals.push({ playerName: headerScorer.lastName, minute: nextMinute, isPenalty: false });
+                    newHomeGoals.push({ playerName: headerScorer.lastName, scorerId: headerScorer.id, minute: nextMinute, isPenalty: false });
                     nextLiveStats.home.shots++;
                     nextLiveStats.home.shotsOnTarget++;
                   } else {
                     nextAwayScore++;
-                    newAwayGoals.push({ playerName: headerScorer.lastName, minute: nextMinute, isPenalty: false });
+                    newAwayGoals.push({ playerName: headerScorer.lastName, scorerId: headerScorer.id, minute: nextMinute, isPenalty: false });
                     nextLiveStats.away.shots++;
                     nextLiveStats.away.shotsOnTarget++;
                   }
-                  newLog = { id: `CORNER_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: headerScorer.lastName };
+                  newLog = { id: `CORNER_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: headerScorer.id, playerName: headerScorer.lastName };
                   goalTriggered = true;
                   priorityAiTrigger = true;
                   immediateEventType = MatchEventType.GOAL;
@@ -1947,7 +1955,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const lastGoal = activeSide === 'HOME' ? newHomeGoals[newHomeGoals.length - 1] : newAwayGoals[newAwayGoals.length - 1];
           const canTriggerVAR = !lastGoal?.isPenalty;
           if (canTriggerVAR) {
-            varDataRef.current = { side: activeSide, scorerName: lastGoal?.playerName || '', minute: nextMinute };
+            const scoringTeamName = activeSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName;
+            varDataRef.current = { side: activeSide, scorerName: lastGoal?.playerName || '', scorerId: lastGoal?.scorerId, teamName: scoringTeamName, minute: nextMinute };
           }
           setIsCelebratingGoal(true);
           setTimeout(() => {
@@ -2299,7 +2308,7 @@ return {
     let hCounter = 0, aCounter = 0;
     [...matchState.logs].filter(l => [MatchEventType.GOAL, MatchEventType.YELLOW_CARD, MatchEventType.RED_CARD, MatchEventType.PENALTY_SCORED, MatchEventType.INJURY_LIGHT, MatchEventType.INJURY_SEVERE].includes(l.type)).sort((a, b) => a.minute - b.minute).forEach(l => {
       const goalEntry = (l.type === MatchEventType.GOAL)
-        ? matchState[l.teamSide === 'HOME' ? 'homeGoals' : 'awayGoals'].find(g => g.playerName === l.playerName && g.minute === l.minute)
+        ? matchState[l.teamSide === 'HOME' ? 'homeGoals' : 'awayGoals'].find(g => (l.playerId ? g.scorerId === l.playerId : g.playerName === l.playerName) && g.minute === l.minute)
         : undefined;
       const isVarDisallowed = goalEntry?.varDisallowed === true;
       if ((l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed) { if (l.teamSide === 'HOME') hCounter++; else aCounter++; }
@@ -2740,6 +2749,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div className="text-7xl animate-bounce">📺</div>
                 <h2 className="text-5xl font-black italic text-white uppercase tracking-tighter">VAR</h2>
                 <p className="text-xl font-bold text-slate-300 uppercase tracking-widest text-center">Sędzia biegnie do monitora</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-yellow-300 text-center">Sprawdzany gol: {activeVAR.scorerName} dla {activeVAR.teamName} ({activeVAR.minute}')</p>
                 <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mt-2" />
               </>
             )}
@@ -2748,6 +2758,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div className="text-8xl">✅</div>
                 <h2 className="text-6xl font-black italic text-emerald-400 uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(52,211,153,0.6)]">BRAMKA!</h2>
                 <p className="text-lg font-bold text-slate-300 uppercase tracking-widest">VAR: Gol uznany</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-emerald-200 text-center">{activeVAR.scorerName} dla {activeVAR.teamName}</p>
               </>
             )}
             {activeVAR.phase === 'VERDICT' && activeVAR.verdict === 'NO_GOAL' && (
@@ -2755,6 +2766,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div className="text-8xl animate-bounce">🚫</div>
                 <h2 className="text-6xl font-black italic text-red-500 uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(239,68,68,0.6)]">SPALONY!</h2>
                 <p className="text-lg font-bold text-slate-300 uppercase tracking-widest">VAR: Bramka nieuznana</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-red-200 text-center">Gol {activeVAR.scorerName} dla {activeVAR.teamName} anulowany</p>
               </>
             )}
           </div>
