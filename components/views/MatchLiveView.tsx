@@ -62,12 +62,13 @@ const calculateLiveRatingNumber = (player: Player, side: 'HOME' | 'AWAY', state:
   else if (scoreDiff === -3) r -= 1.3;
   else if (scoreDiff <= -4) r -= 1.5;
 
-  // Bonus dla MID za bramki drużyny
+  // Bonus dla MID za bramki drużyny. Ma premiować udział formacji w kontroli meczu,
+  // ale nie robić automatycznych dziesiątek każdemu pomocnikowi przy wysokim wyniku.
   if (player.position === 'MID') {
     const teamGoals = (side === 'HOME' ? state.homeGoals : state.awayGoals).length;
     const playerSeed = player.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const midFactor = 0.65 + (playerSeed % 36) / 100;
-    r += teamGoals * midFactor;
+    const midFactor = 0.18 + (playerSeed % 13) / 100;
+    r += Math.min(0.95, teamGoals * midFactor);
   }
 
   // Kara za gole stracone (tylko GK i DEF)
@@ -1822,6 +1823,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const goalkeeperCrisisInitiativeMod =
           getGoalkeeperCrisisInitiativePenalty(nextAwayLineup, ctx.awayPlayers) -
           getGoalkeeperCrisisInitiativePenalty(nextHomeLineup, ctx.homePlayers);
+        const homeSentOffCount = nextSentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
+        const awaySentOffCount = nextSentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
+        const redCardInitiativeMod = (awaySentOffCount - homeSentOffCount) * 0.065;
         const homeAttackChance = Math.min(
           0.72,
           Math.max(
@@ -1835,7 +1839,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               midfieldInitiativeMod +
               qualityInitiativeMod +
               shotDominanceInitiativeMod +
-              goalkeeperCrisisInitiativeMod
+              goalkeeperCrisisInitiativeMod +
+              redCardInitiativeMod
           )
         );
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
@@ -2081,15 +2086,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let ownShortHandedPenalty = 0;
         if (attackingMissing > 0) {
           // Każdy brakujący zawodnik to kara bazowa; większa jeśli taktyka ofensywna (mniej obrońców)
-          const offensiveRisk = attackingTacticObj.attackBias > 65 ? 1.4 : 1.0;
-          ownShortHandedPenalty = attackingMissing * 0.016 * offensiveRisk;
+          const offensiveRisk = attackingTacticObj.attackBias > 65 ? 1.45 : attackingTacticObj.attackBias > 55 ? 1.18 : 1.0;
+          ownShortHandedPenalty = attackingMissing * 0.024 * offensiveRisk;
         }
 
         // Osłabiona drużyna ma też mniejszą jakość własnych ataków, zwłaszcza gdy nie cofa ustawienia.
         let redCardAttackingDrag = 0;
         if (attackingSentOff > 0) {
-          const overreach = Math.max(0, Math.min(1, (attackingTacticObj.attackBias - 55) / 35));
-          redCardAttackingDrag = attackingSentOff * (0.007 + overreach * 0.014);
+          const overreach = Math.max(0, Math.min(1, (attackingTacticObj.attackBias - 50) / 40));
+          redCardAttackingDrag = attackingSentOff * (0.018 + overreach * 0.020);
           if (attackingTacticObj.defenseBias >= 65 && attackingTacticObj.attackBias <= 50) redCardAttackingDrag *= 0.65;
           if (attackingSentOff >= 2) redCardAttackingDrag *= 1.35;
         }
