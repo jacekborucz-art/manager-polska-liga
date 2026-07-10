@@ -571,9 +571,20 @@ export const MatchLiveView = () => {
     processed?: boolean
   } | null>(null);
 
+  /*
+   * VAR review state must carry the full identity of the reviewed goal, not just the
+   * displayed surname. A previous fix prevented disallowed goals from pushing the
+   * scoreboard below zero, but the review overlay then lost enough context that the
+   * user could not clearly see which team/player was being checked. The scorerId is
+   * the reliable key used for matching the goal entry later, while scorerName and
+   * teamName are kept specifically for readable live messages and the broadcast
+   * overlay.
+   */
   const [activeVAR, setActiveVAR] = useState<{
     side: 'HOME' | 'AWAY',
     scorerName: string,
+    scorerId?: string,
+    teamName: string,
     minute: number,
     phase: 'CHECKING' | 'VERDICT',
     verdict?: 'GOAL' | 'NO_GOAL'
@@ -583,7 +594,14 @@ export const MatchLiveView = () => {
     playerName: string,
     minute: number
   } | null>(null);
-  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, minute: number } | null>(null);
+  /*
+   * The VAR prompt is triggered after the goal celebration timeout, so we keep a
+   * snapshot of the exact goal that may be reviewed. This avoids looking up "latest
+   * goal" later, when another state update could have changed arrays or when a
+   * surname-only lookup could become ambiguous. The snapshot mirrors activeVAR so
+   * the delayed check can restore the same scorer/team/minute context.
+   */
+  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
   const [pendingFinishPayload, setPendingFinishPayload] = useState<{
@@ -1265,13 +1283,31 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
       const isVarHome = activeVAR.side === 'HOME';
       setMatchState(prev => {
         if (!prev) return prev;
+        /*
+         * Store a human-readable VAR log with both scorer and team. The original
+         * goal log remains in the event stream, but this generic VAR log is what the
+         * live ticker/history can show immediately after the verdict. Keeping the
+         * playerId on the log is intentional: future report/timeline code can still
+         * associate the review with the exact player even if two players share the
+         * same last name or the UI formats names differently.
+         */
         const varLog: MatchLogEntry = activeVAR.verdict === 'NO_GOAL'
-          ? { id: `VAR_DISALLOWED_${activeVAR.minute}`, minute: activeVAR.minute, text: `🚫 VAR: Bramka ${activeVAR.scorerName} NIEUZNANA! SPALONY!`, type: MatchEventType.GENERIC, teamSide: activeVAR.side }
-          : { id: `VAR_CONFIRMED_${activeVAR.minute}`, minute: activeVAR.minute, text: `✅ VAR: Bramka ${activeVAR.scorerName} ZATWIERDZONA! Gol uznany.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side };
+          ? { id: `VAR_DISALLOWED_${activeVAR.minute}_${activeVAR.scorerId ?? activeVAR.scorerName}`, minute: activeVAR.minute, text: `🚫 VAR: Gol ${activeVAR.scorerName} dla ${activeVAR.teamName} anulowany. Spalony.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side, playerId: activeVAR.scorerId, playerName: activeVAR.scorerName }
+          : { id: `VAR_CONFIRMED_${activeVAR.minute}_${activeVAR.scorerId ?? activeVAR.scorerName}`, minute: activeVAR.minute, text: `✅ VAR: Gol ${activeVAR.scorerName} dla ${activeVAR.teamName} uznany.`, type: MatchEventType.GENERIC, teamSide: activeVAR.side, playerId: activeVAR.scorerId, playerName: activeVAR.scorerName };
         if (activeVAR.verdict === 'NO_GOAL') {
           let didDisallowGoal = false;
+          /*
+           * Only subtract a goal if we actually find and mark the matching goal entry.
+           * This is the guard that prevents the old 0:0 -> -1:0 bug: the score update
+           * is tied to didDisallowGoal, not to the mere existence of a NO_GOAL verdict.
+           * Matching by scorerId is preferred because playerName is display data and
+           * can be shortened, duplicated, or localized by the UI layer.
+           */
           const markDisallowedGoal = (goal: typeof prev.homeGoals[number]) => {
-            if (!didDisallowGoal && goal.playerName === activeVAR.scorerName && goal.minute === activeVAR.minute && !goal.varDisallowed) {
+            const samePlayer = activeVAR.scorerId
+              ? goal.scorerId === activeVAR.scorerId
+              : goal.playerName === activeVAR.scorerName;
+            if (!didDisallowGoal && samePlayer && goal.minute === activeVAR.minute && !goal.varDisallowed) {
               didDisallowGoal = true;
               return { ...goal, varDisallowed: true };
             }
@@ -3008,7 +3044,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 nextLiveStats.away.shotsOnTarget++;
               }
               const counterPrefix = (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide) ? 'Kontra! ' : '';
-              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: scorer.lastName };
+              /*
+               * Keep playerId on every GOAL log. VAR and post-match timeline logic
+               * should not depend on last-name matching, because the goal arrays store
+               * scorerId and the UI can render surnames with initials, truncation, or
+               * duplicate names. This log-level playerId is the bridge between the live
+               * commentary entry and the canonical goal entry.
+               */
+              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: scorer.id, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
 
               // ── CONTACT GOAL BOOST: detekcja i przyznanie boosta ───────────────
@@ -3135,6 +3178,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 text: `⚽ Chaos w polu karnym! ${statPlayer.lastName} wykorzystuje zamieszanie i pakuje piłkę do siatki!`,
                 type: MatchEventType.GOAL,
                 teamSide: activeSide,
+                // Same rationale as open-play goals: VAR/timeline matching uses this exact player identity.
+                playerId: statPlayer.id,
                 playerName: statPlayer.lastName
               };
               goalTriggered = true;
@@ -3251,7 +3296,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                     nextLiveStats.away.shots++;
                     nextLiveStats.away.shotsOnTarget++;
                   }
-                  newLog = { id: `CORNER_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: headerScorer.lastName };
+                  // Corner goals can also enter the VAR flow, so the log must carry the scorerId.
+                  newLog = { id: `CORNER_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: headerScorer.id, playerName: headerScorer.lastName };
                   goalTriggered = true;
                   priorityAiTrigger = true;
                   immediateEventType = MatchEventType.GOAL;
@@ -3293,7 +3339,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   nextLiveStats.away.shots++;
                   nextLiveStats.away.shotsOnTarget++;
                 }
-                newLog = { id: `FK_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol z rzutu wolnego! ${fkTaker.lastName} nie daje szans bramkarzowi!`, type: MatchEventType.GOAL, teamSide: activeSide, playerName: fkTaker.lastName };
+                // Free-kick goals follow the same VAR/report path as open-play goals.
+                newLog = { id: `FK_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol z rzutu wolnego! ${fkTaker.lastName} nie daje szans bramkarzowi!`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: fkTaker.id, playerName: fkTaker.lastName };
                 goalTriggered = true;
                 priorityAiTrigger = true;
                 immediateEventType = MatchEventType.GOAL;
@@ -3438,7 +3485,21 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const lastGoal = activeSide === 'HOME' ? newHomeGoals[newHomeGoals.length - 1] : newAwayGoals[newAwayGoals.length - 1];
           const canTriggerVAR = !lastGoal?.isPenalty;
           if (canTriggerVAR) {
-            varDataRef.current = { side: activeSide, scorerName: lastGoal?.playerName || '', minute: nextMinute };
+            /*
+             * Capture the reviewed goal immediately after it is scored. This is the
+             * authoritative context shown during VAR: which side scored, which player
+             * scored, and which team name should be displayed. Without this snapshot,
+             * the delayed VAR modal can only say "VAR" generically, which was the
+             * regression seen after the earlier scoreboard safety fix.
+             */
+            const scoringTeam = activeSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName;
+            varDataRef.current = {
+              side: activeSide,
+              scorerName: lastGoal?.playerName || 'strzelec',
+              scorerId: lastGoal?.scorerId,
+              teamName: scoringTeam,
+              minute: nextMinute
+            };
           }
           setIsCelebratingGoal(true);
           setTimeout(() => {
@@ -4059,8 +4120,18 @@ return {
     const timeline: MatchSummaryEvent[] = [];
     let hCounter = 0, aCounter = 0;
     [...matchState.logs].filter(l => [MatchEventType.GOAL, MatchEventType.YELLOW_CARD, MatchEventType.RED_CARD, MatchEventType.PENALTY_SCORED, MatchEventType.INJURY_LIGHT, MatchEventType.INJURY_SEVERE].includes(l.type)).sort((a, b) => a.minute - b.minute).forEach(l => {
+      /*
+       * Reconnect each GOAL log to the canonical goal array entry before building the
+       * match summary. VAR marks the goal entry with varDisallowed; the post-match
+       * studio already knows how to render that as a crossed-out VAR goal. Matching
+       * by playerId first preserves that old correct display while avoiding fragile
+       * surname-only matching.
+       */
       const goalEntry = (l.type === MatchEventType.GOAL)
-        ? matchState[l.teamSide === 'HOME' ? 'homeGoals' : 'awayGoals'].find(g => g.playerName === l.playerName && g.minute === l.minute)
+        ? matchState[l.teamSide === 'HOME' ? 'homeGoals' : 'awayGoals'].find(g =>
+            g.minute === l.minute &&
+            (l.playerId ? g.scorerId === l.playerId : g.playerName === l.playerName)
+          )
         : undefined;
       const isVarDisallowed = goalEntry?.varDisallowed === true;
       if ((l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed) { if (l.teamSide === 'HOME') hCounter++; else aCounter++; }
@@ -4717,11 +4788,22 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       {activeVAR && (
         <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-xl flex items-center justify-center animate-fade-in">
           <div className="bg-slate-900/80 border border-white/10 rounded-[40px] p-12 flex flex-col items-center gap-6 shadow-[0_50px_100px_rgba(0,0,0,0.8)]">
+            {/*
+              The VAR modal deliberately repeats scorer and team in every phase.
+              The previous UI only showed a generic monitor/verdict state, so when a
+              goal was disallowed the player could not tell whose goal had been
+              checked. The legacy under-team event strip can still render the
+              crossed-out goal from varDisallowed; this overlay is the live broadcast
+              explanation for the same decision.
+            */}
             {activeVAR.phase === 'CHECKING' && (
               <>
                 <div className="text-7xl animate-bounce">📺</div>
                 <h2 className="text-5xl font-black italic text-white uppercase tracking-tighter">VAR</h2>
                 <p className="text-xl font-bold text-slate-300 uppercase tracking-widest text-center">Sędzia biegnie do monitora</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-yellow-300 text-center">
+                  Sprawdzany gol: {activeVAR.scorerName} dla {activeVAR.teamName} ({activeVAR.minute}')
+                </p>
                 <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mt-2" />
               </>
             )}
@@ -4730,6 +4812,9 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div className="text-8xl">✅</div>
                 <h2 className="text-6xl font-black italic text-emerald-400 uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(52,211,153,0.6)]">BRAMKA!</h2>
                 <p className="text-lg font-bold text-slate-300 uppercase tracking-widest">VAR: Gol uznany</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-emerald-200 text-center">
+                  {activeVAR.scorerName} dla {activeVAR.teamName}
+                </p>
               </>
             )}
             {activeVAR.phase === 'VERDICT' && activeVAR.verdict === 'NO_GOAL' && (
@@ -4737,6 +4822,9 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                 <div className="text-8xl animate-bounce">🚫</div>
                 <h2 className="text-6xl font-black italic text-red-500 uppercase tracking-tighter drop-shadow-[0_0_40px_rgba(239,68,68,0.6)]">SPALONY!</h2>
                 <p className="text-lg font-bold text-slate-300 uppercase tracking-widest">VAR: Bramka nieuznana</p>
+                <p className="text-sm font-black italic uppercase tracking-tighter text-red-200 text-center">
+                  Gol {activeVAR.scorerName} dla {activeVAR.teamName} anulowany
+                </p>
               </>
             )}
           </div>
