@@ -2070,6 +2070,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Kara zmęczenia atakującej drużyny na shotThreshold
         const activeFatPenalty = activeSide === 'HOME' ? homeFatPenalty : awayFatPenalty;
+        const activeAvgFatigue = activeSide === 'HOME' ? avgFatigueHome : avgFatigueAway;
+        const defendingAvgFatigue = activeSide === 'HOME' ? avgFatigueAway : avgFatigueHome;
+        const relativeFreshnessShotSwing = clampNumber(
+          ((activeAvgFatigue - defendingAvgFatigue) / 100) * 0.18,
+          -0.026,
+          0.026
+        );
 
         // ─── KARA: OSŁABIONY SKŁAD + OFENSYWNA TAKTYKA ────────────────────────
         // Liczba "dziur" w XI (null = brak zawodnika po czerwonej lub kontuzji bez zmiany)
@@ -2229,6 +2236,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - defBiasPenalty
             + strikerBonus
             + activeFatPenalty
+            + relativeFreshnessShotSwing
             + activeFormImpact.shotModifier * activeFormStacking
             - defendingFormImpact.shotResistanceModifier * defendingFormStacking
             + openBacksBonus

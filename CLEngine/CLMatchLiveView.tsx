@@ -986,13 +986,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
         const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
 
-        // Krzywa kary: kondycja 85→0 | 78→-0.005 | 70→-0.015 | 65→-0.022 | 60→-0.031 | 55→-0.040
-        // ZMIANA (2026-06-09): próg podniesiony z 75 → 85, współczynnik z 0.14 → 0.17.
-        // Powód: poprzednie wartości były zbyt łagodne — drużyna z dobrą staminą (avg fatigue ~80)
-        // nie odczuwała żadnej kary za brak zmian (próg 75 nigdy nie był przekraczany).
-        // Teraz kara zaczyna się wcześniej (85) i jest bardziej odczuwalna, ale nadal lekka.
-        // Sprawiedliwość: drużyny z wysoką staminą kończą mecz na ~82 kondycji → kara -0.002 (pomijalna).
-        // Drużyny ze słabą staminą / bez zmian kończą na ~65-70 → kara -0.015 do -0.022 (odczuwalna).
+        // Krzywa kary: kondycja 94→0 | 85→-0.022 | 80→-0.039 | 75→-0.057 | 70→-0.077 | 60→-0.118
+        // Brak zmian ma być odczuwalny wcześniej, szczególnie gdy rywal wprowadził świeże nogi.
         // Mechanizm inicjatywy (fatInitiativeMod) jest już względny (różnica obu drużyn) — brak zmian
         // tylko wtedy szkodzi, gdy rywal jest RELATYWNIE świeższy.
         const _fatiguePenalty = (avgFat: number): number => {
@@ -1015,7 +1010,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Wpływ na przewagę inicjatywy (homeAttackChance)
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
-        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
+        const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 3.0;
         // Use role-adjusted strength for the live advantage curve. A player moved into a new slot
         // contributes as his effective role overall, so tactical reshuffles can improve or weaken
         // the team instead of blindly reusing raw OVR.
@@ -1212,6 +1207,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Kara zmęczenia atakującej drużyny na shotThreshold
         const activeFatPenalty = activeSide === 'HOME' ? homeFatPenalty : awayFatPenalty;
+        const activeAvgFatigue = activeSide === 'HOME' ? avgFatigueHome : avgFatigueAway;
+        const defendingAvgFatigue = activeSide === 'HOME' ? avgFatigueAway : avgFatigueHome;
+        const relativeFreshnessShotSwing = clampNumber(
+          ((activeAvgFatigue - defendingAvgFatigue) / 100) * 0.18,
+          -0.026,
+          0.026
+        );
 
         // ─── KARA: OSŁABIONY SKŁAD + OFENSYWNA TAKTYKA ────────────────────────
         // Liczba "dziur" w XI (null = brak zawodnika po czerwonej lub kontuzji bez zmiany)
@@ -1257,6 +1259,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
         const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
         const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
+        const tiredDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 82).length;
+        const exhaustedDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 70).length;
         const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
         const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
         const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
@@ -1270,8 +1274,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
             ) * Math.min(1, (nextMinute - 60) / 30)
           : 0;
+        const rotationMismatchAttackBonus = nextMinute >= 60 && attackingSubsUsed >= 3 && defendingSubsUsed <= 1
+          ? Math.min(
+              0.024,
+              0.006 +
+                Math.max(0, attackingSubsUsed - defendingSubsUsed - 1) * 0.003 +
+                tiredDefenders * 0.003 +
+                exhaustedDefenders * 0.005
+            ) * Math.min(1, (nextMinute - 60) / 30)
+          : 0;
 
-        shotThreshold = Math.max(0.04, shotThreshold - defBiasPenalty + strikerBonus + activeFatPenalty + openBacksBonus - ownShortHandedPenalty + noGkBonus - criticalFatPenalty - freshDefBonus - noRotationShotPenalty);
+        shotThreshold = Math.max(
+          0.04,
+          shotThreshold
+            - defBiasPenalty
+            + strikerBonus
+            + activeFatPenalty
+            + relativeFreshnessShotSwing
+            + openBacksBonus
+            - ownShortHandedPenalty
+            + noGkBonus
+            + rotationMismatchAttackBonus
+            - criticalFatPenalty
+            - freshDefBonus
+            - noRotationShotPenalty
+        );
 
         const defendingXI3 = defendingLineup2.startingXI.filter((id): id is string => id !== null);
         const attackingAvgRating = activeSide === 'HOME' ? homeAvgOverallLive : awayAvgOverallLive;
