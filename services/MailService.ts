@@ -1,5 +1,6 @@
 ﻿import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
+import { Newspaper } from '../types';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
 import { MediaInterviewService } from './MediaInterviewService';
@@ -983,12 +984,65 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         : false;
 
       if (latestLeagueFixture && userLeagueFixtures.length >= 3 && latestLeagueWasPlayedToday) {
+        const isHome = latestLeagueFixture.homeTeamId === userClub.id;
+        const latestUserScore = isHome ? (latestLeagueFixture.homeScore ?? 0) : (latestLeagueFixture.awayScore ?? 0);
+        const latestOpponentScore = isHome ? (latestLeagueFixture.awayScore ?? 0) : (latestLeagueFixture.homeScore ?? 0);
+        const latestGoalDiff = latestUserScore - latestOpponentScore;
+        const opponentId = isHome ? latestLeagueFixture.awayTeamId : latestLeagueFixture.homeTeamId;
+        const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+        const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+        const managerFullName = managerName?.trim().replace(/\s+/g, ' ') || 'nowego trenera';
+
+        if (latestGoalDiff >= 6) {
+          const demolitionMailId = `PRESS_DEMOLITION_${latestLeagueFixture.id}`;
+          const alreadySentDemolition = existingMails.some(m => m.id === demolitionMailId);
+          if (!alreadySentDemolition) {
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const demolitionMail = MediaInterviewService.generatePressArticleMail(
+              'TOTALNA_DEMOLKA',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              { opponentName, venueLabel, latestResultType: 'WIN' }
+            );
+            demolitionMail.id = demolitionMailId;
+            demolitionMail.date = new Date(currentDate);
+            demolitionMail.priority = 65;
+            newMails.push(demolitionMail);
+          }
+        }
+
+        if (latestGoalDiff <= -6) {
+          const humiliationMailId = `PRESS_HUMILIATION_${latestLeagueFixture.id}`;
+          const alreadySentHumiliation = existingMails.some(m => m.id === humiliationMailId);
+          if (!alreadySentHumiliation) {
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const humiliationMail = MediaInterviewService.generatePressArticleMail(
+              'TOTALNA_KOMPROMITACJA',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              { opponentName, venueLabel, latestResultType: 'LOSS', managerFullName }
+            );
+            humiliationMail.id = humiliationMailId;
+            humiliationMail.date = new Date(currentDate);
+            humiliationMail.priority = 66;
+            newMails.push(humiliationMail);
+          }
+        }
+
         const friendlyPressMonthKey = getYearMonthKey(currentDate);
         const alreadySentFriendlyThisMonth =
           sentFriendlyPressMonths.includes(friendlyPressMonthKey) ||
           existingMails.some(m => m.id.startsWith(`PRESS_FRIENDLY_START_${friendlyPressMonthKey}_`));
 
-        if (!alreadySentFriendlyThisMonth) {
+        if (Math.abs(latestGoalDiff) < 6 && !alreadySentFriendlyThisMonth) {
           const friendlyNewspaper = MediaInterviewService.pickFriendlyNewspaper(mediaRelationships);
           if (friendlyNewspaper) {
             const recentLeagueFixtures = userLeagueFixtures.slice(-3);
@@ -1003,11 +1057,6 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const alreadySentFriendly = existingMails.some(m => m.id === friendlyMailId);
             if (!alreadySentFriendly) {
               const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
-              const opponentId = latestLeagueFixture.homeTeamId === userClub.id
-                ? latestLeagueFixture.awayTeamId
-                : latestLeagueFixture.homeTeamId;
-              const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
-              const venueLabel = latestLeagueFixture.homeTeamId === userClub.id ? 'w domu' : 'na wyjeździe';
               const variant = MediaInterviewService.determineFriendlySeasonPressVariant(
                 hasGoodResults,
                 latestWasWin,

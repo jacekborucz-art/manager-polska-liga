@@ -18,12 +18,15 @@ export type PressVariant =
   | 'PRZYCHYLNE_SZATNIA'
   | 'PRZYCHYLNE_SLABY_OPTYMIZM'
   | 'PRZYCHYLNE_SLABY_SZATNIA'
-  | 'PRZYCHYLNE_TRUDNY_OKRES';
+  | 'PRZYCHYLNE_TRUDNY_OKRES'
+  | 'TOTALNA_DEMOLKA'
+  | 'TOTALNA_KOMPROMITACJA';
 
 export interface PressArticleContext {
   opponentName?: string;
   venueLabel?: string;
   latestResultType?: 'WIN' | 'DRAW' | 'LOSS';
+  managerFullName?: string;
 }
 
 export interface PressArticle {
@@ -136,5 +139,18 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
     headline: (m, c) => `${c} bez fajerwerków, ale wokół ${m} wciąż widać spokój`,
     body: (m, c) =>
       `Ostatnie wyniki ${c} nie dają powodów do pełnej satysfakcji, ale w klubie nie widać atmosfery paniki. Według osób zbliżonych do drużyny ${m} nadal ma wsparcie szatni, a zawodnicy wierzą, że konsekwencja w pracy może przełożyć się na stabilniejszą formę.\n\nKibice oczekiwaliby zapewne większej regularności, zwłaszcza na tym etapie sezonu, jednak obraz gry nie jest jednoznacznie negatywny. Zespół ma fragmenty dobrej organizacji, choć wciąż brakuje mu skuteczności i spokojniejszego domykania spotkań.\n\nNajbliższe tygodnie pokażą, czy ${c} potrafi zamienić cierpliwość w punkty, ale na razie projekt nie wygląda na taki, który traci zaufanie od środka.`,
+  },
+  TOTALNA_DEMOLKA: {
+    headline: () => 'TOTALNA DEMOLKA! RYWAL BEZ ŻADNYCH SZANS',
+    body: (_m, c) =>
+      `Drużyna ${c} urządziła rywalom prawdziwy piłkarski nokaut. Od pierwszego gwizdka całkowicie zdominowała wydarzenia na boisku, bezlitośnie wykorzystywała kolejne błędy przeciwnika i raz za razem trafiała do siatki.\n\nRywal nie był w stanie znaleźć żadnej odpowiedzi na tempo, skuteczność i ofensywną siłę zespołu. Kolejne bramki tylko potwierdzały ogromną różnicę klas, a końcowy wynik nie pozostawia żadnych wątpliwości — tego dnia na boisku istniała tylko jedna drużyna.\n\nTo nie było zwykłe zwycięstwo. To była demonstracja siły, bezwzględna dominacja i totalna demolka przeciwnika.`,
+  },
+  TOTALNA_KOMPROMITACJA: {
+    headline: (m, _c, context) =>
+      `TOTALNA KOMPROMITACJA! DRUŻYNA ${context?.managerFullName ?? m} ROZBITA NA BOISKU`,
+    body: (m, _c, context) => {
+      const managerFullName = context?.managerFullName ?? m;
+      return `Drużyna prowadzona przez ${managerFullName} poniosła druzgocącą porażkę, prezentując się zdecydowanie poniżej oczekiwań. Od pierwszych minut rywale przejęli pełną kontrolę nad spotkaniem, bezlitośnie wykorzystywali kolejne błędy i raz za razem trafiali do siatki.\n\nZespół ${m} nie potrafił znaleźć żadnej odpowiedzi na przewagę przeciwnika. Brak organizacji, nieskuteczna gra oraz poważne problemy w defensywie sprawiły, że różnica między drużynami z każdą kolejną minutą stawała się coraz bardziej widoczna.\n\nKońcowy wynik nie pozostawia miejsca na wymówki. To nie była zwykła porażka — to był piłkarski nokaut i totalna kompromitacja drużyny prowadzonej przez ${managerFullName}.`;
+    },
   },
 };

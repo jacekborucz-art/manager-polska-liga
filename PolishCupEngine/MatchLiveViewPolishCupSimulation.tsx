@@ -918,6 +918,13 @@ useEffect(() => {
           secondaryPlayerId: keeper?.id,
           playerName: scorer.lastName
         };
+        const nextLiveStats = {
+          home: { ...latest.liveStats.home },
+          away: { ...latest.liveStats.away }
+        };
+        const penaltyStatsSide = side.toLowerCase() as 'home' | 'away';
+        nextLiveStats[penaltyStatsSide].shots += 1;
+        if (isScored) nextLiveStats[penaltyStatsSide].shotsOnTarget += 1;
         return {
           ...latest,
           homeScore: finalHScore,
@@ -935,7 +942,8 @@ useEffect(() => {
             playerId: scorer.id,
             secondaryPlayerId: keeper?.id,
             playerName: scorer.lastName
-          }, penLog, ...latest.logs]
+          }, penLog, ...latest.logs],
+          liveStats: nextLiveStats
         };
       });
       // Po trafieniu z karnego — auto-wznowienie po 5 sekundach
@@ -2668,7 +2676,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
            dynamicThreshold *= (1 + nextPostGoalPenaltyPct);
         }
        
-       const thresholdPressureTax = isUnderdog ? 1.36 : 1.58;
+       const thresholdPressureTax = isUnderdog ? 1.34 : 1.56;
        const currentThreshold = Math.min(0.95, dynamicThreshold * thresholdPressureTax);
        if (forceZeroShotChance && successfulPasses / diceRolls <= currentThreshold) {
             successfulPasses = Math.min(diceRolls, Math.floor(diceRolls * currentThreshold) + 1);
@@ -2779,8 +2787,8 @@ dynamicThreshold *= undedogThresholdMultiplier;
         const defendingPwr = eventSide === 'HOME' ? awayPwr : homePwr;
         const powerRatio = Math.min(1.5, attackingPwr / Math.max(1, defendingPwr));
         const baseConversionMult = isGiantKillerShot
-            ? Math.max(0.52, 0.60 - (powerRatio - 1.0) * 0.40)
-            : Math.max(0.45, 0.60 - (powerRatio - 1.0) * 0.40);
+            ? Math.max(0.42, 0.52 - (powerRatio - 1.0) * 0.34)
+            : Math.max(0.36, 0.52 - (powerRatio - 1.0) * 0.34);
         // Współczynnik nasycenia bramkowego — progresywny spadek skuteczności atakującego lidera.
         // Działa już od prowadzenia o 1 bramkę.
         // diff=1 → ×0.91 | diff=2 → ×0.81 | diff=3 → ×0.67 | diff=4 → ×0.54 | diff=5 → ×0.44 | diff=7+ → prob cap 0.01
@@ -2803,7 +2811,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
         let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult * clamp(activePlayerFormChanceMultiplier, 0.76, 1.24) + luckyBonus;
         // Giant Killer: bramkarz zostaje zaskoczony — gwarantowany minimalny próg konwersji.
         // Bez flooru: T3 napastnik vs T1 bramkarz → ~18% → niknie w n=10. Z floorem 0.22 → ~1 niespodzianka/20 meczów.
-        if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.22);
+        if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.18);
         if (eventSide === userSide && pGoalMod !== 1.0) {
             rawGoalProbability *= pGoalMod;
         }
@@ -2903,6 +2911,87 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
         } else {
             // MIEJSCE C: atak zatrzymany przed polem karnym
             const noShotRoll = seededRng(currentSeed, nextMinute, 5555);
+            const attackQuality = successfulPasses / Math.max(1, diceRolls);
+            const halfChanceWindow = currentThreshold - attackQuality;
+            const canCreateHalfChance =
+                !isCoolingDown &&
+                attackQuality >= 0.45 &&
+                halfChanceWindow > 0 &&
+                halfChanceWindow <= (isUnderdog ? 0.075 : 0.095);
+
+            if (canCreateHalfChance) {
+                const attTeam = eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+                const defTeam = eventSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
+                const attLineup = eventSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+                const defLineup = eventSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
+                const shooter = GoalAttributionService.pickScorer(attTeam, attLineup as string[], false, () => seededRng(currentSeed, nextMinute, 6681));
+                const keeper = defTeam.find(p => p.id === defLineup[0]) || defTeam[0];
+
+                if (shooter && keeper) {
+                    const shooterFatigue = (eventSide === 'HOME' ? localHomeFatigue : localAwayFatigue)[shooter.id] ?? shooter.condition;
+                    const keeperFatigue = (eventSide === 'HOME' ? localAwayFatigue : localHomeFatigue)[keeper.id] ?? keeper.condition;
+                    const chanceQuality = clamp((attackQuality - Math.max(0.28, currentThreshold - 0.24)) / 0.24, 0, 1);
+                    const shotSkill = shooter.attributes.finishing * 0.44 +
+                        shooter.attributes.attacking * 0.22 +
+                        shooter.attributes.technique * 0.16 +
+                        shooter.attributes.positioning * 0.10 +
+                        shooter.attributes.mentality * 0.08;
+                    const saveSkill = keeper.attributes.goalkeeping * 0.62 +
+                        keeper.attributes.positioning * 0.22 +
+                        keeper.attributes.mentality * 0.16;
+                    const fatigueEdge = clamp((shooterFatigue - keeperFatigue) / 160, -0.10, 0.10);
+                    const onTargetChance = clamp(
+                        0.12 + chanceQuality * 0.15 + (shotSkill - saveSkill) / 620 + fatigueEdge * 0.65,
+                        0.08,
+                        0.34
+                    );
+                    const isHalfChanceOnTarget = seededRng(currentSeed, nextMinute, 6682) < onTargetChance;
+                    const halfChanceGoalChance = isHalfChanceOnTarget
+                        ? clamp(0.008 + chanceQuality * 0.026 + (shotSkill - saveSkill) / 1200 + fatigueEdge * 0.20, 0.003, 0.055)
+                        : 0;
+                    const isHalfChanceGoal = isHalfChanceOnTarget && seededRng(currentSeed, nextMinute, 6683) < halfChanceGoalChance;
+
+                    if (isHalfChanceGoal) {
+                        eventType = MatchEventType.GOAL;
+                        const assistant = GoalAttributionService.pickAssistant(attTeam, attLineup as string[], shooter.id, false, () => seededRng(currentSeed, nextMinute, 6684));
+                        const formattedName = getPlayerReportName(shooter);
+                        currentScorerName = formattedName;
+                        const goalData = {
+                            scorerId: shooter.id,
+                            playerId: shooter.id,
+                            playerName: formattedName,
+                            minute: nextMinute,
+                            isPenalty: false,
+                            assistantId: assistant?.id,
+                            assistantName: assistant ? getPlayerReportName(assistant) : undefined
+                        };
+                        if (eventSide === 'HOME') { hScore++; updatedHomeGoals.push(goalData); }
+                        else { aScore++; updatedAwayGoals.push(goalData); }
+                        nextIsPaused = true;
+                        nextLastGoalBoostMinute = nextMinute;
+                        nextPostGoalSuppressionDuration = 4 + Math.floor(seededRng(currentSeed, nextMinute, 6685) * 5);
+                        nextPostGoalPenaltyPct = 0.10 + (seededRng(currentSeed, nextMinute, 6686) * 0.10);
+                    } else {
+                        eventType = isHalfChanceOnTarget ? MatchEventType.SHOT_ON_TARGET : MatchEventType.SHOT;
+                    }
+
+                    const halfChancePool = MATCH_COMMENTARY_DB[eventType] || ["Strzał po składnej akcji."];
+                    const halfChanceComment = halfChancePool[Math.floor(seededRng(currentSeed, nextMinute, 6687) * halfChancePool.length)]
+                        .replace("{Nazwisko}", shooter.lastName);
+                    updatedLogs = [{
+                        id: `half_chance_${nextMinute}`,
+                        minute: nextMinute,
+                        text: `[${eventSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName}] ${halfChanceComment}`,
+                        type: eventType,
+                        teamSide: eventSide,
+                        playerName: shooter.lastName
+                    }, ...updatedLogs];
+                    nextMomentum += eventType === MatchEventType.GOAL
+                        ? 0
+                        : (eventSide === 'HOME' ? -4 : 4);
+                }
+            }
+
             const noShotEventType = noShotRoll < 0.25
                 ? MatchEventType.OFFSIDE
                 : noShotRoll < 0.32
@@ -2913,7 +3002,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                 ? MatchEventType.DRIBBLING
                 : MatchEventType.PLAY_SIDE;
             const noShotPool = MATCH_COMMENTARY_DB[noShotEventType] || [];
-            if (noShotPool.length > 0) {
+            if (!eventType && noShotPool.length > 0) {
                 const noShotComment = noShotPool[Math.floor(seededRng(currentSeed, nextMinute, 6666) * noShotPool.length)]
                     .replace("{Nazwisko}", "");
                 updatedLogs = [{ 
@@ -2931,7 +3020,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
         //   gap=1.4 (T2-weak vs T1) → 5.7%/min akcji, 14% gola z akcji → ~16% gol/mecz
         //   gap=1.8 (T3 vs T1)      → 4.4%/min akcji, 11% gola z akcji → ~16% gol/mecz
         //   gap=2.7 (T4 vs T1)      → 3.0%/min akcji,  7% gola z akcji → ~7% gol/mecz
-        {
+        if (!eventType) {
             const upsetAttPwr = getFormationPowerPro(
                 eventSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
                 eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,

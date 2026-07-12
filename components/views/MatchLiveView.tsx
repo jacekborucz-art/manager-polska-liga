@@ -1867,7 +1867,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           Math.max(
             0.28,
             0.5 +
-              prev.momentum / 280 +
+              prev.momentum / 340 +
               fatInitiativeMod +
               pressureInitiativeMod +
               formInitiativeMod +
@@ -2285,7 +2285,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // max +0.015 przy momentum 100, przy momentum 50 → +0.0075
         const hasMomentumAdvantage = (activeSide === 'HOME' && prev.momentum > 0) || (activeSide === 'AWAY' && prev.momentum < 0);
         if (hasMomentumAdvantage) {
-          shotThreshold += (Math.abs(prev.momentum) / 100) * 0.015;
+          shotThreshold += (Math.abs(prev.momentum) / 100) * 0.012;
         }
 
         // Krok 3: pressingIntensity atakującej drużyny - wysoki pressing = więcej okazji
@@ -2352,9 +2352,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (isUserAttacking) {
             shotThreshold += 0.012 * rf;
           } else {
-            const counterBonus = oppTacticDefBias > 60 ? 0.010 : 0.004;
-            const techSafetyMod = uAvgTech > 62 ? 0.5 : 1.0;
-            shotThreshold += counterBonus * techSafetyMod * rf;
+            shotThreshold += LiveMatchInstructionBalanceService.getFastTempoDefensiveExposure(
+              oppTacticDefBias,
+              uAvgTech
+            ) * rf;
           }
         } else if (uInstr.tempo === 'SLOW') {
           const rf = uInstr.tempoResponseFactor ?? 1.0;
@@ -2368,7 +2369,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (uInstr.mindset === 'OFFENSIVE') {
           const rf = uInstr.mindsetResponseFactor ?? 1.0;
           if (isUserAttacking) shotThreshold += 0.015 * rf;
-          else if (oppTacticDefBias > 65) shotThreshold += 0.012 * rf;
+          else {
+            shotThreshold += LiveMatchInstructionBalanceService.getOffensiveMindsetDefensiveExposure(
+              oppTacticDefBias
+            ) * rf;
+          }
         } else if (uInstr.mindset === 'DEFENSIVE') {
           const rf = uInstr.mindsetResponseFactor ?? 1.0;
           if (!isUserAttacking) {
@@ -2544,10 +2549,18 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             aiInstructionDecisionTrigger = instructionShifted && decisiveInstruction && nextMinute >= 60;
           }
           const coachReadiness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
+          const userOvercommits = prev.userInstructions.mindset === 'OFFENSIVE' && prev.userInstructions.tempo === 'FAST';
           const baseDelay = nextMinute >= 46 && nextMinute <= 75
-            ? Math.max(5, Math.round(12 - coachReadiness * 0.06))
-            : 10;
-          const randomDelay = Math.floor(seededRng(currentSeed, nextMinute, 77) * (nextMinute >= 46 && nextMinute <= 75 ? 6 : 11));
+            ? Math.max(4, Math.round(10 - coachReadiness * 0.06))
+            : userOvercommits
+              ? Math.max(5, Math.round(11 - coachReadiness * 0.05))
+              : 10;
+          const randomDelayWindow = nextMinute >= 46 && nextMinute <= 75
+            ? 5
+            : userOvercommits
+              ? 7
+              : 11;
+          const randomDelay = Math.floor(seededRng(currentSeed, nextMinute, 77) * randomDelayWindow);
           nextAiNextInstructionMinute = nextMinute + baseDelay + randomDelay;
         }
 
@@ -2567,9 +2580,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (isAiAttacking) {
               shotThreshold += 0.012 * aiTempoRf;
             } else {
-              const counterBonus = aiOppTacticDefBias > 60 ? 0.010 : 0.004;
-              const techSafetyMod = oAvgTech > 62 ? 0.5 : 1.0;
-              shotThreshold += counterBonus * techSafetyMod * aiTempoRf;
+              shotThreshold += LiveMatchInstructionBalanceService.getFastTempoDefensiveExposure(
+                aiOppTacticDefBias,
+                oAvgTech
+              ) * aiTempoRf;
             }
           } else if (nextAiActiveShout.tempo === 'SLOW' && isAiAttacking) {
             shotThreshold += LiveMatchInstructionBalanceService.getSlowTempoModifier(
@@ -2578,7 +2592,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
           if (nextAiActiveShout.mindset === 'OFFENSIVE') {
             if (isAiAttacking) shotThreshold += 0.015 * aiMindsetRf;
-            else if (aiOppTacticDefBias > 65) shotThreshold += 0.012 * aiMindsetRf;
+            else {
+              shotThreshold += LiveMatchInstructionBalanceService.getOffensiveMindsetDefensiveExposure(
+                aiOppTacticDefBias
+              ) * aiMindsetRf;
+            }
           } else if (nextAiActiveShout.mindset === 'DEFENSIVE') {
             if (!isAiAttacking) {
               shotThreshold -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
@@ -2731,7 +2749,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               + Math.max(-0.018, Math.min(0.024, getQualityGapCurve(ratingGap) * 0.022))
               + Math.max(-0.014, Math.min(0.018, (attackingTacticObj.attackBias - 50) / 100 * 0.045))
               + (activeMidfieldControlDiff > 0 ? Math.min(0.014, activeMidfieldControlDiff * 0.0010) : -Math.min(0.012, Math.abs(activeMidfieldControlDiff) * 0.0009))
-              + (hasMomentumAdvantage ? (Math.abs(prev.momentum) / 100) * 0.010 : 0)
+              + (hasMomentumAdvantage ? (Math.abs(prev.momentum) / 100) * 0.007 : 0)
               - lateFatigueShotDrag * 0.35
               - statShotGapDrag
           )

@@ -359,7 +359,7 @@ export const AiCoachTacticsService = {
     //   for punishing a player who refuses to rotate in the second half.
     let exploitScore = 0;
     const userIsPushing = userMindset === 'OFFENSIVE' || userTempo === 'FAST' || userTacticAttackBias >= 68;
-    if (userMindset === 'OFFENSIVE' && userTempo === 'FAST') exploitScore += 1.05;
+    if (userMindset === 'OFFENSIVE' && userTempo === 'FAST') exploitScore += 1.35;
     else if (userIsPushing) exploitScore += 0.45;
     if (userTacticAttackBias >= 76) exploitScore += 0.55;
     if (userAvgFatigue < 72) exploitScore += 0.55;
@@ -377,9 +377,9 @@ export const AiCoachTacticsService = {
     if (aiSentOffCount > 0) exploitScore -= 2.00;
 
     const exploitThreshold =
-      coachScore >= 0.78 ? 1.45 :
-      coachScore >= 0.62 ? 2.10 :
-      coachScore >= 0.46 ? 2.85 :
+      coachScore >= 0.78 ? 1.35 :
+      coachScore >= 0.62 ? 1.90 :
+      coachScore >= 0.46 ? 2.55 :
       99;
     const exploitReadChance = Math.max(
       0,
@@ -414,6 +414,9 @@ export const AiCoachTacticsService = {
       if (mustChase || mustProtect || seriousFatigue || gameLooksBad) noActionChance -= 0.16 + pressureDrama * 0.08;
       if (isLastStand && mustChase) noActionChance -= 0.10;
       noActionChance = Math.max(0.02, Math.min(0.55, noActionChance));
+    }
+    if (userMindset === 'OFFENSIVE' && userTempo === 'FAST' && !seriousFatigue) {
+      noActionChance = Math.max(0.02, noActionChance - 0.08);
     }
     if (rng1 < noActionChance) return null;
 

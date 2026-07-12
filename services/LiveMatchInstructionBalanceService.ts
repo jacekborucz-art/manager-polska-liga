@@ -70,6 +70,21 @@ const getProgressiveModifier = (
 };
 
 export const LiveMatchInstructionBalanceService = {
+  getFastTempoDefensiveExposure: (
+    opponentTacticDefBias: number,
+    teamTechnique: number
+  ) => {
+    const exposure = 0.006 + clamp((opponentTacticDefBias - 50) / 35, 0, 1) * 0.006;
+    const techSafetyMod = teamTechnique > 72 ? 0.80 : teamTechnique > 62 ? 0.90 : 1.0;
+    return exposure * techSafetyMod;
+  },
+
+  getOffensiveMindsetDefensiveExposure: (
+    opponentTacticDefBias: number
+  ) => {
+    return 0.007 + clamp((opponentTacticDefBias - 55) / 30, 0, 1) * 0.007;
+  },
+
   getBuildUpAccuracyProfile: (
     userPlayers: Player[],
     userStartingXI: (string | null)[],
@@ -186,7 +201,7 @@ export const LiveMatchInstructionBalanceService = {
   ) => {
     let modifier = 0;
 
-    if (tempo === 'FAST' && mindset === 'OFFENSIVE') modifier += isAttacking ? 0.003 : 0.003;
+    if (tempo === 'FAST' && mindset === 'OFFENSIVE') modifier += isAttacking ? 0.003 : 0.006;
     if (tempo === 'SLOW' && mindset === 'DEFENSIVE') modifier += isAttacking ? -0.002 : -0.003;
     if (tempo === 'FAST' && mindset === 'DEFENSIVE') modifier += isAttacking ? -0.002 : 0.002;
     if (tempo === 'SLOW' && mindset === 'OFFENSIVE') modifier += isAttacking ? -0.002 : 0.001;
@@ -206,7 +221,7 @@ export const LiveMatchInstructionBalanceService = {
     intensityResponseFactor = 1,
     pressingResponseFactor = 1
   ) => {
-    const tempoCost = tempo === 'FAST' ? 0.025 * tempoResponseFactor : 0;
+    const tempoCost = tempo === 'FAST' ? 0.065 * tempoResponseFactor : 0;
     const intensityCost = intensity === 'AGGRESSIVE'
       ? 0.018 * intensityResponseFactor
       : intensity === 'CAUTIOUS'
@@ -240,8 +255,10 @@ export const LiveMatchInstructionBalanceService = {
         modifier += 0.012;
       } else {
         const userTechnique = getAverage(userPlayers, userStartingXI, ['technique']);
-        const counterBonus = opponentTacticDefBias > 60 ? 0.010 : 0.004;
-        modifier += counterBonus * (userTechnique > 62 ? 0.5 : 1);
+        modifier += LiveMatchInstructionBalanceService.getFastTempoDefensiveExposure(
+          opponentTacticDefBias,
+          userTechnique
+        );
       }
     } else if (instructions.tempo === 'SLOW' && isAttacking) {
       modifier += LiveMatchInstructionBalanceService.getSlowTempoModifier(
@@ -251,7 +268,9 @@ export const LiveMatchInstructionBalanceService = {
 
     if (instructions.mindset === 'OFFENSIVE') {
       if (isAttacking) modifier += 0.015;
-      else if (opponentTacticDefBias > 65) modifier += 0.012;
+      else modifier += LiveMatchInstructionBalanceService.getOffensiveMindsetDefensiveExposure(
+        opponentTacticDefBias
+      );
     } else if (instructions.mindset === 'DEFENSIVE') {
       if (!isAttacking) {
         modifier -= LiveMatchInstructionBalanceService.getDefensiveMindsetModifier(
