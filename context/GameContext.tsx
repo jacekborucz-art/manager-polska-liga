@@ -10905,6 +10905,7 @@ const finalResult: SimulationOutput = {
               userClubId: userTeamId!,
               isHome,
               isFriendly: isFriendlyReport,
+              seasonNumber,
             });
             sentMailIdsRef.current.add(scoutMailKey);
             setMessages(prev => [scoutMail, ...prev]);

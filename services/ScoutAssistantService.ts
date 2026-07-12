@@ -22,13 +22,15 @@ function getErrorMultiplier(quality: number): number {
 function analyzeOpponentForm(
   opponentId: string,
   clubs?: Club[],
-  errorMult: number = 1.0
+  errorMult: number = 1.0,
+  seasonNumber?: number
 ): {
-  label: string; wins: number; draws: number; losses: number; hasEnoughData: boolean;
+  label: string; wins: number; draws: number; losses: number; hasEnoughData: boolean; matchesAnalyzed: number;
   last5: Array<{ date: string; opponentName: string; scored: number; conceded: number; result: 'W' | 'D' | 'L'; competition: string }>;
   yellowCards: number; redCards: number; brutalityLabel: string; brutalityColor: string;
 } {
-  const allHistory = MatchHistoryService.getTeamHistory(opponentId);
+  const allHistory = MatchHistoryService.getTeamHistory(opponentId)
+    .filter(m => seasonNumber === undefined || m.season === seasonNumber);
   const history = allHistory.slice(-5);
   const hasEnoughData = history.length >= 4;
   let wins = 0; let draws = 0; let losses = 0;
@@ -66,7 +68,7 @@ function analyzeOpponentForm(
     index = Math.min(4, Math.max(0, index + (Math.random() > 0.5 ? 1 : -1)));
   }
 
-  return { label: labels[index], wins, draws, losses, hasEnoughData, last5, yellowCards: totalYellow, redCards: totalRed, brutalityLabel, brutalityColor };
+  return { label: labels[index], wins, draws, losses, hasEnoughData, matchesAnalyzed: allHistory.length, last5, yellowCards: totalYellow, redCards: totalRed, brutalityLabel, brutalityColor };
 }
 
 // --- MODUŁ 2: Kluczowi zawodnicy przeciwnika ---
@@ -943,7 +945,7 @@ function buildMailBody(params: {
   );
 
   // ── DYSCYPLINA ────────────────────────────────────────────────────────────
-  const avg = form.last5.length > 0 ? ((form.yellowCards + form.redCards * 2) / form.last5.length).toFixed(1) : '0.0';
+  const avg = form.matchesAnalyzed > 0 ? ((form.yellowCards + form.redCards * 2) / form.matchesAnalyzed).toFixed(1) : '0.0';
   const disciplineCard = card('#f97316', '🃏 Fairplay',
     `<div style="display:flex;gap:8px;margin-bottom:8px;">
        <div style="flex:1;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);border-radius:7px;padding:9px;text-align:center;">
@@ -1204,9 +1206,10 @@ export const ScoutAssistantService = {
     userClubId: string;
     isHome?: boolean;
     isFriendly?: boolean;
+    seasonNumber?: number;
   }): MailMessage => {
     const { opponentClub, opponentPlayers, opponentLineup, userPlayers, userLineup, matchDate, managerName,
-      clubs, opponentLeaguePosition, opponentLeaguePlayed, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome, isFriendly = false } = params;
+      clubs, opponentLeaguePosition, opponentLeaguePlayed, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName, analysisQuality, userClubId, isHome, isFriendly = false, seasonNumber } = params;
     const errorMult = getErrorMultiplier(analysisQuality ?? 10);
 
     const userXi = userLineup.startingXI
@@ -1223,7 +1226,7 @@ export const ScoutAssistantService = {
       ? opponentXi.reduce((s, p) => s + p.overallRating, 0) / opponentXi.length
       : 70;
 
-    const form = analyzeOpponentForm(opponentClub.id, clubs, errorMult);
+    const form = analyzeOpponentForm(opponentClub.id, clubs, errorMult, seasonNumber);
     const keyPlayers = analyzeKeyPlayers(opponentClub.id, opponentPlayers, opponentLineup, errorMult);
     const tactic = analyzeOpponentTactic(opponentClub, opponentPlayers, opponentLineup, errorMult);
     const approach = recommendTacticStyle(userAvgRating, opponentAvgRating, errorMult);
