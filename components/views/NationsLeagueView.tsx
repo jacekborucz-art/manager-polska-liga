@@ -5,6 +5,7 @@ import {
   MatchCardEntry,
   MatchGoalEntry,
   MatchHistoryEntry,
+  NationalTeam,
   NationsLeagueFixture,
   NationsLeagueGroup,
   NationsLeagueState,
@@ -183,12 +184,36 @@ function buildScorers(history: MatchHistoryEntry[], teamNameById: Map<string, st
   return [...rows.values()].sort((a, b) => b.goals - a.goals || a.playerName.localeCompare(b.playerName)).slice(0, 12);
 }
 
-function buildTeamNameById(fixtures: NationsLeagueFixture[], history: MatchHistoryEntry[]) {
-  const names = new Map<string, string>();
+function buildEditionHistory(state: NationsLeagueState, allHistory: MatchHistoryEntry[]) {
+  const fixtureMatchIds = new Set(
+    state.fixtures
+      .map(fixture => fixture.matchId)
+      .filter((matchId): matchId is string => !!matchId)
+  );
+  const editionLabel = `Liga Narodów UEFA ${state.editionLabel}`;
+  const seen = new Set<string>();
+
+  return allHistory.filter(match => {
+    const belongsToEdition = (!!match.matchId && fixtureMatchIds.has(match.matchId)) || String(match.competition).includes(editionLabel);
+    if (!belongsToEdition) return false;
+    const key = match.matchId ? `${match.season}:${match.matchId}` : `${match.date}:${match.homeTeamId}:${match.awayTeamId}:${match.competition}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildTeamNameById(fixtures: NationsLeagueFixture[], history: MatchHistoryEntry[], nationalTeams: NationalTeam[]) {
+  const names = new Map<string, string>(nationalTeams.map(team => [team.id, team.name]));
+  const fixtureByMatchId = new Map(
+    fixtures
+      .filter(fixture => !!fixture.matchId)
+      .map(fixture => [fixture.matchId as string, fixture])
+  );
 
   // Match history stores technical national-team IDs, while Nations League fixtures keep the readable team names used in the UI.
   history.forEach(match => {
-    const fixture = fixtures.find(item => item.matchId === match.matchId);
+    const fixture = match.matchId ? fixtureByMatchId.get(match.matchId) : undefined;
     if (!fixture) return;
     names.set(match.homeTeamId, fixture.home);
     names.set(match.awayTeamId, fixture.away);
@@ -247,7 +272,7 @@ function RankingTab({ rankingState }: { rankingState: UefaNationalRankingState |
 }
 
 const NationsLeagueView: React.FC = () => {
-  const { nationsLeagueState, nationsLeagueArchive, uefaNationalRankingState, navigateTo, viewPlayerDetails } = useGame();
+  const { nationsLeagueState, nationsLeagueArchive, nationalTeams, uefaNationalRankingState, navigateTo, viewPlayerDetails } = useGame();
   const [activeTab, setActiveTab] = useState<TabId>('tabele');
   const editions = useMemo(() => {
     const byYear = new Map<number, NationsLeagueState>();
@@ -266,7 +291,7 @@ const NationsLeagueView: React.FC = () => {
 
   const history = useMemo(
     () => displayState
-      ? MatchHistoryService.getAll().filter(match => String(match.competition).includes(`Liga Narodów UEFA ${displayState.editionLabel}`))
+      ? buildEditionHistory(displayState, MatchHistoryService.getAll())
       : [],
     [displayState]
   );
@@ -279,7 +304,7 @@ const NationsLeagueView: React.FC = () => {
   const leagueFixtures = fixtures.filter(fixture => fixture.stage === 'LEAGUE_PHASE');
   const playoffFixtures = fixtures.filter(fixture => fixture.stage === 'PLAYOFFS');
   const knockoutFixtures = fixtures.filter(fixture => fixture.stage === 'QUARTER_FINALS' || fixture.stage === 'FINALS');
-  const teamNameById = useMemo(() => buildTeamNameById(fixtures, history), [fixtures, history]);
+  const teamNameById = useMemo(() => buildTeamNameById(fixtures, history, nationalTeams), [fixtures, history, nationalTeams]);
   const scorers = useMemo(() => buildScorers(history, teamNameById), [history, teamNameById]);
   const discipline = useMemo(() => buildDiscipline(history, teamNameById), [history, teamNameById]);
 
