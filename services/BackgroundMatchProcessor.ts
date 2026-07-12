@@ -446,7 +446,8 @@ if (todayFixtures.length === 0) {
       const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId);
       const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId, coaches);
       const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId, coaches);
-      const transferResolvedUpdate = AiContractService.resolveAiTransferPending(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
+      const deadlineAcademyFallback = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
+      const transferResolvedUpdate = AiContractService.resolveAiTransferPending(deadlineAcademyFallback.updatedClubs, deadlineAcademyFallback.updatedPlayers, currentDate, userTeamId);
 
       const aiTransferLogEntries: AiTransferLogEntry[] = [
         ...recruitmentUpdate.logEntries,
@@ -476,6 +477,9 @@ if (todayFixtures.length === 0) {
           currentDate,
           userTeamId
         ).updatedPlayers;
+      }
+      if (deadlineAcademyFallback.generatedCount > 0) {
+        DebugLoggerService.log('SQUAD_REVIEW', `Awaryjny nabór akademii AI po rynku (${currentDate.toLocaleDateString('pl-PL')}): ${deadlineAcademyFallback.generatedCount} nowych zawodników.`, true);
       }
       if (currentDate.getMonth() === 0 && currentDate.getDate() === 12) {
         const weakReviewWinter = AiContractService.processWeakPlayerContractCuts(scoutedClubs, scoutedPlayers, currentDate, userTeamId);
@@ -990,7 +994,8 @@ if (todayFixtures.length === 0) {
     const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId);
     const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId, coaches);
     const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId, coaches);
-    const transferResolvedFinal = AiContractService.resolveAiTransferPending(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
+    const deadlineAcademyFallbackMatch = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
+    const transferResolvedFinal = AiContractService.resolveAiTransferPending(deadlineAcademyFallbackMatch.updatedClubs, deadlineAcademyFallbackMatch.updatedPlayers, currentDate, userTeamId);
 
     const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [
       ...finalUpdate.logEntries,
@@ -1003,6 +1008,9 @@ if (todayFixtures.length === 0) {
 
     currentClubs = transferResolvedFinal.updatedClubs;
     currentPlayers = transferResolvedFinal.updatedPlayers;
+    if (deadlineAcademyFallbackMatch.generatedCount > 0) {
+      DebugLoggerService.log('SQUAD_REVIEW', `Awaryjny nabór akademii AI po rynku (${currentDate.toLocaleDateString('pl-PL')}): ${deadlineAcademyFallbackMatch.generatedCount} nowych zawodników.`, true);
+    }
     const newOffers = finalUpdate.newOffers;
 
     // Aktualizacja zainteresowań transferowych — dotyczy też dni meczowych.
