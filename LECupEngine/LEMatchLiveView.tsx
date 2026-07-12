@@ -163,6 +163,7 @@ export const CLMatchLiveView = () => {
   } = useGame();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
+  const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
@@ -200,6 +201,12 @@ export const CLMatchLiveView = () => {
   const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeTacticalSelect = () => setOpenTacticalSelect(null);
+    document.addEventListener('click', closeTacticalSelect);
+    return () => document.removeEventListener('click', closeTacticalSelect);
+  }, []);
 
   const getContrastColor = (hexColor: string): string => {
     const hex = hexColor.replace('#', '');
@@ -2190,6 +2197,92 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       </div>
     </div>
   );
+
+  const renderTacticalSelect = <T extends string,>({
+    value,
+    locked,
+    accent,
+    options,
+    onPick,
+  }: {
+    value: T;
+    locked: boolean;
+    accent: string;
+    options: { val: T; label: string }[];
+    onPick: (value: T) => void;
+  }) => {
+    const widestLabelLength = Math.max(...options.map(option => option.label.length));
+    const selectId = options.map(option => option.val).join('|');
+    const isOpen = openTacticalSelect === selectId && !locked;
+    const selectedLabel = options.find(option => option.val === value)?.label ?? String(value);
+    const controlStyle = {
+      backgroundColor: locked ? 'rgba(15, 23, 42, 0.54)' : hexToRgba(accent, 0.32),
+      borderColor: locked ? 'rgba(255, 255, 255, 0.1)' : hexToRgba(accent, 0.88),
+      boxShadow: locked
+        ? 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -9px 15px rgba(0,0,0,0.35)'
+        : `0 0 18px ${hexToRgba(accent, 0.26)}, inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -11px 18px rgba(0,0,0,0.48)`,
+      lineHeight: '1',
+      textShadow: locked
+        ? '0 1px 4px rgba(0,0,0,0.75)'
+        : '0 1px 2px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.85)',
+    };
+
+    return (
+      <div
+        className="relative z-30"
+        style={{
+          width: `calc(${widestLabelLength}ch + 42px)`,
+          minWidth: '70px',
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          disabled={locked}
+          onClick={() => setOpenTacticalSelect(current => current === selectId ? null : selectId)}
+          className={`relative h-9 w-full rounded-[4px] border px-[8px] pr-[24px] text-center text-[12px] font-black italic uppercase tracking-tighter outline-none transition-all duration-200 ${
+            locked ? 'cursor-not-allowed text-slate-500' : 'cursor-pointer text-yellow-50 hover:brightness-125 focus:brightness-125'
+          }`}
+          style={controlStyle}
+        >
+          <span className="block truncate">{selectedLabel}</span>
+          <span className="absolute right-[7px] top-1/2 -translate-y-1/2 text-[12px] leading-none text-yellow-50/90">⌃</span>
+        </button>
+        {isOpen && (
+          <div
+            className="absolute bottom-[calc(100%+5px)] left-0 z-[620] w-full overflow-hidden rounded-[4px] border py-1 shadow-[0_18px_34px_rgba(0,0,0,0.9)]"
+            style={{
+              background: `linear-gradient(180deg, rgba(2,6,23,0.99), rgba(9,12,22,0.99)), linear-gradient(180deg, ${hexToRgba(accent, 0.18)}, transparent)`,
+              borderColor: hexToRgba(accent, 0.94),
+              boxShadow: `0 18px 34px rgba(0,0,0,0.92), 0 0 0 1px rgba(0,0,0,0.85), 0 0 18px ${hexToRgba(accent, 0.2)}`,
+            }}
+          >
+            {options.map(option => (
+              <button
+                key={option.val}
+                type="button"
+                onClick={() => {
+                  onPick(option.val);
+                  setOpenTacticalSelect(null);
+                }}
+                className={`block h-8 w-full px-2 text-center text-[12px] font-black italic uppercase tracking-tighter transition-colors ${
+                  option.val === value
+                    ? 'text-yellow-50'
+                    : 'text-slate-100 hover:text-yellow-50'
+                }`}
+                style={{
+                  backgroundColor: option.val === value ? hexToRgba(accent, 0.32) : 'rgba(2, 6, 23, 0.96)',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.95)',
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">

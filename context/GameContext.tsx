@@ -1748,8 +1748,42 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   }, [allFixtures, clubs, triggerSeasonCelebrationIfClinched]);
 
 const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
-    if (players[clubId]) return players[clubId];
-    if (generatedSquadCacheRef.current[clubId]) return generatedSquadCacheRef.current[clubId];
+    const getEuropeanSquadSignature = (squad: Player[]) => JSON.stringify(squad.map(player => ({
+        id: player.id,
+        form: player.form,
+        stats: {
+            matchesPlayed: player.stats?.matchesPlayed ?? 0,
+            minutesPlayed: player.stats?.minutesPlayed ?? 0,
+            goals: player.stats?.goals ?? 0,
+            assists: player.stats?.assists ?? 0,
+            yellowCards: player.stats?.yellowCards ?? 0,
+            redCards: player.stats?.redCards ?? 0,
+            cleanSheets: player.stats?.cleanSheets ?? 0,
+            ratingCount: player.stats?.ratingHistory?.length ?? 0,
+            backgroundLeagueProgress: player.stats?.backgroundLeagueProgress ?? {},
+        },
+    })));
+    const syncEuropeanSquadIfNeeded = (squad: Player[]): Player[] => {
+        const club = clubs.find(c => c.id === clubId);
+        if (!club || !isEuropeanCupClub(club)) return squad;
+
+        const beforeSignature = getEuropeanSquadSignature(squad);
+        const updatedSquad = applyEuropeanBackgroundForm(squad, club, currentDate);
+        if (getEuropeanSquadSignature(updatedSquad) === beforeSignature) return squad;
+
+        generatedSquadCacheRef.current[clubId] = updatedSquad;
+        queueMicrotask(() => {
+            setPlayers(prev => {
+                const currentSquad = prev[clubId];
+                if (!currentSquad) return { ...prev, [clubId]: updatedSquad };
+                if (getEuropeanSquadSignature(currentSquad) !== beforeSignature) return prev;
+                return { ...prev, [clubId]: updatedSquad };
+            });
+        });
+        return updatedSquad;
+    };
+    if (players[clubId]) return syncEuropeanSquadIfNeeded(players[clubId]);
+    if (generatedSquadCacheRef.current[clubId]) return syncEuropeanSquadIfNeeded(generatedSquadCacheRef.current[clubId]);
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     const withAiWinterCampState = (squad: Player[]) => {
         const club = clubs.find(c => c.id === clubId);

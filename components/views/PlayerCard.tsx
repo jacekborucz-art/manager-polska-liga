@@ -161,7 +161,7 @@ const PlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> 
 };
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, resolvePlayerTransferListObjection, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, pendingOpenTransferListObjection, setPendingOpenTransferListObjection, submitLoanOffer, sessionSeed } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, resolvePlayerTransferListObjection, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, pendingOpenTransferListObjection, setPendingOpenTransferListObjection, submitLoanOffer, sessionSeed, getOrGenerateSquad } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -246,6 +246,12 @@ export const PlayerCard: React.FC = () => {
     }
     return null;
   }, [viewedPlayerId, players, reserves, clubs]);
+
+  useEffect(() => {
+    if (data?.player.clubId && data.player.clubId !== 'FREE_AGENTS') {
+      getOrGenerateSquad(data.player.clubId);
+    }
+  }, [data?.player.clubId, getOrGenerateSquad]);
 
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;

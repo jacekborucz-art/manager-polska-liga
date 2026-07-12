@@ -258,23 +258,27 @@ const refreshStandings = (state: WorldCupQualifiersState, results: NTMatchResult
       fixture.groupId === result.group
     );
     if (fixtureIndex < 0) return;
-    const fixture = fixtures[fixtureIndex];
-    fixtures[fixtureIndex] = markFixturePlayed(fixture, result);
+    fixtures[fixtureIndex] = markFixturePlayed(fixtures[fixtureIndex], result);
+  });
+
+  fixtures.forEach(fixture => {
+    if (fixture.stage !== 'GROUP_STAGE' || !fixture.played) return;
+    if (fixture.homeGoals === undefined || fixture.awayGoals === undefined) return;
     const table = standingsByGroup.get(fixture.groupId);
-    const home = table?.get(result.home);
-    const away = table?.get(result.away);
+    const home = table?.get(fixture.home);
+    const away = table?.get(fixture.away);
     if (!home || !away) return;
     home.played += 1;
     away.played += 1;
-    home.goalsFor += result.homeGoals;
-    home.goalsAgainst += result.awayGoals;
-    away.goalsFor += result.awayGoals;
-    away.goalsAgainst += result.homeGoals;
-    if (result.homeGoals > result.awayGoals) {
+    home.goalsFor += fixture.homeGoals;
+    home.goalsAgainst += fixture.awayGoals;
+    away.goalsFor += fixture.awayGoals;
+    away.goalsAgainst += fixture.homeGoals;
+    if (fixture.homeGoals > fixture.awayGoals) {
       home.wins += 1;
       home.points += 3;
       away.losses += 1;
-    } else if (result.awayGoals > result.homeGoals) {
+    } else if (fixture.awayGoals > fixture.homeGoals) {
       away.wins += 1;
       away.points += 3;
       home.losses += 1;
