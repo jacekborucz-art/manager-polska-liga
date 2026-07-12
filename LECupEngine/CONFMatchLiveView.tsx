@@ -387,18 +387,17 @@ const isPausedForSevereInjury = useMemo(() => {
           aiCoachInit
         )
         : aiLineupBase.tacticId;
-      const aiPreparedLineup = aiPreparedTacticId !== aiLineupBase.tacticId
-        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
-            competitionId: ctx.fixture.leagueId as string,
-            formAware: true,
-            selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_conf_live_ai_${aiPreparedTacticId}`
-          })
-        : aiLineupBase;
-      const homeLineupData = aiClubInit.id === ctx.homeClub.id ? aiPreparedLineup : homeLineupBase;
-      const awayLineupData = aiClubInit.id === ctx.awayClub.id ? aiPreparedLineup : awayLineupBase;
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userLineupInit.tacticId, sessionSeed, opponentReport
       );
+      const aiPreparedLineup = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
+        competitionId: ctx.fixture.leagueId as string,
+        formAware: true,
+        selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_conf_live_ai_${aiPreparedTacticId}_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
+        instructionProfile: preMatchInstr
+      });
+      const homeLineupData = aiClubInit.id === ctx.homeClub.id ? aiPreparedLineup : homeLineupBase;
+      const awayLineupData = aiClubInit.id === ctx.awayClub.id ? aiPreparedLineup : awayLineupBase;
       const aiInitNextMin = 10 + Math.floor(seededRng(sessionSeed, 0, 77) * 11);
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
       const aiBriefingEffect = PreMatchPressConferenceService.combineWithBriefing(
@@ -1447,10 +1446,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               userShots: userStats.shots,
               aiShotsOnTarget: aiStats.shotsOnTarget,
               userShotsOnTarget: userStats.shotsOnTarget,
+              userTempo: uInstr.tempo,
               aiPaceAvg: oAvgPace,
               aiTechAvg: oAvgTech,
               userPaceAvg: uAvgPace,
               userTechAvg: uAvgTech,
+              aiTacticId: userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId,
+              userTacticId: userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId,
             }
           );
           nextAiActiveShout = decision ? { id: `ai_${nextMinute}`, ...decision, expiryMinute: -1 } : null;

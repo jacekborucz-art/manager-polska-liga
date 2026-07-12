@@ -1,6 +1,7 @@
 import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack, InstructionPassing } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
+import { TacticalInstructionMatrixService } from './TacticalInstructionMatrixService';
 
 type AiInstructions = {
   tempo: InstructionTempo;
@@ -59,6 +60,8 @@ type InMatchDecisionContext = {
   aiTechAvg?: number;
   userPaceAvg?: number;
   userTechAvg?: number;
+  aiTacticId?: string;
+  userTacticId?: string;
 };
 
 const seededRng = (seed: number, minute: number, offset: number = 0): number => {
@@ -589,7 +592,45 @@ export const AiCoachTacticsService = {
       pressing = experience >= 55 || pressureDrama >= 0.75 ? 'PRESSING' : pressing;
     }
 
-    const passing = pickInMatchPassing(seed, minute, coachAccuracy, paceGap, techGap, 601, 602);
+    let passing = pickInMatchPassing(seed, minute, coachAccuracy, paceGap, techGap, 601, 602);
+    const aiTacticId = context?.aiTacticId;
+    const userTacticId = context?.userTacticId;
+    if (aiTacticId && userTacticId) {
+      const matrix = TacticalInstructionMatrixService.getMatrixRecommendation({
+        aiTacticId,
+        opponentTacticId: userTacticId,
+        opponentTempo: userTempo,
+        opponentMindset: userMindset,
+        intendedTempo: tempo,
+        intendedMindset: mindset,
+        intendedIntensity: intensity,
+        aiScoreDiff,
+        aiMomentum,
+        aiAvgFatigue,
+        aiLowestFatigue,
+        paceGap,
+        techGap,
+        minute,
+        pressureDrama,
+      });
+      const matrixTrust = Math.max(
+        0.20,
+        Math.min(0.95, 0.25 + coachScore * 0.45 + matrix.confidence * 0.35)
+      );
+      const mustUseMatrix =
+        matrix.reason === 'counter_overcommit' ||
+        matrix.reason === 'protect_lead' ||
+        matrix.reason === 'chase_game' ||
+        matrix.reason === 'fatigue_safety';
+      if (mustUseMatrix || seededRng(seed, minute, 606) < matrixTrust) {
+        tempo = matrix.tempo;
+        mindset = matrix.mindset;
+        intensity = matrix.intensity;
+        passing = matrix.passing;
+        pressing = matrix.pressing;
+        counterAttack = matrix.counterAttack;
+      }
+    }
     console.log(
       `[AI IN-MATCH min=${minute}] pace gap=${paceGap.toFixed(1)} tech gap=${techGap.toFixed(1)} ` +
       `acc=${coachAccuracy.toFixed(2)} → ${passing} | mindset=${mindset} tempo=${tempo}`

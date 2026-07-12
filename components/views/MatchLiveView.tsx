@@ -854,21 +854,20 @@ const isPausedForSevereInjury = useMemo(() => {
       const aiPreparedTacticId = opponentReport
         ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit, aiClubInit.id !== ctx.homeClub.id, aiCoachInit)
         : aiLineupBase.tacticId;
-      const aiLineupPrepared = aiPreparedTacticId !== aiLineupBase.tacticId
-        ? LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
-            formAware: true,
-            selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_${aiPreparedTacticId}_live_ai`
-          })
-        : aiLineupBase;
+      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
+        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
+      );
+      const aiLineupPrepared = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
+        formAware: true,
+        selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_${aiPreparedTacticId}_live_ai_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
+        instructionProfile: preMatchInstr
+      });
       const homeLineupInit = aiClubInit.id === ctx.homeClub.id
         ? aiLineupPrepared
         : (lineups[ctx.homeClub.id] ?? LineupService.autoPickLineup(ctx.homeClub.id, ctx.homePlayers));
       const awayLineupInit = aiClubInit.id === ctx.awayClub.id
         ? aiLineupPrepared
         : (lineups[ctx.awayClub.id] ?? LineupService.autoPickLineup(ctx.awayClub.id, ctx.awayPlayers));
-      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
-      );
       const aiConferenceEffect = PreMatchPressConferenceService.getTeamMatchEffect(pressConferenceEffects[ctx.fixture.id], aiClubInit.id);
       const aiCoachBriefingEffect = calculateAiCoachBriefingEffect(
           aiClubInit.reputation,
@@ -2514,7 +2513,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               aiPaceAvg: oAvgPace,
               aiTechAvg: oAvgTech,
               userPaceAvg: uAvgPace,
-              userTechAvg: uAvgTech
+              userTechAvg: uAvgTech,
+              aiTacticId: userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId,
+              userTacticId: userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId
             }
           );
           const shouldHoldExploit =

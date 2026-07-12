@@ -1,4 +1,18 @@
-import { Lineup, Player, PlayerPosition, Tactic, InjurySeverity, HealthStatus, Coach } from '../types';
+import {
+  Coach,
+  HealthStatus,
+  InjurySeverity,
+  InstructionCounterAttack,
+  InstructionIntensity,
+  InstructionMindset,
+  InstructionPassing,
+  InstructionPressing,
+  InstructionTempo,
+  Lineup,
+  Player,
+  PlayerPosition,
+  Tactic,
+} from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerPositionFitService } from './PlayerPositionFitService';
@@ -9,6 +23,14 @@ type AutoPickOptions = {
   competitionId?: string;
   selectionSeed?: string;
   formAware?: boolean;
+  instructionProfile?: {
+    tempo: InstructionTempo;
+    mindset: InstructionMindset;
+    intensity: InstructionIntensity;
+    passing?: InstructionPassing;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+  };
 };
 
 type FitScoreOptions = {
@@ -81,14 +103,95 @@ const getSelectionNoise = (player: Player, coachQuality: number, seedKey: string
   return (roll - 0.5) * 2 * range;
 };
 
-const getSelectionScore = (player: Player, coach: Coach | null = null, seedKey: string = 'lineup', formAware: boolean = false): number => {
+const getInstructionProfileFit = (
+  player: Player,
+  profile: AutoPickOptions['instructionProfile'] | undefined,
+  coachQuality: number
+): number => {
+  if (!profile || player.position === PlayerPosition.GK) return 0;
+
+  const a = player.attributes;
+  let score = 0;
+
+  if (profile.tempo === 'FAST') {
+    score += (a.pace - 60) * 0.030;
+    score += (a.acceleration - 60) * 0.024;
+    score += (a.stamina - 60) * 0.026;
+    if (player.position === PlayerPosition.FWD) score += (a.finishing - 60) * 0.018;
+  } else if (profile.tempo === 'SLOW') {
+    score += (a.passing - 60) * 0.024;
+    score += (a.technique - 60) * 0.024;
+    score += (a.vision - 60) * 0.020;
+    score += (a.mentality - 60) * 0.014;
+  }
+
+  if (profile.mindset === 'OFFENSIVE') {
+    score += (a.attacking - 60) * 0.030;
+    score += (a.technique - 60) * 0.018;
+    if (player.position === PlayerPosition.FWD) score += (a.finishing - 60) * 0.032;
+    if (player.position === PlayerPosition.MID) score += (a.vision - 60) * 0.018;
+  } else if (profile.mindset === 'DEFENSIVE') {
+    score += (a.defending - 60) * 0.032;
+    score += (a.positioning - 60) * 0.026;
+    score += (a.strength - 60) * 0.014;
+    if (player.position === PlayerPosition.DEF || player.position === PlayerPosition.MID) {
+      score += (a.mentality - 60) * 0.014;
+    }
+  }
+
+  if (profile.passing === 'SHORT') {
+    score += (a.passing - 60) * 0.030;
+    score += (a.technique - 60) * 0.024;
+    score += (a.vision - 60) * 0.018;
+  } else if (profile.passing === 'LONG') {
+    score += (a.passing - 60) * 0.024;
+    score += (a.vision - 60) * 0.018;
+    score += (a.strength - 60) * 0.010;
+    if (player.position === PlayerPosition.FWD) score += (a.pace - 60) * 0.024;
+  }
+
+  if (profile.pressing === 'PRESSING') {
+    score += (a.workRate - 60) * 0.030;
+    score += (a.stamina - 60) * 0.026;
+    score += (a.aggression - 60) * 0.020;
+    score += (a.pace - 60) * 0.014;
+  }
+
+  if (profile.counterAttack === 'COUNTER') {
+    score += (a.pace - 60) * 0.030;
+    score += (a.acceleration - 60) * 0.020;
+    score += (a.passing - 60) * 0.018;
+    if (player.position === PlayerPosition.FWD) score += (a.finishing - 60) * 0.024;
+  }
+
+  if (profile.intensity === 'AGGRESSIVE') {
+    score += (a.stamina - 60) * 0.022;
+    score += (a.workRate - 60) * 0.020;
+    score += (a.aggression - 60) * 0.014;
+  } else if (profile.intensity === 'CAUTIOUS') {
+    score += (a.positioning - 60) * 0.020;
+    score += (a.mentality - 60) * 0.018;
+  }
+
+  const coachStyleRead = Math.max(0, Math.min(1, (coachQuality - 42) / 42));
+  return Math.max(-4.5, Math.min(5.5, score * coachStyleRead));
+};
+
+const getSelectionScore = (
+  player: Player,
+  coach: Coach | null = null,
+  seedKey: string = 'lineup',
+  formAware: boolean = false,
+  instructionProfile?: AutoPickOptions['instructionProfile']
+): number => {
   const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
   const moraleScore = PlayerMoraleService.getEffectiveOverall(moralePlayer);
   const roleBonus = player.squadRole === 'KEY_PLAYER' ? 1.2 : player.squadRole === 'STARTER' ? 0.7 : 0;
   const coachQuality = getCoachQuality(coach);
   const formBonus = formAware ? TeamFormImpactService.getSelectionFormBonus(player, coachQuality) : 0;
   const noise = formAware ? getSelectionNoise(player, coachQuality, seedKey) : 0;
-  return moraleScore + roleBonus + formBonus + noise;
+  const instructionFit = getInstructionProfileFit(player, instructionProfile, coachQuality);
+  return moraleScore + roleBonus + formBonus + instructionFit + noise;
 };
 
 const isEuropeanCompetition = (competitionId?: string): boolean => {
@@ -137,6 +240,7 @@ export const LineupService = {
     const competitionId = options.competitionId;
     const formAware = options.formAware ?? false;
     const selectionSeed = options.selectionSeed ?? `${clubId}_${tacticId}`;
+    const instructionProfile = options.instructionProfile;
     // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive)
     if (coach?.favoriteTactics) {
       const preferred = [
@@ -163,7 +267,7 @@ export const LineupService = {
         const COND_XI    = 90;
     const COND_BENCH = 85;
     const sortedAll   = [...availablePlayers].sort((a, b) =>
-      getSelectionScore(b, coach, selectionSeed, formAware) - getSelectionScore(a, coach, selectionSeed, formAware)
+      getSelectionScore(b, coach, selectionSeed, formAware, instructionProfile) - getSelectionScore(a, coach, selectionSeed, formAware, instructionProfile)
     );
     const poolXI      = sortedAll.filter(p => p.condition >= COND_XI);
     const poolBench   = sortedAll.filter(p => p.condition >= COND_BENCH && p.condition < COND_XI);

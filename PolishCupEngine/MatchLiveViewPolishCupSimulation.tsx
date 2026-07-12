@@ -721,7 +721,16 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport
       );
-      const aiLineupInit = userSide === 'HOME' ? awayLineupData : homeLineupData;
+      const aiBaseLineupInit = userSide === 'HOME' ? awayLineupData : homeLineupData;
+      const aiLineupPrepared = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiBaseLineupInit.tacticId, aiCoachInit, {
+        competitionId: ctx.fixture.leagueId as string,
+        formAware: true,
+        selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_cup_live_ai_${aiBaseLineupInit.tacticId}_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
+        instructionProfile: preMatchInstr
+      });
+      const finalHomeLineupData = userSide === 'HOME' ? homeLineupData : aiLineupPrepared;
+      const finalAwayLineupData = userSide === 'HOME' ? aiLineupPrepared : awayLineupData;
+      const aiLineupInit = aiLineupPrepared;
       const getInitSimplePower = (players: Player[], lineup: Lineup): number =>
         lineup.startingXI.filter((id): id is string => id !== null)
           .map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p)
@@ -747,7 +756,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
 
       setMatchState({
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true, isPausedForEvent: false, isHalfTime: false, isFinished: false,
-        speed: 1, momentum: 5, momentumPulse: 0, homeScore: 0, awayScore: 0, homeLineup: homeLineupData, awayLineup: awayLineupData,
+        speed: 1, momentum: 5, momentumPulse: 0, homeScore: 0, awayScore: 0, homeLineup: finalHomeLineupData, awayLineup: finalAwayLineupData,
         homeFatigue: {}, awayFatigue: {}, homeInjuries: {}, awayInjuries: {}, playerYellowCards: {}, sentOffIds: [], homeRiskMode: {}, awayRiskMode: {},
         homeUpgradeProb: {}, awayUpgradeProb: {}, homeInjuryMin: {}, awayInjuryMin: {}, subsCountHome: 0, subsCountAway: 0, homeSubsHistory: [], awaySubsHistory: [],
         lastAiActionMinute: 0, logs: [{ id: 'cup_init', minute: 0, text: "Gwizdek sędziego! Zaczynamy bój o awans!", type: MatchEventType.GENERIC }],
