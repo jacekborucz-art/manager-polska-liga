@@ -1400,6 +1400,8 @@ export interface Player {
     years: number;
     requestedAt: string;
     deadline: string;
+    reason?: 'STANDARD' | 'PROMOTION_RAISE';
+    raisePct?: number;
   } | null;
   contractRaiseReminderUntil?: string | null;
   contractRaiseTeamMoraleDelta?: number | null;
