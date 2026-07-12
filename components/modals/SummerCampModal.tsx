@@ -64,7 +64,7 @@ export const SummerCampLocationModal: React.FC<SummerCampLocationModalProps> = (
             <span className="text-2xl">⛺</span>
             <div>
               <h2 className="text-lg font-bold text-green-300">Propozycja Zarządu: Obóz Letni</h2>
-              <p className="text-xs text-green-400/70">14 – 28 czerwca · Wybierz lokalizację</p>
+              <p className="text-xs text-green-400/70">18 – 28 czerwca · Wybierz lokalizację</p>
             </div>
           </div>
         </div>
@@ -245,7 +245,7 @@ export const SummerCampProgramModal: React.FC<SummerCampProgramModalProps> = ({
             <span className="text-2xl">📋</span>
             <div>
               <h2 className="text-lg font-bold text-green-300">Plan Obozu Letniego</h2>
-              <p className="text-xs text-green-400/70">Lokalizacja: {LOCATION_LABELS_SHORT[campLocation]} · 14–28 czerwca</p>
+              <p className="text-xs text-green-400/70">Lokalizacja: {LOCATION_LABELS_SHORT[campLocation]} · 18–28 czerwca</p>
             </div>
           </div>
         </div>

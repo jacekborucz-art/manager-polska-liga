@@ -617,7 +617,7 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
     subject: 'Propozycja letniego obozu przygotowawczego — {CLUB}',
-    body: 'Panie Trenerze,\n\nZarząd {CLUB} rekomenduje zorganizowanie letniego obozu przygotowawczego przed startem nowego sezonu. Obóz planowany jest na 14–28 czerwca.\n\nBiorąc pod uwagę wysokie temperatury w tym okresie, przygotowaliśmy propozycje destynacji w krajach o umiarkowanym klimacie: Polska, Czechy, Słowacja, Austria oraz Szwajcaria. Każda lokalizacja oferuje odpowiednią infrastrukturę treningową przy komfortowych warunkach pogodowych.\n\nProsimy o wybór lokalizacji do 19 maja.\n\nJeśli obóz nie zostanie zorganizowany, drużyna samodzielnie przygotuje się do nowego sezonu — zarząd jednak zaleca skorzystanie z tej możliwości.\n\nZ poważaniem,\nZarząd {CLUB}'
+    body: 'Panie Trenerze,\n\nZarząd {CLUB} rekomenduje zorganizowanie letniego obozu przygotowawczego przed startem nowego sezonu. Obóz planowany jest na 18–28 czerwca.\n\nBiorąc pod uwagę wysokie temperatury w tym okresie, przygotowaliśmy propozycje destynacji w krajach o umiarkowanym klimacie: Polska, Czechy, Słowacja, Austria oraz Szwajcaria. Każda lokalizacja oferuje odpowiednią infrastrukturę treningową przy komfortowych warunkach pogodowych.\n\nProsimy o wybór lokalizacji do 19 maja.\n\nJeśli obóz nie zostanie zorganizowany, drużyna samodzielnie przygotuje się do nowego sezonu — zarząd jednak zaleca skorzystanie z tej możliwości.\n\nZ poważaniem,\nZarząd {CLUB}'
   },
   {
     id: 'summer_camp_assistant_fitness',
