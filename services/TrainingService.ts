@@ -41,6 +41,12 @@ const getRegressionIntensityMultiplier = (intensity: TrainingIntensity): number 
   return 1.0;
 };
 
+const getTrainingInjuryIntensityMultiplier = (intensity: TrainingIntensity): number => {
+  if (intensity === TrainingIntensity.LIGHT) return 0.75;
+  if (intensity === TrainingIntensity.HEAVY) return 1.45;
+  return 1.0;
+};
+
 const isWinterHoliday = (date: Date): boolean => {
   const month = date.getMonth();
   const day = date.getDate();
@@ -81,6 +87,7 @@ export const TrainingService = {
     fixtures: Fixture[] = [],
     fitnessCoachQuality?: number,
     userTeamId?: string,
+    userTrainingIntensity: TrainingIntensity = TrainingIntensity.NORMAL,
     random: () => number = Math.random
   ): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
@@ -98,9 +105,23 @@ export const TrainingService = {
         if (q >= 5)  return 1.08 - (q - 5) / 5 * 0.08;
         return Math.min(1.12, 1.12 - (q - 1) / 4 * 0.04);
       })() : 1.0;
-      if (healthyPlayers.length === 0 || random() >= DAILY_TRAINING_INJURY_CHANCE * injuryModifier) continue;
+      const intensityWeights = healthyPlayers.map(player =>
+        userTeamId && clubId === userTeamId
+          ? getTrainingInjuryIntensityMultiplier(player.trainingIntensity ?? userTrainingIntensity)
+          : 1
+      );
+      const intensityModifier = intensityWeights.length > 0
+        ? intensityWeights.reduce((sum, weight) => sum + weight, 0) / intensityWeights.length
+        : 1;
 
-      const injuredPlayerId = healthyPlayers[Math.floor(random() * healthyPlayers.length)]?.id;
+      if (healthyPlayers.length === 0 || random() >= DAILY_TRAINING_INJURY_CHANCE * injuryModifier * intensityModifier) continue;
+
+      const totalWeight = intensityWeights.reduce((sum, weight) => sum + weight, 0);
+      let roll = random() * totalWeight;
+      const injuredPlayerId = healthyPlayers.find((player, index) => {
+        roll -= intensityWeights[index] ?? 1;
+        return roll <= 0;
+      })?.id ?? healthyPlayers[healthyPlayers.length - 1]?.id;
       if (!injuredPlayerId) continue;
 
       updatedMap[clubId] = updatedMap[clubId].map(player => {
@@ -159,9 +180,10 @@ export const TrainingService = {
     const cycle = selectedCycle || getDefaultTeamTrainingCycle();
 
     updatedMap[userTeamId] = updatedMap[userTeamId].map(player => {
+      const effectiveIntensity = player.trainingIntensity ?? intensity;
       const intensityMultiplier =
-        intensity === TrainingIntensity.HEAVY ? 1.8 :
-        intensity === TrainingIntensity.LIGHT ? 0.5 : 1.0;
+        effectiveIntensity === TrainingIntensity.HEAVY ? 1.8 :
+        effectiveIntensity === TrainingIntensity.LIGHT ? 0.5 : 1.0;
 
       if (player.health.status === HealthStatus.INJURED) {
         return player;
@@ -335,7 +357,7 @@ export const TrainingService = {
         const talentProtection = playerTalent >= 80 ? 0.40 : playerTalent >= 65 ? 0.70 : 1.00;
         pRegress *= talentProtection;
         pRegress *= moraleTrainingModifier.regression;
-        pRegress *= getRegressionIntensityMultiplier(intensity);
+        pRegress *= getRegressionIntensityMultiplier(effectiveIntensity);
         pRegress += coachDeficitRegressionChance;
 
         if (pRegress > 0 && Math.random() < pRegress) {
@@ -363,7 +385,7 @@ export const TrainingService = {
       })();
       const conditionDrift = (!hasGeneralPlan && Math.random() < 0.12 ? -1 : 0) + fitnessCondDrift;
       const fatigueDrift = (!hasGeneralPlan && Math.random() < 0.10 ? 1 : 0) + fitnessFatigueDrift;
-      const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, intensity);
+      const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, effectiveIntensity);
       const nextMorale = PlayerMoraleService.clamp((updated.morale ?? 50) + moraleDelta);
       const nextCondition = Math.max(1, Math.min(100, updated.condition + conditionDrift));
       const nextFatigueDebt = Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift));
@@ -389,7 +411,7 @@ export const TrainingService = {
         },
         marketValue: updatedMarketValue
       };
-      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, intensity));
+      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, effectiveIntensity));
     });
 
     return updatedMap;

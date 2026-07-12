@@ -1449,6 +1449,7 @@ export interface Player {
   transferReportDate?: string;
   retirementLockUntil?: string | null;
   trainingFocus?: keyof PlayerAttributes | null;
+  trainingIntensity?: TrainingIntensity | null;
   squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
   reserveStats?: ReserveSeasonStats;
   reserveHistory?: ReserveHistoryEntry[];

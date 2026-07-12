@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
-import { ViewState, Player, StaffRole, PlayerPosition } from '../../types';
+import { ViewState, Player, StaffRole, PlayerPosition, TrainingIntensity } from '../../types';
 import { TrainingAssistantService, generatePlayerReport } from '../../services/TrainingAssistantService';
 import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
 import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusService';
@@ -65,9 +65,10 @@ export const TrainingView: React.FC = () => {
   const [reportPlayer, setReportPlayer] = useState<Player | null>(null);
   const [modalPos, setModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dragging, setDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
-  const [activeTab, setActiveTab] = useState<'training' | 'focus'>('training');
+  const [activeTab, setActiveTab] = useState<'training' | 'focus' | 'load'>('training');
   const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
   const [hasIndividualFocusChange, setHasIndividualFocusChange] = useState(false);
+  const [hasIndividualLoadChange, setHasIndividualLoadChange] = useState(false);
   const [hoveredCycleHint, setHoveredCycleHint] = useState<{ name: string; description: string; x: number; y: number } | null>(null);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
   const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
@@ -146,6 +147,13 @@ export const TrainingView: React.FC = () => {
     { label: 'ATAK', keys: ['attacking', 'finishing', 'freeKicks', 'corners', 'penalties'], color: '#fb7185' },
     { label: 'MENTAL', keys: ['mentality', 'workRate', 'leadership', 'aggression'], color: '#a78bfa' }
   ];
+  const INTENSITY_OPTIONS: { id: TrainingIntensity; label: string; shortLabel: string; color: string; active: string }[] = [
+    { id: TrainingIntensity.LIGHT, label: 'LEKKI', shortLabel: 'Lekki', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-emerald-400', active: 'bg-emerald-500 text-black border-t-emerald-300/70 border-x-emerald-400/40 border-b-black/60' },
+    { id: TrainingIntensity.NORMAL, label: 'NORMALNY', shortLabel: 'Normalny', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-blue-400', active: 'bg-blue-500 text-white border-t-blue-300/70 border-x-blue-400/40 border-b-black/60' },
+    { id: TrainingIntensity.HEAVY, label: 'CIĘŻKI', shortLabel: 'Ciężki', color: 'border-t-white/10 border-x-white/5 border-b-black/40 text-rose-400', active: 'bg-rose-500 text-white border-t-rose-300/70 border-x-rose-400/40 border-b-black/60' }
+  ];
+  const getIntensityLabel = (intensity: TrainingIntensity): string =>
+    INTENSITY_OPTIONS.find(option => option.id === intensity)?.shortLabel ?? intensity;
 
   const CYCLE_ACCENT: Record<string, string> = {
     T_TACTICAL_PERIOD: '#7c3aed',
@@ -454,7 +462,7 @@ export const TrainingView: React.FC = () => {
             >
               POPROŚ ASYSTENTA ({assistantTrainingSuggestionsRemaining}/3)
             </button>
-            {selectedId && (selectedId !== activeTrainingId || hasIndividualFocusChange) ? (
+            {selectedId && (selectedId !== activeTrainingId || hasIndividualFocusChange || hasIndividualLoadChange) ? (
               <button
                 onClick={handleSave}
                 className="px-14 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black italic uppercase tracking-tighter text-lg transition-all active:translate-y-[2px] border-t border-x border-b border-t-emerald-300/60 border-x-emerald-500/30 border-b-black/60"
@@ -485,15 +493,22 @@ export const TrainingView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('focus')}
-          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'focus' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
+          className={`px-4 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'focus' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
           style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}
         >
-          Fokus Tygodniowy
+          Fokus
           {myClub?.matchPrepFocusId && (
             <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[7px] font-black ${isFocusReady(myClub, currentDate.toISOString().split('T')[0]) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
               {isFocusReady(myClub, currentDate.toISOString().split('T')[0]) ? 'AKTYWNY' : `${getFocusDaysCount(myClub, currentDate.toISOString().split('T')[0])}/5`}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('load')}
+          className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'load' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
+          style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}
+        >
+          Obciążenie
         </button>
       </div>
 
@@ -1090,6 +1105,128 @@ export const TrainingView: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* OBCIĄŻENIE INDYWIDUALNE TAB */}
+      {activeTab === 'load' && (
+        <div className="relative z-10 flex-1 flex gap-8 p-12 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 pb-20">
+            <div className="mb-5 flex items-end justify-between gap-4 px-1">
+              <div>
+                <span className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Obciążenie indywidualne zawodników</span>
+                <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-400">
+                  Domyślnie każdy zawodnik dziedziczy intensywność drużyny: <span className="text-blue-300">{getIntensityLabel(activeIntensity)}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (!userTeamId) return;
+                  setPlayers(prev => ({
+                    ...prev,
+                    [userTeamId]: (prev[userTeamId] || []).map(player => ({ ...player, trainingIntensity: null }))
+                  }));
+                  setHasIndividualLoadChange(true);
+                }}
+                className="rounded-xl border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/50 bg-white/5 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 transition-all hover:bg-white/10 hover:text-white active:translate-y-[2px]"
+                style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)' }}
+              >
+                Reset do drużynowego
+              </button>
+            </div>
+
+            <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-white/5 bg-black/10">
+              <table className="w-full min-w-[760px] text-[9px] font-bold border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="py-3 px-4 text-left text-slate-500 uppercase tracking-widest">Zawodnik</th>
+                    <th className="py-3 px-2 text-center text-slate-500 uppercase tracking-widest">Wiek</th>
+                    <th className="py-3 px-2 text-center text-slate-500 uppercase tracking-widest">OVR</th>
+                    <th className="py-3 px-4 text-left text-slate-500 uppercase tracking-widest">Obciążenie</th>
+                    <th className="py-3 px-4 text-left text-slate-500 uppercase tracking-widest">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedPlayers.map((player, idx) => {
+                    const effectiveIntensity = player.trainingIntensity ?? activeIntensity;
+                    const isCustom = !!player.trainingIntensity;
+                    const posColor = player.position === 'GK' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      : player.position === 'DEF' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
+                      : player.position === 'MID' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                      : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
+                    const loadColor = effectiveIntensity === TrainingIntensity.HEAVY
+                      ? 'text-rose-300 bg-rose-500/10 border-rose-500/20'
+                      : effectiveIntensity === TrainingIntensity.LIGHT
+                        ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
+                        : 'text-blue-300 bg-blue-500/10 border-blue-500/20';
+                    return (
+                      <tr key={player.id} className={`border-b border-white/5 transition-colors hover:bg-white/5 ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
+                        <td className="py-2.5 px-4 whitespace-nowrap">
+                          <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border mr-2 text-[11px] font-black ${posColor}`}>{player.overallRating}</span>
+                          <button
+                            onClick={() => viewPlayerDetails(player.id)}
+                            className="text-[11px] font-black uppercase text-white hover:text-emerald-400 transition-colors active:translate-y-[2px]"
+                          >
+                            {player.firstName[0]}. {player.lastName}
+                          </button>
+                        </td>
+                        <td className="py-2.5 px-2 text-center tabular-nums text-slate-300">{player.age}</td>
+                        <td className="py-2.5 px-2 text-center tabular-nums text-white">{player.overallRating}</td>
+                        <td className="py-2.5 px-4">
+                          <select
+                            value={player.trainingIntensity || ''}
+                            onChange={e => {
+                              updatePlayer(userTeamId!, player.id, { trainingIntensity: (e.target.value as TrainingIntensity) || null });
+                              setHasIndividualLoadChange(true);
+                            }}
+                            className="w-full max-w-[260px] bg-slate-800 border border-white/10 text-white text-[9px] font-black rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-emerald-500/40 transition-all"
+                          >
+                            <option value="">Drużynowe ({getIntensityLabel(activeIntensity)})</option>
+                            {INTENSITY_OPTIONS.map(option => (
+                              <option key={option.id} value={option.id}>{option.shortLabel}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${loadColor}`}>
+                            {isCustom ? getIntensityLabel(effectiveIntensity) : `Drużynowe: ${getIntensityLabel(activeIntensity)}`}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="w-[360px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
+            <div className="bg-slate-900/60 rounded-[28px] border border-white/10 backdrop-blur-3xl p-5 flex flex-col gap-4">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">Podsumowanie</span>
+              {INTENSITY_OPTIONS.map(option => {
+                const count = sortedPlayers.filter(player => (player.trainingIntensity ?? activeIntensity) === option.id).length;
+                const customCount = sortedPlayers.filter(player => player.trainingIntensity === option.id).length;
+                const width = sortedPlayers.length > 0 ? (count / sortedPlayers.length) * 100 : 0;
+                return (
+                  <div key={option.id} className="rounded-2xl border border-white/5 bg-black/25 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-white">{option.shortLabel}</span>
+                      <span className="text-[10px] font-black tabular-nums text-slate-300">{count}</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full border border-white/10 bg-black/40">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${option.id === TrainingIntensity.HEAVY ? 'bg-rose-500' : option.id === TrainingIntensity.LIGHT ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[8px] font-black uppercase tracking-widest text-slate-500">
+                      Indywidualnie: {customCount}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FOOTER TICKER */}
       <footer className="h-12 bg-black/60 border-t border-white/5 flex items-center px-12 overflow-hidden shrink-0 relative z-20">

@@ -4044,7 +4044,8 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       currentDate,
       simulation.updatedFixtures,
       fitnessCoachQuality,
-      userTeamId ?? undefined
+      userTeamId ?? undefined,
+      activeIntensity
     );
 
     if (userTeamId && userSquadBeforeTrainingInjuries.length > 0) {
