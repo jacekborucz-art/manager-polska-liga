@@ -927,6 +927,13 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
 
+  const openContractNegotiationForPlayer = (playerId: string) => {
+    viewPlayerDetails(playerId);
+    setContractManagementInitialMode('NEGOTIATE');
+    navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+    onClose();
+  };
+
   const handleInterviewComplete = (result: MediaInterviewResult) => {
     setMediaRelationships(prev =>
       MediaInterviewService.updateRelationship(prev, result.newspaper as Newspaper, result.totalRelationshipDelta)
@@ -1247,9 +1254,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               <button
                 onClick={() => {
                   if (mail.metadata!.requestType === 'RAISE') {
-                    viewPlayerDetails(mail.metadata!.playerId);
-                    setContractManagementInitialMode('NEGOTIATE');
-                    navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+                    openContractNegotiationForPlayer(mail.metadata!.playerId);
+                    return;
                   } else if (mail.metadata!.requestType === 'TRANSFER_LIST') {
                     // ── Transfer Request Dialog ──────────────────────────────────────────
                     // Otwiera PlayerTransferRequestModal przez PlayerCard.
@@ -1289,6 +1295,15 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
                 Podpisz kontrakt
+              </button>
+            )}
+
+            {mail.metadata?.type === 'CONTRACT_OFFER' && !mail.metadata.accepted && (
+              <button
+                onClick={() => openContractNegotiationForPlayer(mail.metadata!.playerId)}
+                className="mr-4 rounded-2xl bg-sky-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+              >
+                Negocjuj kontrakt
               </button>
             )}
 
