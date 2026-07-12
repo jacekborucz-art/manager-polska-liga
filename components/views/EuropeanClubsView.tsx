@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ntBgImg from '../../Graphic/themes/national_teams_view.png';
 import bojoImg from '../../Graphic/themes/bojo.png';
 import saWorldBgImg from '../../Graphic/themes/innekluby.png';
@@ -740,6 +740,7 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 
   const T = 'font-black italic uppercase tracking-wide text-white';
   const [selectedNTReportId, setSelectedNTReportId] = useState<string | null>(null);
+  const [selectedScheduleYear, setSelectedScheduleYear] = useState<number | null>(null);
   const positionCounts = squad.reduce<Record<PlayerPosition, number>>((acc, player) => {
     acc[player.position] += 1;
     return acc;
@@ -874,9 +875,23 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
   }, [currentDate, matchSimulationSeed, nationalTeamIdByName, nationalTeams, team.id, team.name, wcqPlayoffState]);
 
   const displayedSchedule = useMemo(
-    () => [...teamSchedule].sort((a, b) => a.date.getTime() - b.date.getTime()),
+    () => [...teamSchedule]
+      .filter(item => selectedScheduleYear === null || item.date.getFullYear() === selectedScheduleYear)
+      .sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [selectedScheduleYear, teamSchedule]
+  );
+
+  const scheduleYears = useMemo(
+    () => Array.from(new Set(teamSchedule.map(item => item.date.getFullYear()))).sort((a, b) => b - a),
     [teamSchedule]
   );
+
+  useEffect(() => {
+    setSelectedScheduleYear(prev => {
+      if (prev !== null && scheduleYears.includes(prev)) return prev;
+      return scheduleYears[0] ?? null;
+    });
+  }, [scheduleYears, team.id]);
 
   return (
     <>
@@ -1116,10 +1131,33 @@ const NTSquadView: React.FC<{ team: NationalTeam; coachName: string; playerById:
 
           <div className="rounded-2xl border border-white/[0.08] bg-slate-950/75 overflow-hidden">
             <div className="px-4 pt-4 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-black italic uppercase tracking-[0.3em] text-slate-400">Terminarz</div>
+                  {selectedScheduleYear && (
+                    <div className="mt-1 text-[9px] font-black italic uppercase tracking-[0.18em] text-slate-500">
+                      {displayedSchedule.length} meczów w {selectedScheduleYear}
+                    </div>
+                  )}
                 </div>
+                {scheduleYears.length > 0 && (
+                  <div className="flex max-w-full flex-wrap justify-end gap-1.5">
+                    {scheduleYears.map(year => (
+                      <button
+                        key={year}
+                        type="button"
+                        onClick={() => setSelectedScheduleYear(year)}
+                        className={`min-w-[54px] rounded-lg border px-2.5 py-1.5 text-[10px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[1px] ${
+                          selectedScheduleYear === year
+                            ? 'border-emerald-300/50 bg-emerald-400/18 text-white shadow-[0_0_16px_rgba(52,211,153,0.14)]'
+                            : 'border-white/[0.08] bg-white/[0.04] text-slate-400 hover:border-white/[0.18] hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div className="p-3 max-h-[300px] overflow-y-auto">
