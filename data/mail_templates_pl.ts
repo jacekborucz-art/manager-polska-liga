@@ -245,8 +245,8 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',
     role: 'Prezes Zarządu',
-    subject: '🏆 MISTRZOWIE POLSKI! HISTORIA NAPISANA NA NOWO!',
-    body: 'Panie Managerze, ZROBIŁ PAN TO! Tytuł Mistrza Polski należy do {CLUB}! To jeden z najwspanialszych momentów w historii naszego klubu. Całe miasto świętuje, kibice wylegli na ulice, a my — zarząd — jesteśmy po prostu dumni. To sukces całego sztabu, całej drużyny i Pana niesamowitej pracy przez cały sezon. Dziękujemy z całego serca. Trofeum trafia do naszej gabloty na zawsze!'
+    subject: 'Gratulacje z okazji zdobycia tytułu Mistrza Polski',
+    body: 'Szanowny Panie Trenerze,\n\nw imieniu Zarządu Klubu składamy serdeczne gratulacje z okazji zdobycia tytułu Mistrza Polski.\n\nTo wyjątkowe osiągnięcie jest potwierdzeniem Pana profesjonalizmu, wiedzy, konsekwencji oraz ogromnego zaangażowania w rozwój drużyny. Sukces ten jest również efektem umiejętnego prowadzenia zespołu, podejmowania trafnych decyzji oraz budowania atmosfery sprzyjającej osiąganiu najwyższych celów.\n\nDziękujemy za wykonaną pracę, determinację i wkład w ten historyczny sukces. Zdobycie Mistrzostwa Polski stanowi powód do dumy dla całego Klubu, jego zawodników, pracowników oraz kibiców.\n\nŻyczymy kolejnych sukcesów, dalszego rozwoju oraz wielu niezapomnianych chwil związanych z prowadzeniem naszej drużyny.\n\nZ wyrazami uznania,\n\nZarząd Klubu'
   },
   {
     id: 'board_cup_victory',

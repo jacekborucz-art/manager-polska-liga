@@ -2152,12 +2152,24 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // 3. Budowa raportu
     const getAwards = (leagueId: string, leagueName: string) => {
       const rows = LeagueStatsService.getPlayersForLeague(leagueId, clubs, players);
-      const topScorer = LeagueStatsService.getTopScorers(rows, 1)[0]?.player;
-      const topAssistant = LeagueStatsService.getTopAssists(rows, 1)[0]?.player;
+      const topScorerRow = LeagueStatsService.getTopScorers(rows, 1)[0];
+      const topAssistantRow = LeagueStatsService.getTopAssists(rows, 1)[0];
+      const topScorer = topScorerRow?.player;
+      const topAssistant = topAssistantRow?.player;
       return {
         leagueName,
-        topScorer: { name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak', goals: topScorer?.stats.goals || 0 },
-        topAssistant: { name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak', assists: topAssistant?.stats.assists || 0 }
+        topScorer: {
+          name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak',
+          goals: topScorer?.stats.goals || 0,
+          clubId: topScorerRow?.club.id,
+          clubName: topScorerRow?.club.name,
+        },
+        topAssistant: {
+          name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak',
+          assists: topAssistant?.stats.assists || 0,
+          clubId: topAssistantRow?.club.id,
+          clubName: topAssistantRow?.club.name,
+        }
       };
     };
 
@@ -7617,12 +7629,24 @@ Asystent`,
 
               const getAwardsLocal = (leagueId: string, leagueName: string) => {
                 const rows = LeagueStatsService.getPlayersForLeague(leagueId, clubs, players);
-                const topScorer = LeagueStatsService.getTopScorers(rows, 1)[0]?.player;
-                const topAssistant = LeagueStatsService.getTopAssists(rows, 1)[0]?.player;
+                const topScorerRow = LeagueStatsService.getTopScorers(rows, 1)[0];
+                const topAssistantRow = LeagueStatsService.getTopAssists(rows, 1)[0];
+                const topScorer = topScorerRow?.player;
+                const topAssistant = topAssistantRow?.player;
                 return {
                   leagueName,
-                  topScorer: { name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak', goals: topScorer?.stats.goals || 0 },
-                  topAssistant: { name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak', assists: topAssistant?.stats.assists || 0 }
+                  topScorer: {
+                    name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak',
+                    goals: topScorer?.stats.goals || 0,
+                    clubId: topScorerRow?.club.id,
+                    clubName: topScorerRow?.club.name,
+                  },
+                  topAssistant: {
+                    name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak',
+                    assists: topAssistant?.stats.assists || 0,
+                    clubId: topAssistantRow?.club.id,
+                    clubName: topAssistantRow?.club.name,
+                  }
                 };
               };
 
@@ -9879,8 +9903,20 @@ const finalResult: SimulationOutput = {
     clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
 
     // Przetwarzanie bonusów za Superpuchar Polski
+    const superCupFixture = clResult.updatedFixtures.find(f => f.leagueId === CompetitionType.SUPER_CUP && f.status === MatchStatus.FINISHED);
+    const superCupWinnerId = (() => {
+      if (!superCupFixture) return null;
+      const homeScore = superCupFixture.homeScore ?? 0;
+      const awayScore = superCupFixture.awayScore ?? 0;
+      if (homeScore > awayScore) return superCupFixture.homeTeamId;
+      if (awayScore > homeScore) return superCupFixture.awayTeamId;
+      const homePens = superCupFixture.homePenaltyScore ?? 0;
+      const awayPens = superCupFixture.awayPenaltyScore ?? 0;
+      if (homePens > awayPens) return superCupFixture.homeTeamId;
+      if (awayPens > homePens) return superCupFixture.awayTeamId;
+      return null;
+    })();
     const updatedClubsForSuperCup = finalResult.updatedClubs.map(club => {
-      const superCupFixture = clResult.updatedFixtures.find(f => f.leagueId === 'SUPER_CUP' && f.status === MatchStatus.FINISHED);
       
       if (superCupFixture && (club.id === superCupFixture.homeTeamId || club.id === superCupFixture.awayTeamId)) {
         // Sprawdzenie czy bonus za Superpuchar był już kiedykolwiek przyznany (ignorujemy datę)
@@ -9931,6 +9967,33 @@ const finalResult: SimulationOutput = {
       
       return club;
     });
+
+    if (superCupFixture && userTeamId && superCupWinnerId === userTeamId) {
+      const superCupDate = superCupFixture.date instanceof Date ? superCupFixture.date : dateToProcess;
+      const year = superCupDate.getFullYear();
+      const month = superCupDate.getMonth();
+      const seasonStartYear = month >= 6 ? year : year - 1;
+      const seasonEndYear = seasonStartYear + 1;
+      const seasonLabel = `${seasonStartYear}/${seasonEndYear}`;
+
+      setManagerProfile(prev => {
+        let next = ManagerExperienceService.applyExpAwards(prev, [{
+          sourceKey: `supercup:${superCupFixture.id}:winner`,
+          date: superCupDate,
+          season: seasonNumber,
+          delta: 15,
+          competition: 'Superpuchar Polski',
+          label: 'Zdobycie Superpucharu Polski',
+        }]);
+        next = ManagerExperienceService.addAchievements(next, [{
+          id: `achievement:supercup:${superCupFixture.id}:winner`,
+          seasonLabel,
+          title: `Superpuchar Polski ${seasonEndYear}`,
+          competition: 'Superpuchar Polski',
+        }]);
+        return next;
+      });
+    }
     
     // Aktualizacja boardConfidence dla wszystkich klubów
     const leagueGroups = new Map<string, { id: string; points: number; goalDifference: number }[]>();

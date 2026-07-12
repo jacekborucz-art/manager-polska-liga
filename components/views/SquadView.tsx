@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole, MailMessage, MailType } from '../../types';
+import { ViewState, PlayerPosition, Player, HealthStatus, InjurySeverity, NationalTeam, CompetitionType, MatchStatus, Fixture, StaffRole, MailMessage, MailType, ManagerAchievement } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
@@ -84,6 +84,112 @@ const SquadPlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: strin
       />
       <path d={head} fill="none" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+};
+
+type ManagerAchievementBadgeTheme = {
+  label: string;
+  short: string;
+  primary: string;
+  secondary: string;
+  glow: string;
+  icon: 'star' | 'cup' | 'shield' | 'europe' | 'arrow';
+};
+
+const getManagerAchievementBadgeTheme = (entry: ManagerAchievement): ManagerAchievementBadgeTheme => {
+  const text = `${entry.title} ${entry.competition}`.toLowerCase();
+
+  if (text.includes('awans do ekstraklasy')) {
+    return { label: 'Awans', short: 'EKS', primary: '#38bdf8', secondary: '#22c55e', glow: 'rgba(56,189,248,0.26)', icon: 'arrow' };
+  }
+  if (text.includes('awans do 1. ligi') || text.includes('awans do 1 ligi')) {
+    return { label: 'Awans', short: '1L', primary: '#22d3ee', secondary: '#a3e635', glow: 'rgba(34,211,238,0.24)', icon: 'arrow' };
+  }
+  if (text.includes('mistrz polski')) {
+    return { label: 'Mistrz Polski', short: 'MP', primary: '#facc15', secondary: '#ef4444', glow: 'rgba(250,204,21,0.3)', icon: 'star' };
+  }
+  if (text.includes('superpuchar polski')) {
+    return { label: 'Superpuchar', short: 'SP', primary: '#fb7185', secondary: '#facc15', glow: 'rgba(251,113,133,0.28)', icon: 'shield' };
+  }
+  if (text.includes('puchar polski')) {
+    return { label: 'Puchar Polski', short: 'PP', primary: '#f59e0b', secondary: '#e11d48', glow: 'rgba(245,158,11,0.26)', icon: 'cup' };
+  }
+  if (text.includes('liga mistrz')) {
+    return { label: 'Liga Mistrzów', short: 'LM', primary: '#60a5fa', secondary: '#facc15', glow: 'rgba(96,165,250,0.28)', icon: 'europe' };
+  }
+  if (text.includes('liga europ')) {
+    return { label: 'Liga Europy', short: 'LE', primary: '#fb923c', secondary: '#111827', glow: 'rgba(251,146,60,0.26)', icon: 'cup' };
+  }
+  if (text.includes('konferencji')) {
+    return { label: 'Liga Konferencji', short: 'LK', primary: '#34d399', secondary: '#2563eb', glow: 'rgba(52,211,153,0.25)', icon: 'europe' };
+  }
+  return { label: 'Trofeum', short: '★', primary: '#facc15', secondary: '#64748b', glow: 'rgba(250,204,21,0.22)', icon: 'star' };
+};
+
+const ManagerAchievementBadgeSvg: React.FC<{ theme: ManagerAchievementBadgeTheme; id: string }> = ({ theme, id }) => {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const gradientId = `manager-achievement-${safeId}`;
+  const renderIcon = () => {
+    if (theme.icon === 'arrow') {
+      return <path d="M50 72V32M34 48l16-16 16 16M30 76h40" fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />;
+    }
+    if (theme.icon === 'shield') {
+      return <path d="M50 24l24 9v18c0 17-10 29-24 36-14-7-24-19-24-36V33l24-9z" fill="rgba(255,255,255,0.16)" stroke="#fff" strokeWidth="5" strokeLinejoin="round" />;
+    }
+    if (theme.icon === 'europe') {
+      return (
+        <g fill="#fff">
+          {Array.from({ length: 8 }, (_, i) => {
+            const angle = -Math.PI / 2 + i * Math.PI / 4;
+            return <circle key={i} cx={50 + Math.cos(angle) * 23} cy={48 + Math.sin(angle) * 23} r="3.4" />;
+          })}
+          <circle cx="50" cy="48" r="12" fill="rgba(255,255,255,0.2)" stroke="#fff" strokeWidth="4" />
+        </g>
+      );
+    }
+    if (theme.icon === 'cup') {
+      return <path d="M35 29h30v13c0 12-6 20-15 22-9-2-15-10-15-22V29zM35 35H24c1 12 6 19 15 21M65 35h11c-1 12-6 19-15 21M50 64v11M38 80h24" fill="none" stroke="#fff" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />;
+    }
+    return <path d="M50 23l7.8 16 17.6 2.5-12.7 12.4 3 17.5L50 63.1 34.3 71.4l3-17.5L24.6 41.5 42.2 39 50 23z" fill="rgba(255,255,255,0.24)" stroke="#fff" strokeWidth="4" strokeLinejoin="round" />;
+  };
+
+  return (
+    <svg viewBox="0 0 100 112" className="h-20 w-20 shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={theme.primary} />
+          <stop offset="100%" stopColor={theme.secondary} />
+        </linearGradient>
+      </defs>
+      <path d="M50 4l37 18v32c0 24-14 42-37 53C27 96 13 78 13 54V22L50 4z" fill={`url(#${gradientId})`} />
+      <path d="M50 10l31 15v29c0 20-11 35-31 45-20-10-31-25-31-45V25L50 10z" fill="rgba(2,6,23,0.34)" stroke="rgba(255,255,255,0.32)" strokeWidth="2" />
+      {renderIcon()}
+      <rect x="29" y="82" width="42" height="18" rx="9" fill="rgba(2,6,23,0.72)" stroke="rgba(255,255,255,0.25)" />
+      <text x="50" y="95" textAnchor="middle" fontSize="12" fontWeight="900" fontStyle="italic" fill="#fff">{theme.short}</text>
+    </svg>
+  );
+};
+
+const ManagerAchievementBadge: React.FC<{ entry: ManagerAchievement }> = ({ entry }) => {
+  const theme = getManagerAchievementBadgeTheme(entry);
+
+  return (
+    <div
+      className="group relative flex min-h-[104px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 transition-all duration-200 hover:-translate-y-0.5"
+      style={{
+        borderColor: `${theme.primary}55`,
+        background: `linear-gradient(135deg, rgba(15,23,42,0.92), ${theme.primary}18)`,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.07), 0 14px 34px -24px ${theme.glow}`,
+      }}
+    >
+      <div className="absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" style={{ background: `radial-gradient(circle at 24% 20%, ${theme.glow}, transparent 44%)` }} />
+      <ManagerAchievementBadgeSvg theme={theme} id={entry.id} />
+      <div className="relative z-10 min-w-0">
+        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-400">{theme.label}</div>
+        <div className="mt-1 text-[14px] font-black italic uppercase tracking-tighter text-white leading-tight">{entry.title}</div>
+        <div className="mt-1 text-[11px] font-black italic uppercase tracking-tighter" style={{ color: theme.primary }}>{entry.competition}</div>
+      </div>
+    </div>
   );
 };
 
@@ -3162,10 +3268,7 @@ export const SquadView: React.FC = () => {
                       ) : (
                         <div className="grid grid-cols-2 gap-3">
                           {safeManagerProfile.achievements.map(entry => (
-                            <div key={entry.id} className="rounded-xl border border-yellow-500/20 bg-yellow-950/20 px-4 py-3">
-                              <div className="text-[15px] font-black uppercase tracking-tighter text-yellow-200 leading-tight">{entry.title}</div>
-                              <div className="text-[12px] font-black uppercase tracking-tighter text-yellow-500/70 mt-1">{entry.competition}</div>
-                            </div>
+                            <ManagerAchievementBadge key={entry.id} entry={entry} />
                           ))}
                         </div>
                       )}

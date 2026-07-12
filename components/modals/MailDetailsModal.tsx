@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useModalClose } from '../ui/useModalClose';
-import { MailMessage, MailType, Newspaper, ViewState } from '../../types';
+import { Club, MailMessage, MailType, Newspaper, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import awansEkstraklasaImg from '../../Graphic/cup/awans-do-ekst.png';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
@@ -189,6 +189,202 @@ const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
           })}
         </div>
       </div>
+    </div>
+  );
+};
+
+const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap: ReturnType<typeof useGame>['players'] }> = ({ mail, clubs, playersMap }) => {
+  const parsedFallback = (() => {
+    if (!mail.id.startsWith('SEASON_SUMMARY_')) return null;
+    const lines = mail.body.split('\n').map(line => line.trim()).filter(Boolean);
+    const championIndex = lines.findIndex(line => line.includes('MISTRZ POLSKI'));
+    const promotionIndex = lines.findIndex(line => line.includes('AWANSOWALI'));
+    const relegationIndex = lines.findIndex(line => line.includes('SPADKOWICZE'));
+    const awardsIndex = lines.findIndex(line => line.includes('ZŁOTE BUTY'));
+    const championName = championIndex >= 0 ? (lines[championIndex + 1] ?? '') : '';
+    const promotionLines = promotionIndex >= 0
+      ? lines.slice(promotionIndex + 1, relegationIndex >= 0 ? relegationIndex : undefined)
+      : [];
+    const relegationLines = relegationIndex >= 0
+      ? lines.slice(relegationIndex + 1, awardsIndex >= 0 ? awardsIndex : undefined)
+      : [];
+    const awardLines = awardsIndex >= 0 ? lines.slice(awardsIndex + 1) : [];
+    const parseTeamLine = (line: string, mode: 'promotion' | 'relegation') => {
+      const cleaned = line.replace(/^[-•\s]+/, '');
+      const [labelPart, teamsPart = ''] = cleaned.split(':');
+      const label = labelPart.replace(/^Z\s+/i, '').trim();
+      return {
+        from: mode === 'relegation' ? label : '',
+        to: mode === 'promotion' ? label : '',
+        teams: teamsPart.split(',').map(team => team.trim()).filter(Boolean),
+      };
+    };
+    const parsedAwards: {
+      leagueName: string;
+      topScorer: { name: string; goals: number };
+      topAssistant: { name: string; assists: number };
+    }[] = [];
+    let activeAward: (typeof parsedAwards)[number] | null = null;
+    awardLines.forEach(line => {
+      const leagueMatch = line.match(/^\[([^\]]+)\]$/);
+      if (leagueMatch) {
+        activeAward = {
+          leagueName: leagueMatch[1],
+          topScorer: { name: 'Brak', goals: 0 },
+          topAssistant: { name: 'Brak', assists: 0 },
+        };
+        parsedAwards.push(activeAward);
+        return;
+      }
+
+      if (!activeAward) return;
+      const cleaned = line.replace(/^[^\p{L}]*\s*/u, '');
+      const scorerMatch = cleaned.match(/^Król\s+Strzelców?:\s+(.+?)\s+\((\d+)\s+gol/i);
+      if (scorerMatch) {
+        activeAward.topScorer = { name: scorerMatch[1].trim(), goals: Number(scorerMatch[2]) || 0 };
+        return;
+      }
+      const assistantMatch = cleaned.match(/^Król\s+Asyst:?\s+(.+?)\s+\((\d+)\s+asyst/i);
+      if (assistantMatch) {
+        activeAward.topAssistant = { name: assistantMatch[1].trim(), assists: Number(assistantMatch[2]) || 0 };
+      }
+    });
+    return {
+      championName,
+      promotions: promotionLines.map(line => parseTeamLine(line, 'promotion')).filter(item => item.teams.length > 0),
+      relegations: relegationLines.map(line => parseTeamLine(line, 'relegation')).filter(item => item.teams.length > 0),
+      leagueAwards: parsedAwards,
+    };
+  })();
+
+  const summary = mail.metadata?.type === 'SEASON_SUMMARY'
+    ? mail.metadata
+    : parsedFallback;
+  if (!summary) return null;
+
+  const normalizeName = (name: string): string =>
+    name.trim().toLocaleLowerCase('pl-PL');
+
+  const findClubByName = (name: string): Club | null =>
+    clubs.find(club => normalizeName(club.name) === normalizeName(name)) ?? null;
+
+  const findClubByPlayerName = (playerName: string): Club | null => {
+    for (const [clubId, squad] of Object.entries(playersMap)) {
+      const player = squad.find(candidate => normalizeName(`${candidate.firstName} ${candidate.lastName}`) === normalizeName(playerName));
+      if (player) return clubs.find(club => club.id === clubId) ?? null;
+    }
+    return null;
+  };
+
+  const renderTeamRow = (teamName: string, tone: 'gold' | 'green' | 'red') => {
+    const club = findClubByName(teamName);
+    const logo = club ? getClubLogo(club.id) : null;
+    const toneClass =
+      tone === 'gold'
+        ? 'border-amber-300/35 bg-amber-500/10 text-amber-100'
+        : tone === 'green'
+          ? 'border-emerald-300/30 bg-emerald-500/10 text-emerald-100'
+          : 'border-rose-300/30 bg-rose-500/10 text-rose-100';
+
+    return (
+      <div key={`${tone}_${teamName}`} className={`flex min-w-0 items-center gap-3 border px-4 py-3 ${toneClass}`}>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center bg-black/25">
+          {logo ? (
+            <img src={logo} alt={teamName} className="h-9 w-9 object-contain" />
+          ) : (
+            <span className="text-[10px] font-black italic uppercase tracking-tighter">{teamName.slice(0, 2)}</span>
+          )}
+        </div>
+        <span className="min-w-0 truncate text-[17px] font-black italic uppercase tracking-tighter">
+          {teamName}
+        </span>
+      </div>
+    );
+  };
+
+  const promotionTeams = summary.promotions.flatMap(promotion => promotion.teams);
+  const relegationTeams = summary.relegations.flatMap(relegation => relegation.teams);
+
+  const renderAwardRow = (
+    label: string,
+    award: { name: string; clubId?: string; clubName?: string },
+    value: string
+  ) => {
+    const club = award.clubId
+      ? clubs.find(candidate => candidate.id === award.clubId) ?? null
+      : award.clubName
+        ? findClubByName(award.clubName)
+        : findClubByPlayerName(award.name);
+    const logo = club ? getClubLogo(club.id) : null;
+
+    return (
+      <div className="flex min-w-0 items-center gap-3 border border-sky-300/12 bg-sky-500/5 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-black italic uppercase tracking-tighter text-sky-300/70">{label}</p>
+          <p className="mt-1 truncate text-[13px] font-black italic uppercase tracking-tighter text-sky-50">{award.name}</p>
+        </div>
+        {club && (
+          <div className="flex min-w-0 items-center gap-2 border-l border-white/10 pl-3">
+            {logo && <img src={logo} alt={club.name} className="h-7 w-7 shrink-0 object-contain" />}
+            <span className="max-w-[150px] truncate text-[10px] font-black italic uppercase tracking-tighter text-slate-300">{club.name}</span>
+          </div>
+        )}
+        <span className="shrink-0 text-[13px] font-black italic uppercase tracking-tighter text-white">{value}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-8 [font-family:Archivo,sans-serif]">
+      <div>
+        <p className="mb-4 text-[13px] font-black italic uppercase tracking-tighter text-amber-300">Mistrz Polski</p>
+        <div className="shadow-[0_18px_48px_rgba(245,158,11,0.12)]">
+          {renderTeamRow(summary.championName, 'gold')}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-4 text-[13px] font-black italic uppercase tracking-tighter text-emerald-300">Awans</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          {promotionTeams.length > 0 ? promotionTeams.map(team => (
+            <div key={`promotion_${team}`}>
+              {renderTeamRow(team, 'green')}
+            </div>
+          )) : (
+            <p className="text-sm font-semibold text-slate-400">Brak awansów.</p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-4 text-[13px] font-black italic uppercase tracking-tighter text-rose-300">Spadkowicze</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          {relegationTeams.length > 0 ? relegationTeams.map(team => (
+            <div key={`relegation_${team}`}>
+              {renderTeamRow(team, 'red')}
+            </div>
+          )) : (
+            <p className="text-sm font-semibold text-slate-400">Brak spadków.</p>
+          )}
+        </div>
+      </div>
+
+      {summary.leagueAwards.length > 0 && (
+        <div className="border-t border-white/10 pt-6">
+          <p className="mb-3 text-[12px] font-black italic uppercase tracking-tighter text-sky-200">Nagrody indywidualne</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {summary.leagueAwards.map(award => (
+              <div key={award.leagueName} className="border border-sky-300/15 bg-sky-500/[0.03] px-4 py-3">
+                <p className="text-[10px] font-black italic uppercase tracking-tighter text-sky-300">{award.leagueName}</p>
+                <div className="mt-3 space-y-2">
+                  {renderAwardRow('Król strzelców', award.topScorer, `${award.topScorer.goals} goli`)}
+                  {renderAwardRow('Król asyst', award.topAssistant, `${award.topAssistant.assists} asyst`)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -714,6 +910,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     setTransferNewsActiveTab,
     currentDate,
     clubs,
+    players,
     userTeamId,
     reopenWinterCampInvite,
     respondToSportingDirectorObjective,
@@ -938,6 +1135,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
             ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
               <TeamOfWeekPitch mail={mail} />
+            ) : mail.metadata?.type === 'SEASON_SUMMARY' || mail.id.startsWith('SEASON_SUMMARY_') ? (
+              <SeasonSummaryMail mail={mail} clubs={clubs} playersMap={players} />
             ) : getWCQPlayoffPolandMailData(mail) ? (
               <WCQPlayoffPolandMail mail={mail} />
             ) : mail.metadata?.type === 'AI_FRIENDLY_REPORT_LINK' || mail.metadata?.type === 'NATIONAL_TEAM_FRIENDLY_RESULTS' ? (

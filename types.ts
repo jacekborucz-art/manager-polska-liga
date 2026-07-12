@@ -440,6 +440,16 @@ export interface MailMessage {
   } | {
     type: 'LEAGUE_FINANCE_REPORT';
   } | {
+    type: 'SEASON_SUMMARY';
+    championName: string;
+    promotions: { from: string; to: string; teams: string[] }[];
+    relegations: { from: string; to: string; teams: string[] }[];
+    leagueAwards: {
+      leagueName: string;
+      topScorer: { name: string; goals: number; clubId?: string; clubName?: string };
+      topAssistant: { name: string; assists: number; clubId?: string; clubName?: string };
+    }[];
+  } | {
     type: 'MANAGER_JOB_OFFER';
     offerId: string;
     clubId: string;

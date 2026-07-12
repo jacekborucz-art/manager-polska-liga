@@ -12,8 +12,8 @@ export interface SeasonSummaryData {
   relegations: { from: string, to: string, teams: string[] }[];
   leagueAwards: {
     leagueName: string;
-    topScorer: { name: string, goals: number };
-    topAssistant: { name: string, assists: number };
+    topScorer: { name: string, goals: number, clubId?: string, clubName?: string };
+    topAssistant: { name: string, assists: number, clubId?: string, clubName?: string };
   }[];
 }
 
@@ -307,31 +307,31 @@ generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
     let body = `Szanowny Panie Managerze,\n\nPrzedstawiamy oficjalny raport z zakończenia sezonu ${seasonLabel}.\n`;
     body += `${separator}\n\n`;
 
-    body += `🏆  MISTRZ POLSKI\n`;
+    body += `MISTRZ POLSKI\n`;
     body += `    ${data.championName.toUpperCase()}\n`;
     body += `\n${separator}\n\n`;
 
-    body += `📈  AWANSOWALI:\n`;
+    body += `AWANS\n`;
     if (data.promotions.length > 0) {
       data.promotions.forEach(p => {
-        body += `    • ${p.to}: ${p.teams.join(', ')}\n`;
+        body += `    ${p.to}: ${p.teams.join(', ')}\n`;
       });
     } else {
-      body += `    • Brak awansów (najwyższy szczebel)\n`;
+      body += `    Brak awansów\n`;
     }
     body += `\n`;
 
-    body += `📉  SPADKOWICZE:\n`;
+    body += `SPADKOWICZE\n`;
     data.relegations.forEach(r => {
-      body += `    • Z ${r.from}: ${r.teams.join(', ')}\n`;
+      body += `    Z ${r.from}: ${r.teams.join(', ')}\n`;
     });
     body += `\n${separator}\n\n`;
 
-    body += `⚽  ZŁOTE BUTY — NAGRODY INDYWIDUALNE:\n`;
+    body += `NAGRODY INDYWIDUALNE\n`;
     data.leagueAwards.forEach(a => {
       body += `\n  [${a.leagueName.toUpperCase()}]\n`;
-      body += `    🎯 Król Strzelców: ${a.topScorer.name} (${a.topScorer.goals} goli)\n`;
-      body += `    👟 Król Asyst:     ${a.topAssistant.name} (${a.topAssistant.assists} asyst)\n`;
+      body += `    Król strzelców: ${a.topScorer.name}${a.topScorer.clubName ? ` — ${a.topScorer.clubName}` : ''} (${a.topScorer.goals} goli)\n`;
+      body += `    Król asyst: ${a.topAssistant.name}${a.topAssistant.clubName ? ` — ${a.topAssistant.clubName}` : ''} (${a.topAssistant.assists} asyst)\n`;
     });
 
     body += `\n${separator}\n\n`;
@@ -346,7 +346,14 @@ generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
       date: new Date(data.year + 1, 5, 28),
       isRead: false,
       type: MailType.SYSTEM,
-      priority: 150
+      priority: 150,
+      metadata: {
+        type: 'SEASON_SUMMARY',
+        championName: data.championName,
+        promotions: data.promotions,
+        relegations: data.relegations,
+        leagueAwards: data.leagueAwards,
+      },
     };
   },
 
