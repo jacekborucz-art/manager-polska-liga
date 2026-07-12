@@ -154,7 +154,6 @@ export const TrainingView: React.FC = () => {
   ];
   const getIntensityLabel = (intensity: TrainingIntensity): string =>
     INTENSITY_OPTIONS.find(option => option.id === intensity)?.shortLabel ?? intensity;
-
   const CYCLE_ACCENT: Record<string, string> = {
     T_TACTICAL_PERIOD: '#7c3aed',
     T_GEGENPRESSING:   '#ea580c',
@@ -508,7 +507,7 @@ export const TrainingView: React.FC = () => {
           className={`px-6 py-3 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl border-t border-x border-b active:translate-y-[2px] ${activeTab === 'load' ? 'text-emerald-400 bg-emerald-600/10 border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60' : 'text-slate-500 bg-white/5 border-t-white/10 border-x-white/5 border-b-black/40 hover:text-slate-300 hover:bg-white/10'}`}
           style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}
         >
-          Obciążenie
+          Obciążenie Indywidualne
         </button>
       </div>
 
@@ -517,12 +516,12 @@ export const TrainingView: React.FC = () => {
       <div className="relative z-10 flex-1 flex gap-4 p-12 min-h-0 overflow-hidden">
 
         {/* LEWA STRONA: LISTA ZAWODNIKÓW */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
+        <div className="min-w-0 flex-1 overflow-y-auto custom-scrollbar pr-4">
 
               {/* FOKUS INDYWIDUALNY ZAWODNIKÓW */}
               <div className="pb-20">
                 <span className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 px-1">Fokus Indywidualny Zawodników</span>
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="max-w-full overflow-x-auto custom-scrollbar">
                   <table className="text-[9px] font-bold border-collapse" style={{ minWidth: 'max-content' }}>
                     <thead>
                       <tr className="border-b border-white/10">
@@ -532,7 +531,7 @@ export const TrainingView: React.FC = () => {
                           <th key={k} className="py-2 px-2 text-center text-slate-500 uppercase tracking-widest font-black">{ATTR_ABBR[k]}</th>
                         ))}
                         <th className="p-0" style={{ width: 6, minWidth: 6, maxWidth: 6 }} aria-hidden="true" />
-                        <th className="py-2 px-1 text-center text-slate-500 uppercase tracking-widest sticky right-0 bg-slate-950 z-10" style={{ width: 118, minWidth: 118, maxWidth: 118 }}>FOKUS</th>
+                        <th className="py-2 px-1 text-center text-slate-500 uppercase tracking-widest sticky right-0 bg-slate-950 z-10" style={{ width: 110, minWidth: 110, maxWidth: 110 }}>FOKUS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -603,11 +602,11 @@ export const TrainingView: React.FC = () => {
                               );
                             })}
                             <td className="p-0" style={{ width: 6, minWidth: 6, maxWidth: 6 }} aria-hidden="true" />
-                            <td className={`py-2 px-1 sticky right-0 z-10 ${stickyBg}`} style={{ width: 118, minWidth: 118, maxWidth: 118 }}>
+                            <td className={`py-2 px-1 sticky right-0 z-10 ${stickyBg}`} style={{ width: 110, minWidth: 110, maxWidth: 110 }}>
                               <select
                                 value={player.trainingFocus || ''}
                                 onChange={e => { updatePlayer(userTeamId!, player.id, { trainingFocus: (e.target.value as any) || null }); setHasIndividualFocusChange(true); }}
-                                className="w-full bg-slate-800 border border-white/10 text-white text-[9px] font-black rounded-lg px-2 py-1 outline-none cursor-pointer hover:border-emerald-500/40 transition-all"
+                                className="w-full bg-slate-800 border border-white/10 text-white text-[8px] font-black rounded-lg px-1.5 py-1 outline-none cursor-pointer hover:border-emerald-500/40 transition-all"
                               >
                                 <option value="">— Brak —</option>
                                 {TRAINABLE_ATTRS
@@ -627,7 +626,7 @@ export const TrainingView: React.FC = () => {
         </div>
 
         {/* PRAWA STRONA: PROGRAMY + DIAGNOSTYKA */}
-        <div className="w-[640px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
+        <div className="relative z-20 w-[640px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
 
            {/* WYKRES PROGRESU TRENINGOWEGO */}
            {trainingProgressHistory.length >= 2 && (() => {
@@ -1109,7 +1108,7 @@ export const TrainingView: React.FC = () => {
       {/* OBCIĄŻENIE INDYWIDUALNE TAB */}
       {activeTab === 'load' && (
         <div className="relative z-10 flex-1 flex gap-8 p-12 min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 pb-20">
+          <div className="min-w-0 flex-1 overflow-y-auto custom-scrollbar pr-4 pb-20">
             <div className="mb-5 flex items-end justify-between gap-4 px-1">
               <div>
                 <span className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Obciążenie indywidualne zawodników</span>
@@ -1227,7 +1226,6 @@ export const TrainingView: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* FOOTER TICKER */}
       <footer className="h-12 bg-black/60 border-t border-white/5 flex items-center px-12 overflow-hidden shrink-0 relative z-20">
          <div className="bg-emerald-600 px-5 py-1.5 rounded-full mr-10 shrink-0 shadow-lg shadow-emerald-900/40">
