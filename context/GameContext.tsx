@@ -9386,7 +9386,6 @@ Asystent`,
 
     const isAiYouthLateSummerIntakeDay =
       (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 31) ||
-      (dateToProcess.getMonth() === 7 && dateToProcess.getDate() === 31) ||
       (dateToProcess.getMonth() === 8 && dateToProcess.getDate() === 30);
 
     if (isAiYouthLateSummerIntakeDay) {

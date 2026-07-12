@@ -660,6 +660,101 @@ const _getAiDeadlineYouthOverallRange = (club: Club): { minDelta: number; maxDel
   return { minDelta: -6, maxDelta: 6 };
 };
 
+const _getContractYearsLeft = (player: Player, currentDate: Date): number => {
+  const daysLeft = _getContractDaysLeft(player, currentDate);
+  if (!Number.isFinite(daysLeft) || daysLeft <= 0) return 0;
+  return Math.max(daysLeft / 365, 0);
+};
+
+const _isAiDeadlineOutgoingRisk = (player: Player, currentDate: Date): boolean => {
+  if (player.loan || _isProtectedNewSigning(player, currentDate)) return false;
+  if (player.transferPendingClubId) return true;
+  return !!(player.isOnTransferList || player.isAvailableForLoan || player.transferListDemandUntil);
+};
+
+const _getAiDeadlineExtraSlots = (club: Club, riskyOutgoingCount: number, seasonYear: number): number => {
+  if (riskyOutgoingCount <= 0) return 0;
+  const roll = _seededRandom(`AI_DEADLINE_EXTRA_SLOTS_${club.id}_${seasonYear}_${riskyOutgoingCount}`);
+  return roll < 0.55 ? 2 : 3;
+};
+
+const _getAiDeadlineRiskNeeds = (
+  squad: Player[],
+  riskyOutgoing: Player[]
+): ClubNeedAssessment[] => {
+  if (riskyOutgoing.length === 0) return [];
+
+  const positions: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+  return positions
+    .filter(position => {
+      const currentCount = squad.filter(player => player.position === position).length;
+      const riskCount = riskyOutgoing.filter(player => player.position === position).length;
+      if (riskCount === 0) return false;
+      return currentCount - riskCount < MIN_SQUAD_POSITION_COUNTS[position];
+    })
+    .map(position => ({
+      position,
+      urgency: 'HIGH',
+      reason: 'SHORTAGE',
+      starterRequired: false,
+    }));
+};
+
+const _isAiDeadlineReleaseCandidate = (
+  player: Player,
+  club: Club,
+  squad: Player[],
+  currentDate: Date,
+  createdIds: Set<string>
+): boolean => {
+  if (createdIds.has(player.id)) return false;
+  if (player.loan || player.isUntouchable || player.squadRole === 'KEY_PLAYER') return false;
+  if (player.transferPendingClubId || _isProtectedNewSigning(player, currentDate)) return false;
+
+  const isQualityProblem =
+    _isSquadLevelOutlier(player, club, squad, currentDate) ||
+    _isBelowAiMarketQualityFloor(player, club, squad, player.position) ||
+    player.overallRating < _getPositionAverageOverall(squad, player.position) - 8;
+
+  return isQualityProblem;
+};
+
+const _releaseAiPlayerToFreeAgents = (
+  player: Player,
+  club: Club,
+  currentDate: Date
+): Player => {
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+  const updatedHistory = PlayerCareerService.movePlayer(
+    player,
+    { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+    currentYear,
+    currentMonth,
+    { clubName: club.name, clubId: club.id }
+  );
+
+  return {
+    ...PlayerCareerService.resetClubStatsForNewEntry(player),
+    clubId: 'FREE_AGENTS',
+    annualSalary: 0,
+    contractEndDate: '',
+    marketValue: 0,
+    negotiationStep: 0,
+    isNegotiationPermanentBlocked: false,
+    isOnTransferList: false,
+    isAvailableForLoan: false,
+    interestedClubs: [],
+    transferPendingClubId: undefined,
+    transferReportDate: undefined,
+    transferPendingFee: undefined,
+    transferPendingSalary: undefined,
+    transferPendingBonus: undefined,
+    transferPendingContractYears: undefined,
+    history: updatedHistory,
+  };
+};
+
 const _buildAiSeasonYouthPlayer = (
   club: Club,
   squad: Player[],
@@ -1611,37 +1706,51 @@ export const AiContractService = {
 
       const deadlinePrefix = `${_buildAiYouthSeasonPrefix(seasonYear, club.id)}_DEADLINE`;
       const alreadyGenerated = workingSquad.filter(player => player.id.startsWith(deadlinePrefix)).length;
-      const slotsLeft = Math.min(4 - alreadyGenerated, AI_MAX_SQUAD_SIZE - workingSquad.length);
+      const initialRiskyOutgoing = workingSquad.filter(player => _isAiDeadlineOutgoingRisk(player, currentDate));
+      const deadlineIntakeLimit = 4 + _getAiDeadlineExtraSlots(club, initialRiskyOutgoing.length, seasonYear);
+      const slotsLeft = Math.min(deadlineIntakeLimit - alreadyGenerated, AI_MAX_SQUAD_SIZE - workingSquad.length);
       if (slotsLeft <= 0) return club;
 
       const pendingIncoming = Object.values(updatedPlayersMap)
         .flat()
         .filter(player => player.transferPendingClubId === club.id);
-      const assessmentSquad = [...workingSquad, ...pendingIncoming];
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
-      const needs = _assessClubNeeds(club, assessmentSquad, currentDate, aiStrategy)
-        .filter(need => {
-          const posSquad = assessmentSquad.filter(player => player.position === need.position);
-          if (posSquad.length < MIN_SQUAD_POSITION_COUNTS[need.position]) return true;
-          const weakest = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
-          return !!weakest && weakest.overallRating < _getAiMarketQualityFloor(club, assessmentSquad, need.position, need);
-        });
-
-      if (needs.length === 0) return club;
-
       const urgencyOrder: Record<ClubNeedAssessment['urgency'], number> = {
         CRITICAL: 4,
         HIGH: 3,
         MEDIUM: 2,
         LOW: 1,
       };
-      const orderedNeeds = [...needs].sort((a, b) => urgencyOrder[b.urgency] - urgencyOrder[a.urgency]);
       const createdPlayers: Player[] = [];
+      const fallbackCoveredPositions = new Set<PlayerPosition>();
 
       for (let i = 0; i < slotsLeft; i++) {
-        const need = orderedNeeds[i % orderedNeeds.length];
+        const assessmentSquad = [...workingSquad, ...pendingIncoming];
+        const riskyOutgoing = workingSquad.filter(player => _isAiDeadlineOutgoingRisk(player, currentDate));
+        const riskNeeds = _getAiDeadlineRiskNeeds(assessmentSquad, riskyOutgoing);
+        const marketNeeds = _assessClubNeeds(club, assessmentSquad, currentDate, aiStrategy);
+        const mergedNeeds = [...marketNeeds];
+        riskNeeds.forEach(riskNeed => {
+          if (!mergedNeeds.some(need => need.position === riskNeed.position)) {
+            mergedNeeds.push(riskNeed);
+          }
+        });
+        const orderedNeeds = mergedNeeds
+          .filter(need => {
+            const posSquad = assessmentSquad.filter(player => player.position === need.position);
+            const hasHardShortage = posSquad.length < MIN_SQUAD_POSITION_COUNTS[need.position];
+            const riskNeed = riskNeeds.some(risk => risk.position === need.position);
+            if (fallbackCoveredPositions.has(need.position) && !hasHardShortage) return false;
+            if (hasHardShortage || riskNeed) return true;
+            const weakest = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
+            return !!weakest && weakest.overallRating < _getAiMarketQualityFloor(club, assessmentSquad, need.position, need);
+          })
+          .sort((a, b) => urgencyOrder[b.urgency] - urgencyOrder[a.urgency]);
+        const need = orderedNeeds[0];
         if (!need) break;
-        const slot = Array.from({ length: 4 }, (_, index) => index)
+        const hadHardShortage = assessmentSquad.filter(player => player.position === need.position).length < MIN_SQUAD_POSITION_COUNTS[need.position];
+        const hadRiskNeed = riskNeeds.some(risk => risk.position === need.position);
+        const slot = Array.from({ length: deadlineIntakeLimit }, (_, index) => index)
           .find(index => !workingSquad.some(player => player.id === `${deadlinePrefix}_${index}`));
         if (slot === undefined) break;
 
@@ -1651,19 +1760,54 @@ export const AiContractService = {
         };
         workingSquad = [...workingSquad, youthPlayer];
         createdPlayers.push(youthPlayer);
-
-        const stillShortOnPosition =
-          workingSquad.filter(player => player.position === need.position).length < MIN_SQUAD_POSITION_COUNTS[need.position];
-        if (!stillShortOnPosition && workingSquad.length >= AI_MIN_SQUAD_SIZE) break;
+        const stillHasHardShortage = workingSquad.filter(player => player.position === need.position).length < MIN_SQUAD_POSITION_COUNTS[need.position];
+        const stillHasRiskNeed = _getAiDeadlineRiskNeeds(
+          [...workingSquad, ...pendingIncoming],
+          workingSquad.filter(player => _isAiDeadlineOutgoingRisk(player, currentDate))
+        )
+          .some(risk => risk.position === need.position);
+        if ((!hadHardShortage || !stillHasHardShortage) && (!hadRiskNeed || !stillHasRiskNeed)) {
+          fallbackCoveredPositions.add(need.position);
+        }
       }
 
       if (createdPlayers.length === 0) return club;
 
+      let currentClub = { ...club };
+      const createdIds = new Set(createdPlayers.map(player => player.id));
+      const releaseCandidates = [...workingSquad]
+        .filter(player => _isAiDeadlineReleaseCandidate(player, club, workingSquad, currentDate, createdIds))
+        .sort((a, b) => {
+          const salaryWasteA = a.annualSalary * _getContractYearsLeft(a, currentDate);
+          const salaryWasteB = b.annualSalary * _getContractYearsLeft(b, currentDate);
+          return _getSquadReviewScore(a) - _getSquadReviewScore(b) || salaryWasteB - salaryWasteA;
+        });
+
+      for (const playerToRelease of releaseCandidates) {
+        const releaseCost = Math.floor(playerToRelease.annualSalary * 0.4);
+        const fullContractCost = playerToRelease.annualSalary * _getContractYearsLeft(playerToRelease, currentDate);
+        const posCountAfter = workingSquad.filter(player => player.position === playerToRelease.position && player.id !== playerToRelease.id).length;
+        const canRelease =
+          releaseCost > 0 &&
+          releaseCost < fullContractCost &&
+          currentClub.budget >= releaseCost &&
+          workingSquad.length - 1 >= AI_MIN_SQUAD_SIZE &&
+          posCountAfter >= MIN_SQUAD_POSITION_COUNTS[playerToRelease.position] &&
+          _canAiReleasePlayer(playerToRelease, club, currentDate, 'DEADLINE_ACADEMY_REBALANCE');
+
+        if (!canRelease) continue;
+
+        const releasedPlayer = _releaseAiPlayerToFreeAgents(playerToRelease, club, currentDate);
+        workingSquad = workingSquad.filter(player => player.id !== playerToRelease.id);
+        updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+        currentClub = { ...currentClub, budget: Math.max(0, currentClub.budget - releaseCost) };
+      }
+
       generatedCount += createdPlayers.length;
       updatedPlayersMap[club.id] = workingSquad;
-      const rosterIdSet = new Set([...(club.rosterIds || []), ...createdPlayers.map(player => player.id)]);
+      const rosterIdSet = new Set(workingSquad.map(player => player.id));
       return {
-        ...club,
+        ...currentClub,
         rosterIds: Array.from(rosterIdSet),
       };
     });
@@ -2980,12 +3124,28 @@ processAiRecruitment: (
           // Bez zwrotu klub traci pieniądze i nie dostaje zawodnika.
           const refundFee = player.transferPendingFee ?? TransferSellerLogicService.estimateAskingPrice(player, sellerClub, updatedPlayersMap[sellerClubId] || [], currentDate);
           updatedClubs = updatedClubs.map(c => {
-            if (c.id === buyerClubId) return { ...c, budget: c.budget + refundFee };
+            if (c.id === buyerClubId) {
+              return {
+                ...c,
+                budget: c.budget + refundFee,
+                transferBudget: (c.transferBudget || 0) + refundFee,
+              };
+            }
             if (c.id === sellerClubId) return { ...c, budget: c.budget - refundFee };
             return c;
           });
           updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
-            p.id === player.id ? { ...p, transferPendingClubId: undefined, transferReportDate: undefined } : p
+            p.id === player.id
+              ? {
+                  ...p,
+                  transferPendingClubId: undefined,
+                  transferReportDate: undefined,
+                  transferPendingFee: undefined,
+                  transferPendingSalary: undefined,
+                  transferPendingBonus: undefined,
+                  transferPendingContractYears: undefined,
+                }
+              : p
           );
           logEntries.push({
             id: `RES_NOBUDGET_${player.id}_${buyerClubId}_${currentDate.getTime()}`,
