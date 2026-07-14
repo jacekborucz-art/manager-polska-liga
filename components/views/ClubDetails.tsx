@@ -536,7 +536,12 @@ export const ClubDetails: React.FC = () => {
       )}
 
               {isNegotiationBlocked && (
-                <span className="px-1.5 py-0.5 bg-red-500/20 text-red-500 text-[6px] font-black rounded-sm border border-red-500/30">⛔</span>
+                <span
+                  title="Zerwane negocjacje kontraktowe z obecnym klubem. Zawodnik nie chce przedłużyć umowy, więc może być okazją transferową."
+                  className="px-1.5 py-0.5 bg-red-500/20 text-red-500 text-[6px] font-black rounded-sm border border-red-500/30 cursor-help"
+                >
+                  ⛔
+                </span>
               )}
               {isCooldownActive && (
                 <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-500 text-[6px] font-black rounded-sm border border-amber-500/30">⏳</span>
