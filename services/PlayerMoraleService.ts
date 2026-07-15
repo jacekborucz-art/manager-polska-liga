@@ -1477,20 +1477,20 @@ export const PlayerMoraleService = {
 
   getMatchMultiplier: (player: Player): number => {
     const morale = player.morale ?? 50;
-    if (morale <= 19) return 0.92;
-    if (morale <= 39) return 0.96;
+    if (morale <= 19) return 0.95;
+    if (morale <= 39) return 0.98;
     if (morale <= 59) return 1.00;
-    if (morale <= 79) return 1.03;
-    return 1.06;
+    if (morale <= 79) return 1.015;
+    return 1.03;
   },
 
   getMatchContributionMultiplier: (player: Player): number => {
     const morale = player.morale ?? 50;
-    if (morale <= 19) return 0.22;
-    if (morale <= 39) return 0.55;
+    if (morale <= 19) return 0.78;
+    if (morale <= 39) return 0.90;
     if (morale <= 59) return 1.00;
-    if (morale <= 79) return 1.18;
-    return 1.35;
+    if (morale <= 79) return 1.06;
+    return 1.12;
   },
 
   getLineupReadinessMultiplier: (player: Player): number => {

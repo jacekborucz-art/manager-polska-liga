@@ -2581,7 +2581,7 @@ const diceRolls = 6 + Math.floor(seededRng(currentSeed, nextMinute, 445) * 3.0 *
         const activePlayerFormChanceMultiplier = eventSide === 'HOME'
           ? playerFormImpact.homeGoalChanceMultiplier
           : playerFormImpact.awayGoalChanceMultiplier;
-        dynamicThreshold = clamp(dynamicThreshold / clamp(activePlayerFormChanceMultiplier, 0.74, 1.26), 0.20, 0.95);
+        dynamicThreshold = clamp(dynamicThreshold / clamp(activePlayerFormChanceMultiplier, 0.84, 1.16), 0.20, 0.95);
 // Podnosimy szanse słabszej drużyny w sposób stopniowany — im większa dysproporcja, tym większa ulga
 const attackerPwr = eventSide === userSide ? pPower : aPower;
 const defenderSidePwr = eventSide === userSide ? aPower : pPower;
@@ -2817,7 +2817,7 @@ dynamicThreshold *= undedogThresholdMultiplier;
         } else if (leadDiff === 1) {
             satietyMult = 0.91; // lekkie hamowanie przy prowadzeniu 1 bramką
         }
-        let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult * clamp(activePlayerFormChanceMultiplier, 0.76, 1.24) + luckyBonus;
+        let rawGoalProbability = (shotPower / (shotPower + savePower)) * baseConversionMult * satietyMult * clamp(activePlayerFormChanceMultiplier, 0.86, 1.14) + luckyBonus;
         // Giant Killer: bramkarz zostaje zaskoczony — gwarantowany minimalny próg konwersji.
         // Bez flooru: T3 napastnik vs T1 bramkarz → ~18% → niknie w n=10. Z floorem 0.22 → ~1 niespodzianka/20 meczów.
         if (isGiantKillerShot) rawGoalProbability = Math.max(rawGoalProbability, 0.18);
@@ -3054,7 +3054,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
             if (upsetPowerGap > 1.15 && upsetRepGap >= 2) {
                 const homeCupEdge = eventSide === 'HOME' && attackingClubRep < defendingClubRep ? 1.35 : 1.0;
                 const closeTierEdge = upsetRepGap <= 3 ? 1.25 : 1.0;
-                const upsetActionChance = Math.min(0.12, (0.080 / upsetPowerGap) * homeCupEdge * closeTierEdge * clamp(activePlayerFormChanceMultiplier, 0.84, 1.16));
+                const upsetActionChance = Math.min(0.12, (0.080 / upsetPowerGap) * homeCupEdge * closeTierEdge * clamp(activePlayerFormChanceMultiplier, 0.90, 1.10));
                 if (seededRng(currentSeed, nextMinute, 9991) < upsetActionChance) {
                     const upsetAttTeam = eventSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
                     const upsetAttLineup = (eventSide === 'HOME' ? nextHomeLineup : nextAwayLineup).startingXI;
@@ -3062,7 +3062,7 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                     if (upsetScorer) {
                         const upsetAssistant = GoalAttributionService.pickAssistant(upsetAttTeam, upsetAttLineup as string[], upsetScorer.id, false, () => seededRng(currentSeed, nextMinute, 9995));
                         // Konwersja na gola spada wraz z rosnącą przewagą obrony
-                        const goalConvRate = Math.max(0.11, (0.28 / upsetPowerGap) * clamp(activePlayerFormChanceMultiplier, 0.86, 1.14));
+                        const goalConvRate = Math.max(0.11, (0.28 / upsetPowerGap) * clamp(activePlayerFormChanceMultiplier, 0.92, 1.08));
                         if (seededRng(currentSeed, nextMinute, 9993) < goalConvRate) {
                             eventType = MatchEventType.GOAL;
                             const formattedName = getPlayerReportName(upsetScorer);

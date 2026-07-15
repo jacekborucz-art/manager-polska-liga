@@ -80,7 +80,28 @@ const isSummerHolidayForClub = (date: Date, clubId: string, fixtures: Fixture[] 
 const isTrainingHolidayForClub = (date: Date, clubId: string, fixtures: Fixture[] = []): boolean =>
   isWinterHoliday(date) || isSummerHolidayForClub(date, clubId, fixtures);
 
+const getAutoTrainingFocus = (player: Player): keyof PlayerAttributes | null => {
+  const trainable = getTrainableAttributesForPosition(player.position);
+  if (trainable.length === 0) return null;
+
+  const priorityByPosition: Record<PlayerPosition, Array<keyof PlayerAttributes>> = {
+    [PlayerPosition.GK]: ['goalkeeping', 'positioning', 'mentality', 'passing'],
+    [PlayerPosition.DEF]: ['defending', 'positioning', 'strength', 'pace', 'passing'],
+    [PlayerPosition.MID]: ['passing', 'vision', 'technique', 'workRate', 'stamina'],
+    [PlayerPosition.FWD]: ['finishing', 'attacking', 'pace', 'technique', 'positioning'],
+  };
+  const priorities = priorityByPosition[player.position] ?? trainable;
+  const candidates = priorities.filter(attr => trainable.includes(attr));
+  const pool = candidates.length > 0 ? candidates : trainable;
+
+  return pool
+    .map(attr => ({ attr, value: player.attributes[attr] ?? 50 }))
+    .sort((a, b) => a.value - b.value)[0]?.attr ?? null;
+};
+
 export const TrainingService = {
+  getAutoTrainingFocus,
+
   processWeeklyTrainingInjuries: (
     playersMap: Record<string, Player[]>,
     currentDate: Date,
@@ -415,6 +436,25 @@ export const TrainingService = {
     });
 
     return updatedMap;
+  },
+
+  applyAiTrainingFocuses: (
+    playersMap: Record<string, Player[]>,
+    userTeamId?: string | null
+  ): Record<string, Player[]> => {
+    return Object.fromEntries(
+      Object.entries(playersMap).map(([clubId, squad]) => {
+        if (clubId === userTeamId) return [clubId, squad];
+        return [
+          clubId,
+          squad.map(player => {
+            if (player.trainingFocus) return player;
+            const focus = getAutoTrainingFocus(player);
+            return focus ? { ...player, trainingFocus: focus } : player;
+          }),
+        ];
+      })
+    );
   },
 
   /**

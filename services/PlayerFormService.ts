@@ -119,8 +119,8 @@ export const PlayerFormService = {
     }
 
     score += getOutputBonus(player, stats);
-    score += clamp(((player.morale ?? 50) - 50) * 0.18, -9, 9);
-    if (matches > 0 || recentAverage !== null) score += player.trainingFocus ? 4 : -3;
+    score += clamp(((player.morale ?? 50) - 50) * 0.10, -5, 5);
+    if (matches > 0 || recentAverage !== null) score += player.trainingFocus ? 2 : 0;
 
     if (player.health?.status === HealthStatus.INJURED) score -= 18;
     if ((player.condition ?? 100) < 60) score -= 8;

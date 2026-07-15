@@ -3980,6 +3980,8 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
           setTrainingProgressHistory(prev => [...prev.slice(-19), avgOvr]);
         }
 
+        finalPlayers = TrainingService.applyAiTrainingFocuses(finalPlayers, userTeamId);
+
         // Trening rezerw — automatyczny plan trenera rezerw
         if (reserves.length > 0) {
           const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;

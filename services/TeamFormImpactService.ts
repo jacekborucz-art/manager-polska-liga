@@ -18,13 +18,9 @@ const getPlayersByIds = (players: Player[], ids: Array<string | null | undefined
 };
 
 const getBaseFormMultiplier = (form: number): number => {
-  if (form <= 10) return 0.62 + form * 0.008;
-  if (form <= 25) return 0.70 + (form - 10) * 0.008;
-  if (form <= 40) return 0.82 + (form - 25) * 0.0087;
-  if (form <= 60) return 0.95 + (form - 40) * 0.005;
-  if (form <= 75) return 1.05 + (form - 60) * 0.006;
-  if (form <= 90) return 1.14 + (form - 75) * 0.0053;
-  return 1.22 + (form - 90) * 0.003;
+  const centered = (clamp(form, 0, 100) - 50) / 50;
+  const curve = Math.sign(centered) * Math.pow(Math.abs(centered), 1.18);
+  return clamp(1 + curve * 0.18, 0.82, 1.18);
 };
 
 const getTeamQuality = (players: Player[], lineup: Lineup): number => {
@@ -67,8 +63,8 @@ const adjustForQualityGap = (ownMultiplier: number, ownQuality: number, opponent
 };
 
 const getDefenseLeakMultiplier = (opponentMultiplier: number): number => {
-  if (opponentMultiplier < 1) return 1 + (1 - opponentMultiplier) * 0.72;
-  return 1 - (opponentMultiplier - 1) * 0.28;
+  if (opponentMultiplier < 1) return 1 + (1 - opponentMultiplier) * 0.35;
+  return 1 - (opponentMultiplier - 1) * 0.16;
 };
 
 export interface TeamFormImpact {
@@ -106,8 +102,8 @@ export const TeamFormImpactService = {
     const awayForm = getTeamForm(awayPlayers, awayLineup);
     const homePerformance = adjustForQualityGap(getBaseFormMultiplier(homeForm), homeQuality, awayQuality);
     const awayPerformance = adjustForQualityGap(getBaseFormMultiplier(awayForm), awayQuality, homeQuality);
-    const homeGoalChanceMultiplier = clamp(homePerformance * getDefenseLeakMultiplier(awayPerformance), 0.42, 1.78);
-    const awayGoalChanceMultiplier = clamp(awayPerformance * getDefenseLeakMultiplier(homePerformance), 0.42, 1.78);
+    const homeGoalChanceMultiplier = clamp(homePerformance * getDefenseLeakMultiplier(awayPerformance), 0.72, 1.32);
+    const awayGoalChanceMultiplier = clamp(awayPerformance * getDefenseLeakMultiplier(homePerformance), 0.72, 1.32);
 
     return {
       home: {

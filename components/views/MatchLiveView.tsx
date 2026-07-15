@@ -2742,7 +2742,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           Math.min(
             0.155,
             (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) *
-              clampNumber(activePlayerFormChanceMultiplier, 0.66, 1.34) *
+              clampNumber(activePlayerFormChanceMultiplier, 0.82, 1.18) *
               activePressureMods.shotMultiplier *
               (livePressureContext?.rivalryMultiplier ?? 1)
           )

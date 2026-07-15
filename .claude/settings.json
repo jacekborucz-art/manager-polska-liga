@@ -14,7 +14,8 @@
       "Bash(python _check.py)",
       "Bash(python _debug.py)",
       "Bash(python _fix2.py)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(SIM_MATCHES=300 node tmp/league-balance-sim.cjs)"
     ]
   }
 }
