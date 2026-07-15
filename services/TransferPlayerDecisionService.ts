@@ -1,4 +1,4 @@
-import { Club, ManagerProfile, Player, TransferContractInput } from '../types';
+import { Club, ManagerProfile, Player, Region, TransferContractInput } from '../types';
 import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 
 type SquadRole = 'STAR' | 'FIRST_TEAM' | 'ROTATION' | 'BACKUP';
@@ -25,6 +25,44 @@ const roundMoney = (value: number) => Math.max(50_000, Math.round(value / 5_000)
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const PRE_CONTRACT_PRIORITY_DAYS = 330;
+const HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD = 76;
+
+const EUROPEAN_PLAYER_REGIONS = new Set<Region>([
+  Region.POLAND,
+  Region.BALKANS,
+  Region.CZ_SK,
+  Region.IBERIA,
+  Region.SWEDEN,
+  Region.SCANDINAVIA,
+  Region.EX_USSR,
+  Region.SPAIN,
+  Region.ENGLAND,
+  Region.GERMANY,
+  Region.ITALY,
+  Region.FRANCE,
+  Region.TURKEY,
+  Region.FINLAND,
+  Region.GEORGIA,
+  Region.ARMENIA,
+  Region.ALBANIA,
+  Region.ROMANIA,
+  Region.BALTIC,
+  Region.BENELUX,
+  Region.HUNGARIAN,
+  Region.MALTESE,
+  Region.ISRAELI,
+  Region.GREEK,
+  Region.AZERBAIJANI,
+  Region.KAZAKH,
+]);
+
+const SOUTH_AMERICAN_COUNTRIES = new Set(['ARG', 'BRA', 'URU', 'COL', 'ECU', 'PAR', 'CHI', 'PER', 'BOL']);
+const AFRICAN_COUNTRIES = new Set(['EGY', 'RSA', 'MAR', 'TUN', 'ALG', 'TZA', 'COD']);
+const LOW_APPEAL_DESTINATION_COUNTRIES = new Set([
+  ...SOUTH_AMERICAN_COUNTRIES,
+  ...AFRICAN_COUNTRIES,
+  'CHN',
+]);
 
 const getReputationDrop = (currentClub: Club, targetClub: Club): number =>
   Math.max(0, currentClub.reputation - targetClub.reputation);
@@ -49,6 +87,28 @@ const isLoyaltySoftenedForTransfer = (player: Player): boolean =>
 
 const isMajorReputationStepUp = (currentClub: Club, targetClub: Club): boolean =>
   targetClub.reputation >= currentClub.reputation + 5;
+
+const isLowAppealDestinationForHighOverallEuropean = (player: Player, targetClub: Club): boolean =>
+  player.overallRating >= HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD &&
+  EUROPEAN_PLAYER_REGIONS.has(player.nationality) &&
+  LOW_APPEAL_DESTINATION_COUNTRIES.has(targetClub.country || '');
+
+const getLowAppealDestinationPenalty = (player: Player, targetClub: Club): number => {
+  if (!isLowAppealDestinationForHighOverallEuropean(player, targetClub)) return 0;
+  if (player.overallRating >= 86) return 34;
+  if (player.overallRating >= 82) return 26;
+  if (player.overallRating >= 79) return 19;
+  return 13;
+};
+
+const getLowAppealAcceptanceCap = (player: Player, targetClub: Club): number | null => {
+  if (!isLowAppealDestinationForHighOverallEuropean(player, targetClub)) return null;
+  const veteranSoftener = player.age >= 33 ? 0.025 : player.age >= 30 ? 0.012 : 0;
+  if (player.overallRating >= 86) return 0.006 + veteranSoftener;
+  if (player.overallRating >= 82) return 0.012 + veteranSoftener;
+  if (player.overallRating >= 79) return 0.022 + veteranSoftener;
+  return 0.04 + veteranSoftener;
+};
 
 const getLoyaltyResistance = (player: Player, currentClub: Club, targetClub: Club): number => {
   if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub)) {
@@ -139,6 +199,7 @@ export const TransferPlayerDecisionService = {
     const ageStayScore = getAgeStayScore(player);
     const ageMovePremium = ageStayScore / 100;
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const lowAppealDestination = isLowAppealDestinationForHighOverallEuropean(player, targetClub);
     const daysLeft = Math.floor(
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
@@ -173,6 +234,7 @@ export const TransferPlayerDecisionService = {
     if (reputationDelta === 0 && isForeignMove) salaryMultiplier += 0.12;
     if (reputationDrop > 0) salaryMultiplier += Math.min(0.42, reputationDrop * 0.06);
     if (reputationDrop >= 4 && !hasMoveSoftener) salaryMultiplier += 0.10;
+    if (lowAppealDestination) salaryMultiplier += player.overallRating >= 82 ? 0.34 : 0.24;
     if (player.isOnTransferList) salaryMultiplier -= 0.08;
     if (isNotFirstTeamPlayer) salaryMultiplier -= 0.06;
     if (targetRoleLevel > currentRoleLevel) salaryMultiplier -= 0.06;
@@ -189,6 +251,7 @@ export const TransferPlayerDecisionService = {
     if (reputationDrop > 0) bonusMultiplier += Math.min(0.45, reputationDrop * 0.07);
     else if (reputationDelta === 0 && isForeignMove) bonusMultiplier += 0.14;
     else if (reputationDelta === 0) bonusMultiplier += 0.08;
+    if (lowAppealDestination) bonusMultiplier += player.overallRating >= 82 ? 0.42 : 0.30;
     bonusMultiplier += loyaltyResistance * 0.18;
     bonusMultiplier += ageMovePremium;
     bonusMultiplier *= managerInfluence.expectationMultiplier;
@@ -198,6 +261,8 @@ export const TransferPlayerDecisionService = {
     let negotiationReason = `Moj klient jest gotow rozmawiac. Oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'}.`;
     if (reputationDrop > 0) {
       negotiationReason = 'Moj klient jest gotow rozmawiac, ale nizsza reputacja nowego klubu podnosi jego oczekiwania finansowe. Im wiekszy spadek reputacji, tym mocniejszy kontrakt bedzie potrzebny.';
+    } else if (lowAppealDestination) {
+      negotiationReason = 'Moj klient traktuje ten kierunek jako malo atrakcyjny sportowo. Rozmowy maja sens tylko przy wyjatkowo mocnych warunkach i jasnej roli w projekcie.';
     } else if (reputationDelta === 0 && isForeignMove) {
       negotiationReason = 'Moj klient jest zainteresowany tym kierunkiem. Przy klubie o podobnej reputacji oczekuje solidnych, ale realistycznych warunkow.';
     } else if (reputationDelta === 0) {
@@ -256,6 +321,8 @@ export const TransferPlayerDecisionService = {
       currentClub.country !== targetClub.country;
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
+    const lowAppealDestinationPenalty = getLowAppealDestinationPenalty(player, targetClub);
+    const lowAppealAcceptanceCap = getLowAppealAcceptanceCap(player, targetClub);
 
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;
@@ -349,23 +416,28 @@ export const TransferPlayerDecisionService = {
       foreignBonus +
       roleUpgradeBonus +
       managerInfluence.scoreAdjustment +
-      Math.round((financialFit - 1) * 35);
+      Math.round((financialFit - 1) * 35) -
+      lowAppealDestinationPenalty;
 
     const margin = offerScore - stayScore;
     const requiredFinancialFit = player.age >= 30 ? 0.98 : 0.92;
     const lowerClubMoveWithoutPremium = reputationDrop >= 4 && financialFit < 0.98 && !transferListSalaryDiscountApplied;
     const flatForeignMoveWithoutUpgrade = reputationDelta === 0 && isForeignMove && financialFit < 0.96;
+    const lowAppealMoveWithoutExceptionalPremium = lowAppealDestinationPenalty > 0 && financialFit < 1.12;
     const allowedNegativeMargin = reputationDrop === 0 ? -8 : reputationDrop <= 5 ? -35 : -24;
 
     if (
       financialFit < requiredFinancialFit ||
       lowerClubMoveWithoutPremium ||
       flatForeignMoveWithoutUpgrade ||
+      lowAppealMoveWithoutExceptionalPremium ||
       margin < allowedNegativeMargin
     ) {
       let reason = 'Zawodnik uznal, ze warunki kontraktu i projekt sportowy nie sa dla niego wystarczajaco korzystne.';
 
-      if (lowerClubMoveWithoutPremium) {
+      if (lowAppealMoveWithoutExceptionalPremium) {
+        reason = 'Zawodnik nie traktuje tego kierunku jako atrakcyjnego sportowo. Przy takim profilu kariery potrzebowalby wyjatkowej premii finansowej i bardzo mocnej roli.';
+      } else if (lowerClubMoveWithoutPremium) {
         reason = 'Przy tak duzym spadku reputacji zawodnik oczekuje mocniejszej rekompensaty finansowej i stabilnego kontraktu.';
       } else if (player.age >= 30 && yearsFit < 1) {
         reason = 'Na tym etapie kariery zawodnik oczekuje mocniejszego zabezpieczenia gwarantowanego okresu kontraktu.';
@@ -391,7 +463,7 @@ export const TransferPlayerDecisionService = {
       (contractPressure > 0 ? 0.04 : 0) +
       (contractBreakdownPressure > 0 ? 0.12 : 0) -
       loyaltyResistance * 0.34;
-    const finalAcceptanceChance = clamp(
+    const rawAcceptanceChance = clamp(
       getBaseMoveAcceptanceChance(currentClub, targetClub) +
         roleChanceAdjustment +
         financialChanceAdjustment +
@@ -400,9 +472,14 @@ export const TransferPlayerDecisionService = {
       0.01,
       0.999
     );
+    const finalAcceptanceChance = lowAppealAcceptanceCap === null
+      ? rawAcceptanceChance
+      : Math.min(rawAcceptanceChance, lowAppealAcceptanceCap);
 
     if (Math.random() > finalAcceptanceChance) {
-      const reason = loyaltyResistance >= 0.45
+      const reason = lowAppealDestinationPenalty > 0
+        ? 'Zawodnik po analizie odrzucil kierunek transferu. Przy jego poziomie sportowym liga docelowa nie jest dla niego wystarczajaco atrakcyjna poza wyjatkowymi okolicznosciami.'
+        : loyaltyResistance >= 0.45
         ? 'Zawodnik docenia oferte, ale jego przywiazanie do obecnego klubu przewazylo. Bez statusu zawodnika przeznaczonego do odejscia lub bardzo duzego kroku sportowego nie chce zmieniac klubu.'
         : reputationDrop > 0
         ? 'Zawodnik byl gotow rozmawiac, ale po analizie uznal, ze spadek reputacji klubu jest dla niego zbyt duzym ryzykiem sportowym przy tej ofercie.'
