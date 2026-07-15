@@ -1078,7 +1078,7 @@ export const SquadView: React.FC = () => {
               {myClub?.freeKickTakerId === player.id && (
                 <span className="px-1.5 py-0.5 bg-amber-900/60 text-amber-400 text-[8px] font-black rounded border border-amber-500/40 shrink-0 leading-none" title="Egzekutor wolnych">FK</span>
               )}
-              {player.isOnTransferList && (
+              {player.isOnTransferList && !hasPendingTransfer && (
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[8px] font-black rounded border border-amber-500/30 shadow-sm shrink-0 leading-none">
                      LISTA
                 </span>

@@ -1632,6 +1632,59 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let localAwayFatigue = { ...prev.awayFatigue };
         let nextActionContributions = { ...(prev.actionContributions ?? {}) };
 
+        const getSideInjuryMap = (side: 'HOME' | 'AWAY') => side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
+        const getSidePlayers = (side: 'HOME' | 'AWAY') => side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+        const getSideLineup = (side: 'HOME' | 'AWAY') => side === 'HOME' ? nextHomeLineup : nextAwayLineup;
+        const getUserInjuredSpinePenalty = (side: 'HOME' | 'AWAY', mode: 'DEFENDING' | 'ATTACKING'): number => {
+          if (side !== userSide) return 0;
+          const injuries = getSideInjuryMap(side);
+          const playerMap = new Map(getSidePlayers(side).map(player => [player.id, player]));
+          const lineup = getSideLineup(side);
+          const tactic = TacticRepository.getById(lineup.tacticId);
+          let penalty = 0;
+
+          lineup.startingXI.forEach((playerId, slotIdx) => {
+            if (!playerId) return;
+            const player = playerMap.get(playerId);
+            if (!player) return;
+            const severity = injuries[player.id];
+            if (!severity) return;
+            const slotRole = tactic.slots[slotIdx]?.role ?? player.position;
+
+            if (slotIdx === 0 && player.position === PlayerPosition.GK) {
+              penalty += severity === InjurySeverity.SEVERE
+                ? (mode === 'DEFENDING' ? 0.040 : 0.016)
+                : (mode === 'DEFENDING' ? 0.018 : 0.008);
+              return;
+            }
+
+            if (slotRole === PlayerPosition.DEF) {
+              const outOfPositionRelief = player.position === PlayerPosition.DEF ? 1 : 0.65;
+              const basePenalty = severity === InjurySeverity.SEVERE
+                ? (mode === 'DEFENDING' ? 0.020 : 0.012)
+                : (mode === 'DEFENDING' ? 0.008 : 0.005);
+              penalty += basePenalty * outOfPositionRelief;
+              return;
+            }
+
+            if (player.position === PlayerPosition.DEF) {
+              penalty += severity === InjurySeverity.SEVERE
+                ? (mode === 'DEFENDING' ? 0.006 : 0.006)
+                : (mode === 'DEFENDING' ? 0.003 : 0.003);
+            }
+          });
+
+          return mode === 'DEFENDING'
+            ? Math.min(0.085, penalty)
+            : Math.min(0.040, penalty);
+        };
+        const getUserInjuredGoalkeeperFitMultiplier = (side: 'HOME' | 'AWAY', goalkeeper: Player | null | undefined): number => {
+          if (side !== userSide || !goalkeeper) return 1;
+          const severity = getSideInjuryMap(side)[goalkeeper.id];
+          if (!severity || goalkeeper.position !== PlayerPosition.GK) return 1;
+          return severity === InjurySeverity.SEVERE ? 0.35 : 0.72;
+        };
+
         // ── CONTACT GOAL BOOST: inicjalizacja zmiennych lokalnych ──────────────
         // Konwencja: >0 = boost dla HOME | <0 = boost dla AWAY | 0 = brak boosta
         // Wygaszamy boost gdy minął czas jego trwania
@@ -1971,6 +2024,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           prev.userInstructions.mindset === 'OFFENSIVE' ||
           userCounterTactic.attackBias >= 60 ||
           userScoreDiff < 0;
+        const userOvercommitsIntoAiBlock =
+          prev.userInstructions.mindset === 'OFFENSIVE' &&
+          userCounterTactic.attackBias >= 60 &&
+          (
+            aiCounterTacticObj.defenseBias >= 74 ||
+            aiCounterTacticObj.attackBias <= 42 ||
+            prev.aiActiveShout?.mindset === 'DEFENSIVE'
+          ) &&
+          (
+            aiCounterAttackEnabled ||
+            prev.aiActiveShout?.mindset === 'DEFENSIVE' ||
+            prev.aiActiveShout?.mindset === 'NEUTRAL'
+          );
+        const userOvercommitIntoAiBlockFactor = userOvercommitsIntoAiBlock
+          ? Math.max(
+              0.35,
+              Math.min(
+                1,
+                (userCounterTactic.attackBias - 58) / 32 +
+                (aiCounterTacticObj.defenseBias - 68) / 34 +
+                (prev.userInstructions.tempo === 'FAST' ? 0.18 : 0) +
+                (aiCounterAttackEnabled ? 0.16 : 0)
+              )
+            )
+          : 0;
 
         if (!counterAttackTriggered && activeSide === userSide && aiCounterAttackEnabled && aiCounterShape && userPushes) {
           const userPressFactor = Math.max(0, Math.min(1, (userPressure - 25) / 75));
@@ -1979,7 +2057,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const aiScoreFactor = aiScoreDiffForCounter > 0 ? 0.03 : 0;
           const aiCounterChance = Math.max(
             0,
-            Math.min(0.14, (0.023 + userPressFactor * 0.054 + aiShapeFactor * 0.022 + userRiskFactor * 0.022 + aiScoreFactor) * aiCounterResponseFactor)
+            Math.min(
+              userOvercommitsIntoAiBlock ? 0.20 : 0.14,
+              (0.023 +
+                userPressFactor * 0.054 +
+                aiShapeFactor * 0.022 +
+                userRiskFactor * 0.022 +
+                aiScoreFactor +
+                userOvercommitIntoAiBlockFactor * 0.036) * aiCounterResponseFactor
+            )
           );
           if (seededRng(currentSeed, nextMinute, 641) < aiCounterChance) {
             activeSide = aiSideForCounter;
@@ -1992,7 +2078,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             );
             aiCounterAttackShotBonus = Math.max(
               0.006,
-              Math.min(0.028, 0.011 + userPressFactor * 0.009 + userRiskFactor * 0.005 + aiCounterQualityModifier)
+              Math.min(
+                userOvercommitsIntoAiBlock ? 0.050 : 0.028,
+                0.011 +
+                  userPressFactor * 0.009 +
+                  userRiskFactor * 0.005 +
+                  aiCounterQualityModifier +
+                  userOvercommitIntoAiBlockFactor * 0.016
+              )
             );
           }
         }
@@ -2158,6 +2251,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         }
 
+        const userOvercommitLowBlockShotDrag =
+          userOvercommitsIntoAiBlock && activeSide === userSide
+            ? Math.min(0.034, 0.010 + userOvercommitIntoAiBlockFactor * 0.024)
+            : 0;
+        const aiLowBlockTransitionBonus =
+          userOvercommitsIntoAiBlock && activeSide !== userSide
+            ? Math.min(
+                0.040,
+                0.008 +
+                  userOvercommitIntoAiBlockFactor * 0.020 +
+                  (aiCounterAttackTriggered ? 0.014 : 0)
+              )
+            : 0;
+
         // ─── BOOST: CZERWONA KARTKA + DEFENSYWNA TAKTYKA ──────────────────────
         // Broniący grał defensywnie (attackBias ≤ 60) po czerwonej kartce → brak kary "otwarte plecy",
         // ale i tak jest luka w obronie. Przeciwnik dostaje losowy boost do akcji podbramkowych.
@@ -2167,6 +2274,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const baseBoost = 0.006 + seededRng(currentSeed, nextMinute, 777) * 0.009;
           redCardDefensiveBoost = baseBoost * Math.pow(1.7, defendingSentOff - 1);
         }
+        const defendingInjuredSpineExposure = getUserInjuredSpinePenalty(activeSide === 'HOME' ? 'AWAY' : 'HOME', 'DEFENDING');
+        const attackingInjuredSpineDrag = getUserInjuredSpinePenalty(activeSide, 'ATTACKING');
 
         // ─── KARA: ZMĘCZENIE INDYWIDUALNYCH GRACZY ───────────────────────────
         // Średnia kondycji całej jedenastki rozmywa wpływ 1-2 krytycznie zmęczonych graczy.
@@ -2244,12 +2353,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             - ownShortHandedPenalty
             - redCardAttackingDrag
             - goalkeeperCrisisAttackDrag
+            - userOvercommitLowBlockShotDrag
+            + aiLowBlockTransitionBonus
             + noGkBonus
             + redCardDefensiveBoost
+            + defendingInjuredSpineExposure
             + rotationMismatchAttackBonus
             - criticalFatPenalty
             - freshDefBonus
             - noRotationShotPenalty
+            - attackingInjuredSpineDrag
         );
         shotThreshold = Math.max(fatiguedShotFloor, shotThreshold * moraleDebuffMultiplier);
 
@@ -3022,7 +3135,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               rng: () => seededRng(currentSeed, nextMinute, 760),
             });
             const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * playerFormFinishingBoost * actionProfile.finishingFitMod;
-            const gkTeamFormFitMod = gkFitMod * gkFormBoost * playerFormGoalkeepingBoost;
+            const defendingSideForShot = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+            const gkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(defendingSideForShot, gk);
+            const gkTeamFormFitMod = gkFitMod * gkFormBoost * playerFormGoalkeepingBoost * gkInjuryFitMod;
 
             // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
             const isGoal = GoalAttributionService.checkShotSuccess(
@@ -3300,7 +3415,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const headerFormBoost = 1 + ((activeFormImpact.finishingMultiplier - 1) * activeFormStacking);
                 const headerGkBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
                 const headerTeamFormFitMod = headerBriefingFitMod * headerFormBoost * clampNumber(activePlayerFormImpact.performanceMultiplier, 0.80, 1.20);
-                const headerGkFormFitMod = hGkFitMod * headerGkBoost * clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.84, 1.16);
+                const headerDefendingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+                const headerGkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(headerDefendingSide, cornerGk);
+                const headerGkFormFitMod = hGkFitMod * headerGkBoost * clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.84, 1.16) * headerGkInjuryFitMod;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
                   () => seededRng(currentSeed, nextMinute, 3500),
@@ -3349,9 +3466,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               const fkFormDefMod = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
               const fkMoraleMod = PlayerMoraleService.getMatchMultiplier(fkTaker);
               const fkGkMoraleMod = fkGk ? PlayerMoraleService.getMatchMultiplier(fkGk) : 1;
+              const fkDefendingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+              const fkGkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(fkDefendingSide, fkGk);
               const fkGoalProb = Math.max(
                 0.05,
-                Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod * fkMoraleMod) * 1.05) - ((fkGkAttr * fkFormDefMod * fkGkMoraleMod) * 1.20)) / 300)
+                Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod * fkMoraleMod) * 1.05) - ((fkGkAttr * fkFormDefMod * fkGkMoraleMod * fkGkInjuryFitMod) * 1.20)) / 300)
               );
               if (seededRng(currentSeed, nextMinute, 5200) < fkGoalProb) {
                 nextActionContributions = MatchActionService.mergeContributions(nextActionContributions, { [fkTaker.id]: 0.55 });

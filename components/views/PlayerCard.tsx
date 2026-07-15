@@ -559,7 +559,7 @@ export const PlayerCard: React.FC = () => {
                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-white/60">Profil Zawodnika PZPN</span>
               </div>
-              {player.isOnTransferList && (
+              {player.isOnTransferList && !hasPendingTransfer && (
                 <div className="mb-4 animate-pulse">
                    <span className="bg-amber-500 text-black text-[10px] font-black px-4 py-1 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.5)]">
                      LISTA TRANSFEROWA
@@ -573,7 +573,7 @@ export const PlayerCard: React.FC = () => {
                    </span>
                 </div>
               )}
-              {player.isUntouchable && !player.isOnTransferList && (
+              {player.isUntouchable && !player.isOnTransferList && !hasPendingTransfer && (
                 <div className="mb-4">
                    <span className="bg-rose-600 text-white text-[10px] font-black italic uppercase tracking-tighter px-4 py-1 rounded-full shadow-[0_0_20px_rgba(225,29,72,0.45)]">
                      NIE NA SPRZEDAŻ

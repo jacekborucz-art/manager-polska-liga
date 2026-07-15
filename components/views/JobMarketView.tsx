@@ -254,8 +254,8 @@ export const JobMarketView: React.FC = () => {
   const transferListedPlayers = useMemo(() => {
     if (contractStatusFilter === 'FREE_AGENT') return [];
     let list = visibleMarketPlayers.filter(p => p.clubId !== 'FREE_AGENTS');
-    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
-    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => !p.isOnTransferList);
+    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList && !p.transferPendingClubId);
+    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => !p.isOnTransferList || !!p.transferPendingClubId);
     list = list.filter(matchesCommonPlayerFilters);
     const transferQuery = searchTermTransfer.trim().toLowerCase();
     if (transferQuery) {
@@ -293,8 +293,8 @@ export const JobMarketView: React.FC = () => {
   const filteredPlayerResults = useMemo(() => {
     let list = visibleMarketPlayers;
     if (contractStatusFilter === 'FREE_AGENT') list = list.filter(p => p.clubId === 'FREE_AGENTS');
-    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => p.clubId !== 'FREE_AGENTS' && !p.isOnTransferList);
-    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList);
+    if (contractStatusFilter === 'CONTRACT') list = list.filter(p => p.clubId !== 'FREE_AGENTS' && (!p.isOnTransferList || !!p.transferPendingClubId));
+    if (contractStatusFilter === 'TRANSFER_LIST') list = list.filter(p => p.isOnTransferList && !p.transferPendingClubId);
     list = list.filter(matchesCommonPlayerFilters);
     return list.sort((a, b) => b.overallRating - a.overallRating);
   }, [visibleMarketPlayers, contractStatusFilter, searchTermPlayers, posFilter, filters, playerNationalityFilter]);

@@ -60,6 +60,9 @@ const hasClinched = (
   table: { pts: number; played: number }[],
 ): boolean => {
   if (position >= 2) return false;
+  const groupComplete = table.length > 0 && table.every(row => row.played >= 6);
+  if (groupComplete) return true;
+
   const teamPts = table[position].pts;
   for (let i = 2; i < table.length; i++) {
     const rival = table[i];

@@ -2612,6 +2612,12 @@ processAiRecruitment: (
               transferPendingSalary: contractInput.salary,
               transferPendingBonus: contractInput.bonus,
               transferPendingContractYears: contractInput.years,
+              interestedClubs: [],
+              isOnTransferList: false,
+              transferListPrice: undefined,
+              transferListDemandUntil: null,
+              transferListRemovalPromiseDeadline: null,
+              isAvailableForLoan: false,
             }
           : p
       );
@@ -2869,6 +2875,12 @@ processAiRecruitment: (
               transferPendingSalary: contractInput.salary,
               transferPendingBonus: contractInput.bonus,
               transferPendingContractYears: contractInput.years,
+              interestedClubs: [],
+              isOnTransferList: false,
+              transferListPrice: undefined,
+              transferListDemandUntil: null,
+              transferListRemovalPromiseDeadline: null,
+              isAvailableForLoan: false,
               retirementLockUntil: gulfVeteranStarOffer?.newEndDate ?? p.retirementLockUntil,
             }
           : p
@@ -3031,6 +3043,10 @@ processAiRecruitment: (
                   transferPendingContractYears: offer.years,
                   interestedClubs: [],
                   isOnTransferList: false,
+                  transferListPrice: undefined,
+                  transferListDemandUntil: null,
+                  transferListRemovalPromiseDeadline: null,
+                  isAvailableForLoan: false,
                 }
               : p
           );

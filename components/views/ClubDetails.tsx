@@ -504,7 +504,7 @@ export const ClubDetails: React.FC = () => {
                 {player.lastName ? <>{player.lastName} <span className="opacity-40 font-medium text-[10px]">{player.firstName}</span></> : player.firstName}
               </span>
 
-{player.isOnTransferList && (
+{player.isOnTransferList && !player.transferPendingClubId && (
         <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[7px] font-black rounded-sm border border-amber-500/30 shadow-sm animate-pulse">
           LISTA
         </span>

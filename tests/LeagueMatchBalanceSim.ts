@@ -864,7 +864,8 @@ const simulateMatch = (sc: Scenario, matchIdx: number) => {
       Math.max(0.050, fatiguedShotFloor - 0.010),
       Math.min(0.155,
         (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) *
-        clampNumber(activePlayerFormChanceMultiplier, 0.66, 1.34)
+        // [SYNC 2026-07-15] MatchLiveView.tsx zmienił clamp 0.66–1.34 → 0.82–1.18 (commit d66ad6f)
+        clampNumber(activePlayerFormChanceMultiplier, 0.82, 1.18)
       )
     );
 
@@ -1227,6 +1228,12 @@ const SCENARIOS: Scenario[] = [
     desc: 'Forma/morale: gracz form 62 + morale 68 (trening/morale zarządzane) vs AI form 44 + morale 50 (brak trainingFocus)',
     aiBrain: true, aiBriefing: true, userBriefingType: null,
     userForm: 62, userMorale: 68, aiForm: 44, aiMorale: 50,
+  },
+  {
+    id: 'S6r-realistic-gap',
+    desc: 'Realistyczna luka PO fixie (AI też ma trainingFocus): gracz form 56 + morale 68 vs AI form 52 + morale 50',
+    aiBrain: true, aiBriefing: true, userBriefingType: null,
+    userForm: 56, userMorale: 68, aiForm: 52, aiMorale: 50,
   },
   {
     id: 'S7-all-in',

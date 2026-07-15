@@ -1472,8 +1472,8 @@ var PlayerFormService = {
       }
     }
     score += getOutputBonus(player, stats);
-    score += clamp4(((player.morale ?? 50) - 50) * 0.18, -9, 9);
-    if (matches > 0 || recentAverage !== null) score += player.trainingFocus ? 4 : -3;
+    score += clamp4(((player.morale ?? 50) - 50) * 0.1, -5, 5);
+    if (matches > 0 || recentAverage !== null) score += player.trainingFocus ? 2 : 0;
     if (player.health?.status === "INJURED" /* INJURED */) score -= 18;
     if ((player.condition ?? 100) < 60) score -= 8;
     if ((player.fatigueDebt ?? 0) > 55) score -= 6;
@@ -1581,13 +1581,9 @@ var getPlayersByIds = (players, ids) => {
   return ids.map((id) => id ? playerMap.get(id) : void 0).filter((player) => !!player);
 };
 var getBaseFormMultiplier = (form) => {
-  if (form <= 10) return 0.62 + form * 8e-3;
-  if (form <= 25) return 0.7 + (form - 10) * 8e-3;
-  if (form <= 40) return 0.82 + (form - 25) * 87e-4;
-  if (form <= 60) return 0.95 + (form - 40) * 5e-3;
-  if (form <= 75) return 1.05 + (form - 60) * 6e-3;
-  if (form <= 90) return 1.14 + (form - 75) * 53e-4;
-  return 1.22 + (form - 90) * 3e-3;
+  const centered = (clamp5(form, 0, 100) - 50) / 50;
+  const curve = Math.sign(centered) * Math.pow(Math.abs(centered), 1.18);
+  return clamp5(1 + curve * 0.18, 0.82, 1.18);
 };
 var getTeamQuality = (players, lineup) => {
   const starters = getPlayersByIds(players, lineup.startingXI);
@@ -1618,8 +1614,8 @@ var adjustForQualityGap = (ownMultiplier, ownQuality, opponentQuality) => {
   return ownMultiplier;
 };
 var getDefenseLeakMultiplier = (opponentMultiplier) => {
-  if (opponentMultiplier < 1) return 1 + (1 - opponentMultiplier) * 0.72;
-  return 1 - (opponentMultiplier - 1) * 0.28;
+  if (opponentMultiplier < 1) return 1 + (1 - opponentMultiplier) * 0.35;
+  return 1 - (opponentMultiplier - 1) * 0.16;
 };
 var TeamFormImpactService = {
   getPlayerForm,
@@ -1636,8 +1632,8 @@ var TeamFormImpactService = {
     const awayForm = getTeamForm(awayPlayers, awayLineup);
     const homePerformance = adjustForQualityGap(getBaseFormMultiplier(homeForm), homeQuality, awayQuality);
     const awayPerformance = adjustForQualityGap(getBaseFormMultiplier(awayForm), awayQuality, homeQuality);
-    const homeGoalChanceMultiplier = clamp5(homePerformance * getDefenseLeakMultiplier(awayPerformance), 0.42, 1.78);
-    const awayGoalChanceMultiplier = clamp5(awayPerformance * getDefenseLeakMultiplier(homePerformance), 0.42, 1.78);
+    const homeGoalChanceMultiplier = clamp5(homePerformance * getDefenseLeakMultiplier(awayPerformance), 0.72, 1.32);
+    const awayGoalChanceMultiplier = clamp5(awayPerformance * getDefenseLeakMultiplier(homePerformance), 0.72, 1.32);
     return {
       home: {
         teamForm: homeForm,
@@ -4220,19 +4216,19 @@ var PlayerMoraleService = {
   },
   getMatchMultiplier: (player) => {
     const morale = player.morale ?? 50;
-    if (morale <= 19) return 0.92;
-    if (morale <= 39) return 0.96;
+    if (morale <= 19) return 0.95;
+    if (morale <= 39) return 0.98;
     if (morale <= 59) return 1;
-    if (morale <= 79) return 1.03;
-    return 1.06;
+    if (morale <= 79) return 1.015;
+    return 1.03;
   },
   getMatchContributionMultiplier: (player) => {
     const morale = player.morale ?? 50;
-    if (morale <= 19) return 0.22;
-    if (morale <= 39) return 0.55;
+    if (morale <= 19) return 0.78;
+    if (morale <= 39) return 0.9;
     if (morale <= 59) return 1;
-    if (morale <= 79) return 1.18;
-    return 1.35;
+    if (morale <= 79) return 1.06;
+    return 1.12;
   },
   getLineupReadinessMultiplier: (player) => {
     const morale = player.morale ?? 50;
@@ -8191,7 +8187,8 @@ var simulateMatch = (sc, matchIdx) => {
       Math.max(0.05, fatiguedShotFloor - 0.01),
       Math.min(
         0.155,
-        (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) * clampNumber(activePlayerFormChanceMultiplier, 0.66, 1.34)
+        (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) * // [SYNC 2026-07-15] MatchLiveView.tsx zmienił clamp 0.66–1.34 → 0.82–1.18 (commit d66ad6f)
+        clampNumber(activePlayerFormChanceMultiplier, 0.82, 1.18)
       )
     );
     const statShotGapDrag = activeShotsSoFar >= 14 ? Math.min(0.035, (activeShotsSoFar - 13) * 7e-3) : 0;
@@ -8571,6 +8568,17 @@ var SCENARIOS = [
     userForm: 62,
     userMorale: 68,
     aiForm: 44,
+    aiMorale: 50
+  },
+  {
+    id: "S6r-realistic-gap",
+    desc: "Realistyczna luka PO fixie (AI te\u017C ma trainingFocus): gracz form 56 + morale 68 vs AI form 52 + morale 50",
+    aiBrain: true,
+    aiBriefing: true,
+    userBriefingType: null,
+    userForm: 56,
+    userMorale: 68,
+    aiForm: 52,
     aiMorale: 50
   },
   {

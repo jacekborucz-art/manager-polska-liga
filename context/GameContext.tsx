@@ -11600,6 +11600,10 @@ const finalResult: SimulationOutput = {
                       transferPendingBonus: bonus,
                       transferPendingContractYears: years,
                       interestedClubs: [],
+                      isOnTransferList: false,
+                      transferListPrice: undefined,
+                      transferListDemandUntil: null,
+                      transferListRemovalPromiseDeadline: null,
                       isAvailableForLoan: false,
                     }
                   : player
@@ -15123,6 +15127,9 @@ const finalResult: SimulationOutput = {
                 transferReportDate: agreedOffer.effectiveDate || player!.contractEndDate,
                 interestedClubs: [],
                 isOnTransferList: false,
+                transferListPrice: undefined,
+                transferListDemandUntil: null,
+                transferListRemovalPromiseDeadline: null,
                 isAvailableForLoan: false,
               }
             : p
@@ -16177,6 +16184,9 @@ const finalResult: SimulationOutput = {
                 transferPendingContractYears: contractInput.years,
                 interestedClubs: [],
                 isOnTransferList: false,
+                transferListPrice: undefined,
+                transferListDemandUntil: null,
+                transferListRemovalPromiseDeadline: null,
                 isAvailableForLoan: false,
               }
             : player
