@@ -4,7 +4,7 @@ import ekstraklasaBgImg from '../../Graphic/themes/ekstraklasa.png';
 import { useGame } from '../../context/GameContext';
 import { ViewState, LeagueLevel, Club } from '../../types';
 import { Button } from '../ui/Button';
-import InternationalView from './InternationalView';
+import InternationalView, { InternationalTournamentId } from './InternationalView';
 
 const _persisted = {
   selectedLeagueId: 'L_PL_1' as string,
@@ -27,14 +27,22 @@ const hasClinchedAboveBoundary = (club: Club, boundaryClub?: Club) => {
   return boundaryCannotGainMorePoints && club.stats.points >= boundaryClub.stats.points;
 };
 
-export const LeagueTables: React.FC = () => {
+interface LeagueTablesProps {
+  initialViewMode?: 'TABLE' | 'SCHEDULE' | 'INTERNATIONAL';
+  initialInternationalTournament?: InternationalTournamentId;
+}
+
+export const LeagueTables: React.FC<LeagueTablesProps> = ({
+  initialViewMode,
+  initialInternationalTournament,
+}) => {
   const { leagues, clubs, leagueSchedules, navigateTo, viewClubDetails, userTeamId, seasonTemplate } = useGame();
 
   const myClub = clubs.find(c => c.id === userTeamId);
   const displayLeagues = leagues.filter(l => l.level !== LeagueLevel.TIER_4_HIDDEN && l.level !== LeagueLevel.EUROPEAN);
   
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(_persisted.selectedLeagueId);
-  const [viewMode, setViewMode] = useState<'TABLE' | 'SCHEDULE' | 'INTERNATIONAL'>(_persisted.viewMode);
+  const [viewMode, setViewMode] = useState<'TABLE' | 'SCHEDULE' | 'INTERNATIONAL'>(initialViewMode ?? _persisted.viewMode);
   const [selectedRound, setSelectedRound] = useState<number>(_persisted.selectedRound);
 
   const selectedLeague = displayLeagues.find(l => l.id === selectedLeagueId);
@@ -208,7 +216,9 @@ export const LeagueTables: React.FC = () => {
       <div className="flex-1 overflow-hidden flex flex-col gap-4">
 
         {/* Zakładka Miedzynarodowe */}
-        {viewMode === 'INTERNATIONAL' && <InternationalView />}
+        {viewMode === 'INTERNATIONAL' && (
+          <InternationalView initialTournament={initialInternationalTournament} />
+        )}
 
         {viewMode !== 'INTERNATIONAL' && (viewMode === 'TABLE' ? (
           <div className="flex-1 bg-slate-900/30 rounded-[40px] border border-white/5 shadow-2xl flex flex-col overflow-hidden">

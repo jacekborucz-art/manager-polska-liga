@@ -8,8 +8,10 @@ import polskaBgImg from '../../Graphic/themes/polska.png';
 const SUBHEADING = 'text-[10px] font-black uppercase tracking-[0.25em] text-slate-500';
 const POLAND_GROUP_LABEL = 'Grupa G';
 
+export type InternationalTournamentId = 'nationsLeague' | 'wcqDynamic' | 'euroQualifiers' | 'wcq2026';
+
 interface Tournament {
-  id: string;
+  id: InternationalTournamentId;
   label: string;
 }
 
@@ -43,7 +45,7 @@ interface GroupTeam {
 const TOURNAMENTS: Tournament[] = [
   { id: 'nationsLeague', label: 'Liga Narodów' },
   { id: 'wcqDynamic', label: 'Eliminacje MŚ' },
-  { id: 'euroq2028', label: 'Eliminacje EURO 2028' },
+  { id: 'euroQualifiers', label: 'Eliminacje EURO' },
   { id: 'wcq2026', label: 'Kwalifikacje do MŚ 2026' },
 ];
 
@@ -679,9 +681,13 @@ const EuroPlayoffCard: React.FC<{
   );
 };
 
-const InternationalView: React.FC = () => {
+interface InternationalViewProps {
+  initialTournament?: InternationalTournamentId;
+}
+
+const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament = 'wcq2026' }) => {
   const { nationalTeams, currentDate, lastNTMatchResults, wcqPlayoffState, euroQualifiersState, worldCupQualifiersState, nationsLeagueState, nationsLeagueArchive, navigateTo } = useGame();
-  const [activeTournament, setActiveTournament] = useState<string>('wcq2026');
+  const [activeTournament, setActiveTournament] = useState<InternationalTournamentId>(initialTournament);
   const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
   const [activeEuroGroup, setActiveEuroGroup] = useState<string>('A');
@@ -940,7 +946,7 @@ const InternationalView: React.FC = () => {
                 : 'border-transparent text-slate-500 hover:text-slate-300'
             }`}
           >
-            {tournament.id === 'euroq2028' ? euroQualifiersLabel : tournament.id === 'wcqDynamic' ? worldCupQualifiersLabel : tournament.label}
+            {tournament.id === 'euroQualifiers' ? euroQualifiersLabel : tournament.id === 'wcqDynamic' ? worldCupQualifiersLabel : tournament.label}
           </button>
         ))}
       </div>
@@ -1420,7 +1426,7 @@ const InternationalView: React.FC = () => {
         </div>
       )}
 
-      {activeTournament === 'euroq2028' && (
+      {activeTournament === 'euroQualifiers' && (
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden px-6 py-6">
           {!euroQualifiersState?.drawCompleted ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">

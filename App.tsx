@@ -391,6 +391,15 @@ case ViewState.POLISH_CUP_BRACKET:
             <LeagueTables />
           </div>
         );
+      case ViewState.EURO_QUALIFIERS:
+        return (
+          <div className="min-h-screen bg-slate-900 p-6">
+            <LeagueTables
+              initialViewMode="INTERNATIONAL"
+              initialInternationalTournament="euroQualifiers"
+            />
+          </div>
+        );
       case ViewState.LEAGUE_STATS:
         return <LeagueStatsView />;
       case ViewState.CALENDAR_DEBUG:

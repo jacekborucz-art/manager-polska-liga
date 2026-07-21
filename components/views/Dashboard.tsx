@@ -217,7 +217,8 @@ const boardConfidence = useMemo(() => {
   }, []);
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    const shortYear = String(date.getFullYear()).slice(-2);
+    return `${date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} '${shortYear}`;
   };
 
   const lineupValidation = useMemo(() => {
@@ -1176,13 +1177,21 @@ const boardConfidence = useMemo(() => {
 
         <div className="relative z-10 px-12 h-full flex items-center justify-between gap-10">
            <div className="flex-1">
-              <div className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4 backdrop-blur-md">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                 <span className="text-[9px] font-black uppercase tracking-[0.3em] text-emerald-400">Centrum Klubowe</span>
+              <button
+                type="button"
+                onClick={() => navigateTo(ViewState.CALENDAR_DEBUG)}
+                disabled={clubManagementDisabled}
+                className="group/date mb-3 block text-left disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Otwórz kalendarz"
+              >
+                <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-white leading-none drop-shadow-2xl transition-all duration-300 group-hover/date:text-cyan-100 group-hover/date:translate-x-1">
+                   {formatDate(currentDate)}
+                </h2>
+              </button>
+              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4 backdrop-blur-md">
+                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,1)]" />
+                 <span className="text-xl font-black italic uppercase tracking-tighter text-emerald-400">Centrum Klubowe</span>
               </div>
-              <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white leading-none drop-shadow-2xl">
-                 {formatDate(currentDate)}
-              </h2>
            </div>
 
            {nextEvent && nextEvent.opponentClubId && (() => {
@@ -1335,7 +1344,7 @@ const boardConfidence = useMemo(() => {
 
            {euroQualifiersState && !euroQualifiersState.completed && (
              <button
-               onClick={() => navigateTo(ViewState.LEAGUE_TABLES)}
+               onClick={() => navigateTo(ViewState.EURO_QUALIFIERS)}
                disabled={isJumping}
                className="hidden lg:flex min-w-[260px] h-[100px] flex-col items-center justify-center rounded-[30px] border border-blue-400/30 bg-blue-500/15 px-8 text-center shadow-[0_16px_45px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-300/60 hover:bg-blue-400/20 disabled:cursor-not-allowed disabled:opacity-50"
              >
