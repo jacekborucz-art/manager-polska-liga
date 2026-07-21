@@ -111,6 +111,7 @@ import { AiTransferDecisionService } from '../services/AiTransferDecisionService
 import { BackgroundMatchProcessorCL } from '../services/BackgroundMatchProcessorCL';
 import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
 import { MatchHistoryService } from '../services/MatchHistoryService';
+import { SaveArchiveService } from '../services/SaveArchiveService';
 import { ScoutAssistantService } from '../services/ScoutAssistantService';
 import { ChampionshipHistoryService } from '../data/championship_history';
 import { TransferBuyerLogicService } from '../services/TransferBuyerLogicService';
@@ -3011,7 +3012,25 @@ if (userTeamId) {
     setActiveConfGroupDraw(null);
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
-  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile]);
+
+    // Retencja zapisu: pełne szczegóły zachowujemy wyłącznie dla pięciu ostatnich sezonów.
+    const nextSeasonNumber = seasonNumber + 1;
+    const nextSeasonStartDate = new Date(newYear, 6, 1);
+    const firstDetailedSeason = SaveArchiveService.getFirstDetailedSeason(nextSeasonNumber);
+    MatchHistoryService.archiveBeforeSeason(firstDetailedSeason);
+    setMessages(prev => SaveArchiveService.pruneMessages(prev, nextSeasonStartDate));
+    setReserveFixtures([]);
+    setReserveMatchResults(prev => SaveArchiveService.pruneReserveResults(prev, nextSeasonNumber));
+    setAiFriendlyPairs(prev => SaveArchiveService.pruneAiFriendlyPairs(prev, nextSeasonStartDate));
+    setAiFriendlyReports(prev => SaveArchiveService.pruneAiFriendlyReports(prev, nextSeasonStartDate));
+    if (firstDetailedSeason > 1) {
+      showGameNotification({
+        title: 'Archiwizacja zakończona',
+        message: `Dane sezonu ${firstDetailedSeason - 1} zostały skompresowane. Wyniki i najważniejsze informacje historyczne pozostają dostępne.`,
+        tone: 'info',
+      });
+    }
+  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, showGameNotification]);
 
   const getSaveState = (): SaveState => ({
     version: SAVE_VERSION,
@@ -3024,7 +3043,7 @@ if (userTeamId) {
     reserves,
     reserveCoachId,
     reserveFixtures,
-    reserveMatchResults,
+    reserveMatchResults: SaveArchiveService.pruneReserveResults(reserveMatchResults, seasonNumber),
     academy,
     scoutPool,
     scoutMarket,
@@ -3043,7 +3062,7 @@ if (userTeamId) {
     managerProfile,
     managerJobOffers,
     seasonNumber,
-    messages,
+    messages: SaveArchiveService.pruneMessages(messages, currentDate),
     mediaRelationships,
     sentUnfriendlyPressMonths,
     sentFriendlyPressMonths,
@@ -3099,15 +3118,15 @@ if (userTeamId) {
     lastUEFASuperCupResult,
     confR2QPolishTeamIds,
     supercupWinners,
-    matchHistory: MatchHistoryService.getAll(),
+    matchHistory: MatchHistoryService.getForSave(SaveArchiveService.getFirstDetailedSeason(seasonNumber)),
     championshipHistory: ChampionshipHistoryService.getAll(),
     winterCampInvitePending,
     winterCampProgramPending,
     summerCampInvitePending,
     summerCampProgramPending,
     lastNTMatchResults,
-    aiFriendlyPairs,
-    aiFriendlyReports,
+    aiFriendlyPairs: SaveArchiveService.pruneAiFriendlyPairs(aiFriendlyPairs, currentDate),
+    aiFriendlyReports: SaveArchiveService.pruneAiFriendlyReports(aiFriendlyReports, currentDate),
     pzpnDisciplinaryEvents,
     sentMailIds: Array.from(sentMailIdsRef.current),
     lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
@@ -3195,6 +3214,15 @@ if (userTeamId) {
       loadedCoaches,
       data.players ?? {}
     );
+    const retainedMessages = SaveArchiveService.pruneMessages(data.messages ?? [], data.currentDate);
+    const retainedReserveResults = SaveArchiveService.pruneReserveResults(data.reserveMatchResults ?? [], data.seasonNumber);
+    const retainedAiFriendlyPairs = SaveArchiveService.pruneAiFriendlyPairs(data.aiFriendlyPairs ?? [], data.currentDate);
+    const retainedAiFriendlyReports = SaveArchiveService.pruneAiFriendlyReports(data.aiFriendlyReports ?? [], data.currentDate);
+    const removedArchiveItems =
+      (data.messages?.length ?? 0) - retainedMessages.length +
+      (data.reserveMatchResults?.length ?? 0) - retainedReserveResults.length +
+      (data.aiFriendlyPairs?.length ?? 0) - retainedAiFriendlyPairs.length +
+      (data.aiFriendlyReports?.length ?? 0) - retainedAiFriendlyReports.length;
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
@@ -3204,7 +3232,7 @@ if (userTeamId) {
     setReserves(data.reserves);
     setReserveCoachId(data.reserveCoachId);
     setReserveFixtures(data.reserveFixtures ?? []);
-    setReserveMatchResults(data.reserveMatchResults ?? []);
+    setReserveMatchResults(retainedReserveResults);
     setAcademy(data.academy);
     setScoutPool(data.scoutPool);
     setScoutMarket(data.scoutMarket);
@@ -3223,7 +3251,7 @@ if (userTeamId) {
     setManagerProfile(data.managerProfile);
     setManagerJobOffers(data.managerJobOffers ?? []);
     setSeasonNumber(data.seasonNumber);
-    setMessages(data.messages);
+    setMessages(retainedMessages);
     setMediaRelationships(data.mediaRelationships ?? {});
     setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
     setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
@@ -3284,8 +3312,8 @@ if (userTeamId) {
     setSummerCampInvitePending(data.summerCampInvitePending ?? false);
     setSummerCampProgramPending(data.summerCampProgramPending ?? false);
     setLastNTMatchResults(data.lastNTMatchResults ?? null);
-    setAiFriendlyPairs(data.aiFriendlyPairs || []);
-    setAiFriendlyReports(data.aiFriendlyReports || []);
+    setAiFriendlyPairs(retainedAiFriendlyPairs);
+    setAiFriendlyReports(retainedAiFriendlyReports);
     setPzpnDisciplinaryEvents((data.pzpnDisciplinaryEvents || []) as PzpnDisciplinaryEvent[]);
     const restoredSentMailIds = data.sentMailIds && data.sentMailIds.length > 0
       ? data.sentMailIds
@@ -3294,9 +3322,17 @@ if (userTeamId) {
     lastProcessedLeagueDateRef.current = data.lastProcessedLeagueDate ?? null;
     MatchHistoryService.clear();
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
+    const archivedMatches = MatchHistoryService.archiveBeforeSeason(SaveArchiveService.getFirstDetailedSeason(data.seasonNumber));
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.restore(data.championshipHistory || []);
     setViewState(ViewState.DASHBOARD);
+    if (archivedMatches + removedArchiveItems > 0) {
+      showGameNotification({
+        title: 'Zapis zoptymalizowany',
+        message: `Podczas wczytywania zarchiwizowano ${archivedMatches + removedArchiveItems} starszych elementów. Najważniejsze wyniki historyczne zostały zachowane.`,
+        tone: 'info',
+      });
+    }
   };
 
   const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState }): { success: boolean; message: string } => {

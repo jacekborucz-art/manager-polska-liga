@@ -2476,6 +2476,8 @@ export interface MatchHistoryEntry {
   matchId: string;
   date: string;
   season: number; 
+  /** Starszy raport zachowany wyłącznie jako lekki wynik historyczny. */
+  archived?: boolean;
   competition: string;
   homeTeamId: string;
   awayTeamId: string;

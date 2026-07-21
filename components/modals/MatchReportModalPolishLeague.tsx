@@ -685,6 +685,14 @@ export const MatchReportModalPolishLeague: React.FC<MatchReportModalProps> = ({ 
           <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">×</button>
         </div>
 
+        {match.archived && (
+          <div className="border-b border-amber-400/20 bg-amber-400/10 px-8 py-3 text-center">
+            <span className="font-black italic uppercase tracking-tighter text-[10px] text-amber-200">
+              Raport zarchiwizowany — zachowano wynik i podstawowe informacje o meczu
+            </span>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {/* Match conditions row */}
           <div className="px-8 py-3 flex items-center gap-6 border-b border-white/5 flex-wrap">

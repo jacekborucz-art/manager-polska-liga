@@ -3,7 +3,7 @@ import { FinanceService } from './FinanceService';
 import { ManagerExperienceService } from './ManagerExperienceService';
 import { PlayerFormService } from './PlayerFormService';
 
-export const SAVE_VERSION = '2.0';
+export const SAVE_VERSION = '3.0';
 
 export interface SaveState {
   version: string;
@@ -103,6 +103,13 @@ export interface SaveState {
   pendingPressArticles?: { mail: import('../types').MailMessage; deliveryDate: string }[];
   completedPressConferenceFixtureIds?: string[];
   pressConferenceEffects?: Record<string, import('./PreMatchPressConferenceService').PressConferenceMatchEffect>;
+}
+
+export interface SaveExportResult {
+  compressed: boolean;
+  fileName: string;
+  originalBytes: number;
+  savedBytes: number;
 }
 
 const DEFAULT_START_DATE = new Date('2025-07-01');
@@ -362,6 +369,8 @@ function normalizeMatchHistory(matchHistory: unknown): any[] {
   return asArray(matchHistory).map((match: any) => ({
     ...match,
     date: asDateString(match?.date),
+    goals: asArray(match?.goals),
+    cards: asArray(match?.cards),
   }));
 }
 
@@ -747,19 +756,48 @@ function normalizeSaveState(data: SaveState): SaveState {
   };
 }
 
-export function exportSaveToFile(state: SaveState): void {
+export async function exportSaveToFile(state: SaveState): Promise<SaveExportResult> {
   const json = JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: new Date().toISOString() });
-  const blob = new Blob([json], { type: 'application/json' });
+  const originalBytes = new TextEncoder().encode(json).byteLength;
+  let blob = new Blob([json], { type: 'application/json' });
+  let extension = 'json';
+
+  if (typeof CompressionStream !== 'undefined') {
+    const compressedStream = blob.stream().pipeThrough(new CompressionStream('gzip'));
+    blob = new Blob([await new Response(compressedStream).arrayBuffer()], { type: 'application/gzip' });
+    extension = 'json.gz';
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `futbol_manager_${new Date().toISOString().slice(0, 10)}.json`;
+  const fileName = `futbol_manager_${new Date().toISOString().slice(0, 10)}.${extension}`;
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(url);
+  return {
+    compressed: extension === 'json.gz',
+    fileName,
+    originalBytes,
+    savedBytes: blob.size,
+  };
 }
 
 export async function importSaveFromFile(file: File): Promise<SaveState> {
-  const text = await file.text();
+  const source = new Uint8Array(await file.arrayBuffer());
+  const isGzip = source.length >= 2 && source[0] === 0x1f && source[1] === 0x8b;
+  let text: string;
+
+  if (isGzip) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('Ta przeglądarka nie obsługuje skompresowanych zapisów GZIP.');
+    }
+    const decompressedStream = new Blob([source]).stream().pipeThrough(new DecompressionStream('gzip'));
+    text = await new Response(decompressedStream).text();
+  } else {
+    text = new TextDecoder().decode(source);
+  }
+
   const rawData = JSON.parse(text, reviveDate) as SaveState;
   const data = normalizeSaveState(rawData);
   if (

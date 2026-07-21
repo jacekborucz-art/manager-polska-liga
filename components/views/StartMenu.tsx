@@ -416,7 +416,7 @@ export const StartMenu: React.FC = () => {
           </div>
 
           <input ref={fullPackInputRef} type="file" accept=".json" className="hidden" onChange={handleFullPackLoad} />
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileLoad} />
+          <input ref={fileInputRef} type="file" accept=".json,.gz,.json.gz" className="hidden" onChange={handleFileLoad} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6 w-full">
             {menuItems.map((item, i) => (

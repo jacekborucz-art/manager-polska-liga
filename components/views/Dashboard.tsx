@@ -79,6 +79,7 @@ export const Dashboard: React.FC = () => {
     euroQualifiersState,
     seasonCelebration,
     clearSeasonCelebration,
+    showGameNotification,
   } = useGame();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,7 +96,33 @@ export const Dashboard: React.FC = () => {
   const [isSummerCampLocationOpen, setIsSummerCampLocationOpen] = useState(false);
   const [isSummerCampProgramOpen, setIsSummerCampProgramOpen] = useState(false);
   const [activeHint, setActiveHint] = useState<string | null>(null);
-  const handleSaveGame = () => { exportSaveToFile(getSaveState()); };
+  const handleSaveGame = async () => {
+    showGameNotification({
+      title: 'Kompresowanie zapisu',
+      message: 'Trwa przygotowywanie i kompresowanie pliku zapisu gry.',
+      tone: 'info',
+    });
+
+    try {
+      const result = await exportSaveToFile(getSaveState());
+      const formatSize = (bytes: number) => bytes >= 1024 * 1024
+        ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+      showGameNotification({
+        title: result.compressed ? 'Zapis skompresowany' : 'Gra zapisana',
+        message: result.compressed
+          ? `Plik ${result.fileName} został pobrany. Rozmiar zmniejszono z ${formatSize(result.originalBytes)} do ${formatSize(result.savedBytes)}.`
+          : `Plik ${result.fileName} został pobrany. Ta przeglądarka zapisała go bez kompresji GZIP.`,
+        tone: 'success',
+      });
+    } catch {
+      showGameNotification({
+        title: 'Błąd zapisu',
+        message: 'Nie udało się przygotować skompresowanego pliku zapisu gry.',
+        tone: 'error',
+      });
+    }
+  };
 
   const formatMailDate = (dateValue: MailMessage['date'] | string | number | null | undefined): string => {
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue ?? currentDate);
@@ -605,6 +632,35 @@ const boardConfidence = useMemo(() => {
       case MailType.STAFF: return 'bg-blue-600/20 text-blue-400 border-blue-500/20';
       case MailType.MEDIA: return 'bg-emerald-600/20 text-emerald-400 border-emerald-500/20';
       default: return 'bg-slate-600/20 text-slate-400 border-slate-500/20';
+    }
+  };
+
+  const getMailActionLabel = (mail: MailMessage): string | null => {
+    switch (mail.metadata?.type) {
+      case 'PLAYER_MORALE_REQUEST':
+      case 'INTERVIEW_REQUEST':
+        return 'Odpowiedz';
+      case 'SPORTING_DIRECTOR_OBJECTIVE': {
+        const objective = myClub?.sportingDirectorObjective;
+        return objective?.status === 'ACTIVE' && objective.id === mail.metadata.objectiveId
+          ? 'Odpowiedz'
+          : null;
+      }
+      case 'WINTER_CAMP_INVITE': {
+        const expiryDate = new Date(mail.metadata.expiryDate);
+        expiryDate.setHours(23, 59, 59, 999);
+        const alreadyChosen =
+          myClub?.winterCamp?.location !== null && myClub?.winterCamp?.location !== undefined ||
+          !!myClub?.winterCamp?.isDeclined;
+        return currentDate <= expiryDate && !alreadyChosen ? 'Wymaga decyzji' : null;
+      }
+      case 'INCOMING_TRANSFER_OFFER':
+      case 'CONTRACT_OFFER':
+      case 'MANAGER_JOB_OFFER':
+      case 'LOAN_PLAYTIME_WARNING':
+        return 'Wymaga decyzji';
+      default:
+        return null;
     }
   };
 
@@ -1640,12 +1696,18 @@ const boardConfidence = useMemo(() => {
               
                <div className="h-[700px] overflow-y-auto custom-scrollbar p-5 space-y-2.5">
                  {activeMailboxMessages.length > 0 ? (
-                   activeMailboxMessages.map(mail => (
-                    <div 
+                   activeMailboxMessages.map(mail => {
+                    const actionLabel = getMailActionLabel(mail);
+                    return (
+                    <div
                       key={mail.id}
                       onClick={() => setSelectedMail(mail)}
                       className={`group relative min-h-[84px] p-4 rounded-[22px] border transition-all cursor-pointer overflow-hidden shadow-lg
-                        ${mail.isRead ? 'bg-white/[0.025] border-white/[0.05] opacity-65' : 'bg-white/[0.055] border-white/[0.10] hover:border-white/20 hover:bg-white/[0.085]'}
+                        ${actionLabel
+                          ? 'bg-amber-400/[0.07] border-amber-400/30 hover:border-amber-300/55 hover:bg-amber-400/[0.11]'
+                          : mail.isRead
+                            ? 'bg-white/[0.025] border-white/[0.05] opacity-65'
+                            : 'bg-white/[0.055] border-white/[0.10] hover:border-white/20 hover:bg-white/[0.085]'}
                       `}
                     >
                        <svg className="absolute inset-0 h-full w-full opacity-0 transition-opacity group-hover:opacity-100" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
@@ -1661,10 +1723,17 @@ const boardConfidence = useMemo(() => {
                           </div>
                           <div className="flex-1 min-w-0">
                              <div className="flex justify-between items-center gap-4 mb-1">
-                                <span className={`text-[9px] truncate font-black italic uppercase tracking-tighter ${mail.isRead ? 'text-slate-500' : 'text-blue-300'}`}>
-                                   {mail.sender.toUpperCase()}
-                                </span>
-                                <span className="text-[8px] text-slate-600 shrink-0 font-black italic uppercase tracking-tighter">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className={`text-[9px] truncate font-black italic uppercase tracking-tighter ${mail.isRead && !actionLabel ? 'text-slate-500' : 'text-blue-300'}`}>
+                                     {mail.sender.toUpperCase()}
+                                  </span>
+                                  {actionLabel && (
+                                    <span className="shrink-0 rounded-full border border-amber-300/35 bg-amber-400/15 px-2 py-0.5 text-[8px] text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.12)] font-black italic uppercase tracking-tighter">
+                                      {actionLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-500 shrink-0 font-black italic uppercase tracking-tighter">
                                    {formatMailDate(mail.date)}
                                 </span>
                              </div>
@@ -1676,11 +1745,12 @@ const boardConfidence = useMemo(() => {
                              </p>
                           </div>
                           {!mail.isRead && (
-                             <div className="w-2 h-12 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,1)]" />
+                             <div className={`w-2 h-12 rounded-full ${actionLabel ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.9)]' : 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,1)]'}`} />
                           )}
                        </div>
                     </div>
-                   ))
+                    );
+                   })
                  ) : (
                    <div className="h-full flex flex-col items-center justify-center opacity-10 py-20">
                       <span className="text-6xl mb-4">📭</span>
