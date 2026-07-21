@@ -12,7 +12,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "preview": "vite preview",
     "test:euro-qualifiers-schedule": "esbuild tests/EuroQualifiersScheduleTests.ts --bundle --platform=node --format=cjs --outfile=tmp/euro-qualifiers-schedule-tests.cjs && node tmp/euro-qualifiers-schedule-tests.cjs",
-    "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs"
+    "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs",
+    "test:ai-opponent-analysis": "esbuild tests/AiOpponentAnalysisTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-opponent-analysis-tests.cjs && node tmp/ai-opponent-analysis-tests.cjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

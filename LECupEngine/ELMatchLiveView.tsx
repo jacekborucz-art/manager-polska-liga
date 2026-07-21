@@ -371,6 +371,7 @@ const isPausedForSevereInjury = useMemo(() => {
         aiCoach: aiCoachInit,
         aiStaffMembers: staffMembers,
         opponentClub: userClubInit,
+        aiPlayers: aiPlayersInit,
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: sessionSeed,
@@ -394,6 +395,7 @@ const isPausedForSevereInjury = useMemo(() => {
         competitionId: ctx.fixture.leagueId as string,
         formAware: true,
         selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_el_live_ai_${aiPreparedTacticId}_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
+        respectRequestedTactic: true,
         instructionProfile: preMatchInstr
       });
       const homeLineupData = aiClubInit.id === ctx.homeClub.id ? aiPreparedLineup : homeLineupBase;

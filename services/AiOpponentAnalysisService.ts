@@ -20,6 +20,7 @@ export interface AiOpponentMatchReport {
   predictedTacticId: string;
   predictedStyle: AiPredictedStyle;
   perceivedPower: number;
+  perceivedOpponentToAiPowerRatio?: number;
   perceivedLineStrengths: {
     defense: number;
     midfield: number;
@@ -75,6 +76,51 @@ const getTopLineAvg = (players: Player[], position: PlayerPosition, topN: number
     .slice(0, topN);
   if (line.length === 0) return 60;
   return line.reduce((sum, player) => sum + player.overallRating, 0) / line.length;
+};
+
+const getPlayerPower = (player: Player): number =>
+  player.attributes.attacking +
+  player.attributes.passing +
+  player.attributes.defending +
+  player.attributes.technique * 0.5;
+
+const getAvailableSquadPower = (players: Player[]): number => {
+  const available = players.filter(player =>
+    player.condition >= 60 &&
+    player.suspensionMatches <= 0 &&
+    (
+      player.health.status !== HealthStatus.INJURED ||
+      player.health.injury?.severity !== InjurySeverity.SEVERE
+    )
+  );
+  const selected: Player[] = [];
+  const selectedIds = new Set<string>();
+  const addBest = (position: PlayerPosition, count: number) => {
+    available
+      .filter(player => player.position === position)
+      .sort((a, b) => getPlayerPower(b) - getPlayerPower(a))
+      .slice(0, count)
+      .forEach(player => {
+        selected.push(player);
+        selectedIds.add(player.id);
+      });
+  };
+
+  // Neutralny szkielet 1-4-4-2 daje porównywalny punkt odniesienia bez
+  // sztucznego zawyżania siły przez wybranie samych pomocników lub napastników.
+  addBest(PlayerPosition.GK, 1);
+  addBest(PlayerPosition.DEF, 4);
+  addBest(PlayerPosition.MID, 4);
+  addBest(PlayerPosition.FWD, 2);
+  if (selected.length < 11) {
+    available
+      .filter(player => !selectedIds.has(player.id))
+      .sort((a, b) => getPlayerPower(b) - getPlayerPower(a))
+      .slice(0, 11 - selected.length)
+      .forEach(player => selected.push(player));
+  }
+
+  return selected.reduce((sum, player) => sum + getPlayerPower(player), 0);
 };
 
 const isTacticFeasible = (players: Player[], tacticId: string): boolean => {
@@ -215,11 +261,12 @@ export const AiOpponentAnalysisService = {
     aiCoach: Coach | null;
     aiStaffMembers?: Record<string, StaffMember>;
     opponentClub: Club;
+    aiPlayers?: Player[];
     opponentPlayers: Player[];
     opponentLineup: Lineup;
     seed: number;
   }): AiOpponentMatchReport => {
-    const { aiClub, aiCoach, aiStaffMembers = {}, opponentClub, opponentPlayers, opponentLineup, seed } = params;
+    const { aiClub, aiCoach, aiStaffMembers = {}, opponentClub, aiPlayers = [], opponentPlayers, opponentLineup, seed } = params;
     const profile = AiOpponentAnalysisService.buildStaffProfile(aiClub, aiCoach, aiStaffMembers);
     const reportSeed = seed + hashString(aiClub.id) * 11 + hashString(opponentClub.id) * 17;
 
@@ -235,6 +282,8 @@ export const AiOpponentAnalysisService = {
       return sum + player.attributes.attacking + player.attributes.passing + player.attributes.defending + player.attributes.technique * 0.5;
     }, 0);
     const perceivedPower = Math.max(1, addNoise(realPower, errorPercent, reportSeed, 4));
+    const aiPower = getAvailableSquadPower(aiPlayers);
+    const perceivedOpponentToAiPowerRatio = aiPower > 0 ? perceivedPower / aiPower : undefined;
 
     const tacticMistakeChance = clamp(0.38 - profile.tacticalQuality / 260, 0.03, 0.34);
     const predictedTacticId =
@@ -261,10 +310,22 @@ export const AiOpponentAnalysisService = {
     let recommendedApproach: AiRecommendedApproach = 'CONTROL';
     if (predictedStyle === 'OFFENSIVE' || lines.attack > lines.defense + 5) recommendedApproach = 'COUNTER';
     if (predictedStyle === 'DEFENSIVE' || lines.defense < 64 || perceivedWeakness === 'DEFENSE') recommendedApproach = 'PRESS';
-    if (perceivedPower > 850) recommendedApproach = 'LOW_BLOCK';
     if (perceivedWeakness === 'FITNESS') recommendedApproach = 'PRESS';
     if (perceivedWeakness === 'MIDFIELD') recommendedApproach = 'CONTROL';
     if (perceivedWeakness === 'ATTACK' && predictedStyle !== 'DEFENSIVE') recommendedApproach = 'DIRECT';
+
+    // Siła przeciwnika ma sens wyłącznie w relacji do własnej drużyny. Poprzedni
+    // stały próg 850 był niższy od typowej sumy atrybutów niemal każdego składu,
+    // więc raport seryjnie zalecał LOW_BLOCK także klubom wyraźnie mocniejszym.
+    if (perceivedOpponentToAiPowerRatio !== undefined) {
+      if (perceivedOpponentToAiPowerRatio >= 1.10) {
+        recommendedApproach = 'LOW_BLOCK';
+      } else if (perceivedOpponentToAiPowerRatio <= 0.92) {
+        recommendedApproach = predictedStyle === 'DEFENSIVE' || perceivedWeakness === 'DEFENSE' || perceivedWeakness === 'FITNESS'
+          ? 'PRESS'
+          : 'CONTROL';
+      }
+    }
 
     return {
       accuracy,
@@ -272,6 +333,7 @@ export const AiOpponentAnalysisService = {
       predictedTacticId,
       predictedStyle,
       perceivedPower,
+      perceivedOpponentToAiPowerRatio,
       perceivedLineStrengths: lines,
       perceivedFatigueLevel,
       perceivedWeakness,
@@ -286,6 +348,11 @@ export const AiOpponentAnalysisService = {
     const current = TacticRepository.getById(baseTacticId);
     const alreadyDefensive = current.defenseBias >= 65;
     const alreadyOffensive = current.attackBias >= 65;
+    const opponentToAiPowerRatio = report.perceivedOpponentToAiPowerRatio ?? (() => {
+      const aiPower = getAvailableSquadPower(aiPlayers);
+      return aiPower > 0 ? report.perceivedPower / aiPower : 1;
+    })();
+    const aiClearlyStronger = opponentToAiPowerRatio <= (isAiAway ? 0.92 : 0.95);
 
     const pickFeasible = (...tacticIds: string[]): string => {
       if (aiPlayers.length === 0) return tacticIds[0] ?? baseTacticId;
@@ -294,8 +361,23 @@ export const AiOpponentAnalysisService = {
 
     const tacticalCounters = TacticalMatchupService.suggestCounterTactics(report.predictedTacticId)
       .filter(tacticId => tacticId !== baseTacticId);
+
+    // Wyraźny faworyt nie powinien kopiować automatycznie najbardziej zachowawczej
+    // kontry ani pozostawać przy defensywnej ulubionej formacji trenera.
+    if (aiClearlyStronger && (alreadyDefensive || report.recommendedApproach === 'LOW_BLOCK')) {
+      const proactiveCounters = tacticalCounters.filter(tacticId => {
+        const tactic = TacticRepository.getById(tacticId);
+        return tactic.attackBias >= 55 && tactic.defenseBias <= 65;
+      });
+      const proactiveTactic = pickFeasible(...proactiveCounters, '4-2-3-1', '4-3-3', '4-4-2-OFF', '4-4-2');
+      if (proactiveTactic !== baseTacticId) return proactiveTactic;
+    }
+
     if (tacticalCounters.length > 0 && report.confidence >= 0.58) {
-      const suggestedCounter = pickFeasible(...tacticalCounters);
+      const candidates = aiClearlyStronger
+        ? tacticalCounters.filter(tacticId => TacticRepository.getById(tacticId).defenseBias <= 65)
+        : tacticalCounters;
+      const suggestedCounter = pickFeasible(...candidates);
       if (suggestedCounter !== baseTacticId) return suggestedCounter;
     }
 

@@ -322,6 +322,7 @@ const isPausedForSevereInjury = useMemo(() => {
         aiCoach: aiCoachInit,
         aiStaffMembers: staffMembers,
         opponentClub: userClubInit,
+        aiPlayers: aiPlayersInit,
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: sessionSeed,

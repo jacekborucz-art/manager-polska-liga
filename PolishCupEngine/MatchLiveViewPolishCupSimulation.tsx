@@ -714,6 +714,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
         aiCoach: aiCoachInit,
         aiStaffMembers: staffMembers,
         opponentClub: userClubInit,
+        aiPlayers: aiPlayersInit,
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: cupSessionSeed,
@@ -726,6 +727,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
         competitionId: ctx.fixture.leagueId as string,
         formAware: true,
         selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_cup_live_ai_${aiBaseLineupInit.tacticId}_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
+        respectRequestedTactic: true,
         instructionProfile: preMatchInstr
       });
       const finalHomeLineupData = userSide === 'HOME' ? homeLineupData : aiLineupPrepared;

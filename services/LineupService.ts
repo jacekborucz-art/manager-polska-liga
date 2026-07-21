@@ -23,6 +23,10 @@ type AutoPickOptions = {
   competitionId?: string;
   selectionSeed?: string;
   formAware?: boolean;
+  // Używane, gdy taktyka została już wybrana przez analizę konkretnego meczu.
+  // Bez tej flagi zachowujemy dotychczasowe zachowanie: trener najpierw próbuje
+  // ustawić jedną ze swoich ulubionych formacji.
+  respectRequestedTactic?: boolean;
   instructionProfile?: {
     tempo: InstructionTempo;
     mindset: InstructionMindset;
@@ -241,8 +245,9 @@ export const LineupService = {
     const formAware = options.formAware ?? false;
     const selectionSeed = options.selectionSeed ?? `${clubId}_${tacticId}`;
     const instructionProfile = options.instructionProfile;
-    // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive)
-    if (coach?.favoriteTactics) {
+    // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive),
+    // chyba że analiza tego konkretnego spotkania wybrała już docelową formację.
+    if (coach?.favoriteTactics && !options.respectRequestedTactic) {
       const preferred = [
         coach.favoriteTactics.neutral,
         coach.favoriteTactics.offensive,
