@@ -91,6 +91,23 @@ const legacyRecoveredState = EuroQualifiersService.applyResults(
 );
 assert(legacyRecoveredState.stage === 'PLAYOFFS', 'Po odzyskaniu zaległego meczu eliminacje nie przeszły do baraży.');
 
+const overduePlayoffState = EuroQualifiersService.ensurePlayoffsReady(
+  legacyPartialState,
+  new Date(2028, 2, 17)
+);
+if (!overduePlayoffState || overduePlayoffState.stage !== 'PLAYOFFS') {
+  throw new Error('Stary zapis po oknie grupowym nie utworzył awaryjnie baraży.');
+}
+assert(
+  overduePlayoffState.playoffPaths.length > 0,
+  'Awaryjnie domknięte eliminacje nie mają utworzonych ścieżek barażowych.'
+);
+const overduePlayoffMatchDay = EuroQualifiersService.getMatchDayForDate(overduePlayoffState, new Date(2028, 2, 17));
+assert(
+  overduePlayoffMatchDay && overduePlayoffMatchDay.matches.length > 0,
+  'Po awaryjnym domknięciu grup 17 marca nie znaleziono meczów barażowych.'
+);
+
 const completedGroups = EuroQualifiersService.applyResults(state, results);
 assert(completedGroups.stage === 'PLAYOFFS', 'Po komplecie wyników eliminacje nie przeszły do baraży.');
 assert(

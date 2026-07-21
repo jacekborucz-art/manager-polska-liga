@@ -176,6 +176,29 @@ const isLegacyGroupRecoveryDate = (date: Date, tournamentYear: number): boolean 
   date.getMonth() === 10 &&
   LEGACY_GROUP_RECOVERY_DAYS.includes(date.getDate());
 
+const getTimeForFixture = (fixture: EuroQualifiersFixture): number =>
+  new Date(fixture.year, fixture.month, fixture.day).getTime();
+
+const getGroupStageCutoffTime = (state: EuroQualifiersState): number => {
+  const groupFixtureTimes = state.fixtures
+    .filter(fixture => (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE')
+    .map(getTimeForFixture);
+  const latestScheduledTime = groupFixtureTimes.length > 0
+    ? Math.max(...groupFixtureTimes)
+    : new Date(state.tournamentYear - 1, 10, 17).getTime();
+  const latestRecoveryTime = new Date(
+    state.tournamentYear - 1,
+    10,
+    Math.max(...LEGACY_GROUP_RECOVERY_DAYS)
+  ).getTime();
+  return Math.max(latestScheduledTime, latestRecoveryTime);
+};
+
+const shouldForceResolveGroupStage = (state: EuroQualifiersState, date: Date): boolean =>
+  state.stage === 'GROUP_STAGE' &&
+  state.drawCompleted &&
+  date.getTime() > getGroupStageCutoffTime(state);
+
 const countBlockedMatchDates = (blocked: Map<string, Set<string>>, team: string): number =>
   MATCH_DATES.filter(slot => hasDateBlock(blocked, slot.day, slot.month, team)).length;
 
@@ -380,7 +403,6 @@ const resolveAggregateWinner = (
 };
 
 const refreshStandings = (state: EuroQualifiersState, results: NTMatchResult[]): EuroQualifiersState => {
-  if (results.length === 0) return state;
   const fixtures = state.fixtures.map(fixture => ({ ...fixture }));
   const groups = state.groups.map(group => ({
     ...group,
@@ -586,7 +608,10 @@ const finalizeGroupStage = (state: EuroQualifiersState, rankingState?: UefaNatio
     qualifiedTeams,
     playoffTeams,
     playoffPaths: playoffData.paths,
-    fixtures: [...state.fixtures, ...playoffData.fixtures],
+    fixtures: [
+      ...state.fixtures.filter(fixture => (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE'),
+      ...playoffData.fixtures,
+    ],
     completed: false,
     lastUpdatedIso: new Date().toISOString(),
   };
@@ -770,6 +795,19 @@ export const EuroQualifiersService = {
   },
 
   createHostAnnouncement,
+
+  ensurePlayoffsReady(
+    state: EuroQualifiersState | null,
+    date: Date,
+    rankingState?: UefaNationalRankingState | null
+  ): EuroQualifiersState | null {
+    if (!state || state.stage !== 'GROUP_STAGE') return state;
+    const groupFixtures = state.fixtures.filter(fixture => (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE');
+    const allGroupFixturesPlayed = groupFixtures.length > 0 && groupFixtures.every(fixture => fixture.played);
+    if (!allGroupFixturesPlayed && !shouldForceResolveGroupStage(state, date)) return state;
+    const refreshed = refreshStandings(state, []);
+    return finalizeGroupStage(refreshed, rankingState);
+  },
 
   getMatchDayForDate(state: EuroQualifiersState | null, date: Date): NTMatchDay | null {
     if (!state || state.completed) return null;

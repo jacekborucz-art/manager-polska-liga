@@ -682,6 +682,31 @@ const EuroPlayoffCard: React.FC<{
   );
 };
 
+const TeamListPanel: React.FC<{ title: string; teams: string[]; tone: 'emerald' | 'sky' | 'amber' }> = ({ title, teams, tone }) => {
+  const toneClass = tone === 'emerald'
+    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+    : tone === 'sky'
+      ? 'border-sky-400/20 bg-sky-400/10 text-sky-100'
+      : 'border-amber-400/20 bg-amber-400/10 text-amber-100';
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass}`}>
+      <p className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">{title}</p>
+      {teams.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {teams.map(team => (
+            <span key={team} className="px-3 py-1.5 rounded-xl border border-white/10 bg-black/25 text-[10px] font-black italic uppercase tracking-tighter">
+              {team}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs font-black italic uppercase tracking-tighter">Brak</p>
+      )}
+    </div>
+  );
+};
+
 interface InternationalViewProps {
   initialTournament?: InternationalTournamentId;
 }
@@ -888,6 +913,22 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
         }))
         .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round),
     }));
+  }, [euroQualifiersState]);
+
+  const euroQualifiedTeams = useMemo(() => {
+    if (!euroQualifiersState) return [];
+    const teams = euroQualifiersState.completed
+      ? euroQualifiersState.qualifiedTeams
+      : [...euroQualifiersState.directQualifiers, ...euroQualifiersState.hostReservedQualifiers];
+    return Array.from(new Set(teams));
+  }, [euroQualifiersState]);
+
+  const euroPlayoffTeams = useMemo(() => {
+    if (!euroQualifiersState) return [];
+    const teams = euroQualifiersState.playoffTeams.length > 0
+      ? euroQualifiersState.playoffTeams
+      : euroQualifiersState.playoffPaths.flatMap(path => path.teams);
+    return Array.from(new Set(teams));
   }, [euroQualifiersState]);
 
   const activeWorldCupGroupData = useMemo(() => {
@@ -1543,19 +1584,10 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
                       </div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-3 gap-4 mb-6">
-                          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Bezpośredni awans</p>
-                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-emerald-100">{euroQualifiersState.directQualifiers.join(', ') || 'Brak'}</p>
-                          </div>
-                          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
-                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Miejsca gospodarzy</p>
-                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-amber-100">{euroQualifiersState.hostReservedQualifiers.join(', ') || 'Brak'}</p>
-                          </div>
-                          <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
-                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Uczestnicy baraży</p>
-                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-sky-100">{euroQualifiersState.playoffTeams.join(', ') || 'Brak'}</p>
-                          </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+                          <TeamListPanel title="Zakwalifikowane do EURO" teams={euroQualifiedTeams} tone="emerald" />
+                          <TeamListPanel title="Miejsca rezerwowe gospodarzy" teams={euroQualifiersState.hostReservedQualifiers} tone="amber" />
+                          <TeamListPanel title="W barażach" teams={euroPlayoffTeams} tone="sky" />
                         </div>
 
                         {euroPlayoffData.length > 0 ? (

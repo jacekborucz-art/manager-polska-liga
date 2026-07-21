@@ -8598,7 +8598,15 @@ Asystent`,
       const nationsLeagueMatchDay = scheduledMatchDay
         ? null
         : NationsLeagueService.getMatchDayForDate(ensuredNationsLeagueState, dateToProcess);
-      const euroQualifiersMatchDay = EuroQualifiersService.getMatchDayForDate(euroQualifiersState, dateToProcess);
+      const ensuredEuroQualifiersState = EuroQualifiersService.ensurePlayoffsReady(
+        euroQualifiersState,
+        dateToProcess,
+        ensuredUefaRankingState
+      );
+      if (ensuredEuroQualifiersState !== euroQualifiersState) {
+        setEuroQualifiersState(ensuredEuroQualifiersState);
+      }
+      const euroQualifiersMatchDay = EuroQualifiersService.getMatchDayForDate(ensuredEuroQualifiersState, dateToProcess);
       const worldCupQualifiersMatchDay = WorldCupQualifiersService.getMatchDayForDate(worldCupQualifiersState, dateToProcess);
       const mergeMatchDays = (matchDays: (NTMatchDay | null)[]): NTMatchDay | null => {
         const active = matchDays.filter((item): item is NTMatchDay => !!item);
@@ -8865,15 +8873,15 @@ Asystent`,
           }
           setUefaNationalRankingState(nextUefaRankingState);
         }
-        if (isEuroQualifiersMatchDay && euroQualifiersState) {
+        if (isEuroQualifiersMatchDay && ensuredEuroQualifiersState) {
           const nextEuroQualifiersState = EuroQualifiersService.applyResults(
-            euroQualifiersState,
+            ensuredEuroQualifiersState,
             ntSimulation.results,
             ensuredUefaRankingState
           );
           setEuroQualifiersState(nextEuroQualifiersState);
 
-          if (nextEuroQualifiersState.stage === 'PLAYOFFS' && euroQualifiersState.stage === 'GROUP_STAGE') {
+          if (nextEuroQualifiersState.stage === 'PLAYOFFS' && euroQualifiersState?.stage === 'GROUP_STAGE') {
             const euroGroupSummaryKey = `EUROQ_GROUP_SUMMARY_${nextEuroQualifiersState.tournamentYear}`;
             if (!sentMailIdsRef.current.has(euroGroupSummaryKey)) {
               sentMailIdsRef.current.add(euroGroupSummaryKey);
@@ -8897,7 +8905,7 @@ Asystent`,
             }
           }
 
-          if (nextEuroQualifiersState.completed && !euroQualifiersState.completed) {
+          if (nextEuroQualifiersState.completed && !(euroQualifiersState?.completed ?? false)) {
             const euroFinalKey = `EUROQ_FINAL_${nextEuroQualifiersState.tournamentYear}`;
             if (!sentMailIdsRef.current.has(euroFinalKey)) {
               sentMailIdsRef.current.add(euroFinalKey);
