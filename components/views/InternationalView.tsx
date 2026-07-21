@@ -586,6 +586,7 @@ const GROUP_TABS = ['A','B','C','D','E','F','G','H','I','J','K','L'] as const;
 type GroupTab = typeof GROUP_TABS[number];
 
 type WcqSubTab = 'groups' | 'playoff';
+type EuroSubTab = 'groups' | 'playoffs';
 
 const PATH_COLORS: Record<string, { border: string; text: string; bg: string }> = {
   A: { border: 'border-amber-400/50',  text: 'text-amber-300',  bg: 'bg-amber-400/10' },
@@ -691,6 +692,7 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
   const [wcqSubTab, setWcqSubTab] = useState<WcqSubTab>('groups');
   const [activeGroup, setActiveGroup] = useState<GroupTab>('G');
   const [activeEuroGroup, setActiveEuroGroup] = useState<string>('A');
+  const [euroSubTab, setEuroSubTab] = useState<EuroSubTab>('groups');
   const [activeWorldCupGroup, setActiveWorldCupGroup] = useState<string>('A');
   const upcomingSchedule = NT_SCHEDULE_BY_YEAR[2025] ?? [];
   const euroQualifiersLabel = euroQualifiersState?.editionLabel
@@ -1442,9 +1444,12 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
                 {euroQualifiersState.groups.map(group => (
                   <button
                     key={group.id}
-                    onClick={() => setActiveEuroGroup(group.id)}
+                    onClick={() => {
+                      setActiveEuroGroup(group.id);
+                      setEuroSubTab('groups');
+                    }}
                     className={`px-4 h-11 text-[11px] font-black uppercase tracking-[0.18em] rounded-xl transition-all border flex items-center justify-center whitespace-nowrap ${
-                      activeEuroGroupData.group.id === group.id
+                      euroSubTab === 'groups' && activeEuroGroupData.group.id === group.id
                         ? 'bg-gradient-to-b from-blue-500/30 to-blue-800/20 border-blue-300/60 text-blue-200'
                         : 'bg-gradient-to-b from-slate-800/60 to-slate-900/60 border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'
                     }`}
@@ -1452,9 +1457,20 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
                     Grupa {group.id}
                   </button>
                 ))}
+                <button
+                  onClick={() => setEuroSubTab('playoffs')}
+                  className={`px-5 h-11 text-[11px] font-black italic uppercase tracking-tighter rounded-xl transition-all border flex items-center justify-center whitespace-nowrap ${
+                    euroSubTab === 'playoffs'
+                      ? 'bg-gradient-to-b from-sky-500/35 to-sky-800/25 border-sky-300/70 text-sky-100 shadow-[0_0_18px_rgba(56,189,248,0.12)]'
+                      : 'bg-gradient-to-b from-slate-800/60 to-slate-900/60 border-sky-400/20 text-sky-500 hover:text-sky-300 hover:border-sky-300/40'
+                  }`}
+                >
+                  Baraże
+                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar pt-6">
+                {euroSubTab === 'groups' ? (
                 <div className="max-w-5xl w-full mx-auto">
                   <div className="flex items-center gap-3 mb-4">
                     <span className={SUBHEADING}>Eliminacje {euroQualifiersState.editionLabel} — Grupa {activeEuroGroupData.group.id}</span>
@@ -1485,38 +1501,6 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
                     </table>
                   </div>
 
-                  {euroQualifiersState.stage !== 'GROUP_STAGE' && (
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                        <p className={SUBHEADING}>Bezpośredni awans</p>
-                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-100">{euroQualifiersState.directQualifiers.join(', ')}</p>
-                      </div>
-                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
-                        <p className={SUBHEADING}>Miejsca gospodarzy</p>
-                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-amber-100">{euroQualifiersState.hostReservedQualifiers.join(', ') || 'Brak'}</p>
-                      </div>
-                      <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
-                        <p className={SUBHEADING}>Baraże</p>
-                        <p className="mt-2 text-xs font-black uppercase tracking-wider text-sky-100">{euroQualifiersState.playoffTeams.join(', ') || 'Do ustalenia'}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {euroPlayoffData.length > 0 && (
-                    <section className="pb-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className={SUBHEADING}>Baraże eliminacji {euroQualifiersState.editionLabel}</span>
-                        <div className="flex-1 h-px bg-white/5" />
-                        <span className={SUBHEADING}>{euroQualifiersState.completed ? 'Rozstrzygnięte' : 'Marzec ' + euroQualifiersState.tournamentYear}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {euroPlayoffData.map(({ path, fixtures }) => (
-                          <EuroPlayoffCard key={path.id} path={path} fixtures={fixtures} />
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
                   <section className="pb-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className={SUBHEADING}>Terminarz — Grupa {activeEuroGroupData.group.id}</span>
@@ -1538,6 +1522,57 @@ const InternationalView: React.FC<InternationalViewProps> = ({ initialTournament
                     ))}
                   </section>
                 </div>
+                ) : (
+                  <div className="max-w-5xl w-full mx-auto pb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Baraże eliminacji {euroQualifiersState.editionLabel}</span>
+                      <div className="flex-1 h-px bg-white/5" />
+                      <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+                        {euroQualifiersState.stage === 'GROUP_STAGE'
+                          ? `17 i 20 marca ${euroQualifiersState.tournamentYear}`
+                          : euroQualifiersState.completed ? 'Rozstrzygnięte' : `Marzec ${euroQualifiersState.tournamentYear}`}
+                      </span>
+                    </div>
+
+                    {euroQualifiersState.stage === 'GROUP_STAGE' ? (
+                      <div className="rounded-[28px] border border-sky-400/20 bg-sky-400/5 px-8 py-12 text-center">
+                        <p className="font-black italic uppercase tracking-tighter text-xl text-sky-100">Uczestnicy baraży nie są jeszcze znani</p>
+                        <p className="mt-3 font-black italic uppercase tracking-tighter text-[11px] text-slate-500">
+                          Pary zostaną utworzone po rozegraniu wszystkich meczów fazy grupowej. Baraże odbędą się 17 i 20 marca {euroQualifiersState.tournamentYear}.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Bezpośredni awans</p>
+                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-emerald-100">{euroQualifiersState.directQualifiers.join(', ') || 'Brak'}</p>
+                          </div>
+                          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Miejsca gospodarzy</p>
+                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-amber-100">{euroQualifiersState.hostReservedQualifiers.join(', ') || 'Brak'}</p>
+                          </div>
+                          <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
+                            <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">Uczestnicy baraży</p>
+                            <p className="mt-2 font-black italic uppercase tracking-tighter text-xs text-sky-100">{euroQualifiersState.playoffTeams.join(', ') || 'Brak'}</p>
+                          </div>
+                        </div>
+
+                        {euroPlayoffData.length > 0 ? (
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            {euroPlayoffData.map(({ path, fixtures }) => (
+                              <EuroPlayoffCard key={path.id} path={path} fixtures={fixtures} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rounded-[28px] border border-white/10 bg-black/20 px-8 py-10 text-center">
+                            <p className="font-black italic uppercase tracking-tighter text-sm text-slate-400">Baraże nie są wymagane w tej edycji</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}

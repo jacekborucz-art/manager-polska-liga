@@ -38,6 +38,7 @@ const PLAYOFF_DATES = [
   { day: 17, month: 2 },
   { day: 20, month: 2 },
 ];
+const LEGACY_GROUP_RECOVERY_DAYS = [18, 19, 20, 21];
 
 class Rng {
   private seed: number;
@@ -170,6 +171,11 @@ const buildBlockedDates = (nationsLeagueState?: NationsLeagueState | null): Map<
 const hasDateBlock = (blocked: Map<string, Set<string>>, day: number, month: number, team: string): boolean =>
   blocked.get(`${day}-${month}`)?.has(team) ?? false;
 
+const isLegacyGroupRecoveryDate = (date: Date, tournamentYear: number): boolean =>
+  date.getFullYear() === tournamentYear - 1 &&
+  date.getMonth() === 10 &&
+  LEGACY_GROUP_RECOVERY_DAYS.includes(date.getDate());
+
 const countBlockedMatchDates = (blocked: Map<string, Set<string>>, team: string): number =>
   MATCH_DATES.filter(slot => hasDateBlock(blocked, slot.day, slot.month, team)).length;
 
@@ -221,16 +227,77 @@ const createGroups = (
   }));
 };
 
-const pairKey = (home: string, away: string): string => `${home}__${away}`;
+interface RoundRobinPair {
+  home: string;
+  away: string;
+}
 
-const buildPairPool = (teams: string[], rng: Rng): { home: string; away: string }[] => {
-  const pairs: { home: string; away: string }[] = [];
-  teams.forEach((home, homeIndex) => {
-    teams.forEach((away, awayIndex) => {
-      if (homeIndex !== awayIndex) pairs.push({ home, away });
-    });
-  });
-  return rng.shuffle(pairs);
+const buildRoundRobinRounds = (teams: string[], rng: Rng): RoundRobinPair[][] => {
+  const shuffled = rng.shuffle(teams);
+  const rotation: Array<string | null> = shuffled.length % 2 === 0 ? shuffled : [...shuffled, null];
+  const firstLeg: RoundRobinPair[][] = [];
+
+  for (let roundIndex = 0; roundIndex < rotation.length - 1; roundIndex += 1) {
+    const matches: RoundRobinPair[] = [];
+    for (let pairIndex = 0; pairIndex < rotation.length / 2; pairIndex += 1) {
+      const first = rotation[pairIndex];
+      const second = rotation[rotation.length - 1 - pairIndex];
+      if (!first || !second) continue;
+      const reverse = (roundIndex + pairIndex) % 2 === 1;
+      matches.push(reverse ? { home: second, away: first } : { home: first, away: second });
+    }
+    firstLeg.push(matches);
+    rotation.splice(1, 0, rotation.pop() as string | null);
+  }
+
+  const secondLeg = firstLeg.map(round => round.map(match => ({ home: match.away, away: match.home })));
+  return [...firstLeg, ...secondLeg];
+};
+
+const assignRoundsToDates = (
+  rounds: RoundRobinPair[][],
+  allowedDateIndexes: number[],
+  blocked: Map<string, Set<string>>
+): RoundRobinPair[][] | null => {
+  const assigned: Array<RoundRobinPair[] | undefined> = new Array(allowedDateIndexes.length);
+  const usedRounds = new Set<number>();
+
+  const isCompatible = (round: RoundRobinPair[], dateIndex: number): boolean => {
+    const slot = MATCH_DATES[allowedDateIndexes[dateIndex]];
+    return round.every(match =>
+      !hasDateBlock(blocked, slot.day, slot.month, match.home) &&
+      !hasDateBlock(blocked, slot.day, slot.month, match.away)
+    );
+  };
+
+  const fill = (): boolean => {
+    if (usedRounds.size === rounds.length) return true;
+
+    let selectedDateIndex = -1;
+    let selectedCandidates: number[] = [];
+    for (let dateIndex = 0; dateIndex < allowedDateIndexes.length; dateIndex += 1) {
+      if (assigned[dateIndex]) continue;
+      const candidates = rounds
+        .map((_, roundIndex) => roundIndex)
+        .filter(roundIndex => !usedRounds.has(roundIndex) && isCompatible(rounds[roundIndex], dateIndex));
+      if (candidates.length === 0) return false;
+      if (selectedDateIndex < 0 || candidates.length < selectedCandidates.length) {
+        selectedDateIndex = dateIndex;
+        selectedCandidates = candidates;
+      }
+    }
+
+    for (const roundIndex of selectedCandidates) {
+      assigned[selectedDateIndex] = rounds[roundIndex];
+      usedRounds.add(roundIndex);
+      if (fill()) return true;
+      usedRounds.delete(roundIndex);
+      assigned[selectedDateIndex] = undefined;
+    }
+    return false;
+  };
+
+  return fill() ? assigned as RoundRobinPair[][] : null;
 };
 
 const buildFixturesForGroup = (
@@ -240,62 +307,25 @@ const buildFixturesForGroup = (
   seed: number
 ): EuroQualifiersFixture[] => {
   const rng = new Rng(seed ^ group.id.charCodeAt(0));
-  const pairs = buildPairPool(group.teams, rng);
   const allowedDateIndexes = group.teams.length <= 4 ? FOUR_TEAM_GROUP_DATE_INDEXES : MATCH_DATES.map((_, index) => index);
-  const fixtures: EuroQualifiersFixture[] = [];
-  const usedPairs = new Set<string>();
-  let round = 1;
+  const generatedRounds = buildRoundRobinRounds(group.teams, rng);
+  const scheduledRounds = assignRoundsToDates(generatedRounds, allowedDateIndexes, blocked) ?? generatedRounds;
 
-  allowedDateIndexes.forEach(dateIndex => {
-    const slot = MATCH_DATES[dateIndex];
-    const usedTeams = new Set<string>();
-    let matchesOnDate = 0;
-    pairs.forEach(pair => {
-      if (matchesOnDate >= Math.floor(group.teams.length / 2)) return;
-      if (usedPairs.has(pairKey(pair.home, pair.away))) return;
-      if (usedTeams.has(pair.home) || usedTeams.has(pair.away)) return;
-      if (hasDateBlock(blocked, slot.day, slot.month, pair.home) || hasDateBlock(blocked, slot.day, slot.month, pair.away)) return;
-      usedPairs.add(pairKey(pair.home, pair.away));
-      usedTeams.add(pair.home);
-      usedTeams.add(pair.away);
-      fixtures.push({
-        id: `EUROQ_${tournamentYear}_${group.id}_R${round}_${matchesOnDate + 1}`,
-        year: tournamentYear + slot.yearOffset,
-        day: slot.day,
-        month: slot.month,
-        round,
-        home: pair.home,
-        away: pair.away,
-        groupId: group.id,
-        stage: 'GROUP_STAGE',
-        played: false,
-      });
-      matchesOnDate += 1;
-    });
-    round += 1;
+  return scheduledRounds.flatMap((matches, roundIndex) => {
+    const slot = MATCH_DATES[allowedDateIndexes[roundIndex]];
+    return matches.map((match, matchIndex) => ({
+      id: `EUROQ_${tournamentYear}_${group.id}_R${roundIndex + 1}_${matchIndex + 1}`,
+      year: tournamentYear + slot.yearOffset,
+      day: slot.day,
+      month: slot.month,
+      round: roundIndex + 1,
+      home: match.home,
+      away: match.away,
+      groupId: group.id,
+      stage: 'GROUP_STAGE' as const,
+      played: false,
+    }));
   });
-
-  pairs
-    .filter(pair => !usedPairs.has(pairKey(pair.home, pair.away)))
-    .forEach(pair => {
-      const slot = MATCH_DATES[allowedDateIndexes[fixtures.length % allowedDateIndexes.length]];
-      fixtures.push({
-        id: `EUROQ_${tournamentYear}_${group.id}_EX${fixtures.length + 1}`,
-        year: tournamentYear + slot.yearOffset,
-        day: slot.day,
-        month: slot.month,
-        round: Math.min(10, fixtures.length + 1),
-        home: pair.home,
-        away: pair.away,
-        groupId: group.id,
-        stage: 'GROUP_STAGE',
-        played: false,
-      });
-    });
-
-  return fixtures.sort((a, b) =>
-    a.year - b.year || a.month - b.month || a.day - b.day || a.groupId.localeCompare(b.groupId)
-  );
 };
 
 const compareStandings = (a: EuroQualifiersTeamStanding, b: EuroQualifiersTeamStanding): number =>
@@ -684,10 +714,11 @@ export const EuroQualifiersService = {
     const isGroupDate = date.getFullYear() === tournamentYear - 1 && MATCH_DATES.some(slot =>
       slot.day === date.getDate() && slot.month === date.getMonth()
     );
+    const isLegacyRecoveryDate = isLegacyGroupRecoveryDate(date, tournamentYear);
     const isPlayoffDate = date.getFullYear() === tournamentYear && PLAYOFF_DATES.some(slot =>
       slot.day === date.getDate() && slot.month === date.getMonth()
     );
-    return isGroupDate || isPlayoffDate;
+    return isGroupDate || isLegacyRecoveryDate || isPlayoffDate;
   },
 
   createInitialState(
@@ -742,12 +773,28 @@ export const EuroQualifiersService = {
 
   getMatchDayForDate(state: EuroQualifiersState | null, date: Date): NTMatchDay | null {
     if (!state || state.completed) return null;
-    const fixtures = state.fixtures.filter(fixture =>
+    let fixtures = state.fixtures.filter(fixture =>
       !fixture.played &&
       fixture.year === date.getFullYear() &&
       fixture.day === date.getDate() &&
       fixture.month === date.getMonth()
     );
+    if (fixtures.length === 0 && state.stage === 'GROUP_STAGE' && isLegacyGroupRecoveryDate(date, state.tournamentYear)) {
+      const recoveryCandidates = state.fixtures
+        .filter(fixture =>
+          (fixture.stage ?? 'GROUP_STAGE') === 'GROUP_STAGE' &&
+          !fixture.played &&
+          new Date(fixture.year, fixture.month, fixture.day).getTime() < date.getTime()
+        )
+        .sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || a.round - b.round);
+      const usedTeams = new Set<string>();
+      fixtures = recoveryCandidates.filter(fixture => {
+        if (usedTeams.has(fixture.home) || usedTeams.has(fixture.away)) return false;
+        usedTeams.add(fixture.home);
+        usedTeams.add(fixture.away);
+        return true;
+      });
+    }
     if (fixtures.length === 0) return null;
     const round = fixtures[0].round;
     if (state.stage === 'PLAYOFFS') {
