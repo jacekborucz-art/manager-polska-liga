@@ -718,6 +718,7 @@ const penaltyPendingRef = useRef<null | { side: 'HOME' | 'AWAY', scorer: any, ke
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: cupSessionSeed,
+        matchEnvironment: 'DOMESTIC_CUP',
       });
       const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
         aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userLineupInit.tacticId, cupSessionSeed, opponentReport

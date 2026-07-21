@@ -375,6 +375,7 @@ const isPausedForSevereInjury = useMemo(() => {
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: sessionSeed,
+        matchEnvironment: 'EUROPE',
       });
 
       const aiPreparedTacticId = opponentReport

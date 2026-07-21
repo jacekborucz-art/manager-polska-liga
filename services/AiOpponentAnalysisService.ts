@@ -6,6 +6,7 @@ export type AiPredictedStyle = 'DEFENSIVE' | 'BALANCED' | 'OFFENSIVE';
 export type AiRecommendedApproach = 'PRESS' | 'CONTROL' | 'COUNTER' | 'LOW_BLOCK' | 'DIRECT';
 export type AiPerceivedFatigueLevel = 'FRESH' | 'TIRED' | 'EXHAUSTED';
 export type AiPerceivedWeakness = 'DEFENSE' | 'MIDFIELD' | 'ATTACK' | 'FITNESS' | null;
+export type AiMatchEnvironment = 'DOMESTIC_LEAGUE' | 'DOMESTIC_CUP' | 'EUROPE' | 'FRIENDLY';
 
 export interface AiStaffAnalysisProfile {
   analysisQuality: number;
@@ -21,6 +22,10 @@ export interface AiOpponentMatchReport {
   predictedStyle: AiPredictedStyle;
   perceivedPower: number;
   perceivedOpponentToAiPowerRatio?: number;
+  defensiveStartChance?: number;
+  defensiveStartSelected?: boolean;
+  coachPlanResolved?: boolean;
+  matchEnvironment?: AiMatchEnvironment;
   perceivedLineStrengths: {
     defense: number;
     midfield: number;
@@ -32,6 +37,26 @@ export interface AiOpponentMatchReport {
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const CAUTIOUS_START_THRESHOLD = 1.25;
+const DEFENSIVE_START_THRESHOLD = 1.50;
+const LOW_BLOCK_START_THRESHOLD = 1.75;
+
+export const isCautiousStartJustified = (opponentToAiPowerRatio: number | undefined): boolean =>
+  opponentToAiPowerRatio !== undefined && opponentToAiPowerRatio >= CAUTIOUS_START_THRESHOLD;
+
+export const getDefensiveStartProbability = (opponentToAiPowerRatio: number | undefined): number =>
+  opponentToAiPowerRatio !== undefined && opponentToAiPowerRatio >= DEFENSIVE_START_THRESHOLD ? 0.50 : 0;
+
+export const isDefensiveStartJustified = (
+  opponentToAiPowerRatio: number | undefined,
+  _environment: AiMatchEnvironment = 'DOMESTIC_LEAGUE'
+): boolean => getDefensiveStartProbability(opponentToAiPowerRatio) > 0;
+
+export const isLowBlockStartJustified = (
+  opponentToAiPowerRatio: number | undefined,
+  _environment: AiMatchEnvironment = 'DOMESTIC_LEAGUE'
+): boolean => opponentToAiPowerRatio !== undefined && opponentToAiPowerRatio >= LOW_BLOCK_START_THRESHOLD;
 
 const staffAttr = (member: StaffMember | undefined, key: string, fallback = 10): number =>
   clamp(member?.attributes?.[key] ?? fallback, 1, 20) * 5;
@@ -265,8 +290,19 @@ export const AiOpponentAnalysisService = {
     opponentPlayers: Player[];
     opponentLineup: Lineup;
     seed: number;
+    matchEnvironment?: AiMatchEnvironment;
   }): AiOpponentMatchReport => {
-    const { aiClub, aiCoach, aiStaffMembers = {}, opponentClub, aiPlayers = [], opponentPlayers, opponentLineup, seed } = params;
+    const {
+      aiClub,
+      aiCoach,
+      aiStaffMembers = {},
+      opponentClub,
+      aiPlayers = [],
+      opponentPlayers,
+      opponentLineup,
+      seed,
+      matchEnvironment = 'DOMESTIC_LEAGUE',
+    } = params;
     const profile = AiOpponentAnalysisService.buildStaffProfile(aiClub, aiCoach, aiStaffMembers);
     const reportSeed = seed + hashString(aiClub.id) * 11 + hashString(opponentClub.id) * 17;
 
@@ -284,6 +320,8 @@ export const AiOpponentAnalysisService = {
     const perceivedPower = Math.max(1, addNoise(realPower, errorPercent, reportSeed, 4));
     const aiPower = getAvailableSquadPower(aiPlayers);
     const perceivedOpponentToAiPowerRatio = aiPower > 0 ? perceivedPower / aiPower : undefined;
+    const defensiveStartChance = getDefensiveStartProbability(perceivedOpponentToAiPowerRatio);
+    const defensiveStartSelected = defensiveStartChance > 0 && seededRng(reportSeed, 44) < defensiveStartChance;
 
     const tacticMistakeChance = clamp(0.38 - profile.tacticalQuality / 260, 0.03, 0.34);
     const predictedTacticId =
@@ -314,16 +352,26 @@ export const AiOpponentAnalysisService = {
     if (perceivedWeakness === 'MIDFIELD') recommendedApproach = 'CONTROL';
     if (perceivedWeakness === 'ATTACK' && predictedStyle !== 'DEFENSIVE') recommendedApproach = 'DIRECT';
 
-    // Siła przeciwnika ma sens wyłącznie w relacji do własnej drużyny. Poprzedni
-    // stały próg 850 był niższy od typowej sumy atrybutów niemal każdego składu,
-    // więc raport seryjnie zalecał LOW_BLOCK także klubom wyraźnie mocniejszym.
+    // Różnica klasy działa stopniowo: 25-50% przewagi rywala oznacza ostrożniejszy
+    // plan, ale nie automatyczną defensywę. Od 50% raport ma stabilne 50% szans
+    // na wybór defensywnego startu. Niski blok wymaga jeszcze większej różnicy.
     if (perceivedOpponentToAiPowerRatio !== undefined) {
-      if (perceivedOpponentToAiPowerRatio >= 1.10) {
+      if (defensiveStartSelected && isLowBlockStartJustified(perceivedOpponentToAiPowerRatio, matchEnvironment)) {
         recommendedApproach = 'LOW_BLOCK';
+      } else if (isCautiousStartJustified(perceivedOpponentToAiPowerRatio)) {
+        recommendedApproach = 'COUNTER';
       } else if (perceivedOpponentToAiPowerRatio <= 0.92) {
         recommendedApproach = predictedStyle === 'DEFENSIVE' || perceivedWeakness === 'DEFENSE' || perceivedWeakness === 'FITNESS'
           ? 'PRESS'
           : 'CONTROL';
+      } else if (
+        matchEnvironment === 'DOMESTIC_LEAGUE' &&
+        !isCautiousStartJustified(perceivedOpponentToAiPowerRatio) &&
+        recommendedApproach === 'COUNTER'
+      ) {
+        // W lidze krajowej reakcją na ofensywne ustawienie rywala ma być przede
+        // wszystkim kontrola i zabezpieczenie środka, a nie automatyczny autobus.
+        recommendedApproach = 'CONTROL';
       }
     }
 
@@ -334,6 +382,9 @@ export const AiOpponentAnalysisService = {
       predictedStyle,
       perceivedPower,
       perceivedOpponentToAiPowerRatio,
+      defensiveStartChance,
+      defensiveStartSelected,
+      matchEnvironment,
       perceivedLineStrengths: lines,
       perceivedFatigueLevel,
       perceivedWeakness,
@@ -343,16 +394,20 @@ export const AiOpponentAnalysisService = {
 
   recommendStartingTactic: (baseTacticId: string, report: AiOpponentMatchReport, aiClub: Club, opponentClub: Club, aiPlayers: Player[] = [], isAiAway: boolean = false, aiCoach: Coach | null = null): string => {
     const confidenceGate = report.confidence >= 0.48;
-    if (!confidenceGate) return baseTacticId;
+    if (!confidenceGate && !report.coachPlanResolved) return baseTacticId;
 
     const current = TacticRepository.getById(baseTacticId);
     const alreadyDefensive = current.defenseBias >= 65;
     const alreadyOffensive = current.attackBias >= 65;
+    const matchEnvironment = report.matchEnvironment ?? 'DOMESTIC_LEAGUE';
     const opponentToAiPowerRatio = report.perceivedOpponentToAiPowerRatio ?? (() => {
       const aiPower = getAvailableSquadPower(aiPlayers);
       return aiPower > 0 ? report.perceivedPower / aiPower : 1;
     })();
     const aiClearlyStronger = opponentToAiPowerRatio <= (isAiAway ? 0.92 : 0.95);
+    const defensiveStartEligible = isDefensiveStartJustified(opponentToAiPowerRatio, matchEnvironment);
+    const defensiveStartSelected = defensiveStartEligible && (report.defensiveStartSelected ?? false);
+    const lowBlockJustified = defensiveStartSelected && isLowBlockStartJustified(opponentToAiPowerRatio, matchEnvironment);
 
     const pickFeasible = (...tacticIds: string[]): string => {
       if (aiPlayers.length === 0) return tacticIds[0] ?? baseTacticId;
@@ -361,6 +416,40 @@ export const AiOpponentAnalysisService = {
 
     const tacticalCounters = TacticalMatchupService.suggestCounterTactics(report.predictedTacticId)
       .filter(tacticId => tacticId !== baseTacticId);
+
+    const balancedCounters = tacticalCounters.filter(tacticId => {
+      const tactic = TacticRepository.getById(tacticId);
+      return tactic.defenseBias <= 65 && tactic.attackBias >= 45;
+    });
+
+    // Defensywny start jest wyjątkiem. Gdy losowanie 50/50 go nie wybierze,
+    // nawet zachowawczy trener dostaje ustawienie kontrolne,
+    // a jego indywidualny styl realizują instrukcje i dobór zawodników.
+    if (!defensiveStartSelected && alreadyDefensive) {
+      const balancedTactic = pickFeasible(
+        ...balancedCounters,
+        '4-1-4-1',
+        '4-2-3-1',
+        '4-4-2-DIAMOND',
+        '4-4-2',
+        '4-3-2-1'
+      );
+      if (balancedTactic !== baseTacticId) return balancedTactic;
+    }
+
+    // Ostrożny wariant 25-50% nie oznacza ani autobusu, ani desperackiego ataku.
+    // Jeśli ulubiona formacja trenera jest skrajnie ofensywna, sprowadzamy ją do
+    // ustawienia zbalansowanego; ryzyko realizują później instrukcje i wydarzenia meczu.
+    if (isCautiousStartJustified(opponentToAiPowerRatio) && !defensiveStartSelected && alreadyOffensive) {
+      const balancedTactic = pickFeasible(
+        ...balancedCounters,
+        '4-2-3-1',
+        '4-1-4-1',
+        '4-4-2',
+        '4-3-2-1'
+      );
+      if (balancedTactic !== baseTacticId) return balancedTactic;
+    }
 
     // Wyraźny faworyt nie powinien kopiować automatycznie najbardziej zachowawczej
     // kontry ani pozostawać przy defensywnej ulubionej formacji trenera.
@@ -373,19 +462,26 @@ export const AiOpponentAnalysisService = {
       if (proactiveTactic !== baseTacticId) return proactiveTactic;
     }
 
+    if (report.recommendedApproach === 'LOW_BLOCK' && lowBlockJustified) {
+      if (alreadyDefensive) return baseTacticId;
+      return pickFeasible('5-4-1', '4-5-1', '4-4-2-DEF');
+    }
+
+    if (defensiveStartSelected && report.recommendedApproach === 'COUNTER') {
+      if (alreadyDefensive) return baseTacticId;
+      return pickFeasible('4-4-2-DEF', '5-2-1-2', '5-4-1');
+    }
+
     if (tacticalCounters.length > 0 && report.confidence >= 0.58) {
-      const candidates = aiClearlyStronger
-        ? tacticalCounters.filter(tacticId => TacticRepository.getById(tacticId).defenseBias <= 65)
+      const candidates = aiClearlyStronger || !defensiveStartSelected
+        ? balancedCounters
         : tacticalCounters;
       const suggestedCounter = pickFeasible(...candidates);
       if (suggestedCounter !== baseTacticId) return suggestedCounter;
     }
 
-    if (report.recommendedApproach === 'LOW_BLOCK' && !alreadyDefensive) {
-      return pickFeasible('5-4-1', '4-5-1', '4-4-2-DEF');
-    }
-
     if (report.recommendedApproach === 'COUNTER' && !alreadyDefensive) {
+      if (isCautiousStartJustified(opponentToAiPowerRatio)) return baseTacticId;
       const coachBoldness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
       if (!isAiAway) {
         if (!alreadyOffensive && coachBoldness >= 60 && Math.random() < (coachBoldness - 55) / 45) {
@@ -397,7 +493,7 @@ export const AiOpponentAnalysisService = {
       if (!alreadyOffensive && Math.random() < offensiveRisk) {
         return pickFeasible('4-2-3-1', '4-3-3', '4-4-2-OFF');
       }
-      if (coachBoldness < 45) return pickFeasible('4-4-2-DEF', '4-5-1');
+      if (coachBoldness < 45 && defensiveStartSelected) return pickFeasible('4-4-2-DEF', '4-5-1');
       return baseTacticId;
     }
 

@@ -1,6 +1,6 @@
 import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack, InstructionPassing } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
-import { AiOpponentMatchReport } from './AiOpponentAnalysisService';
+import { AiOpponentMatchReport, isDefensiveStartJustified } from './AiOpponentAnalysisService';
 import { TacticalInstructionMatrixService } from './TacticalInstructionMatrixService';
 
 type AiInstructions = {
@@ -147,7 +147,12 @@ export const AiCoachTacticsService = {
     const userDefAvg = opponentReport?.perceivedLineStrengths.defense ?? getTopLineAvg(userPlayers, PlayerPosition.DEF, 4);
     const userTacticDefBias = TacticRepository.getById(opponentReport?.predictedTacticId ?? userTacticId)?.defenseBias ?? 50;
     const repDiff = ownClub.reputation - userClub.reputation;
-
+    const defensiveStartJustified = opponentReport
+      ? !!opponentReport.defensiveStartSelected && isDefensiveStartJustified(
+          opponentReport.perceivedOpponentToAiPowerRatio,
+          opponentReport.matchEnvironment ?? 'DOMESTIC_LEAGUE'
+        )
+      : repDiff <= -3;
     // Suma sygnałów: dodatnia = sugeruje OFFENSIVE, ujemna = sugeruje DEFENSIVE
     let signalScore = 0;
 
@@ -156,10 +161,11 @@ export const AiCoachTacticsService = {
       if (opponentReport.recommendedApproach === 'PRESS') signalScore += 2;
       if (opponentReport.recommendedApproach === 'DIRECT') signalScore += 1;
       if (opponentReport.recommendedApproach === 'CONTROL') signalScore += 0.5;
-      if (opponentReport.recommendedApproach === 'COUNTER') signalScore -= 1.5;
-      if (opponentReport.recommendedApproach === 'LOW_BLOCK') signalScore -= 2;
+      if (opponentReport.recommendedApproach === 'COUNTER') signalScore -= defensiveStartJustified ? 1.5 : 0.5;
+      if (opponentReport.recommendedApproach === 'LOW_BLOCK') signalScore -= defensiveStartJustified ? 2 : 0.25;
+      if (defensiveStartJustified) signalScore -= 0.75;
 
-      if (opponentReport.predictedStyle === 'OFFENSIVE') signalScore -= 1;
+      if (opponentReport.predictedStyle === 'OFFENSIVE') signalScore -= defensiveStartJustified ? 1 : 0.25;
       if (opponentReport.predictedStyle === 'DEFENSIVE') signalScore += 1;
       if (opponentReport.perceivedFatigueLevel === 'EXHAUSTED') signalScore += 1.5;
       else if (opponentReport.perceivedFatigueLevel === 'TIRED') signalScore += 0.75;
@@ -202,8 +208,12 @@ export const AiCoachTacticsService = {
       const rng1 = seededRng(seed, 0, 301);
       if (rng1 < decisionNoiseChance) {
         const rng2 = seededRng(seed, 0, 302);
-        const opts: InstructionMindset[] = ['DEFENSIVE', 'NEUTRAL', 'OFFENSIVE'];
-        mindset = opts[Math.floor(rng2 * 3)];
+        // Ryzykowna decyzja jest dozwolona, ale losowy błąd nie może tworzyć
+        // całkowicie nielogicznego niskiego bloku bez odpowiedniej różnicy klas.
+        const opts: InstructionMindset[] = defensiveStartJustified
+          ? ['DEFENSIVE', 'NEUTRAL']
+          : ['NEUTRAL', 'OFFENSIVE'];
+        mindset = opts[Math.floor(rng2 * opts.length)];
       }
     }
 

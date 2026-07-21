@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
 import { 
@@ -127,6 +127,7 @@ import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
 import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
 import { AiOpponentAnalysisService, AiOpponentMatchReport } from '../../services/AiOpponentAnalysisService';
+import { AiLeagueMatchPlanService } from '../../services/AiLeagueMatchPlanService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
@@ -835,30 +836,40 @@ const isPausedForSevereInjury = useMemo(() => {
       const userClubInit = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
       const userPlayersInit = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
       const aiPlayersInit = ctx.homeClub.id === userTeamId ? ctx.awayPlayers : ctx.homePlayers;
-      const userLineupInit = lineups[userClubInit.id];
-      const userTacticIdInit = userLineupInit?.tacticId ?? '4-4-2';
+      const userLineupInit = lineups[userClubInit.id]
+        ?? LineupService.autoPickLineup(userClubInit.id, userPlayersInit);
+      const userTacticIdInit = userLineupInit.tacticId;
       const aiLineupBase = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, '4-4-2', aiCoachInit, {
         formAware: true,
         selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_live_ai`
       });
-      const opponentReport = userLineupInit
-        ? AiOpponentAnalysisService.generateReport({
-            aiClub: aiClubInit,
-            aiCoach: aiCoachInit,
-            aiStaffMembers: staffMembers,
-            opponentClub: userClubInit,
-            aiPlayers: aiPlayersInit,
-            opponentPlayers: userPlayersInit,
-            opponentLineup: userLineupInit,
-            seed: sessionSeed,
-          })
-        : undefined;
-      const aiPreparedTacticId = opponentReport
-        ? AiOpponentAnalysisService.recommendStartingTactic(aiLineupBase.tacticId, opponentReport, aiClubInit, userClubInit, aiPlayersInit, aiClubInit.id !== ctx.homeClub.id, aiCoachInit)
-        : aiLineupBase.tacticId;
-      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
-        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
-      );
+      const opponentReport = AiOpponentAnalysisService.generateReport({
+        aiClub: aiClubInit,
+        aiCoach: aiCoachInit,
+        aiStaffMembers: staffMembers,
+        opponentClub: userClubInit,
+        aiPlayers: aiPlayersInit,
+        opponentPlayers: userPlayersInit,
+        opponentLineup: userLineupInit,
+        seed: sessionSeed,
+        matchEnvironment: 'DOMESTIC_LEAGUE',
+      });
+      const { plan: aiLeagueMatchPlan } = AiLeagueMatchPlanService.createPlan({
+        report: opponentReport,
+        aiClub: aiClubInit,
+        aiCoach: aiCoachInit,
+        aiPlayers: aiPlayersInit,
+        aiBaseLineup: aiLineupBase,
+        userClub: userClubInit,
+        userPlayers: userPlayersInit,
+        userLineup: userLineupInit,
+        aiRank: aiPressureProfile.rank,
+        userRank: userPressureProfile.rank,
+        isAiAway: aiClubInit.id !== ctx.homeClub.id,
+        seed: sessionSeed,
+      });
+      const aiPreparedTacticId = aiLeagueMatchPlan.initialTacticId;
+      const preMatchInstr = aiLeagueMatchPlan.initialInstructions;
       const aiLineupPrepared = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
         formAware: true,
         selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_${aiPreparedTacticId}_live_ai_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
@@ -988,6 +999,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           label:         aiBriefingEffect.label,
         },
         aiNextInstructionMinute: aiInitNextMin,
+        aiLeagueMatchPlan,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
         tacticalBoostExpiry: -1
@@ -995,7 +1007,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext, livePressureContext]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, userPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext, livePressureContext]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1621,6 +1633,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute;
         let nextAiLateTacticChanges = prev.aiLateTacticChanges ?? 0;
         let nextAiLateTacticScoreDiffAtLastChange = prev.aiLateTacticScoreDiffAtLastChange;
+        let aiFormationChangedThisMinute = false;
         let nextHomeInjuries = { ...prev.homeInjuries };
         let nextAwayInjuries = { ...prev.awayInjuries };
         let nextHomeRiskMode = { ...prev.homeRiskMode };
@@ -1719,6 +1732,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               // komentarz przy pierwszym takim bloku (sekcja przerwy, ~linia 1067).
               if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
               else nextAwayLineup = decision.newLineup || nextAwayLineup;
+              aiFormationChangedThisMinute = true;
            }
            if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
            if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
@@ -2508,6 +2522,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         let nextAiActiveShout = prev.aiActiveShout;
         let nextAiNextInstructionMinute = prev.aiNextInstructionMinute ?? 10;
+        if (aiFormationChangedThisMinute && nextAiActiveShout) {
+          const currentAiTactic = TacticRepository.getById(
+            userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId
+          );
+          const currentAiScoreDiff = userSide === 'HOME'
+            ? nextAwayScore - nextHomeScore
+            : nextHomeScore - nextAwayScore;
+          const conflictsWithAttackingShape =
+            currentAiTactic.attackBias >= 70 &&
+            nextAiActiveShout.mindset === 'DEFENSIVE' &&
+            currentAiScoreDiff <= 0;
+          const conflictsWithDefensiveShape =
+            currentAiTactic.defenseBias >= 75 &&
+            nextAiActiveShout.mindset === 'OFFENSIVE' &&
+            currentAiScoreDiff >= 0;
+          if (conflictsWithAttackingShape || conflictsWithDefensiveShape) {
+            nextAiActiveShout = {
+              ...nextAiActiveShout,
+              id: `formation_sync_${nextMinute}`,
+              mindset: 'NEUTRAL',
+              tempo: 'NORMAL',
+              intensity: 'NORMAL',
+              pressing: 'NORMAL',
+              counterAttack: 'NORMAL',
+            };
+          }
+        }
         // AI Exploit Window memory:
         // nextAiExploitUntilMinute lets AI keep a targeted pressure instruction active for a
         // short window after the tactical brain detects a player mistake. This prevents the
@@ -2520,15 +2561,18 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         //   Raise fatigue threshold if AI should abandon pressure sooner when tired.
         //   Tighten score diff if AI should stop exploiting when clearly losing.
         let nextAiExploitUntilMinute = prev.aiExploitUntilMinute ?? -1;
-        if (nextAiExploitUntilMinute > 0 && nextMinute > nextAiExploitUntilMinute) {
+        const aiExploitExpiredThisMinute = nextAiExploitUntilMinute > 0 && nextMinute > nextAiExploitUntilMinute;
+        if (aiExploitExpiredThisMinute) {
           nextAiExploitUntilMinute = -1;
         }
         let aiInstructionDecisionTrigger = false;
 
-        if (nextMinute >= nextAiNextInstructionMinute) {
+        if (nextMinute >= nextAiNextInstructionMinute || aiFormationChangedThisMinute) {
           const aiClub = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
           const aiCoach = aiClub?.coachId ? coaches[aiClub.coachId] : null;
-          const aiScoreDiff = userSide === 'HOME' ? prev.awayScore - prev.homeScore : prev.homeScore - prev.awayScore;
+          const aiScoreDiff = userSide === 'HOME'
+            ? nextAwayScore - nextHomeScore
+            : nextHomeScore - nextAwayScore;
           const aiMomentum = userSide === 'HOME' ? -prev.momentum : prev.momentum;
           const aiXIForDecision = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatigueForDecision = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
@@ -2563,7 +2607,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             aiScoreDiff, aiMomentum, nextMinute,
             aiCoach?.attributes.decisionMaking ?? 50,
             aiCoach?.attributes.experience ?? 50,
-            prev.lastGoalBoostMinute ?? -1,
+            nextLastGoalBoostMinute,
             currentSeed,
             prev.userInstructions.mindset,
             TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId).attackBias,
@@ -2611,7 +2655,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           } else if (shouldHoldExploit) {
             nextAiActiveShout = prev.aiActiveShout;
           } else {
-            nextAiActiveShout = null;
+            // null z serwisu oznacza „bez zmiany”, a nie „wyczyść plan”. Po zakończeniu
+            // krótkiego okna eksploatacji wracamy do instrukcji zapisanych przed meczem.
+            const initialPlanInstructions = prev.aiLeagueMatchPlan?.initialInstructions;
+            nextAiActiveShout = aiExploitExpiredThisMinute && initialPlanInstructions
+              ? { id: `plan_${nextMinute}`, ...initialPlanInstructions, expiryMinute: -1 }
+              : prev.aiActiveShout;
             nextAiExploitUntilMinute = -1;
           }
           if (decision) {

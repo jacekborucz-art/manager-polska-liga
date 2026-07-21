@@ -434,6 +434,18 @@ const getOpponentStrengthTier = (
   return { tier: 'MUCH_WEAKER', strengthDiff };                          // rywal OGROMNIE słabszy
 };
 
+// Przedmeczowy raport albo intuicja trenera wyznaczają jeden punkt odniesienia na cały mecz.
+// Dzięki temu silnik live nie podmienia po cichu oceny trenera idealną wiedzą o realnym overallu.
+const getPlannedOpponentStrengthTier = (
+  opponentToAiPowerRatio: number
+): { tier: OpponentStrengthTier; strengthDiff: number } => {
+  if (opponentToAiPowerRatio >= 1.50) return { tier: 'MUCH_STRONGER', strengthDiff: -9 };
+  if (opponentToAiPowerRatio >= 1.25) return { tier: 'STRONGER', strengthDiff: -4 };
+  if (opponentToAiPowerRatio > 0.92) return { tier: 'EVEN', strengthDiff: 0 };
+  if (opponentToAiPowerRatio > 0.80) return { tier: 'WEAKER', strengthDiff: 4 };
+  return { tier: 'MUCH_WEAKER', strengthDiff: 9 };
+};
+
 type CoachScoreState = 'WINNING' | 'DRAWING' | 'LOSING';
 
 const getCoachScoreState = (scoreDiff: number): CoachScoreState =>
@@ -598,18 +610,17 @@ const resolvePlanAdherence = (input: PlanAdherenceInput): PlanDecisionOutcome =>
   return Math.random() < 0.5 ? 'IMPROVISE_WELL' : 'IMPROVISE_BADLY';
 };
 
-type BadImprovisationMode = 'FREEZE' | 'SUBOPTIMAL' | 'SPECTACULAR';
+type BadImprovisationMode = 'FREEZE' | 'SUBOPTIMAL' | 'RISKY';
 
-// [AI-COACH-CALIBRATION] rozkład 65/25/10 SKOPIOWANY Z ISTNIEJĄCEGO mechanizmu błędu trenera w
-// AiMatchDecisionCupService.tsx (sekcja "PROGRESYWNY MECHANIZM BŁĘDÓW TRENERA") — ten sam rozkład:
-// najczęściej trener po prostu nie reaguje (65%), czasem reaguje słabo/nie na temat (25%), rzadko
-// reaguje spektakularnie źle (10%). Użycie tego samego rozkładu w obu silnikach (ligowym i
-// pucharowym) to świadoma decyzja o konsekwencji, nie przypadek.
+// Błąd trenera może być kosztowny, ale nie może całkowicie ignorować klasy rywala i wyniku.
+// Najczęściej trener nie reaguje (65%), czasem wybiera sąsiedni, nieoptymalny plan (30%),
+// a rzadko podejmuje kontrolowane ryzyko (5%). Nie istnieje już wariant, który bezwarunkowo
+// przełączał każdą drużynę na ALL_IN od pierwszej minuty.
 const rollBadImprovisationMode = (): BadImprovisationMode => {
   const roll = Math.random();
   if (roll < 0.65) return 'FREEZE';
-  if (roll < 0.90) return 'SUBOPTIMAL';
-  return 'SPECTACULAR';
+  if (roll < 0.95) return 'SUBOPTIMAL';
+  return 'RISKY';
 };
 
 // [AI-COACH-CALIBRATION] applyPlanDeviation — przekłada wynik resolvePlanAdherence na KONKRETNE,
@@ -656,11 +667,19 @@ const applyPlanDeviation = (
     return { plan: getCoachPlan(tier, neighborScoreState), freezeThisTick: false, badMode };
   }
 
-  // SPECTACULAR — najbardziej dramatyczny błąd: trener całkowicie błędnie ocenia wagę sytuacji,
-  // odblokowuje zmianę szyku formacji NATYCHMIAST (nawet w 1. połowie) i ustawia najbardziej
-  // ekstremalne posture (ALL_IN) niezależnie od tego, czy sytuacja na to wskazuje.
+  // RISKY — trener przyspiesza eskalację i przesuwa plan o jeden poziom w stronę ataku.
+  // Zachowujemy jednak blokadę pierwszej połowy oraz dolny limit momentu przebudowy szyku,
+  // więc outsider nie rzuci wszystkiego do ataku po kilku minutach meczu z gigantem.
+  const posturesInOrder: CoachPosture[] = ['PARK_BUS', 'CONTROL', 'BALANCED', 'PUSH', 'ALL_IN'];
+  const currentIdx = posturesInOrder.indexOf(plan.posture);
+  const riskierPosture = posturesInOrder[Math.min(posturesInOrder.length - 1, currentIdx + 1)];
+  const earliestReasonableChange = scoreState === 'LOSING' ? 30 : 45;
   return {
-    plan: { posture: 'ALL_IN', allowFirstHalfTacticChange: true, crossFamilyEscalationMinute: 1 },
+    plan: {
+      posture: riskierPosture,
+      allowFirstHalfTacticChange: plan.allowFirstHalfTacticChange,
+      crossFamilyEscalationMinute: Math.max(earliestReasonableChange, plan.crossFamilyEscalationMinute - 10)
+    },
     freezeThisTick: false,
     badMode
   };
@@ -671,11 +690,12 @@ const assessHalftimeStatus = (
   oppLineup: Lineup,
   myPlayers: Player[],
   oppPlayers: Player[],
-  scoreDiff: number
+  scoreDiff: number,
+  perceivedStrengthDiff?: number
 ): { status: HalftimeStatus; strengthDiff: number } => {
   const myXiStrength = getLineupAverageRating(myLineup.startingXI, myPlayers);
   const oppXiStrength = getLineupAverageRating(oppLineup.startingXI, oppPlayers);
-  const strengthDiff = myXiStrength - oppXiStrength;
+  const strengthDiff = perceivedStrengthDiff ?? (myXiStrength - oppXiStrength);
   const isClearFavorite = strengthDiff >= 3.5;
   const isClearUnderdog = strengthDiff <= -3.5;
 
@@ -1210,7 +1230,17 @@ export const AiMatchDecisionService = {
     const oppScore = isHome ? state.awayScore : state.homeScore;
     const scoreDiff = myScore - oppScore;
     const oppLineup = isHome ? state.awayLineup : state.homeLineup;
-    const halftimeAssessment = assessHalftimeStatus(currentLineup, oppLineup, myPlayers, oppPlayers, scoreDiff);
+    const plannedStrengthAssessment = state.aiLeagueMatchPlan
+      ? getPlannedOpponentStrengthTier(state.aiLeagueMatchPlan.opponentToAiPowerRatio)
+      : null;
+    const halftimeAssessment = assessHalftimeStatus(
+      currentLineup,
+      oppLineup,
+      myPlayers,
+      oppPlayers,
+      scoreDiff,
+      plannedStrengthAssessment?.strengthDiff
+    );
     const opponentGoalkeeperCrisis = !hasReliableGoalkeeper(oppLineup, oppPlayers);
     const isFinalPhase = state.minute >= 76;
     const aiStakes = lateMatchContext?.aiStakes ?? 'MID_TABLE';
@@ -1232,7 +1262,8 @@ export const AiMatchDecisionService = {
     // od tego zależy: (1) czy ten tick ma być całkowicie "zamrożony" (poniżej, w gate reactionChance),
     // (2) czy dyskrecjonalna (nie wymuszona Warstwą 0/1) zmiana taktyki jest w ogóle dopuszczona w
     // 1. połowie, (3) jak chętnie/jak szybko (posture) trener sięga po zmianę szyku formacji.
-    const strengthAssessment = getOpponentStrengthTier(currentLineup, oppLineup, myPlayers, oppPlayers);
+    const strengthAssessment = plannedStrengthAssessment
+      ?? getOpponentStrengthTier(currentLineup, oppLineup, myPlayers, oppPlayers);
     const coachScoreState = getCoachScoreState(scoreDiff);
     const basePlan = getCoachPlan(strengthAssessment.tier, coachScoreState);
     const planAdherenceOutcome = resolvePlanAdherence({

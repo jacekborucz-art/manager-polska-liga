@@ -2198,6 +2198,33 @@ export interface TacticalInstructions {
   pressingResponseFactor: number;
   counterAttackResponseFactor?: number;
 }
+
+export type AiLeaguePlanSource = 'REPORT' | 'INTUITION';
+export type AiLeaguePlanStrength = 'FAVORED' | 'EVEN' | 'CAUTIOUS' | 'CLEAR_UNDERDOG';
+
+export interface AiLeagueMatchPlan {
+  source: AiLeaguePlanSource;
+  reportTrustProbability: number;
+  reportConfidence: number;
+  opponentToAiPowerRatio: number;
+  strength: AiLeaguePlanStrength;
+  recommendedApproach: 'PRESS' | 'CONTROL' | 'COUNTER' | 'LOW_BLOCK' | 'DIRECT';
+  defensiveStartChance: number;
+  defensiveStartSelected: boolean;
+  initialTacticId: string;
+  initialInstructions: {
+    tempo: InstructionTempo;
+    mindset: InstructionMindset;
+    intensity: InstructionIntensity;
+    passing?: InstructionPassing;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+  };
+  aiRank: number;
+  userRank: number;
+  aiMorale: number;
+  userMorale: number;
+}
 export interface SubstitutionRecord {
   playerOutId: string;
   playerInId: string;
@@ -2324,6 +2351,8 @@ isPenalties?: boolean;
   // Losowa przedmeczowa proba AI przewidzenia taktyki gracza, zapisana do audytu/raportu.
   aiTacticGuessId?: string;
   aiNextInstructionMinute?: number;
+  // Jeden, trwały punkt odniesienia dla raportu, formacji i instrukcji ligowego trenera AI.
+  aiLeagueMatchPlan?: AiLeagueMatchPlan;
   preMatchMotivation?: {
     actionMod: number;
     goalMod: number;
