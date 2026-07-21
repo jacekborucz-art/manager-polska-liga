@@ -549,7 +549,7 @@ export const PlayerCard: React.FC = () => {
           ×
         </button>
         
-           <div className="w-full md:w-[305px] relative flex flex-col items-center justify-between p-6 border-r border-white/5 overflow-hidden overflow-y-auto custom-scrollbar">
+           <div className="w-full md:w-[305px] relative flex flex-col items-center justify-start p-6 border-r border-white/5 overflow-hidden overflow-y-auto custom-scrollbar">
            <div className="absolute inset-0 flex items-center justify-center opacity-[0.02] pointer-events-none">
               <span className="text-[30rem] font-black italic select-none">{player.position}</span>
            </div>
@@ -605,12 +605,12 @@ export const PlayerCard: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-center gap-2 mb-2">
-                <div className={`px-4 py-1 rounded-xl border-2 font-black italic tracking-tighter text-lg ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
-                  {player.position}
+                <div className={`px-4 py-1 rounded-xl border-2 text-sm font-black italic uppercase tracking-tighter ${PlayerPresentationService.getPositionBadgeClass(player.position)}`}>
+                  {playerPositionLabel[player.position]}
                 </div>
                 {player.secondaryPosition && player.secondaryPosition !== player.position && (
                   <div className={`px-3 py-1 rounded-lg border font-black italic uppercase tracking-tighter text-xs ${PlayerPresentationService.getPositionBadgeClass(player.secondaryPosition)}`}>
-                    {player.secondaryPosition}
+                    {playerPositionLabel[player.secondaryPosition]}
                   </div>
                 )}
               </div>
@@ -629,27 +629,25 @@ export const PlayerCard: React.FC = () => {
               )}
            </div>
 
-           <div className="relative z-10 group mt-4 mb-4">
-              <div className="absolute inset-[-15px] bg-white/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <div className="w-36 h-36 rounded-full border-4 border-white/5 flex flex-col items-center justify-center shadow-2xl relative bg-slate-950 overflow-hidden">
-                 <div className="absolute inset-0 opacity-10" style={{ background: `linear-gradient(135deg, ${club.colorsHex[0]}, transparent)` }} />
-                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 relative z-10">Rating</span>
-                 <span className="text-6xl font-black text-white italic tracking-tighter leading-none relative z-10 drop-shadow-lg">{player.overallRating}</span>
-                 <div className="absolute bottom-4 h-1 w-12 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,1)]" />
-              </div>
+           <div className="relative z-10 mt-1 mb-3 flex w-full flex-col items-center justify-center">
+              <span className="mb-1 w-full text-center text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Overall</span>
+              <span className="text-5xl font-black text-white italic tracking-tighter leading-none drop-shadow-lg">{player.overallRating}</span>
            </div>
 
            <div className="relative z-10 w-full flex flex-col gap-2">
-            <div className="flex items-center justify-between p-3 bg-black/25 rounded-[20px] border border-white/5">
-                 <div className="flex flex-col gap-1">
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Status Kontraktu</span>
+              <div className="flex items-center justify-between p-3 bg-black/25 rounded-[20px] border border-white/5">
+                 <div className="min-w-0">
                     <span className="text-xs font-black text-white italic uppercase tracking-tight">
                        {club.id === 'FREE_AGENTS' ? 'Wolny Agent' : isReserve ? `${club.name} II` : club.name}
                     </span>
                  </div>
                  <div className="w-10 h-10 rounded-xl flex flex-col overflow-hidden border border-white/20 shadow-lg">
-                    {club.id === 'FREE_AGENTS' ? (
-                      <div className="flex-1 bg-slate-700 flex items-center justify-center text-xs">🚫</div>
+                    {clubLogoUrl ? (
+                      <img
+                        src={clubLogoUrl}
+                        alt={club.name}
+                        className="h-full w-full object-contain p-1"
+                      />
                     ) : (
                       <>
                         <div style={{ backgroundColor: club.colorsHex[0] }} className="flex-1" />
@@ -749,20 +747,17 @@ export const PlayerCard: React.FC = () => {
                 )}
               </div>
 
-              <div className={`p-3 rounded-[20px] border ${formInfo.borderClass} ${formInfo.bgClass}`}>
-                <div className="flex items-center justify-between gap-3">
+              <div className={`px-3 py-2.5 rounded-[18px] border border-white/5 ${formInfo.bgClass}`}>
+                <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Forma</span>
-                    <span className={`block text-xs font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.label}</span>
+                    <span className="block text-[7px] font-black text-slate-500 uppercase tracking-widest">Forma</span>
+                    <span className={`block text-[10px] font-black italic uppercase tracking-tighter ${formInfo.colorClass}`}>{formInfo.label}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-white/10 bg-black/25">
-                      <PlayerFormArrow level={formInfo.level} className="h-7 w-7 drop-shadow" />
+                  <div className="flex items-center">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-black/25">
+                      <PlayerFormArrow level={formInfo.level} className="h-5 w-5 drop-shadow" />
                     </div>
                   </div>
-                </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full border border-white/5 bg-black/35">
-                  <div className="h-full rounded-full bg-current transition-all duration-700" style={{ width: `${formInfo.score}%`, color: formInfo.level === 'VERY_LOW' ? '#f87171' : formInfo.level === 'FALLING' ? '#fb923c' : formInfo.level === 'STABLE' ? '#cbd5e1' : formInfo.level === 'RISING' ? '#a3e635' : formInfo.level === 'HIGH' ? '#84cc16' : '#34d399' }} />
                 </div>
               </div>
 
