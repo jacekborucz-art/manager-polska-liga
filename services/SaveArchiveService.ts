@@ -1,6 +1,6 @@
 import { AiFriendlyMatchReport, AiFriendlyPair, MailMessage, ReserveMatchResult } from '../types';
 
-export const FULL_DETAIL_SEASONS = 5;
+export const ARCHIVE_INTERVAL_SEASONS = 5;
 
 const getValidDate = (value: Date | string): Date | null => {
   const date = value instanceof Date ? value : new Date(value);
@@ -8,19 +8,11 @@ const getValidDate = (value: Date | string): Date | null => {
 };
 
 export const SaveArchiveService = {
-  getFirstDetailedSeason(currentSeasonNumber: number): number {
-    return Math.max(1, currentSeasonNumber - FULL_DETAIL_SEASONS + 1);
+  shouldArchiveAfterSeason(completedSeasonNumber: number): boolean {
+    return completedSeasonNumber > 0 && completedSeasonNumber % ARCHIVE_INTERVAL_SEASONS === 0;
   },
 
-  getMailAndReportCutoff(currentDate: Date): Date {
-    const seasonStartYear = currentDate.getMonth() >= 6
-      ? currentDate.getFullYear()
-      : currentDate.getFullYear() - 1;
-    return new Date(seasonStartYear - FULL_DETAIL_SEASONS + 1, 6, 1);
-  },
-
-  pruneMessages(messages: MailMessage[], currentDate: Date): MailMessage[] {
-    const cutoff = this.getMailAndReportCutoff(currentDate);
+  archiveMessagesBefore(messages: MailMessage[], cutoff: Date): MailMessage[] {
     return messages.filter(mail => {
       const metadataType = mail.metadata?.type;
       if (metadataType === 'SEASON_SUMMARY') return true;
@@ -29,21 +21,18 @@ export const SaveArchiveService = {
     });
   },
 
-  pruneReserveResults(results: ReserveMatchResult[], currentSeasonNumber: number): ReserveMatchResult[] {
-    const firstDetailedSeason = this.getFirstDetailedSeason(currentSeasonNumber);
+  archiveReserveResultsBefore(results: ReserveMatchResult[], firstDetailedSeason: number): ReserveMatchResult[] {
     return results.filter(result => result.season >= firstDetailedSeason);
   },
 
-  pruneAiFriendlyPairs(pairs: AiFriendlyPair[], currentDate: Date): AiFriendlyPair[] {
-    const cutoff = this.getMailAndReportCutoff(currentDate);
+  archiveAiFriendlyPairsBefore(pairs: AiFriendlyPair[], cutoff: Date): AiFriendlyPair[] {
     return pairs.filter(pair => {
       const date = getValidDate(pair.date);
       return !date || date >= cutoff;
     });
   },
 
-  pruneAiFriendlyReports(reports: AiFriendlyMatchReport[], currentDate: Date): AiFriendlyMatchReport[] {
-    const cutoff = this.getMailAndReportCutoff(currentDate);
+  archiveAiFriendlyReportsBefore(reports: AiFriendlyMatchReport[], cutoff: Date): AiFriendlyMatchReport[] {
     return reports.filter(report => {
       const date = getValidDate(report.date);
       return !date || date >= cutoff;

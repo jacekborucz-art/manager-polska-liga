@@ -98,27 +98,22 @@ export const Dashboard: React.FC = () => {
   const [activeHint, setActiveHint] = useState<string | null>(null);
   const handleSaveGame = async () => {
     showGameNotification({
-      title: 'Kompresowanie zapisu',
-      message: 'Trwa przygotowywanie i kompresowanie pliku zapisu gry.',
+      title: 'Zapisywanie gry',
+      message: 'Trwa przygotowywanie pełnego pliku JSON ze stanem gry.',
       tone: 'info',
     });
 
     try {
       const result = await exportSaveToFile(getSaveState());
-      const formatSize = (bytes: number) => bytes >= 1024 * 1024
-        ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
       showGameNotification({
-        title: result.compressed ? 'Zapis skompresowany' : 'Gra zapisana',
-        message: result.compressed
-          ? `Plik ${result.fileName} został pobrany. Rozmiar zmniejszono z ${formatSize(result.originalBytes)} do ${formatSize(result.savedBytes)}.`
-          : `Plik ${result.fileName} został pobrany. Ta przeglądarka zapisała go bez kompresji GZIP.`,
+        title: 'Gra zapisana',
+        message: `Pełny stan gry został zapisany w pliku ${result.fileName}.`,
         tone: 'success',
       });
     } catch {
       showGameNotification({
         title: 'Błąd zapisu',
-        message: 'Nie udało się przygotować skompresowanego pliku zapisu gry.',
+        message: 'Nie udało się przygotować pliku JSON ze stanem gry.',
         tone: 'error',
       });
     }

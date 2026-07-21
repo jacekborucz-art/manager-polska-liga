@@ -91,6 +91,7 @@ import { TrainingAssistantService } from '../services/TrainingAssistantService';
 import { AiWeeklyTrainingService } from '../services/AiWeeklyTrainingService';
 import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
+import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
@@ -1290,12 +1291,13 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const [summerCampInvitePending, setSummerCampInvitePending] = useState(false);
   const [summerCampProgramPending, setSummerCampProgramPending] = useState(false);
  const [currentPolishChampionId, setCurrentPolishChampionId] = useState<string>('PL_LECH_POZNAN');
+ const [currentPolishViceChampionId, setCurrentPolishViceChampionId] = useState<string | null>('PL_RAKOW_CZESTOCHOWA');
  const [currentPolishCupWinnerId, setCurrentPolishCupWinnerId] = useState<string>('PL_LEGIA_WARSZAWA');
  const [currentCLWinnerId, setCurrentCLWinnerId] = useState<string>('EU_CL_PARIS_SAINT_GERMAIN');
  const [currentELWinnerId, setCurrentELWinnerId] = useState<string>('EU_CL_TOTTENHAM_HOTSPUR');
  const [lastUEFASuperCupResult, setLastUEFASuperCupResult] = useState<MatchHistoryEntry | null>(null);
- // Polskie drużyny do CONF R2Q: sezon 1 = Jagiellonia + Raków, kolejne sezony = 2. i 3. miejsce Ekstraklasy z zabezpieczeniem PP
- const [confR2QPolishTeamIds, setConfR2QPolishTeamIds] = useState<string[]>(['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA']);
+ // Polskie drużyny do CONF R2Q: sezon 1 = Jagiellonia + Pogoń, kolejne sezony = dwa najwyższe wolne kluby od 3. miejsca
+ const [confR2QPolishTeamIds, setConfR2QPolishTeamIds] = useState<string[]>(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
  const [supercupWinners, setSupercupWinners] = useState<{ season: string; winner: string; year: number; }[]>(() => {
     // Załaduj z localStorage przy inicjalizacji
     try {
@@ -2077,6 +2079,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     sentMailIdsRef.current = new Set(initialMessages.map(message => message.id));
     setPzpnDisciplinaryEvents([]);
     setProcessedDrawIds(initialNationsLeagueState ? [`UNL_DRAW_${initialNationsLeagueState.editionStartYear}`] : []);
+    setCurrentPolishChampionId('PL_LECH_POZNAN');
+    setCurrentPolishViceChampionId('PL_RAKOW_CZESTOCHOWA');
+    setCurrentPolishCupWinnerId('PL_LEGIA_WARSZAWA');
+    setConfR2QPolishTeamIds(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
     const initialSuperCup = SuperCupService.generateFixture(startYear, STATIC_CLUBS);
     const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, STATIC_CLUBS);
     setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
@@ -2117,6 +2123,12 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       cupWinnerId = homeWin ? cupFinal.homeTeamId : cupFinal.awayTeamId;
       cupLoserId = homeWin ? cupFinal.awayTeamId : cupFinal.homeTeamId;
     }
+
+    const polishEuropeanQualification = PolishEuropeanQualificationService.resolve({
+      leagueTableIds: standingsL1.map(club => club.id),
+      cupWinnerId,
+      cupRunnerUpId: cupLoserId,
+    });
 
     // 2. Logika awansów i spadków
     const standingsL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2').sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
@@ -2720,42 +2732,16 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const nextSuperCup = SuperCupService.generateFixture(newYear, updatedClubs, champion?.id, cupWinnerId);
     const nextUEFASuperCup = UEFASuperCupService.generateFixture(newYear, updatedClubs, currentCLWinnerId, currentELWinnerId);
     setGlobalFixtures([nextSuperCup, nextUEFASuperCup]); // Czyścimy stare puchary, zostawiamy Superpuchary na nowy sezon
-    if (champion?.id) setCurrentPolishChampionId(champion.id);
+    if (polishEuropeanQualification.championsLeagueR2TeamId) {
+      setCurrentPolishChampionId(polishEuropeanQualification.championsLeagueR2TeamId);
+    }
+    setCurrentPolishViceChampionId(polishEuropeanQualification.championsLeagueR1TeamId);
 
-    // Ustal kto idzie do LE R2Q: zwycięzca PP, chyba że jest też mistrzem — wtedy przegrany finału
-    const polishCupEuropeTeamId = cupWinnerId
-      ? ((cupWinnerId === champion?.id && cupLoserId) ? cupLoserId : cupWinnerId)
-      : undefined;
+    const polishCupEuropeTeamId = polishEuropeanQualification.europaLeagueR2TeamId ?? undefined;
     if (polishCupEuropeTeamId) {
       setCurrentPolishCupWinnerId(polishCupEuropeTeamId);
     }
-
-    // Ustal 2 polskie drużyny do CONF R2Q: 2. i 3. miejsce Ekstraklasy
-    // Jeśli drużyna z 2. lub 3. miejsca wygrała PP (gra w LE), zastępujemy ją 4. miejscem
-    {
-      const lePolishTeamId = polishCupEuropeTeamId ?? null;
-
-      const candidates: string[] = [];
-      let replacementIndex = 3; // index 3 = 4. miejsce (0-based)
-
-      for (let i = 1; i < standingsL1.length && candidates.length < 2; i++) {
-        const candidateId = standingsL1[i].id;
-        if (candidateId === lePolishTeamId) {
-          // Ta drużyna idzie do LE — pomijamy, bierzemy następną z listy
-          const replacement = standingsL1[replacementIndex];
-          if (replacement && !candidates.includes(replacement.id) && replacement.id !== lePolishTeamId) {
-            candidates.push(replacement.id);
-            replacementIndex++;
-          }
-        } else {
-          candidates.push(candidateId);
-        }
-      }
-
-      if (candidates.length > 0) {
-        setConfR2QPolishTeamIds(candidates.slice(0, 2));
-      }
-    }
+    setConfR2QPolishTeamIds(polishEuropeanQualification.conferenceLeagueR2TeamIds);
 
 
         const seasonEndDate = new Date(newYear - 1, 5, 30); // 30 czerwca kończącego się sezonu
@@ -2766,28 +2752,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       seasonNumber
     );
     const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationGrowth, updatedClubs, seasonEndDate, userTeamId);
-    const confEuropeTeamIds = (() => {
-      const lePolishTeamId = polishCupEuropeTeamId ?? null;
-      const candidates: string[] = [];
-      let replacementIndex = 3;
-
-      for (let i = 1; i < standingsL1.length && candidates.length < 2; i++) {
-        const candidateId = standingsL1[i].id;
-        if (candidateId === lePolishTeamId) {
-          const replacement = standingsL1[replacementIndex];
-          if (replacement && !candidates.includes(replacement.id) && replacement.id !== lePolishTeamId) {
-            candidates.push(replacement.id);
-            replacementIndex++;
-          }
-        } else {
-          candidates.push(candidateId);
-        }
-      }
-
-      return candidates.slice(0, 2);
-    })();
+    const confEuropeTeamIds = polishEuropeanQualification.conferenceLeagueR2TeamIds;
     const europeanQualificationIds = new Set([
-      champion?.id,
+      polishEuropeanQualification.championsLeagueR2TeamId,
+      polishEuropeanQualification.championsLeagueR1TeamId,
       polishCupEuropeTeamId,
       ...confEuropeTeamIds,
     ].filter((id): id is string => !!id));
@@ -3013,20 +2981,20 @@ if (userTeamId) {
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
 
-    // Retencja zapisu: pełne szczegóły zachowujemy wyłącznie dla pięciu ostatnich sezonów.
+    // Archiwizacja jest wykonywana wyłącznie po każdych pięciu zakończonych sezonach.
+    // Pomiędzy archiwizacjami ręczny zapis zachowuje wszystkie szczegółowe dane.
     const nextSeasonNumber = seasonNumber + 1;
     const nextSeasonStartDate = new Date(newYear, 6, 1);
-    const firstDetailedSeason = SaveArchiveService.getFirstDetailedSeason(nextSeasonNumber);
-    MatchHistoryService.archiveBeforeSeason(firstDetailedSeason);
-    setMessages(prev => SaveArchiveService.pruneMessages(prev, nextSeasonStartDate));
     setReserveFixtures([]);
-    setReserveMatchResults(prev => SaveArchiveService.pruneReserveResults(prev, nextSeasonNumber));
-    setAiFriendlyPairs(prev => SaveArchiveService.pruneAiFriendlyPairs(prev, nextSeasonStartDate));
-    setAiFriendlyReports(prev => SaveArchiveService.pruneAiFriendlyReports(prev, nextSeasonStartDate));
-    if (firstDetailedSeason > 1) {
+    if (SaveArchiveService.shouldArchiveAfterSeason(seasonNumber)) {
+      MatchHistoryService.archiveBeforeSeason(nextSeasonNumber);
+      setMessages(prev => SaveArchiveService.archiveMessagesBefore(prev, nextSeasonStartDate));
+      setReserveMatchResults(prev => SaveArchiveService.archiveReserveResultsBefore(prev, nextSeasonNumber));
+      setAiFriendlyPairs(prev => SaveArchiveService.archiveAiFriendlyPairsBefore(prev, nextSeasonStartDate));
+      setAiFriendlyReports(prev => SaveArchiveService.archiveAiFriendlyReportsBefore(prev, nextSeasonStartDate));
       showGameNotification({
         title: 'Archiwizacja zakończona',
-        message: `Dane sezonu ${firstDetailedSeason - 1} zostały skompresowane. Wyniki i najważniejsze informacje historyczne pozostają dostępne.`,
+        message: `Dane sezonów ${Math.max(1, seasonNumber - 4)}–${seasonNumber} zostały zarchiwizowane. Wyniki i najważniejsze informacje historyczne pozostają dostępne.`,
         tone: 'info',
       });
     }
@@ -3043,7 +3011,7 @@ if (userTeamId) {
     reserves,
     reserveCoachId,
     reserveFixtures,
-    reserveMatchResults: SaveArchiveService.pruneReserveResults(reserveMatchResults, seasonNumber),
+    reserveMatchResults,
     academy,
     scoutPool,
     scoutMarket,
@@ -3062,7 +3030,7 @@ if (userTeamId) {
     managerProfile,
     managerJobOffers,
     seasonNumber,
-    messages: SaveArchiveService.pruneMessages(messages, currentDate),
+    messages,
     mediaRelationships,
     sentUnfriendlyPressMonths,
     sentFriendlyPressMonths,
@@ -3112,21 +3080,22 @@ if (userTeamId) {
     isResigned,
     managerEmploymentStatus,
     currentPolishChampionId,
+    currentPolishViceChampionId,
     currentPolishCupWinnerId,
     currentCLWinnerId,
     currentELWinnerId,
     lastUEFASuperCupResult,
     confR2QPolishTeamIds,
     supercupWinners,
-    matchHistory: MatchHistoryService.getForSave(SaveArchiveService.getFirstDetailedSeason(seasonNumber)),
+    matchHistory: MatchHistoryService.getAll(),
     championshipHistory: ChampionshipHistoryService.getAll(),
     winterCampInvitePending,
     winterCampProgramPending,
     summerCampInvitePending,
     summerCampProgramPending,
     lastNTMatchResults,
-    aiFriendlyPairs: SaveArchiveService.pruneAiFriendlyPairs(aiFriendlyPairs, currentDate),
-    aiFriendlyReports: SaveArchiveService.pruneAiFriendlyReports(aiFriendlyReports, currentDate),
+    aiFriendlyPairs,
+    aiFriendlyReports,
     pzpnDisciplinaryEvents,
     sentMailIds: Array.from(sentMailIdsRef.current),
     lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
@@ -3214,15 +3183,10 @@ if (userTeamId) {
       loadedCoaches,
       data.players ?? {}
     );
-    const retainedMessages = SaveArchiveService.pruneMessages(data.messages ?? [], data.currentDate);
-    const retainedReserveResults = SaveArchiveService.pruneReserveResults(data.reserveMatchResults ?? [], data.seasonNumber);
-    const retainedAiFriendlyPairs = SaveArchiveService.pruneAiFriendlyPairs(data.aiFriendlyPairs ?? [], data.currentDate);
-    const retainedAiFriendlyReports = SaveArchiveService.pruneAiFriendlyReports(data.aiFriendlyReports ?? [], data.currentDate);
-    const removedArchiveItems =
-      (data.messages?.length ?? 0) - retainedMessages.length +
-      (data.reserveMatchResults?.length ?? 0) - retainedReserveResults.length +
-      (data.aiFriendlyPairs?.length ?? 0) - retainedAiFriendlyPairs.length +
-      (data.aiFriendlyReports?.length ?? 0) - retainedAiFriendlyReports.length;
+    const retainedMessages = data.messages ?? [];
+    const retainedReserveResults = data.reserveMatchResults ?? [];
+    const retainedAiFriendlyPairs = data.aiFriendlyPairs ?? [];
+    const retainedAiFriendlyReports = data.aiFriendlyReports ?? [];
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
@@ -3301,6 +3265,7 @@ if (userTeamId) {
     setIsResigned(data.isResigned);
     setManagerEmploymentStatus(data.managerEmploymentStatus ?? (data.isResigned ? 'RESIGNED' : 'EMPLOYED'));
     setCurrentPolishChampionId(data.currentPolishChampionId);
+    setCurrentPolishViceChampionId(data.currentPolishViceChampionId ?? null);
     setCurrentPolishCupWinnerId(data.currentPolishCupWinnerId);
     setCurrentCLWinnerId(data.currentCLWinnerId);
     setCurrentELWinnerId(data.currentELWinnerId);
@@ -3322,17 +3287,9 @@ if (userTeamId) {
     lastProcessedLeagueDateRef.current = data.lastProcessedLeagueDate ?? null;
     MatchHistoryService.clear();
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
-    const archivedMatches = MatchHistoryService.archiveBeforeSeason(SaveArchiveService.getFirstDetailedSeason(data.seasonNumber));
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.restore(data.championshipHistory || []);
     setViewState(ViewState.DASHBOARD);
-    if (archivedMatches + removedArchiveItems > 0) {
-      showGameNotification({
-        title: 'Zapis zoptymalizowany',
-        message: `Podczas wczytywania zarchiwizowano ${archivedMatches + removedArchiveItems} starszych elementów. Najważniejsze wyniki historyczne zostały zachowane.`,
-        tone: 'info',
-      });
-    }
   };
 
   const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState }): { success: boolean; message: string } => {
@@ -3583,6 +3540,10 @@ if (userTeamId) {
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
     setProcessedDrawIds([]);
+    setCurrentPolishChampionId('PL_LECH_POZNAN');
+    setCurrentPolishViceChampionId('PL_RAKOW_CZESTOCHOWA');
+    setCurrentPolishCupWinnerId('PL_LEGIA_WARSZAWA');
+    setConfR2QPolishTeamIds(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
     setWinterCampInvitePending(false);
@@ -7037,7 +6998,7 @@ Asystent`,
         // ── LM: Losowanie Rundy 1 Preeliminacyjnej ──────────────────────────
         case CompetitionType.CHAMPIONS_LEAGUE_DRAW: {
           if (processedDrawIds.includes(slot.id)) break;
-          const eligibleIds = CLDrawService.getEligibleTeams(RAW_CHAMPIONS_LEAGUE_CLUBS);
+          const eligibleIds = CLDrawService.getEligibleTeams(RAW_CHAMPIONS_LEAGUE_CLUBS, currentPolishViceChampionId);
           const pairs = CLDrawService.drawPairs(eligibleIds, clubs, dateToProcess, sessionSeed);
           setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs });
           setProcessedDrawIds(prev => [...prev, slot.id]);

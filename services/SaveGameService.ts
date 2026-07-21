@@ -79,6 +79,7 @@ export interface SaveState {
   isResigned: boolean;
   managerEmploymentStatus?: import('../types').ManagerEmploymentStatus;
   currentPolishChampionId: string;
+  currentPolishViceChampionId?: string | null;
   currentPolishCupWinnerId: string;
   currentCLWinnerId: string;
   currentELWinnerId: string;
@@ -731,9 +732,10 @@ function normalizeSaveState(data: SaveState): SaveState {
     supercupWinners: asArray(data.supercupWinners),
     matchHistory: normalizedMatchHistory,
     championshipHistory: asArray(data.championshipHistory),
-    confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_RAKOW_CZESTOCHOWA'],
+    confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN'],
     lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,
     currentPolishChampionId: data.currentPolishChampionId ?? 'PL_LECH_POZNAN',
+    currentPolishViceChampionId: data.currentPolishViceChampionId ?? null,
     currentPolishCupWinnerId: data.currentPolishCupWinnerId ?? 'PL_LEGIA_WARSZAWA',
     currentCLWinnerId: data.currentCLWinnerId ?? 'EU_CL_PARIS_SAINT_GERMAIN',
     currentELWinnerId: data.currentELWinnerId ?? 'EU_CL_TOTTENHAM_HOTSPUR',
@@ -756,27 +758,28 @@ function normalizeSaveState(data: SaveState): SaveState {
   };
 }
 
-export async function exportSaveToFile(state: SaveState): Promise<SaveExportResult> {
-  const json = JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: new Date().toISOString() });
-  const originalBytes = new TextEncoder().encode(json).byteLength;
-  let blob = new Blob([json], { type: 'application/json' });
-  let extension = 'json';
+export function serializeSaveState(state: SaveState, savedAt = new Date()): string {
+  return JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: savedAt.toISOString() });
+}
 
-  if (typeof CompressionStream !== 'undefined') {
-    const compressedStream = blob.stream().pipeThrough(new CompressionStream('gzip'));
-    blob = new Blob([await new Response(compressedStream).arrayBuffer()], { type: 'application/gzip' });
-    extension = 'json.gz';
-  }
+export function getSaveFileName(savedAt = new Date()): string {
+  return `futbol_manager_${savedAt.toISOString().slice(0, 10)}.json`;
+}
+
+export async function exportSaveToFile(state: SaveState): Promise<SaveExportResult> {
+  const json = serializeSaveState(state);
+  const originalBytes = new TextEncoder().encode(json).byteLength;
+  const blob = new Blob([json], { type: 'application/json' });
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const fileName = `futbol_manager_${new Date().toISOString().slice(0, 10)}.${extension}`;
+  const fileName = getSaveFileName();
   a.download = fileName;
   a.click();
   URL.revokeObjectURL(url);
   return {
-    compressed: extension === 'json.gz',
+    compressed: false,
     fileName,
     originalBytes,
     savedBytes: blob.size,

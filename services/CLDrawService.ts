@@ -13,7 +13,7 @@ type RawCLClub = {
 
 export const CLDrawService = {
 
-  getEligibleTeams: (rawClubs: RawCLClub[]): string[] => {
+  getEligibleTeams: (rawClubs: RawCLClub[], polishViceChampionId?: string | null): string[] => {
     const tier4 = rawClubs.filter(c => c.tier === 4);
     const tier3 = rawClubs.filter(c => c.tier === 3);
     let pool = [...tier4, ...tier3];
@@ -24,7 +24,14 @@ export const CLDrawService = {
       pool = [...pool, ...shuffled.slice(0, 36 - pool.length)];
     }
 
-    return pool.slice(0, 36).map(c => generateEuropeanClubId(c.name));
+    const foreignTeamCount = polishViceChampionId ? 35 : 36;
+    const teamIds = pool.slice(0, foreignTeamCount).map(c => generateEuropeanClubId(c.name));
+
+    if (polishViceChampionId && !teamIds.includes(polishViceChampionId)) {
+      teamIds.push(polishViceChampionId);
+    }
+
+    return teamIds.slice(0, 36);
   },
 
   drawPairs: (
@@ -788,10 +795,3 @@ return fixtures;
   },
 
 };                // ← koniec obiektu CLDrawService
-
-
-
-
-
-
- 

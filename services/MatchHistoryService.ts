@@ -63,12 +63,6 @@ export const MatchHistoryService = {
     return archivedCount;
   },
 
-  getForSave: (firstDetailedSeason: number) => {
-    return matchHistory.map(entry =>
-      entry.season >= firstDetailedSeason || entry.archived ? entry : toArchivedSummary(entry)
-    );
-  },
-
   // Funkcja czyszcząca (np. przy nowej grze)
   clear: () => {
     matchHistory = [];
