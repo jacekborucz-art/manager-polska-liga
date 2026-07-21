@@ -119,6 +119,7 @@ import { LiveMatchInstructionBalanceService } from '../../services/LiveMatchInst
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 import { LineupService } from '../../services/LineupService';
+import { LiveMatchPhysicalMismatchService } from '../../services/LiveMatchPhysicalMismatchService';
 import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
 import { applyFocusToFormImpact } from '../../services/MatchPrepFocusService';
 import { FinanceService } from '@/services/FinanceService';
@@ -1635,52 +1636,25 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const getSideInjuryMap = (side: 'HOME' | 'AWAY') => side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
         const getSidePlayers = (side: 'HOME' | 'AWAY') => side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
         const getSideLineup = (side: 'HOME' | 'AWAY') => side === 'HOME' ? nextHomeLineup : nextAwayLineup;
-        const getUserInjuredSpinePenalty = (side: 'HOME' | 'AWAY', mode: 'DEFENDING' | 'ATTACKING'): number => {
-          if (side !== userSide) return 0;
-          const injuries = getSideInjuryMap(side);
-          const playerMap = new Map(getSidePlayers(side).map(player => [player.id, player]));
-          const lineup = getSideLineup(side);
-          const tactic = TacticRepository.getById(lineup.tacticId);
-          let penalty = 0;
-
-          lineup.startingXI.forEach((playerId, slotIdx) => {
-            if (!playerId) return;
-            const player = playerMap.get(playerId);
-            if (!player) return;
-            const severity = injuries[player.id];
-            if (!severity) return;
-            const slotRole = tactic.slots[slotIdx]?.role ?? player.position;
-
-            if (slotIdx === 0 && player.position === PlayerPosition.GK) {
-              penalty += severity === InjurySeverity.SEVERE
-                ? (mode === 'DEFENDING' ? 0.040 : 0.016)
-                : (mode === 'DEFENDING' ? 0.018 : 0.008);
-              return;
-            }
-
-            if (slotRole === PlayerPosition.DEF) {
-              const outOfPositionRelief = player.position === PlayerPosition.DEF ? 1 : 0.65;
-              const basePenalty = severity === InjurySeverity.SEVERE
-                ? (mode === 'DEFENDING' ? 0.020 : 0.012)
-                : (mode === 'DEFENDING' ? 0.008 : 0.005);
-              penalty += basePenalty * outOfPositionRelief;
-              return;
-            }
-
-            if (player.position === PlayerPosition.DEF) {
-              penalty += severity === InjurySeverity.SEVERE
-                ? (mode === 'DEFENDING' ? 0.006 : 0.006)
-                : (mode === 'DEFENDING' ? 0.003 : 0.003);
-            }
+        const getInjuredPlayerChanceImpact = (
+          side: 'HOME' | 'AWAY',
+          mode: 'DEFENDING' | 'ATTACKING',
+          rngOffset: number
+        ): number =>
+          LiveMatchPhysicalMismatchService.getInjuryChanceImpact({
+            players: getSidePlayers(side),
+            lineup: getSideLineup(side),
+            matchInjuries: getSideInjuryMap(side),
+            mode,
+            rng: () => seededRng(currentSeed, nextMinute, rngOffset),
           });
-
-          return mode === 'DEFENDING'
-            ? Math.min(0.085, penalty)
-            : Math.min(0.040, penalty);
-        };
-        const getUserInjuredGoalkeeperFitMultiplier = (side: 'HOME' | 'AWAY', goalkeeper: Player | null | undefined): number => {
-          if (side !== userSide || !goalkeeper) return 1;
-          const severity = getSideInjuryMap(side)[goalkeeper.id];
+        const getInjuredGoalkeeperFitMultiplier = (side: 'HOME' | 'AWAY', goalkeeper: Player | null | undefined): number => {
+          if (!goalkeeper) return 1;
+          const severity = getSideInjuryMap(side)[goalkeeper.id] ?? (
+            goalkeeper.health.status === HealthStatus.INJURED
+              ? goalkeeper.health.injury?.severity ?? InjurySeverity.LIGHT
+              : null
+          );
           if (!severity || goalkeeper.position !== PlayerPosition.GK) return 1;
           return severity === InjurySeverity.SEVERE ? 0.35 : 0.72;
         };
@@ -2274,8 +2248,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const baseBoost = 0.006 + seededRng(currentSeed, nextMinute, 777) * 0.009;
           redCardDefensiveBoost = baseBoost * Math.pow(1.7, defendingSentOff - 1);
         }
-        const defendingInjuredSpineExposure = getUserInjuredSpinePenalty(activeSide === 'HOME' ? 'AWAY' : 'HOME', 'DEFENDING');
-        const attackingInjuredSpineDrag = getUserInjuredSpinePenalty(activeSide, 'ATTACKING');
+        const defendingSideForPhysicalMismatch = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+        const defendingInjuredSpineExposure = getInjuredPlayerChanceImpact(defendingSideForPhysicalMismatch, 'DEFENDING', 6101);
+        const attackingInjuredSpineDrag = getInjuredPlayerChanceImpact(activeSide, 'ATTACKING', 6102);
 
         // ─── KARA: ZMĘCZENIE INDYWIDUALNYCH GRACZY ───────────────────────────
         // Średnia kondycji całej jedenastki rozmywa wpływ 1-2 krytycznie zmęczonych graczy.
@@ -2289,8 +2264,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
         const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
         const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
-        const tiredDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 82).length;
-        const exhaustedDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) < 70).length;
         const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
         const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
         const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
@@ -2304,33 +2277,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
             ) * Math.min(1, (nextMinute - 60) / 30)
           : 0;
-        // Fresh-legs attack bonus:
-        // Rewards a side that used the bench (3+ substitutions) when attacking a team that
-        // barely rotated (0-1 substitutions) after minute 60. This complements the existing
-        // noRotationShotPenalty, which mostly punishes the tired team's own attacking output.
-        // Without this positive swing, an AI that correctly uses 4-5 substitutions still did
-        // not feel dangerous enough against a player who left exhausted defenders on the pitch.
-        //
-        // Calibration:
-        // - "attackingSubsUsed >= 3" defines when fresh attacking legs are considered real.
-        //   Lower to 2 if rotation should matter earlier; raise to 4 for a stricter payoff.
-        // - "defendingSubsUsed <= 1" defines negligence. Raise to 2 if you want players who
-        //   make only minimal changes to still be punished.
-        // - Cap 0.024 limits how much this can add to shotThreshold. Raise carefully; this
-        //   stacks with fatigue, momentum, tactics, and FAST + OFFENSIVE instruction bonuses.
-        // - tiredDefenders/exhaustedDefenders weights control whether the effect is mainly
-        //   about substitution count or actual tired bodies on the pitch.
-        // - The minute ramp prevents a sudden jump at 60'; changing the divisor from 30 to
-        //   20 makes the effect reach full strength around minute 80 instead of 90.
-        const rotationMismatchAttackBonus = nextMinute >= 60 && attackingSubsUsed >= 3 && defendingSubsUsed <= 1
-          ? Math.min(
-              0.024,
-              0.006 +
-                Math.max(0, attackingSubsUsed - defendingSubsUsed - 1) * 0.003 +
-                tiredDefenders * 0.003 +
-                exhaustedDefenders * 0.005
-            ) * Math.min(1, (nextMinute - 60) / 30)
-          : 0;
+        // Bonus świeżych nóg zależy od realnego najsłabszego punktu rywala:
+        // kondycji, roli na boisku i OVR najbardziej zmęczonego zawodnika.
+        const rotationMismatchAttackBonus = LiveMatchPhysicalMismatchService.getRotationMismatchAttackBonus({
+          attackingSubsUsed,
+          defendingSubsUsed,
+          defendingPlayers: activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+          defendingLineup: activeSide === 'HOME' ? nextAwayLineup : nextHomeLineup,
+          defendingFatigue: defendingFatigueMap,
+          rng: () => seededRng(currentSeed, nextMinute, 6201),
+        });
         const lateFatigueShotDrag = nextMinute >= 60
           ? Math.min(0.052, noRotationShotPenalty * 0.75 + criticalFatPenalty * 0.35)
           : 0;
@@ -3136,7 +3092,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             });
             const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * playerFormFinishingBoost * actionProfile.finishingFitMod;
             const defendingSideForShot = activeSide === 'HOME' ? 'AWAY' : 'HOME';
-            const gkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(defendingSideForShot, gk);
+            const gkInjuryFitMod = getInjuredGoalkeeperFitMultiplier(defendingSideForShot, gk);
             const gkTeamFormFitMod = gkFitMod * gkFormBoost * playerFormGoalkeepingBoost * gkInjuryFitMod;
 
             // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
@@ -3416,7 +3372,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const headerGkBoost = 1 + ((defendingFormImpact.goalkeepingMultiplier - 1) * defendingFormStacking);
                 const headerTeamFormFitMod = headerBriefingFitMod * headerFormBoost * clampNumber(activePlayerFormImpact.performanceMultiplier, 0.80, 1.20);
                 const headerDefendingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
-                const headerGkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(headerDefendingSide, cornerGk);
+                const headerGkInjuryFitMod = getInjuredGoalkeeperFitMultiplier(headerDefendingSide, cornerGk);
                 const headerGkFormFitMod = hGkFitMod * headerGkBoost * clampNumber(defendingPlayerFormImpact.performanceMultiplier, 0.84, 1.16) * headerGkInjuryFitMod;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
@@ -3467,7 +3423,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               const fkMoraleMod = PlayerMoraleService.getMatchMultiplier(fkTaker);
               const fkGkMoraleMod = fkGk ? PlayerMoraleService.getMatchMultiplier(fkGk) : 1;
               const fkDefendingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
-              const fkGkInjuryFitMod = getUserInjuredGoalkeeperFitMultiplier(fkDefendingSide, fkGk);
+              const fkGkInjuryFitMod = getInjuredGoalkeeperFitMultiplier(fkDefendingSide, fkGk);
               const fkGoalProb = Math.max(
                 0.05,
                 Math.min(0.30, 0.50 + (((fkTaker.attributes.freeKicks * fkFormAttMod * fkMoraleMod) * 1.05) - ((fkGkAttr * fkFormDefMod * fkGkMoraleMod * fkGkInjuryFitMod) * 1.20)) / 300)
