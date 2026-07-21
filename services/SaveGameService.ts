@@ -84,6 +84,7 @@ export interface SaveState {
   currentCLWinnerId: string;
   currentELWinnerId: string;
   lastUEFASuperCupResult: any;
+  confR1QPolishTeamIds?: string[];
   confR2QPolishTeamIds: string[];
   supercupWinners: { season: string; winner: string; year: number; }[];
   matchHistory: any[];
@@ -732,6 +733,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     supercupWinners: asArray(data.supercupWinners),
     matchHistory: normalizedMatchHistory,
     championshipHistory: asArray(data.championshipHistory),
+    confR1QPolishTeamIds: asArray(data.confR1QPolishTeamIds),
     confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN'],
     lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,
     currentPolishChampionId: data.currentPolishChampionId ?? 'PL_LECH_POZNAN',

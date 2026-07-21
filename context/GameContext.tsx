@@ -1296,6 +1296,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
  const [currentCLWinnerId, setCurrentCLWinnerId] = useState<string>('EU_CL_PARIS_SAINT_GERMAIN');
  const [currentELWinnerId, setCurrentELWinnerId] = useState<string>('EU_CL_TOTTENHAM_HOTSPUR');
  const [lastUEFASuperCupResult, setLastUEFASuperCupResult] = useState<MatchHistoryEntry | null>(null);
+ const [confR1QPolishTeamIds, setConfR1QPolishTeamIds] = useState<string[]>([]);
  // Polskie drużyny do CONF R2Q: sezon 1 = Jagiellonia + Pogoń, kolejne sezony = dwa najwyższe wolne kluby od 3. miejsca
  const [confR2QPolishTeamIds, setConfR2QPolishTeamIds] = useState<string[]>(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
  const [supercupWinners, setSupercupWinners] = useState<{ season: string; winner: string; year: number; }[]>(() => {
@@ -1904,6 +1905,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
   ) => {
     const startYear = careerStartYear;
     const careerStartDate = new Date(startYear, 6, 1);
+    const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
     const newSessionSeed = generateRuntimeSeed();
     const newRuntimeSimulationSeed = generateRuntimeSeed();
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
@@ -2079,10 +2081,11 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     sentMailIdsRef.current = new Set(initialMessages.map(message => message.id));
     setPzpnDisciplinaryEvents([]);
     setProcessedDrawIds(initialNationsLeagueState ? [`UNL_DRAW_${initialNationsLeagueState.editionStartYear}`] : []);
-    setCurrentPolishChampionId('PL_LECH_POZNAN');
-    setCurrentPolishViceChampionId('PL_RAKOW_CZESTOCHOWA');
-    setCurrentPolishCupWinnerId('PL_LEGIA_WARSZAWA');
-    setConfR2QPolishTeamIds(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
+    setCurrentPolishChampionId(initialPolishEuropeanQualification.championsLeagueR2TeamId);
+    setCurrentPolishViceChampionId(initialPolishEuropeanQualification.championsLeagueR1TeamId);
+    setCurrentPolishCupWinnerId(initialPolishEuropeanQualification.europaLeagueR2TeamId);
+    setConfR1QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR1TeamIds);
+    setConfR2QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR2TeamIds);
     const initialSuperCup = SuperCupService.generateFixture(startYear, STATIC_CLUBS);
     const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, STATIC_CLUBS);
     setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
@@ -2741,6 +2744,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     if (polishCupEuropeTeamId) {
       setCurrentPolishCupWinnerId(polishCupEuropeTeamId);
     }
+    setConfR1QPolishTeamIds([]);
     setConfR2QPolishTeamIds(polishEuropeanQualification.conferenceLeagueR2TeamIds);
 
 
@@ -3085,6 +3089,7 @@ if (userTeamId) {
     currentCLWinnerId,
     currentELWinnerId,
     lastUEFASuperCupResult,
+    confR1QPolishTeamIds,
     confR2QPolishTeamIds,
     supercupWinners,
     matchHistory: MatchHistoryService.getAll(),
@@ -3270,6 +3275,7 @@ if (userTeamId) {
     setCurrentCLWinnerId(data.currentCLWinnerId);
     setCurrentELWinnerId(data.currentELWinnerId);
     setLastUEFASuperCupResult(data.lastUEFASuperCupResult);
+    setConfR1QPolishTeamIds(data.confR1QPolishTeamIds ?? []);
     setConfR2QPolishTeamIds(data.confR2QPolishTeamIds);
     setSupercupWinners(data.supercupWinners);
     setWinterCampInvitePending(data.winterCampInvitePending ?? false);
@@ -3299,6 +3305,7 @@ if (userTeamId) {
     }
 
     const startYear = 2025;
+    const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
     const template = SeasonTemplateGenerator.generate(startYear);
     const baseClubs = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
     const baseClubMap = new Map(baseClubs.map(club => [club.id, club]));
@@ -3540,10 +3547,11 @@ if (userTeamId) {
     setElHistoryInitialRound(null);
     setConfHistoryInitialRound(null);
     setProcessedDrawIds([]);
-    setCurrentPolishChampionId('PL_LECH_POZNAN');
-    setCurrentPolishViceChampionId('PL_RAKOW_CZESTOCHOWA');
-    setCurrentPolishCupWinnerId('PL_LEGIA_WARSZAWA');
-    setConfR2QPolishTeamIds(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
+    setCurrentPolishChampionId(initialPolishEuropeanQualification.championsLeagueR2TeamId);
+    setCurrentPolishViceChampionId(initialPolishEuropeanQualification.championsLeagueR1TeamId);
+    setCurrentPolishCupWinnerId(initialPolishEuropeanQualification.europaLeagueR2TeamId);
+    setConfR1QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR1TeamIds);
+    setConfR2QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR2TeamIds);
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
     setWinterCampInvitePending(false);
@@ -6622,7 +6630,12 @@ Asystent`,
         // ── LK: Losowanie Rundy 1 Preeliminacyjnej ──────────────────────────
         case CompetitionType.CONF_R1Q_DRAW: {
           if (processedDrawIds.includes(slot.id)) break;
-          const confTeamIds = CONFDrawService.getEligibleTeams(RAW_CONFERENCE_LEAGUE_CLUBS, sessionSeed);
+          const confTeamIds = CONFDrawService.getEligibleTeams(
+            RAW_CONFERENCE_LEAGUE_CLUBS,
+            sessionSeed,
+            64,
+            confR1QPolishTeamIds,
+          );
           const confPairs = CONFDrawService.drawPairs(confTeamIds, RAW_CONFERENCE_LEAGUE_CLUBS, clubs, dateToProcess, sessionSeed);
           setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: confPairs });
           setProcessedDrawIds(prev => [...prev, slot.id]);

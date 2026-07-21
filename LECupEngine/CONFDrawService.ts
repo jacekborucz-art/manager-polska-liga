@@ -26,11 +26,14 @@ export const CONFDrawService = {
   /**
    * Wybiera 128 drużyn do losowania Rundy 1 LK.
    * Priorytet: Tier 4, uzupełnienie Tier 3 jeśli za mało.
-   * Wyklucza polskie kluby (country === 'POL').
+   * Zagraniczną część puli buduje bez polskich klubów, a wskazane polskie zespoły
+   * dodaje na końcu w miejsce takiej samej liczby klubów zagranicznych.
    * Round-robin po krajach zapewnia maksymalną różnorodność.
    */
-  getEligibleTeams(rawClubs: RawCONFClub[], seed: number, count = 64): string[] {
+  getEligibleTeams(rawClubs: RawCONFClub[], seed: number, count = 64, polishTeamIds: string[] = []): string[] {
     const rng = makeLcg(seed);
+    const uniquePolishTeamIds = [...new Set(polishTeamIds.filter(Boolean))].slice(0, count);
+    const foreignTeamCount = Math.max(0, count - uniquePolishTeamIds.length);
 
     const eligible = rawClubs.filter(c => c.country !== 'POL');
 
@@ -60,10 +63,10 @@ export const CONFDrawService = {
     const selected: RawCONFClub[] = [];
 
     let pass = 0;
-    while (selected.length < count && pass < 10) {
+    while (selected.length < foreignTeamCount && pass < 10) {
       let addedInPass = 0;
       for (const country of countries) {
-        if (selected.length >= count) break;
+        if (selected.length >= foreignTeamCount) break;
         const bucket = byCountry.get(country)!;
         const ptr = pointers.get(country)!;
         if (ptr < bucket.length) {
@@ -76,7 +79,10 @@ export const CONFDrawService = {
       if (addedInPass === 0) break;
     }
 
-    return selected.slice(0, count).map(c => generateCONFClubId(c.name));
+    return [
+      ...selected.slice(0, foreignTeamCount).map(c => generateCONFClubId(c.name)),
+      ...uniquePolishTeamIds,
+    ];
   },
 
   /**
@@ -86,6 +92,7 @@ export const CONFDrawService = {
    */
   drawPairs(teamIds: string[], rawClubs: RawCONFClub[], clubs: Club[], date: Date, seed: number): Fixture[] {
     const getCountry = (id: string): string => {
+      if (id.startsWith('PL_')) return 'POL';
       const raw = rawClubs.find(c => generateCONFClubId(c.name) === id);
       return raw?.country ?? '';
     };
