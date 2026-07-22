@@ -836,6 +836,7 @@ export interface PlayerStats {
   seasonalChanges: Record<string, number>;
   seasonalGrowthPoints?: number;
   backgroundLeagueProgress?: Record<string, number>;
+  backgroundLeagueCalibration?: Record<string, number>;
   ratingHistory: number[]; 
 }
 
@@ -2328,6 +2329,10 @@ isPenalties?: boolean;
   lastGoalBoostMinute: number;
     activeTacticalBoost: number; // Suma aktualnie dodanego momentum (do zwrotu)
   tacticalBoostExpiry: number; // Minuta, w której impuls wygasa i wraca
+  aiMentalitySurgeBoost?: number; // HOME > 0, AWAY < 0; active until AI concedes
+  aiMentalitySurgePreviousBoost?: number;
+  aiMentalitySurgeLastGoalMinute?: number;
+  aiMentalitySurgeLastAction?: 'AI_SCORED' | 'USER_SCORED' | null;
   liveStats: {
     home: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };
     away: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };

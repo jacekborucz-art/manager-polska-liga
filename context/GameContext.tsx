@@ -281,17 +281,24 @@ const getAiWinterCampFormAdjustment = (club: Club, cost: number): number =>
 const isPolishLeagueClub = (club: Club): boolean =>
   club.leagueId?.startsWith('L_PL') || club.country === 'POL';
 
-const isEuropeanCupClub = (club: Club): boolean =>
-  ['L_CL', 'L_EL', 'L_CONF'].includes(club.leagueId) && club.country !== 'POL';
+const FOREIGN_BACKGROUND_LEAGUE_IDS = new Set(['L_CL', 'L_EL', 'L_CONF', 'L_SA', 'L_ASIA', 'L_AFRICA', 'L_NA']);
 
-const getEuropeanBackgroundFormScore = (player: Player, club: Club, date: Date): number => {
+const isForeignBackgroundStatsClub = (club: Club): boolean =>
+  FOREIGN_BACKGROUND_LEAGUE_IDS.has(club.leagueId) && club.country !== 'POL';
+
+const getNormalizedForeignReputation = (club: Club): number => {
+  const reputation = club.reputation ?? 60;
+  return reputation <= 25 ? reputation * 5 : reputation;
+};
+
+const getForeignBackgroundFormScore = (player: Player, club: Club, date: Date): number => {
   const currentScore = player.form ?? PlayerFormService.calculate(player).score;
   const seed = Array.from(`${club.id}_${player.id}_${date.getFullYear()}_${date.getMonth()}`).reduce(
     (sum, char, index) => sum + char.charCodeAt(0) * (index + 3),
     0
   );
   const variation = (seed % 11) - 5;
-  const reputationAdjustment = ((club.reputation ?? 60) - 65) * 0.12;
+  const reputationAdjustment = (getNormalizedForeignReputation(club) - 65) * 0.12;
   const qualityAdjustment = ((player.overallRating ?? 60) - 62) * 0.22;
   const moraleAdjustment = ((player.morale ?? 50) - 50) * 0.08;
   const conditionPenalty = (player.condition ?? 100) < 65 ? -5 : 0;
@@ -302,10 +309,10 @@ const getEuropeanBackgroundFormScore = (player: Player, club: Club, date: Date):
   return Math.round(currentScore + (targetScore - currentScore) * 0.65);
 };
 
-const applyEuropeanBackgroundForm = (squad: Player[], club: Club, date: Date): Player[] =>
+const applyForeignBackgroundForm = (squad: Player[], club: Club, date: Date): Player[] =>
   EuropeanPlayerStatsService.applyBackgroundLeagueStatsToDate(squad, club, date, date.getFullYear()).map(player => ({
     ...player,
-    form: getEuropeanBackgroundFormScore(player, club, date),
+    form: getForeignBackgroundFormScore(player, club, date),
   }));
 
 const sanitizeImportedLoan = (
@@ -1752,7 +1759,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   }, [allFixtures, clubs, triggerSeasonCelebrationIfClinched]);
 
 const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
-    const getEuropeanSquadSignature = (squad: Player[]) => JSON.stringify(squad.map(player => ({
+    const getForeignSquadSignature = (squad: Player[]) => JSON.stringify(squad.map(player => ({
         id: player.id,
         form: player.form,
         stats: {
@@ -1767,32 +1774,32 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
             backgroundLeagueProgress: player.stats?.backgroundLeagueProgress ?? {},
         },
     })));
-    const syncEuropeanSquadIfNeeded = (squad: Player[]): Player[] => {
+    const syncForeignSquadIfNeeded = (squad: Player[]): Player[] => {
         const club = clubs.find(c => c.id === clubId);
-        if (!club || !isEuropeanCupClub(club)) return squad;
+        if (!club || !isForeignBackgroundStatsClub(club)) return squad;
 
-        const beforeSignature = getEuropeanSquadSignature(squad);
-        const updatedSquad = applyEuropeanBackgroundForm(squad, club, currentDate);
-        if (getEuropeanSquadSignature(updatedSquad) === beforeSignature) return squad;
+        const beforeSignature = getForeignSquadSignature(squad);
+        const updatedSquad = applyForeignBackgroundForm(squad, club, currentDate);
+        if (getForeignSquadSignature(updatedSquad) === beforeSignature) return squad;
 
         generatedSquadCacheRef.current[clubId] = updatedSquad;
         queueMicrotask(() => {
             setPlayers(prev => {
                 const currentSquad = prev[clubId];
                 if (!currentSquad) return { ...prev, [clubId]: updatedSquad };
-                if (getEuropeanSquadSignature(currentSquad) !== beforeSignature) return prev;
+                if (getForeignSquadSignature(currentSquad) !== beforeSignature) return prev;
                 return { ...prev, [clubId]: updatedSquad };
             });
         });
         return updatedSquad;
     };
-    if (players[clubId]) return syncEuropeanSquadIfNeeded(players[clubId]);
-    if (generatedSquadCacheRef.current[clubId]) return syncEuropeanSquadIfNeeded(generatedSquadCacheRef.current[clubId]);
+    if (players[clubId]) return syncForeignSquadIfNeeded(players[clubId]);
+    if (generatedSquadCacheRef.current[clubId]) return syncForeignSquadIfNeeded(generatedSquadCacheRef.current[clubId]);
     const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
     const withAiWinterCampState = (squad: Player[]) => {
         const club = clubs.find(c => c.id === clubId);
-        if (club && isEuropeanCupClub(club)) {
-          return applyEuropeanBackgroundForm(squad, club, currentDate);
+        if (club && isForeignBackgroundStatsClub(club)) {
+          return applyForeignBackgroundForm(squad, club, currentDate);
         }
         const adjustment = club?.aiWinterCampFormAdjustment ?? 0;
         const decisionYear = club?.aiWinterCampDecisionYear;
@@ -8049,15 +8056,15 @@ Asystent`,
 
     // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
     if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
-      const europeanClubs = clubs.filter(isEuropeanCupClub);
-      if (europeanClubs.length > 0) {
+      const foreignBackgroundClubs = clubs.filter(isForeignBackgroundStatsClub);
+      if (foreignBackgroundClubs.length > 0) {
         setPlayers(prev => {
           let changed = false;
           const next = { ...prev };
-          europeanClubs.forEach(club => {
+          foreignBackgroundClubs.forEach(club => {
             const squad = prev[club.id] ?? generatedSquadCacheRef.current[club.id];
             if (!squad?.length) return;
-            const updatedSquad = applyEuropeanBackgroundForm(squad, club, dateToProcess);
+            const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
             generatedSquadCacheRef.current[club.id] = updatedSquad;
             if (prev[club.id]) {
               next[club.id] = updatedSquad;

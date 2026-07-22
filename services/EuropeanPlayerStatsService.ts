@@ -21,6 +21,8 @@ const emptyStats = (): PlayerStats => ({
   ratingHistory: []
 });
 
+const BACKGROUND_STATS_BALANCE_VERSION = 2;
+
 const getPlayedIds = (lineup: MatchLiveState['homeLineup'], history: SubstitutionRecord[]) => {
   const currentOnPitch = lineup.startingXI.filter((id): id is string => !!id);
   const subbedOut = history
@@ -127,6 +129,9 @@ const getSeasonStartYear = (date: Date): number =>
 const getBackgroundProgressKey = (clubId: string, seasonStartYear: number): string =>
   `europeanLeagueBackground:${clubId}:${seasonStartYear}`;
 
+const getBackgroundCalibrationKey = (clubId: string, seasonStartYear: number): string =>
+  `${getBackgroundProgressKey(clubId, seasonStartYear)}:v${BACKGROUND_STATS_BALANCE_VERSION}`;
+
 const getCurrentBackgroundAppearances = (player: Player, progressKey: string): number => {
   const savedProgress = player.stats?.backgroundLeagueProgress?.[progressKey];
   if (typeof savedProgress === 'number' && Number.isFinite(savedProgress)) {
@@ -142,46 +147,219 @@ const getPlayerTargetAppearances = (targetRounds: number, rank: number, player: 
   return Math.max(0, Math.round(targetRounds * clamp(roleFactor + ageRotation, 0.08, 0.98)));
 };
 
-const getBackgroundRating = (player: Player, club: Club, round: number, seedBase: number): number => {
+const getQualityFactor = (player: Player): number =>
+  clamp(((player.overallRating ?? 62) - 60) / 30, 0, 1);
+
+const getAttributeEdge = (value: number): number =>
+  clamp((value - 60) / 30, -0.45, 0.9);
+
+const getNormalizedClubReputation = (club: Club): number => {
+  const reputation = club.reputation ?? 60;
+  return reputation <= 25 ? reputation * 5 : reputation;
+};
+
+const getReputationFactor = (club: Club): number =>
+  clamp((getNormalizedClubReputation(club) - 60) / 45, -0.45, 0.55);
+
+const getMinutesFactor = (minutes: number): number =>
+  clamp(minutes / 90, 0.38, 1);
+
+const getRateControlMultiplier = (currentCount: number, appearances: number, targetRate: number): number => {
+  if (appearances < 4 || targetRate <= 0) return 1;
+
+  const currentRate = currentCount / appearances;
+  if (currentRate <= targetRate * 0.72) return 1.12;
+  if (currentRate <= targetRate * 1.12) return 1;
+  if (currentRate <= targetRate * 1.42) return 0.65;
+  return 0.35;
+};
+
+const getGoalTargetRate = (player: Player, club: Club): number => {
+  const quality = getQualityFactor(player);
+  const finishingEdge = getAttributeEdge(((player.attributes.attacking ?? 50) + (player.attributes.finishing ?? 50)) / 2);
+  const reputation = getReputationFactor(club);
+
+  if (player.position === PlayerPosition.FWD) {
+    return clamp(0.18 + quality * 0.16 + finishingEdge * 0.10 + reputation * 0.04, 0.14, 0.52);
+  }
+  if (player.position === PlayerPosition.MID) {
+    return clamp(0.045 + quality * 0.045 + finishingEdge * 0.045 + reputation * 0.012, 0.025, 0.16);
+  }
+  if (player.position === PlayerPosition.DEF) {
+    const headingEdge = getAttributeEdge(player.attributes.heading ?? 50);
+    return clamp(0.012 + quality * 0.014 + headingEdge * 0.018 + reputation * 0.006, 0.004, 0.065);
+  }
+  return 0.0015;
+};
+
+const getAssistTargetRate = (player: Player, club: Club): number => {
+  const quality = getQualityFactor(player);
+  const creationEdge = getAttributeEdge(
+    ((player.attributes.passing ?? 50) + (player.attributes.vision ?? 50) + (player.attributes.crossing ?? 50)) / 3
+  );
+  const reputation = getReputationFactor(club);
+
+  if (player.position === PlayerPosition.MID) {
+    return clamp(0.085 + quality * 0.075 + creationEdge * 0.075 + reputation * 0.025, 0.045, 0.27);
+  }
+  if (player.position === PlayerPosition.FWD) {
+    return clamp(0.055 + quality * 0.045 + creationEdge * 0.055 + reputation * 0.016, 0.03, 0.18);
+  }
+  if (player.position === PlayerPosition.DEF) {
+    return clamp(0.025 + quality * 0.025 + creationEdge * 0.025 + reputation * 0.01, 0.012, 0.09);
+  }
+  return 0.0015;
+};
+
+type BackgroundAppearanceOutcome = {
+  minutes: number;
+  scored: boolean;
+  assisted: boolean;
+  yellowCard: boolean;
+  redCard: boolean;
+  cleanSheet: boolean;
+};
+
+const getBackgroundRating = (
+  player: Player,
+  club: Club,
+  round: number,
+  seedBase: number,
+  outcome: BackgroundAppearanceOutcome
+): number => {
   const rng = rngFromSeed(hashString(`${club.id}_${player.id}_${round}_${seedBase}_rating`));
-  const quality = ((player.overallRating ?? 62) - 62) * 0.035;
-  const reputation = ((club.reputation ?? 60) - 60) * 0.012;
-  const morale = ((player.morale ?? 50) - 50) * 0.01;
-  const noise = (rng() - 0.5) * 1.15;
-  return Number(clamp(6.45 + quality + reputation + morale + noise, 5.4, 8.6).toFixed(1));
+  const quality = ((player.overallRating ?? 62) - 62) * 0.024;
+  const reputation = (getNormalizedClubReputation(club) - 60) * 0.006;
+  const morale = ((player.morale ?? 50) - 50) * 0.007;
+  const noise = (rng() - 0.5) * 0.72;
+  const minutesAdjustment = outcome.minutes >= 75 ? 0 : outcome.minutes >= 45 ? -0.08 : -0.18;
+  const goalBonus =
+    player.position === PlayerPosition.FWD ? 0.44 :
+    player.position === PlayerPosition.MID ? 0.52 :
+    player.position === PlayerPosition.DEF ? 0.66 :
+    0.30;
+  const assistBonus =
+    player.position === PlayerPosition.FWD ? 0.28 :
+    player.position === PlayerPosition.MID ? 0.36 :
+    player.position === PlayerPosition.DEF ? 0.42 :
+    0.18;
+  const defensiveBonus = outcome.cleanSheet
+    ? player.position === PlayerPosition.GK ? 0.38 : player.position === PlayerPosition.DEF ? 0.24 : 0.04
+    : 0;
+  const disciplinePenalty = (outcome.yellowCard ? 0.18 : 0) + (outcome.redCard ? 1.25 : 0);
+
+  return Number(clamp(
+    6.55 + quality + reputation + morale + noise + minutesAdjustment +
+      (outcome.scored ? goalBonus : 0) +
+      (outcome.assisted ? assistBonus : 0) +
+      defensiveBonus -
+      disciplinePenalty,
+    5.4,
+    8.8
+  ).toFixed(1));
+};
+
+const generateBackgroundAppearanceOutcome = (
+  player: Player,
+  club: Club,
+  round: number,
+  seedBase: number,
+  statsBeforeAppearance: Pick<PlayerStats, 'matchesPlayed' | 'goals' | 'assists'>
+): BackgroundAppearanceOutcome => {
+  const rng = rngFromSeed(hashString(`${club.id}_${player.id}_${round}_${seedBase}_league`));
+  const minutes = player.position === PlayerPosition.GK || rng() > 0.22 ? 90 : 25 + Math.floor(rng() * 35);
+  const minutesFactor = getMinutesFactor(minutes);
+  const goalTargetRate = getGoalTargetRate(player, club);
+  const assistTargetRate = getAssistTargetRate(player, club);
+  const goalChance = clamp(
+    goalTargetRate * minutesFactor * getRateControlMultiplier(statsBeforeAppearance.goals, statsBeforeAppearance.matchesPlayed, goalTargetRate),
+    0,
+    0.56
+  );
+  const assistChance = clamp(
+    assistTargetRate * minutesFactor * getRateControlMultiplier(statsBeforeAppearance.assists, statsBeforeAppearance.matchesPlayed, assistTargetRate),
+    0,
+    0.32
+  );
+
+  return {
+    minutes,
+    scored: rng() < goalChance,
+    assisted: rng() < assistChance,
+    yellowCard: rng() < 0.09,
+    redCard: rng() < 0.005,
+    cleanSheet: player.position === PlayerPosition.GK && rng() < clamp(0.16 + getNormalizedClubReputation(club) / 520, 0.16, 0.35),
+  };
 };
 
 const addBackgroundAppearance = (player: Player, club: Club, round: number, seedBase: number): Player => {
   if (player.health?.status === HealthStatus.INJURED) return player;
 
-  const rng = rngFromSeed(hashString(`${club.id}_${player.id}_${round}_${seedBase}_league`));
   const stats = { ...(player.stats ?? emptyStats()), ratingHistory: [...(player.stats?.ratingHistory ?? [])] };
-  const minutes = player.position === PlayerPosition.GK || rng() > 0.22 ? 90 : 25 + Math.floor(rng() * 35);
-  const attackingScore = (player.attributes.attacking ?? 50) + (player.attributes.finishing ?? 50) + (player.overallRating ?? 60);
-  const creationScore = (player.attributes.passing ?? 50) + (player.attributes.vision ?? 50) + (player.attributes.crossing ?? 50);
-  const goalChance =
-    player.position === PlayerPosition.FWD ? 0.28 + attackingScore / 900 :
-    player.position === PlayerPosition.MID ? 0.09 + attackingScore / 1800 :
-    player.position === PlayerPosition.DEF ? 0.025 + (player.attributes.heading ?? 50) / 3500 :
-    0.003;
-  const assistChance =
-    player.position === PlayerPosition.MID ? 0.16 + creationScore / 1500 :
-    player.position === PlayerPosition.FWD ? 0.09 + creationScore / 2200 :
-    player.position === PlayerPosition.DEF ? 0.045 + creationScore / 3000 :
-    0.002;
+  const outcome = generateBackgroundAppearanceOutcome(player, club, round, seedBase, stats);
 
   stats.matchesPlayed += 1;
-  stats.minutesPlayed += minutes;
-  if (rng() < goalChance) stats.goals += 1;
-  if (rng() < assistChance) stats.assists += 1;
-  if (rng() < 0.11) stats.yellowCards += 1;
-  if (rng() < 0.008) stats.redCards += 1;
-  if (player.position === PlayerPosition.GK && rng() < clamp(0.18 + (club.reputation ?? 60) / 400, 0.18, 0.42)) {
-    stats.cleanSheets += 1;
-  }
-  stats.ratingHistory.push(getBackgroundRating(player, club, round, seedBase));
+  stats.minutesPlayed += outcome.minutes;
+  if (outcome.scored) stats.goals += 1;
+  if (outcome.assisted) stats.assists += 1;
+  if (outcome.yellowCard) stats.yellowCards += 1;
+  if (outcome.redCard) stats.redCards += 1;
+  if (outcome.cleanSheet) stats.cleanSheets += 1;
+  stats.ratingHistory.push(getBackgroundRating(player, club, round, seedBase, outcome));
 
   return PlayerFormService.withUpdatedForm({ ...player, stats });
+};
+
+const rebalanceExistingBackgroundStats = (
+  player: Player,
+  club: Club,
+  appearances: number,
+  seasonStartYear: number,
+  seedBase: number
+): Player => {
+  const calibrationKey = getBackgroundCalibrationKey(club.id, seasonStartYear);
+  const currentCalibrationVersion = player.stats?.backgroundLeagueCalibration?.[calibrationKey];
+  if (currentCalibrationVersion === BACKGROUND_STATS_BALANCE_VERSION || appearances <= 0) {
+    return player;
+  }
+
+  let calibratedStats: PlayerStats = {
+    ...(player.stats ?? emptyStats()),
+    goals: 0,
+    assists: 0,
+    yellowCards: 0,
+    redCards: 0,
+    cleanSheets: 0,
+    matchesPlayed: 0,
+    minutesPlayed: 0,
+    ratingHistory: [],
+  };
+
+  for (let round = 0; round < appearances; round += 1) {
+    const outcome = generateBackgroundAppearanceOutcome(player, club, round, seedBase, calibratedStats);
+    calibratedStats.matchesPlayed += 1;
+    calibratedStats.minutesPlayed += outcome.minutes;
+    if (outcome.scored) calibratedStats.goals += 1;
+    if (outcome.assisted) calibratedStats.assists += 1;
+    if (outcome.yellowCard) calibratedStats.yellowCards += 1;
+    if (outcome.redCard) calibratedStats.redCards += 1;
+    if (outcome.cleanSheet) calibratedStats.cleanSheets += 1;
+    calibratedStats.ratingHistory.push(getBackgroundRating(player, club, round, seedBase, outcome));
+  }
+
+  calibratedStats = {
+    ...calibratedStats,
+    backgroundLeagueProgress: {
+      ...(player.stats?.backgroundLeagueProgress ?? {}),
+      [getBackgroundProgressKey(club.id, seasonStartYear)]: appearances,
+    },
+    backgroundLeagueCalibration: {
+      ...(player.stats?.backgroundLeagueCalibration ?? {}),
+      [calibrationKey]: BACKGROUND_STATS_BALANCE_VERSION,
+    },
+  };
+
+  return PlayerFormService.withUpdatedForm({ ...player, stats: calibratedStats });
 };
 
 const applyBackgroundLeagueStatsToSquad = (
@@ -202,8 +380,8 @@ const applyBackgroundLeagueStatsToSquad = (
   return squad.map(player => {
     const rank = Math.max(0, rankedIds.indexOf(player.id));
     const targetAppearances = getPlayerTargetAppearances(targetRounds, rank, player);
-    let updated = player;
     const currentAppearances = getCurrentBackgroundAppearances(player, progressKey);
+    let updated = rebalanceExistingBackgroundStats(player, club, currentAppearances, seasonStartYear, seedBase);
     for (let round = currentAppearances; round < targetAppearances; round += 1) {
       updated = addBackgroundAppearance(updated, club, round, seedBase);
     }
@@ -215,6 +393,10 @@ const applyBackgroundLeagueStatsToSquad = (
           backgroundLeagueProgress: {
             ...(updated.stats?.backgroundLeagueProgress ?? {}),
             [progressKey]: targetAppearances,
+          },
+          backgroundLeagueCalibration: {
+            ...(updated.stats?.backgroundLeagueCalibration ?? {}),
+            [getBackgroundCalibrationKey(club.id, seasonStartYear)]: BACKGROUND_STATS_BALANCE_VERSION,
           },
         },
       };

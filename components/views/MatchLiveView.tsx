@@ -223,6 +223,78 @@ const seededValue = (seed: number, offset: number = 0) => {
   return x - Math.floor(x);
 };
 
+const AI_MENTALITY_SURGE_MAX = 0.055;
+
+const getLineupMentalitySum = (players: Player[], lineup: Lineup): number => {
+  const activeIds = new Set(lineup.startingXI.filter((id): id is string => id !== null));
+  return players.reduce((sum, player) => {
+    return activeIds.has(player.id) ? sum + (player.attributes.mentality ?? 50) : sum;
+  }, 0);
+};
+
+const getAiMentalitySurgeImpulse = (aiMentalitySum: number, userMentalitySum: number, rng: () => number): number => {
+  const mentalityDiff = aiMentalitySum - userMentalitySum;
+  if (mentalityDiff <= 0) {
+    return Number((0.002 + rng() * 0.004).toFixed(4));
+  }
+
+  const diffScale = clampNumber(mentalityDiff / 120, 0, 1);
+  const progressiveKick = Math.pow(diffScale, 1.18);
+  const rngKick = 0.002 + rng() * 0.007;
+  return Number(clampNumber(0.005 + progressiveKick * 0.030 + rngKick, 0.006, 0.038).toFixed(4));
+};
+
+const updateAiMentalitySurgeAfterGoal = ({
+  scoringSide,
+  userSide,
+  homePlayers,
+  awayPlayers,
+  homeLineup,
+  awayLineup,
+  currentBoost,
+  minute,
+  rng,
+}: {
+  scoringSide: 'HOME' | 'AWAY';
+  userSide: 'HOME' | 'AWAY';
+  homePlayers: Player[];
+  awayPlayers: Player[];
+  homeLineup: Lineup;
+  awayLineup: Lineup;
+  currentBoost: number;
+  minute: number;
+  rng: () => number;
+}) => {
+  if (scoringSide === userSide) {
+    return {
+      boost: 0,
+      previousBoost: currentBoost,
+      lastGoalMinute: minute,
+      lastAction: 'USER_SCORED' as const,
+    };
+  }
+
+  const aiSide: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
+  const aiMentalitySum = aiSide === 'HOME'
+    ? getLineupMentalitySum(homePlayers, homeLineup)
+    : getLineupMentalitySum(awayPlayers, awayLineup);
+  const userMentalitySum = userSide === 'HOME'
+    ? getLineupMentalitySum(homePlayers, homeLineup)
+    : getLineupMentalitySum(awayPlayers, awayLineup);
+  const impulse = getAiMentalitySurgeImpulse(aiMentalitySum, userMentalitySum, rng);
+  const currentAbs = Math.abs(currentBoost);
+  const nextAbs = currentAbs > 0
+    ? clampNumber(currentAbs + impulse * 0.42 + 0.001 + rng() * 0.004, 0, AI_MENTALITY_SURGE_MAX)
+    : impulse;
+
+  return {
+    boost: aiSide === 'HOME' ? Number(nextAbs.toFixed(4)) : Number((-nextAbs).toFixed(4)),
+    previousBoost: currentBoost,
+    lastGoalMinute: minute,
+    lastAction: 'AI_SCORED' as const,
+  };
+};
+
 const getRefereeDecisionQuality = (referee: Referee) =>
   (referee.consistency * 0.6) + ((referee.experience ?? 50) * 0.4);
 
@@ -1002,7 +1074,11 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         aiLeagueMatchPlan,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
-        tacticalBoostExpiry: -1
+        tacticalBoostExpiry: -1,
+        aiMentalitySurgeBoost: 0,
+        aiMentalitySurgePreviousBoost: 0,
+        aiMentalitySurgeLastGoalMinute: -1,
+        aiMentalitySurgeLastAction: null
         
         
      });
@@ -1235,6 +1311,29 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             playerName: activePenalty.kicker.lastName
           };
 
+          let nextAiMentalitySurgeBoost = prev.aiMentalitySurgeBoost ?? 0;
+          let nextAiMentalitySurgePreviousBoost = prev.aiMentalitySurgePreviousBoost ?? 0;
+          let nextAiMentalitySurgeLastGoalMinute = prev.aiMentalitySurgeLastGoalMinute ?? -1;
+          let nextAiMentalitySurgeLastAction = prev.aiMentalitySurgeLastAction ?? null;
+          if (isGoal) {
+            let surgeOffset = 8700;
+            const surge = updateAiMentalitySurgeAfterGoal({
+              scoringSide: activePenalty.side,
+              userSide,
+              homePlayers: ctx.homePlayers,
+              awayPlayers: ctx.awayPlayers,
+              homeLineup: prev.homeLineup,
+              awayLineup: prev.awayLineup,
+              currentBoost: nextAiMentalitySurgeBoost,
+              minute: prev.minute,
+              rng: () => seededRng(prev.sessionSeed, prev.minute, surgeOffset++),
+            });
+            nextAiMentalitySurgeBoost = surge.boost;
+            nextAiMentalitySurgePreviousBoost = surge.previousBoost;
+            nextAiMentalitySurgeLastGoalMinute = surge.lastGoalMinute;
+            nextAiMentalitySurgeLastAction = surge.lastAction;
+          }
+
           return {
             ...prev,
             homeScore: nextHomeScore,
@@ -1242,6 +1341,10 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
             homeGoals: newHomeGoals,
             awayGoals: newAwayGoals,
             logs: [newLog, ...prev.logs],
+            aiMentalitySurgeBoost: nextAiMentalitySurgeBoost,
+            aiMentalitySurgePreviousBoost: nextAiMentalitySurgePreviousBoost,
+            aiMentalitySurgeLastGoalMinute: nextAiMentalitySurgeLastGoalMinute,
+            aiMentalitySurgeLastAction: nextAiMentalitySurgeLastAction,
             momentum: MomentumService.computeMomentum(ctx, prev, finalResult, activePenalty.side, prev.homeFatigue, prev.awayFatigue, env?.weather),
             liveStats: {
               ...prev.liveStats,
@@ -1333,12 +1436,19 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           const newAwayGoals = !isVarHome
             ? prev.awayGoals.map(markDisallowedGoal)
             : prev.awayGoals;
+          const shouldRevertSurge =
+            didDisallowGoal &&
+            prev.aiMentalitySurgeLastGoalMinute === activeVAR.minute &&
+            prev.aiMentalitySurgeLastAction !== null;
           return {
             ...prev,
             homeScore: isVarHome && didDisallowGoal ? Math.max(0, prev.homeScore - 1) : prev.homeScore,
             awayScore: !isVarHome && didDisallowGoal ? Math.max(0, prev.awayScore - 1) : prev.awayScore,
             homeGoals: newHomeGoals,
             awayGoals: newAwayGoals,
+            aiMentalitySurgeBoost: shouldRevertSurge ? (prev.aiMentalitySurgePreviousBoost ?? 0) : (prev.aiMentalitySurgeBoost ?? 0),
+            aiMentalitySurgePreviousBoost: shouldRevertSurge ? 0 : (prev.aiMentalitySurgePreviousBoost ?? 0),
+            aiMentalitySurgeLastAction: shouldRevertSurge ? null : (prev.aiMentalitySurgeLastAction ?? null),
             logs: [varLog, ...prev.logs]
           };
         }
@@ -1680,6 +1790,28 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let nextActiveTacticalBoost: number = prev.activeTacticalBoost ?? 0;
         let nextTacticalBoostExpiry: number = prev.tacticalBoostExpiry ?? -1;
         let nextLastGoalBoostMinute: number = prev.lastGoalBoostMinute ?? -1;
+        let nextAiMentalitySurgeBoost: number = prev.aiMentalitySurgeBoost ?? 0;
+        let nextAiMentalitySurgePreviousBoost: number = prev.aiMentalitySurgePreviousBoost ?? 0;
+        let nextAiMentalitySurgeLastGoalMinute: number = prev.aiMentalitySurgeLastGoalMinute ?? -1;
+        let nextAiMentalitySurgeLastAction: MatchLiveState['aiMentalitySurgeLastAction'] = prev.aiMentalitySurgeLastAction ?? null;
+        const applyAiMentalitySurgeForGoal = (scoringSide: 'HOME' | 'AWAY') => {
+          let surgeOffset = 8600;
+          const surge = updateAiMentalitySurgeAfterGoal({
+            scoringSide,
+            userSide,
+            homePlayers: ctx.homePlayers,
+            awayPlayers: ctx.awayPlayers,
+            homeLineup: nextHomeLineup,
+            awayLineup: nextAwayLineup,
+            currentBoost: nextAiMentalitySurgeBoost,
+            minute: nextMinute,
+            rng: () => seededRng(currentSeed, nextMinute, surgeOffset++),
+          });
+          nextAiMentalitySurgeBoost = surge.boost;
+          nextAiMentalitySurgePreviousBoost = surge.previousBoost;
+          nextAiMentalitySurgeLastGoalMinute = surge.lastGoalMinute;
+          nextAiMentalitySurgeLastAction = surge.lastAction;
+        };
         if (nextActiveTacticalBoost !== 0 && nextMinute > nextTacticalBoostExpiry) {
           nextActiveTacticalBoost = 0;
           nextTacticalBoostExpiry = -1;
@@ -2810,6 +2942,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             shotThreshold += Math.abs(nextActiveTacticalBoost);
           }
         }
+        if (nextAiMentalitySurgeBoost !== 0) {
+          const surgeSide = nextAiMentalitySurgeBoost > 0 ? 'HOME' : 'AWAY';
+          if (surgeSide === activeSide && activeSide !== userSide) {
+            shotThreshold += Math.abs(nextAiMentalitySurgeBoost);
+          }
+        }
 
         const activeBriefing =
           prev.preMatchMotivation && nextMinute <= prev.preMatchMotivation.expiryMinute
@@ -3202,6 +3340,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                */
               newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: scorer.id, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
+              applyAiMentalitySurgeForGoal(activeSide);
 
               // ── CONTACT GOAL BOOST: detekcja i przyznanie boosta ───────────────
               // Bramka kontaktowa = strzelająca drużyna była w tyle przed tym golem.
@@ -3335,6 +3474,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               priorityAiTrigger = true;
               pauseForEvent = true;
               immediateEventType = MatchEventType.GOAL;
+              applyAiMentalitySurgeForGoal(activeSide);
             } else if (seededRng(currentSeed, nextMinute, 922) < 0.18) {
               newLog = {
                 id: `STAT_SHOT_${nextMinute}`,
@@ -3452,6 +3592,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   goalTriggered = true;
                   priorityAiTrigger = true;
                   immediateEventType = MatchEventType.GOAL;
+                  applyAiMentalitySurgeForGoal(activeSide);
                 } else {
                   if (activeSide === 'HOME') nextLiveStats.home.shots++;
                   else nextLiveStats.away.shots++;
@@ -3497,6 +3638,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 goalTriggered = true;
                 priorityAiTrigger = true;
                 immediateEventType = MatchEventType.GOAL;
+                applyAiMentalitySurgeForGoal(activeSide);
               } else {
                 nextActionContributions = MatchActionService.mergeContributions(nextActionContributions, {
                   [fkTaker.id]: 0.10,
@@ -3888,6 +4030,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             lightInjuryPrompt: null,
             userInstructions: nextUserInstructions,
             activeTacticalBoost: 0, tacticalBoostExpiry: -1, lastGoalBoostMinute: nextLastGoalBoostMinute,
+            aiMentalitySurgeBoost: nextAiMentalitySurgeBoost,
+            aiMentalitySurgePreviousBoost: nextAiMentalitySurgePreviousBoost,
+            aiMentalitySurgeLastGoalMinute: nextAiMentalitySurgeLastGoalMinute,
+            aiMentalitySurgeLastAction: nextAiMentalitySurgeLastAction,
             aiActiveShout: nextAiActiveShout,
             aiNextInstructionMinute: nextAiNextInstructionMinute,
             aiExploitUntilMinute: nextAiExploitUntilMinute,
@@ -3941,6 +4087,10 @@ return {
            activeTacticalBoost: nextActiveTacticalBoost,
            tacticalBoostExpiry: nextTacticalBoostExpiry,
            lastGoalBoostMinute: nextLastGoalBoostMinute,
+           aiMentalitySurgeBoost: nextAiMentalitySurgeBoost,
+           aiMentalitySurgePreviousBoost: nextAiMentalitySurgePreviousBoost,
+           aiMentalitySurgeLastGoalMinute: nextAiMentalitySurgeLastGoalMinute,
+           aiMentalitySurgeLastAction: nextAiMentalitySurgeLastAction,
            aiActiveShout: nextAiActiveShout,
            aiNextInstructionMinute: nextAiNextInstructionMinute,
            aiExploitUntilMinute: nextAiExploitUntilMinute,
