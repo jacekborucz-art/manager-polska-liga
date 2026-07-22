@@ -1159,6 +1159,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   summerCampProgramPending: boolean;
   clearSummerCampInvitePending: () => void;
   clearSummerCampProgramPending: () => void;
+  reopenSummerCampInvite: () => void;
   saveSummerCampLocation: (location: import('../types').SummerCampLocation | null, cost: number, spaOption: boolean) => void;
   saveSummerCampProgram: (program: import('../types').SummerCampProgram, intensity: import('../types').SummerCampIntensity) => void;
   seasonCelebration: SeasonCelebrationType | null;
@@ -5817,8 +5818,38 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     setWinterCampProgramPending(false);
   }, [userTeamId]);
 
+  const ensureSummerCampInviteState = useCallback((baseDate: Date = currentDate) => {
+    if (!userTeamId) return;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || c.summerCamp) return c;
+
+      const priceSeed = sessionSeed + baseDate.getTime() % 100000 + 1000;
+      return {
+        ...c,
+        summerCamp: {
+          location: null,
+          cost: 0,
+          program: null,
+          intensity: null,
+          spaOption: false,
+          isDeclined: false,
+          locationPrices: generateSummerLocationPrices(priceSeed),
+          spaCost: generateSummerSpaCost(priceSeed),
+          inviteSent: true,
+          programChosen: false,
+          effectsApplied: false,
+        },
+      };
+    }));
+  }, [currentDate, sessionSeed, userTeamId]);
+
   const clearSummerCampInvitePending = useCallback(() => setSummerCampInvitePending(false), []);
   const clearSummerCampProgramPending = useCallback(() => setSummerCampProgramPending(false), []);
+  const reopenSummerCampInvite = useCallback(() => {
+    ensureSummerCampInviteState();
+    setSummerCampInvitePending(true);
+  }, [ensureSummerCampInviteState]);
   const [seasonCelebration, setSeasonCelebration] = useState<SeasonCelebrationType | null>(null);
   const clearSeasonCelebration = useCallback(() => setSeasonCelebration(null), []);
 
@@ -8371,7 +8402,11 @@ Asystent`,
           },
         } : c));
         const inviteMail = MailService.createFromTemplate('summer_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
-        if (inviteMail) setMessages(prev => [inviteMail, ...prev]);
+        if (inviteMail) {
+          inviteMail.date = new Date(dateToProcess);
+          inviteMail.metadata = { type: 'SUMMER_CAMP_INVITE', expiryDate: new Date(dateToProcess.getFullYear(), 4, 19).toISOString() };
+          setMessages(prev => [inviteMail, ...prev]);
+        }
         setSummerCampInvitePending(true);
       }
     }
@@ -17059,7 +17094,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
     saveWinterCampLocation, saveWinterCampProgram,
     summerCampInvitePending, summerCampProgramPending,
-    clearSummerCampInvitePending, clearSummerCampProgramPending,
+    clearSummerCampInvitePending, clearSummerCampProgramPending, reopenSummerCampInvite,
     saveSummerCampLocation, saveSummerCampProgram,
     seasonCelebration, clearSeasonCelebration,
     }}>

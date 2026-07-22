@@ -1053,6 +1053,11 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
             const latestResultType = latestWasWin ? 'WIN' : latestWasLoss ? 'LOSS' : 'DRAW';
             const hasGoodResults = latestWasWin || recentWins >= 2 || recentLosses === 0;
             const isEarlyLeagueSeason = userLeagueFixtures.length <= 5;
+            const seasonPhase = userLeagueFixtures.length <= 5
+              ? 'EARLY' as const
+              : userLeagueFixtures.length >= 28
+                ? 'LATE' as const
+                : 'MID' as const;
             const friendlyMailId = `PRESS_FRIENDLY_START_${friendlyPressMonthKey}_${latestLeagueFixture.id}_${friendlyNewspaper}`;
             const alreadySentFriendly = existingMails.some(m => m.id === friendlyMailId);
             if (!alreadySentFriendly) {
@@ -1068,7 +1073,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
                 managerLastName,
                 userClub.name,
                 currentDate,
-                { opponentName, venueLabel, latestResultType }
+                { opponentName, venueLabel, latestResultType, seasonPhase }
               );
               friendlyMail.id = friendlyMailId;
               friendlyMail.date = new Date(currentDate);

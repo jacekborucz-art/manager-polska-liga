@@ -436,6 +436,9 @@ export interface MailMessage {
     type: 'WINTER_CAMP_INVITE';
     expiryDate: string;
   } | {
+    type: 'SUMMER_CAMP_INVITE';
+    expiryDate: string;
+  } | {
     type: 'SPORTING_DIRECTOR_OBJECTIVE';
     objectiveId: string;
   } | {

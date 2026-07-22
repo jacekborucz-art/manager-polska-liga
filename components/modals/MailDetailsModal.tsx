@@ -23,6 +23,22 @@ const formatMailDate = (
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('pl-PL', options);
 };
 
+const getSeasonAwareMailBody = (mail: MailMessage): string => {
+  const mailDate = mail.date instanceof Date ? mail.date : new Date(mail.date);
+  const isLateSeasonPressArticle =
+    mail.type === MailType.PRESS &&
+    !Number.isNaN(mailDate.getTime()) &&
+    mailDate.getMonth() >= 4 &&
+    mail.body.includes('zespół może wejść w drugą część sezonu z większą pewnością siebie');
+
+  if (!isLateSeasonPressArticle) return mail.body;
+
+  return mail.body.replace(
+    'zespół może wejść w drugą część sezonu z większą pewnością siebie',
+    'zespół może podejść do finiszu sezonu z większą pewnością siebie',
+  );
+};
+
 const TeamOfWeekPitch: React.FC<{ mail: MailMessage }> = ({ mail }) => {
   const { players } = useGame();
 
@@ -913,6 +929,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     players,
     userTeamId,
     reopenWinterCampInvite,
+    reopenSummerCampInvite,
     respondToSportingDirectorObjective,
     setMediaRelationships,
     setClubs,
@@ -926,6 +943,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   const { closeModal, exitClass } = useModalClose(onClose);
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const displayBody = getSeasonAwareMailBody(mail);
 
   const openContractNegotiationForPlayer = (playerId: string) => {
     viewPlayerDetails(playerId);
@@ -1181,7 +1199,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               })()
             ) : (
               <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Archivo,sans-serif]">
-                {mail.body}
+                {displayBody}
               </p>
             )}
           </div>
@@ -1212,6 +1230,32 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                   className={`mr-4 rounded-2xl px-10 py-4 text-xs font-black italic uppercase tracking-widest shadow-xl transition-all ${
                     isActive
                       ? 'bg-amber-600 text-white hover:scale-105 active:scale-95 cursor-pointer'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })()}
+
+            {(mail.metadata?.type === 'SUMMER_CAMP_INVITE' || (!mail.metadata && mail.subject.toLowerCase().includes('propozycja letniego obozu'))) && (() => {
+              const expiryDate = mail.metadata?.type === 'SUMMER_CAMP_INVITE'
+                ? new Date(mail.metadata.expiryDate)
+                : null;
+              if (expiryDate) expiryDate.setHours(23, 59, 59, 999);
+              const today = new Date(currentDate);
+              const isExpired = expiryDate ? today > expiryDate : false;
+              const userClub = clubs.find(c => c.id === userTeamId);
+              const alreadyChosen = !!(userClub?.summerCamp?.location !== null && userClub?.summerCamp?.location !== undefined) || !!(userClub?.summerCamp?.isDeclined);
+              const isActive = !isExpired && !alreadyChosen;
+              const label = isExpired ? 'Termin minął' : alreadyChosen ? 'Już zadecydowano' : 'Wybierz lokalizację obozu';
+              return (
+                <button
+                  disabled={!isActive}
+                  onClick={isActive ? () => { reopenSummerCampInvite(); onClose(); } : undefined}
+                  className={`mr-4 rounded-2xl px-10 py-4 text-xs font-black italic uppercase tracking-widest shadow-xl transition-all ${
+                    isActive
+                      ? 'bg-green-600 text-white hover:scale-105 active:scale-95 cursor-pointer'
                       : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                   }`}
                 >

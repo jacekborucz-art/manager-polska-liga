@@ -27,6 +27,7 @@ export interface PressArticleContext {
   venueLabel?: string;
   latestResultType?: 'WIN' | 'DRAW' | 'LOSS';
   managerFullName?: string;
+  seasonPhase?: 'EARLY' | 'MID' | 'LATE';
 }
 
 export interface PressArticle {
@@ -115,10 +116,15 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
       context?.latestResultType === 'WIN'
         ? `${m} łapie rytm. Wygrana z ${context?.opponentName ?? 'rywalem'} wzmacnia wiarę kibiców`
         : `${m} łapie rytm. Wynik z ${context?.opponentName ?? 'rywalem'} potwierdza stabilizację`,
-    body: (m, c, context) =>
-      context?.latestResultType === 'WIN'
-        ? `${c} pod wodzą ${m} dopisała kolejne ważne zwycięstwo, pokonując ${context?.opponentName ?? 'rywala'} ${context?.venueLabel ?? 'w lidze'}. Po wielu tygodniach pracy coraz wyraźniej widać, że zespół ma własny rytm i coraz lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`
-        : `${c} pod wodzą ${m} utrzymała pozytywny rytm w meczu z ${context?.opponentName ?? 'rywalem'} ${context?.venueLabel ?? 'w lidze'}. Choć tym razem nie udało się dopisać kompletu punktów, po wielu tygodniach pracy coraz wyraźniej widać, że zespół lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik nie zamyka dyskusji, ale daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\nSam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`,
+    body: (m, c, context) => {
+      const closingLine = context?.seasonPhase === 'LATE'
+        ? `Sam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może podejść do finiszu sezonu z większą pewnością siebie.`
+        : `Sam trener zachowuje ostrożność, ale wokół ${c} da się wyczuć przekonanie, że zespół może wejść w drugą część sezonu z większą pewnością siebie.`;
+
+      return context?.latestResultType === 'WIN'
+        ? `${c} pod wodzą ${m} dopisała kolejne ważne zwycięstwo, pokonując ${context?.opponentName ?? 'rywala'} ${context?.venueLabel ?? 'w lidze'}. Po wielu tygodniach pracy coraz wyraźniej widać, że zespół ma własny rytm i coraz lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\n${closingLine}`
+        : `${c} pod wodzą ${m} utrzymała pozytywny rytm w meczu z ${context?.opponentName ?? 'rywalem'} ${context?.venueLabel ?? 'w lidze'}. Choć tym razem nie udało się dopisać kompletu punktów, po wielu tygodniach pracy coraz wyraźniej widać, że zespół lepiej rozumie założenia sztabu.\n\nTo nie jest już etap pierwszych wrażeń, lecz moment, w którym kibice zaczynają oceniać drużynę przez pryzmat regularności. Ostatni wynik nie zamyka dyskusji, ale daje argumenty tym, którzy uważają, że obrany kierunek przynosi konkretne efekty.\n\n${closingLine}`;
+    },
   },
   PRZYCHYLNE_SZATNIA: {
     headline: (m, c) => `Piłkarze po stronie ${m}. W ${c} mówi się o bardzo dobrej atmosferze`,

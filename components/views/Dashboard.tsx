@@ -631,6 +631,16 @@ const boardConfidence = useMemo(() => {
   };
 
   const getMailActionLabel = (mail: MailMessage): string | null => {
+    const isLegacySummerCampInvite =
+      !mail.metadata && mail.subject.toLowerCase().includes('propozycja letniego obozu');
+
+    if (isLegacySummerCampInvite) {
+      const alreadyChosen =
+        myClub?.summerCamp?.location !== null && myClub?.summerCamp?.location !== undefined ||
+        !!myClub?.summerCamp?.isDeclined;
+      return !alreadyChosen ? 'Wymaga decyzji' : null;
+    }
+
     switch (mail.metadata?.type) {
       case 'PLAYER_MORALE_REQUEST':
       case 'INTERVIEW_REQUEST':
@@ -647,6 +657,14 @@ const boardConfidence = useMemo(() => {
         const alreadyChosen =
           myClub?.winterCamp?.location !== null && myClub?.winterCamp?.location !== undefined ||
           !!myClub?.winterCamp?.isDeclined;
+        return currentDate <= expiryDate && !alreadyChosen ? 'Wymaga decyzji' : null;
+      }
+      case 'SUMMER_CAMP_INVITE': {
+        const expiryDate = new Date(mail.metadata.expiryDate);
+        expiryDate.setHours(23, 59, 59, 999);
+        const alreadyChosen =
+          myClub?.summerCamp?.location !== null && myClub?.summerCamp?.location !== undefined ||
+          !!myClub?.summerCamp?.isDeclined;
         return currentDate <= expiryDate && !alreadyChosen ? 'Wymaga decyzji' : null;
       }
       case 'INCOMING_TRANSFER_OFFER':
