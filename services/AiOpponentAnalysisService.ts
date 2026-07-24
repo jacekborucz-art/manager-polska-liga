@@ -1,6 +1,7 @@
 import { Club, Coach, HealthStatus, InjurySeverity, Lineup, Player, PlayerPosition, StaffMember, StaffRole } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { TacticalMatchupService } from './TacticalMatchupService';
+import { getLegacySpreadOffsetSeededValue } from './match/live/LiveMatchRandom';
 
 export type AiPredictedStyle = 'DEFENSIVE' | 'BALANCED' | 'OFFENSIVE';
 export type AiRecommendedApproach = 'PRESS' | 'CONTROL' | 'COUNTER' | 'LOW_BLOCK' | 'DIRECT';
@@ -61,10 +62,8 @@ export const isLowBlockStartJustified = (
 const staffAttr = (member: StaffMember | undefined, key: string, fallback = 10): number =>
   clamp(member?.attributes?.[key] ?? fallback, 1, 20) * 5;
 
-const seededRng = (seed: number, offset: number): number => {
-  const x = Math.sin(seed + offset * 9973) * 10000;
-  return x - Math.floor(x);
-};
+// Migration bridge: reuse the exact legacy scouting/report RNG formula during extraction.
+const seededRng = getLegacySpreadOffsetSeededValue;
 
 const hashString = (value: string): number =>
   value.split('').reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 17), 0);

@@ -1,6 +1,7 @@
 ﻿import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { Newspaper } from '../types';
+import type { MatchHistoryEntry } from '../types';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
 import { MediaInterviewService } from './MediaInterviewService';
@@ -66,6 +67,177 @@ const getYearMonthKey = (date: Date): string =>
   `${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 const STAR_INJURY_DRAMA_MIN_DAYS = 90;
+
+type VarControversyArticleContext = {
+  teamName: string;
+  teamRole: 'gospodarzy' | 'gości';
+};
+
+type RedCardControversyArticleContext = {
+  teamName: string;
+};
+
+type PenaltyNoCallControversyArticleContext = {
+  teamName: string;
+};
+
+type LowRefereeRatingArticleContext = {
+  refereeName?: string;
+};
+
+type AiVarCriticismArticleContext = {
+  teamName: string;
+};
+
+const getVarControversyArticleContext = (
+  matchHistory: MatchHistoryEntry[],
+  fixture: Fixture,
+  allClubs: Club[]
+): VarControversyArticleContext | null => {
+  const match = matchHistory.find(entry => entry.matchId === fixture.id);
+  if (!match) return null;
+
+  const disallowedGoal = match.goals.find(goal => goal.varDisallowed === true && !goal.isMiss);
+  const disallowedTimelineEvent = (match.timeline ?? []).find(event => {
+    const eventAny = event as any;
+    return eventAny.varDisallowed === true && (eventAny.type === 'GOAL' || eventAny.type === 'PENALTY_SCORED');
+  }) as any;
+
+  const teamId = disallowedGoal?.teamId
+    ?? (disallowedTimelineEvent?.teamSide === 'HOME'
+      ? match.homeTeamId
+      : disallowedTimelineEvent?.teamSide === 'AWAY'
+        ? match.awayTeamId
+        : undefined);
+
+  if (!teamId) return null;
+
+  return {
+    teamName: allClubs.find(club => club.id === teamId)?.name ?? 'jedna z drużyn',
+    teamRole: teamId === match.homeTeamId ? 'gospodarzy' : 'gości',
+  };
+};
+
+const getAiRedCardControversyArticleContext = (
+  matchHistory: MatchHistoryEntry[],
+  fixture: Fixture,
+  userClub: Club,
+  allClubs: Club[]
+): RedCardControversyArticleContext | null => {
+  // This press hook is intentionally narrow: it reacts only when the AI opponent received
+  // a red-card dismissal and then failed to beat the user, so the article can plausibly
+  // frame the referee decision as a turning point rather than generic post-match noise.
+  const match = matchHistory.find(entry => entry.matchId === fixture.id);
+  if (!match) return null;
+
+  const userIsHome = fixture.homeTeamId === userClub.id;
+  const aiTeamId = userIsHome ? fixture.awayTeamId : fixture.homeTeamId;
+  const userScore = userIsHome ? (fixture.homeScore ?? match.homeScore ?? 0) : (fixture.awayScore ?? match.awayScore ?? 0);
+  const aiScore = userIsHome ? (fixture.awayScore ?? match.awayScore ?? 0) : (fixture.homeScore ?? match.homeScore ?? 0);
+
+  if (aiScore > userScore) return null;
+
+  const aiRedCard = (match.cards ?? []).find(card =>
+    card.teamId === aiTeamId &&
+    (card.type === 'RED' || card.type === 'SECOND_YELLOW')
+  );
+  if (!aiRedCard) return null;
+
+  return {
+    teamName: allClubs.find(club => club.id === aiTeamId)?.name ?? 'drużyny rywali',
+  };
+};
+
+const getAiPenaltyNoCallControversyArticleContext = (
+  matchHistory: MatchHistoryEntry[],
+  fixture: Fixture,
+  userClub: Club,
+  allClubs: Club[]
+): PenaltyNoCallControversyArticleContext | null => {
+  // The article needs a clear "what if" narrative: the AI opponent was denied a VAR-reviewed
+  // penalty and the final score was close enough that one successful penalty could have
+  // changed the result from a loss to a draw, or from a draw to a potential win.
+  const match = matchHistory.find(entry => entry.matchId === fixture.id);
+  if (!match) return null;
+
+  const userIsHome = fixture.homeTeamId === userClub.id;
+  const aiTeamId = userIsHome ? fixture.awayTeamId : fixture.homeTeamId;
+  const aiSide = aiTeamId === match.homeTeamId ? 'HOME' : 'AWAY';
+  const userScore = userIsHome ? (fixture.homeScore ?? match.homeScore ?? 0) : (fixture.awayScore ?? match.awayScore ?? 0);
+  const aiScore = userIsHome ? (fixture.awayScore ?? match.awayScore ?? 0) : (fixture.homeScore ?? match.homeScore ?? 0);
+  const goalDiffForUser = userScore - aiScore;
+
+  if (goalDiffForUser < 0 || goalDiffForUser > 1) return null;
+
+  const aiPenaltyNoCall = (match.timeline ?? []).find(event => {
+    const eventAny = event as any;
+    return eventAny.teamSide === aiSide &&
+      eventAny.type === 'GENERIC' &&
+      typeof eventAny.text === 'string' &&
+      eventAny.text.includes('VAR: Nie ma karnego');
+  });
+  if (!aiPenaltyNoCall) return null;
+
+  return {
+    teamName: allClubs.find(club => club.id === aiTeamId)?.name ?? 'drużyny rywali',
+  };
+};
+
+const getLowRefereeRatingArticleContext = (
+  matchHistory: MatchHistoryEntry[],
+  fixture: Fixture
+): LowRefereeRatingArticleContext | null => {
+  // Low referee-rating coverage is intentionally tied to the stored live-match referee grade.
+  // The post-match engine already compresses VAR controversies, card balance, fouls, and match
+  // closeness into refereeRating, so the press layer only checks whether that final grade fell
+  // below the acceptable 6.0 line instead of duplicating every match-engine detail here.
+  const match = matchHistory.find(entry => entry.matchId === fixture.id);
+  if (!match || match.refereeRating === undefined || match.refereeRating >= 6) return null;
+
+  return {
+    refereeName: match.refereeName,
+  };
+};
+
+const getAiTwoGoalLossVarCriticismArticleContext = (
+  matchHistory: MatchHistoryEntry[],
+  fixture: Fixture,
+  userClub: Club,
+  allClubs: Club[]
+): AiVarCriticismArticleContext | null => {
+  // This article is reserved for a very specific narrative: the AI opponent lost by exactly
+  // two goals and had at least one goal disallowed after VAR. A one-goal loss already has a
+  // separate "could have changed the result" hook; this two-goal version frames the coach's
+  // reaction as frustration about match control and trust in VAR, not as a direct lost point.
+  const match = matchHistory.find(entry => entry.matchId === fixture.id);
+  if (!match) return null;
+
+  const userIsHome = fixture.homeTeamId === userClub.id;
+  const aiTeamId = userIsHome ? fixture.awayTeamId : fixture.homeTeamId;
+  const aiSide = aiTeamId === match.homeTeamId ? 'HOME' : 'AWAY';
+  const userScore = userIsHome ? (fixture.homeScore ?? match.homeScore ?? 0) : (fixture.awayScore ?? match.awayScore ?? 0);
+  const aiScore = userIsHome ? (fixture.awayScore ?? match.awayScore ?? 0) : (fixture.homeScore ?? match.homeScore ?? 0);
+
+  if (userScore - aiScore !== 2) return null;
+
+  const aiDisallowedGoal = (match.goals ?? []).some(goal =>
+    goal.teamId === aiTeamId &&
+    goal.varDisallowed === true &&
+    !goal.isMiss
+  );
+  const aiDisallowedTimelineGoal = (match.timeline ?? []).some(event => {
+    const eventAny = event as any;
+    return eventAny.teamSide === aiSide &&
+      eventAny.varDisallowed === true &&
+      (eventAny.type === 'GOAL' || eventAny.type === 'PENALTY_SCORED');
+  });
+
+  if (!aiDisallowedGoal && !aiDisallowedTimelineGoal) return null;
+
+  return {
+    teamName: allClubs.find(club => club.id === aiTeamId)?.name ?? 'rywali',
+  };
+};
 
 const getMailDate = (mail: MailMessage): Date | null => {
   const mailDate = mail.date instanceof Date ? mail.date : new Date(mail.date);
@@ -812,7 +984,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     mediaRelationships: Record<string, number> = {},
     sentUnfriendlyPressMonths: string[] = [],
     sentFriendlyPressMonths: string[] = [],
-    seasonNumber = 1
+    seasonNumber = 1,
+    matchHistory: MatchHistoryEntry[] = []
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -976,6 +1149,179 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         const oppScore = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
         return userScore < oppScore;
       };
+
+      const latestCompetitiveFixture = competitiveFixtures[competitiveFixtures.length - 1];
+      const latestCompetitiveWasPlayedToday = latestCompetitiveFixture
+        ? startOfDay(latestCompetitiveFixture.date) === startOfDay(currentDate)
+        : false;
+
+      if (latestCompetitiveFixture && latestCompetitiveWasPlayedToday) {
+        const varControversyContext = getVarControversyArticleContext(matchHistory, latestCompetitiveFixture, allClubs);
+        if (varControversyContext && Math.random() < 0.3) {
+          const varMailId = `PRESS_VAR_CONTROVERSY_${latestCompetitiveFixture.id}`;
+          const alreadySentVarArticle =
+            existingMails.some(m => m.id === varMailId) ||
+            newMails.some(m => m.id === varMailId);
+          if (!alreadySentVarArticle) {
+            const isHome = latestCompetitiveFixture.homeTeamId === userClub.id;
+            const opponentId = isHome ? latestCompetitiveFixture.awayTeamId : latestCompetitiveFixture.homeTeamId;
+            const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+            const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const varMail = MediaInterviewService.generatePressArticleMail(
+              'VAR_KONTROWERSJE',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              {
+                opponentName,
+                venueLabel,
+                varControversyTeamName: varControversyContext.teamName,
+                varControversyTeamRole: varControversyContext.teamRole,
+              }
+            );
+            varMail.id = varMailId;
+            varMail.date = new Date(currentDate);
+            varMail.priority = 58;
+            newMails.push(varMail);
+          }
+        }
+
+        const aiTwoGoalLossVarCriticismContext = getAiTwoGoalLossVarCriticismArticleContext(matchHistory, latestCompetitiveFixture, userClub, allClubs);
+        if (aiTwoGoalLossVarCriticismContext && Math.random() < 0.2) {
+          const aiTwoGoalLossVarMailId = `PRESS_AI_TWO_GOAL_LOSS_VAR_CRITICISM_${latestCompetitiveFixture.id}`;
+          const alreadySentAiTwoGoalLossVarArticle =
+            existingMails.some(m => m.id === aiTwoGoalLossVarMailId) ||
+            newMails.some(m => m.id === aiTwoGoalLossVarMailId);
+          if (!alreadySentAiTwoGoalLossVarArticle) {
+            const isHome = latestCompetitiveFixture.homeTeamId === userClub.id;
+            const opponentId = isHome ? latestCompetitiveFixture.awayTeamId : latestCompetitiveFixture.homeTeamId;
+            const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+            const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const aiTwoGoalLossVarMail = MediaInterviewService.generatePressArticleMail(
+              'TRENER_AI_KRYTYKUJE_VAR_PO_ANULOWANEJ_BRAMCE',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              {
+                opponentName,
+                venueLabel,
+                aiVarCriticismTeamName: aiTwoGoalLossVarCriticismContext.teamName,
+              }
+            );
+            aiTwoGoalLossVarMail.id = aiTwoGoalLossVarMailId;
+            aiTwoGoalLossVarMail.date = new Date(currentDate);
+            aiTwoGoalLossVarMail.priority = 57;
+            newMails.push(aiTwoGoalLossVarMail);
+          }
+        }
+
+        const redCardControversyContext = getAiRedCardControversyArticleContext(matchHistory, latestCompetitiveFixture, userClub, allClubs);
+        if (redCardControversyContext && Math.random() < 0.3) {
+          const redCardMailId = `PRESS_RED_CARD_CONTROVERSY_${latestCompetitiveFixture.id}`;
+          const alreadySentRedCardArticle =
+            existingMails.some(m => m.id === redCardMailId) ||
+            newMails.some(m => m.id === redCardMailId);
+          if (!alreadySentRedCardArticle) {
+            const isHome = latestCompetitiveFixture.homeTeamId === userClub.id;
+            const opponentId = isHome ? latestCompetitiveFixture.awayTeamId : latestCompetitiveFixture.homeTeamId;
+            const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+            const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const redCardMail = MediaInterviewService.generatePressArticleMail(
+              'CZERWONA_KARTKA_KONTROWERSJE',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              {
+                opponentName,
+                venueLabel,
+                redCardControversyTeamName: redCardControversyContext.teamName,
+              }
+            );
+            redCardMail.id = redCardMailId;
+            redCardMail.date = new Date(currentDate);
+            redCardMail.priority = 57;
+            newMails.push(redCardMail);
+          }
+        }
+
+        const penaltyNoCallControversyContext = getAiPenaltyNoCallControversyArticleContext(matchHistory, latestCompetitiveFixture, userClub, allClubs);
+        if (penaltyNoCallControversyContext && Math.random() < 0.3) {
+          const penaltyNoCallMailId = `PRESS_PENALTY_NO_CALL_CONTROVERSY_${latestCompetitiveFixture.id}`;
+          const alreadySentPenaltyNoCallArticle =
+            existingMails.some(m => m.id === penaltyNoCallMailId) ||
+            newMails.some(m => m.id === penaltyNoCallMailId);
+          if (!alreadySentPenaltyNoCallArticle) {
+            const isHome = latestCompetitiveFixture.homeTeamId === userClub.id;
+            const opponentId = isHome ? latestCompetitiveFixture.awayTeamId : latestCompetitiveFixture.homeTeamId;
+            const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+            const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const penaltyNoCallMail = MediaInterviewService.generatePressArticleMail(
+              'NIEPRZYZNANY_KARNY_KONTROWERSJE',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              {
+                opponentName,
+                venueLabel,
+                penaltyNoCallControversyTeamName: penaltyNoCallControversyContext.teamName,
+              }
+            );
+            penaltyNoCallMail.id = penaltyNoCallMailId;
+            penaltyNoCallMail.date = new Date(currentDate);
+            penaltyNoCallMail.priority = 56;
+            newMails.push(penaltyNoCallMail);
+          }
+        }
+
+        const lowRefereeRatingContext = getLowRefereeRatingArticleContext(matchHistory, latestCompetitiveFixture);
+        if (lowRefereeRatingContext && Math.random() < 0.2) {
+          const lowRefereeRatingMailId = `PRESS_LOW_REFEREE_RATING_${latestCompetitiveFixture.id}`;
+          const alreadySentLowRefereeRatingArticle =
+            existingMails.some(m => m.id === lowRefereeRatingMailId) ||
+            newMails.some(m => m.id === lowRefereeRatingMailId);
+          if (!alreadySentLowRefereeRatingArticle) {
+            const isHome = latestCompetitiveFixture.homeTeamId === userClub.id;
+            const opponentId = isHome ? latestCompetitiveFixture.awayTeamId : latestCompetitiveFixture.homeTeamId;
+            const opponentName = allClubs.find(club => club.id === opponentId)?.name ?? 'rywalem';
+            const venueLabel = isHome ? 'w domu' : 'na wyjeździe';
+            const newspapers = Object.values(Newspaper);
+            const newspaper = newspapers[Math.floor(Math.random() * newspapers.length)];
+            const managerLastName = MediaInterviewService.getPressManagerLabel(managerName);
+            const lowRefereeRatingMail = MediaInterviewService.generatePressArticleMail(
+              'NISKA_OCENA_SEDZIEGO',
+              newspaper,
+              managerLastName,
+              userClub.name,
+              currentDate,
+              {
+                opponentName,
+                venueLabel,
+                refereeName: lowRefereeRatingContext.refereeName,
+              }
+            );
+            lowRefereeRatingMail.id = lowRefereeRatingMailId;
+            lowRefereeRatingMail.date = new Date(currentDate);
+            lowRefereeRatingMail.priority = 55;
+            newMails.push(lowRefereeRatingMail);
+          }
+        }
+      }
 
       const userLeagueFixtures = competitiveFixtures.filter(f => f.leagueId === userClub.leagueId);
       const latestLeagueFixture = userLeagueFixtures[userLeagueFixtures.length - 1];

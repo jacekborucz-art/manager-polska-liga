@@ -1,0 +1,3120 @@
+
+export enum ViewState {
+  START_MENU = 'START_MENU',
+  MANAGER_CREATION = 'MANAGER_CREATION',
+  TEAM_SELECTION = 'TEAM_SELECTION',
+  SQUAD_IMPORT = 'SQUAD_IMPORT',
+  PREGAME_DATAPACK_EDITOR = 'PREGAME_DATAPACK_EDITOR',
+  DASHBOARD = 'DASHBOARD',
+  LEAGUE_TABLES = 'LEAGUE_TABLES',
+  EURO_QUALIFIERS = 'EURO_QUALIFIERS',
+  LEAGUE_STATS = 'LEAGUE_STATS',
+  CALENDAR_DEBUG = 'CALENDAR_DEBUG',
+  SQUAD_VIEW = 'SQUAD_VIEW',
+  CLUB_DETAILS = 'CLUB_DETAILS',
+  PLAYER_CARD = 'PLAYER_CARD',
+  COACH_CARD = 'COACH_CARD',
+  JOB_MARKET = 'JOB_MARKET',
+  REFEREE_CARD = 'REFEREE_CARD',
+  REFEREE_LIST = 'REFEREE_LIST',
+  HIDDEN_LEAGUE = 'HIDDEN_LEAGUE',
+  TRANSFER_WINDOW = 'TRANSFER_WINDOW',
+  PRE_MATCH_STUDIO = 'PRE_MATCH_STUDIO',
+  MATCH_LIVE = 'MATCH_LIVE',
+  MATCH_PREVIEW = 'MATCH_PREVIEW',
+  MATCH_POST = 'MATCH_POST',
+  GAME_MANUAL = 'GAME_MANUAL',
+  TRAINING_VIEW = 'TRAINING_VIEW',
+  CUP_DRAW = 'CUP_DRAW',
+  MATCH_HISTORY_BROWSER = 'MATCH_HISTORY_BROWSER',
+  PRE_MATCH_CUP_STUDIO = 'PRE_MATCH_CUP_STUDIO',
+  MATCH_LIVE_CUP = 'MATCH_LIVE_CUP',
+  POST_MATCH_CUP_STUDIO = 'POST_MATCH_CUP_STUDIO',
+  SCORE_RESULTS_POLISH_CUP = 'SCORE_RESULTS_POLISH_CUP',
+  EDITOR = 'EDITOR',
+  CONTRACT_MANAGEMENT = 'CONTRACT_MANAGEMENT',
+  FREE_AGENT_NEGOTIATION = 'FREE_AGENT_NEGOTIATION',
+  MYSTERY_AGENT_NEGOTIATION = 'MYSTERY_AGENT_NEGOTIATION',
+  TRANSFER_OFFER = 'TRANSFER_OFFER',
+  TRANSFER_PLAYER_NEGOTIATION = 'TRANSFER_PLAYER_NEGOTIATION',
+  INCOMING_OFFER = 'INCOMING_OFFER',
+
+
+  CL_DRAW = 'CL_DRAW',
+  POLISH_CUP_BRACKET = 'POLISH_CUP_BRACKET',
+  POLISH_CUP_FINALISTS = 'POLISH_CUP_FINALISTS',
+
+  ///champions league 
+  CHAMPIONS_LEAGUE_DRAW = 'CHAMPIONS_LEAGUE_DRAW',
+  CL_R1Q = 'CL_R1Q',              // ← DODAJ: 1. mecz, Runda 1 Preeliminacyjna
+  CL_R1Q_RETURN = 'CL_R1Q_RETURN', // ← DODAJ: Rewanż, Runda 1 Preeliminacyjna
+   CL_R2Q_DRAW = 'CL_R2Q_DRAW',
+  CL_R2Q = 'CL_R2Q',
+  CL_R2Q_RETURN = 'CL_R2Q_RETURN',
+  CL_GROUP_DRAW = 'CL_GROUP_DRAW',
+
+
+   PRE_MATCH_CL_STUDIO = 'PRE_MATCH_CL_STUDIO',
+  PRE_MATCH_CL_LIVE_STUDIO = 'PRE_MATCH_CL_LIVE_STUDIO',
+  POST_MATCH_CL_STUDIO = 'POST_MATCH_CL_STUDIO',
+  MATCH_LIVE_CL = 'MATCH_LIVE_CL',
+  CL_BRACKET = 'CL_BRACKET',
+  CL_HISTORY = 'CL_HISTORY',
+  EL_DRAW = 'EL_DRAW',
+  CONF_DRAW = 'CONF_DRAW',
+  CONF_R2Q_DRAW = 'CONF_R2Q_DRAW',
+  CONF_GROUP_DRAW = 'CONF_GROUP_DRAW',
+  CONF_R16_DRAW = 'CONF_R16_DRAW',
+  CONF_QF_DRAW = 'CONF_QF_DRAW',
+  CONF_SF_DRAW = 'CONF_SF_DRAW',
+  CONF_HISTORY = 'CONF_HISTORY',
+  EL_R2Q_DRAW = 'EL_R2Q_DRAW',
+  EL_GROUP_DRAW = 'EL_GROUP_DRAW',
+  EL_R16_DRAW = 'EL_R16_DRAW',
+  EL_QF_DRAW = 'EL_QF_DRAW',
+  EL_SF_DRAW = 'EL_SF_DRAW',
+  EL_FINAL_DRAW = 'EL_FINAL_DRAW',
+  CONF_FINAL_DRAW = 'CONF_FINAL_DRAW',
+  EL_HISTORY = 'EL_HISTORY',
+  CL_R16_DRAW = 'CL_R16_DRAW',
+  CL_QF_DRAW = 'CL_QF_DRAW',
+  CL_SF_DRAW = 'CL_SF_DRAW',
+  CL_FINAL_DRAW = 'CL_FINAL_DRAW',
+  PRE_MATCH_CL_FINAL = 'PRE_MATCH_CL_FINAL',
+  POST_MATCH_CL_FINAL = 'POST_MATCH_CL_FINAL',
+  EUROPEAN_CLUBS = 'EUROPEAN_CLUBS',
+  TRANSFER_NEWS = 'TRANSFER_NEWS',
+  AI_MARKET_NEWS = 'AI_MARKET_NEWS',
+  PRE_MATCH_EL_STUDIO = 'PRE_MATCH_EL_STUDIO',
+  PRE_MATCH_EL_LIVE_STUDIO = 'PRE_MATCH_EL_LIVE_STUDIO',
+  MATCH_LIVE_EL = 'MATCH_LIVE_EL',
+  POST_MATCH_EL_STUDIO = 'POST_MATCH_EL_STUDIO',
+  PRE_MATCH_CONF_STUDIO = 'PRE_MATCH_CONF_STUDIO',
+  PRE_MATCH_CONF_LIVE_STUDIO = 'PRE_MATCH_CONF_LIVE_STUDIO',
+  MATCH_LIVE_CONF = 'MATCH_LIVE_CONF',
+  POST_MATCH_CONF_STUDIO = 'POST_MATCH_CONF_STUDIO',
+  // Studio pomeczowe dla meczów europejskich (CL/EL/CONF) z ocenami zawodników
+  POST_MATCH_EUROPEAN_STUDIO = 'POST_MATCH_EUROPEAN_STUDIO',
+  // Wyniki meczów reprezentacji (wszystkie mecze grupy danego dnia)
+  NATIONAL_TEAM_RESULTS = 'NATIONAL_TEAM_RESULTS',
+  PLAYOFF_DRAW = 'PLAYOFF_DRAW',
+  PROMOTION_PLAYOFF_SEMI_VIEW = 'PROMOTION_PLAYOFF_SEMI_VIEW',
+  PROMOTION_PLAYOFF_FINAL_VIEW = 'PROMOTION_PLAYOFF_FINAL_VIEW',
+  // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
+  RELEGATION_PLAYOFF_MATCH_1 = 'RELEGATION_PLAYOFF_MATCH_1', // 26 maja — widok wyników 1. meczów
+  RELEGATION_PLAYOFF_MATCH_2 = 'RELEGATION_PLAYOFF_MATCH_2', // 29 maja — widok wyników rewanży + rozstrzygnięcie
+  // ── BARAŻE — INTERAKTYWNY MECZ GRACZA ───────────────────────────────────
+  PRE_MATCH_PLAYOFF_STUDIO = 'PRE_MATCH_PLAYOFF_STUDIO',
+  MATCH_LIVE_PLAYOFF = 'MATCH_LIVE_PLAYOFF',
+  POST_MATCH_PLAYOFF_STUDIO = 'POST_MATCH_PLAYOFF_STUDIO',
+  HOSPITAL_VIEW = 'HOSPITAL_VIEW',
+  RESERVES_VIEW = 'RESERVES_VIEW',
+  ACADEMY_VIEW = 'ACADEMY_VIEW',
+  UEFA_SUPER_CUP_VIEW = 'UEFA_SUPER_CUP_VIEW',
+  // ── SPARINGI ─────────────────────────────────────────────────────────────
+  PRE_MATCH_FRIENDLY_STUDIO = 'PRE_MATCH_FRIENDLY_STUDIO',
+  MATCH_LIVE_FRIENDLY = 'MATCH_LIVE_FRIENDLY',
+  POST_MATCH_FRIENDLY_STUDIO = 'POST_MATCH_FRIENDLY_STUDIO',
+  // ── BARAŻE MŚ 2026 — PLAYOFF KWALIFIKACYJNY UEFA ────────────────────────
+  WCQ_PLAYOFF_DRAW_VIEW = 'WCQ_PLAYOFF_DRAW_VIEW',         // 29 listopada — animowana ceremonia losowania
+  WCQ_PLAYOFF_RESULTS_SF = 'WCQ_PLAYOFF_RESULTS_SF',       // 17 marca — wyniki półfinałów
+  WCQ_PLAYOFF_RESULTS_FINAL = 'WCQ_PLAYOFF_RESULTS_FINAL', // 20 marca — wyniki finałów + kwalifikacja
+  // ── MISTRZOSTWA ŚWIATA ───────────────────────────────────────────────────
+  NATIONS_LEAGUE = 'NATIONS_LEAGUE',
+  NATIONS_LEAGUE_DRAW = 'NATIONS_LEAGUE_DRAW',
+  WC_DRAW = 'WC_DRAW',
+  WORLD_CUP = 'WORLD_CUP',
+  EURO_CHAMPIONSHIP = 'EURO_CHAMPIONSHIP',
+  STAFF_SEARCH = 'STAFF_SEARCH',
+  AI_FRIENDLY_REPORTS = 'AI_FRIENDLY_REPORTS',
+}
+
+// ── BARAŻE WCQ 2026 — typy ────────────────────────────────────────────────
+
+export interface WCQPlayoffMatchResult {
+  homeTeam: string;
+  awayTeam: string;
+  homeGoals: number;
+  awayGoals: number;
+  /** Wygrany po karnych (ustawione tylko gdy po 90 min był remis). */
+  penaltyWinner?: string;
+  homePenaltyGoals?: number;
+  awayPenaltyGoals?: number;
+  wentToExtraTime?: boolean;
+  refereeName?: string;
+  // Detale meczu — dostępne po symulacji pełnym silnikiem
+  homeTeamId?: string;
+  awayTeamId?: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+}
+
+export interface WCQPlayoffPath {
+  pathLabel: 'A' | 'B' | 'C' | 'D';
+  sf1Home: string;
+  sf1Away: string;
+  sf2Home: string;
+  sf2Away: string;
+  sf1Result?: WCQPlayoffMatchResult;
+  sf2Result?: WCQPlayoffMatchResult;
+  sf1Winner?: string;
+  sf2Winner?: string;
+  finalHome?: string;
+  finalAway?: string;
+  finalResult?: WCQPlayoffMatchResult;
+  qualifier?: string;
+}
+
+export interface WCQPlayoffState {
+  seasonYear: number;
+  drawCompleted: boolean;
+  sfCompleted: boolean;
+  finalCompleted: boolean;
+  paths: WCQPlayoffPath[];
+}
+
+export interface PlayoffPair {
+  homeId: string;
+  awayId: string;
+  homePos: number;
+  awayPos: number;
+}
+export interface ActivePlayoffDraw {
+  ekstraklasaPlayoffs: PlayoffPair[];
+  ligaOnePlayoffs: PlayoffPair[];
+  relegationPlayoffs: PlayoffPair[];
+}
+
+// ── BARAŻE O UTRZYMANIE — typy wyników ─────────────────────────────────────
+
+// Wynik jednego meczu barażowego
+export interface RelegationPlayoffLegResult {
+  homeId: string;  // ID drużyny gospodarzy
+  awayId: string;  // ID drużyny gości
+  homeGoals: number;
+  awayGoals: number;
+  matchId?: string; // raport meczu rozgrywanego w tle
+  isExtraTime?: boolean;
+}
+
+// Wyniki rzutów karnych (gdy dwumecz zakończy się remisem)
+export interface RelegationPlayoffPenalties {
+  winnerId: string; // ID drużyny, która wygrała karne
+  homeShots: number;
+  awayShots: number;
+}
+
+// Wyniki 1. meczów (26 maja) — przechowywane w stanie gry do obliczenia agregatu
+export interface RelegationPlayoffFirstLegResults {
+  pair0: RelegationPlayoffLegResult; // 13. miejsce 2.Ligi vs los. 3.Liga
+  pair1: RelegationPlayoffLegResult; // 14. miejsce 2.Ligi vs los. 3.Liga
+}
+
+// Pełny wynik jednej pary (po obu meczach)
+export interface RelegationPlayoffPairOutcome {
+  leg1: RelegationPlayoffLegResult;
+  leg2: RelegationPlayoffLegResult;
+  winnerId: string;  // ID zwycięzcy dwumeczu
+  loserId: string;   // ID przegranego dwumeczu
+  decidedBy: 'AGGREGATE' | 'EXTRA_TIME' | 'PENALTIES'; // jak rozstrzygnięto
+  extraTime?: {
+    homeGoals: number; // gospodarz rewanżu
+    awayGoals: number; // gość rewanżu
+  };
+  penalties?: RelegationPlayoffPenalties;
+}
+
+// Finalny wynik barażów (po 29 maja) — używany do aktualizacji lig w startNextSeason
+export interface RelegationPlayoffFinalResult {
+  pair0: RelegationPlayoffPairOutcome;
+  pair1: RelegationPlayoffPairOutcome;
+}
+
+// Wynik pojedynczego meczu barażowego o awans (półfinał lub finał)
+export interface PromotionPlayoffSingleMatchResult {
+  homeId: string;
+  awayId: string;
+  homeGoals: number;
+  awayGoals: number;
+  decidedBy: 'REGULAR' | 'EXTRA_TIME' | 'PENALTIES';
+  penalties?: {
+    winnerId: string;
+    homeShots: number;
+    awayShots: number;
+  };
+  winnerId: string;
+  matchId?: string;
+}
+
+// Wyniki półfinałów z 31 maja — potrzebne do wyłonienia finalistów 4 czerwca
+export interface PromotionPlayoffSemiResults {
+  ekstraklasaSemi0: PromotionPlayoffSingleMatchResult;
+  ekstraklasaSemi1: PromotionPlayoffSingleMatchResult;
+  ligaOneSemi0: PromotionPlayoffSingleMatchResult;
+  ligaOneSemi1: PromotionPlayoffSingleMatchResult;
+}
+
+// Wyniki finałów z 4 czerwca — używane do zmian ligowych w startNextSeason
+export interface PromotionPlayoffFinalResults {
+  ekstraklasaFinal: PromotionPlayoffSingleMatchResult;
+  ligaOneFinal: PromotionPlayoffSingleMatchResult;
+}
+
+// Dane aktywnego meczu barażowego — przekazywane przez context do silnika meczu i studia
+export interface ActivePlayoffMatchData {
+  matchType: 'RELEGATION_LEG1' | 'RELEGATION_LEG2' | 'PROMOTION_SEMI' | 'PROMOTION_FINAL';
+  homeClub: Club;
+  awayClub: Club;
+  userSide: 'HOME' | 'AWAY';
+  pairIndex: number;                                   // indeks pary w tablicy par (0 lub 1)
+  leagueContext?: 'EKSTRAKLASA' | 'LIGA_ONE';          // tylko dla baraży o awans
+  firstLegResult?: RelegationPlayoffLegResult;                      // tylko dla RELEGATION_LEG2
+  otherRelegationPairOutcome?: RelegationPlayoffPairOutcome;         // tylko dla RELEGATION_LEG2
+  otherPromotionSemiResults?: Partial<PromotionPlayoffSemiResults>;  // tylko dla PROMOTION_SEMI
+  otherPromotionFinalResult?: PromotionPlayoffSingleMatchResult;     // tylko dla PROMOTION_FINAL
+}
+
+export enum MailType {
+  BOARD = 'BOARD',
+  FANS = 'FANS',
+  STAFF = 'STAFF',
+  MEDIA = 'MEDIA',
+  SYSTEM = 'SYSTEM',
+  SCOUT = 'SCOUT',
+  PRESS = 'PRESS',
+}
+
+export enum Newspaper {
+  GAZETA_SPORTOWA = 'GAZETA_SPORTOWA',
+  DWIE_BRAMKI = 'DWIE_BRAMKI',
+  PILKA_NOZNA = 'PILKA_NOZNA',
+  FUTBOL_NAD_WISLA = 'FUTBOL_NAD_WISLA',
+  DZIENNIK_SPORTOWY = 'DZIENNIK_SPORTOWY',
+}
+
+export interface MediaRelationship {
+  newspaper: Newspaper;
+  relationship: number;
+}
+
+export interface CoachAttributes {
+  experience: number;
+  decisionMaking: number;
+  motivation: number;
+  training: number;
+}
+export interface CoachHistoryEntry {
+  clubName: string;
+  clubId: string;
+  fromYear: number;
+  fromMonth: number;
+  toYear: number | null; // null = obecnie pracuje
+  toMonth: number | null;
+}
+
+export interface CoachSeasonStats {
+  season: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  finalRank: number;
+  leagueId: string;
+  cupReached: 'NONE' | 'R64' | 'R32' | 'R16' | 'R8' | 'QUARTER' | 'SEMI' | 'FINAL' | 'WINNER';
+}
+
+export interface Coach {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: string;
+  nationalityFlag: string;
+  attributes: CoachAttributes;
+  history: CoachHistoryEntry[];
+  currentClubId: string | null;
+  currentNationalTeamId?: string | null;
+  isNationalTeamCoach?: boolean;
+  hiredDate: string; // ISO Date String
+  contractEndDate: string; // ISO Date String
+  annualSalary: number;    // Kwota roczna w PLN
+  expPoints: number;
+   blacklist: Record<string, number>;
+  favoriteTactics: {
+    offensive: string;
+    neutral: string;
+    defensive: string;
+  };
+  seasonStats: CoachSeasonStats[];
+  favoritePlayerIds?: string[];  // Lista ID "ulubieńców trenera" — aktualizowana co miesiąc
+}
+
+export enum StaffRole {
+  ASSISTANT_COACH = 'ASSISTANT_COACH',
+  GOALKEEPER_COACH = 'GOALKEEPER_COACH',
+  FITNESS_COACH = 'FITNESS_COACH',
+  VIDEO_ANALYST = 'VIDEO_ANALYST',
+  PHYSIOTHERAPIST = 'PHYSIOTHERAPIST',
+  CLUB_DOCTOR = 'CLUB_DOCTOR'
+}
+
+export type StaffAttributes = Record<string, number>;
+
+export interface StaffHistoryEntry {
+  clubId: string;
+  clubName: string;
+  fromYear: number;
+  fromMonth: number;
+  toYear: number | null;
+  toMonth: number | null;
+}
+
+export interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: string;
+  nationalityFlag: string;
+  role: StaffRole;
+  attributes: StaffAttributes;
+  currentClubId: string | null;
+  hiredDate: string;
+  contractEndDate: string;
+  salary: number;
+  history: StaffHistoryEntry[];
+  lastNegotiationDate?: string | null;
+}
+
+export interface AiWeeklyTrainingState {
+  weekKey: string;
+  cycleId: string;
+  intensity: TrainingIntensity;
+  matchModifier: number;
+  fatigueLoad: number;
+  quality: number;
+  validUntil: string;
+}
+
+export interface MailMessage {
+  id: string;
+  sender: string;
+  role: string;
+  subject: string;
+  body: string;
+  date: Date;
+  isRead: boolean;
+  type: MailType;
+  priority: number;
+   metadata?: {
+    type: 'CONTRACT_OFFER';
+    negotiationId: string;
+    accepted: boolean;
+    salary: number;
+    years: number;
+    bonus: number;
+    goalBonus?: number;
+    assistBonus?: number;
+    cleanSheetBonus?: number;
+    responseDate: string;
+    acceptanceExpiryDate?: string;
+  status: NegotiationStatus;
+  isAiOffer: boolean;
+    playerId: string;
+    demands?: {
+      salary: number;
+      bonus: number;
+    } | null;
+  } | {
+    type: 'INCOMING_TRANSFER_OFFER';
+    offerId: string;
+  } | {
+    type: 'WINTER_CAMP_INVITE';
+    expiryDate: string;
+  } | {
+    type: 'SUMMER_CAMP_INVITE';
+    expiryDate: string;
+  } | {
+    type: 'SPORTING_DIRECTOR_OBJECTIVE';
+    objectiveId: string;
+  } | {
+    type: 'LEAGUE_FINANCE_REPORT';
+  } | {
+    type: 'SEASON_SUMMARY';
+    championName: string;
+    promotions: { from: string; to: string; teams: string[] }[];
+    relegations: { from: string; to: string; teams: string[] }[];
+    leagueAwards: {
+      leagueName: string;
+      topScorer: { name: string; goals: number; clubId?: string; clubName?: string };
+      topAssistant: { name: string; assists: number; clubId?: string; clubName?: string };
+    }[];
+  } | {
+    type: 'MANAGER_JOB_OFFER';
+    offerId: string;
+    clubId: string;
+  } | {
+    type: 'LOAN_PLAYTIME_WARNING';
+    playerId: string;
+  } | {
+    type: 'AGENT_CLIENTS_OFFER';
+    seasonNumber: number;
+    playerIds: string[];
+    candidates: {
+      playerId: string;
+      playerName: string;
+      position: PlayerPosition;
+      age: number;
+      overallRating: number;
+      nationalityLabel: string;
+    }[];
+  } | {
+    type: 'PLAYER_MORALE_REQUEST';
+    playerId: string;
+    requestType: 'MINUTES' | 'ROLE' | 'ROLE_PLAYTIME' | 'TRANSFER_LIST' | 'TRANSFER_LIST_OBJECTION' | 'DEVELOPMENT_EXIT' | 'RAISE';
+    requestedRole?: 'STARTER' | 'KEY_PLAYER';
+    requestedSalary?: number;
+    requestedBonus?: number;
+    requestedYears?: number;
+    nextFixtureId?: string;
+    responseDeadline: string;
+  } | {
+    type: 'PLAYER_BOARD_APPEAL';
+    playerId: string;
+    appealType: 'RAISE' | 'TRANSFER';
+    decisionDeadline: string;
+  } | {
+    type: 'BOARD_APPEAL_DECISION';
+    playerId: string;
+    decision: 'SELL' | 'RAISE' | 'VETO';
+    appealType: 'RAISE' | 'TRANSFER';
+  } | {
+    type: 'ONE_TIME_BONUS_DECISION';
+    playerId: string;
+    approved: boolean;
+    amount: number;
+    seasonNumber: number;
+  } | {
+    type: 'AI_FRIENDLY_REPORT_LINK';
+    reportDateKey?: string;
+    matches?: {
+      homeName: string;
+      awayName: string;
+      homeScore: number;
+      awayScore: number;
+      homeCountry?: string;
+      awayCountry?: string;
+    }[];
+  } | {
+    type: 'NATIONAL_TEAM_FRIENDLY_RESULTS';
+    matches?: {
+      matchId?: string;
+      homeName: string;
+      awayName: string;
+      homeScore: number;
+      awayScore: number;
+      homeCountry?: string;
+      awayCountry?: string;
+    }[];
+  } | {
+    type: 'WCQ_PLAYOFF_POLAND';
+    stage: 'SF' | 'FINAL';
+    pathLabel: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeScore: number;
+    awayScore: number;
+    scoreLabel: string;
+    polandWon: boolean;
+    lead: string;
+    finalOpponent?: string | null;
+    penaltyWinner?: string;
+    homePenaltyGoals?: number;
+    awayPenaltyGoals?: number;
+    wentToExtraTime?: boolean;
+  } | {
+    type: 'TEAM_OF_WEEK';
+    leagueId: string;
+    leagueName: string;
+    roundNumber: number;
+    formation: '4-4-2';
+    team: {
+      slotIndex: number;
+      role: PlayerPosition;
+      x: number;
+      y: number;
+      playerId: string;
+      playerName: string;
+      clubId: string;
+      clubName: string;
+      position: PlayerPosition;
+      rating: number;
+      overallRating?: number;
+      shirt: string;
+      shirtSecondary?: string;
+      shorts: string;
+      socks: string;
+      pattern?: ClubKitPattern;
+      labelColor: string;
+    }[];
+  } | {
+    type: 'INTERVIEW_REQUEST';
+    newspaper: Newspaper;
+    questionIds: string[];
+    placeholders: Record<string, string>;
+    deadline: string;
+  } | {
+    // ── Transfer Request Dialog — odpowiedź gracza po THINKING ──────────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewPendingResponse
+    // Obsługiwane przez: GameContext.resolvePlayerTransferRequestDialog
+    type: 'TRANSFER_REQUEST_PLAYER_RESPONSE';
+    playerId: string;
+    reaction: 'AGREED' | 'REFUSED';
+    managerChoice: 'PROMISE_CONTRACT' | 'ALLOW_END_OF_SEASON' | 'REFUSE_IMPORTANT';
+    /** % podwyżki wybrany przez gracza (ścieżka A); null dla B i C. */
+    promisedRaisePct: number | null;
+  } | {
+    // ── Przypomnienie o obietnicy kontraktowej (14 dni przed deadline) ───────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewContractPromise
+    // Wyświetlane w: MailDetailsModal — gracz powinien teraz negocjować kontrakt
+    type: 'TRANSFER_CONTRACT_PROMISE_REMINDER';
+    playerId: string;
+    salaryRaisePct: number;
+    deadlineAt: string;
+  } | {
+    // ── Złamana obietnica kontraktowa (deadline minął, brak podwyżki) ────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewContractPromise
+    // Skutki: conflictLevel +25, coachTrust −30, morale −16 (stosuje GameContext)
+    type: 'TRANSFER_CONTRACT_PROMISE_BROKEN';
+    playerId: string;
+    salaryRaisePct: number;
+  } | {
+    // ── Złamana obietnica odejścia po sezonie ─────────────────────────────────────
+    // Generowane przez: PlayerTransferRequestDialogService.reviewAllowAfterSeason
+    // Skutki: conflictLevel +20, coachTrust −25, morale −6 (stosuje GameContext)
+    type: 'TRANSFER_AFTER_SEASON_BROKEN';
+    playerId: string;
+  };
+}
+
+export enum Region {
+  POLAND = 'POLAND',
+  BALKANS = 'BALKANS',
+  CZ_SK = 'CZ_SK',
+  SSA = 'SSA',
+  IBERIA = 'IBERIA',
+  NORTH_AMERICA = 'NORTH_AMERICA',
+  MEXICO = 'MEXICO',
+  OCEANIA = 'OCEANIA',
+  SWEDEN = 'SWEDEN',
+  SCANDINAVIA = 'SCANDINAVIA',
+  EX_USSR = 'EX_USSR',
+  SPAIN = 'SPAIN',
+  ENGLAND = 'ENGLAND',
+  GERMANY = 'GERMANY',
+  ITALY = 'ITALY',
+  FRANCE = 'FRANCE',
+  JAPAN = 'JAPAN',
+  KOREA = 'KOREA',
+  ARGENTINA = 'ARGENTINA',
+  BRAZIL = 'BRAZIL',
+  TURKEY = 'TURKEY',
+  ARABIA = 'ARABIA',
+  FINLAND = 'FINLAND',
+  GEORGIA = 'GEORGIA',
+  ARMENIA = 'ARMENIA',
+  ALBANIA = 'ALBANIA',
+  ROMANIA = 'ROMANIA',
+  BALTIC = 'BALTIC',
+  BENELUX = 'BENELUX',
+  HUNGARIAN = 'HUNGARIAN',
+  MALTESE = 'MALTESE',
+  ISRAELI = 'ISRAELI',
+  GREEK = 'GREEK',
+  AZERBAIJANI = 'AZERBAIJANI',
+  KAZAKH = 'KAZAKH',
+  SOUTH_AMERICAN = 'SOUTH_AMERICAN'
+}
+
+export enum PlayerPosition {
+  GK = 'GK',
+  DEF = 'DEF',
+  MID = 'MID',
+  FWD = 'FWD'
+}
+
+export enum HealthStatus {
+  HEALTHY = 'HEALTHY',
+  INJURED = 'INJURED'
+}
+
+export enum MatchStatus {
+  SCHEDULED = 'SCHEDULED',
+  FINISHED = 'FINISHED'
+}
+
+export enum InjurySeverity {
+  LIGHT = 'LIGHT',
+  SEVERE = 'SEVERE'
+}
+
+export enum EventKind {
+  MATCH_LEAGUE = 'MATCH_LEAGUE',
+  MATCH_SUPER_CUP = 'MATCH_SUPER_CUP',
+  MATCH_FRIENDLY = 'MATCH_FRIENDLY',
+  MATCH_POLISH_CUP = 'MATCH_POLISH_CUP',
+  MATCH_EURO = 'MATCH_EURO',
+  TRANSFER_WINDOW = 'TRANSFER_WINDOW',
+  OFF_SEASON = 'OFF_SEASON',
+  CL_DRAW = 'CL_DRAW',
+  CUP_DRAW = 'CUP_DRAW',
+  // Dzień meczowy reprezentacji (symulacja w tle, gracz widzi wyniki)
+  NATIONAL_TEAM_MATCH = 'NATIONAL_TEAM_MATCH',
+  PLAYOFF_DRAW = 'PLAYOFF_DRAW',
+  NONE = 'NONE'
+}
+
+export enum CompetitionType {
+  LEAGUE = 'LEAGUE',
+  POLISH_CUP = 'POLISH_CUP',
+  SUPER_CUP = 'SUPER_CUP',
+  EURO_CUP = 'EURO_CUP',
+  BREAK = 'BREAK',
+  OFF_SEASON = 'OFF_SEASON',
+  TRANSFER_WINDOW = 'TRANSFER_WINDOW',
+  FRIENDLY = 'FRIENDLY',
+  BOARD = 'BOARD',
+  CHAMPIONS_LEAGUE_DRAW = 'CHAMPIONS_LEAGUE_DRAW',
+  CL_R1Q = 'CL_R1Q',
+  CL_R1Q_RETURN = 'CL_R1Q_RETURN',
+  CL_R2Q_DRAW = 'CL_R2Q_DRAW',
+  CL_R2Q = 'CL_R2Q',
+  CL_R2Q_RETURN = 'CL_R2Q_RETURN',
+   CL_GROUP_DRAW = 'CL_GROUP_DRAW',
+  CL_GROUP_STAGE = 'CL_GROUP_STAGE',
+   CL_R16_DRAW = 'CL_R16_DRAW',
+  CL_R16 = 'CL_R16',
+  CL_R16_RETURN = 'CL_R16_RETURN',
+   CL_QF_DRAW = 'CL_QF_DRAW',         // ← NOWE
+  CL_QF = 'CL_QF',                   // ← NOWE
+  CL_QF_RETURN = 'CL_QF_RETURN',  
+   CL_SF_DRAW = 'CL_SF_DRAW',
+  CL_SF = 'CL_SF',
+  CL_SF_RETURN = 'CL_SF_RETURN',
+  CL_FINAL = 'CL_FINAL',
+  CL_FINAL_DRAW = 'CL_FINAL_DRAW',
+
+  // ── Liga Europy UEFA ──────────────────────────────────────────────────────
+  EL_R1Q_DRAW = 'EL_R1Q_DRAW',
+  EL_R1Q = 'EL_R1Q',
+  EL_R1Q_RETURN = 'EL_R1Q_RETURN',
+  EL_R2Q_DRAW = 'EL_R2Q_DRAW',
+  EL_R2Q = 'EL_R2Q',
+  EL_R2Q_RETURN = 'EL_R2Q_RETURN',
+  EL_GROUP_DRAW = 'EL_GROUP_DRAW',
+  EL_GROUP_STAGE = 'EL_GROUP_STAGE',
+  EL_R16_DRAW = 'EL_R16_DRAW',
+  EL_R16 = 'EL_R16',
+  EL_R16_RETURN = 'EL_R16_RETURN',
+  EL_QF_DRAW = 'EL_QF_DRAW',
+  EL_QF = 'EL_QF',
+  EL_QF_RETURN = 'EL_QF_RETURN',
+  EL_SF_DRAW = 'EL_SF_DRAW',
+  EL_SF = 'EL_SF',
+  EL_SF_RETURN = 'EL_SF_RETURN',
+  EL_FINAL_DRAW = 'EL_FINAL_DRAW',
+  EL_FINAL = 'EL_FINAL',
+
+  // ── Liga Pucharu Konferencji UEFA ─────────────────────────────────────────
+  CONF_R1Q_DRAW = 'CONF_R1Q_DRAW',
+  CONF_R1Q = 'CONF_R1Q',
+  CONF_R1Q_RETURN = 'CONF_R1Q_RETURN',
+  CONF_R2Q_DRAW = 'CONF_R2Q_DRAW',
+  CONF_R2Q = 'CONF_R2Q',
+  CONF_R2Q_RETURN = 'CONF_R2Q_RETURN',
+  CONF_GROUP_DRAW = 'CONF_GROUP_DRAW',
+  CONF_GROUP_STAGE = 'CONF_GROUP_STAGE',
+  CONF_R16_DRAW = 'CONF_R16_DRAW',
+  CONF_R16 = 'CONF_R16',
+  CONF_R16_RETURN = 'CONF_R16_RETURN',
+  CONF_QF_DRAW = 'CONF_QF_DRAW',
+  CONF_QF = 'CONF_QF',
+  CONF_QF_RETURN = 'CONF_QF_RETURN',
+  CONF_SF_DRAW = 'CONF_SF_DRAW',
+  CONF_SF = 'CONF_SF',
+  CONF_SF_RETURN = 'CONF_SF_RETURN',
+  CONF_FINAL_DRAW = 'CONF_FINAL_DRAW',
+  CONF_FINAL = 'CONF_FINAL',
+  PLAYOFF_DRAW_CEREMONY = 'PLAYOFF_DRAW_CEREMONY',
+  PROMOTION_PLAYOFF_31_MAY = 'PROMOTION_PLAYOFF_31_MAY',
+  PROMOTION_PLAYOFF_4_JUNE = 'PROMOTION_PLAYOFF_4_JUNE',
+  // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
+  RELEGATION_PLAYOFF_1 = 'RELEGATION_PLAYOFF_1', // 26 maja — 1. mecze (13. i 14. 2.Ligi vs 3.Liga)
+  RELEGATION_PLAYOFF_2 = 'RELEGATION_PLAYOFF_2', // 29 maja — rewanże + rozstrzygnięcie
+  // ── SUPERPUCHAR EUROPY ────────────────────────────────────────────────────
+  UEFA_SUPER_CUP = 'UEFA_SUPER_CUP', // 23 sierpnia — Superpuchar Europy (CL winner vs EL winner)
+  // ── MISTRZOSTWA ŚWIATA ────────────────────────────────────────────────────
+  WC_GROUP_STAGE = 'WC_GROUP_STAGE',
+  WC_R32 = 'WC_R32',
+  WC_R16 = 'WC_R16',
+  WC_QF = 'WC_QF',
+  WC_SF = 'WC_SF',
+  WC_THIRD = 'WC_THIRD',
+  WC_FINAL = 'WC_FINAL',
+  // ── BARAŻE MŚ 2026 — PLAYOFF KWALIFIKACYJNY UEFA ─────────────────────────
+  WCQ_PLAYOFF_DRAW = 'WCQ_PLAYOFF_DRAW',   // 29 listopada — losowanie par
+  WCQ_PLAYOFF_SF = 'WCQ_PLAYOFF_SF',       // 17 marca — półfinały
+  WCQ_PLAYOFF_FINAL = 'WCQ_PLAYOFF_FINAL', // 20 marca — finały
+  // ── OBÓZ ZIMOWY ──────────────────────────────────────────────────────────
+  WINTER_CAMP_INVITE = 'WINTER_CAMP_INVITE',   // 11 grudnia — email zarządu z propozycją
+  WINTER_CAMP_PROGRAM = 'WINTER_CAMP_PROGRAM', // 22 grudnia — asystent pyta o program
+  WINTER_CAMP_END = 'WINTER_CAMP_END',         // 15 stycznia — zakończenie, efekty
+  // ── OBÓZ LETNI ───────────────────────────────────────────────────────────
+  SUMMER_CAMP_INVITE = 'SUMMER_CAMP_INVITE',   // 19 maja — wybór lokalizacji
+  SUMMER_CAMP_PROGRAM = 'SUMMER_CAMP_PROGRAM', // 5 czerwca — asystent pyta o program
+  SUMMER_CAMP_END = 'SUMMER_CAMP_END',         // 28 czerwca — zakończenie, efekty
+}
+
+export enum SlotType {
+  WEEKEND = 'WEEKEND',
+  MIDWEEK = 'MIDWEEK'
+}
+
+export enum CommentaryCategory {
+  INTRO = 'INTRO',
+  TACTICS = 'TACTICS',
+  FORM = 'FORM',
+  INJURIES = 'INJURIES',
+  REFEREE = 'REFEREE',
+  PREDICTION = 'PREDICTION',
+  KEY_PLAYERS = 'KEY_PLAYERS',
+  WEATHER = 'WEATHER'
+}
+
+export enum LeagueLevel {
+  TIER_1 = 'TIER_1',
+  TIER_2 = 'TIER_2',
+  TIER_3 = 'TIER_3',
+  TIER_4_HIDDEN = 'TIER_4_HIDDEN',
+  EUROPEAN = 'EUROPEAN'
+}
+
+export interface PlayerAttributes {
+  strength: number;
+  stamina: number;
+  pace: number;
+  defending: number;
+  passing: number;
+  attacking: number;
+  finishing: number;
+  technique: number;
+  vision: number;
+  dribbling: number;
+  heading: number;
+  positioning: number;
+  goalkeeping: number;
+  freeKicks: number;
+  talent: number;
+  penalties: number;
+  corners: number;
+  aggression: number;
+  crossing: number;
+  leadership: number;
+  mentality: number;
+  workRate: number;
+}
+
+export interface PlayerStats {
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  cleanSheets: number;
+  matchesPlayed: number;
+  minutesPlayed: number;
+  seasonalChanges: Record<string, number>;
+  seasonalGrowthPoints?: number;
+  backgroundLeagueProgress?: Record<string, number>;
+  backgroundLeagueCalibration?: Record<string, number>;
+  ratingHistory: number[]; 
+}
+
+export type PlayerMoralePersonality =
+  | 'PROFESSIONAL'
+  | 'AMBITIOUS'
+  | 'SENSITIVE'
+  | 'CONFIDENT'
+  | 'NERVOUS'
+  | 'LOYAL'
+  | 'EGOIST'
+  | 'CALM';
+
+export interface PlayerMoraleHistoryEntry {
+  id: string;
+  date: string;
+  delta: number;
+  reason: string;
+  moraleAfter: number;
+}
+
+export interface PlayerMindsetHistoryEntry {
+  id: string;
+  date: string;
+  reason: string;
+  deltas: Partial<Record<
+    'coachTrust' |
+    'clubHappiness' |
+    'squadBelonging' |
+    'roleClarity' |
+    'playingTimeSatisfaction' |
+    'developmentSatisfaction' |
+    'transferOpenness' |
+    'conflictLevel',
+    number
+  >>;
+}
+
+export interface PlayerMindsetState {
+  /** Zaufanie do trenera i jego obietnic. */
+  coachTrust: number;
+  /** Ogólne samopoczucie w klubie, niezależnie od samej formy. */
+  clubHappiness: number;
+  /** Poczucie przynależności do szatni i projektu drużyny. */
+  squadBelonging: number;
+  /** Czy zawodnik rozumie swoją rolę i uważa ją za uczciwą. */
+  roleClarity: number;
+  /** Satysfakcja z minut i szans w meczach. */
+  playingTimeSatisfaction: number;
+  /** Poczucie, że klub pomaga mu się rozwijać. */
+  developmentSatisfaction: number;
+  /** Gotowość do słuchania ofert i myślenia o odejściu. */
+  transferOpenness: number;
+  /** Narastające napięcie/konflikt z klubem lub trenerem. */
+  conflictLevel: number;
+  lastUpdatedAt?: string;
+  history?: PlayerMindsetHistoryEntry[];
+}
+
+export type IndividualTalkType =
+  | 'PRAISE'
+  | 'MOTIVATE'
+  | 'SUPPORT'
+  | 'CRITICIZE'
+  | 'PROMISE_MINUTES'
+  | 'PROMISE_ONE_TIME_BONUS'
+  | 'DEMAND_WORK';
+
+export interface PlayerOneTimeBonusPromise {
+  requestedAt: string;
+  decisionDueAt: string;
+  seasonNumber: number;
+}
+
+export interface ReserveProgressEntry {
+  date: string;
+  overall: number;
+}
+
+export type ReserveProgressPoint = number | ReserveProgressEntry;
+
+export interface ReserveSeasonStats {
+  matches: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  totalRatingPoints: number;
+}
+
+export interface ReserveHistoryEntry {
+  season: number;
+  clubName: string;
+  matches: number;
+  goals: number;
+  assists: number;
+  cards: number;
+  avgRating: number;
+}
+
+export interface ReserveFixture {
+  id: string;
+  date: string;
+  isHome: boolean;
+  opponentClubId: string;
+  opponentClubName: string;
+  round: 1 | 2;
+  resultId?: string;
+}
+
+export interface ReserveMatchResult {
+  id: string;
+  date: string;
+  season: number;
+  homeTeamName: string;
+  awayTeamName: string;
+  isUserHome: boolean;
+  homeScore: number;
+  awayScore: number;
+  venue: string;
+  opponentClubId: string;
+  goals: MatchGoalEntry[];
+  missedPenalties?: MatchGoalEntry[];
+  cards: MatchCardEntry[];
+  substitutions: MatchSubstitutionEntry[];
+  injuries: MatchInjuryEntry[];
+  ratings: Record<string, number>;
+  userStartingXI: string[];
+  manOfTheMatch?: string;
+  matchPlayers?: ReserveMatchPlayerEntry[];
+}
+
+export interface ReserveMatchPlayerEntry {
+  id: string;
+  name: string;
+  position: PlayerPosition;
+  teamId: 'HOME' | 'AWAY';
+  starter: boolean;
+  rating?: number;
+}
+
+export interface PlayerCareerStatsSnapshot {
+  matchesPlayed: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  averageRating: number | null;
+}
+
+export interface PlayerSeasonHistoryEntry {
+  season: number;
+  clubId: string;
+  clubName: string;
+  fromYear: number;
+  fromMonth: number;
+  toYear: number;
+  toMonth: number;
+  matchesPlayed: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  averageRating: number | null;
+  isLoan?: boolean;
+}
+
+export interface PlayerHistoryEntry {
+  clubName: string;
+  clubId: string | 'FREE_AGENTS';
+  fromYear: number;
+  fromMonth: number;
+  toYear: number | null;
+  toMonth: number | null;
+  statsSnapshot?: PlayerCareerStatsSnapshot;
+  transferFee?: number;
+  isLoan?: boolean;
+  parentClubId?: string;
+  parentClubName?: string;
+  loanEndDate?: string;
+}
+
+export enum NegotiationStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED'
+}
+
+export interface PendingNegotiation {
+  id: string;
+  playerId: string;
+  clubId: string;
+  salary: number;
+  bonus: number;
+  years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+  responseDate: string; // Data ISO, kiedy agent odpowie
+  status: NegotiationStatus;
+}
+
+export interface PendingFriendlyRequest {
+  id: string;
+  proposedDate: string;      // 'YYYY-MM-DD' - data meczu
+  opponentClubId: string;
+  venue: 'HOME' | 'AWAY' | 'NEUTRAL';
+  chance: number;            // 0-100 (ukryte przed graczem, do losowania)
+  responseDate: string;      // 'YYYY-MM-DD' - dzień odpowiedzi (currentDate + 1)
+}
+
+export interface FriendlyMatchConditions {
+  /** Co dzieje się po remisie w regulaminowym czasie */
+  drawRule: 'NONE' | 'PENALTIES' | 'ET_ONLY' | 'ET_THEN_PENALTIES';
+  /** Maksymalna liczba zmian na drużynę */
+  maxSubstitutions: 5 | 6 | 7 | 8 | 9;
+}
+
+export interface AiFriendlyPair {
+  id: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  date: Date;
+}
+
+export interface AiFriendlyMatchReport {
+  pairId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  date: Date;
+  homeScore: number;
+  awayScore: number;
+  scorers: { playerId: string; playerName: string; teamId: string; assistId?: string; assistName?: string; minute: number; isPenalty: boolean; isMiss?: boolean }[];
+  cards: { playerId: string; playerName: string; teamId: string; type: string; minute: number }[];
+  injuries: { playerId: string; playerName: string; teamId: string; severity: string; minute: number; days: number; type: string }[];
+  substitutions: { playerOutId: string; playerOutName: string; playerInId: string; playerInName: string; teamId: string; minute: number }[];
+  ratings: Record<string, number>;
+  extraTime: number;
+  homeTacticId: string;
+  awayTacticId: string;
+  homeStartingXI: string[];
+  awayStartingXI: string[];
+  homeFinalXI?: string[];
+  awayFinalXI?: string[];
+}
+
+export enum TransferOfferStatus {
+  SELLER_REVIEW = 'SELLER_REVIEW',
+  SELLER_REJECTED = 'SELLER_REJECTED',
+  SELLER_COUNTERED = 'SELLER_COUNTERED',
+  SELLER_ACCEPTED = 'SELLER_ACCEPTED',
+  PLAYER_NEGOTIATION = 'PLAYER_NEGOTIATION',
+  PLAYER_REJECTED = 'PLAYER_REJECTED',
+  READY_TO_FINALIZE = 'READY_TO_FINALIZE',
+  AGREED_PRECONTRACT = 'AGREED_PRECONTRACT',
+  COMPLETED = 'COMPLETED'
+}
+
+export enum TransferTiming {
+  IMMEDIATE = 'IMMEDIATE',
+  IN_SIX_MONTHS = 'IN_SIX_MONTHS',
+  IN_TWELVE_MONTHS = 'IN_TWELVE_MONTHS',
+  CONTRACT_END = 'CONTRACT_END'
+}
+
+export interface TransferOffer {
+  id: string;
+  playerId: string;
+  sellerClubId: string;
+  buyerClubId: string;
+  fee: number;
+  timing: TransferTiming;
+  salary?: number;
+  bonus?: number;
+  years?: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+  createdAt: string;
+  status: TransferOfferStatus;
+  effectiveDate?: string;
+  askingPrice?: number;
+  sellerReason?: string;
+  playerReason?: string;
+  attemptNumber: number;
+  maxAttempts: number;
+}
+
+export interface TransferClubBidInput {
+  fee: number;
+  timing: TransferTiming;
+}
+
+export enum IncomingOfferStatus {
+  EMAIL_SENT = 'EMAIL_SENT',
+  REMINDER_SENT = 'REMINDER_SENT',
+  EXPIRED = 'EXPIRED',
+  REJECTED_BY_MANAGER = 'REJECTED_BY_MANAGER',
+  COUNTER_PENDING_AI = 'COUNTER_PENDING_AI',
+  AI_COUNTERED = 'AI_COUNTERED',
+  NEGOTIATION_IN_PROGRESS = 'NEGOTIATION_IN_PROGRESS',
+  AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION',
+  PLAYER_REFUSED = 'PLAYER_REFUSED',
+  COMPLETED = 'COMPLETED',
+  REJECTED_AT_CONFIRM = 'REJECTED_AT_CONFIRM',
+}
+
+export type IncomingOfferKind = 'TRANSFER' | 'LOAN';
+export type LoanOfferDuration = 'ROUND' | 'SEASON';
+
+export interface IncomingTransferOffer {
+  id: string;
+  kind?: IncomingOfferKind;
+  playerId: string;
+  buyerClubId: string;
+  fee: number;
+  timing: TransferTiming;
+  status: IncomingOfferStatus;
+  createdAt: string;
+  emailSentAt: string;
+  reminderSentAt?: string;
+  aiMaxFee: number;
+  aiUrgency: 1 | 2 | 3;
+  counterFee?: number;
+  aiCounterFee?: number;
+  negotiationRound: number;
+  playerNegotiationStartedAt?: string;
+  playerNegotiationResolvesAt?: string;
+  playerNegotiationResult?: 'accepted' | 'refused';
+  boardPressure: boolean;
+  loanDuration?: LoanOfferDuration;
+  loanStartDate?: string;
+  loanEndDate?: string;
+  wageCoveragePercent?: number;
+  loanFee?: number;
+  loanTotalCost?: number;
+  loanPlayerCanBeForced?: boolean;
+  loanNegotiationNote?: string;
+  loanNegotiationResult?: 'AI_ACCEPTED_COUNTER' | 'AI_COUNTERED' | 'AI_REJECTED_COUNTER';
+}
+
+export type AiTransferLogStatus =
+  | 'OFFER_MADE'
+  | 'TRANSFER_SIGNED'
+  | 'PLAYER_REJECTED'
+  | 'CANCELLED_NO_BUDGET'
+  | 'CANCELLED_OTHER';
+
+export interface AiTransferLogEntry {
+  id: string;
+  date: string;
+  playerName: string;
+  playerOvr: number;
+  playerPosition: string;
+  fromClub: string;
+  toClub: string;
+  status: AiTransferLogStatus;
+  reason?: string;
+  fee?: number;
+  playerId?: string;
+  fromClubId?: string;
+  toClubId?: string;
+  isGulfMegaOffer?: boolean;
+  salary?: number;
+  bonus?: number;
+  contractYears?: number;
+}
+
+export interface TransferContractInput {
+  salary: number;
+  bonus: number;
+  years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+}
+
+export interface TransferOfferSubmissionResult {
+  ok: boolean;
+  status: TransferOfferStatus | 'VALIDATION_ERROR';
+  message: string;
+  offer?: TransferOffer;
+}
+
+export interface LoanOfferSubmissionInput {
+  loanFee: number;
+  wageCoveragePercent: number;
+  loanDuration: LoanOfferDuration;
+}
+
+export interface LoanOfferSubmissionResult {
+  ok: boolean;
+  status: 'ACCEPTED' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
+  message: string;
+  loan?: PlayerLoanInfo;
+}
+
+export interface PlayerLoanMonthlyReport {
+  id: string;
+  date: string;
+  monthLabel: string;
+  matches: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  averageRating: number | null;
+  status: string;
+  daysLeft: number;
+  previousOverall: number;
+  nextOverall: number;
+  developmentNote: string;
+  developmentChanged: boolean;
+}
+
+export interface PlayerLoanInfo {
+  parentClubId: string;
+  parentClubName: string;
+  destinationClubId: string;
+  destinationClubName: string;
+  startDate: string; // ISO Date string
+  endDate: string;   // ISO Date string
+  wageCoveragePercent?: number;
+  loanFee?: number;
+  forcedByClub?: boolean;
+  reportBaselineMatches?: number;
+  reportBaselineMinutes?: number;
+  reportBaselineGoals?: number;
+  reportBaselineAssists?: number;
+  reportBaselineYellowCards?: number;
+  reportBaselineRedCards?: number;
+  reportBaselineRatingCount?: number;
+  lastReportDate?: string;
+  lastReportMatches?: number;
+  lastReportMinutes?: number;
+  lastReportGoals?: number;
+  lastReportAssists?: number;
+  lastReportRatingCount?: number;
+  monthlyReports?: PlayerLoanMonthlyReport[];
+}
+
+// ─── Transfer Request Dialog — nowe interfejsy ────────────────────────────────
+// Używane przez: PlayerTransferRequestDialogService.ts
+// Modal:        components/modals/PlayerTransferRequestModal.tsx
+// Handler:      GameContext.resolvePlayerTransferRequestDialog
+// Daily check:  GameContext (advanceDay) → PlayerTransferRequestDialogService.reviewContractPromise
+//               + PlayerTransferRequestDialogService.reviewAllowAfterSeason
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Obietnica kontraktowa złożona zawodnikowi po prośbie o listę transferową (ścieżka A).
+ *  Zapisywana na player.transferContractPromise.
+ *  Jeśli trener nie podpisze nowego kontraktu do deadlineAt:
+ *    conflictLevel +25, coachTrust −30, morale −16, mail TRANSFER_CONTRACT_PROMISE_BROKEN. */
+export interface TransferContractPromise {
+  /** ISO date złożenia obietnicy. */
+  madeAt: string;
+  /** ISO date deadline spełnienia (= koniec sezonu = 30 czerwca). */
+  deadlineAt: string;
+  /** % podwyżki wybrany losowo przez zawodnika z puli: 15 | 25 | 35 | 45 | 50 | 75 | 100.
+   *  PlayerContractMindflowService powinien sprawdzać to pole przy rozmowach kontraktowych. */
+  salaryRaisePct: number;
+  /** ISO date pierwszego przypomnienia wysłanego do managera; null = jeszcze nie wysłano.
+   *  Przypomnienie wysyłane 14 dni przed deadlineAt. */
+  reminderSentAt: string | null;
+  /** true = trener nie spełnił obietnicy — kary już zostały naliczone. */
+  broken: boolean;
+}
+
+/** Stan "gracz zastanawia się" — odpowie po 5–14 dniach od daty rozmowy.
+ *  Zapisywana na player.transferRequestPendingResponse.
+ *  Sprawdzana codziennie; po responseExpectedBy gracz daje ostateczną odpowiedź (AGREED / REFUSED). */
+export interface TransferRequestPendingResponse {
+  /** Ścieżka wybrana przez managera podczas rozmowy. */
+  managerChoice: 'PROMISE_CONTRACT' | 'ALLOW_END_OF_SEASON' | 'REFUSE_IMPORTANT';
+  /** ISO date — do kiedy gracz musi odpowiedzieć. */
+  responseExpectedBy: string;
+  /** Wynik sub-dialogu (suma punktów z pytań). Wpływa na szansę AGREED przy finalizacji. */
+  dialogScore: number;
+  /** Dla ścieżki PROMISE_CONTRACT: % podwyżki wybrany przez gracza; null dla B i C. */
+  promisedRaisePct: number | null;
+}
+
+export interface Player {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  clubId: string;
+  nationality: Region;
+  nationalityCountry?: string;
+  position: PlayerPosition;
+  secondaryPosition?: PlayerPosition | null;
+  secondaryPositionRating?: number;
+  overallRating: number;
+  attributes: PlayerAttributes;
+  stats: PlayerStats;
+  health: {
+    status: HealthStatus;
+    injury?: {
+      type: string;
+      daysRemaining: number;
+      severity?: InjurySeverity;
+      injuryDate: string; // ISO Date string
+      totalDays: number;
+      conditionAtInjury?: number; // kondycja w momencie rejestracji kontuzji
+    };
+  };
+  condition: number;
+  suspensionMatches: number;
+  contractEndDate: string; // Data w formacie ISO
+  annualSalary: number;    // Kwota roczna w PLN
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+  isOnTransferList?: boolean;
+  transferListPrice?: number;
+  isAvailableForLoan?: boolean;
+  marketValue?: number;
+  loan?: PlayerLoanInfo | null;
+  purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
+   history: PlayerHistoryEntry[];
+  seasonHistory?: PlayerSeasonHistoryEntry[];
+    boardLockoutUntil: string | null; // Data ISO, do której nie można ponowić próby zwolnienia
+  isUntouchable: boolean;           
+  negotiationStep: number;           // Licznik prób (0-3)
+  negotiationLockoutUntil: string | null; // Blokada czasowa negocjacji
+  contractLockoutUntil: string | null;
+  boardYouthContractLockoutUntil?: string | null;
+  /** Data ISO końca rocznego okresu bez nowych żądań po podpisaniu kontraktu. */
+  moraleDemandLockoutUntil?: string | null;
+  fatigueDebt: number; 
+  form?: number;
+  morale?: number;
+  moralePersonality?: PlayerMoralePersonality;
+  moraleHistory?: PlayerMoraleHistoryEntry[];
+  playerMindset?: PlayerMindsetState;
+  lastIndividualTalkDate?: string | null;
+  promisedMinutesUntil?: string | null;
+  promisedMinutesBaseline?: number | null;
+  promisedRoleNextMatchFixtureId?: string | null;
+  lastMoraleDemandDate?: string | null;
+  minutesDemandUntil?: string | null;
+  minutesDemandBaseline?: number | null;
+  unresolvedMinutesDemandDate?: string | null;
+  unresolvedMinutesDemandBaseline?: number | null;
+  developmentExitDemandUntil?: string | null;
+  developmentExitDemandBaseline?: number | null;
+  lastTemptingOfferConflictDate?: string | null;
+  roleDemandUntil?: string | null;
+  requestedSquadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  squadRoleMindsetLockUntil?: string | null;
+  transferListDemandUntil?: string | null;
+  oneTimeBonusPromise?: PlayerOneTimeBonusPromise | null;
+  oneTimeBonusAwardedSeason?: number | null;
+  // ─── Transfer Request Dialog (ścieżki A–D po prośbie o listę transferową) ────
+  // Serwis:    services/PlayerTransferRequestDialogService.ts
+  // Modal:     components/modals/PlayerTransferRequestModal.tsx
+  // Handler:   GameContext.resolvePlayerTransferRequestDialog
+  // Daily:     GameContext (advanceDay) → reviewContractPromise + reviewAllowAfterSeason
+  /** Obietnica kontraktowa złożona zawodnikowi (ścieżka A). Czyść po podpisaniu kontraktu. */
+  transferContractPromise?: TransferContractPromise | null;
+  /** true = manager zgodził się na odejście po sezonie (ścieżka B). */
+  transferAllowAfterSeason?: boolean;
+  /** ISO date końca sezonu — deadline dla wystawienia na listę transferową (ścieżka B). */
+  transferAllowAfterSeasonDeadline?: string | null;
+  /** Oczekująca odpowiedź gracza — "zastanawia się" 5–14 dni (THINKING state). */
+  transferRequestPendingResponse?: TransferRequestPendingResponse | null;
+  /** Obietnica zdjęcia zawodnika z listy transferowej po jego proteście. Deadline zwykle +1 dzień. */
+  transferListRemovalPromiseDeadline?: string | null;
+  contractRaiseDemandUntil?: string | null;
+  contractRaiseRequest?: {
+    salary: number;
+    bonus: number;
+    years: number;
+    requestedAt: string;
+    deadline: string;
+    reason?: 'STANDARD' | 'PROMOTION_RAISE';
+    raisePct?: number;
+  } | null;
+  contractRaiseReminderUntil?: string | null;
+  contractRaiseTeamMoraleDelta?: number | null;
+  contractRaiseTeamMoraleReason?: string | null;
+  boardAppealSentAt?: string | null;
+  boardAppealType?: 'RAISE' | 'TRANSFER' | null;
+  boardAppealDeadline?: string | null;
+  reserveProtestUntil?: string | null;
+  isNegotiationPermanentBlocked: boolean; // Czy zawodnik obraził się na amen
+  transferLockoutUntil: string | null;
+  transferClubLockouts?: Record<string, string>;
+  transferOfferBanUntil?: string | null;
+  freeAgentLockoutUntil: string | null;
+  freeAgentClubLockouts?: Record<string, string>;
+  mysteryAgentHiddenUntilScouted?: boolean;
+  mysteryAgentProspect?: boolean;
+  assignedNationalTeamId?: string | null;
+  /** Data ISO końca krótkiej odnowy po występie w reprezentacji. */
+  nationalTeamRecoveryUntil?: string | null;
+  nationalTeamMajorTournamentRecoveryUntil?: string | null;
+  /** Lista ID klubów aktualnie zainteresowanych pozyskaniem tego zawodnika (aktualizowana ~1x/miesiąc przez AI) */
+  interestedClubs?: string[];
+  /** ID klubu AI który aktualnie negocjuje z tym wolnym agentem */
+  aiNegotiationClubId?: string;
+  /** Data ISO do której klub AI czeka na odpowiedź agenta (okno 4 dni dla gracza) */
+  aiNegotiationResponseDate?: string;
+  /** ID klubu AI który kupuje zawodnika z listy transferowej — tag TRSF, blokuje inne oferty */
+  transferPendingClubId?: string;
+  /** Kwota transferu zapłacona przy złożeniu oferty — używana przy finalizacji do zapisania w historii kariery */
+  transferPendingFee?: number;
+  transferPendingSalary?: number;
+  transferPendingBonus?: number;
+  transferPendingContractYears?: number;
+  /** Data ISO kiedy zawodnik "melduje się" w nowym klubie (currentDate + 3 dni) */
+  transferReportDate?: string;
+  retirementLockUntil?: string | null;
+  trainingFocus?: keyof PlayerAttributes | null;
+  trainingIntensity?: TrainingIntensity | null;
+  squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  reserveStats?: ReserveSeasonStats;
+  reserveHistory?: ReserveHistoryEntry[];
+  cupStats?: PlayerStats;
+  euroStats?: PlayerStats;
+  friendlyStats?: PlayerStats;
+  nationalStats?: PlayerStats;
+  cupSuspensionMatches?: number;
+  euroSuspensionMatches?: number;
+  nationalSuspensionMatches?: number;
+  reputacja?: number;
+  lojalnosc?: number;
+}
+
+export interface MysteryAgentContractOffer {
+  signingFee: number;
+  salary: number;
+  years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+}
+
+export interface MysteryAgentOfferState {
+  id: string;
+  seasonNumber: number;
+  clubId: string;
+  createdDate: string;
+  player: Player;
+  hiddenOverallRating: number;
+  askingSigningFee: number;
+  askingSalary: number;
+  minimumSigningFee: number;
+  minimumSalary: number;
+  attemptsUsed: number;
+  maxAttempts: number;
+  status: 'ACTIVE' | 'AGREED' | 'FAILED';
+  boardRequestUsed: boolean;
+  boardApproved?: boolean;
+  boardSupportAmount?: number;
+  joinDate?: string;
+  agreedContract?: MysteryAgentContractOffer;
+  lastAgentMessage?: string;
+}
+
+export interface MysteryAgentNegotiationResult {
+  accepted: boolean;
+  ended: boolean;
+  message: string;
+  nextOffer?: MysteryAgentOfferState;
+}
+
+export interface MysteryAgentBoardRequestResult {
+  approved: boolean;
+  ended: boolean;
+  grantedAmount: number;
+  message: string;
+  nextOffer?: MysteryAgentOfferState;
+}
+
+export interface TeamStats {
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  played: number;
+  form: ('W' | 'R' | 'P')[];
+}
+
+export interface FinanceLog {
+  id: string;
+  date: string;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  description: string;
+  previousBalance?: number; // Saldo przed operacją
+}
+
+export type BoardAttributeLevel = 'bardzo_niska' | 'niska' | 'przecietna' | 'wysoka' | 'bardzo_wysoka';
+
+export interface ClubBoard {
+  hojnosc: BoardAttributeLevel;
+  ambicja: BoardAttributeLevel;
+  cierpliwosc: BoardAttributeLevel;
+  chciwosc: BoardAttributeLevel;
+  oczekiwania: BoardAttributeLevel;
+  kompetencja: BoardAttributeLevel;
+}
+
+export type SportingDirectorPersonality =
+  | 'CONTROLLER'
+  | 'VISIONARY'
+  | 'ACCOUNTANT'
+  | 'PARTNER'
+  | 'POLITICIAN'
+  | 'TALENT_HUNTER';
+
+export interface SportingDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  patience: number;
+  control: number;
+  flexibility: number;
+  ambition: number;
+  footballKnowledge: number;
+  negotiation: number;
+  developmentVision: number;
+  financialDiscipline: number;
+  relationshipWithManager: number;
+  personality: SportingDirectorPersonality;
+}
+
+export interface ClubOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  cierpliwosc: number;
+  ambicja: number;
+  hojnosc: number;
+  doswiadczenie: number;
+  monthlySalary: number;
+}
+
+export interface ClubCEO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  cierpliwosc: number;
+  ambicja: number;
+  hojnosc: number;
+  doswiadczenie: number;
+  monthlySalary: number;
+}
+
+export interface ClubCFO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  hojnosc: number;
+  doswiadczenie: number;
+  zdolnosciMarketingowe: number;
+  dyscyplinaFinansowa: number;
+  monthlySalary: number;
+}
+
+export interface ClubCOO {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  organizacja: number;
+  zarzadzanieInfrastruktura: number;
+  efektywnoscKosztowa: number;
+  logistykaIPlanowanie: number;
+  monthlySalary: number;
+}
+
+export interface ClubMarketingDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  zdolnosciMarketingowe: number;
+  monthlySalary: number;
+}
+
+export interface ClubAcademyDirector {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  nationalityCountry: string;
+  doswiadczenie: number;
+  rozwojMlodziezy: number;
+  zarzadzanie: number;
+  monthlySalary: number;
+}
+
+export interface ClubManagement {
+  owner: ClubOwner;
+  ceo?: ClubCEO;
+  cfo: ClubCFO;
+  coo: ClubCOO;
+  marketingDirector: ClubMarketingDirector;
+  academyDirector?: ClubAcademyDirector;
+}
+
+export interface SportingDirectorPolicyItem {
+  playerId: string;
+  playerName: string;
+  note: string;
+}
+
+export interface SportingDirectorPolicy {
+  issuedAt: string;
+  windowType: 'SUMMER' | 'WINTER';
+  protectedPlayers: SportingDirectorPolicyItem[];
+  sellCandidates: SportingDirectorPolicyItem[];
+  developmentPlayers: SportingDirectorPolicyItem[];
+  summary: string;
+  budgetDirective?: string;
+  transferBudgetAdjustment?: number;
+}
+
+export type SportingDirectorObjectiveType =
+  | 'WIN_NEXT_MATCH'
+  | 'AVOID_DEFEAT'
+  | 'HOLD_TOP_SPOT'
+  | 'STAY_IN_TOP_THREE'
+  | 'POINTS_RUN'
+  | 'DEFENSIVE_RUN'
+  | 'YOUTH_DEVELOPMENT'
+  | 'PLAYER_MINUTES'
+  | 'WAGE_DISCIPLINE';
+export type SportingDirectorObjectiveResponse = 'ACCEPT' | 'NEGOTIATE' | 'CHALLENGE';
+
+export interface SportingDirectorObjective {
+  id: string;
+  type: SportingDirectorObjectiveType;
+  issuedAt: string;
+  dueAt: string;
+  status: 'ACTIVE' | 'AWAITING_REVIEW' | 'COMPLETED' | 'FAILED';
+  title: string;
+  description: string;
+  target: number;
+  baselinePoints: number;
+  baselinePlayed: number;
+  baselineGoalsAgainst: number;
+  baselineYouthAppearances: number;
+  baselineYouthMinutes?: number;
+  baselinePlayerMinutes?: number;
+  baselineWageBill?: number;
+  targetPlayerId?: string;
+  targetPlayerName?: string;
+  contextTag?: 'STANDARD' | 'ULTIMATUM' | 'PLAYER_PLAN' | 'WAGE_ALERT';
+  managerResponse?: 'ACCEPTED' | 'NEGOTIATED' | 'CHALLENGED';
+  renegotiated?: boolean;
+  resultNote?: string;
+}
+
+export type StadiumStand =
+  | 'MAIN_STAND'
+  | 'OPPOSITE_STAND'
+  | 'NORTH_END'
+  | 'SOUTH_END'
+  | 'LIGHTING'
+  | 'VIP_BOXES';
+
+export type StadiumExpansionPhase =
+  | 'BOARD_REVIEW'
+  | 'CITY_AID_REVIEW'
+  | 'FEASIBILITY_STUDY'
+  | 'PLANNING_PERMISSION'
+  | 'TENDER'
+  | 'CONSTRUCTION'
+  | 'SAFETY_INSPECTION'
+  | 'COMPLETED'
+  | 'REJECTED';
+
+export interface StadiumExpansionEvent {
+  date: string;
+  message: string;
+  type: 'INFO' | 'WARNING' | 'SUCCESS' | 'DELAY' | 'COST';
+}
+
+export interface StadiumExpansionProject {
+  id: string;
+  stand: StadiumStand;
+  phase: StadiumExpansionPhase;
+  startDate: string;
+  phaseEndDate: string;
+  requestedCapacityIncrease: number;
+  approvedCapacityIncrease?: number;
+  feasibilityCost?: number;
+  totalCost?: number;
+  financeType?: 'BUDGET' | 'INSTALLMENTS' | 'BANK_CREDIT' | 'CITY_AID';
+  cityAidAmount?: number;
+  cityAidShare?: number;
+  contractorTier?: 'CHEAP' | 'BALANCED' | 'PREMIUM';
+  tempCapacityReduction?: number;
+  log: StadiumExpansionEvent[];
+}
+
+export interface Club {
+  id: string;
+  name: string;
+  shortName: string;
+  leagueId: string;
+  tier?: number;
+  colorsHex: string[];
+  kits?: ClubKit[];
+  stadiumName: string;
+  stadiumCapacity: number;
+  reputation: number;
+  country?: string;
+  isDefaultActive: boolean;
+  colorPrimary?: string;
+  colorSecondary?: string;
+  rosterIds: string[];
+  coachId?: string;
+  staffIds?: string[];
+  stats: TeamStats;
+  isInPolishCup?: boolean;
+  budget: number;
+  transferBudget: number;
+  reserveBudget?: number;
+  boardBudgetRequestsThisSeason?: number;
+  boardExceptionalContractApprovals?: number;
+  oneTimePlayerBonusesThisSeason?: number;
+  boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
+  boardBudgetLastShiftDate?: string;
+  boardBudgetLastShiftAction?: 'REDUCE' | 'RESTORE' | 'RESERVE_SUPPORT';
+  boardStrictness: number;
+  signingBonusPool: number; // Pula pieniędzy zarezerwowana tylko na bonusy za podpis
+  squadNeeds?: Record<string, number>;
+  captainId?: string | null;
+  penaltyTakerId?: string | null;
+  freeKickTakerId?: string | null;
+  financeHistory?: FinanceLog[];
+  europeanBonusPoints?: number;
+  logoFile?: string;
+  academy?: ClubAcademy;
+  board?: ClubBoard;
+  sportingDirector?: SportingDirector;
+  lastSportingDirectorReviewDate?: string;
+  lastSportingDirectorPolicyDate?: string;
+  lastSportingDirectorRelationshipEventDate?: string;
+  lastSportingDirectorObjectiveDate?: string;
+  lastSportingDirectorObjectiveResolvedDate?: string;
+  lastSportingDirectorCommunicationDate?: string;
+  lastSportingDirectorBudgetAdjustmentDate?: string;
+  sportingDirectorBoardInfluence?: number;
+  sportingDirectorPolicy?: SportingDirectorPolicy;
+  sportingDirectorObjective?: SportingDirectorObjective;
+  boardConfidence?: number;
+  sponsorAcquiredThisSeason?: boolean;
+  nextSponsorCheckDate?: string;
+  ownerRescueThisSeason?: boolean;
+  morale?: number;
+  lastMotivationDate?: string;
+  motivationMonitoringStartDate?: string;
+  motivationNeglectLevel?: number;
+  matchPrepFocusId?: string;
+  matchPrepFocusStartDate?: string;
+  aiWeeklyTraining?: AiWeeklyTrainingState;
+  aiWinterCampDecisionYear?: number;
+  aiWinterCampFormAdjustment?: number;
+  aiWinterCampType?: 'AWAY' | 'LOCAL';
+  userWeeklyTrainingWeekKey?: string;
+  assistantTrainingSuggestionWeekKey?: string;
+  assistantTrainingSuggestionCount?: number;
+  winterCamp?: WinterCampState;
+  summerCamp?: SummerCampState;
+  stadiumSeatColors?: string[];
+  stadiumExpansionProjects?: StadiumExpansionProject[];
+  management?: ClubManagement;
+}
+
+export interface ClubKit {
+  id: string;
+  name: string;
+  shirt: string;
+  shirtSecondary?: string;
+  shorts: string;
+  socks: string;
+  pattern?: ClubKitPattern;
+  isActive?: boolean;
+}
+
+export type ClubKitPattern =
+  | 'solid'
+  | 'horizontal_stripes'
+  | 'vertical_stripes'
+  | 'diagonal_stripe'
+  | 'center_band'
+  | 'center_vertical_stripe';
+
+export type BoardClubRequestType =
+  | 'CLUB_FUNDS'
+  | 'TRANSFER_BUDGET'
+  | 'RESERVE_STATUS'
+  | 'EXCEPTIONAL_CONTRACT'
+  | 'WAGE_COST_CONTROL';
+
+export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
+export type WinterCampProgram = 'fitness' | 'tactical' | 'technical' | 'strength' | 'recovery';
+export type WinterCampIntensity = 'light' | 'moderate' | 'intense';
+
+export interface WinterCampState {
+  location: WinterCampLocation | null;
+  cost: number;
+  program: WinterCampProgram | null;
+  intensity: WinterCampIntensity | null;
+  spaOption: boolean;
+  isDeclined: boolean;
+  locationPrices: {
+    turkey: number;
+    cyprus: number;
+    greece: number;
+    poland: number;
+  };
+  spaCost: number;
+  inviteSent: boolean;
+  programChosen: boolean;
+  effectsApplied: boolean;
+  winterFriendlyFormPenaltyYear?: number;
+}
+
+export type SummerCampLocation = 'poland' | 'czech_republic' | 'slovakia' | 'austria' | 'switzerland';
+export type SummerCampProgram = WinterCampProgram;
+export type SummerCampIntensity = WinterCampIntensity;
+
+export interface SummerCampState {
+  location: SummerCampLocation | null;
+  cost: number;
+  program: SummerCampProgram | null;
+  intensity: SummerCampIntensity | null;
+  spaOption: boolean;
+  isDeclined: boolean;
+  locationPrices: {
+    poland: number;
+    czech_republic: number;
+    slovakia: number;
+    austria: number;
+    switzerland: number;
+  };
+  spaCost: number;
+  inviteSent: boolean;
+  programChosen: boolean;
+  effectsApplied: boolean;
+}
+
+export interface YouthPlayer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  position: PlayerPosition;
+  nationality: Region;
+  nationalityCountry?: string;
+  attributes: PlayerAttributes;
+  hiddenTalent: number;
+  revealedTalentRating?: 'EXCEPTIONAL' | 'HIGH' | 'AVERAGE' | 'LOW';
+  developmentFocus?: keyof PlayerAttributes;
+  readinessScore: number;
+  monthsInAcademy: number;
+  contractEndDate: string;
+  weeklyMaintenanceCost?: number;  // PLN/tydz — tylko wychowankowie ze skauta
+  contractSigned?: boolean;        // undefined/true = w akademii; false = oczekuje na podpisanie
+  loanClubId?: string;
+  scoutReportAvailableDate?: string;
+}
+
+export interface AcademyScoutMission {
+  id: string;
+  targetYouthPlayerId?: string;
+  regionFocus?: Region;
+  completionDate: string;
+  isRegionScouting: boolean;
+  cost: number;
+  positionFilter?: PlayerPosition;
+  ageMin?: number;
+  ageMax?: number;
+  scoutId?: string;
+}
+
+// ── SYSTEM SKAUTÓW ─────────────────────────────────────────────────────────────────────────────
+
+export type ScoutPersonality = 'RISK_TAKER' | 'CONSERVATIVE' | 'VERSATILE' | 'AMBITIOUS';
+
+export interface Scout {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  // Parametry 1–20
+  judgmentAccuracy: number;   // dokładność oceny talentu
+  networkDepth: number;       // szansa znalezienia talentu >80
+  reportSpeed: number;        // skraca czas misji
+  experience: number;         // zmniejsza szum w ocenie
+  regionalSpecialty?: Region; // bonus w swoim regionie
+  positionSpecialty?: PlayerPosition; // bonus dla tej pozycji
+  personality: ScoutPersonality;
+  minClubReputation: number;  // 1–10: nie pracuje poniżej tej wartości
+  weeklySalary: number;
+  contractEndDate?: string;
+  employedByClubId?: string;
+  isOnMission: boolean;
+}
+
+export interface AcademyPromotedEntry {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position: PlayerPosition;
+  promotedYear: number;
+  promotedTo: 'RESERVES' | 'FIRST_TEAM';
+  overallAtPromotion: number;
+}
+
+export interface ClubAcademy {
+  level: 1 | 2 | 3 | 4 | 5;
+  youthPlayers: YouthPlayer[];
+  lastIntakeYear: number;
+  operationalBudgetWeekly: number;
+  upgradeInProgress: boolean;
+  upgradeCompletionDate?: string;
+  regionFocus?: Region;
+  activeMissions: AcademyScoutMission[];
+  promotedHistory: AcademyPromotedEntry[];
+  upgradeProposalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  upgradeProposalDate?: string;
+  upgradeProposalDecisionDate?: string;
+  upgradeProposalRejectedUntil?: string;
+}
+
+export interface EuropeanStatus {
+  isInChampionsLeague: boolean;
+  isInEuropeanLeague: boolean;
+  isInConferenceLeague: boolean;
+  isInChampionsLeagueNextPhase: boolean;
+  isInEuropeanLeagueNextPhase: boolean;
+  isInConferenceLeagueNextPhase: boolean;
+}
+
+
+
+export interface NationalTeam {
+  id: string;
+  name: string;
+  continent: string;
+  capital?: string;
+  tier: number;
+  colorsHex: string[];
+  kits?: ClubKit[];
+  stadiumName: string;
+  stadiumCapacity: number;
+  reputation: number;
+  region: Region;
+  coachId: string | null;
+  squadPlayerIds: string[];
+  tacticId: string | null;
+  logoFile?: string;
+}
+export interface League {
+  id: string;
+  name: string;
+  level: LeagueLevel;
+  teamIds: string[];
+}
+
+export interface Fixture {
+  id: string;
+  leagueId: string | CompetitionType;
+  homeTeamId: string;
+  awayTeamId: string;
+  date: Date;
+  status: MatchStatus;
+  homeScore: number | null;
+  awayScore: number | null;
+  // Cup specific metadata
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  attendance?: number;
+  neutralVenue?: boolean;
+}
+
+export interface Lineup {
+  clubId: string;
+  tacticId: string;
+  startingXI: (string | null)[];
+  bench: string[];
+  reserves: string[];
+}
+
+export interface Tactic {
+  id: string;
+  name: string;
+  category: string;
+  attackBias: number;
+  defenseBias: number;
+  pressingIntensity: number;
+  slots: {
+    index: number;
+    role: PlayerPosition;
+    x: number;
+    y: number;
+  }[];
+}
+
+export enum MatchEventType {
+  SHOT = 'SHOT',
+  SHOT_ON_TARGET = 'SHOT_ON_TARGET',
+  CORNER = 'CORNER',
+  FOUL = 'FOUL',
+  OFFSIDE = 'OFFSIDE',
+  PENALTY_AWARDED = 'PENALTY_AWARDED',
+  PENALTY_SCORED = 'PENALTY_SCORED',
+  PENALTY_MISSED = 'PENALTY_MISSED',
+  GOAL = 'GOAL',
+  PRESSURE = 'PRESSURE',
+  SAVE = 'SAVE',
+  YELLOW_CARD = 'YELLOW_CARD',
+  RED_CARD = 'RED_CARD',
+  INJURY_LIGHT = 'INJURY_LIGHT',
+  INJURY_SEVERE = 'INJURY_SEVERE',
+  SUBSTITUTION = 'SUBSTITUTION',
+  GENERIC = 'GENERIC',
+  THROW_IN = 'THROW_IN',
+  FREE_KICK = 'FREE_KICK',
+  FREE_KICK_DANGEROUS = 'FREE_KICK_DANGEROUS',
+  SHOT_POST = 'SHOT_POST',
+  SHOT_BAR = 'SHOT_BAR',
+  HANDBALL = 'HANDBALL',
+  FOUL_JERSEY = 'FOUL_JERSEY',
+  FOUL_PUSH = 'FOUL_PUSH',
+  WINGER_STOPPED = 'WINGER_STOPPED',
+  CROSS_NEAR_POST = 'CROSS_NEAR_POST',
+  CROSS_FAR_POST = 'CROSS_FAR_POST',
+  ONE_ON_ONE_GOAL = 'ONE_ON_ONE_GOAL',
+  ONE_ON_ONE_MISS = 'ONE_ON_ONE_MISS',
+  ONE_ON_ONE_SAVE = 'ONE_ON_ONE_SAVE',
+  DRIBBLING = 'DRIBBLING',
+  STUMBLE = 'STUMBLE',
+  MISPLACED_PASS = 'MISPLACED_PASS',
+  BLUNDER = 'BLUNDER',
+  GK_LONG_THROW = 'GK_LONG_THROW',
+  MIDFIELD_CONTROL = 'MIDFIELD_CONTROL',
+  PLAY_LEFT = 'PLAY_LEFT',
+  PLAY_RIGHT = 'PLAY_RIGHT',
+  PLAY_BACK = 'PLAY_BACK',
+  PLAY_SIDE = 'PLAY_SIDE'
+}
+
+export interface MatchLogEntry {
+  id: string;
+  minute: number;
+  text: string;
+  teamSide?: 'HOME' | 'AWAY';
+  type: MatchEventType;
+  playerId?: string;
+  secondaryPlayerId?: string;
+  playerName?: string;
+}
+
+export interface MatchEvent {
+  minute: number;
+  teamSide: 'HOME' | 'AWAY';
+  type: MatchEventType;
+  primaryPlayerId?: string;
+  secondaryPlayerId?: string;
+  text: string;
+}
+
+export interface GoalTickerInfo {
+  playerName: string;
+  scorerId?: string;
+  minute: number;
+  isPenalty: boolean;
+  isMiss?: boolean;
+  varDisallowed?: boolean;
+  assistantName?: string;
+  assistantId?: string;
+  isOwnGoal?: boolean;
+  ownGoalPlayerId?: string;
+  ownGoalPlayerName?: string;
+}
+export type InstructionTempo = 'SLOW' | 'NORMAL' | 'FAST';
+export type InstructionMindset = 'DEFENSIVE' | 'NEUTRAL' | 'OFFENSIVE';
+export type InstructionIntensity = 'CAUTIOUS' | 'NORMAL' | 'AGGRESSIVE';
+export type InstructionPassing = 'SHORT' | 'MIXED' | 'LONG';
+export type InstructionPressing = 'NORMAL' | 'PRESSING';
+export type InstructionCounterAttack = 'NORMAL' | 'COUNTER';
+
+export type CupPowerScenario = 'MUCH_STRONGER' | 'STRONGER' | 'EQUAL' | 'WEAKER' | 'MUCH_WEAKER';
+export type CupScoreState = 'WINNING' | 'DRAWING' | 'LOSING';
+
+export interface AiCupScenarioPlan {
+  mindset: InstructionMindset;
+  tempo: InstructionTempo;
+  intensity: InstructionIntensity;
+  pressing: InstructionPressing;
+  counterAttack: InstructionCounterAttack;
+  log?: string;
+  escalation?: {
+    minute: number;
+    mindset?: InstructionMindset;
+    tempo?: InstructionTempo;
+    intensity?: InstructionIntensity;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+    log?: string;
+  };
+}
+
+export interface AiCupMatchPlan {
+  powerScenario: CupPowerScenario;
+  coachQuality: number;
+  plans: Record<CupScoreState, AiCupScenarioPlan>;
+}
+
+export interface TacticalInstructions {
+  tempo: InstructionTempo;
+  mindset: InstructionMindset;
+  intensity: InstructionIntensity;
+  passing: InstructionPassing;
+  pressing: InstructionPressing;
+  counterAttack?: InstructionCounterAttack;
+  lastChangeMinute: number;
+  expiryMinute: number;
+  tempoExpiry: number;
+  mindsetExpiry: number;
+  intensityExpiry: number;
+  tempoCooldown: number;
+  mindsetCooldown: number;
+  intensityCooldown: number;
+  passingCooldown: number;
+  pressingCooldown: number;
+  counterAttackCooldown?: number;
+  tempoResponseFactor: number;
+  mindsetResponseFactor: number;
+  intensityResponseFactor: number;
+  passingResponseFactor: number;
+  pressingResponseFactor: number;
+  counterAttackResponseFactor?: number;
+}
+
+export type AiLeaguePlanSource = 'REPORT' | 'INTUITION';
+export type AiLeaguePlanStrength = 'FAVORED' | 'EVEN' | 'CAUTIOUS' | 'CLEAR_UNDERDOG';
+
+export interface AiLeagueMatchPlan {
+  source: AiLeaguePlanSource;
+  reportTrustProbability: number;
+  reportConfidence: number;
+  opponentToAiPowerRatio: number;
+  strength: AiLeaguePlanStrength;
+  recommendedApproach: 'PRESS' | 'CONTROL' | 'COUNTER' | 'LOW_BLOCK' | 'DIRECT';
+  defensiveStartChance: number;
+  defensiveStartSelected: boolean;
+  initialTacticId: string;
+  initialInstructions: {
+    tempo: InstructionTempo;
+    mindset: InstructionMindset;
+    intensity: InstructionIntensity;
+    passing?: InstructionPassing;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+  };
+  aiRank: number;
+  userRank: number;
+  aiMorale: number;
+  userMorale: number;
+}
+export interface SubstitutionRecord {
+  playerOutId: string;
+  playerInId: string;
+  minute: number;
+}
+
+export interface RetirementInfo {
+  oldPlayerName: string;
+  oldPlayerAge: number;
+  newPlayerName: string;
+  newPlayerOverall: number;
+  clubId: string;
+}
+
+export interface MatchLiveState {
+  fixtureId: string;
+  minute: number;
+  period: 1 | 2 | 3 | 4 | 5; // 1,2: Reg, 3,4: ET, 5: Pens
+  addedTime: number;
+  isPaused: boolean;
+  isPausedForEvent: boolean;
+  isHalfTime: boolean;
+  isFinished: boolean;
+  speed: 1 | 2.5 | 3.5 | 5;
+  momentum: number;
+  momentumPulse: number; 
+  homeScore: number;
+  awayScore: number;
+  homeLineup: Lineup;
+  awayLineup: Lineup;
+  homeFatigue: Record<string, number>;
+  awayFatigue: Record<string, number>;
+  playedPlayerIds: string[];
+  homeInjuries: Record<string, InjurySeverity>;
+  awayInjuries: Record<string, InjurySeverity>;
+  playerYellowCards: Record<string, number>;
+  sentOffIds: string[];
+  homeRiskMode: Record<string, boolean>;
+  awayRiskMode: Record<string, boolean>;
+  homeUpgradeProb: Record<string, number>;
+  awayUpgradeProb: Record<string, number>;
+  lightInjuryPrompt?: {
+    playerId: string;
+    playerName: string;
+    minute: number;
+  } | null;
+  homeInjuryMin: Record<string, number>;
+  awayInjuryMin: Record<string, number>;
+  subsCountHome: number;
+  subsCountAway: number;
+  homeSubsHistory: SubstitutionRecord[];
+  awaySubsHistory: SubstitutionRecord[];
+  lastAiActionMinute: number;
+  aiTacticLocked?: boolean;
+  lastAiSubMinute?: number;
+  lastAiFormationMinute?: number;
+  aiTacticLockUntilMinute?: number;
+  aiLateTacticChanges?: number;
+  aiLateTacticScoreDiffAtLastChange?: number;
+  // AI Exploit Window:
+  // Minute until which league live-match AI may keep a targeted FAST + OFFENSIVE pressure
+  // response after detecting a player mistake. -1/undefined means no active exploit window.
+  // Tune scoring and duration in AiCoachTacticsService; tune hold/expiry safety brakes in
+  // components/views/MatchLiveView.tsx.
+  aiExploitUntilMinute?: number;
+  logs: MatchLogEntry[];
+  events: MatchEvent[];
+  homeGoals: GoalTickerInfo[];
+  awayGoals: GoalTickerInfo[];
+  flashMessage: string | null;
+  sessionSeed: number;
+  tacticalImpact: number;
+  
+  // KO Specific
+  isExtraTime?: boolean;
+isPenalties?: boolean;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  penaltySequence?: {
+    side: 'HOME' | 'AWAY';
+    result: 'SCORED' | 'MISSED';
+    playerId?: string;
+    playerName?: string;
+  }[];
+  // -> tutaj wstaw kod
+  aiActiveShout: {
+    id: string;
+    expiryMinute: number;
+    mindset: InstructionMindset;
+    tempo: InstructionTempo;
+    intensity: InstructionIntensity;
+    pressing?: InstructionPressing;
+    counterAttack?: InstructionCounterAttack;
+    passing?: InstructionPassing;
+    // Mnozniki z odprawy AI w przerwie; lustrzane do reakcji gracza na rozmowe motywacyjna.
+    tempoResponseFactor?: number;
+    mindsetResponseFactor?: number;
+    intensityResponseFactor?: number;
+    isExpired?: boolean;
+  } | null;
+  lastGoalBoostMinute: number;
+    activeTacticalBoost: number; // Suma aktualnie dodanego momentum (do zwrotu)
+  tacticalBoostExpiry: number; // Minuta, w której impuls wygasa i wraca
+  aiMentalitySurgeBoost?: number; // HOME > 0, AWAY < 0; active until AI concedes
+  aiMentalitySurgePreviousBoost?: number;
+  aiMentalitySurgeLastGoalMinute?: number;
+  aiMentalitySurgeLastAction?: 'AI_SCORED' | 'USER_SCORED' | null;
+  liveStats: {
+    home: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };
+    away: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number };
+  };
+  actionContributions?: Record<string, number>;
+  momentumSum: number;
+  momentumTicks: number;
+  // KONIEC WSTAWKI
+  // Post-goal suppression + comeback (CUP engine)
+  postGoalSuppressionDuration?: number;
+  postGoalPenaltyPct?: number;
+  comebackPower?: number;
+  comebackExpiry?: number;
+  comebackSide?: 'HOME' | 'AWAY' | null;
+  halftimeTalkApplied?: boolean;
+  halftimeMomentumBonus?: number;
+  oppHalftimeMomentumBonus?: number;
+  // Taktyka startowa jest trzymana osobno, bo live tacticId moze zmienic sie po korektach w trakcie meczu.
+  initialHomeTacticId?: string;
+  initialAwayTacticId?: string;
+  // Losowa przedmeczowa proba AI przewidzenia taktyki gracza, zapisana do audytu/raportu.
+  aiTacticGuessId?: string;
+  aiNextInstructionMinute?: number;
+  // Jeden, trwały punkt odniesienia dla raportu, formacji i instrukcji ligowego trenera AI.
+  aiLeagueMatchPlan?: AiLeagueMatchPlan;
+  preMatchMotivation?: {
+    actionMod: number;
+    goalMod: number;
+    momentumBonus: number;
+    expiryMinute: number;
+    fatigueMult: number;
+    rivalBoost: number;
+    userActionSuppression?: number;
+    label: string;
+  };
+  aiPreMatchMotivation?: {
+    actionMod: number;
+    goalMod: number;
+    momentumBonus: number;
+    expiryMinute: number;
+    fatigueMult: number;
+    rivalBoost: number;
+    userActionSuppression?: number;
+    label: string;
+  };
+  aiCupMatchPlan?: AiCupMatchPlan;
+  userInstructions: TacticalInstructions;
+}
+
+export interface MatchSummaryTeamStats {
+  shots: number;
+  shotsOnTarget: number;
+  corners: number;
+  fouls: number;
+  offsides: number;
+  yellowCards: number;
+  redCards: number;
+  possession: number;
+}
+
+export interface PlayerPerformance {
+  playerId: string;
+  name: string;
+  position: PlayerPosition;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  missedPenalties: number;
+  savedPenalties: number;
+  healthStatus: HealthStatus;
+  injuryDays?: number;
+  fatigue: number;
+  rating?: number;
+}
+
+export interface MatchSummaryEvent {
+  minute: number;
+  type: MatchEventType;
+  playerName: string;
+  assistantName?: string;
+  teamSide: 'HOME' | 'AWAY';
+  scoreAtMoment?: string;
+  varDisallowed?: boolean;
+  isOwnGoal?: boolean;
+  ownGoalPlayerName?: string;
+}
+
+export interface MatchSummary {
+  matchId: string;
+  userTeamId: string;
+  homeClub: Club;
+  awayClub: Club;
+  homeScore: number;
+  awayScore: number;
+  homeGoals: GoalTickerInfo[];
+  awayGoals: GoalTickerInfo[];
+  homeStats: MatchSummaryTeamStats;
+  awayStats: MatchSummaryTeamStats;
+  homePlayers: PlayerPerformance[];
+  awayPlayers: PlayerPerformance[];
+  timeline: MatchSummaryEvent[];
+  attendance?: number;
+  kits?: {
+    home: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+    away: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+  };
+  // KO Info
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+}
+
+export interface MatchResult {
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+  homeColors: string[];
+  awayColors: string[];
+  // KO Result
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  matchId?: string;
+}
+export interface MatchGoalEntry {
+  playerId?: string;
+  playerName: string;
+  minute: number;
+  teamId: string;
+  isPenalty: boolean;
+  assistantId?: string;
+  assistantName?: string;
+  varDisallowed?: boolean;
+  isMiss?: boolean;
+  isOwnGoal?: boolean;
+  ownGoalPlayerId?: string;
+  ownGoalPlayerName?: string;
+}
+
+export interface MatchCardEntry {
+  playerId?: string;
+  playerName: string;
+  minute: number;
+  teamId: string;
+  type: 'YELLOW' | 'RED' | 'SECOND_YELLOW';
+}
+
+export interface MatchSubstitutionEntry {
+  playerOutId?: string;
+  playerOutName: string;
+  playerInId?: string;
+  playerInName: string;
+  minute: number;
+  teamId: string;
+}
+
+export interface MatchInjuryEntry {
+  playerId?: string;
+  playerName: string;
+  minute: number;
+  teamId: string;
+  severity: InjurySeverity;
+  days: number;
+  type: string;
+}
+
+export interface MatchHistoryEntry {
+  matchId: string;
+  date: string;
+  season: number; 
+  /** Starszy raport zachowany wyłącznie jako lekki wynik historyczny. */
+  archived?: boolean;
+  competition: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number;
+  awayScore: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  attendance?: number;
+  venue?: string;
+  weather?: WeatherSnapshot;
+  addedTime?: number;
+  goals: MatchGoalEntry[];
+  cards: MatchCardEntry[];
+  substitutions?: MatchSubstitutionEntry[];
+  injuries?: MatchInjuryEntry[];
+  timeline?: MatchEvent[];
+  refereeName?: string;
+  homeLineup?: string[];
+  awayLineup?: string[];
+  ratings?: Record<string, number>;
+  emergencyPlayers?: Player[];
+  // Historia przechowuje start i final osobno, zeby scouting AI analizowal faktyczne otwarcie meczu.
+  homeStartingTacticId?: string;
+  awayStartingTacticId?: string;
+  // Zapamietany typ AI z przedmeczowego zgadywania taktyki gracza.
+  aiTacticGuessId?: string;
+  homeTacticId?: string;
+  awayTacticId?: string;
+  kits?: {
+    home: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+    away: {
+      primary: string;
+      shirtSecondary?: string;
+      secondary: string;
+      pattern?: ClubKitPattern;
+      text: string;
+    };
+  };
+}
+export interface LeagueRoundResults {
+  dateKey: string;
+  league1Results: MatchResult[];
+  league2Results: MatchResult[];
+  league3Results: MatchResult[];
+}
+
+/**
+ * Wynik pojedynczego meczu reprezentacji po symulacji w tle.
+ * Przechowywany w GameContext.lastNTMatchResults i wyświetlany w NationalTeamResultsView.
+ */
+export interface NTMatchResult {
+  /** Nazwa drużyny gospodarza (zgodna z NationalTeamSchedule.ts). */
+  home: string;
+  /** Nazwa drużyny gościa (zgodna z NationalTeamSchedule.ts). */
+  away: string;
+  /** Gole strzelone przez gospodarza. */
+  homeGoals: number;
+  /** Gole strzelone przez gościa. */
+  awayGoals: number;
+  /** Etykieta rozgrywek wyświetlana graczowi, np. "Kwalifikacje MŚ 2026 – Gr. A". */
+  competitionLabel: string;
+  /** Etykieta grupy (np. 'A', 'G'). Opcjonalna — używana do filtrowania wyników w widoku. */
+  group?: string;
+  /** Trwale identyfikowalny identyfikator meczu. */
+  matchId?: string;
+  /** Id gospodarza i goscia w modelu NationalTeam. */
+  homeTeamId?: string;
+  awayTeamId?: string;
+  /** Stadion i warunki meczu. */
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  addedTime?: number;
+  /** Szczegolowa historia meczu. */
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  substitutions?: MatchSubstitutionEntry[];
+  injuries?: MatchInjuryEntry[];
+  timeline?: MatchEvent[];
+  refereeName?: string;
+  kits?: MatchHistoryEntry['kits'];
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  penaltyWinner?: string;
+}
+
+export type NationsLeagueTier = 'A' | 'B' | 'C' | 'D';
+export type NationsLeagueStage = 'LEAGUE_PHASE' | 'QUARTER_FINALS' | 'PLAYOFFS' | 'FINALS' | 'COMPLETE';
+export type NationsLeaguePlayoffLevel = 'AB' | 'BC' | 'CD';
+
+export interface NationsLeagueTeamStanding {
+  teamName: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface NationsLeagueGroup {
+  id: string;
+  tier: NationsLeagueTier;
+  teams: string[];
+  standings: NationsLeagueTeamStanding[];
+}
+
+export interface NationsLeagueFixture {
+  id: string;
+  stage: NationsLeagueStage;
+  round: number;
+  day: number;
+  month: number;
+  home: string;
+  away: string;
+  groupId?: string;
+  tier?: NationsLeagueTier;
+  playoffTieId?: string;
+  playoffLevel?: NationsLeaguePlayoffLevel;
+  played?: boolean;
+  matchId?: string;
+  homeGoals?: number;
+  awayGoals?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+}
+
+export interface NationsLeaguePlayoffTie {
+  id: string;
+  level: NationsLeaguePlayoffLevel;
+  highLeagueTeam: string;
+  lowLeagueTeam: string;
+  firstLegId: string;
+  secondLegId: string;
+  winner?: string;
+  loser?: string;
+}
+
+export interface NationsLeagueFinalsState {
+  semiFinalists: string[];
+  finalists: string[];
+  thirdPlaceTeams: string[];
+  champion?: string;
+  runnerUp?: string;
+  thirdPlace?: string;
+  fourthPlace?: string;
+}
+
+export interface NationsLeagueState {
+  editionStartYear: number;
+  editionLabel: string;
+  stage: NationsLeagueStage;
+  groups: NationsLeagueGroup[];
+  fixtures: NationsLeagueFixture[];
+  playoffs: NationsLeaguePlayoffTie[];
+  quarterFinalists: string[];
+  semiFinalists: string[];
+  finals: NationsLeagueFinalsState | null;
+  completed: boolean;
+  lastUpdatedIso?: string;
+}
+
+export interface NationsLeagueArchiveEntry extends NationsLeagueState {}
+
+export interface EuroHostAnnouncement {
+  tournamentYear: number;
+  hosts: string[];
+  announcedIso: string;
+}
+
+export type EuroQualifiersStage = 'GROUP_STAGE' | 'PLAYOFFS' | 'COMPLETE';
+
+export interface EuroQualifiersTeamStanding {
+  teamName: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface EuroQualifiersGroup {
+  id: string;
+  teams: string[];
+  hostTeams: string[];
+  standings: EuroQualifiersTeamStanding[];
+}
+
+export interface EuroQualifiersFixture {
+  id: string;
+  year: number;
+  day: number;
+  month: number;
+  round: number;
+  home: string;
+  away: string;
+  groupId: string;
+  stage?: EuroQualifiersStage;
+  playoffPathId?: string;
+  played?: boolean;
+  matchId?: string;
+  homeGoals?: number;
+  awayGoals?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
+  isExtraTime?: boolean;
+  winner?: string;
+  loser?: string;
+}
+
+export interface EuroQualifiersPlayoffPath {
+  id: string;
+  label: string;
+  mode: 'PATH' | 'TIE';
+  teams: string[];
+  semiFinalFixtureIds: string[];
+  tieFixtureIds?: string[];
+  finalFixtureId?: string;
+  winner?: string;
+}
+
+export interface EuroQualifiersState {
+  tournamentYear: number;
+  editionLabel: string;
+  stage: EuroQualifiersStage;
+  drawCompleted: boolean;
+  groups: EuroQualifiersGroup[];
+  fixtures: EuroQualifiersFixture[];
+  playoffPaths: EuroQualifiersPlayoffPath[];
+  hostTeams: string[];
+  qualifiedTeams: string[];
+  directQualifiers: string[];
+  hostReservedQualifiers: string[];
+  playoffTeams: string[];
+  completed: boolean;
+  lastUpdatedIso?: string;
+}
+
+// World Cup qualifiers intentionally reuse the same table/fixture/playoff shapes
+// as the EURO qualifiers. The two competitions have different qualification rules
+// and different tournament hosts, but the UI, save-game normalization and match-day
+// simulation all benefit from a shared data contract: groups contain standings,
+// fixtures become NTMatchDay entries, and playoff paths are resolved from simulated
+// national-team match reports. Keeping this as a named alias makes future expansion
+// possible without forcing every consumer to know that the first implementation is
+// powered by the EURO-style scheduling engine.
+export type WorldCupQualifiersStage = EuroQualifiersStage;
+export type WorldCupQualifiersTeamStanding = EuroQualifiersTeamStanding;
+export type WorldCupQualifiersGroup = EuroQualifiersGroup;
+export type WorldCupQualifiersFixture = EuroQualifiersFixture;
+export type WorldCupQualifiersPlayoffPath = EuroQualifiersPlayoffPath;
+
+export interface WorldCupQualifiersState extends EuroQualifiersState {
+  editionLabel: string;
+}
+
+export interface UefaNationalRankingEntry {
+  teamName: string;
+  points: number;
+  rank: number;
+  previousRank?: number;
+  leagueTier?: NationsLeagueTier;
+  lastDelta?: number;
+  rankingBasis?: 'ACCESS_LIST' | 'LEAGUE_PHASE' | 'FINAL';
+  groupPosition?: number;
+  played?: number;
+  wins?: number;
+  draws?: number;
+  losses?: number;
+  goalsFor?: number;
+  goalsAgainst?: number;
+  goalDifference?: number;
+}
+
+export interface UefaNationalRankingState {
+  entries: UefaNationalRankingEntry[];
+  source: string;
+  lastUpdatedIso?: string;
+}
+
+export interface CalendarSlot {
+  id: string;
+  start: Date;
+  end: Date;
+  slotType: SlotType;
+  competition: CompetitionType;
+  label: string;
+  priority: number;
+  metadata?: any;
+}
+
+export interface SeasonTemplate {
+  seasonStartYear: number;
+  careerStartDate: Date;
+  slots: CalendarSlot[];
+}
+
+export interface Matchday {
+  roundNumber: number;
+  start: Date;
+  end: Date;
+  slotType: SlotType;
+  fixtures: Fixture[];
+}
+
+export interface LeagueSchedule {
+  seasonStartYear: number;
+  leagueTier: number;
+  matchdays: Matchday[];
+}
+
+export interface PlayerNextEvent {
+  startDate: Date;
+  endDate: Date;
+  kind: EventKind;
+  label: string;
+  competition?: CompetitionType;
+  opponentClubId?: string;
+  isHome?: boolean;
+}
+
+export interface Referee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  strictness: number;
+  consistency: number;
+  advantageTendency: number;
+  matchRatings: number[];
+  totalYellowCardsShown: number;
+  totalRedCardsShown: number;
+  experience: number; // DOŚWIADCZENIE SĘDZIEGO
+  isInternational: boolean; // Arbiter FIFA/UEFA — może prowadzić mecze międzynarodowe
+}
+
+export interface WeatherSnapshot {
+  tempC: number;
+  precipitationChance: number;
+  windKmh: number;
+  description: string;
+  weatherIntensity?: number; // 0.0 = brak wpływu, 1.0 = ekstremalne warunki
+}
+
+export interface OddsSnapshot {
+  homeWin: string;
+  draw: string;
+  awayWin: string;
+}
+
+export interface PreMatchContext {
+  competitionType: CompetitionType;
+  importanceTier: number;
+  tableGap: number;
+  seasonPhase: 'START' | 'MID' | 'END';
+  homeForm: string;
+  awayForm: string;
+  underdogFlag: boolean;
+  injuryCountHome: number;
+  injuryCountAway: number;
+  rivalryTier?: 'NONE' | 'RIVAL' | 'DERBY' | 'CLASSIC';
+  rivalryLabel?: string | null;
+}
+
+export interface StudioLine {
+  speaker: string;
+  category: CommentaryCategory;
+  text: string;
+}
+
+export interface PreMatchStudioData {
+  fixture: Fixture;
+  homeClub: Club;
+  awayClub: Club;
+  homeLineup: Lineup;
+  awayLineup: Lineup;
+  homePlayers: Player[];
+  awayPlayers: Player[];
+  weather: WeatherSnapshot;
+  referee: Referee;
+  odds: OddsSnapshot | null;
+  studioTranscript: StudioLine[];
+}
+
+export interface MatchContext {
+  fixture: Fixture;
+  homeClub: Club;
+  awayClub: Club;
+  homePlayers: Player[];
+  awayPlayers: Player[];
+  homeCoach?: Coach | null;
+  awayCoach?: Coach | null;
+  homeAdvantage: boolean;
+  competition: CompetitionType;
+}
+
+export interface StatRow {
+  player: Player;
+  club: Club;
+}
+
+export interface ManagerExpEntry {
+  id: string;
+  sourceKey: string;
+  date: string;
+  season: number;
+  delta: number;
+  totalAfter: number;
+  competition: string;
+  label: string;
+}
+
+export interface ManagerCareerSeason {
+  id: string;
+  seasonLabel: string;
+  clubId: string;
+  clubName: string;
+  finalRank?: number;
+  points?: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export interface ManagerAchievement {
+  id: string;
+  seasonLabel: string;
+  title: string;
+  competition: string;
+}
+
+export interface ManagerProfile {
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: string;
+  nationalityFlag: string;
+  expPoints: number;
+  experience: number;
+  expHistory: ManagerExpEntry[];
+  careerHistory: ManagerCareerSeason[];
+  achievements: ManagerAchievement[];
+}
+
+export type ManagerEmploymentStatus = 'EMPLOYED' | 'RESIGNED' | 'FIRED';
+
+export type ManagerJobOfferStatus = 'OPEN' | 'APPLIED' | 'REJECTED' | 'OFFERED' | 'ACCEPTED' | 'EXPIRED';
+export type ManagerJobOfferSource = 'VACANCY' | 'APPLICATION' | 'CLUB_OFFER';
+
+export interface ManagerJobOffer {
+  id: string;
+  clubId: string;
+  createdAt: string;
+  expiresAt: string;
+  season: number;
+  status: ManagerJobOfferStatus;
+  source: ManagerJobOfferSource;
+  requiredExp: number;
+  chance: number;
+  reason: string;
+  response?: string;
+}
+
+export interface ManagerJobApplicationResult {
+  ok: boolean;
+  offer?: ManagerJobOffer;
+  message: string;
+}
+
+export interface TrainingCycle {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  primaryAttributes: (keyof PlayerAttributes)[];
+  secondaryAttributes: (keyof PlayerAttributes)[];
+  fatigueRisk: number; // 0.0 - 1.0
+  recoveryBonus?: number; // 0.0 - 1.0
+}
+
+export enum TrainingIntensity {
+  LIGHT = 'LIGHT',
+  NORMAL = 'NORMAL',
+  HEAVY = 'HEAVY'
+}
+
+// ── MISTRZOSTWA ŚWIATA — typy ─────────────────────────────────────────────────
+
+export type WCConfederation = 'UEFA' | 'CAF' | 'AFC' | 'CONMEBOL' | 'CONCACAF' | 'OFC' | 'INTERCONT';
+
+export type WCKnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | 'THIRD' | 'FINAL';
+
+export interface WCTeam {
+  name: string;
+  confederation: WCConfederation;
+  reputation: number;
+  colors: string[];
+  isHost: boolean;
+  isPlayoffSlot?: boolean;
+}
+
+export interface WCGroupMatch {
+  matchId?: string;
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+  date: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
+}
+
+export interface WCGroup {
+  label: string;
+  teams: string[];
+  matches: WCGroupMatch[];
+}
+
+export interface WCGroupStanding {
+  name: string;
+  M: number;
+  W: number;
+  D: number;
+  L: number;
+  GF: number;
+  GA: number;
+  pts: number;
+}
+
+export interface WCKnockoutMatch {
+  id: string;
+  matchId?: string;
+  round: WCKnockoutRound;
+  home: string | null;
+  away: string | null;
+  homeGoals?: number;
+  awayGoals?: number;
+  homeGoalsAET?: number;
+  awayGoalsAET?: number;
+  homePenalties?: number;
+  awayPenalties?: number;
+  winner?: string;
+  wentToET?: boolean;
+  wentToPenalties?: boolean;
+  date: string;
+  goals?: MatchGoalEntry[];
+  cards?: MatchCardEntry[];
+  venue?: string;
+  attendance?: number;
+  weather?: WeatherSnapshot;
+  refereeName?: string;
+}
+
+export interface WCPlayerEffect {
+  playerId: string;
+  type: 'INJURY' | 'FATIGUE' | 'MORALE_BOOST';
+  value: number;
+}
+
+export interface WCState {
+  year: number;
+  teams: WCTeam[];
+  groups: WCGroup[];
+  knockoutMatches: WCKnockoutMatch[];
+  champion?: string;
+  runnerUp?: string;
+  thirdPlace?: string;
+  fourthPlace?: string;
+  playerEffects: WCPlayerEffect[];
+  groupStageComplete: boolean;
+  knockoutComplete: boolean;
+  drawComplete?: boolean;
+  playoffSlotsResolved?: boolean;
+}

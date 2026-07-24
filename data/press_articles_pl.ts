@@ -20,7 +20,12 @@ export type PressVariant =
   | 'PRZYCHYLNE_SLABY_SZATNIA'
   | 'PRZYCHYLNE_TRUDNY_OKRES'
   | 'TOTALNA_DEMOLKA'
-  | 'TOTALNA_KOMPROMITACJA';
+  | 'TOTALNA_KOMPROMITACJA'
+  | 'VAR_KONTROWERSJE'
+  | 'CZERWONA_KARTKA_KONTROWERSJE'
+  | 'NIEPRZYZNANY_KARNY_KONTROWERSJE'
+  | 'NISKA_OCENA_SEDZIEGO'
+  | 'TRENER_AI_KRYTYKUJE_VAR_PO_ANULOWANEJ_BRAMCE';
 
 export interface PressArticleContext {
   opponentName?: string;
@@ -28,6 +33,12 @@ export interface PressArticleContext {
   latestResultType?: 'WIN' | 'DRAW' | 'LOSS';
   managerFullName?: string;
   seasonPhase?: 'EARLY' | 'MID' | 'LATE';
+  varControversyTeamName?: string;
+  redCardControversyTeamName?: string;
+  penaltyNoCallControversyTeamName?: string;
+  aiVarCriticismTeamName?: string;
+  refereeName?: string;
+  varControversyTeamRole?: 'gospodarzy' | 'gości';
 }
 
 export interface PressArticle {
@@ -157,6 +168,47 @@ export const PRESS_ARTICLES: Record<PressVariant, PressArticle> = {
     body: (m, _c, context) => {
       const managerFullName = context?.managerFullName ?? m;
       return `Drużyna prowadzona przez ${managerFullName} poniosła druzgocącą porażkę, prezentując się zdecydowanie poniżej oczekiwań. Od pierwszych minut rywale przejęli pełną kontrolę nad spotkaniem, bezlitośnie wykorzystywali kolejne błędy i raz za razem trafiali do siatki.\n\nZespół ${m} nie potrafił znaleźć żadnej odpowiedzi na przewagę przeciwnika. Brak organizacji, nieskuteczna gra oraz poważne problemy w defensywie sprawiły, że różnica między drużynami z każdą kolejną minutą stawała się coraz bardziej widoczna.\n\nKońcowy wynik nie pozostawia miejsca na wymówki. To nie była zwykła porażka — to był piłkarski nokaut i totalna kompromitacja drużyny prowadzonej przez ${managerFullName}.`;
+    },
+  },
+  VAR_KONTROWERSJE: {
+    headline: (_m, _c, context) =>
+      `Kontrowersje po meczu z ${context?.opponentName ?? 'rywalem'}. VAR znów w centrum uwagi`,
+    body: (_m, _c, context) => {
+      const teamName = context?.varControversyTeamName ?? 'jedna z drużyn';
+      const teamRole = context?.varControversyTeamRole ?? 'gospodarzy';
+      return `Spotkanie zakończyło się w atmosferze dużych kontrowersji związanych z decyzjami sędziego. Drużyna ${teamName} nie mogła pogodzić się z nieuznaniem zdobytej bramki, mimo że sytuacja została przeanalizowana z wykorzystaniem systemu VAR. Sztab szkoleniowy oraz zawodnicy ${teamRole} otwarcie protestowali przeciwko tej decyzji, podkreślając, że ich zdaniem gol powinien zostać uznany.\n\nCała sytuacja wywołała wiele emocji zarówno na boisku, jak i na trybunach, a decyzja arbitra miała znaczący wpływ na przebieg oraz końcowy wynik spotkania. Kontrowersje związane z pracą zespołu sędziowskiego z pewnością będą jeszcze długo komentowane przez ekspertów i kibiców.`;
+    },
+  },
+  CZERWONA_KARTKA_KONTROWERSJE: {
+    headline: (_m, _c, context) =>
+      `Kontrowersyjna czerwona kartka w meczu z ${context?.opponentName ?? 'rywalem'}`,
+    body: (_m, _c, context) => {
+      const teamName = context?.redCardControversyTeamName ?? 'drużyny rywali';
+      return `Spotkanie zakończyło się w atmosferze dużych emocji po kontrowersyjnej decyzji sędziego o pokazaniu czerwonej kartki zawodnikowi drużyny ${teamName}. Decyzja arbitra znacząco wpłynęła na przebieg meczu, zmuszając zespół do gry w osłabieniu przez znaczną część spotkania.\n\nSztab szkoleniowy oraz piłkarze drużyny ${teamName} nie kryli swojego niezadowolenia z decyzji sędziego, argumentując, że wykluczenie było zbyt surowe. Gra w osłabieniu wyraźnie utrudniła realizację założeń taktycznych, co zostało wykorzystane przez rywali i miało istotny wpływ na końcowy rezultat spotkania.`;
+    },
+  },
+  NIEPRZYZNANY_KARNY_KONTROWERSJE: {
+    headline: (_m, _c, context) =>
+      `Karny, który mógł odmienić losy meczu z ${context?.opponentName ?? 'rywalem'}`,
+    body: (_m, _c, context) => {
+      const teamName = context?.penaltyNoCallControversyTeamName ?? 'drużyny rywali';
+      return `Spotkanie zakończyło się w cieniu kontrowersyjnej decyzji sędziego, który nie podyktował rzutu karnego dla drużyny ${teamName} mimo protestów zawodników i sztabu szkoleniowego. Arbiter przeanalizował całą sytuację z wykorzystaniem systemu VAR, jednak podtrzymał swoją pierwotną decyzję.\n\nNieprzyznanie rzutu karnego wywołało wiele emocji zarówno na boisku, jak i na trybunach. Przedstawiciele drużyny ${teamName} przekonywali, że ich zespół został pozbawiony znakomitej okazji do zdobycia bramki, a decyzja sędziego mogła mieć istotny wpływ na przebieg oraz końcowy rezultat spotkania.`;
+    },
+  },
+  NISKA_OCENA_SEDZIEGO: {
+    headline: (_m, _c, context) =>
+      `Praca arbitra po meczu z ${context?.opponentName ?? 'rywalem'} pod lupą ekspertów`,
+    body: (_m, _c, context) => {
+      const refereeLead = context?.refereeName ? `Sędzia ${context.refereeName}` : 'Arbiter';
+      return `Spotkanie obfitowało w kontrowersje związane z pracą zespołu sędziowskiego. ${refereeLead} przez większą część meczu miał wyraźne problemy z utrzymaniem kontroli nad wydarzeniami na boisku, a jego decyzje wielokrotnie spotykały się z protestami zawodników i sztabów obu drużyn.\n\nZdaniem wielu obserwatorów kilka kluczowych decyzji sędziego miało wpływ na przebieg spotkania, co dodatkowo podgrzało atmosferę rywalizacji. Liczne przerwy, dyskusje z piłkarzami oraz narastające napięcie sprawiły, że praca arbitra stała się jednym z głównych tematów pomeczowych analiz.`;
+    },
+  },
+  TRENER_AI_KRYTYKUJE_VAR_PO_ANULOWANEJ_BRAMCE: {
+    headline: (_m, _c, context) =>
+      `Trener ${context?.aiVarCriticismTeamName ?? 'rywali'} krytykuje VAR po meczu z ${context?.opponentName ?? 'rywalem'}`,
+    body: (_m, _c, context) => {
+      const teamName = context?.aiVarCriticismTeamName ?? 'rywali';
+      return `Po zakończeniu spotkania trener drużyny ${teamName} nie krył rozczarowania pracą zespołu sędziowskiego. Podczas pomeczowej konferencji prasowej otwarcie skrytykował decyzje arbitra, podkreślając, że jego zdaniem miały one znaczący wpływ na przebieg meczu.\n\nSzkoleniowiec zwrócił również uwagę na rolę systemu VAR, stawiając pytanie o zasadność jego wykorzystywania w obecnej formie. Jak zaznaczył, skoro identyczne lub bardzo podobne sytuacje są interpretowane w różny sposób, trudno mówić o zachowaniu pełnej spójności i przewidywalności decyzji. Według trenera technologia powinna pomagać w eliminowaniu błędów, tymczasem wciąż pozostawia wiele miejsca na odmienne interpretacje przepisów.\n\nWypowiedź szkoleniowca wywołała szeroką dyskusję wśród ekspertów i kibiców, po raz kolejny rozpoczynając debatę na temat skuteczności systemu VAR oraz sposobu jego wykorzystywania podczas najważniejszych spotkań.`;
     },
   },
 };

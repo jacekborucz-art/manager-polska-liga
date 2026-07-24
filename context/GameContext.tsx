@@ -5010,7 +5010,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
 
   const submitMysteryAgentOffer = useCallback((contract: MysteryAgentContractOffer): MysteryAgentNegotiationResult => {
     if (!mysteryAgentOffer || !userTeamId) {
-      return { accepted: false, ended: true, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+      return { accepted: false, ended: true, message: 'Nie ma aktywnych rozmów z agentem.' };
     }
 
     const userClub = clubs.find(c => c.id === userTeamId);
@@ -5042,7 +5042,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
 
   const requestMysteryAgentBoardFunds = useCallback((contract: MysteryAgentContractOffer): MysteryAgentBoardRequestResult => {
     if (!mysteryAgentOffer || !userTeamId) {
-      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie ma aktywnych rozmów z agentem.' };
     }
 
     const userClub = clubs.find(c => c.id === userTeamId);
@@ -5173,7 +5173,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
           date: today,
           amount: -totalCost,
           type: 'EXPENSE' as const,
-          description: `Tajemniczy agent: podpis ${signedPlayer.firstName} ${signedPlayer.lastName}`,
+          description: `Propozycja agenta: podpis ${signedPlayer.firstName} ${signedPlayer.lastName}`,
           previousBalance: c.budget,
         },
         ...(c.financeHistory || []),
@@ -5187,7 +5187,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     } : prev);
 
     showGameNotification({
-      title: 'Tajemniczy talent w klubie',
+      title: 'Nowy talent w klubie',
       message: `${signedPlayer.firstName} ${signedPlayer.lastName} pojawił się w klubie i podpisał kontrakt.`,
       tone: 'success',
     });
@@ -10154,7 +10154,7 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber);
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll());
       if (newMails.length > 0) {
         prependUniqueMessages(newMails);
         const sentUnfriendlyPressMonthKeys = newMails

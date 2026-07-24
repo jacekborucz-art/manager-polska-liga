@@ -215,7 +215,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
 
   // Buduje chronologiczną listę zdarzeń dla drużyny (gole + czerwone kartki + niestrzelone karne)
   const buildEvents = (teamId: string) => {
-    const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean; isMiss?: boolean; isInjury?: boolean; injurySeverity?: string }[] = [];
+    const events: { minute: number; icon: string; name: string; extra?: string; varDisallowed?: boolean; isMiss?: boolean; isInjury?: boolean; injurySeverity?: string; isOwnGoal?: boolean }[] = [];
 
     match.goals
       .filter(g => g.teamId === teamId && !g.isMiss)
@@ -223,8 +223,9 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
         minute: g.minute,
         icon: '⚽',
         name: g.playerName,
-        extra: g.isPenalty ? '(k)' : undefined,
-        varDisallowed: g.varDisallowed
+        extra: g.isOwnGoal ? '(sam)' : g.isPenalty ? '(k)' : undefined,
+        varDisallowed: g.varDisallowed,
+        isOwnGoal: g.isOwnGoal
       }));
 
     match.goals
@@ -302,7 +303,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
           }
         </span>
       ) : (
-        <span key={i} className="text-[10px] font-black text-white uppercase italic whitespace-nowrap">
+        <span key={i} className={`text-[10px] font-black ${e.isOwnGoal ? 'text-orange-400' : 'text-white'} uppercase italic whitespace-nowrap`}>
           {align === 'right'
             ? <>{fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''} {e.minute}' {e.icon}</>
             : <>{e.icon} {e.minute}' {fmtName(e.name)}{e.extra ? ` ${e.extra}` : ''}</>
@@ -375,7 +376,7 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
       const playerId = player?.id;
       const rating = playerId ? match.ratings?.[playerId] : undefined;
       const isMOTM = motmId === playerId;
-      const playerGoals = playerId ? match.goals.filter(g => g.playerId === playerId && !g.isMiss) : [];
+      const playerGoals = playerId ? match.goals.filter(g => g.playerId === playerId && !g.isMiss && !g.isOwnGoal) : [];
       const playerVarGoals = playerGoals.filter(g => g.varDisallowed);
       const playerValidGoals = playerGoals.filter(g => !g.varDisallowed);
       const yellowCards = playerId ? match.cards.filter(c => c.playerId === playerId && c.type === 'YELLOW') : [];

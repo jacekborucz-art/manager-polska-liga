@@ -237,7 +237,12 @@ export const adjustBriefingEffectForPressure = (
   const weight = getPressureWeight(profile);
   if (weight <= 0) return effect;
 
-  const emotionalScore = effect.actionMod + effect.goalMod + effect.momentumBonus / 120 - Math.max(0, effect.rivalBoost) * 0.05;
+  const emotionalScore =
+    effect.actionMod +
+    effect.goalMod +
+    effect.momentumBonus / 120 +
+    (effect.userActionSuppression ?? 0) * 1.2 -
+    Math.max(0, effect.rivalBoost) * 0.05;
   const isPositive = emotionalScore >= 0;
   const amp = 1 + weight * (isPositive ? 0.28 : 0.45);
   const fatigueAmp = 1 + weight * (isPositive ? 0.20 : 0.35);
@@ -249,6 +254,22 @@ export const adjustBriefingEffectForPressure = (
     momentumBonus: Math.round(amplifyNumber(effect.momentumBonus, amp, -35, 38)),
     fatigueMult: amplifyDistanceFromOne(effect.fatigueMult, fatigueAmp, 0.86, 1.16),
     rivalBoost: amplifyNumber(effect.rivalBoost, amp, -0.05, 0.90),
+    /**
+     * Pressure can magnify a scouting read, but the value remains tightly capped because
+     * this is subtracted directly from the user's open-play probability later in the engine.
+     */
+    userActionSuppression: effect.userActionSuppression !== undefined
+      ? amplifyNumber(effect.userActionSuppression, amp, 0, 0.024)
+      : undefined,
+    tacticalReadActionMod: effect.tacticalReadActionMod !== undefined
+      ? amplifyNumber(effect.tacticalReadActionMod, amp, 0, 0.026)
+      : undefined,
+    tacticalReadGoalMod: effect.tacticalReadGoalMod !== undefined
+      ? amplifyNumber(effect.tacticalReadGoalMod, amp, 0, 0.013)
+      : undefined,
+    tacticalReadMomentumBonus: effect.tacticalReadMomentumBonus !== undefined
+      ? Math.round(amplifyNumber(effect.tacticalReadMomentumBonus, amp, 0, 13))
+      : undefined,
   };
 };
 

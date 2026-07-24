@@ -2,6 +2,25 @@
 import { Referee, Region } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 
+type LiveRefereeMatchRatingInput = {
+  referee: Referee;
+  homeScore: number;
+  awayScore: number;
+  homeStats: { fouls: number; yellowCards: number; redCards: number };
+  awayStats: { fouls: number; yellowCards: number; redCards: number };
+  timeline?: Array<{ type: string; text?: string; varDisallowed?: boolean }>;
+  seed?: number;
+};
+
+const clampRating = (value: number): number =>
+  Math.max(1, Math.min(10, Math.round(value * 10) / 10));
+
+const stableNoise = (seed: number, refereeId: string): number => {
+  const idHash = refereeId.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const raw = Math.sin((seed + idHash) * 12.9898) * 43758.5453;
+  return raw - Math.floor(raw);
+};
+
 export const RefereeService = {
   pool: [] as Referee[],
 
@@ -327,6 +346,55 @@ export const RefereeService = {
   generateMatchRating: (referee: Referee): number => {
     const maxRating = Math.min(10, 4 + Math.floor(referee.consistency / 15));
     return Math.floor(1 + Math.random() * maxRating);
+  },
+
+  generateLiveMatchRating: (input: LiveRefereeMatchRatingInput): number => {
+    const { referee, homeScore, awayScore, homeStats, awayStats, timeline = [], seed = 0 } = input;
+    const totalFouls = homeStats.fouls + awayStats.fouls;
+    const totalYellows = homeStats.yellowCards + awayStats.yellowCards;
+    const totalReds = homeStats.redCards + awayStats.redCards;
+    const scoreDiff = Math.abs(homeScore - awayScore);
+    const isCloseMatch = scoreDiff <= 1;
+    const varDisallowedGoals = timeline.filter(event =>
+      event.varDisallowed === true &&
+      (event.type === 'GOAL' || event.type === 'PENALTY_SCORED')
+    ).length;
+    const varPenaltyNoCalls = timeline.filter(event =>
+      typeof event.text === 'string' &&
+      event.text.includes('VAR: Nie ma karnego')
+    ).length;
+
+    /*
+     * Live referee ratings are built from match context rather than pure randomness.
+     * Consistency and experience set the baseline, while close-score controversies,
+     * VAR no-calls, dismissed goals, and card/foul balance decide whether the referee
+     * is praised for control or punished for changing the match narrative.
+     */
+    let rating =
+      6.6 +
+      ((referee.consistency - 50) * 0.018) +
+      ((referee.experience - 50) * 0.012);
+
+    const matchDifficulty =
+      Math.min(0.35, totalFouls * 0.006 + totalReds * 0.06 + (isCloseMatch ? 0.08 : 0));
+    rating += matchDifficulty;
+
+    if (totalFouls >= 18 && totalYellows <= 1) rating -= 0.45;
+    if (totalFouls >= 24 && totalYellows <= 2) rating -= 0.35;
+    if (totalFouls <= 10 && totalYellows >= 5) rating -= 0.45;
+    if (totalYellows > totalFouls * 0.55 + 2) rating -= 0.25;
+
+    rating -= totalReds * (isCloseMatch ? 0.22 : 0.12);
+    rating -= varDisallowedGoals * (isCloseMatch ? 0.55 : 0.25);
+    rating -= varPenaltyNoCalls * (isCloseMatch ? 0.65 : 0.30);
+
+    if (varDisallowedGoals === 0 && varPenaltyNoCalls === 0 && totalReds === 0 && totalFouls >= 12) {
+      rating += 0.18;
+    }
+
+    rating += (stableNoise(seed, referee.id) - 0.5) * 0.25;
+
+    return clampRating(rating);
   },
 
   recordMatchStats: (refereeId: string, rating: number, yellowCards: number, redCards: number): void => {

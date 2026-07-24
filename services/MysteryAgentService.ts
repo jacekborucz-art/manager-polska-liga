@@ -251,7 +251,7 @@ export const MysteryAgentService = {
         accepted: false,
         ended: true,
         message: isInsult
-          ? 'Agent uznaje ofertę za obraźliwą i kończy rozmowy. Zawodnik znika z radarów klubu.'
+          ? 'Wasza oferta nie jest poważna. Do widzenia!'
           : 'Trzecia propozycja nie przekonała agenta. Zawodnik trafia do ukrytej puli skautingu.',
         nextOffer: {
           ...offer,

@@ -19,6 +19,22 @@ export interface BriefingEffect {
   expiryMinute: number;
   fatigueMult: number;
   rivalBoost: number;
+  /**
+   * Direct open-play suppression applied against the user team when the opponent has
+   * a tactical read on a repeated plan. This stays optional because most briefing
+   * effects motivate one side only; the match engine only reads it from AI briefing
+   * packages that explicitly punish user predictability.
+   */
+  userActionSuppression?: number;
+  /**
+   * Optional provenance fields for the tactical-read slice of an AI briefing.
+   * They let MatchLiveView weaken only the repeated-tactic scouting effect after
+   * a live user formation change without touching unrelated morale, media, rivalry,
+   * or coach briefing bonuses that were merged into the same final BriefingEffect.
+   */
+  tacticalReadActionMod?: number;
+  tacticalReadGoalMod?: number;
+  tacticalReadMomentumBonus?: number;
   label: string;
   reactionText: string;
   wasSurprise: boolean;

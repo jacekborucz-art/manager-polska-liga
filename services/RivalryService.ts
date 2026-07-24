@@ -144,6 +144,23 @@ export const RivalryService = {
       momentumBonus: Math.round(clamp(effect.momentumBonus * amp, -36, 42)),
       fatigueMult: clamp(1 + (effect.fatigueMult - 1) * fatigueAmp, 0.84, 1.18),
       rivalBoost: clamp(effect.rivalBoost + rivalry.pressureBoost * 2.4, -0.10, 1.00),
+      /**
+       * Rivalry intensity makes repeated tactical habits easier to punish because both
+       * staffs prepare harder and players are more emotionally keyed into known patterns.
+       * The cap is deliberately low: this number is a direct chance-creation drag.
+       */
+      userActionSuppression: effect.userActionSuppression !== undefined
+        ? clamp(effect.userActionSuppression * amp, 0, 0.024)
+        : undefined,
+      tacticalReadActionMod: effect.tacticalReadActionMod !== undefined
+        ? clamp(effect.tacticalReadActionMod * amp, 0, 0.026)
+        : undefined,
+      tacticalReadGoalMod: effect.tacticalReadGoalMod !== undefined
+        ? clamp(effect.tacticalReadGoalMod * amp, 0, 0.013)
+        : undefined,
+      tacticalReadMomentumBonus: effect.tacticalReadMomentumBonus !== undefined
+        ? Math.round(clamp(effect.tacticalReadMomentumBonus * amp, 0, 13))
+        : undefined,
     };
   },
 };

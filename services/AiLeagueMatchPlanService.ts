@@ -8,13 +8,12 @@ import {
 } from './AiOpponentAnalysisService';
 import { AiCoachTacticsService } from './AiCoachTacticsService';
 import { PlayerMoraleService } from './PlayerMoraleService';
+import { getLegacySpreadOffsetSeededValue } from './match/live/LiveMatchRandom';
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
-const seededRng = (seed: number, offset: number): number => {
-  const x = Math.sin(seed + offset * 9973) * 10000;
-  return x - Math.floor(x);
-};
+// Migration bridge: keep plan selection on the existing spread-offset formula during extraction.
+const seededRng = getLegacySpreadOffsetSeededValue;
 
 const getLineupPlayers = (players: Player[], lineup: Lineup): Player[] =>
   lineup.startingXI

@@ -762,6 +762,31 @@ export const PreMatchPressConferenceService = {
       expiryMinute: Math.max(conferenceEffect.expiryMinute, briefingEffect.expiryMinute),
       fatigueMult: clamp(conferenceEffect.fatigueMult * briefingEffect.fatigueMult, 0.84, 1.18),
       rivalBoost: clamp(conferenceEffect.rivalBoost + briefingEffect.rivalBoost, -0.10, 1),
+      /**
+       * Tactical predictability is a one-way penalty against the user's chance creation,
+       * while actionMod/goalMod are side-owned bonuses. Combining it additively keeps the
+       * source effects transparent and lets MatchLiveView clamp the final gameplay impact.
+       */
+      userActionSuppression: clamp(
+        (conferenceEffect.userActionSuppression ?? 0) + (briefingEffect.userActionSuppression ?? 0),
+        0,
+        0.022
+      ),
+      tacticalReadActionMod: clamp(
+        (conferenceEffect.tacticalReadActionMod ?? 0) + (briefingEffect.tacticalReadActionMod ?? 0),
+        0,
+        0.024
+      ),
+      tacticalReadGoalMod: clamp(
+        (conferenceEffect.tacticalReadGoalMod ?? 0) + (briefingEffect.tacticalReadGoalMod ?? 0),
+        0,
+        0.012
+      ),
+      tacticalReadMomentumBonus: clamp(
+        (conferenceEffect.tacticalReadMomentumBonus ?? 0) + (briefingEffect.tacticalReadMomentumBonus ?? 0),
+        0,
+        12
+      ),
       label: `${conferenceEffect.label} + ${briefingEffect.label}`,
       reactionText: briefingEffect.reactionText,
       wasSurprise: briefingEffect.wasSurprise,

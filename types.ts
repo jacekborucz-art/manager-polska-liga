@@ -2142,6 +2142,9 @@ export interface GoalTickerInfo {
   varDisallowed?: boolean;
   assistantName?: string;
   assistantId?: string;
+  isOwnGoal?: boolean;
+  ownGoalPlayerId?: string;
+  ownGoalPlayerName?: string;
 }
 export type InstructionTempo = 'SLOW' | 'NORMAL' | 'FAST';
 export type InstructionMindset = 'DEFENSIVE' | 'NEUTRAL' | 'OFFENSIVE';
@@ -2368,6 +2371,10 @@ isPenalties?: boolean;
     expiryMinute: number;
     fatigueMult: number;
     rivalBoost: number;
+    userActionSuppression?: number;
+    tacticalReadActionMod?: number;
+    tacticalReadGoalMod?: number;
+    tacticalReadMomentumBonus?: number;
     label: string;
   };
   aiPreMatchMotivation?: {
@@ -2377,6 +2384,10 @@ isPenalties?: boolean;
     expiryMinute: number;
     fatigueMult: number;
     rivalBoost: number;
+    userActionSuppression?: number;
+    tacticalReadActionMod?: number;
+    tacticalReadGoalMod?: number;
+    tacticalReadMomentumBonus?: number;
     label: string;
   };
   aiCupMatchPlan?: AiCupMatchPlan;
@@ -2416,8 +2427,11 @@ export interface MatchSummaryEvent {
   playerName: string;
   assistantName?: string;
   teamSide: 'HOME' | 'AWAY';
+  text?: string;
   scoreAtMoment?: string;
   varDisallowed?: boolean;
+  isOwnGoal?: boolean;
+  ownGoalPlayerName?: string;
 }
 
 export interface MatchSummary {
@@ -2434,6 +2448,9 @@ export interface MatchSummary {
   homePlayers: PlayerPerformance[];
   awayPlayers: PlayerPerformance[];
   timeline: MatchSummaryEvent[];
+  refereeId?: string;
+  refereeName?: string;
+  refereeRating?: number;
   attendance?: number;
   kits?: {
     home: {
@@ -2480,6 +2497,9 @@ export interface MatchGoalEntry {
   assistantName?: string;
   varDisallowed?: boolean;
   isMiss?: boolean;
+  isOwnGoal?: boolean;
+  ownGoalPlayerId?: string;
+  ownGoalPlayerName?: string;
 }
 
 export interface MatchCardEntry {
@@ -2531,8 +2551,10 @@ export interface MatchHistoryEntry {
   cards: MatchCardEntry[];
   substitutions?: MatchSubstitutionEntry[];
   injuries?: MatchInjuryEntry[];
-  timeline?: MatchEvent[];
+  timeline?: Array<MatchEvent | MatchSummaryEvent>;
+  refereeId?: string;
   refereeName?: string;
+  refereeRating?: number;
   homeLineup?: string[];
   awayLineup?: string[];
   ratings?: Record<string, number>;

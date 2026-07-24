@@ -36,15 +36,19 @@ const getPlayerPenaltyImpact = (player: Player, side: 'HOME' | 'AWAY', state: an
 const calculateLiveRatingNumber = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   let r = 6.0;
   const goals = (side === 'HOME' ? state.homeGoals : state.awayGoals)
-    .filter((g: any) => (g.scorerId ? g.scorerId === player.id : g.playerName === player.lastName) && !g.varDisallowed && !g.isMiss)
+    .filter((g: any) => !g.isOwnGoal && (g.scorerId ? g.scorerId === player.id : g.playerName === player.lastName) && !g.varDisallowed && !g.isMiss)
     .length;
-  const assists = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => g.assistantId === player.id).length;
+  const assists = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => !g.isOwnGoal && g.assistantId === player.id).length;
+  const ownGoalsAgainst = (side === 'HOME' ? state.awayGoals : state.homeGoals)
+    .filter((g: any) => g.isOwnGoal && !g.varDisallowed && !g.isMiss && (g.ownGoalPlayerId ? g.ownGoalPlayerId === player.id : g.ownGoalPlayerName === player.lastName || g.playerName === player.lastName))
+    .length;
   const penaltyImpact = getPlayerPenaltyImpact(player, side, state);
   const cards = state.playerYellowCards[player.id] || 0;
   const isRed = state.sentOffIds.includes(player.id);
   
   r += goals * 1.5;
   r += assists * 0.8;
+  r -= ownGoalsAgainst * 1.35;
   r -= penaltyImpact.missed * 0.8;
   r += penaltyImpact.saved * 1.2;
   r -= cards * 0.5;
@@ -65,7 +69,7 @@ const calculateLiveRatingNumber = (player: Player, side: 'HOME' | 'AWAY', state:
   // Bonus dla MID za bramki drużyny. Ma premiować udział formacji w kontroli meczu,
   // ale nie robić automatycznych dziesiątek każdemu pomocnikowi przy wysokim wyniku.
   if (player.position === 'MID') {
-    const teamGoals = (side === 'HOME' ? state.homeGoals : state.awayGoals).length;
+    const teamGoals = (side === 'HOME' ? state.homeGoals : state.awayGoals).filter((g: any) => !g.varDisallowed && !g.isMiss).length;
     const playerSeed = player.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const midFactor = 0.18 + (playerSeed % 13) / 100;
     r += Math.min(0.95, teamGoals * midFactor);
@@ -146,6 +150,43 @@ import {
   getPressureProfileForSide,
 } from '../../services/MatchPressureService';
 import { detectLeagueMotivationContext } from '../../services/LeagueMotivationContextService';
+import {
+  createRuntimeSessionSeed,
+  getLegacyMinuteSeededValue,
+  getLegacyOffsetSeededValue,
+} from '../../services/match/live/LiveMatchRandom';
+import { buildLiveMatchTeamProfile } from '../../services/match/live/LiveMatchTeamProfile';
+import { calculateLiveMatchInitiative } from '../../services/match/live/LiveMatchInitiative';
+import { calculateLiveMatchFatigueImpact } from '../../services/match/live/LiveMatchFatigue';
+import {
+  adjustLiveShotThresholdForRainTechnique,
+  calculateLiveDefendingBiasShotPenalty,
+  calculateLiveIndividualFatigueShotImpact,
+  calculateLiveMoraleShotMultiplier,
+  calculateLiveNoGoalkeeperShotBonus,
+  calculateLiveRelativeFreshnessShotSwing,
+  calculateLiveShotSatiety,
+  calculateLiveTopStrikerShotBonus,
+  getLiveEmergencyKeeperRead,
+  getLiveLineupAttributeAverage,
+} from '../../services/match/live/LiveMatchShotPressure';
+import { calculateLiveUserPhysicalActionSuppression } from '../../services/match/live/LiveMatchUserPhysicalAction';
+import { resolveLiveOwnGoal } from '../../services/match/live/LiveMatchOwnGoal';
+import {
+  isLiveShotOnTargetEvent,
+  resolveLiveMissedShotOutcome,
+  shouldAttemptLiveOpenPlayShot,
+} from '../../services/match/live/LiveMatchOutcome';
+import {
+  calculateLiveFoulThreshold,
+  calculateLivePenaltyIncidentChance,
+  calculateLivePenaltyVarOverturnChance,
+  chooseLivePenaltyReviewReason,
+  resolveLiveHandballBaseCard,
+  resolveLivePenaltyReviewCard,
+  resolveLivePenaltyReviewVerdict,
+  shouldTriggerLiveFoul,
+} from '../../services/match/live/LiveMatchDiscipline';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -217,11 +258,8 @@ const PitchBroadcastOverlay = ({
 };
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-// Deterministyczny roll z seeda meczu, zeby losowania AI byly powtarzalne w ramach tej samej symulacji.
-const seededValue = (seed: number, offset: number = 0) => {
-  const x = Math.sin(seed + offset) * 10000;
-  return x - Math.floor(x);
-};
+// Migration bridge: keep the old helper name while moving the exact legacy formula into a shared module.
+const seededValue = getLegacyOffsetSeededValue;
 
 const AI_MENTALITY_SURGE_MAX = 0.055;
 
@@ -470,12 +508,13 @@ const getAiUserPatternBriefingEffect = (
     expiryMinute: 0,
     fatigueMult: 1,
     rivalBoost: 0,
+    userActionSuppression: 0,
     label: 'BRAK ROZPOZNANEGO WZORCA',
     reactionText: '',
     wasSurprise: false,
   });
 
-  if (!opponentReport || opponentReport.confidence < 0.42) {
+  if (!opponentReport || opponentReport.confidence < 0.30) {
     return neutralPatternEffect();
   }
 
@@ -483,38 +522,120 @@ const getAiUserPatternBriefingEffect = (
     const tactic = TacticRepository.getById(tacticId);
     return `${tactic.category}_${tactic.attackBias >= 68 ? 'ATT' : tactic.defenseBias >= 72 ? 'DEF' : 'BAL'}_${tactic.pressingIntensity >= 70 ? 'PRESS' : 'NORMAL'}`;
   };
+  const tacticProfileDistance = (leftTacticId: string, rightTacticId: string): number => {
+    const left = TacticRepository.getById(leftTacticId);
+    const right = TacticRepository.getById(rightTacticId);
+    const attackDistance = Math.abs(left.attackBias - right.attackBias) / 100;
+    const defenseDistance = Math.abs(left.defenseBias - right.defenseBias) / 100;
+    const pressingDistance = Math.abs(left.pressingIntensity - right.pressingIntensity) / 100;
+    const categoryDistance = left.category === right.category ? 0 : 0.28;
+
+    return clampNumber(
+      attackDistance * 0.32 + defenseDistance * 0.28 + pressingDistance * 0.26 + categoryDistance,
+      0,
+      1
+    );
+  };
   const currentStyleKey = tacticStyleKey(currentUserTacticId);
   const predictedStyleKey = tacticStyleKey(opponentReport.predictedTacticId);
   const reportAlignment = opponentReport.predictedTacticId === currentUserTacticId
     ? 1
     : predictedStyleKey === currentStyleKey
       ? 0.72
-      : 0;
+      : clampNumber(1 - tacticProfileDistance(opponentReport.predictedTacticId, currentUserTacticId), 0, 0.42);
 
-  if (reportAlignment <= 0) {
+  type UserTacticHistorySnapshot = {
+    startingTacticId: string;
+    finalTacticId?: string;
+    styleKey: string;
+    finalStyleKey?: string;
+  };
+  const recent: UserTacticHistorySnapshot[] = MatchHistoryService.getTeamHistory(userTeamId)
+    .map(entry => {
+      const startingTacticId = entry.homeTeamId === userTeamId
+        ? (entry.homeStartingTacticId ?? entry.homeTacticId)
+        : (entry.awayStartingTacticId ?? entry.awayTacticId);
+      const finalTacticId = entry.homeTeamId === userTeamId
+        ? entry.homeTacticId
+        : entry.awayTacticId;
+
+      if (!startingTacticId) return null;
+
+      return {
+        startingTacticId,
+        finalTacticId,
+        styleKey: tacticStyleKey(startingTacticId),
+        finalStyleKey: finalTacticId ? tacticStyleKey(finalTacticId) : undefined,
+      };
+    })
+    .filter((snapshot): snapshot is UserTacticHistorySnapshot => !!snapshot);
+
+  if (recent.length < 1) {
     return neutralPatternEffect();
   }
 
-  // AI sprawdza startowe taktyki z historii; zmiany w trakcie meczu nie powinny kasowac kary za powtarzalny plan startowy.
-  const recent = MatchHistoryService.getTeamHistory(userTeamId)
-    .map(entry => entry.homeTeamId === userTeamId
-      ? (entry.homeStartingTacticId ?? entry.homeTacticId)
-      : (entry.awayStartingTacticId ?? entry.awayTacticId)
-    )
-    .filter((tacticId): tacticId is string => !!tacticId);
-
-  if (recent.length < 4) {
-    return neutralPatternEffect();
-  }
-
-  // Bonus odpala dopiero przy piatym starcie tym samym ustawieniem: wymagamy 4 poprzednich meczow z rzedu.
+  /**
+   * AI tactical pattern read
+   *
+   * What this calculation does:
+   * It converts the user's recent match history into one predictability score instead of waiting for
+   * a single hard "five matches with the same tactic" threshold. Exact repeated tactic IDs matter most,
+   * but the model also watches repeated tactical families, repeated final shapes, and close tactical
+   * profiles. This prevents the exploit where the user can keep the same football idea while making only
+   * tiny formation changes to avoid the scouting penalty.
+   *
+   * Why the effect starts early:
+   * The second consecutive match with the same starting plan should already give a prepared AI coach a
+   * light read. The third and fourth matches become progressively easier to counter. The formula is still
+   * bounded, because forcing the player to rotate tactics every match would be artificial and less fun.
+   *
+   * How the score is used:
+   * The result feeds two different levers. AI receives more chance creation, finishing fit, and early
+   * momentum through the existing briefing fields. The user receives a separate direct action suppression
+   * so the engine finally models both sides of the design: "AI gets more chances, player gets fewer".
+   */
   let sameTacticStartStreak = 0;
+  let sameStyleStartStreak = 0;
   for (let idx = recent.length - 1; idx >= 0; idx--) {
-    if (recent[idx] !== currentUserTacticId) break;
-    sameTacticStartStreak++;
+    if (recent[idx].startingTacticId === currentUserTacticId) {
+      sameTacticStartStreak++;
+      continue;
+    }
+    break;
+  }
+  for (let idx = recent.length - 1; idx >= 0; idx--) {
+    if (recent[idx].styleKey === currentStyleKey) {
+      sameStyleStartStreak++;
+      continue;
+    }
+    break;
   }
 
-  if (sameTacticStartStreak < 4) {
+  const sample = recent.slice(-6);
+  const recentExactRatio = sample.filter(snapshot => snapshot.startingTacticId === currentUserTacticId).length / sample.length;
+  const recentStyleRatio = sample.filter(snapshot => snapshot.styleKey === currentStyleKey).length / sample.length;
+  const finalEchoRatio = sample.filter(snapshot =>
+    snapshot.finalTacticId === currentUserTacticId || snapshot.finalStyleKey === currentStyleKey
+  ).length / sample.length;
+  const closeProfileRatio = sample.filter(snapshot =>
+    snapshot.startingTacticId === currentUserTacticId || tacticProfileDistance(snapshot.startingTacticId, currentUserTacticId) <= 0.22
+  ).length / sample.length;
+
+  const consecutiveScore = clampNumber(sameTacticStartStreak / 4, 0, 1);
+  const styleStreakScore = clampNumber(sameStyleStartStreak / 5, 0, 1);
+  const historyDepthConfidence = clampNumber(sample.length / 4, 0.45, 1);
+  const rawPredictabilityScore = clampNumber(
+    consecutiveScore * 0.38 +
+    styleStreakScore * 0.20 +
+    recentExactRatio * 0.16 +
+    recentStyleRatio * 0.12 +
+    finalEchoRatio * 0.08 +
+    closeProfileRatio * 0.06,
+    0,
+    1
+  ) * historyDepthConfidence;
+
+  if (rawPredictabilityScore < 0.18 || reportAlignment < 0.22) {
     return neutralPatternEffect();
   }
 
@@ -525,17 +646,28 @@ const getAiUserPatternBriefingEffect = (
     0.35,
     0.95
   );
-  const reportRead = clampNumber(opponentReport.confidence * (0.62 + reportAlignment * 0.38), 0.28, 0.95);
-  const streakPressure = clampNumber(0.54 + (sameTacticStartStreak - 4) * 0.10, 0.54, 0.88);
-  const strength = clampNumber(streakPressure * coachRead * reportRead, 0, 0.78);
+  const reportRead = clampNumber(opponentReport.confidence * (0.54 + reportAlignment * 0.46), 0.24, 0.96);
+  const repeatAcceleration =
+    sameTacticStartStreak >= 4 ? 1.18 :
+    sameTacticStartStreak >= 3 ? 1.08 :
+    sameTacticStartStreak >= 2 ? 1.00 :
+    0.82;
+  const strength = clampNumber(rawPredictabilityScore * coachRead * reportRead * repeatAcceleration, 0, 0.82);
+  const actionMod = clampNumber(strength * 0.032, 0, 0.024);
+  const goalMod = clampNumber(strength * 0.016, 0, 0.012);
+  const momentumBonus = Math.round(strength * 12);
 
   return {
-    actionMod: clampNumber(strength * 0.024, 0, 0.020),
-    goalMod: clampNumber(strength * 0.014, 0, 0.011),
-    momentumBonus: Math.round(strength * 10),
-    expiryMinute: strength >= 0.48 ? 45 : 30,
+    actionMod,
+    goalMod,
+    momentumBonus,
+    expiryMinute: strength >= 0.54 ? 60 : strength >= 0.34 ? 45 : 30,
     fatigueMult: 1,
     rivalBoost: 0,
+    userActionSuppression: clampNumber(strength * 0.024, 0, 0.016),
+    tacticalReadActionMod: actionMod,
+    tacticalReadGoalMod: goalMod,
+    tacticalReadMomentumBonus: momentumBonus,
     label: 'ROZCZYTANY SCHEMAT GRACZA',
     reactionText: '',
     wasSurprise: false,
@@ -591,6 +723,55 @@ const getAiRandomTacticGuessBriefingEffect = (
       wasSurprise: false,
     },
   };
+};
+
+const getAiPatternReadLiveTacticMultiplier = (
+  effect: Pick<BriefingEffect, 'userActionSuppression' | 'tacticalReadActionMod' | 'tacticalReadGoalMod' | 'tacticalReadMomentumBonus'> | null,
+  startingUserTacticId: string | undefined,
+  currentUserTacticId: string | undefined
+): number => {
+  if (!effect || !startingUserTacticId || !currentUserTacticId || startingUserTacticId === currentUserTacticId) {
+    return 1;
+  }
+
+  const hasTacticalRead =
+    (effect.userActionSuppression ?? 0) > 0 ||
+    (effect.tacticalReadActionMod ?? 0) > 0 ||
+    (effect.tacticalReadGoalMod ?? 0) > 0 ||
+    (effect.tacticalReadMomentumBonus ?? 0) > 0;
+
+  if (!hasTacticalRead) {
+    return 1;
+  }
+
+  const startingTactic = TacticRepository.getById(startingUserTacticId);
+  const currentTactic = TacticRepository.getById(currentUserTacticId);
+  const sameCategory = startingTactic.category === currentTactic.category;
+  const attackDistance = Math.abs(startingTactic.attackBias - currentTactic.attackBias) / 100;
+  const defenseDistance = Math.abs(startingTactic.defenseBias - currentTactic.defenseBias) / 100;
+  const pressingDistance = Math.abs(startingTactic.pressingIntensity - currentTactic.pressingIntensity) / 100;
+  const profileDistance = clampNumber(
+    attackDistance * 0.36 + defenseDistance * 0.30 + pressingDistance * 0.24 + (sameCategory ? 0 : 0.18),
+    0,
+    1
+  );
+
+  /**
+   * Live tactical-change attenuation
+   *
+   * What this does:
+   * A user's in-match formation change weakens the AI's pre-match pattern read, but it never deletes it.
+   * The opponent has still prepared against the player's habits, squad structure, common build-up lanes,
+   * and risk profile, so a simple switch from one formation to another is not treated as a full surprise.
+   *
+   * Why the multiplier has a floor:
+   * Removing the penalty completely would create a new exploit: repeat one tactic every week, let the AI
+   * read it, then change formation after kick-off to erase the consequence. The floor keeps the strategic
+   * cost alive while still rewarding a meaningful in-match adjustment.
+   */
+  if (sameCategory && profileDistance <= 0.16) return 0.84;
+  if (profileDistance <= 0.28) return 0.74;
+  return 0.64;
 };
 
 const getPenaltyCallChance = (referee: Referee) => {
@@ -848,11 +1029,8 @@ const isPausedForSevereInjury = useMemo(() => {
     return { ref, weather };
   }, [ctx]);
 
-  const seededRng = (seed: number, minute: number, offset: number = 0) => {
-    let s = seed + minute + offset;
-    const x = Math.sin(s) * 10000;
-    return x - Math.floor(x);
-  };
+  // Migration bridge: MatchLiveView still owns the event loop, but the RNG formula now has one shared owner.
+  const seededRng = getLegacyMinuteSeededValue;
 
   const buildDisplayStats = (
     rawStats: { shots: number; shotsOnTarget: number; corners: number; fouls: number; offsides: number },
@@ -900,7 +1078,7 @@ const isPausedForSevereInjury = useMemo(() => {
 
   useEffect(() => {
    if (ctx && (!matchState || matchState.fixtureId !== ctx.fixture.id)) {
-      const sessionSeed = Math.abs(Math.floor(Date.now() * Math.random()));
+      const sessionSeed = createRuntimeSessionSeed();
 
       const aiClubInit = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
       const aiInitialSide: 'HOME' | 'AWAY' = aiClubInit.id === ctx.homeClub.id ? 'HOME' : 'AWAY';
@@ -1068,6 +1246,10 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           expiryMinute:  aiBriefingEffect.expiryMinute,
           fatigueMult:   aiBriefingEffect.fatigueMult,
           rivalBoost:    aiBriefingEffect.rivalBoost,
+          userActionSuppression: aiBriefingEffect.userActionSuppression,
+          tacticalReadActionMod: aiBriefingEffect.tacticalReadActionMod,
+          tacticalReadGoalMod: aiBriefingEffect.tacticalReadGoalMod,
+          tacticalReadMomentumBonus: aiBriefingEffect.tacticalReadMomentumBonus,
           label:         aiBriefingEffect.label,
         },
         aiNextInstructionMinute: aiInitNextMin,
@@ -1422,7 +1604,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
            */
           const markDisallowedGoal = (goal: typeof prev.homeGoals[number]) => {
             const samePlayer = activeVAR.scorerId
-              ? goal.scorerId === activeVAR.scorerId
+              ? goal.scorerId === activeVAR.scorerId || goal.ownGoalPlayerId === activeVAR.scorerId
               : goal.playerName === activeVAR.scorerName;
             if (!didDisallowGoal && samePlayer && goal.minute === activeVAR.minute && !goal.varDisallowed) {
               didDisallowGoal = true;
@@ -1880,17 +2062,85 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            }
         }
 
+        /**
+         * Match engine migration note
+         *
+         * What this snapshot does:
+         * It builds a HOME/AWAY profile for the current simulated minute after local match-state
+         * updates and AI emergency decisions have been applied. The profile includes player attributes,
+         * live fatigue, morale, sent-off exclusions, coach quality, and weather pressure in one explicit
+         * object. This gives the future match engine a stable input model instead of forcing every event
+         * formula to rediscover those factors inside MatchLiveView.
+         *
+         * Why it is calculated here:
+         * This point in the minute loop has the best currently available tactical picture: substitutions
+         * and formation changes may already have changed nextHomeLineup/nextAwayLineup, injury maps and
+         * sent-off ids are local to the minute, and fatigue uses the current live maps before the next
+         * fatigue-drain step is committed. Building the profile here prepares the engine for smaller,
+         * testable calculators without changing the story produced by the current simulation.
+         *
+         * How it should be used next:
+         * The next phase should replace one inline formula at a time with profile-based values, starting
+         * with low-risk initiative helpers. Each replacement must keep the old calculation nearby until
+         * golden-match or range tests prove that shot volume, goals, cards, injuries, fatigue drain, and AI
+         * reactions remain within intended ranges. Until that phase starts, this snapshot is intentionally
+         * passive and must not affect match balance.
+         */
+        const liveTeamProfiles = {
+          home: buildLiveMatchTeamProfile({
+            side: 'HOME',
+            players: ctx.homePlayers,
+            lineup: nextHomeLineup,
+            fatigue: localHomeFatigue,
+            coach: ctx.homeCoach,
+            weather: env?.weather,
+            sentOffIds: nextSentOffIds,
+          }),
+          away: buildLiveMatchTeamProfile({
+            side: 'AWAY',
+            players: ctx.awayPlayers,
+            lineup: nextAwayLineup,
+            fatigue: localAwayFatigue,
+            coach: ctx.awayCoach,
+            weather: env?.weather,
+            sentOffIds: nextSentOffIds,
+          }),
+        };
+        void liveTeamProfiles;
+
         const rngEvent = seededRng(currentSeed, nextMinute, 500);
 
         // ─── KARA ZA ZMĘCZENIE DRUŻYNY (wpływ na inicjatywę i liczbę strzałów) ───
         // Liczymy średnią kondycję aktywnych zawodników każdej drużyny
-        const _getAvgFatigue = (lineup: (string | null)[], fatigueMap: Record<string, number>): number => {
-          const ids = lineup.filter((id): id is string => id !== null);
-          if (ids.length === 0) return 100;
-          return ids.reduce((acc, id) => acc + (fatigueMap[id] ?? 100), 0) / ids.length;
-        };
-        const avgFatigueHome = _getAvgFatigue(nextHomeLineup.startingXI, localHomeFatigue);
-        const avgFatigueAway = _getAvgFatigue(nextAwayLineup.startingXI, localAwayFatigue);
+        /**
+         * Match engine migration note
+         *
+         * What changed here:
+         * Average team fatigue and late rotation penalties are now calculated by LiveMatchFatigue.
+         * MatchLiveView still owns the live minute state, but the fatigue curve itself has one pure,
+         * tested owner.
+         *
+         * Why this is safe:
+         * The extracted calculator keeps the same legacy thresholds and constants. The local variable
+         * names below are preserved because later initiative and shot logic still consumes avgFatigueHome,
+         * avgFatigueAway, homeFatPenalty, and awayFatPenalty.
+         */
+        const homeFatigueImpact = calculateLiveMatchFatigueImpact({
+          minute: nextMinute,
+          lineup: nextHomeLineup.startingXI,
+          fatigueMap: localHomeFatigue,
+          ownSubs: nextSubsCountHome,
+          opponentSubs: nextSubsCountAway,
+        });
+        const awayFatigueImpact = calculateLiveMatchFatigueImpact({
+          minute: nextMinute,
+          lineup: nextAwayLineup.startingXI,
+          fatigueMap: localAwayFatigue,
+          ownSubs: nextSubsCountAway,
+          opponentSubs: nextSubsCountHome,
+        });
+        const avgFatigueHome = homeFatigueImpact.averageFatigue;
+        const avgFatigueAway = awayFatigueImpact.averageFatigue;
 
         // Krzywa kary: kondycja 94→0 | 85→-0.022 | 80→-0.039 | 75→-0.057 | 70→-0.077 | 60→-0.118
         // ZMIANA (2026-06-18): brak zmian był nadal zbyt mało odczuwalny, bo średnia kondycja
@@ -1901,23 +2151,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // kara wynosiła zaledwie -0.005 (niewidoczna). Brak zmian nie powodował żadnej przewagi rywala.
         // Teraz: przy 80% kara = -0.039, przy 75% kara = -0.057 — odczuwalna różnica w kreowaniu sytuacji.
         // Drużyna bez zmian (80% kondycji) vs drużyna z 3 zmianami (87%) → różnica inicjatywy ~11-14%.
-        const _fatiguePenalty = (avgFat: number): number => {
-          if (avgFat >= 94) return 0;
-          const depth = (94 - avgFat) / 94; // 0..1
-          return -(Math.pow(depth, 1.25) * 0.42);
-        };
-        const _rotationPenalty = (lineup: (string | null)[], fatigueMap: Record<string, number>, ownSubs: number, oppSubs: number): number => {
-          if (nextMinute < 60 || ownSubs >= 2) return 0;
-          const ids = lineup.filter((id): id is string => id !== null);
-          if (ids.length === 0) return 0;
-          const tiredShare = ids.filter(id => (fatigueMap[id] ?? 100) < 84).length / ids.length;
-          const lateFactor = Math.min(1, (nextMinute - 60) / 30);
-          const rotationGap = Math.max(0, oppSubs - ownSubs);
-          const pressure = ((2 - ownSubs) * 0.012) + tiredShare * 0.052 + rotationGap * 0.010;
-          return -Math.min(0.085, pressure * lateFactor);
-        };
-        const homeFatPenalty = _fatiguePenalty(avgFatigueHome) + _rotationPenalty(nextHomeLineup.startingXI, localHomeFatigue, nextSubsCountHome, nextSubsCountAway);
-        const awayFatPenalty = _fatiguePenalty(avgFatigueAway) + _rotationPenalty(nextAwayLineup.startingXI, localAwayFatigue, nextSubsCountAway, nextSubsCountHome);
+        const homeFatPenalty = homeFatigueImpact.totalPenalty;
+        const awayFatPenalty = awayFatigueImpact.totalPenalty;
         const homeFormImpact = teamFormImpact.home;
         const awayFormImpact = teamFormImpact.away;
         const playerFormImpact = TeamFormImpactService.calculateMatchImpact(
@@ -2036,7 +2271,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const homeSentOffCount = nextSentOffIds.filter(id => ctx.homePlayers.some(p => p.id === id)).length;
         const awaySentOffCount = nextSentOffIds.filter(id => ctx.awayPlayers.some(p => p.id === id)).length;
         const redCardInitiativeMod = (awaySentOffCount - homeSentOffCount) * 0.065;
-        const homeAttackChance = Math.min(
+        const legacyInlineHomeAttackChance = Math.min(
           0.72,
           Math.max(
             0.28,
@@ -2053,6 +2288,45 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               redCardInitiativeMod
           )
         );
+        /**
+         * Match engine migration note
+         *
+         * What changed here:
+         * The final HOME attack chance is now produced by LiveMatchInitiative. The local modifier
+         * variables directly above are intentionally still present during this phase because they make
+         * the migration auditable: the extracted calculator receives the same source values and must
+         * reproduce the old inline result exactly.
+         *
+         * Why the team profile is passed in:
+         * The live profiles are threaded into the initiative layer as readiness diagnostics only. They
+         * do not yet alter the probability, so this step keeps match balance stable while preparing the
+         * next stage where profile-based modifiers can be introduced behind tests.
+         */
+        const initiativeResult = calculateLiveMatchInitiative({
+          momentum: prev.momentum,
+          minute: nextMinute,
+          homeFatPenalty,
+          awayFatPenalty,
+          homePressureInitiativeMultiplier: hLivePressure.initiativeMultiplier,
+          awayPressureInitiativeMultiplier: aLivePressure.initiativeMultiplier,
+          homeFormInitiativeModifier: homeFormImpact.initiativeModifier,
+          awayFormInitiativeModifier: awayFormImpact.initiativeModifier,
+          homeFormStacking,
+          awayFormStacking,
+          homePlayerFormGoalChanceMultiplier: playerFormImpact.homeGoalChanceMultiplier,
+          awayPlayerFormGoalChanceMultiplier: playerFormImpact.awayGoalChanceMultiplier,
+          midfieldControlDiff,
+          homeQualityGapLive,
+          shotGapLive,
+          homeGoalkeeperCrisisPenalty: getGoalkeeperCrisisInitiativePenalty(nextHomeLineup, ctx.homePlayers),
+          awayGoalkeeperCrisisPenalty: getGoalkeeperCrisisInitiativePenalty(nextAwayLineup, ctx.awayPlayers),
+          homeSentOffCount,
+          awaySentOffCount,
+          homeProfileReadiness: liveTeamProfiles.home.readiness,
+          awayProfileReadiness: liveTeamProfiles.away.readiness,
+        });
+        const homeAttackChance = initiativeResult.homeAttackChance;
+        void legacyInlineHomeAttackChance;
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
         const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
@@ -2228,51 +2502,45 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         // Krok 2: defenseBias rywala utrudnia dojście do strzału
         // max kara: 6-3-1 (defenseBias=95) → -0.076 | min: 4-2-4 (defenseBias=10) → -0.008
+        /**
+         * Match engine migration note
+         *
+         * What changed here:
+         * LiveMatchShotPressure now owns the named satiety calculation. The legacy inline block above is
+         * left as an audit anchor for this step, then immediately reconciled with the extracted helper.
+         *
+         * Why this is safe:
+         * The helper receives the same base threshold, lead state, goal difference, and seeded roll, so the
+         * final value remains equivalent while the formula becomes unit-testable outside MatchLiveView.
+         */
+        shotThreshold = calculateLiveShotSatiety({
+          baseShotThreshold: 0.11,
+          leads,
+          goalDiff,
+          satietyRoll: seededRng(currentSeed, 0, 999),
+        }).threshold;
         const defendingLineup2 = activeSide === 'HOME' ? nextAwayLineup : nextHomeLineup;
         const defendingTactic2 = TacticRepository.getById(defendingLineup2.tacticId);
-        const defBiasPenalty = (defendingTactic2.defenseBias / 100) * 0.045;
+        const defBiasPenalty = calculateLiveDefendingBiasShotPenalty(defendingTactic2.defenseBias);
 
         // Bonus gdy broniący nie ma bramkarza na bramce (slot 0 = null lub nie-GK)
         const defendingXI2 = activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const defendingTeamPlayers2 = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
         const slotZeroPlayer = defendingXI2[0] !== null ? defendingTeamPlayers2.find(p => p.id === defendingXI2[0]) : null;
-        const getEmergencyKeeperRead = (player: Player | null | undefined): number => {
-          if (!player) return 0;
-          return (
-            player.attributes.goalkeeping * 0.35 +
-            player.attributes.positioning * 0.25 +
-            player.attributes.mentality * 0.22 +
-            player.attributes.strength * 0.18
-          );
-        };
-        const noGkBonus = defendingXI2[0] === null
-          ? 0.055  // pusty slot = otwarta bramka
-          : (slotZeroPlayer?.position !== PlayerPosition.GK
-              ? 0.031 + Math.max(0, Math.min(1, (62 - getEmergencyKeeperRead(slotZeroPlayer)) / 45)) * 0.017
-              : 0); // nie-GK w bramce
+        const getEmergencyKeeperRead = getLiveEmergencyKeeperRead;
+        const noGkBonus = calculateLiveNoGoalkeeperShotBonus(defendingXI2, slotZeroPlayer);
 
         // Bonus za jakość napastnika (znormalizowany do polskiej ligi: zakres finishing 55-77)
         const attackingTeamPlayers2 = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-        const attackingXI2 = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter(id => id !== null) as string[];
-        const topStriker = attackingTeamPlayers2
-          .filter(p => attackingXI2.includes(p.id) && p.position === PlayerPosition.FWD)
-          .sort((a, b) => b.attributes.finishing - a.attributes.finishing)[0];
-        const strikerBonus = topStriker
-          ? Math.max(0, ((topStriker.attributes.finishing * PlayerMoraleService.getMatchMultiplier(topStriker)) - 55) / (77 - 55)) * 0.012
-          : 0;
-        let moraleTeamPenalty = 0;
-        attackingXI2.forEach(id => {
-          const player = attackingTeamPlayers2.find(p => p.id === id);
-          if (!player) return;
-          const morale = (player as any).morale ?? 50;
-          const baseDebuff = morale <= 19 ? 0.097 : morale <= 39 ? 0.062 : 0;
-          if (baseDebuff === 0) return;
-          const mentalityResistance = (player.attributes.mentality ?? 50) / 100;
-          const effectivePenalty = baseDebuff * (1 - mentalityResistance * 0.6);
-          const randomNoise = 1 + (Math.random() * 0.10 - 0.05);
-          moraleTeamPenalty += effectivePenalty * randomNoise;
+        const strikerBonus = calculateLiveTopStrikerShotBonus(
+          attackingTeamPlayers2,
+          activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI
+        );
+        const moraleDebuffMultiplier = calculateLiveMoraleShotMultiplier({
+          attackingPlayers: attackingTeamPlayers2,
+          attackingLineup: activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          moraleNoise: () => Math.random(),
         });
-        const moraleDebuffMultiplier = Math.max(0.15, 1 - moraleTeamPenalty);
         const activeFormImpact = activeSide === 'HOME' ? homeFormImpact : awayFormImpact;
         const defendingFormImpact = activeSide === 'HOME' ? awayFormImpact : homeFormImpact;
         const activePlayerFormImpact = activeSide === 'HOME' ? playerFormImpact.home : playerFormImpact.away;
@@ -2287,11 +2555,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const activeFatPenalty = activeSide === 'HOME' ? homeFatPenalty : awayFatPenalty;
         const activeAvgFatigue = activeSide === 'HOME' ? avgFatigueHome : avgFatigueAway;
         const defendingAvgFatigue = activeSide === 'HOME' ? avgFatigueAway : avgFatigueHome;
-        const relativeFreshnessShotSwing = clampNumber(
-          ((activeAvgFatigue - defendingAvgFatigue) / 100) * 0.18,
-          -0.026,
-          0.026
-        );
+        const relativeFreshnessShotSwing = calculateLiveRelativeFreshnessShotSwing(activeAvgFatigue, defendingAvgFatigue);
 
         // ─── KARA: OSŁABIONY SKŁAD + OFENSYWNA TAKTYKA ────────────────────────
         // Liczba "dziur" w XI (null = brak zawodnika po czerwonej lub kontuzji bez zmiany)
@@ -2408,23 +2672,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // [ZMIANA 2026-06-18: próg zmęczenia użytkowego podniesiony z 75 → 82, z limitem kary 0.060]
         const attackingFatigueMap = activeSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
         const defendingFatigueMap = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
-        const attackingXIIds = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter((id): id is string => id !== null);
-        const defendingXIIds = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter((id): id is string => id !== null);
-        const tiredAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 82).length;
-        const exhaustedAttackers = attackingXIIds.filter(id => (attackingFatigueMap[id] ?? 100) < 70).length;
-        const freshDefenders = defendingXIIds.filter(id => (defendingFatigueMap[id] ?? 100) > 82).length;
-        const criticalFatPenalty = Math.min(0.060, tiredAttackers * 0.006 + exhaustedAttackers * 0.010);
-        const freshDefBonus = tiredAttackers >= 2 ? Math.min(0.040, freshDefenders * 0.006) : 0;
         const attackingSubsUsed = activeSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
         const defendingSubsUsed = activeSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome;
-        const noRotationShotPenalty = nextMinute >= 60 && attackingSubsUsed <= 1
-          ? Math.min(
-              0.035,
-              (2 - attackingSubsUsed) * 0.006 +
-              tiredAttackers * 0.004 +
-              Math.max(0, defendingSubsUsed - attackingSubsUsed) * 0.004
-            ) * Math.min(1, (nextMinute - 60) / 30)
-          : 0;
+        const individualShotFatigueImpact = calculateLiveIndividualFatigueShotImpact({
+          minute: nextMinute,
+          attackingLineup: activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          defendingLineup: activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+          attackingFatigue: attackingFatigueMap,
+          defendingFatigue: defendingFatigueMap,
+          attackingSubsUsed,
+          defendingSubsUsed,
+        });
+        const criticalFatPenalty = individualShotFatigueImpact.criticalFatPenalty;
+        const freshDefBonus = individualShotFatigueImpact.freshDefBonus;
+        const noRotationShotPenalty = individualShotFatigueImpact.noRotationShotPenalty;
         // Bonus świeżych nóg zależy od realnego najsłabszego punktu rywala:
         // kondycji, roli na boisku i OVR najbardziej zmęczonego zawodnika.
         const rotationMismatchAttackBonus = LiveMatchPhysicalMismatchService.getRotationMismatchAttackBonus({
@@ -2435,13 +2696,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           defendingFatigue: defendingFatigueMap,
           rng: () => seededRng(currentSeed, nextMinute, 6201),
         });
-        const lateFatigueShotDrag = nextMinute >= 60
-          ? Math.min(0.052, noRotationShotPenalty * 0.75 + criticalFatPenalty * 0.35)
-          : 0;
-        const fatiguedShotFloor = Math.max(
-          0.055,
-          0.10 - noRotationShotPenalty - criticalFatPenalty * 0.25
-        );
+        const lateFatigueShotDrag = individualShotFatigueImpact.lateFatigueShotDrag;
+        const fatiguedShotFloor = individualShotFatigueImpact.fatiguedShotFloor;
 
         shotThreshold = Math.max(
           fatiguedShotFloor,
@@ -2522,6 +2778,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // POGODA: Deszcz karze technicznie słabszą drużynę (śliska piłka, niedokładne podania)
         // Efekt jest WZGLĘDNY — liczy się różnica techniki między atakującymi a broniącymi
         // precipitationChance > 40% = realny deszcz; efekt progresywny od różnicy techniki
+        const shotThresholdBeforeRainTechnique = shotThreshold;
         if (env && env.weather.precipitationChance > 40) {
           const getAvgTech = (players: Player[], xi: (string | null)[]): number => {
             const ids = xi.filter((id): id is string => id !== null);
@@ -2547,15 +2804,27 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
 
         // ─── INSTRUKCJE TAKTYCZNE GRACZA → MODYFIKATORY SILNIKA ────────────────
+        const rainTechniqueAdjustment = adjustLiveShotThresholdForRainTechnique({
+          shotThreshold: shotThresholdBeforeRainTechnique,
+          weather: env?.weather,
+          attackingTechniqueAverage: getLiveLineupAttributeAverage(
+            activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+            activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+            'technique'
+          ),
+          defendingTechniqueAverage: getLiveLineupAttributeAverage(
+            activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+            activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+            'technique'
+          ),
+        });
+        shotThreshold = rainTechniqueAdjustment.threshold;
+        void rainTechniqueAdjustment.modifier;
+
         let nextUserInstructions = { ...prev.userInstructions };
         const uInstr = nextUserInstructions;
         const isUserAttacking = activeSide === userSide;
-        const _getXIAvgAttr = (playersList: Player[], xi: (string | null)[], attr: keyof Player['attributes']): number => {
-          const ids = xi.filter((id): id is string => id !== null);
-          const active = playersList.filter(p => ids.includes(p.id));
-          if (active.length === 0) return 60;
-          return active.reduce((acc, p) => acc + (p.attributes[attr] as number), 0) / active.length;
-        };
+        const _getXIAvgAttr = getLiveLineupAttributeAverage;
         const uPlayersList = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
         const uXIList      = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
         const oPlayersList = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
@@ -2957,11 +3226,28 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           prev.aiPreMatchMotivation && nextMinute <= prev.aiPreMatchMotivation.expiryMinute
             ? prev.aiPreMatchMotivation
             : null;
+        const startingUserTacticId = userSide === 'HOME'
+          ? (prev.initialHomeTacticId ?? prev.homeLineup.tacticId)
+          : (prev.initialAwayTacticId ?? prev.awayLineup.tacticId);
+        const currentUserTacticId = userSide === 'HOME'
+          ? nextHomeLineup.tacticId
+          : nextAwayLineup.tacticId;
+        const aiPatternReadLiveTacticMultiplier = getAiPatternReadLiveTacticMultiplier(
+          activeAiBriefing,
+          startingUserTacticId,
+          currentUserTacticId
+        );
+        const adjustedAiBriefingGoalMod = activeAiBriefing
+          ? activeAiBriefing.goalMod - ((activeAiBriefing.tacticalReadGoalMod ?? 0) * (1 - aiPatternReadLiveTacticMultiplier))
+          : 0;
+        const adjustedAiBriefingMomentumBonus = activeAiBriefing
+          ? activeAiBriefing.momentumBonus - Math.round((activeAiBriefing.tacticalReadMomentumBonus ?? 0) * (1 - aiPatternReadLiveTacticMultiplier))
+          : 0;
         const briefingFinishingFitMod = activeBriefing
           ? Math.max(0.96, Math.min(1.05, 1 + activeBriefing.goalMod * 1.25))
           : 1.0;
         const aiBriefingFinishingFitMod = activeAiBriefing
-          ? Math.max(0.96, Math.min(1.05, 1 + activeAiBriefing.goalMod * 1.25))
+          ? Math.max(0.96, Math.min(1.05, 1 + adjustedAiBriefingGoalMod * 1.25))
           : 1.0;
         const briefingFreshnessDelta = activeBriefing
           ? Math.max(-3, Math.min(3, (1 - activeBriefing.fatigueMult) * 45))
@@ -2982,10 +3268,32 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
         if (activeAiBriefing) {
           if (isAiAttacking) {
-            shotThreshold += activeAiBriefing.actionMod * 0.12;
+            const adjustedAiBriefingActionMod =
+              activeAiBriefing.actionMod - ((activeAiBriefing.tacticalReadActionMod ?? 0) * (1 - aiPatternReadLiveTacticMultiplier));
+            shotThreshold += adjustedAiBriefingActionMod * 0.12;
             shotThreshold += (1 - activeAiBriefing.fatigueMult) * 0.04;
-          } else if (activeAiBriefing.rivalBoost !== 0) {
-            shotThreshold += activeAiBriefing.rivalBoost * 0.012;
+          } else {
+            if (isUserAttacking && activeAiBriefing.userActionSuppression) {
+              /**
+               * Direct user chance suppression from AI tactical predictability.
+               *
+               * What this does:
+               * When the AI briefing says the user's repeated plan has been read, the penalty is applied
+               * only while the user is the attacking side. This is intentionally separate from actionMod:
+               * actionMod rewards the AI's own chance creation, while userActionSuppression represents the
+               * opponent blocking passing lanes, anticipating build-up routes, and forcing lower-quality
+               * possessions before they become logged shots.
+               *
+               * Why it is clamped here:
+               * Several AI effects can be combined before reaching MatchLiveView. The final clamp prevents
+               * conference pressure, rivalry amplification, and tactical pattern reading from stacking into
+               * an extreme value that would make a strong team unable to create anything at all.
+               */
+              shotThreshold -= clampNumber(activeAiBriefing.userActionSuppression * aiPatternReadLiveTacticMultiplier, 0, 0.024);
+            }
+            if (activeAiBriefing.rivalBoost !== 0) {
+              shotThreshold += activeAiBriefing.rivalBoost * 0.012;
+            }
           }
         }
         // PRE-MATCH BRIEFING — jednorazowy impuls momentum przy minucie 1
@@ -2993,22 +3301,88 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           shotThreshold += (activeBriefing.momentumBonus / 100) * 0.014;
         }
         if (nextMinute === 1 && activeAiBriefing?.momentumBonus && isAiAttacking) {
-          shotThreshold += (activeAiBriefing.momentumBonus / 100) * 0.014;
+          shotThreshold += (adjustedAiBriefingMomentumBonus / 100) * 0.014;
         }
+        /**
+         * Match engine user-physical action note
+         *
+         * What this block does:
+         * It applies the new player-team-only physical action suppression at the final chance-creation
+         * gate. The calculator observes the user's live XI every minute: players below 85 condition,
+         * injured players who remain on the pitch, and unused substitutions after minute 60. It only runs
+         * when the currently active attacking side is the user side, so AI teams keep the legacy physical
+         * model and do not receive this extra user-management penalty.
+         *
+         * Why existing penalties are credited first:
+         * MatchLiveView already subtracts several physical costs before this point: average fatigue
+         * pressure, individual tired-attacker drag, late no-rotation shot drag, and injured-player
+         * attacking drag. Passing those costs into existingPhysicalActionPenalty prevents double-counting.
+         * The final subtraction below is only the missing incremental amount needed to satisfy the new
+         * explicit design ranges: 1-5% per tired user player, 5-10% per injured user player left on the
+         * field, and 2-5% per unused user substitution after minute 60.
+         *
+         * Why it is applied here:
+         * This is the last compact point before shotThreshold becomes the actual open-play attempt
+         * probability. Applying the adjustment here reduces both high-quality attacks and late statistical
+         * pressure without touching unrelated event systems such as fouls, penalties, injury generation,
+         * VAR, commentary, or AI tactical decisions.
+         *
+         * Why the critical cap exists:
+         * The wider live engine intentionally keeps minimum event floors so quiet matches do not become
+         * empty. That floor can become an exploit when the user keeps five, seven, nine, or even eleven
+         * red-zone players below 60 condition on the pitch. The criticalExhaustionActionCap returned here
+         * is an anti-cheat override: it lets a depleted team still produce rare football noise, but stops
+         * a squad on the edge of collapse from creating normal open-play or stat-pressure volume.
+         */
+        let userPhysicalActionSuppression = {
+          tiredPlayerCount: 0,
+          redZonePlayerCount: 0,
+          criticalExhaustionActionCap: null as number | null,
+          injuredPlayerCount: 0,
+          unusedSubstitutions: 0,
+          fatiguePenalty: 0,
+          injuryPenalty: 0,
+          substitutionPenalty: 0,
+          rawPenalty: 0,
+          creditedExistingPenalty: 0,
+          incrementalPenalty: 0,
+        };
+        if (activeSide === userSide) {
+          let userPhysicalRngOffset = 0;
+          userPhysicalActionSuppression = calculateLiveUserPhysicalActionSuppression({
+            minute: nextMinute,
+            lineup: activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+            fatigueMap: activeSide === 'HOME' ? localHomeFatigue : localAwayFatigue,
+            matchInjuries: activeSide === 'HOME' ? nextHomeInjuries : nextAwayInjuries,
+            substitutionsUsed: attackingSubsUsed,
+            maxSubstitutions: 5,
+            existingPhysicalActionPenalty:
+              Math.max(0, -activeFatPenalty) +
+              criticalFatPenalty +
+              noRotationShotPenalty +
+              attackingInjuredSpineDrag +
+              lateFatigueShotDrag,
+            rng: () => seededRng(currentSeed, nextMinute, 6700 + userPhysicalRngOffset++),
+          });
+        }
+
         shotThreshold = Math.max(
           Math.max(0.050, fatiguedShotFloor - 0.010),
           Math.min(
             0.155,
-            (shotThreshold - lateFatigueShotDrag - shotVolumeDrag) *
+            (shotThreshold - lateFatigueShotDrag - shotVolumeDrag - userPhysicalActionSuppression.incrementalPenalty) *
               clampNumber(activePlayerFormChanceMultiplier, 0.82, 1.18) *
               activePressureMods.shotMultiplier *
               (livePressureContext?.rivalryMultiplier ?? 1)
           )
         );
+        if (userPhysicalActionSuppression.criticalExhaustionActionCap !== null) {
+          shotThreshold = Math.min(shotThreshold, userPhysicalActionSuppression.criticalExhaustionActionCap);
+        }
         const statShotGapDrag = activeShotsSoFar >= 14
           ? Math.min(0.035, (activeShotsSoFar - 13) * 0.007)
           : 0;
-        const statPressureChance = Math.max(
+        let statPressureChance = Math.max(
           0.075,
           Math.min(
             0.205,
@@ -3018,9 +3392,16 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               + (activeMidfieldControlDiff > 0 ? Math.min(0.014, activeMidfieldControlDiff * 0.0010) : -Math.min(0.012, Math.abs(activeMidfieldControlDiff) * 0.0009))
               + (hasMomentumAdvantage ? (Math.abs(prev.momentum) / 100) * 0.007 : 0)
               - lateFatigueShotDrag * 0.35
+              - userPhysicalActionSuppression.incrementalPenalty * 0.35
               - statShotGapDrag
           )
         );
+        if (userPhysicalActionSuppression.criticalExhaustionActionCap !== null) {
+          statPressureChance = Math.min(
+            statPressureChance,
+            userPhysicalActionSuppression.criticalExhaustionActionCap * 1.75
+          );
+        }
         const statPressureLimit = Math.min(0.42, shotThreshold + statPressureChance);
 
         let pauseForEvent = false;
@@ -3090,14 +3471,38 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         };
 
         const activeIntensityRisk = isUserAttacking ? userIntensityRisk : aiIntensityRisk;
-        const uFoulThreshold = 0.043 * activeIntensityRisk.foul * activePressureMods.cardMultiplier * (livePressureContext?.rivalryMultiplier ?? 1);
-        if (!forceZeroShotChance && rngEvent < uFoulThreshold) {
+        const uFoulThreshold = calculateLiveFoulThreshold({
+          intensityFoulMultiplier: activeIntensityRisk.foul,
+          pressureCardMultiplier: activePressureMods.cardMultiplier,
+          rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1,
+        });
+        /**
+         * Match engine migration note
+         *
+         * What changed here:
+         * The open-play attempt gate is now named by LiveMatchOutcome. MatchLiveView still owns the
+         * surrounding branch order because fouls, penalties, and UI pauses remain stateful here.
+         *
+         * Why this matters:
+         * Separating the pure "should a shot action happen" decision from the React state updates makes
+         * later balancing safer. We can tune threshold behaviour without touching logs, VAR, injuries,
+         * tactical boosts, or live stat mutation in the same edit.
+         */
+        const openPlayAttemptDecision = shouldAttemptLiveOpenPlayShot({
+          forceZeroShotChance,
+          eventRoll: rngEvent,
+          shotThreshold,
+        });
+        if (shouldTriggerLiveFoul({ forceZeroShotChance, eventRoll: rngEvent, foulThreshold: uFoulThreshold })) {
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
            const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
            const player = (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId)!;
            if (!player) return prev; // Jeśli zawodnik zniknął (np. czerwona kartka), przerwij akcję
-           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * activeIntensityRisk.penalty * activePressureMods.penaltyMultiplier);
+           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < calculateLivePenaltyIncidentChance({
+             intensityPenaltyMultiplier: activeIntensityRisk.penalty,
+             pressurePenaltyMultiplier: activePressureMods.penaltyMultiplier,
+           });
 
            if (isPenalty) {
               const attackingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
@@ -3119,18 +3524,18 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
               nextIsPausedForEvent = true;
               if (refereeGivesPenalty) {
-                const reason: PenaltyReviewReason = seededRng(currentSeed, nextMinute, 1712) < 0.42 ? 'HAND_BALL' : 'FOUL';
+                const reason: PenaltyReviewReason = chooseLivePenaltyReviewReason(seededRng(currentSeed, nextMinute, 1712));
                 const usesVar = seededRng(currentSeed, nextMinute, 1714) < 0.48;
-                const varOverturnChance = clampNumber(
-                  0.18 - ((getRefereeDecisionQuality(env.ref) - 50) * 0.0012),
-                  0.08,
-                  0.28
-                );
-                const verdict: PenaltyReviewVerdict = usesVar && seededRng(currentSeed, nextMinute, 1716) < varOverturnChance ? 'NO_PENALTY' : 'PENALTY';
+                const varOverturnChance = calculateLivePenaltyVarOverturnChance(getRefereeDecisionQuality(env.ref));
+                const verdict: PenaltyReviewVerdict = resolveLivePenaltyReviewVerdict({
+                  usesVar,
+                  varRoll: seededRng(currentSeed, nextMinute, 1716),
+                  varOverturnChance,
+                });
                 const baseCard = reason === 'FOUL'
                   ? DisciplineService.evaluateFoul(env.ref, player, nextPlayerYellowCards[pId] || 0, () => seededRng(currentSeed, nextMinute, 1718))
-                  : (seededRng(currentSeed, nextMinute, 1720) < 0.22 ? MatchEventType.YELLOW_CARD : MatchEventType.FOUL);
-                const card = verdict === 'PENALTY' ? baseCard : MatchEventType.FOUL;
+                  : resolveLiveHandballBaseCard(seededRng(currentSeed, nextMinute, 1720));
+                const card = resolveLivePenaltyReviewCard({ verdict, baseCard });
 
                 setActivePenaltyReview({
                   side: attackingSide,
@@ -3209,7 +3614,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
            }
         } 
-       else if (forceZeroShotChance || rngEvent < shotThreshold) {
+        else if (openPlayAttemptDecision.shouldAttempt) {
            const team = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const oppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
@@ -3309,13 +3714,35 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            
 
            if (isGoal) {
+              /*
+               * Own-goal conversion:
+               * This roll runs only after the engine has already produced a valid open-play goal. That is
+               * intentional: an own goal should be a rare attribution variant of a dangerous action, not an
+               * additional random scoring source that inflates match totals. The scoring side still receives
+               * the team goal, but the responsible player is selected from the defending XI and the goal entry
+               * is marked with isOwnGoal so player stats, ratings, morale, reports, and the ticker can treat
+               * it differently from a normal scorer goal.
+               */
+              let openPlayOwnGoalRngStep = 0;
+              const ownGoal = resolveLiveOwnGoal({
+                context: 'openPlay',
+                defendingPlayers: oppTeam,
+                defendingLineup: oppXi,
+                defendingFatigue: oppFatigueMap,
+                weather: env?.weather,
+                pressureMultiplier: actionProfile.dangerLabel === 'big' ? 1.18 : actionProfile.dangerLabel === 'chaotic' ? 1.10 : 1,
+                rng: () => seededRng(currentSeed, nextMinute, 781 + openPlayOwnGoalRngStep++),
+              });
               const goalInfo = { 
-                playerName: scorer.lastName,
-                scorerId: scorer.id,
+                playerName: ownGoal?.player.lastName ?? scorer.lastName,
+                scorerId: ownGoal ? undefined : scorer.id,
                 minute: nextMinute, 
                 isPenalty: false,
-                assistantName: assistant?.lastName,
-                assistantId: assistant?.id
+                assistantName: ownGoal ? undefined : assistant?.lastName,
+                assistantId: ownGoal ? undefined : assistant?.id,
+                isOwnGoal: !!ownGoal,
+                ownGoalPlayerId: ownGoal?.player.id,
+                ownGoalPlayerName: ownGoal?.player.lastName
               };
    if (activeSide === 'HOME') { 
                 nextHomeScore++; 
@@ -3338,7 +3765,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                * duplicate names. This log-level playerId is the bridge between the live
                * commentary entry and the canonical goal entry.
                */
-              newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: scorer.id, playerName: scorer.lastName };
+              newLog = {
+                id: `GOAL_${nextMinute}`,
+                minute: nextMinute,
+                text: ownGoal
+                  ? `⚽ ${counterPrefix}${ownGoal.commentary}`
+                  : `⚽ ${counterPrefix}${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`,
+                type: MatchEventType.GOAL,
+                teamSide: activeSide,
+                playerId: ownGoal?.player.id ?? scorer.id,
+                playerName: ownGoal?.player.lastName ?? scorer.lastName
+              };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
               applyAiMentalitySurgeForGoal(activeSide);
 
@@ -3373,32 +3810,20 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
               // ────────────────────────────────────────────────────────────────────
           } else {
-              const failRng = seededRng(currentSeed, nextMinute, 780);
-              let failType = MatchEventType.SHOT_ON_TARGET;
-              if (failRng < 0.08) failType = MatchEventType.SHOT_POST;
-              else if (failRng < 0.16) failType = MatchEventType.SHOT_BAR;
-              else if (failRng < 0.26) failType = MatchEventType.ONE_ON_ONE_SAVE;
-              else if (failRng < 0.36) failType = MatchEventType.ONE_ON_ONE_MISS;
-              else if (failRng < 0.44) failType = MatchEventType.SAVE;
-              else if (failRng < 0.54) failType = MatchEventType.WINGER_STOPPED;
-              else if (failRng > 0.85) failType = MatchEventType.SHOT;
-              if (actionProfile.dangerLabel === 'big' && failType === MatchEventType.SHOT) failType = MatchEventType.ONE_ON_ONE_MISS;
-              if (actionProfile.dangerLabel === 'clear' && failType === MatchEventType.WINGER_STOPPED) failType = MatchEventType.SHOT_ON_TARGET;
-              if (actionProfile.dangerLabel === 'chaotic' && failType === MatchEventType.SHOT_ON_TARGET) failType = MatchEventType.SHOT;
-              const shotAccuracyRoll = seededRng(currentSeed, nextMinute, 790);
-              if (actionProfile.shotOnTargetBoost > 0 && failType === MatchEventType.SHOT && shotAccuracyRoll < actionProfile.shotOnTargetBoost * 3) {
-                failType = MatchEventType.SHOT_ON_TARGET;
-              } else if (actionProfile.shotOnTargetBoost < 0 && failType !== MatchEventType.SHOT && shotAccuracyRoll < Math.abs(actionProfile.shotOnTargetBoost) * 2) {
-                failType = MatchEventType.SHOT;
-              }
+              const failType = resolveLiveMissedShotOutcome({
+                failRoll: seededRng(currentSeed, nextMinute, 780),
+                shotAccuracyRoll: seededRng(currentSeed, nextMinute, 790),
+                dangerLabel: actionProfile.dangerLabel,
+                shotOnTargetBoost: actionProfile.shotOnTargetBoost,
+              });
 
               // Inkrementacja strzałów niecelnych i celnych (bez gola)
               if (activeSide === 'HOME') {
                 nextLiveStats.home.shots++;
-                if (failType !== MatchEventType.SHOT) nextLiveStats.home.shotsOnTarget++;
+                if (isLiveShotOnTargetEvent(failType)) nextLiveStats.home.shotsOnTarget++;
               } else {
                 nextLiveStats.away.shots++;
-                if (failType !== MatchEventType.SHOT) nextLiveStats.away.shotsOnTarget++;
+                if (isLiveShotOnTargetEvent(failType)) nextLiveStats.away.shotsOnTarget++;
               }
 
               immediateEventType = failType;
@@ -3447,11 +3872,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (shotType === MatchEventType.SHOT_ON_TARGET) targetSideStats.shotsOnTarget++;
             immediateEventType = shotType;
             if (isChaosGoal && statPlayer) {
+              /*
+               * Own-goal conversion for penalty-box chaos:
+               * Chaotic shots are exactly where real own goals are most believable: loose ball, bodies in
+               * front of goal, tired defenders reacting late. The roll still converts only an already-scored
+               * chaos goal, so total score balance remains controlled while the goal attribution becomes more
+               * realistic and auditable through isOwnGoal.
+               */
+              let chaosOwnGoalRngStep = 0;
+              const chaosOwnGoal = resolveLiveOwnGoal({
+                context: 'chaos',
+                defendingPlayers: activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+                defendingLineup: activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+                defendingFatigue: activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue,
+                weather: env?.weather,
+                pressureMultiplier: 1.18,
+                rng: () => seededRng(currentSeed, nextMinute, 930 + chaosOwnGoalRngStep++),
+              });
               const goalInfo = {
-                playerName: statPlayer.lastName,
-                scorerId: statPlayer.id,
+                playerName: chaosOwnGoal?.player.lastName ?? statPlayer.lastName,
+                scorerId: chaosOwnGoal ? undefined : statPlayer.id,
                 minute: nextMinute,
-                isPenalty: false
+                isPenalty: false,
+                isOwnGoal: !!chaosOwnGoal,
+                ownGoalPlayerId: chaosOwnGoal?.player.id,
+                ownGoalPlayerName: chaosOwnGoal?.player.lastName
               };
               if (activeSide === 'HOME') {
                 nextHomeScore++;
@@ -3463,12 +3908,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               newLog = {
                 id: `CHAOS_GOAL_${nextMinute}`,
                 minute: nextMinute,
-                text: `⚽ Chaos w polu karnym! ${statPlayer.lastName} wykorzystuje zamieszanie i pakuje piłkę do siatki!`,
+                text: chaosOwnGoal
+                  ? `⚽ ${chaosOwnGoal.commentary}`
+                  : `⚽ Chaos w polu karnym! ${statPlayer.lastName} wykorzystuje zamieszanie i pakuje piłkę do siatki!`,
                 type: MatchEventType.GOAL,
                 teamSide: activeSide,
                 // Same rationale as open-play goals: VAR/timeline matching uses this exact player identity.
-                playerId: statPlayer.id,
-                playerName: statPlayer.lastName
+                playerId: chaosOwnGoal?.player.id ?? statPlayer.id,
+                playerName: chaosOwnGoal?.player.lastName ?? statPlayer.lastName
               };
               goalTriggered = true;
               priorityAiTrigger = true;
@@ -3576,19 +4023,62 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                   ...(cornerGk && !isHeaderGoal ? { [cornerGk.id]: 0.12 } : {}),
                 });
                 if (isHeaderGoal) {
+                  /*
+                   * Own-goal conversion for corners:
+                   * Corners have the highest own-goal risk because defenders attack the same ball as the
+                   * header target under crowding, fatigue, and weather pressure. The conversion happens after
+                   * the successful header check, preserving the old chance volume while allowing the final
+                   * touch to belong to the defending player.
+                   */
+                  let cornerOwnGoalRngStep = 0;
+                  const cornerOwnGoal = resolveLiveOwnGoal({
+                    context: 'corner',
+                    defendingPlayers: cornerOppTeam,
+                    defendingLineup: activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+                    defendingFatigue: cornerOppFatigue,
+                    weather: env?.weather,
+                    pressureMultiplier: 1.24,
+                    rng: () => seededRng(currentSeed, nextMinute, 3510 + cornerOwnGoalRngStep++),
+                  });
                   if (activeSide === 'HOME') {
                     nextHomeScore++;
-                    newHomeGoals.push({ playerName: headerScorer.lastName, scorerId: headerScorer.id, minute: nextMinute, isPenalty: false });
+                    newHomeGoals.push({
+                      playerName: cornerOwnGoal?.player.lastName ?? headerScorer.lastName,
+                      scorerId: cornerOwnGoal ? undefined : headerScorer.id,
+                      minute: nextMinute,
+                      isPenalty: false,
+                      isOwnGoal: !!cornerOwnGoal,
+                      ownGoalPlayerId: cornerOwnGoal?.player.id,
+                      ownGoalPlayerName: cornerOwnGoal?.player.lastName
+                    });
                     nextLiveStats.home.shots++;
                     nextLiveStats.home.shotsOnTarget++;
                   } else {
                     nextAwayScore++;
-                    newAwayGoals.push({ playerName: headerScorer.lastName, scorerId: headerScorer.id, minute: nextMinute, isPenalty: false });
+                    newAwayGoals.push({
+                      playerName: cornerOwnGoal?.player.lastName ?? headerScorer.lastName,
+                      scorerId: cornerOwnGoal ? undefined : headerScorer.id,
+                      minute: nextMinute,
+                      isPenalty: false,
+                      isOwnGoal: !!cornerOwnGoal,
+                      ownGoalPlayerId: cornerOwnGoal?.player.id,
+                      ownGoalPlayerName: cornerOwnGoal?.player.lastName
+                    });
                     nextLiveStats.away.shots++;
                     nextLiveStats.away.shotsOnTarget++;
                   }
                   // Corner goals can also enter the VAR flow, so the log must carry the scorerId.
-                  newLog = { id: `CORNER_GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: headerScorer.id, playerName: headerScorer.lastName };
+                  newLog = {
+                    id: `CORNER_GOAL_${nextMinute}`,
+                    minute: nextMinute,
+                    text: cornerOwnGoal
+                      ? `⚽ ${cornerOwnGoal.commentary}`
+                      : `⚽ Gol po rzucie rożnym! ${headerScorer.lastName} wbija głową!`,
+                    type: MatchEventType.GOAL,
+                    teamSide: activeSide,
+                    playerId: cornerOwnGoal?.player.id ?? headerScorer.id,
+                    playerName: cornerOwnGoal?.player.lastName ?? headerScorer.lastName
+                  };
                   goalTriggered = true;
                   priorityAiTrigger = true;
                   immediateEventType = MatchEventType.GOAL;
@@ -3791,7 +4281,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             varDataRef.current = {
               side: activeSide,
               scorerName: lastGoal?.playerName || 'strzelec',
-              scorerId: lastGoal?.scorerId,
+              scorerId: lastGoal?.scorerId ?? lastGoal?.ownGoalPlayerId,
               teamName: scoringTeam,
               minute: nextMinute
             };
@@ -3810,7 +4300,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const briefingMomentumImpulse =
           nextMinute === 1
             ? (activeBriefing?.momentumBonus ?? 0) * (userSide === 'HOME' ? 1 : -1)
-              + (activeAiBriefing?.momentumBonus ?? 0) * (aiSide === 'HOME' ? 1 : -1)
+              + (activeAiBriefing ? adjustedAiBriefingMomentumBonus : 0) * (aiSide === 'HOME' ? 1 : -1)
             : 0;
         const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue, env?.weather);
         const momentumUpdate = Math.max(-100, Math.min(100, rawMomentumUpdate + briefingMomentumImpulse));
@@ -4177,12 +4667,16 @@ return {
     updatedPlayers[ctx.homeClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.homeClub.id], playedIdsHome);
     updatedPlayers[ctx.awayClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.awayClub.id], playedIdsAway);
 
-    matchState.homeGoals.filter(g => !g.varDisallowed).forEach(g => {
-       const pFound = ctx.homePlayers.find(px => px.lastName === g.playerName);
+    matchState.homeGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
+       const pFound = g.scorerId
+         ? ctx.homePlayers.find(px => px.id === g.scorerId)
+         : ctx.homePlayers.find(px => px.lastName === g.playerName);
        if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
     });
-    matchState.awayGoals.filter(g => !g.varDisallowed).forEach(g => {
-       const pFound = ctx.awayPlayers.find(px => px.lastName === g.playerName);
+    matchState.awayGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
+       const pFound = g.scorerId
+         ? ctx.awayPlayers.find(px => px.id === g.scorerId)
+         : ctx.awayPlayers.find(px => px.lastName === g.playerName);
        if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
     });
 
@@ -4241,12 +4735,15 @@ return {
       return squad.map(player => {
         const withMorale = PlayerMoraleService.ensurePlayerState(player);
         let delta = activeIds.has(player.id) ? teamDelta : Math.round(teamDelta * 0.45);
-        const scored = sideGoals.some(goal => goal.scorerId === player.id || goal.playerName === player.lastName);
-        const assisted = sideGoals.some(goal => goal.assistantId === player.id);
+        const scored = sideGoals.some(goal => !goal.isOwnGoal && (goal.scorerId === player.id || goal.playerName === player.lastName));
+        const assisted = sideGoals.some(goal => !goal.isOwnGoal && goal.assistantId === player.id);
+        const ownGoalAgainst = (side === 'HOME' ? matchState.awayGoals : matchState.homeGoals)
+          .some(goal => goal.isOwnGoal && !goal.varDisallowed && (goal.ownGoalPlayerId === player.id || goal.ownGoalPlayerName === player.lastName));
         const cards = (matchState.playerYellowCards[player.id] || 0) + (matchState.sentOffIds.includes(player.id) ? 2 : 0);
 
         if (scored) delta += 3;
         if (assisted) delta += 2;
+        if (ownGoalAgainst) delta -= 2;
         if (cards > 0) delta -= cards;
         if (!activeIds.has(player.id) && player.squadRole === 'KEY_PLAYER') delta -= 2;
         if (!activeIds.has(player.id) && player.squadRole === 'STARTER') delta -= 1;
@@ -4422,7 +4919,16 @@ return {
 
     const timeline: MatchSummaryEvent[] = [];
     let hCounter = 0, aCounter = 0;
-    [...matchState.logs].filter(l => [MatchEventType.GOAL, MatchEventType.YELLOW_CARD, MatchEventType.RED_CARD, MatchEventType.PENALTY_SCORED, MatchEventType.INJURY_LIGHT, MatchEventType.INJURY_SEVERE].includes(l.type)).sort((a, b) => a.minute - b.minute).forEach(l => {
+    /*
+     * Persist only the referee-review no-penalty generic log, not every generic live
+     * commentary line. Press generation runs after the match screen closes, so it needs
+     * this VAR-reviewed no-call in match history to decide whether the AI opponent lost
+     * a close result after a penalty that could have changed the score.
+     */
+    [...matchState.logs].filter(l =>
+      [MatchEventType.GOAL, MatchEventType.YELLOW_CARD, MatchEventType.RED_CARD, MatchEventType.PENALTY_SCORED, MatchEventType.INJURY_LIGHT, MatchEventType.INJURY_SEVERE].includes(l.type) ||
+      (l.type === MatchEventType.GENERIC && l.id.startsWith('PEN_REVIEW_NO_'))
+    ).sort((a, b) => a.minute - b.minute).forEach(l => {
       /*
        * Reconnect each GOAL log to the canonical goal array entry before building the
        * match summary. VAR marks the goal entry with varDisallowed; the post-match
@@ -4433,12 +4939,12 @@ return {
       const goalEntry = (l.type === MatchEventType.GOAL)
         ? matchState[l.teamSide === 'HOME' ? 'homeGoals' : 'awayGoals'].find(g =>
             g.minute === l.minute &&
-            (l.playerId ? g.scorerId === l.playerId : g.playerName === l.playerName)
+            (l.playerId ? g.scorerId === l.playerId || g.ownGoalPlayerId === l.playerId : g.playerName === l.playerName)
           )
         : undefined;
       const isVarDisallowed = goalEntry?.varDisallowed === true;
       if ((l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed) { if (l.teamSide === 'HOME') hCounter++; else aCounter++; }
-      timeline.push({ minute: l.minute, type: l.type, playerName: l.playerName || '?', assistantName: l.type === MatchEventType.GOAL ? goalEntry?.assistantName : undefined, teamSide: l.teamSide!, varDisallowed: isVarDisallowed, scoreAtMoment: (l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed ? `${hCounter}-${aCounter}` : undefined });
+      timeline.push({ minute: l.minute, type: l.type, playerName: l.playerName || '?', assistantName: l.type === MatchEventType.GOAL ? goalEntry?.assistantName : undefined, teamSide: l.teamSide!, text: l.type === MatchEventType.GENERIC ? l.text : undefined, varDisallowed: isVarDisallowed, isOwnGoal: goalEntry?.isOwnGoal, ownGoalPlayerName: goalEntry?.ownGoalPlayerName, scoreAtMoment: (l.type === MatchEventType.GOAL || l.type === MatchEventType.PENALTY_SCORED) && !isVarDisallowed ? `${hCounter}-${aCounter}` : undefined });
     });
 
     const homeYellowCards = Object.keys(matchState.playerYellowCards).filter(id => ctx.homePlayers.some(p => p.id === id)).length;
@@ -4449,6 +4955,27 @@ return {
     const awayPossession = 100 - homePossession;
     const finalHomeStats = buildDisplayStats(matchState.liveStats.home, matchState.homeScore, homeYellowCards, homeRedCards, homePossession, matchState.sessionSeed, 1000);
     const finalAwayStats = buildDisplayStats(matchState.liveStats.away, matchState.awayScore, awayYellowCards, awayRedCards, awayPossession, matchState.sessionSeed, 2000);
+    const refereeRating = env
+      ? RefereeService.generateLiveMatchRating({
+          referee: env.ref,
+          homeScore: matchState.homeScore,
+          awayScore: matchState.awayScore,
+          homeStats: finalHomeStats,
+          awayStats: finalAwayStats,
+          timeline,
+          seed: matchState.sessionSeed,
+        })
+      : undefined;
+    const refereeName = env ? `${env.ref.firstName} ${env.ref.lastName}` : undefined;
+
+    if (env && refereeRating !== undefined) {
+      RefereeService.recordMatchStats(
+        env.ref.id,
+        refereeRating,
+        finalHomeStats.yellowCards + finalAwayStats.yellowCards,
+        finalHomeStats.redCards + finalAwayStats.redCards
+      );
+    }
 
 const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, side: 'HOME' | 'AWAY', conceded: number, shotsAgainst: number) => {
       const teamScore = side === 'HOME' ? matchState.homeScore : matchState.awayScore;
@@ -4460,9 +4987,9 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
         const perf: PlayerPerformance = {
           playerId: p.id, name: p.lastName, position: p.position,
           goals: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals']
-            .filter(g => (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.varDisallowed && !g.isMiss)
+            .filter(g => !g.isOwnGoal && (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.varDisallowed && !g.isMiss)
             .length,
-          assists: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => g.assistantId === p.id).length,
+          assists: matchState[side === 'HOME' ? 'homeGoals' : 'awayGoals'].filter(g => !g.isOwnGoal && g.assistantId === p.id).length,
           yellowCards: matchState.playerYellowCards[p.id] || 0,
           redCards: matchState.sentOffIds.includes(p.id) ? 1 : 0,
           missedPenalties: penaltyImpact.missed,
@@ -4488,6 +5015,10 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
         }
         finalAdjustment += Math.min(0.35, perf.goals * 0.12);
         finalAdjustment += Math.min(0.25, perf.assists * 0.10);
+        const ownGoalsAgainst = (side === 'HOME' ? matchState.awayGoals : matchState.homeGoals)
+          .filter(g => g.isOwnGoal && !g.varDisallowed && !g.isMiss && (g.ownGoalPlayerId === p.id || g.ownGoalPlayerName === p.lastName))
+          .length;
+        finalAdjustment -= Math.min(0.45, ownGoalsAgainst * 0.22);
         finalAdjustment += Math.min(0.30, perf.savedPenalties * 0.30);
         finalAdjustment -= Math.min(0.25, perf.missedPenalties * 0.25);
         finalAdjustment -= Math.min(0.25, perf.yellowCards * 0.10);
@@ -4509,6 +5040,9 @@ const summary: MatchSummary = {
       homePlayers: calculateUnitRatings(ctx.homePlayers, playedIdsHome, 'HOME', matchState.awayScore, matchState.liveStats.away.shotsOnTarget),
       awayPlayers: calculateUnitRatings(ctx.awayPlayers, playedIdsAway, 'AWAY', matchState.homeScore, matchState.liveStats.home.shotsOnTarget),
       timeline,
+      refereeId: env?.ref.id,
+      refereeName,
+      refereeRating,
       kits: kitColors
     };
 
@@ -4577,28 +5111,40 @@ const summary: MatchSummary = {
       awayScore: matchState.awayScore,
       attendance: attendance,
       kits: kitColors,
-      goals: summary.homeGoals.map(g => ({
-        playerId: g.scorerId,
+      goals: matchState.homeGoals.map(g => ({
+        playerId: g.isOwnGoal ? undefined : g.scorerId,
         playerName: g.playerName,
         minute: g.minute,
         teamId: ctx.homeClub.id,
         isPenalty: g.isPenalty,
         assistantId: g.assistantId,
         assistantName: g.assistantName,
+        varDisallowed: g.varDisallowed,
         isMiss: g.isMiss,
-      })).concat(summary.awayGoals.map(g => ({
-        playerId: g.scorerId,
+        isOwnGoal: g.isOwnGoal,
+        ownGoalPlayerId: g.ownGoalPlayerId,
+        ownGoalPlayerName: g.ownGoalPlayerName,
+      })).concat(matchState.awayGoals.map(g => ({
+        playerId: g.isOwnGoal ? undefined : g.scorerId,
         playerName: g.playerName,
         minute: g.minute,
         teamId: ctx.awayClub.id,
         isPenalty: g.isPenalty,
         assistantId: g.assistantId,
         assistantName: g.assistantName,
+        varDisallowed: g.varDisallowed,
         isMiss: g.isMiss,
+        isOwnGoal: g.isOwnGoal,
+        ownGoalPlayerId: g.ownGoalPlayerId,
+        ownGoalPlayerName: g.ownGoalPlayerName,
       }))),
       ratings: finalRatingsMap,
       substitutions: buildReportSubs('HOME').concat(buildReportSubs('AWAY')),
       injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
+      timeline,
+      refereeId: env?.ref.id,
+      refereeName,
+      refereeRating,
       homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
       awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
       // Historia zapisuje taktyke startowa i koncowa osobno, bo scouting AI analizuje otwarcie meczu.
@@ -4671,19 +5217,24 @@ const summary: MatchSummary = {
       <div className={`flex flex-wrap gap-2 mt-1 ${side === 'AWAY' ? 'justify-end' : 'justify-start'}`}>
         
       {goals.map((g, i) => {
-          const playersList = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-          const foundPlayer = g.scorerId
+          const playersList = g.isOwnGoal
+            ? side === 'HOME' ? ctx.awayPlayers : ctx.homePlayers
+            : side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+          const foundPlayer = g.isOwnGoal && g.ownGoalPlayerId
+            ? playersList.find(px => px.id === g.ownGoalPlayerId)
+            : g.scorerId
             ? playersList.find(px => px.id === g.scorerId)
             : playersList.find(px => px.lastName === g.playerName);
           const nameToDisplay = foundPlayer
             ? `${foundPlayer.firstName.charAt(0)}. ${foundPlayer.lastName}`
             : g.playerName;
+          const goalSuffix = `${g.minute}'${g.isPenalty ? ' k.' : ''}`;
           return (
-            <span key={`g-${i}`} className={`text-[9px] font-bold flex items-center gap-1 ${g.isMiss ? 'text-rose-500' : g.varDisallowed ? 'text-slate-500' : 'text-white'}`}>
+            <span key={`g-${i}`} className={`text-[9px] font-bold flex items-center gap-1 ${g.isMiss ? 'text-rose-500' : g.varDisallowed ? 'text-slate-500' : g.isOwnGoal ? 'text-orange-400' : 'text-white'}`}>
               {g.isMiss ? '❌' : '⚽'}{' '}
               {g.varDisallowed
-                ? <><s>{nameToDisplay} ({g.minute}'{g.isPenalty ? ' k.' : ''})</s> (VAR)</>
-                : `${nameToDisplay} (${g.minute}'${g.isPenalty ? ' k.' : ''}${g.isMiss ? '' : ''})`}
+                ? <><s>{nameToDisplay} ({goalSuffix}{g.isOwnGoal ? ' sam' : ''})</s> (VAR)</>
+                : <>{nameToDisplay} ({goalSuffix}{g.isOwnGoal ? <span className="text-orange-300"> sam</span> : null})</>}
             </span>
           );
         })}
@@ -4747,9 +5298,9 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
           const liveRating = calculateLiveRating(p, side, matchState);
           const nameWithInitial = `${p.firstName.charAt(0)}. ${p.lastName}`;
           // Poprawiona detekcja goli: używamy scorerId gdy dostępne, fallback na nazwisko
-          const goalsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => (g.scorerId ? g.scorerId === p.id : (g.playerName === p.lastName || g.playerName === nameWithInitial)) && !g.varDisallowed && !g.isMiss).length;
-          const varDisallowedCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => (g.scorerId ? g.scorerId === p.id : (g.playerName === p.lastName || g.playerName === nameWithInitial)) && g.varDisallowed && !g.isMiss).length;
-          const assistsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => g.assistantId === p.id).length;
+          const goalsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => !g.isOwnGoal && (g.scorerId ? g.scorerId === p.id : (g.playerName === p.lastName || g.playerName === nameWithInitial)) && !g.varDisallowed && !g.isMiss).length;
+          const varDisallowedCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => !g.isOwnGoal && (g.scorerId ? g.scorerId === p.id : (g.playerName === p.lastName || g.playerName === nameWithInitial)) && g.varDisallowed && !g.isMiss).length;
+          const assistsCount = (side === 'HOME' ? matchState!.homeGoals : matchState!.awayGoals).filter(g => !g.isOwnGoal && g.assistantId === p.id).length;
           const f = fatigue[pid] || 100;
           const isSentOff = matchState!.sentOffIds.includes(pid);
 
@@ -5439,7 +5990,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       const p = ctx.homePlayers.find(px => px.id === pId);
       if (!p || matchState.sentOffIds.includes(p.id)) return null;
       const injury = matchState.homeInjuries[pId];
-const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.isMiss && !g.varDisallowed);
+const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.isMiss && !g.varDisallowed);
       return (
         <div
   key={`h-${p.id}`}
@@ -5492,7 +6043,7 @@ const hasScored = matchState.homeGoals.some(g => (g.scorerId ? g.scorerId === p.
   const p = ctx.awayPlayers.find(px => px.id === pId);
   if (!p || matchState.sentOffIds.includes(p.id)) return null;
   const injury = matchState.awayInjuries[pId];
- const hasScored = matchState.awayGoals.some(g => (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.isMiss && !g.varDisallowed);
+ const hasScored = matchState.awayGoals.some(g => !g.isOwnGoal && (g.scorerId ? g.scorerId === p.id : g.playerName === p.lastName) && !g.isMiss && !g.varDisallowed);
   return (
     <div
       key={`a-${p.id}`}

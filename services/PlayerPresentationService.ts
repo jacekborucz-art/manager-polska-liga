@@ -99,8 +99,8 @@ export const PlayerPresentationService = {
    * Returns condition bar color class based on value.
    */
   getConditionColorClass: (condition: number): string => {
-    if (condition >= 70) return 'bg-emerald-500';
-    if (condition >= 40) return 'bg-orange-500';
+    if (condition >= 85) return 'bg-emerald-500';
+    if (condition >= 60) return 'bg-orange-500';
     return 'bg-red-500';
   }
 };

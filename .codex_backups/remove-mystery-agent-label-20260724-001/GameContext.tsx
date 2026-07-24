@@ -1,0 +1,17110 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useProcessing } from '../components/ui/ProcessingOverlay';
+import {
+  ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
+  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, ManagerJobOffer, ManagerJobApplicationResult, MatchLiveState,
+  MailMessage, MatchStatus, MailType, CompetitionType,
+Coach, TrainingIntensity, IndividualTalkType,
+PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
+HealthStatus, InjurySeverity,
+PlayerPosition, EuropeanStatus, NationalTeam, NTMatchResult, ReserveProgressPoint,
+PlayerStats,
+TransferOffer, TransferClubBidInput, TransferContractInput, TransferOfferStatus, TransferOfferSubmissionResult, TransferTiming,
+IncomingTransferOffer, IncomingOfferStatus,
+LoanOfferSubmissionInput, LoanOfferSubmissionResult,
+ActivePlayoffDraw,
+RelegationPlayoffFirstLegResults,
+RelegationPlayoffFinalResult,
+RelegationPlayoffPairOutcome,
+RelegationPlayoffLegResult,
+PromotionPlayoffSemiResults,
+PromotionPlayoffFinalResults,
+PromotionPlayoffSingleMatchResult,
+ActivePlayoffMatchData,
+ClubAcademy,
+AcademyScoutMission,
+Region,
+YouthPlayer,
+Scout,
+MatchHistoryEntry,
+WCQPlayoffState,
+WCState,
+NationsLeagueState,
+NationsLeagueArchiveEntry,
+EuroHostAnnouncement,
+EuroQualifiersState,
+WorldCupQualifiersState,
+UefaNationalRankingState,
+CoachSeasonStats,
+AiTransferLogEntry,
+WinterCampLocation,
+WinterCampProgram,
+WinterCampIntensity,
+WinterCampState,
+SummerCampLocation,
+SummerCampProgram,
+SummerCampIntensity,
+SummerCampState,
+StadiumStand,
+StaffMember,
+StaffRole,
+BoardClubRequestType,
+AiFriendlyPair,
+AiFriendlyMatchReport,
+MysteryAgentOfferState,
+MysteryAgentContractOffer,
+MysteryAgentNegotiationResult,
+MysteryAgentBoardRequestResult,
+} from '../types';
+import { StadiumExpansionService } from '../services/StadiumExpansionService';
+import { AiFriendlyGeneratorService } from '../services/AiFriendlyGeneratorService';
+import { AiFriendlyMatchSimulator } from '../services/AiFriendlyMatchSimulator';
+import { KitSelection } from '../services/KitSelectionService';
+import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
+import { ScoutService } from '../services/ScoutService';
+import { NationalTeamService } from '../services/NationalTeamService';
+import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../resources/static_db/clubs/ChampionsLeagueTeams';
+import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../resources/static_db/clubs/EuropeLeagueTeams';
+import { ELDrawService } from '../LECupEngine/ELDrawService';
+import { CONFDrawService } from '../LECupEngine/CONFDrawService';
+import { RAW_CONFERENCE_LEAGUE_CLUBS, generateCONFClubId } from '../resources/static_db/clubs/ConferenceLeagueTeams';
+import { CLUBS_SOUTH_AMERICA, generateSAClubId } from '../resources/static_db/clubs/SouthamericanTeams';
+import { CLUBS_ASIAN, generateAsianClubId } from '../resources/static_db/clubs/asian_teams';
+import { CLUBS_AFRICAN, generateAfricanClubId } from '../resources/static_db/clubs/african_teams';
+import { CLUBS_NORTH_AMERICA, generateNorthAmericaClubId } from '../resources/static_db/clubs/northAME_teams';
+import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS, STATIC_SA_CLUBS, STATIC_ASIAN_CLUBS, STATIC_AFRICAN_CLUBS, STATIC_NA_CLUBS, START_DATE, UNEMPLOYED_MANAGER_CLUB, UNEMPLOYED_MANAGER_CLUB_ID, generateRandomBoard, computeBoardFromManagement } from '../constants';
+import { SeasonTemplateGenerator } from '../services/SeasonTemplateGenerator';
+import { LeagueScheduleGenerator } from '../services/LeagueScheduleGenerator';
+import { CalendarEngine } from '../services/CalendarEngine';
+import { SquadGeneratorService, calcReputacja } from '../services/SquadGeneratorService';
+import { LineupService } from '../services/LineupService';
+import { BackgroundMatchProcessor } from '../services/BackgroundMatchProcessor';
+import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
+import { BackgroundPlayOffMatchPolishCup } from '../services/BackgroundPlayOffMatchPolishCup';
+import { DebugLoggerService } from '../services/DebugLoggerService';
+import { BackgroundMatchProcessorPolishCup } from '../services/BackgroundMatchProcessorPolishCup';
+import { RecoveryService } from '../services/RecoveryService';
+import { isRecoveryFocusReady } from '../services/MatchPrepFocusService';
+import { MailService, SeasonSummaryData } from '../services/MailService';
+import { TrainingService } from '../services/TrainingService';
+import { TrainingAssistantService } from '../services/TrainingAssistantService';
+import { AiWeeklyTrainingService } from '../services/AiWeeklyTrainingService';
+import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
+import { SeasonTransitionService } from '../services/SeasonTransitionService';
+import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
+import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
+import { LeagueStatsService } from '../services/LeagueStatsService';
+import { FinanceService } from '../services/FinanceService';
+import { BoardFinanceMonitorService } from '../services/BoardFinanceMonitorService';
+import { PolishCupDrawService } from '../services/PolishCupDrawService';
+import { CLDrawService } from '../services/CLDrawService';
+import { SuperCupService } from '../services/SuperCupService';
+import { UEFASuperCupService } from '../services/UEFASuperCupService';
+import { CoachService } from '../services/CoachService';
+import { StaffGenerationService } from '../services/StaffGenerationService';
+import { ClubManagementService } from '../services/ClubManagementService';
+import { SportingDirectorService } from '../services/SportingDirectorService';
+import { RefereeService } from '../services/RefereeService';
+import { FreeAgentService } from '../services/FreeAgentService';
+import { AiContractService } from '@/services/AiContractService';
+import { AiScoutingService } from '../services/AiScoutingService';
+import { AiTransferDecisionService } from '../services/AiTransferDecisionService';
+import { BackgroundMatchProcessorCL } from '../services/BackgroundMatchProcessorCL';
+import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
+import { MatchHistoryService } from '../services/MatchHistoryService';
+import { SaveArchiveService } from '../services/SaveArchiveService';
+import { ScoutAssistantService } from '../services/ScoutAssistantService';
+import { ChampionshipHistoryService } from '../data/championship_history';
+import { TransferBuyerLogicService } from '../services/TransferBuyerLogicService';
+import { TransferSellerLogicService } from '../services/TransferSellerLogicService';
+import { TransferPlayerDecisionService } from '../services/TransferPlayerDecisionService';
+import { TransferExecutionService } from '../services/TransferExecutionService';
+import { IncomingTransferService } from '../services/IncomingTransferService';
+import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
+import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
+import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
+import { NationsLeagueService } from '../services/NationsLeagueService';
+import { EuroQualifiersService } from '../services/EuroQualifiersService';
+import { WorldCupQualifiersService } from '../services/WorldCupQualifiersService';
+import { EuroTournamentService } from '../services/EuroTournamentService';
+import { UefaNationalRankingService } from '../services/UefaNationalRankingService';
+import { getNTMatchDayForDate, NTMatchDay } from '../resources/NationalTeamSchedule';
+import { WCQPlayoffService } from '../services/WCQPlayoffService';
+import { WorldCupService } from '../services/WorldCupService';
+import { WorldCupHistoryBackfillService } from '../services/WorldCupHistoryBackfillService';
+import { PlayerCareerService } from '../services/PlayerCareerService';
+import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
+import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
+import { PlayerMarketVisibilityService } from '../services/PlayerMarketVisibilityService';
+import { MysteryAgentService } from '../services/MysteryAgentService';
+import { SAVE_VERSION, SaveState, migrateWelcomeMailSignatories } from '../services/SaveGameService';
+import { generateLocationPrices, generateSpaCost, applyWinterCampEffects, getAssistantSuggestion } from '../services/WinterCampService';
+import { generateSummerLocationPrices, generateSummerSpaCost, applySummerCampEffects, getSummerAssistantSuggestion } from '../services/SummerCampService';
+import { ReserveScheduleService } from '../services/ReserveScheduleService';
+import { ReserveOpponentGeneratorService } from '../services/ReserveOpponentGeneratorService';
+import { ReserveMatchEngine } from '../services/ReserveMatchEngine';
+import { ReserveFixture, ReserveMatchResult, ReserveSeasonStats } from '../types';
+import { PlayerAttributesGenerator } from '../services/PlayerAttributesGenerator';
+import { PlayerDevelopmentService } from '../services/PlayerDevelopmentService';
+import { PlayerFormService } from '../services/PlayerFormService';
+import { EuropeanPlayerStatsService } from '../services/EuropeanPlayerStatsService';
+import { pickNationalityForRegion } from '../services/NationalityService';
+import { IndividualTalkResult, PlayerMoraleService } from '../services/PlayerMoraleService';
+import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowService';
+import { PlayerTransferConversationResult } from '../services/PlayerTransferMindflowService';
+import { PlayerTransferListObjectionResult } from '../services/PlayerTransferListObjectionService';
+// ── Transfer Request Dialog ──────────────────────────────────────────────────
+// 4 ścieżki rozmowy po prośbie o listę transferową (A/B/C/D).
+// Modal: PlayerTransferRequestModal | Serwis: PlayerTransferRequestDialogService
+import { PlayerTransferRequestDialogService, TransferRequestDialogResult } from '../services/PlayerTransferRequestDialogService';
+import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
+import { ManagerExperienceService, ManagerExpAwardInput } from '../services/ManagerExperienceService';
+import { ManagerJobService } from '../services/ManagerJobService';
+import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
+import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
+import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
+
+export interface ImportedSquadPlayer {
+  firstName: string;
+  lastName: string;
+  age: number;
+  clubId?: string;
+  position: PlayerPosition;
+  secondaryPosition?: PlayerPosition | null;
+  secondaryPositionRating?: number;
+  nationality?: Region;
+  nationalityCountry?: string;
+  annualSalary?: number;
+  marketValue?: number;
+  contractEndDate?: string;
+  loan?: PlayerLoanInfo | null;
+  transferPendingClubId?: string;
+  transferReportDate?: string;
+  transferPendingFee?: number;
+  transferPendingSalary?: number;
+  transferPendingBonus?: number;
+  transferPendingContractYears?: number;
+  isAvailableForLoan?: boolean;
+  isOnTransferList?: boolean;
+  isUntouchable?: boolean;
+  squadRole?: 'STARTER' | 'KEY_PLAYER' | null;
+  nationalStats?: { matchesPlayed?: number; goals?: number };
+  reputacja?: number;
+  lojalnosc?: number;
+  attributes: {
+    strength: number; stamina: number; pace: number; defending: number;
+    passing: number; attacking: number; finishing: number; technique: number;
+    vision: number; dribbling: number; heading: number; positioning: number;
+    goalkeeping: number; freeKicks: number; talent: number; penalties: number;
+    corners: number; aggression: number; crossing: number; leadership: number;
+    mentality: number; workRate: number;
+  };
+}
+
+const getAiFriendlyPlayedIds = (report: AiFriendlyMatchReport, teamId: string, startingXI: string[]): Set<string> => new Set([
+  ...startingXI.filter(Boolean),
+  ...report.substitutions
+    .filter(sub => sub.teamId === teamId)
+    .map(sub => sub.playerInId)
+    .filter(Boolean),
+]);
+
+const applyAiFriendlyStatsToPlayers = (
+  playersMap: Record<string, Player[]>,
+  reports: AiFriendlyMatchReport[],
+  knownSquads: Record<string, Player[]> = {}
+): Record<string, Player[]> => {
+  let nextPlayers = { ...knownSquads, ...playersMap };
+
+  const updateTeamStats = (
+    report: AiFriendlyMatchReport,
+    teamId: string,
+    playedIds: Set<string>,
+    conceded: number
+  ) => {
+    const squad = nextPlayers[teamId];
+    if (!squad || playedIds.size === 0) return;
+
+    let changed = false;
+    const updatedSquad = squad.map(player => {
+      if (!playedIds.has(player.id)) return player;
+
+      changed = true;
+      const friendlyStats: PlayerStats = { ...(player.friendlyStats ?? PlayerCareerService.emptyStats()) };
+      const goals = report.scorers.filter(s => s.teamId === teamId && s.playerId === player.id && !s.isMiss).length;
+      const assists = report.scorers.filter(s => s.teamId === teamId && s.assistId === player.id && !s.isMiss).length;
+      const yellowCards = report.cards.filter(c =>
+        c.playerId === player.id && (c.type === 'YELLOW_CARD' || c.type === 'SECOND_YELLOW')
+      ).length;
+      const redCards = report.cards.filter(c => c.playerId === player.id && c.type === 'RED_CARD').length;
+      const rating = report.ratings[player.id];
+
+      return PlayerFormService.withUpdatedForm({
+        ...player,
+        friendlyStats: {
+          ...friendlyStats,
+          matchesPlayed: friendlyStats.matchesPlayed + 1,
+          minutesPlayed: friendlyStats.minutesPlayed + 90,
+          goals: friendlyStats.goals + goals,
+          assists: friendlyStats.assists + assists,
+          yellowCards: friendlyStats.yellowCards + yellowCards,
+          redCards: friendlyStats.redCards + redCards,
+          cleanSheets: friendlyStats.cleanSheets + (player.position === PlayerPosition.GK && conceded === 0 ? 1 : 0),
+          ratingHistory: rating ? [...(friendlyStats.ratingHistory || []), rating] : (friendlyStats.ratingHistory || []),
+        },
+      });
+    });
+
+    if (changed) {
+      nextPlayers = { ...nextPlayers, [teamId]: updatedSquad };
+    }
+  };
+
+  reports.forEach(report => {
+    updateTeamStats(report, report.homeTeamId, getAiFriendlyPlayedIds(report, report.homeTeamId, report.homeStartingXI), report.awayScore);
+    updateTeamStats(report, report.awayTeamId, getAiFriendlyPlayedIds(report, report.awayTeamId, report.awayStartingXI), report.homeScore);
+  });
+
+  return nextPlayers;
+};
+
+const getAiWinterCampCost = (club: Club): number => {
+  const tier = club.tier ?? (parseInt(club.leagueId?.split('_')[2] || '2') || 2);
+  const tierMultiplier = tier <= 1 ? 1.35 : tier === 2 ? 1.1 : tier === 3 ? 0.85 : 0.65;
+  const rawCost = (70000 + (club.reputation ?? 50) * 2600) * tierMultiplier;
+  return Math.round(rawCost / 10000) * 10000;
+};
+
+const getAiWinterCampFormAdjustment = (club: Club, cost: number): number =>
+  club.budget >= cost * 1.12 ? 3 : -12;
+
+const isPolishLeagueClub = (club: Club): boolean =>
+  club.leagueId?.startsWith('L_PL') || club.country === 'POL';
+
+const FOREIGN_BACKGROUND_LEAGUE_IDS = new Set(['L_CL', 'L_EL', 'L_CONF', 'L_SA', 'L_ASIA', 'L_AFRICA', 'L_NA']);
+
+const isForeignBackgroundStatsClub = (club: Club): boolean =>
+  FOREIGN_BACKGROUND_LEAGUE_IDS.has(club.leagueId) && club.country !== 'POL';
+
+const getNormalizedForeignReputation = (club: Club): number => {
+  const reputation = club.reputation ?? 60;
+  return reputation <= 25 ? reputation * 5 : reputation;
+};
+
+const getForeignBackgroundFormScore = (player: Player, club: Club, date: Date): number => {
+  const currentScore = player.form ?? PlayerFormService.calculate(player).score;
+  const seed = Array.from(`${club.id}_${player.id}_${date.getFullYear()}_${date.getMonth()}`).reduce(
+    (sum, char, index) => sum + char.charCodeAt(0) * (index + 3),
+    0
+  );
+  const variation = (seed % 11) - 5;
+  const reputationAdjustment = (getNormalizedForeignReputation(club) - 65) * 0.12;
+  const qualityAdjustment = ((player.overallRating ?? 60) - 62) * 0.22;
+  const moraleAdjustment = ((player.morale ?? 50) - 50) * 0.08;
+  const conditionPenalty = (player.condition ?? 100) < 65 ? -5 : 0;
+  const fatiguePenalty = (player.fatigueDebt ?? 0) > 60 ? -4 : 0;
+  const targetScore = Math.max(42, Math.min(76, 54 + reputationAdjustment + qualityAdjustment + moraleAdjustment + conditionPenalty + fatiguePenalty + variation));
+
+  if (currentScore >= targetScore) return currentScore;
+  return Math.round(currentScore + (targetScore - currentScore) * 0.65);
+};
+
+const applyForeignBackgroundForm = (squad: Player[], club: Club, date: Date): Player[] =>
+  EuropeanPlayerStatsService.applyBackgroundLeagueStatsToDate(squad, club, date, date.getFullYear()).map(player => ({
+    ...player,
+    form: getForeignBackgroundFormScore(player, club, date),
+  }));
+
+const sanitizeImportedLoan = (
+  loan: ImportedSquadPlayer['loan'],
+  fallbackParentClubId: string,
+  fallbackParentClubName: string,
+): PlayerLoanInfo | null => {
+  if (!loan) return null;
+  if (
+    typeof loan.destinationClubId !== 'string' ||
+    typeof loan.destinationClubName !== 'string' ||
+    typeof loan.startDate !== 'string' ||
+    typeof loan.endDate !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    parentClubId: typeof loan.parentClubId === 'string' ? loan.parentClubId : fallbackParentClubId,
+    parentClubName: typeof loan.parentClubName === 'string' ? loan.parentClubName : fallbackParentClubName,
+    destinationClubId: loan.destinationClubId,
+    destinationClubName: loan.destinationClubName,
+    startDate: loan.startDate,
+    endDate: loan.endDate,
+    wageCoveragePercent: typeof loan.wageCoveragePercent === 'number' ? loan.wageCoveragePercent : undefined,
+    loanFee: typeof loan.loanFee === 'number' ? loan.loanFee : undefined,
+    forcedByClub: typeof loan.forcedByClub === 'boolean' ? loan.forcedByClub : undefined,
+    reportBaselineMatches: typeof loan.reportBaselineMatches === 'number' ? loan.reportBaselineMatches : undefined,
+    reportBaselineMinutes: typeof loan.reportBaselineMinutes === 'number' ? loan.reportBaselineMinutes : undefined,
+    reportBaselineGoals: typeof loan.reportBaselineGoals === 'number' ? loan.reportBaselineGoals : undefined,
+    reportBaselineAssists: typeof loan.reportBaselineAssists === 'number' ? loan.reportBaselineAssists : undefined,
+    reportBaselineYellowCards: typeof loan.reportBaselineYellowCards === 'number' ? loan.reportBaselineYellowCards : undefined,
+    reportBaselineRedCards: typeof loan.reportBaselineRedCards === 'number' ? loan.reportBaselineRedCards : undefined,
+    reportBaselineRatingCount: typeof loan.reportBaselineRatingCount === 'number' ? loan.reportBaselineRatingCount : undefined,
+    lastReportDate: typeof loan.lastReportDate === 'string' ? loan.lastReportDate : undefined,
+    lastReportMatches: typeof loan.lastReportMatches === 'number' ? loan.lastReportMatches : undefined,
+    lastReportMinutes: typeof loan.lastReportMinutes === 'number' ? loan.lastReportMinutes : undefined,
+    lastReportGoals: typeof loan.lastReportGoals === 'number' ? loan.lastReportGoals : undefined,
+    lastReportAssists: typeof loan.lastReportAssists === 'number' ? loan.lastReportAssists : undefined,
+    lastReportRatingCount: typeof loan.lastReportRatingCount === 'number' ? loan.lastReportRatingCount : undefined,
+    monthlyReports: Array.isArray(loan.monthlyReports)
+      ? loan.monthlyReports.filter(report =>
+          report &&
+          typeof report.id === 'string' &&
+          typeof report.date === 'string' &&
+          typeof report.monthLabel === 'string'
+        )
+      : undefined,
+  };
+};
+
+const generateRuntimeSeed = (): number => {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    const seedBuffer = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(seedBuffer);
+    return seedBuffer[0] >>> 0;
+  }
+
+  return Math.floor(Math.random() * 0x100000000) >>> 0;
+};
+
+const buildCareerScopedSeed = (date: Date, careerSeed: number, scope: string): number => {
+  const input = `${date.toISOString().slice(0, 10)}|${careerSeed}|${scope}`;
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const ACTIVE_TRANSFER_OFFER_STATUSES = new Set<TransferOfferStatus>([
+  TransferOfferStatus.SELLER_REVIEW,
+  TransferOfferStatus.SELLER_COUNTERED,
+  TransferOfferStatus.SELLER_ACCEPTED,
+  TransferOfferStatus.PLAYER_NEGOTIATION,
+  TransferOfferStatus.READY_TO_FINALIZE,
+  TransferOfferStatus.AGREED_PRECONTRACT,
+]);
+
+const isActiveTransferOffer = (offer: TransferOffer): boolean =>
+  ACTIVE_TRANSFER_OFFER_STATUSES.has(offer.status);
+
+const hasActiveTransferConflict = (playerId: string, transferOffers: TransferOffer[]): boolean =>
+  transferOffers.some(offer => offer.playerId === playerId && isActiveTransferOffer(offer));
+
+const getHiddenOffenseLockoutDate = (currentDate: Date): Date => {
+  const lockoutDate = new Date(currentDate);
+  lockoutDate.setMonth(lockoutDate.getMonth() + 3 + Math.floor(Math.random() * 10));
+  return lockoutDate;
+};
+
+const getUserTrainingWeekKey = (date: Date): string => {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const day = Math.floor((
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
+    new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime()
+  ) / 86_400_000);
+  return `${date.getFullYear()}-${Math.floor(day / 7)}`;
+};
+
+const hasActiveIncomingConflict = (
+  playerId: string,
+  incomingOffers: IncomingTransferOffer[],
+  kind?: 'TRANSFER' | 'LOAN'
+): boolean =>
+  incomingOffers.some(offer =>
+    offer.playerId === playerId &&
+    IncomingTransferService.isActiveIncomingOfferStatus(offer.status) &&
+    (!kind || (offer.kind ?? 'TRANSFER') === kind)
+  );
+
+const processAiMonthlyLoanListReview = (
+  clubs: Club[],
+  players: Record<string, Player[]>,
+  lineups: Record<string, Lineup>,
+  coaches: Record<string, Coach>,
+  currentDate: Date,
+  sessionSeed: number,
+  userTeamId: string | null,
+  incomingOffers: IncomingTransferOffer[],
+  transferOffers: TransferOffer[]
+): Record<string, Player[]> => {
+  const nextPlayers: Record<string, Player[]> = { ...players };
+  let changed = false;
+
+  clubs.forEach(club => {
+    if (club.id === userTeamId) return;
+
+    const squad = players[club.id] || [];
+    if (squad.length === 0) return;
+
+    const lineup = lineups[club.id];
+    const startingIds = new Set((lineup?.startingXI.filter(Boolean) as string[] | undefined) ?? []);
+    const benchIds = new Set(lineup?.bench ?? []);
+    const coachExperience = club.coachId ? coaches[club.coachId]?.attributes.experience ?? 50 : 50;
+    const maxLoanListed = squad.length >= 31 ? 3 : squad.length > 26 ? 2 : 0;
+
+    const positionRank = new Map<string, number>();
+    Object.values(PlayerPosition).forEach(position => {
+      squad
+        .filter(player => player.position === position)
+        .sort((a, b) => b.overallRating - a.overallRating)
+        .forEach((player, index) => positionRank.set(player.id, index + 1));
+    });
+
+    const selectedIds = new Set<string>();
+
+    if (maxLoanListed > 0) {
+      const candidates = squad
+        .map(player => {
+          const isStarter = startingIds.has(player.id);
+          const isBench = benchIds.has(player.id);
+          const rank = positionRank.get(player.id) ?? 99;
+          const activeTransferConflict =
+            !!player.transferPendingClubId ||
+            hasActiveTransferConflict(player.id, transferOffers) ||
+            hasActiveIncomingConflict(player.id, incomingOffers);
+
+          if (
+            player.loan ||
+            player.isOnTransferList ||
+            player.isUntouchable ||
+            activeTransferConflict ||
+            isStarter ||
+            isBench
+          ) {
+            return null;
+          }
+
+          const agePriority = player.age <= 21
+            ? 40
+            : player.age <= 23
+              ? 30
+              : player.age <= 25
+                ? 18
+                : Math.max(0, 12 - Math.max(0, player.age - 26));
+          const depthPriority = rank >= 6 ? 32 : rank === 5 ? 24 : rank === 4 ? 12 : 0;
+          const talentPriority = player.age <= 24 && player.attributes.talent >= player.overallRating + 6 ? 14 : 0;
+          const surplusPriority = Math.max(0, squad.length - 26) * 3;
+          const experienceNoise = Math.max(1, Math.round((70 - coachExperience) / 12) + 2);
+          const deterministicNoise = Math.floor(
+            IncomingTransferService.seededRandom(
+              IncomingTransferService.buildOfferSeed(currentDate, club.id, `${player.id}_AI_LOAN_LIST_${sessionSeed}`)
+            ) * experienceNoise
+          );
+          const score = agePriority + depthPriority + talentPriority + surplusPriority + deterministicNoise;
+
+          return {
+            player,
+            score,
+          };
+        })
+        .filter((candidate): candidate is { player: Player; score: number } => !!candidate)
+        .sort((a, b) => {
+          // MINDFLOW AI:
+          // Trener zaczyna od najmłodszych zawodników bez realnej roli meczowej,
+          // bo wypożyczenie ma przede wszystkim dawać minuty rozwojowe. Dopiero gdy
+          // takich graczy brakuje, sortowanie naturalnie idzie w górę wieku i wybiera
+          // starszych rezerwowych, którzy dalej są poza pierwszą jedenastką i ławką.
+          if (a.player.age !== b.player.age) return a.player.age - b.player.age;
+          if (b.score !== a.score) return b.score - a.score;
+          return a.player.overallRating - b.player.overallRating;
+        });
+
+      candidates
+        .filter(candidate => candidate.score >= (coachExperience >= 70 ? 38 : coachExperience >= 45 ? 34 : 30))
+        .slice(0, maxLoanListed)
+        .forEach(candidate => selectedIds.add(candidate.player.id));
+    }
+
+    const updatedSquad = squad.map(player => {
+      const shouldBeListed = selectedIds.has(player.id);
+      const shouldStayListedBecauseOfferExists =
+        player.isAvailableForLoan &&
+        hasActiveIncomingConflict(player.id, incomingOffers, 'LOAN');
+      const nextAvailableForLoan = shouldBeListed || shouldStayListedBecauseOfferExists;
+
+      if (player.isAvailableForLoan === nextAvailableForLoan) return player;
+
+      changed = true;
+      return {
+        ...player,
+        isAvailableForLoan: nextAvailableForLoan,
+        squadRole: nextAvailableForLoan ? null : player.squadRole,
+      };
+    });
+
+    nextPlayers[club.id] = updatedSquad;
+  });
+
+  return changed ? nextPlayers : players;
+};
+
+const isTransferWindowDate = (date: Date): boolean => {
+  const month = date.getMonth();
+  const day = date.getDate();
+  const isSummer = (month === 6 && day >= 1) || month === 7 || (month === 8 && day <= 8);
+  const isWinter = (month === 0 && day >= 12) || (month === 1 && day <= 13);
+  return isSummer || isWinter;
+};
+
+const processAiToAiLoanMoves = (
+  clubs: Club[],
+  players: Record<string, Player[]>,
+  lineups: Record<string, Lineup>,
+  coaches: Record<string, Coach>,
+  currentDate: Date,
+  sessionSeed: number,
+  userTeamId: string | null,
+  incomingOffers: IncomingTransferOffer[],
+  transferOffers: TransferOffer[]
+): {
+  updatedClubs: Club[];
+  updatedPlayers: Record<string, Player[]>;
+  updatedLineups: Record<string, Lineup>;
+  aiTransferLogEntries: AiTransferLogEntry[];
+} => {
+  if (!isTransferWindowDate(currentDate)) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  const dateStr = currentDate.toISOString().split('T')[0];
+  const dailyRoll = IncomingTransferService.seededRandom(currentDate.getTime() + sessionSeed + 3907);
+  const maxDailyLoans = dailyRoll < 0.08 ? 2 : dailyRoll < 0.48 ? 1 : 0;
+
+  if (maxDailyLoans === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  const aiClubs = clubs.filter(club => club.id !== userTeamId);
+  const clubById = new Map(clubs.map(club => [club.id, club]));
+  const loanCandidates: Array<{
+    player: Player;
+    sellerClub: Club;
+    buyerClub: Club;
+    offer: IncomingTransferOffer;
+    score: number;
+  }> = [];
+
+  aiClubs.forEach(sellerClub => {
+    const sellerSquad = players[sellerClub.id] || [];
+    sellerSquad
+      .filter(player =>
+        player.isAvailableForLoan &&
+        !player.loan &&
+        !player.transferPendingClubId &&
+        !hasActiveTransferConflict(player.id, transferOffers) &&
+        !hasActiveIncomingConflict(player.id, incomingOffers)
+      )
+      .forEach(player => {
+        aiClubs.forEach(buyerClub => {
+          if (buyerClub.id === sellerClub.id) return;
+          const buyerSquad = players[buyerClub.id] || [];
+          if (buyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
+          if (buyerSquad.length >= 32) return;
+
+          const seed = IncomingTransferService.buildOfferSeed(
+            currentDate,
+            buyerClub.id,
+            `${player.id}_AI_AI_LOAN_${sessionSeed}`
+          );
+          const decision = IncomingTransferService.shouldGenerateLoanOffer(
+            player,
+            buyerClub,
+            sellerClub,
+            incomingOffers,
+            seed,
+            currentDate,
+            buyerSquad
+          );
+          if (!decision.shouldGenerate) return;
+
+          const loanTerms = IncomingTransferService.calculateLoanOffer(player, buyerClub, sellerClub, currentDate, seed);
+          if (!loanTerms) return;
+
+          const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+            player,
+            buyerClub,
+            sellerClub,
+            buyerSquad,
+            seed + 419
+          );
+          if (playerDecision === 'refused') return;
+
+          const loanFee = loanTerms.loanFee ?? 0;
+          const wageCoveragePercent = loanTerms.wageCoveragePercent ?? 0;
+          const loanEndDate = loanTerms.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, loanTerms.loanDuration || 'SEASON');
+          const loanStartDate = loanTerms.loanStartDate || dateStr;
+          const loanStart = new Date(loanStartDate);
+          const loanEnd = new Date(loanEndDate);
+          const loanDays = Math.max(30, Math.ceil((loanEnd.getTime() - loanStart.getTime()) / 86_400_000));
+          const wageSaving = Math.round((player.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
+          const financialScore = Math.min(60, (loanFee + wageSaving) / 5000);
+          const reputationScore = Math.max(0, buyerClub.reputation) * 6;
+          const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad);
+          const squadNeedScore = Math.max(0, need.needScore) * 7;
+          const sameCountryBonus = buyerClub.country === sellerClub.country ? 4 : 0;
+          const score = financialScore + reputationScore + squadNeedScore + sameCountryBonus;
+
+          loanCandidates.push({
+            player,
+            sellerClub,
+            buyerClub,
+            score,
+            offer: {
+              id: `ai_ai_loan_${dateStr}_${player.id}_${buyerClub.id}`,
+              kind: 'LOAN',
+              playerId: player.id,
+              buyerClubId: buyerClub.id,
+              fee: loanFee,
+              timing: TransferTiming.IMMEDIATE,
+              status: IncomingOfferStatus.COMPLETED,
+              createdAt: dateStr,
+              emailSentAt: dateStr,
+              aiMaxFee: loanTerms.aiMaxFee,
+              aiUrgency: loanTerms.aiUrgency,
+              negotiationRound: 0,
+              boardPressure: false,
+              loanDuration: loanTerms.loanDuration,
+              loanStartDate,
+              loanEndDate,
+              wageCoveragePercent,
+              loanFee,
+              loanTotalCost: loanTerms.loanTotalCost,
+              loanPlayerCanBeForced: loanTerms.loanPlayerCanBeForced,
+            },
+          });
+        });
+      });
+  });
+
+  const bestOfferByPlayer = new Map<string, typeof loanCandidates[number]>();
+  loanCandidates.forEach(candidate => {
+    const currentBest = bestOfferByPlayer.get(candidate.player.id);
+    if (!currentBest || candidate.score > currentBest.score) {
+      bestOfferByPlayer.set(candidate.player.id, candidate);
+    }
+  });
+
+  const selectedLoans = [...bestOfferByPlayer.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxDailyLoans);
+
+  if (selectedLoans.length === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  let nextPlayers: Record<string, Player[]> = { ...players };
+  let nextClubs = clubs;
+  let nextLineups = { ...lineups };
+  const completedPlayerIds = new Set<string>();
+  const logEntries: AiTransferLogEntry[] = [];
+
+  selectedLoans.forEach(({ player, sellerClub, buyerClub, offer }) => {
+    if (completedPlayerIds.has(player.id)) return;
+    const currentSellerSquad = nextPlayers[sellerClub.id] || [];
+    const currentBuyerSquad = nextPlayers[buyerClub.id] || [];
+    const currentPlayer = currentSellerSquad.find(squadPlayer => squadPlayer.id === player.id);
+    if (!currentPlayer || currentPlayer.loan) return;
+    if (currentBuyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
+
+    const loanFee = offer.loanFee ?? offer.fee ?? 0;
+    const baselineRatingCount = currentPlayer.stats.ratingHistory?.length ?? 0;
+    const loanInfo: PlayerLoanInfo = {
+      parentClubId: sellerClub.id,
+      parentClubName: sellerClub.name,
+      destinationClubId: buyerClub.id,
+      destinationClubName: buyerClub.name,
+      startDate: offer.loanStartDate || dateStr,
+      endDate: offer.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, offer.loanDuration || 'SEASON'),
+      wageCoveragePercent: offer.wageCoveragePercent,
+      loanFee,
+      forcedByClub: false,
+      reportBaselineMatches: currentPlayer.stats.matchesPlayed ?? 0,
+      reportBaselineMinutes: currentPlayer.stats.minutesPlayed ?? 0,
+      reportBaselineGoals: currentPlayer.stats.goals ?? 0,
+      reportBaselineAssists: currentPlayer.stats.assists ?? 0,
+      reportBaselineYellowCards: currentPlayer.stats.yellowCards ?? 0,
+      reportBaselineRedCards: currentPlayer.stats.redCards ?? 0,
+      reportBaselineRatingCount: baselineRatingCount,
+      lastReportDate: dateStr,
+      lastReportMatches: currentPlayer.stats.matchesPlayed ?? 0,
+      lastReportMinutes: currentPlayer.stats.minutesPlayed ?? 0,
+      lastReportGoals: currentPlayer.stats.goals ?? 0,
+      lastReportAssists: currentPlayer.stats.assists ?? 0,
+      lastReportRatingCount: baselineRatingCount,
+      monthlyReports: [],
+    };
+    const loanStart = new Date(loanInfo.startDate);
+    const loanStartYear = Number.isNaN(loanStart.getTime()) ? currentDate.getFullYear() : loanStart.getFullYear();
+    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? currentDate.getMonth() + 1 : loanStart.getMonth() + 1;
+    const baseHistory = currentPlayer.history && currentPlayer.history.length > 0
+      ? currentPlayer.history
+      : [{
+          clubName: sellerClub.name,
+          clubId: sellerClub.id,
+          fromYear: loanStartYear - 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null,
+        }];
+    const loanedPlayer: Player = {
+      ...currentPlayer,
+      clubId: buyerClub.id,
+      loan: loanInfo,
+      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
+      isAvailableForLoan: false,
+      isOnTransferList: false,
+      transferListPrice: undefined,
+      squadRole: null,
+      isUntouchable: false,
+      interestedClubs: [],
+    };
+
+    const sellerSquadAfterLoan = currentSellerSquad.filter(squadPlayer => squadPlayer.id !== currentPlayer.id);
+    const buyerSquadAfterLoan = [
+      ...currentBuyerSquad.filter(squadPlayer => squadPlayer.id !== currentPlayer.id),
+      loanedPlayer,
+    ];
+
+    nextPlayers = {
+      ...nextPlayers,
+      [sellerClub.id]: sellerSquadAfterLoan,
+      [buyerClub.id]: buyerSquadAfterLoan,
+    };
+
+    nextClubs = nextClubs.map(club => {
+      if (club.id === sellerClub.id) {
+        return {
+          ...club,
+          budget: club.budget + loanFee,
+          transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== currentPlayer.id),
+        };
+      }
+      if (club.id === buyerClub.id) {
+        return {
+          ...club,
+          budget: Math.max(0, club.budget - loanFee),
+          transferBudget: Math.max(0, club.transferBudget - loanFee),
+          rosterIds: [...club.rosterIds.filter(id => id !== currentPlayer.id), currentPlayer.id],
+        };
+      }
+      return club;
+    });
+
+    const sellerLineup = nextLineups[sellerClub.id];
+    const buyerLineup = nextLineups[buyerClub.id];
+    nextLineups = {
+      ...nextLineups,
+      ...(sellerLineup ? { [sellerClub.id]: LineupService.repairLineup(sellerLineup, sellerSquadAfterLoan) } : {}),
+      [buyerClub.id]: buyerLineup
+        ? LineupService.repairLineup(buyerLineup, buyerSquadAfterLoan)
+        : LineupService.autoPickLineup(
+            buyerClub.id,
+            buyerSquadAfterLoan,
+            '4-4-2',
+            buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null
+          ),
+    };
+
+    completedPlayerIds.add(currentPlayer.id);
+    logEntries.push({
+      id: `ai-ai-loan-${dateStr}-${currentPlayer.id}-${buyerClub.id}`,
+      date: dateStr,
+      playerName: `${currentPlayer.firstName} ${currentPlayer.lastName}`,
+      playerOvr: currentPlayer.overallRating,
+      playerPosition: currentPlayer.position,
+      fromClub: sellerClub.name,
+      toClub: buyerClub.name,
+      status: 'TRANSFER_SIGNED',
+      reason: `Wypożyczenie AI-AI: ${loanFee.toLocaleString('pl-PL')} PLN, ${offer.wageCoveragePercent ?? 0}% pensji`,
+      fee: loanFee,
+      playerId: currentPlayer.id,
+      fromClubId: sellerClub.id,
+      toClubId: buyerClub.id,
+    });
+  });
+
+  if (completedPlayerIds.size === 0) {
+    return { updatedClubs: clubs, updatedPlayers: players, updatedLineups: lineups, aiTransferLogEntries: [] };
+  }
+
+  return {
+    updatedClubs: nextClubs,
+    updatedPlayers: nextPlayers,
+    updatedLineups: nextLineups,
+    aiTransferLogEntries: logEntries,
+  };
+};
+
+interface SimulationOutput {
+  updatedFixtures: Fixture[];
+  updatedClubs: Club[];
+  updatedPlayers: Record<string, Player[]>;
+  updatedLineups: Record<string, Lineup>;
+  // TUTAJ WSTAW TEN KOD
+  newOffers: PendingNegotiation[];
+  ratings?: Record<string, number>;
+  // KONIEC KODU
+  seasonNumber: number;
+  roundResults: LeagueRoundResults | null;
+  aiTransferLogEntries?: AiTransferLogEntry[];
+}
+
+type SeasonCelebrationType = 'championship' | 'promotion-ekst' | 'promotion-1liga';
+type SeasonCelebrationTriggerResult = {
+  players: Record<string, Player[]>;
+  clubs: Club[];
+  mails: MailMessage[];
+};
+
+type GameNotificationTone = 'success' | 'info' | 'warning' | 'error';
+
+interface GameNotificationState {
+  title: string;
+  message: string;
+  tone: GameNotificationTone;
+  onAction?: () => void;
+  actionLabel?: string;
+}
+
+interface GameContextType {
+  currentDate: Date;
+  viewState: ViewState;
+  sessionSeed: number;
+  matchSimulationSeed: number;
+  previousViewState: ViewState | null;
+  clubs: Club[];
+  leagues: League[];
+  players: Record<string, Player[]>;
+  lineups: Record<string, Lineup>;
+  fixtures: Fixture[];
+  userTeamId: string | null;
+  seasonTemplate: SeasonTemplate | null;
+  leagueSchedules: Record<number, LeagueSchedule>;
+  nextEvent: PlayerNextEvent | null;
+  viewedClubId: string | null;
+  viewedPlayerId: string | null;
+  viewedCoachId: string | null;
+  viewedRefereeId: string | null;
+  lastRecoveryDate: Date;
+  lastMatchSummary: MatchSummary | null;
+  coaches: Record<string, Coach>;
+  staffMembers: Record<string, StaffMember>;
+  roundResults: Record<string, LeagueRoundResults>;
+  isJumping: boolean;
+  managerProfile: ManagerProfile | null;
+  managerJobOffers: ManagerJobOffer[];
+  seasonNumber: number;
+  activeMatchState: MatchLiveState | null;
+  messages: MailMessage[];
+  mediaRelationships: Record<string, number>;
+  sentUnfriendlyPressMonths: string[];
+  sentFriendlyPressMonths: string[];
+  activeTrainingId: string | null;
+  cupParticipants: string[];
+    activeCupDraw: { id: string, label: string, date: Date, pairs: Fixture[] } | null;
+  activeGroupDraw: { id: string, label: string, date: Date, groups: string[][] } | null;
+  activePlayoffDraw: ActivePlayoffDraw | null;
+  confirmPlayoffDraw: () => void;
+  // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
+  relegationPlayoffFirstLegResults: RelegationPlayoffFirstLegResults | null;  // wyniki 26 maja
+  relegationPlayoffFinalResult: RelegationPlayoffFinalResult | null;           // wyniki 29 maja (finalne)
+  confirmRelegationPlayoffMatch1: () => void; // przycisk "Dalej" po 26 maja
+  confirmRelegationPlayoffMatch2: () => void; // przycisk "Dalej" po 29 maja
+  promotionPlayoffSemiResults: PromotionPlayoffSemiResults | null;   // wyniki półfinałów z 31 maja
+  promotionPlayoffFinalResults: PromotionPlayoffFinalResults | null; // wyniki finałów z 4 czerwca
+  confirmPromotionPlayoffSemi: () => void;  // przycisk "Dalej" po 31 maja
+  confirmPromotionPlayoffFinal: () => void; // przycisk "Dalej" po 4 czerwca
+  // ── BARAŻE — INTERAKTYWNY MECZ GRACZA ───────────────────────────────────
+  activePlayoffMatch: ActivePlayoffMatchData | null;
+  setActivePlayoffMatch: React.Dispatch<React.SetStateAction<ActivePlayoffMatchData | null>>;
+  setRelegationPlayoffFirstLegResults: React.Dispatch<React.SetStateAction<RelegationPlayoffFirstLegResults | null>>;
+  setRelegationPlayoffFinalResult: React.Dispatch<React.SetStateAction<RelegationPlayoffFinalResult | null>>;
+  setPromotionPlayoffSemiResults: React.Dispatch<React.SetStateAction<PromotionPlayoffSemiResults | null>>;
+  setPromotionPlayoffFinalResults: React.Dispatch<React.SetStateAction<PromotionPlayoffFinalResults | null>>;
+  clGroups: string[][] | null;
+  activeELGroupDraw: { id: string, label: string, date: Date, groups: string[][] } | null;
+  elGroups: string[][] | null;
+  activeConfGroupDraw: { id: string, label: string, date: Date, groups: string[][] } | null;
+  confGroups: string[][] | null;
+  supercupWinners: { season: string; winner: string; year: number; }[];
+  addSupercupWinner: (season: string, winner: string, year: number) => void;
+  currentCLWinnerId: string;
+  currentELWinnerId: string;
+  lastUEFASuperCupResult: MatchHistoryEntry | null;
+  setLastUEFASuperCupResult: React.Dispatch<React.SetStateAction<MatchHistoryEntry | null>>;
+
+  activeIntensity: TrainingIntensity;
+  setTrainingIntensity: (intensity: TrainingIntensity) => void;
+  trainingProgressHistory: number[];
+  reserveProgressHistory: ReserveProgressPoint[];
+
+  startNewGame: (careerStartYear?: number, options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }) => void;
+  getSaveState: () => SaveState;
+  loadGameFromFile: (data: SaveState) => void;
+  importEditorFullPack: (data: unknown, options?: { nextView?: ViewState }) => { success: boolean; message: string };
+  saveManagerProfile: (profile: ManagerProfile) => void;
+  selectUserTeam: (clubId: string) => void;
+  advanceDay: () => void;
+  jumpToDate: (date: Date) => void;
+  jumpToNextEvent: () => void;
+  navigateTo: (view: ViewState) => void;
+  navigateWithoutHistory: (view: ViewState) => void;
+  pendingMatchKits: KitSelection | null;
+  setPendingMatchKits: React.Dispatch<React.SetStateAction<KitSelection | null>>;
+  updateLineup: (clubId: string, lineup: Lineup) => void;
+  viewClubDetails: (clubId: string) => void;
+  viewPlayerDetails: (playerId: string) => void;
+   viewCoachDetails: (coachId: string) => void;
+  viewRefereeDetails: (refId: string) => void;
+  getOrGenerateSquad: (clubId: string) => Player[];
+  setPlayers: React.Dispatch<React.SetStateAction<Record<string, Player[]>>>;
+  setLastMatchSummary: (summary: MatchSummary | null) => void;
+   setClubs: React.Dispatch<React.SetStateAction<Club[]>>;
+  setCoaches: React.Dispatch<React.SetStateAction<Record<string, Coach>>>;
+  setStaffMembers: React.Dispatch<React.SetStateAction<Record<string, StaffMember>>>;
+  addRoundResults: (results: LeagueRoundResults) => void;
+  applySimulationResult: (result: SimulationOutput) => void;
+  setActiveMatchState: React.Dispatch<React.SetStateAction<MatchLiveState | null>>;
+  setMessages: React.Dispatch<React.SetStateAction<MailMessage[]>>;
+  setMediaRelationships: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  markMessageRead: (id: string) => void;
+  deleteMessage: (id: string) => void;
+  addPendingPressArticle: (item: { mail: MailMessage; deliveryDate: string }) => void;
+  setActiveTrainingId: (id: string | null) => void;
+  confirmCupDraw: (pairs: Fixture[]) => void;
+  confirmCLDraw: (pairs: Fixture[]) => void;
+  confirmELDraw: (pairs: Fixture[]) => void;
+  confirmELR2QDraw: (pairs: Fixture[]) => void;
+  confirmCLGroupDraw: () => void;
+  confirmELGroupDraw: () => void;
+  confirmELR16Draw: () => void;
+    confirmCLR16Draw: () => void;
+  confirmCLQFDraw: () => void;
+  confirmCLSFDraw: () => void;
+  confirmELQFDraw: () => void;
+  confirmELSFDraw: () => void;
+  confirmELFinalDraw: () => void;
+  confirmCONFDraw: (pairs: Fixture[]) => void;
+  confirmCONFR2QDraw: (pairs: Fixture[]) => void;
+  confirmCONFGroupDraw: () => void;
+  confirmCONFR16Draw: () => void;
+  confirmCONFQFDraw: () => void;
+  confirmCONFSFDraw: () => void;
+  confirmCONFFinalDraw: () => void;
+  confirmSeasonEnd: () => void;
+  elHistoryInitialRound: string | null;
+  setElHistoryInitialRound: (round: string | null) => void;
+  confHistoryInitialRound: string | null;
+  setConfHistoryInitialRound: (round: string | null) => void;
+
+  processBackgroundCupMatches: () => void;
+    processCLMatchDay: () => void;
+  updatePlayer: (clubId: string, playerId: string, newData: Partial<Player>) => void;
+  importSquad: (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => void;
+  toggleTransferList: (playerId: string, price?: number) => void;
+  toggleLoanAvailability: (playerId: string) => void;
+  terminateLoanEarly: (playerId: string) => void;
+  toggleUntouchable: (playerId: string) => void;
+  setSquadRole: (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => void;
+  pendingOpenTalk: boolean;
+  setPendingOpenTalk: (v: boolean) => void;
+  pendingOpenRoleMindflow: boolean;
+  setPendingOpenRoleMindflow: (v: boolean) => void;
+  pendingNegotiations: PendingNegotiation[];
+setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]>>;
+  pendingFriendlyRequests: PendingFriendlyRequest[];
+  addFriendlyRequest: (req: Omit<PendingFriendlyRequest, 'id'>) => void;
+  cancelFriendly: (fixtureId: string) => void;
+  aiFriendlyPairs: AiFriendlyPair[];
+  aiFriendlyReports: AiFriendlyMatchReport[];
+  aiFriendlyReportsDateFilter: string | null;
+  setAiFriendlyReportsDateFilter: React.Dispatch<React.SetStateAction<string | null>>;
+  activeFriendlyFixtureId: string | null;
+  activeFriendlyConditions: FriendlyMatchConditions | null;
+  setActiveFriendlyConditions: React.Dispatch<React.SetStateAction<FriendlyMatchConditions | null>>;
+finalizeFreeAgentContract: (mailId: string) => void;
+  transferOffers: TransferOffer[];
+  submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
+  submitLoanOffer: (playerId: string, offer: LoanOfferSubmissionInput) => LoanOfferSubmissionResult;
+  finalizeTransferNegotiation: (offerId: string, contract: TransferContractInput, bypassBoardCheck?: boolean) => TransferOfferSubmissionResult;
+  incomingOffers: IncomingTransferOffer[];
+  viewedIncomingOfferId: string | null;
+  respondToIncomingOffer: (
+    offerId: string,
+    response: 'accept' | 'counter' | 'reject',
+    counterFee?: number,
+    loanCounterTerms?: {
+      loanFee: number;
+      wageCoveragePercent: number;
+      loanDuration: LoanOfferDuration;
+    }
+  ) => void;
+  confirmIncomingTransfer: (offerId: string, confirm: boolean) => void;
+  navigateToIncomingOffer: (offerId: string) => void;
+  transferNewsActiveTab: 'scouting' | 'released' | 'activity' | 'completed' | 'incoming';
+  setTransferNewsActiveTab: React.Dispatch<React.SetStateAction<'scouting' | 'released' | 'activity' | 'completed' | 'incoming'>>;
+  contractManagementInitialMode: 'RELEASE' | 'NEGOTIATE';
+  setContractManagementInitialMode: React.Dispatch<React.SetStateAction<'RELEASE' | 'NEGOTIATE'>>;
+  aiTransferLog: AiTransferLogEntry[];
+
+ europeanStatus: Record<string, EuropeanStatus>;
+  setEuropeanStatus: React.Dispatch<React.SetStateAction<Record<string, EuropeanStatus>>>;
+  addFinanceLog: (clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => void;
+  nationalTeams: NationalTeam[];
+  setNationalTeams: React.Dispatch<React.SetStateAction<NationalTeam[]>>;
+  europeanViewTab: 'clubs' | 'nt';
+  setEuropeanViewTab: React.Dispatch<React.SetStateAction<'clubs' | 'nt'>>;
+  selectedNTId: string | null;
+  setSelectedNTId: React.Dispatch<React.SetStateAction<string | null>>;
+  isResigned: boolean;
+  managerEmploymentStatus: ManagerEmploymentStatus;
+  resignFromClub: () => void;
+  applyForManagerJob: (clubId: string) => ManagerJobApplicationResult;
+  acceptManagerJobOffer: (offerId: string) => ManagerJobApplicationResult;
+  gameNotification: GameNotificationState | null;
+  showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => void;
+  clearGameNotification: () => void;
+  respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
+  requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
+  submitBoardClubRequest: (requestType: BoardClubRequestType) => void;
+  // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
+  lastNTMatchResults: NTMatchResult[] | null;
+  setLastNTMatchResults: React.Dispatch<React.SetStateAction<NTMatchResult[] | null>>;
+  // Baraże MŚ 2026
+  wcqPlayoffState: WCQPlayoffState | null;
+  setWcqPlayoffState: React.Dispatch<React.SetStateAction<WCQPlayoffState | null>>;
+  nationsLeagueState: NationsLeagueState | null;
+  setNationsLeagueState: React.Dispatch<React.SetStateAction<NationsLeagueState | null>>;
+  nationsLeagueArchive: NationsLeagueArchiveEntry[];
+  euroHostAnnouncements: EuroHostAnnouncement[];
+  euroQualifiersState: EuroQualifiersState | null;
+  setEuroQualifiersState: React.Dispatch<React.SetStateAction<EuroQualifiersState | null>>;
+  worldCupQualifiersState: WorldCupQualifiersState | null;
+  setWorldCupQualifiersState: React.Dispatch<React.SetStateAction<WorldCupQualifiersState | null>>;
+  uefaNationalRankingState: UefaNationalRankingState | null;
+  setUefaNationalRankingState: React.Dispatch<React.SetStateAction<UefaNationalRankingState | null>>;
+  wcState: WCState | null;
+  setWcState: React.Dispatch<React.SetStateAction<WCState | null>>;
+  euroState: WCState | null;
+  setEuroState: React.Dispatch<React.SetStateAction<WCState | null>>;
+  reserves: Player[];
+  setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
+  reserveCoachId: string | null;
+  reserveFixtures: ReserveFixture[];
+  setReserveFixtures: React.Dispatch<React.SetStateAction<ReserveFixture[]>>;
+  reserveMatchResults: ReserveMatchResult[];
+  setReserveMatchResults: React.Dispatch<React.SetStateAction<ReserveMatchResult[]>>;
+  academy: ClubAcademy | null;
+  initAcademy: () => void;
+  submitUpgradeProposal: () => void;
+  startAcademyUpgrade: () => void;
+  promoteYouthPlayer: (youthId: string, target: 'RESERVES' | 'FIRST_TEAM') => void;
+  dismissYouthPlayer: (youthId: string) => void;
+  setYouthFocus: (youthId: string, attr: keyof import('../types').PlayerAttributes | null) => void;
+  startScoutMission: (targetYouthPlayerId?: string, regionFocus?: Region, positionFilter?: import('../types').PlayerPosition, ageMin?: number, ageMax?: number, scoutId?: string) => boolean;
+  setAcademyRegionFocus: (region: Region | undefined) => void;
+  setAcademyOperationalBudget: (amount: number) => void;
+  signYouthPlayerContract: (youthId: string) => void;
+  scoutPool: Scout[];
+  scoutMarket: Scout[];
+  employedScouts: Scout[];
+  hireScout: (scoutId: string) => boolean;
+  fireScout: (scoutId: string) => void;
+  refreshScoutMarket: () => void;
+  scoutMarketRefreshDate: string;
+  scoutMarketManualRefreshCount: number;
+  scoutMarketPeriodStart: string;
+  mysteryAgentOffer: MysteryAgentOfferState | null;
+  submitMysteryAgentOffer: (contract: MysteryAgentContractOffer) => MysteryAgentNegotiationResult;
+  requestMysteryAgentBoardFunds: (contract: MysteryAgentContractOffer) => MysteryAgentBoardRequestResult;
+  declineMysteryAgentOffer: () => void;
+  applyWeeklyMotivation: (moraleDelta: number) => void;
+  completedPressConferenceFixtureIds: string[];
+  pressConferenceEffects: Record<string, PressConferenceMatchEffect>;
+  completePreMatchPressConference: (fixtureId: string, answers: PressConferenceAnswer[]) => void;
+  conductIndividualTalk: (playerId: string, talkType: IndividualTalkType) => IndividualTalkResult | null;
+  resolvePlayerRoleConversation: (playerId: string, result: PlayerRoleConversationResult) => void;
+  resolvePlayerTransferConversation: (playerId: string, result: PlayerTransferConversationResult) => void;
+  // ── Transfer Request Dialog ──────────────────────────────────────────────
+  // Stosuje wynik dialogu A/B/C/D (morale, mindset, obietnice, flagi).
+  // Serwis: PlayerTransferRequestDialogService | Modal: PlayerTransferRequestModal
+  resolvePlayerTransferRequestDialog: (playerId: string, result: TransferRequestDialogResult) => void;
+  pendingOpenTransferRequestDialog: boolean;
+  setPendingOpenTransferRequestDialog: (v: boolean) => void;
+  resolvePlayerTransferListObjection: (playerId: string, result: PlayerTransferListObjectionResult) => void;
+  pendingOpenTransferListObjection: boolean;
+  setPendingOpenTransferListObjection: (v: boolean) => void;
+  fireStaffMember: (staffId: string) => { success: boolean; message: string; cost?: number };
+  extendStaffContract: (staffId: string, years: number) => void;
+  negotiateStaffContract: (staffId: string, newSalary: number, years: number) => void;
+  hireStaffMember: (staffId: string, salary: number, years: number, kaucja: number) => { success: boolean; message: string };
+  winterCampInvitePending: boolean;
+  winterCampProgramPending: boolean;
+  clearWinterCampInvitePending: () => void;
+  clearWinterCampProgramPending: () => void;
+  reopenWinterCampInvite: () => void;
+  saveWinterCampLocation: (location: import('../types').WinterCampLocation | null, cost: number, spaOption: boolean) => void;
+  saveWinterCampProgram: (program: import('../types').WinterCampProgram, intensity: import('../types').WinterCampIntensity) => void;
+  summerCampInvitePending: boolean;
+  summerCampProgramPending: boolean;
+  clearSummerCampInvitePending: () => void;
+  clearSummerCampProgramPending: () => void;
+  reopenSummerCampInvite: () => void;
+  saveSummerCampLocation: (location: import('../types').SummerCampLocation | null, cost: number, spaOption: boolean) => void;
+  saveSummerCampProgram: (program: import('../types').SummerCampProgram, intensity: import('../types').SummerCampIntensity) => void;
+  seasonCelebration: SeasonCelebrationType | null;
+  clearSeasonCelebration: () => void;
+}
+
+const GameContext = createContext<GameContextType | undefined>(undefined);
+
+export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { runWithProcessing } = useProcessing();
+  const [currentDate, setCurrentDate] = useState<Date>(START_DATE);
+  const [sessionSeed, setSessionSeed] = useState<number>(() => generateRuntimeSeed());
+  const [runtimeSimulationSeed, setRuntimeSimulationSeed] = useState<number>(() => generateRuntimeSeed());
+  const matchSimulationSeed = (sessionSeed ^ runtimeSimulationSeed) >>> 0;
+  const [viewState, setViewState] = useState<ViewState>(ViewState.START_MENU);
+  const [previousViewState, setPreviousViewState] = useState<ViewState | null>(null);
+  const [clubs, setClubs] = useState<Club[]>([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
+  const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
+  const [players, setPlayers] = useState<Record<string, Player[]>>({});
+  const [reserves, setReserves] = useState<Player[]>([]);
+  const [reserveCoachId, setReserveCoachId] = useState<string | null>(null);
+  const [reserveFixtures, setReserveFixtures] = useState<ReserveFixture[]>([]);
+  const [reserveMatchResults, setReserveMatchResults] = useState<ReserveMatchResult[]>([]);
+  const [academy, setAcademy] = useState<ClubAcademy | null>(null);
+ const [scoutPool, setScoutPool] = useState<Scout[]>([]);
+ const [scoutMarket, setScoutMarket] = useState<Scout[]>([]);
+ const [scoutMarketRefreshDate, setScoutMarketRefreshDate] = useState<string>('');
+ const [scoutMarketManualRefreshCount, setScoutMarketManualRefreshCount] = useState<number>(0);
+ const [scoutMarketPeriodStart, setScoutMarketPeriodStart] = useState<string>('');
+  const [mysteryAgentOffer, setMysteryAgentOffer] = useState<MysteryAgentOfferState | null>(null);
+  const [lineups, setLineups] = useState<Record<string, Lineup>>({});
+  const [userTeamId, setUserTeamId] = useState<string | null>(null);
+  const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
+  const [leagueSchedules, setLeagueSchedules] = useState<Record<number, LeagueSchedule>>({});
+  const [nextEvent, setNextEvent] = useState<PlayerNextEvent | null>(null);
+  const [viewedClubId, setViewedClubId] = useState<string | null>(null);
+  const [viewedPlayerId, setViewedPlayerId] = useState<string | null>(null);
+  const [viewedCoachId, setViewedCoachId] = useState<string | null>(null);
+  const [viewedRefereeId, setViewedRefereeId] = useState<string | null>(null);
+  const [lastRecoveryDate, setLastRecoveryDate] = useState<Date>(START_DATE);
+  const [lastMatchSummary, setLastMatchSummary] = useState<MatchSummary | null>(null);
+  const [coaches, setCoaches] = useState<Record<string, Coach>>({});
+  const [staffMembers, setStaffMembers] = useState<Record<string, StaffMember>>({});
+  const [roundResults, setRoundResults] = useState<Record<string, LeagueRoundResults>>({});
+  const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(null);
+  const [managerJobOffers, setManagerJobOffers] = useState<ManagerJobOffer[]>([]);
+  const [seasonNumber, setSeasonNumber] = useState<number>(1);
+  const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
+  const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
+  const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
+  const [messages, setMessages] = useState<MailMessage[]>([]);
+  const [mediaRelationships, setMediaRelationships] = useState<Record<string, number>>({});
+  const [sentUnfriendlyPressMonths, setSentUnfriendlyPressMonths] = useState<string[]>([]);
+  const [sentFriendlyPressMonths, setSentFriendlyPressMonths] = useState<string[]>([]);
+  const [pendingPressArticles, setPendingPressArticles] = useState<{ mail: MailMessage; deliveryDate: string }[]>([]);
+  const [targetJumpTime, setTargetJumpTime] = useState<number | null>(null);
+  const [activeTrainingId, setActiveTrainingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userTeamId || messages.length === 0 || clubs.length === 0) return;
+    const migrated = migrateWelcomeMailSignatories(messages, clubs, userTeamId) as MailMessage[];
+    if (migrated.some((message, index) => message !== messages[index])) {
+      setMessages(migrated);
+    }
+  }, [clubs, messages, userTeamId]);
+
+const [activeIntensity, setActiveIntensity] = useState<TrainingIntensity>(TrainingIntensity.NORMAL);
+const [trainingProgressHistory, setTrainingProgressHistory] = useState<number[]>([]);
+const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProgressPoint[]>([]);
+ const [pendingOpenTalk, setPendingOpenTalk] = useState(false);
+ const [pendingOpenRoleMindflow, setPendingOpenRoleMindflow] = useState(false);
+ // Flaga otwierająca PlayerTransferRequestModal przez PlayerCard po nawigacji z maila
+ const [pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog] = useState(false);
+ const [pendingOpenTransferListObjection, setPendingOpenTransferListObjection] = useState(false);
+ const [completedPressConferenceFixtureIds, setCompletedPressConferenceFixtureIds] = useState<string[]>([]);
+ const [pressConferenceEffects, setPressConferenceEffects] = useState<Record<string, PressConferenceMatchEffect>>({});
+ const [pendingNegotiations, setPendingNegotiations] = useState<PendingNegotiation[]>([]);
+ const [pendingFriendlyRequests, setPendingFriendlyRequests] = useState<PendingFriendlyRequest[]>([]);
+ const [activeFriendlyFixtureId, setActiveFriendlyFixtureId] = useState<string | null>(null);
+ const [activeFriendlyConditions, setActiveFriendlyConditions] = useState<FriendlyMatchConditions | null>(null);
+ const [aiFriendlyPairs, setAiFriendlyPairs] = useState<AiFriendlyPair[]>([]);
+ const [aiFriendlyReports, setAiFriendlyReports] = useState<AiFriendlyMatchReport[]>([]);
+ const [aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter] = useState<string | null>(null);
+ const [pzpnDisciplinaryEvents, setPzpnDisciplinaryEvents] = useState<PzpnDisciplinaryEvent[]>([]);
+ const [transferOffers, setTransferOffers] = useState<TransferOffer[]>([]);
+ const [incomingOffers, setIncomingOffers] = useState<IncomingTransferOffer[]>([]);
+ const [viewedIncomingOfferId, setViewedIncomingOfferId] = useState<string | null>(null);
+ const [transferNewsActiveTab, setTransferNewsActiveTab] = useState<'scouting' | 'released' | 'activity' | 'completed' | 'incoming'>('activity');
+ const [aiTransferLog, setAiTransferLog] = useState<AiTransferLogEntry[]>([]);
+ const [contractManagementInitialMode, setContractManagementInitialMode] = useState<'RELEASE' | 'NEGOTIATE'>('NEGOTIATE');
+ const [europeanStatus, setEuropeanStatus] = useState<Record<string, EuropeanStatus>>({});
+  const [nationalTeams, setNationalTeams] = useState<NationalTeam[]>([]);
+  // Przechowuje wyniki ostatniego dnia meczowego reprezentacji (wszystkie mecze grupy)
+  const [lastNTMatchResults, setLastNTMatchResults] = useState<NTMatchResult[] | null>(null);
+  // Baraże MŚ 2026
+  const [wcqPlayoffState, setWcqPlayoffState] = useState<WCQPlayoffState | null>(null);
+  const [nationsLeagueState, setNationsLeagueState] = useState<NationsLeagueState | null>(null);
+  const [nationsLeagueArchive, setNationsLeagueArchive] = useState<NationsLeagueArchiveEntry[]>([]);
+  const [euroHostAnnouncements, setEuroHostAnnouncements] = useState<EuroHostAnnouncement[]>([]);
+  const [euroQualifiersState, setEuroQualifiersState] = useState<EuroQualifiersState | null>(null);
+  const [worldCupQualifiersState, setWorldCupQualifiersState] = useState<WorldCupQualifiersState | null>(null);
+  const [uefaNationalRankingState, setUefaNationalRankingState] = useState<UefaNationalRankingState | null>(null);
+  const [wcState, setWcState] = useState<WCState | null>(null);
+  const [euroState, setEuroState] = useState<WCState | null>(null);
+
+  const upsertNationsLeagueArchive = (archive: NationsLeagueArchiveEntry[], state: NationsLeagueState): NationsLeagueArchiveEntry[] => {
+    const next = archive.filter(entry => entry.editionStartYear !== state.editionStartYear);
+    return [...next, state].sort((a, b) => b.editionStartYear - a.editionStartYear);
+  };
+  const [europeanViewTab, setEuropeanViewTab] = useState<'clubs' | 'nt'>('clubs');
+  const [selectedNTId, setSelectedNTId] = useState<string | null>(null);
+  const [gameNotification, setGameNotification] = useState<GameNotificationState | null>(null);
+  // Polish Cup & Persistent Events State
+  const [cupParticipants, setCupParticipants] = useState<string[]>([]);
+  const [activeCupDraw, setActiveCupDraw] = useState<{ id: string, label: string, date: Date, pairs: Fixture[] } | null>(null);
+  const [activeGroupDraw, setActiveGroupDraw] = useState<{ id: string, label: string, date: Date, groups: string[][] } | null>(null);
+  const [activePlayoffDraw, setActivePlayoffDraw] = useState<ActivePlayoffDraw | null>(null);
+  // ── BARAŻE O UTRZYMANIE — stan wyników ──────────────────────────────────
+  const [relegationPlayoffFirstLegResults, setRelegationPlayoffFirstLegResults] = useState<RelegationPlayoffFirstLegResults | null>(null);
+  const [relegationPlayoffFinalResult, setRelegationPlayoffFinalResult] = useState<RelegationPlayoffFinalResult | null>(null);
+  const [promotionPlayoffSemiResults, setPromotionPlayoffSemiResults] = useState<PromotionPlayoffSemiResults | null>(null);
+  const [promotionPlayoffFinalResults, setPromotionPlayoffFinalResults] = useState<PromotionPlayoffFinalResults | null>(null);
+  const [activePlayoffMatch, setActivePlayoffMatch] = useState<ActivePlayoffMatchData | null>(null);
+  const [clGroups, setClGroups] = useState<string[][] | null>(null);
+  const [activeELGroupDraw, setActiveELGroupDraw] = useState<{ id: string, label: string, date: Date, groups: string[][] } | null>(null);
+  const [elGroups, setElGroups] = useState<string[][] | null>(null);
+  const [activeConfGroupDraw, setActiveConfGroupDraw] = useState<{ id: string, label: string, date: Date, groups: string[][] } | null>(null);
+  const [confGroups, setConfGroups] = useState<string[][] | null>(null);
+  const [processedDrawIds, setProcessedDrawIds] = useState<string[]>([]);
+  const [globalFixtures, setGlobalFixtures] = useState<Fixture[]>([]);
+  const [elHistoryInitialRound, setElHistoryInitialRound] = useState<string | null>(null);
+  const [confHistoryInitialRound, setConfHistoryInitialRound] = useState<string | null>(null);
+  const [isResigned, setIsResigned] = useState(false);
+  const [managerEmploymentStatus, setManagerEmploymentStatus] = useState<ManagerEmploymentStatus>('EMPLOYED');
+  const [winterCampInvitePending, setWinterCampInvitePending] = useState(false);
+  const [winterCampProgramPending, setWinterCampProgramPending] = useState(false);
+  const [summerCampInvitePending, setSummerCampInvitePending] = useState(false);
+  const [summerCampProgramPending, setSummerCampProgramPending] = useState(false);
+ const [currentPolishChampionId, setCurrentPolishChampionId] = useState<string>('PL_LECH_POZNAN');
+ const [currentPolishViceChampionId, setCurrentPolishViceChampionId] = useState<string | null>('PL_RAKOW_CZESTOCHOWA');
+ const [currentPolishCupWinnerId, setCurrentPolishCupWinnerId] = useState<string>('PL_LEGIA_WARSZAWA');
+ const [currentCLWinnerId, setCurrentCLWinnerId] = useState<string>('EU_CL_PARIS_SAINT_GERMAIN');
+ const [currentELWinnerId, setCurrentELWinnerId] = useState<string>('EU_CL_TOTTENHAM_HOTSPUR');
+ const [lastUEFASuperCupResult, setLastUEFASuperCupResult] = useState<MatchHistoryEntry | null>(null);
+ const [confR1QPolishTeamIds, setConfR1QPolishTeamIds] = useState<string[]>([]);
+ // Polskie drużyny do CONF R2Q: sezon 1 = Jagiellonia + Pogoń, kolejne sezony = dwa najwyższe wolne kluby od 3. miejsca
+ const [confR2QPolishTeamIds, setConfR2QPolishTeamIds] = useState<string[]>(['PL_JAGIELLONIA_BIALYSTOK', 'PL_POGON_SZCZECIN']);
+ const [supercupWinners, setSupercupWinners] = useState<{ season: string; winner: string; year: number; }[]>(() => {
+    // Załaduj z localStorage przy inicjalizacji
+    try {
+      const stored = localStorage?.getItem('fm_championship_history');
+      if (stored) {
+        const all = JSON.parse(stored) as any[];
+        return all.filter(e => e.competition === 'SUPERPUCHAR_POLSKI') || [];
+      }
+    } catch (e) {
+      console.error('Failed to load supercup winners from localStorage:', e);
+    }
+    // Fallback na dane domyślne
+    return [
+      { season: '2023/2024', winner: 'Jagiellonia Białystok', year: 2024 }
+    ];
+  });
+
+  // Guard: zapobiega wielokrotnemu uruchomieniu processLeagueEvent dla tej samej daty
+  const lastProcessedLeagueDateRef = React.useRef<string | null>(null);
+  const celebrationAlreadyFiredRef = React.useRef(false);
+  const boardLevelScore = (level: Club['board'] extends infer B ? B extends undefined ? never : B[keyof B] : never): number => {
+    if (level === 'bardzo_wysoka') return 4;
+    if (level === 'wysoka') return 3;
+    if (level === 'przecietna') return 2;
+    if (level === 'niska') return 1;
+    if (level === 'bardzo_niska') return 0;
+    return 2;
+  };
+  const roundTeamPresidentBonus = (value: number): number => {
+    const step = value >= 5_000_000 ? 250_000 : value >= 1_000_000 ? 100_000 : 50_000;
+    return Math.max(step, Math.round(value / step) * step);
+  };
+  const calculatePresidentTeamBonus = (club: Club, celebration: SeasonCelebrationType): number => {
+    const base =
+      celebration === 'championship' ? 1_000_000 :
+      celebration === 'promotion-ekst' ? 500_000 :
+      100_000;
+    const generosity = boardLevelScore(club.board?.hojnosc);
+    const ambition = boardLevelScore(club.board?.ambicja);
+    const greed = boardLevelScore(club.board?.chciwosc);
+    const generosityMultiplier = 0.70 + generosity * 0.28 + ambition * 0.08 - greed * 0.08;
+    const wealthMultiplier = Math.max(1, Math.min(5.5, Math.sqrt(Math.max(1, club.budget) / Math.max(1, base * 10)) + 0.75));
+    const reputationMultiplier = 0.85 + Math.max(1, Math.min(10, club.reputation)) * 0.035;
+    const raw = base * generosityMultiplier * wealthMultiplier * reputationMultiplier;
+    const maxAffordable = Math.floor(Math.max(0, club.budget) * 0.12);
+    return roundTeamPresidentBonus(Math.max(base, Math.min(raw, maxAffordable)));
+  };
+
+  // Helper do jednorazowego uruchamiania planszy za zapewnione mistrzostwo lub awans.
+  const triggerSeasonCelebrationIfClinched = useCallback((
+    sourceClubs: Club[],
+    sourceFixtures: Fixture[],
+    sourcePlayers?: Record<string, Player[]>
+  ): SeasonCelebrationTriggerResult | null => {
+    if (!userTeamId || celebrationAlreadyFiredRef.current) return null;
+
+    const userClub = sourceClubs.find(c => c.id === userTeamId);
+    if (!userClub) return null;
+
+    const remaining = (leagueId: string, teamId: string) =>
+      sourceFixtures.filter(f =>
+        f.leagueId === leagueId &&
+        f.status === MatchStatus.SCHEDULED &&
+        (f.homeTeamId === teamId || f.awayTeamId === teamId)
+      ).length;
+
+    const hasClinchedAboveBoundary = (boundaryClub?: Club) => {
+      if (!boundaryClub) return false;
+
+      const boundaryRemaining = remaining(userClub.leagueId, boundaryClub.id);
+      const boundaryMaxPoints = boundaryClub.stats.points + boundaryRemaining * 3;
+      if (userClub.stats.points > boundaryMaxPoints) return true;
+
+      return boundaryRemaining === 0 && userClub.stats.points >= boundaryClub.stats.points;
+    };
+
+    let celebration: SeasonCelebrationType | null = null;
+
+    if (userClub.leagueId === 'L_PL_1') {
+      const sortedL1 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_1')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      if (sortedL1[0]?.id === userTeamId && hasClinchedAboveBoundary(sortedL1[1])) {
+        celebration = 'championship';
+      }
+    } else if (userClub.leagueId === 'L_PL_2') {
+      const sortedL2 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_2')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      const pos = sortedL2.findIndex(c => c.id === userTeamId);
+      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL2[2])) {
+        celebration = 'promotion-ekst';
+      }
+    } else if (userClub.leagueId === 'L_PL_3') {
+      const sortedL3 = [...sourceClubs]
+        .filter(c => c.leagueId === 'L_PL_3')
+        .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+      const pos = sortedL3.findIndex(c => c.id === userTeamId);
+      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL3[2])) {
+        celebration = 'promotion-1liga';
+      }
+    }
+
+    if (!celebration) return null;
+    celebrationAlreadyFiredRef.current = true;
+    const achievement = celebration === 'championship' ? 'championship' : 'promotion';
+    const todayKey = currentDate.toISOString().split('T')[0];
+    const clinchingWinFixture = sourceFixtures.find(fixture => {
+      const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+      if (Number.isNaN(fixtureDate.getTime()) || fixtureDate.toISOString().split('T')[0] !== todayKey) return false;
+      if (fixture.status !== MatchStatus.FINISHED || fixture.homeScore === null || fixture.awayScore === null) return false;
+      if (fixture.homeTeamId === userTeamId) return fixture.homeScore > fixture.awayScore;
+      if (fixture.awayTeamId === userTeamId) return fixture.awayScore > fixture.homeScore;
+      return false;
+    });
+    const bonusId = `PRESIDENT_TEAM_BONUS_${seasonNumber}_${userTeamId}_${celebration}`;
+    const canAwardPresidentBonus =
+      !!clinchingWinFixture &&
+      !userClub.financeHistory?.some(entry => entry.id === bonusId);
+    const presidentBonus = canAwardPresidentBonus ? calculatePresidentTeamBonus(userClub, celebration) : 0;
+    const generosityScore = boardLevelScore(userClub.board?.hojnosc);
+    const wealthChanceBonus = Math.min(0.18, Math.max(0, userClub.budget / Math.max(1, presidentBonus * 25)));
+    const presidentBonusChance = Math.min(0.94, Math.max(0.16, 0.22 + generosityScore * 0.16 + wealthChanceBonus));
+    const bonusAwarded = presidentBonus > 0 && userClub.budget >= presidentBonus && Math.random() < presidentBonusChance;
+    const nextClubs = bonusAwarded
+      ? sourceClubs.map(club => {
+          if (club.id !== userTeamId) return club;
+          return {
+            ...club,
+            budget: club.budget - presidentBonus,
+            financeHistory: [{
+              id: bonusId,
+              date: todayKey,
+              amount: -presidentBonus,
+              type: 'EXPENSE' as const,
+              description: celebration === 'championship'
+                ? 'Premia prezesa dla drużyny za zwycięstwo dające mistrzostwo'
+                : 'Premia prezesa dla drużyny za zwycięstwo dające awans',
+              previousBalance: club.budget,
+            }, ...(club.financeHistory || [])].slice(0, 50),
+          };
+        })
+      : sourceClubs;
+    const presidentMails: MailMessage[] = bonusAwarded ? [{
+      id: `PRESIDENT_TEAM_BONUS_MAIL_${seasonNumber}_${userTeamId}_${celebration}`,
+      sender: userClub.management?.owner
+        ? `${userClub.management.owner.firstName} ${userClub.management.owner.lastName}`
+        : 'Prezes Klubu',
+      role: 'Prezes',
+      subject: celebration === 'championship'
+        ? 'Premia za mecz mistrzowski'
+        : 'Premia za mecz o awans',
+      body: [
+        'Trenerze,',
+        '',
+        celebration === 'championship'
+          ? 'To zwycięstwo przypieczętowało mistrzostwo. Taki mecz wymaga konkretnej reakcji klubu.'
+          : 'To zwycięstwo przypieczętowało awans. Drużyna udźwignęła presję i zasłużyła na konkretny sygnał od klubu.',
+        '',
+        `Przyznaję jednorazową premię drużynową w wysokości ${presidentBonus.toLocaleString('pl-PL')} PLN.`,
+        'Kwota została odjęta z budżetu klubu. Proszę przekazać zawodnikom, że zarząd docenia ten wynik.',
+        '',
+        userClub.management?.owner
+          ? `${userClub.management.owner.firstName} ${userClub.management.owner.lastName}`
+          : 'Prezes Klubu',
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 8,
+    }] : [];
+    const applyMoraleBoost = (playersMap: Record<string, Player[]>): Record<string, Player[]> => {
+      const squad = playersMap[userTeamId] || [];
+      if (squad.length === 0) return playersMap;
+      return {
+        ...playersMap,
+        [userTeamId]: squad.map(player => {
+          const afterAchievement = PlayerMoraleService.applyClinchedSeasonAchievementMorale(player, achievement, currentDate);
+          return bonusAwarded
+            ? PlayerMoraleService.applyPresidentTeamBonusMorale(afterAchievement, presidentBonus, squad.length, currentDate)
+            : afterAchievement;
+        }),
+      };
+    };
+
+    if (sourcePlayers) {
+      setSeasonCelebration(celebration);
+      return {
+        players: applyMoraleBoost(sourcePlayers),
+        clubs: nextClubs,
+        mails: presidentMails,
+      };
+    }
+
+    setPlayers(prev => applyMoraleBoost(prev));
+    if (nextClubs !== sourceClubs) setClubs(nextClubs);
+    if (presidentMails.length > 0) setMessages(prev => [...presidentMails, ...prev]);
+    setSeasonCelebration(celebration);
+    return null;
+  }, [currentDate, seasonNumber, userTeamId]);
+
+  // Helper do dodawania logów finansowych
+  const addFinanceLog = useCallback((clubId: string, description: string, amount: number, date?: Date, previousBalance?: number) => {
+    const logDate = (date || currentDate).toISOString().split('T')[0];
+    
+    // Jeśli previousBalance nie podany, pobierz z klubu
+    let prevBalance = previousBalance;
+    if (prevBalance === undefined) {
+      const club = clubs.find(c => c.id === clubId);
+      // Jeśli operacja zwiększała budżet, to poprzednie saldo = obecne - kwota
+      // Jeśli operacja zmniejszała budżet, to poprzednie saldo = obecne - (-kwota) = obecne + kwota
+      prevBalance = club ? club.budget - amount : 0;
+    }
+    
+    const newLog = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: logDate,
+      amount: amount,
+      type: amount >= 0 ? 'INCOME' as const : 'EXPENSE' as const,
+      description: description,
+      previousBalance: prevBalance
+    };
+
+    setClubs(prev => prev.map(c => 
+      c.id === clubId 
+        ? { ...c, financeHistory: [newLog, ...(c.financeHistory || [])].slice(0, 50) } 
+        : c
+    ));
+  }, [currentDate, clubs]);
+
+  const showGameNotification = useCallback((notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => {
+    setGameNotification({
+      title: notification.title,
+      message: notification.message,
+      tone: notification.tone || 'info',
+      onAction: notification.onAction,
+      actionLabel: notification.actionLabel
+    });
+  }, []);
+
+  const clearGameNotification = useCallback(() => {
+    setGameNotification(null);
+  }, []);
+
+  useEffect(() => {
+    if (!gameNotification) return;
+
+    const timer = window.setTimeout(() => {
+      setGameNotification(null);
+    }, 4200);
+
+    return () => window.clearTimeout(timer);
+  }, [gameNotification]);
+
+  const addSupercupWinner = useCallback((season: string, winner: string, year: number) => {
+    setSupercupWinners(prev => {
+      const exists = prev.some(w => w.season === season);
+      if (exists) {
+        return prev.map(w => w.season === season ? { season, winner, year } : w);
+      }
+      return [...prev, { season, winner, year }];
+    });
+  }, []);
+
+  // Guard: śledzi ID maili już wysłanych w trakcie sesji (by nie duplikować przy stale closure)
+  const sentMailIdsRef = React.useRef<Set<string>>(new Set());
+  const sportingDirectorObjectiveResponseLockRef = React.useRef<string | null>(null);
+
+  const buildMailFingerprint = useCallback((mail: MailMessage): string => {
+    const dateKey = mail.date instanceof Date ? mail.date.toISOString() : new Date(mail.date).toISOString();
+    return [
+      mail.id,
+      mail.sender,
+      mail.role,
+      mail.subject,
+      mail.body,
+      mail.type,
+      dateKey,
+      mail.metadata ? JSON.stringify(mail.metadata) : '',
+    ].join('||');
+  }, []);
+
+  const prependUniqueMessages = useCallback((incoming: MailMessage[], directorOnly = false) => {
+    if (incoming.length === 0) return;
+
+    setMessages(prev => {
+      const existing = new Set(prev.map(buildMailFingerprint));
+      const nextUnique = incoming.filter(mail => {
+        if (directorOnly && mail.role !== 'Dyrektor sportowy') return true;
+        const fingerprint = buildMailFingerprint(mail);
+        if (existing.has(fingerprint)) return false;
+        existing.add(fingerprint);
+        return true;
+      });
+
+      if (nextUnique.length === 0) return prev;
+      return [...nextUnique, ...prev];
+    });
+  }, [buildMailFingerprint]);
+
+  const buildContractStaffAlert = useCallback((
+    club: Club,
+    squad: Player[],
+    date: Date,
+    lineup?: Lineup
+  ): MailMessage | null => {
+    if (squad.length === 0) return null;
+
+    const daysLeft = (player: Player): number =>
+      Math.floor((new Date(player.contractEndDate).getTime() - date.getTime()) / 86_400_000);
+
+    const played = (player: Player): number =>
+      (player.stats?.matchesPlayed || 0) +
+      (player.cupStats?.matchesPlayed || 0) +
+      (player.euroStats?.matchesPlayed || 0);
+
+    const minutes = (player: Player): number =>
+      (player.stats?.minutesPlayed || 0) +
+      (player.cupStats?.minutesPlayed || 0) +
+      (player.euroStats?.minutesPlayed || 0);
+
+    const totalStat = (player: Player, key: 'goals' | 'assists' | 'cleanSheets'): number =>
+      (player.stats?.[key] || 0) +
+      (player.cupStats?.[key] || 0) +
+      (player.euroStats?.[key] || 0);
+
+    const averageRating = (player: Player): number | null => {
+      const ratings = [
+        ...(player.stats?.ratingHistory || []),
+        ...(player.cupStats?.ratingHistory || []),
+        ...(player.euroStats?.ratingHistory || []),
+      ];
+      return ratings.length > 0
+        ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
+        : null;
+    };
+
+    const lineupIds = new Set<string>([
+      ...(lineup?.startingXI.filter(Boolean) as string[] || []),
+      ...(lineup?.bench || []),
+    ]);
+    const squadAverage = squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+    const samePositionAverage = (position: PlayerPosition): number => {
+      const group = squad.filter(player => player.position === position);
+      return group.length > 0
+        ? group.reduce((sum, player) => sum + player.overallRating, 0) / group.length
+        : squadAverage;
+    };
+
+    const expiring = squad
+      .map(player => {
+        const left = daysLeft(player);
+        if (left <= 0 || left > 425 || player.transferPendingClubId) return null;
+
+        const matchCount = played(player);
+        const minutesCount = minutes(player);
+        const rating = averageRating(player);
+        const positionAverage = samePositionAverage(player.position);
+        const importantByRole = player.squadRole === 'KEY_PLAYER' || player.squadRole === 'STARTER' || player.isUntouchable || lineupIds.has(player.id);
+        const strongForTeam = player.overallRating >= squadAverage + 3 || player.overallRating >= positionAverage + 4;
+        const tooGoodForClub = player.overallRating >= squadAverage + 7 && player.age >= 22 && player.age <= 31 && club.reputation < 78;
+        const wantsBetterMove = tooGoodForClub || (player.interestedClubs?.length || 0) >= 2 || player.isNegotiationPermanentBlocked;
+        const retirementRisk = player.age >= 36 || (player.age >= 34 && matchCount < 8 && minutesCount < 500);
+        const usefulVeteran = player.age >= 32 && player.overallRating >= squadAverage + 2 && matchCount >= 10;
+        const poorSeason = rating !== null ? rating < 6.3 : matchCount >= 10 && minutesCount < 700;
+        const fringe = !importantByRole && matchCount < 8 && minutesCount < 500;
+        const youngUpside = player.age <= 23 && player.attributes.talent >= player.overallRating + 8;
+
+        let recommendation = 'Porozmawiać o przedłużeniu kontraktu';
+        if (wantsBetterMove) recommendation = 'Nowy kontrakt albo sprzedaż, zanim stracimy kontrolę';
+        else if (retirementRisk) recommendation = 'Krótka rozmowa: rok kontraktu albo plan następcy';
+        else if (fringe && !youngUpside) recommendation = 'Rozważyć sprzedaż lub odejście po sezonie';
+        else if (youngUpside) recommendation = 'Przedłużyć i zabezpieczyć rozwój';
+        else if (poorSeason && !strongForTeam) recommendation = 'Nie spieszyć się z podwyżką, sprawdzić rynek';
+        else if (importantByRole || strongForTeam || usefulVeteran) recommendation = 'Przedłużyć możliwie szybko';
+
+        const reasons = [
+          left <= 90 ? `zostało tylko ${left} dni kontraktu` : left <= 330 ? `kontrakt kończy się za ${Math.ceil(left / 30)} mies.` : `za około ${Math.ceil((left - 330) / 30)} mies. zacznie się okno prekontraktu`,
+          player.squadRole === 'KEY_PLAYER' ? 'status: kluczowy zawodnik' : player.squadRole === 'STARTER' ? 'status: pierwszy skład' : importantByRole ? 'jest w planach meczowych' : 'rola w kadrze jest mniejsza',
+          matchCount > 0 ? `${matchCount} mecz(e) w tym sezonie` : 'brak większej próbki meczowej',
+          wantsBetterMove ? 'może chcieć mocniejszego projektu' : null,
+          retirementRisk ? 'ryzyko końca kariery lub spadku roli' : null,
+        ].filter(Boolean);
+
+        const urgency =
+          (left <= 90 ? 45 : left <= 180 ? 32 : 20) +
+          (importantByRole ? 18 : 0) +
+          (strongForTeam ? 14 : 0) +
+          (wantsBetterMove ? 18 : 0) +
+          (retirementRisk ? 10 : 0) +
+          (youngUpside ? 10 : 0) -
+          (fringe ? 8 : 0);
+
+        return {
+          player,
+          left,
+          recommendation,
+          reasons,
+          urgency,
+          stats: {
+            assists: totalStat(player, 'assists'),
+            cleanSheets: totalStat(player, 'cleanSheets'),
+            goals: totalStat(player, 'goals'),
+            matchCount,
+            rating,
+          },
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b!.urgency - a!.urgency) || (a!.left - b!.left))
+      .slice(0, 5);
+
+    if (expiring.length === 0) return null;
+
+    const dateKey = date.toISOString().split('T')[0];
+    const signature = expiring.map(entry => `${entry!.player.id}_${entry!.left <= 90 ? '90' : entry!.left <= 180 ? '180' : '330'}`).join('_');
+    const lines = expiring.map(entry => {
+      const item = entry!;
+      const ratingLabel = item.stats.rating !== null ? item.stats.rating.toFixed(1) : 'brak';
+      const concededPerMatchLabel = club.stats.played > 0
+        ? (club.stats.goalsAgainst / club.stats.played).toFixed(2)
+        : 'brak';
+      const baseStats = item.player.position === PlayerPosition.GK
+        ? `średnia ocena ${ratingLabel}, czyste konta ${item.stats.cleanSheets}/${Math.max(1, item.stats.matchCount)} (${Math.round((item.stats.cleanSheets / Math.max(1, item.stats.matchCount)) * 100)}%), stracone gole/mecz drużyny ${concededPerMatchLabel}`
+        : `średnia ocena ${ratingLabel}, bramki ${item.stats.goals}, asysty ${item.stats.assists}`;
+
+      return `${item.player.firstName} ${item.player.lastName} (${item.player.position}, ${item.player.age} lat, OVR ${item.player.overallRating})\nDecyzja: ${item.recommendation}.\nPowód: ${item.reasons.join(', ')}; ${baseStats}.`;
+    });
+
+    return {
+      id: `STAFF_CONTRACT_ALERT_${club.id}_${dateKey}_${signature}`,
+      sender: 'Sztab trenera',
+      role: 'Asystent trenera',
+      subject: 'Przegląd kontraktów: decyzje przed końcem umów',
+      body: `Trenerze,\n\nsprawdziliśmy zawodników, którym zostało maksymalnie 14 miesięcy kontraktu. To są sprawy, których nie warto odkładać, bo na około 11 miesięcy przed końcem umowy inne kluby mogą zacząć rozmawiać z zawodnikiem o przejściu po wygaśnięciu kontraktu.\n\n${lines.join('\n\n')}\n\nMoja rekomendacja: przy kluczowych graczach zaczynamy rozmowy teraz, przy zawodnikach z ambicją na większy klub rozważamy też sprzedaż, a przy starszych lub rzadko grających równolegle szukamy następcy.`,
+      date: new Date(date),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 88,
+    };
+  }, []);
+
+  // Memoized allFixtures
+  const allFixtures = useMemo(() => {
+    const allLeagueFixtures = Object.values(leagueSchedules).flatMap(s => s.matchdays.flatMap(m => m.fixtures));
+    return [...allLeagueFixtures, ...globalFixtures];
+  }, [leagueSchedules, globalFixtures]);
+
+  useEffect(() => {
+    triggerSeasonCelebrationIfClinched(clubs, allFixtures);
+  }, [allFixtures, clubs, triggerSeasonCelebrationIfClinched]);
+
+const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
+    const getForeignSquadSignature = (squad: Player[]) => JSON.stringify(squad.map(player => ({
+        id: player.id,
+        form: player.form,
+        stats: {
+            matchesPlayed: player.stats?.matchesPlayed ?? 0,
+            minutesPlayed: player.stats?.minutesPlayed ?? 0,
+            goals: player.stats?.goals ?? 0,
+            assists: player.stats?.assists ?? 0,
+            yellowCards: player.stats?.yellowCards ?? 0,
+            redCards: player.stats?.redCards ?? 0,
+            cleanSheets: player.stats?.cleanSheets ?? 0,
+            ratingCount: player.stats?.ratingHistory?.length ?? 0,
+            backgroundLeagueProgress: player.stats?.backgroundLeagueProgress ?? {},
+        },
+    })));
+    const syncForeignSquadIfNeeded = (squad: Player[]): Player[] => {
+        const club = clubs.find(c => c.id === clubId);
+        if (!club || !isForeignBackgroundStatsClub(club)) return squad;
+
+        const beforeSignature = getForeignSquadSignature(squad);
+        const updatedSquad = applyForeignBackgroundForm(squad, club, currentDate);
+        if (getForeignSquadSignature(updatedSquad) === beforeSignature) return squad;
+
+        generatedSquadCacheRef.current[clubId] = updatedSquad;
+        queueMicrotask(() => {
+            setPlayers(prev => {
+                const currentSquad = prev[clubId];
+                if (!currentSquad) return { ...prev, [clubId]: updatedSquad };
+                if (getForeignSquadSignature(currentSquad) !== beforeSignature) return prev;
+                return { ...prev, [clubId]: updatedSquad };
+            });
+        });
+        return updatedSquad;
+    };
+    if (players[clubId]) return syncForeignSquadIfNeeded(players[clubId]);
+    if (generatedSquadCacheRef.current[clubId]) return syncForeignSquadIfNeeded(generatedSquadCacheRef.current[clubId]);
+    const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
+    const withAiWinterCampState = (squad: Player[]) => {
+        const club = clubs.find(c => c.id === clubId);
+        if (club && isForeignBackgroundStatsClub(club)) {
+          return applyForeignBackgroundForm(squad, club, currentDate);
+        }
+        const adjustment = club?.aiWinterCampFormAdjustment ?? 0;
+        const decisionYear = club?.aiWinterCampDecisionYear;
+        const isAfterWinterCamp =
+          decisionYear === currentDate.getFullYear() &&
+          (currentDate.getMonth() > 0 || (currentDate.getMonth() === 0 && currentDate.getDate() >= 15));
+        if (!club || !isPolishLeagueClub(club) || club.id === userTeamId || adjustment === 0 || !isAfterWinterCamp) return squad;
+        return squad.map(player => PlayerFormService.withUpdatedForm(player, adjustment));
+    };
+    const queueGeneratedSquad = (squad: Player[]) => {
+        const preparedSquad = withAiWinterCampState(squad);
+        generatedSquadCacheRef.current[clubId] = preparedSquad;
+        queueMicrotask(() => {
+            setPlayers(prev => {
+                if (prev[clubId]) return prev;
+                return { ...prev, [clubId]: preparedSquad };
+            });
+        });
+        return preparedSquad;
+    };
+
+    // Sprawdź czy to klub europejski (CL)
+    const rawCL = RAW_CHAMPIONS_LEAGUE_CLUBS.find(c => generateEuropeanClubId(c.name) === clubId);
+    if (rawCL) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCL.tier, rawCL.reputation, rawCL.country));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawEL = RAW_EUROPA_LEAGUE_CLUBS.find(c => generateELClubId(c.name) === clubId);
+    if (rawEL) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawEL.tier, rawEL.reputation, rawEL.country));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawCONF = RAW_CONFERENCE_LEAGUE_CLUBS.find(c => generateCONFClubId(c.name) === clubId);
+    if (rawCONF) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, rawCONF.tier, rawCONF.reputation, rawCONF.country));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawSA = CLUBS_SOUTH_AMERICA.find(c => generateSAClubId(c.name) === clubId);
+    if (rawSA) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateSouthAmericanSquad(clubId, rawSA.tier, rawSA.reputation, rawSA.country));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawAsian = CLUBS_ASIAN.find(c => generateAsianClubId(c.name) === clubId);
+    if (rawAsian) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAsian.tier, rawAsian.reputation, rawAsian.country, 'Asia'));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawAfrican = CLUBS_AFRICAN.find(c => generateAfricanClubId(c.name) === clubId);
+    if (rawAfrican) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawAfrican.tier, rawAfrican.reputation, rawAfrican.country, 'Africa'));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const rawNorthAmerica = CLUBS_NORTH_AMERICA.find(c => generateNorthAmericaClubId(c.name) === clubId);
+    if (rawNorthAmerica) {
+        const newSquad = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, rawNorthAmerica.tier, rawNorthAmerica.reputation, rawNorthAmerica.country, 'North America'));
+        return queueGeneratedSquad(newSquad);
+    }
+
+    const newSquad = withMoraleState(SquadGeneratorService.generateSquadForClub(clubId));
+    return queueGeneratedSquad(newSquad);
+}, [players, clubs, currentDate, userTeamId]);
+
+  const navigateTo = useCallback((view: ViewState) => {
+    setPreviousViewState(viewState);
+    setViewState(view);
+  }, [viewState]);
+
+  const navigateWithoutHistory = useCallback((view: ViewState) => {
+    setViewState(view);
+  }, []);
+
+  useEffect(() => {
+    if (!userTeamId) {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+      return;
+    }
+
+    const objective = clubs.find(club => club.id === userTeamId)?.sportingDirectorObjective;
+    if (!objective || objective.status !== 'ACTIVE') {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+      return;
+    }
+
+    if (sportingDirectorObjectiveResponseLockRef.current && sportingDirectorObjectiveResponseLockRef.current !== objective.id) {
+      sportingDirectorObjectiveResponseLockRef.current = null;
+    }
+  }, [clubs, userTeamId]);
+
+  const generateSchedules = (template: SeasonTemplate, currentClubs: Club[]): Record<number, LeagueSchedule> => {
+    const schedules: Record<number, LeagueSchedule> = {};
+    [1, 2, 3].forEach(tier => {
+      const league = STATIC_LEAGUES.find(l => l.id === `L_PL_${tier}`);
+      if (league) {
+        const tierClubs = currentClubs.filter(c => c.leagueId === league.id);
+        schedules[tier] = LeagueScheduleGenerator.generate(tierClubs, template, tier, league.id);
+      }
+    });
+    return schedules;
+  };
+
+  const startNewGame = (
+    careerStartYear = 2025,
+    options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }
+  ) => {
+    const startYear = careerStartYear;
+    const careerStartDate = new Date(startYear, 6, 1);
+    const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
+    const newSessionSeed = generateRuntimeSeed();
+    const newRuntimeSimulationSeed = generateRuntimeSeed();
+    const withMoraleState = (squad: Player[]) => squad.map(PlayerMoraleService.ensurePlayerState);
+    setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
+    setUserTeamId(null);
+    setManagerProfile(options?.preserveManagerProfile ?? null);
+    setManagerJobOffers([]);
+    setLineups({});
+    setReserves([]);
+    setReserveCoachId(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
+    setAcademy(null);
+    setScoutPool([]);
+    setScoutMarket([]);
+    setScoutMarketRefreshDate('');
+    setScoutMarketManualRefreshCount(0);
+    setScoutMarketPeriodStart('');
+    MatchHistoryService.clear();
+    ChampionshipHistoryService.clear();
+    setCurrentDate(careerStartDate);
+    setLastRecoveryDate(careerStartDate);
+    setSessionSeed(newSessionSeed);
+    setRuntimeSimulationSeed(newRuntimeSimulationSeed);
+    const template = SeasonTemplateGenerator.generate(startYear);
+    // -> tutaj wstaw kod
+    const coachData = CoachService.generateInitialCoaches([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
+    setCoaches(coachData.coaches);
+   
+
+
+ const initialFreeAgents = withMoraleState(FreeAgentService.generatePool(99));
+    setPlayers(prev => ({ ...prev, 'FREE_AGENTS': initialFreeAgents }));
+
+
+    setSeasonTemplate(template);
+    setSeasonNumber(1);
+    const initialSchedules = generateSchedules(template, STATIC_CLUBS);
+    setLeagueSchedules(initialSchedules);
+
+ // Generuj składy dla klubów Ligi Mistrzów
+    const europeanPlayers: Record<string, Player[]> = {};
+    RAW_CHAMPIONS_LEAGUE_CLUBS.forEach(club => {
+      const clubId = generateEuropeanClubId(club.name);
+            europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
+    });
+    RAW_EUROPA_LEAGUE_CLUBS.forEach(club => {
+      const clubId = generateELClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
+    });
+    RAW_CONFERENCE_LEAGUE_CLUBS.forEach(club => {
+      const clubId = generateCONFClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateEuropeanSquad(clubId, club.tier, club.reputation, club.country));
+    });
+    CLUBS_SOUTH_AMERICA.forEach(club => {
+      const clubId = generateSAClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateSouthAmericanSquad(clubId, club.tier, club.reputation, club.country));
+    });
+    CLUBS_ASIAN.forEach(club => {
+      const clubId = generateAsianClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Asia'));
+    });
+    CLUBS_AFRICAN.forEach(club => {
+      const clubId = generateAfricanClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'Africa'));
+    });
+    CLUBS_NORTH_AMERICA.forEach(club => {
+      const clubId = generateNorthAmericaClubId(club.name);
+      europeanPlayers[clubId] = withMoraleState(SquadGeneratorService.generateIntercontinentalSquad(clubId, club.tier, club.reputation, club.country, 'North America'));
+    });
+    setPlayers(prev => ({ ...prev, ...europeanPlayers }));
+
+    // ── Inicjalizacja reprezentacji narodowych ─────────────────────────────────
+    const allNationalTeams = NationalTeamService.initializeNationalTeams();
+    const ntCoachList = CoachService.generateNationalTeamCoaches();
+    const { updatedTeams: teamsWithCoaches, updatedCoaches: assignedNtCoaches } =
+      NationalTeamService.assignCoachesToNationalTeams(allNationalTeams, ntCoachList);
+    const polishPlayers: Record<string, Player[]> = {};
+    STATIC_CLUBS.forEach(club => {
+      polishPlayers[club.id] = withMoraleState(SquadGeneratorService.generateSquadForClub(club.id));
+    });
+    setPlayers(prev => ({ ...prev, ...polishPlayers }));
+
+    const allPlayersForNT: Record<string, Player[]> = {
+      'FREE_AGENTS': initialFreeAgents,
+      ...europeanPlayers,
+      ...polishPlayers
+    };
+    const ntSquadResult = NationalTeamService.generateAllSquads(
+      teamsWithCoaches, assignedNtCoaches, allPlayersForNT
+    );
+    if (ntSquadResult.newPlayers.length > 0) {
+      setPlayers(prev => ({
+        ...prev,
+        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...withMoraleState(ntSquadResult.newPlayers)]
+      }));
+    }
+    if (ntSquadResult.playerUpdates.length > 0) {
+      const updateMap: Record<string, string> = {};
+      ntSquadResult.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
+      setPlayers(prev => {
+        const updated: Record<string, Player[]> = {};
+        for (const [clubId, squad] of Object.entries(prev)) {
+          updated[clubId] = squad.map(p =>
+            updateMap[p.id] ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
+          );
+        }
+        return updated;
+      });
+    }
+    setCoaches(prev => ({ ...prev, ...assignedNtCoaches }));
+    setNationalTeams(ntSquadResult.updatedTeams);
+    const initialUefaRankingState = UefaNationalRankingService.createInitialState(ntSquadResult.updatedTeams);
+    setUefaNationalRankingState(initialUefaRankingState);
+    const initialNationsLeagueState = NationsLeagueService.isNationsLeagueSeason(startYear)
+      ? NationsLeagueService.createInitialState(
+        ntSquadResult.updatedTeams,
+        startYear,
+        initialUefaRankingState,
+        null
+      )
+      : null;
+    setNationsLeagueState(initialNationsLeagueState);
+    setNationsLeagueArchive([]);
+    setEuroHostAnnouncements([]);
+    setEuroQualifiersState(null);
+    setWorldCupQualifiersState(null);
+    const worldCupBackfill = WorldCupHistoryBackfillService.simulateSkippedWorldCups(
+      startYear,
+      ntSquadResult.updatedTeams,
+      newSessionSeed,
+    );
+    setWcqPlayoffState(null);
+    setWcState(worldCupBackfill.latestWorldCupState);
+    worldCupBackfill.worldCupStates.forEach(state => {
+      if (!state.champion) return;
+      ChampionshipHistoryService.addWorldCupResult(
+        state.year,
+        state.champion,
+        state.runnerUp,
+        state.thirdPlace,
+        state.fourthPlace
+      );
+    });
+    setEuroState(null);
+    // ── Koniec inicjalizacji reprezentacji ────────────────────────────────────
+
+    const initialNationsLeagueMail: MailMessage | null = initialNationsLeagueState
+      ? {
+        id: `UNL_DRAW_${initialNationsLeagueState.editionStartYear}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: `Liga Narodów UEFA ${initialNationsLeagueState.editionLabel} - grupy i terminarz`,
+        body: `Kariera rozpoczyna się już po technicznym przygotowaniu edycji Ligi Narodów UEFA ${initialNationsLeagueState.editionLabel}. Grupy zostały rozlosowane na podstawie rankingu UEFA reprezentacji, a terminarz fazy ligowej jest gotowy dla wrześniowego, październikowego i listopadowego okna reprezentacyjnego.`,
+        date: careerStartDate,
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      }
+      : null;
+    const initialMessages = [
+      ...(initialNationsLeagueMail ? [initialNationsLeagueMail] : []),
+      ...worldCupBackfill.messages,
+    ];
+    setMessages(initialMessages);
+    setSentUnfriendlyPressMonths([]);
+    setSentFriendlyPressMonths([]);
+    setCompletedPressConferenceFixtureIds([]);
+    setPressConferenceEffects({});
+    setActiveTrainingId(null);
+    setTrainingProgressHistory([]);
+    sentMailIdsRef.current = new Set(initialMessages.map(message => message.id));
+    setPzpnDisciplinaryEvents([]);
+    setProcessedDrawIds(initialNationsLeagueState ? [`UNL_DRAW_${initialNationsLeagueState.editionStartYear}`] : []);
+    setCurrentPolishChampionId(initialPolishEuropeanQualification.championsLeagueR2TeamId);
+    setCurrentPolishViceChampionId(initialPolishEuropeanQualification.championsLeagueR1TeamId);
+    setCurrentPolishCupWinnerId(initialPolishEuropeanQualification.europaLeagueR2TeamId);
+    setConfR1QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR1TeamIds);
+    setConfR2QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR2TeamIds);
+    const initialSuperCup = SuperCupService.generateFixture(startYear, STATIC_CLUBS);
+    const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, STATIC_CLUBS);
+    setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
+    const finalClubs = [...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
+    const staffData = StaffGenerationService.generateInitialStaff(finalClubs);
+    setStaffMembers(staffData.staffMembers);
+    const clubsWithManagement = ClubManagementService.generateForAllClubs(staffData.updatedClubs);
+    setClubs(clubsWithManagement);
+    navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
+  };
+
+  const startNextSeason = useCallback((newYear: number) => {
+    // 1. Zidentyfikuj Mistrza i zdobywcę Pucharu PRZED zresetowaniem stanu
+    const standingsL1 = [...clubs]
+      .filter(c => c.leagueId === 'L_PL_1')
+      .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+    
+    const champion = standingsL1[0];
+
+    // Szukamy Finału Pucharu Polski w rozegranych meczach (CompetitionType.POLISH_CUP)
+    const cupFinal = allFixtures.find(f => 
+      f.leagueId === CompetitionType.POLISH_CUP && 
+      f.status === MatchStatus.FINISHED &&
+      f.id.includes("CUP_Puchar_Polski:_FINAŁ")
+    );
+    
+    let cupWinnerId: string | undefined;
+    let cupLoserId: string | undefined;
+    if (cupFinal) {
+     const hScore = cupFinal.homeScore || 0;
+      const aScore = cupFinal.awayScore || 0;
+      let homeWin = hScore > aScore;
+
+      // Jeśli w regulaminowym czasie był remis, sprawdź rzuty karne
+      if (hScore === aScore && cupFinal.homePenaltyScore !== undefined) {
+        homeWin = cupFinal.homePenaltyScore > (cupFinal.awayPenaltyScore || 0);
+      }
+      cupWinnerId = homeWin ? cupFinal.homeTeamId : cupFinal.awayTeamId;
+      cupLoserId = homeWin ? cupFinal.awayTeamId : cupFinal.homeTeamId;
+    }
+
+    const polishEuropeanQualification = PolishEuropeanQualificationService.resolve({
+      leagueTableIds: standingsL1.map(club => club.id),
+      cupWinnerId,
+      cupRunnerUpId: cupLoserId,
+    });
+
+    // 2. Logika awansów i spadków
+    const standingsL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2').sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+    const standingsL3 = [...clubs].filter(c => c.leagueId === 'L_PL_3').sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+    const potentialL4 = clubs.filter(c => c.leagueId === 'L_PL_4');
+
+    const relegatedTeamsL1 = standingsL1.slice(15, 18);
+    const promotedTeamsL2 = standingsL2.slice(0, 2);
+    const relegatedTeamsL2 = standingsL2.slice(15, 18);
+    const promotedTeamsL3 = standingsL3.slice(0, 2);
+    const relegatedTeamsL3 = standingsL3.slice(14, 18); // miejsca 15-18 — automatyczny spadek
+
+    // ── BARAŻE O UTRZYMANIE — integracja z awansami/spadkami ────────────────
+    // Wynik barażów (miejsca 13-14 w 2.Lidze vs los. drużyny 3.Ligi) jest znany po 29 maja.
+    // relegationPlayoffFinalResult.pair0/pair1.loserId = drużyna spadająca do L_PL_4 (lub zostająca w L_PL_3)
+    const playoffRelegatedL3Ids: string[] = [];  // kluby z L_PL_3 przegrywające baraże → L_PL_4
+    const playoffPromotedL4Ids: string[] = [];   // kluby z L_PL_4 wygrywające baraże → L_PL_3
+    const playoffL4ParticipantIds = new Set<string>();
+    if (relegationPlayoffFinalResult) {
+      [relegationPlayoffFinalResult.pair0, relegationPlayoffFinalResult.pair1].forEach(outcome => {
+        if (!outcome) return;
+        const loserClub = clubs.find(c => c.id === outcome.loserId);
+        const winnerClub = clubs.find(c => c.id === outcome.winnerId);
+        // Jeśli przegrany to klub z L_PL_3 → spada do L_PL_4
+        if (loserClub?.leagueId === 'L_PL_3') playoffRelegatedL3Ids.push(outcome.loserId);
+        if (loserClub?.leagueId === 'L_PL_4') playoffL4ParticipantIds.add(outcome.loserId);
+        // Jeśli wygrany to klub z L_PL_4 → awansuje do L_PL_3
+        if (winnerClub?.leagueId === 'L_PL_4') {
+          playoffL4ParticipantIds.add(outcome.winnerId);
+          playoffPromotedL4Ids.push(outcome.winnerId);
+        }
+      });
+    }
+
+    // Losowanie z L_PL_4: 4 automatyczne awanse + dodatkowi zwycięzcy baraży.
+    // Uczestnik barażu nie może dostać drugiej szansy przez zwykłe losowanie awansu.
+    const remainingL4Pool = potentialL4.filter(c => !playoffL4ParticipantIds.has(c.id));
+    const randomPromotionsNeeded = 4;
+    const promotedFromL4Teams = [...remainingL4Pool].sort(() => Math.random() - 0.5).slice(0, randomPromotionsNeeded);
+
+    const relegateFromL1Ids = relegatedTeamsL1.map(c => c.id);
+    const promoteFromL2Ids = promotedTeamsL2.map(c => c.id);
+    const relegateFromL2Ids = relegatedTeamsL2.map(c => c.id);
+    const promoteFromL3Ids = promotedTeamsL3.map(c => c.id);
+    if (promotionPlayoffFinalResults) {
+      const ekstraklasaWinnerId = promotionPlayoffFinalResults.ekstraklasaFinal.winnerId;
+      const ligaOneWinnerId = promotionPlayoffFinalResults.ligaOneFinal.winnerId;
+      if (!promoteFromL2Ids.includes(ekstraklasaWinnerId)) promoteFromL2Ids.push(ekstraklasaWinnerId);
+      if (!promoteFromL3Ids.includes(ligaOneWinnerId)) promoteFromL3Ids.push(ligaOneWinnerId);
+    }
+    const relegateFromL3Ids = [...new Set([...relegatedTeamsL3.map(c => c.id), ...playoffRelegatedL3Ids])]; // 15-18 + barażowi przegrani
+    const promoteFromL4Ids = [...new Set([...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids])]; // losowi + barażowi zwycięzcy
+
+    if (userTeamId && !celebrationAlreadyFiredRef.current) {
+      if (champion?.id === userTeamId) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('championship');
+      } else if (promoteFromL2Ids.includes(userTeamId)) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('promotion-ekst');
+      } else if (promoteFromL3Ids.includes(userTeamId)) {
+        celebrationAlreadyFiredRef.current = true;
+        setSeasonCelebration('promotion-1liga');
+      }
+    }
+    celebrationAlreadyFiredRef.current = false;
+
+    // 3. Budowa raportu
+    const getAwards = (leagueId: string, leagueName: string) => {
+      const rows = LeagueStatsService.getPlayersForLeague(leagueId, clubs, players);
+      const topScorerRow = LeagueStatsService.getTopScorers(rows, 1)[0];
+      const topAssistantRow = LeagueStatsService.getTopAssists(rows, 1)[0];
+      const topScorer = topScorerRow?.player;
+      const topAssistant = topAssistantRow?.player;
+      return {
+        leagueName,
+        topScorer: {
+          name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak',
+          goals: topScorer?.stats.goals || 0,
+          clubId: topScorerRow?.club.id,
+          clubName: topScorerRow?.club.name,
+        },
+        topAssistant: {
+          name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak',
+          assists: topAssistant?.stats.assists || 0,
+          clubId: topAssistantRow?.club.id,
+          clubName: topAssistantRow?.club.name,
+        }
+      };
+    };
+
+    const promotionToEkstraklasaNames = [...new Set(promoteFromL2Ids
+      .map(id => clubs.find(c => c.id === id)?.name)
+      .filter((name): name is string => !!name))];
+    const promotionToLigaOneNames = [...new Set(promoteFromL3Ids
+      .map(id => clubs.find(c => c.id === id)?.name)
+      .filter((name): name is string => !!name))];
+    const promotionToLigaTwoNames = [...new Set(promoteFromL4Ids
+      .map(id => clubs.find(c => c.id === id)?.name)
+      .filter((name): name is string => !!name))];
+
+    const summaryData: SeasonSummaryData = {
+      year: newYear - 1,
+      championName: champion?.name || 'Nieznany',
+      promotions: [
+        { from: '1. Liga', to: 'Ekstraklasy', teams: promotionToEkstraklasaNames },
+        { from: '2. Liga', to: '1. Ligi', teams: promotionToLigaOneNames },
+        { from: 'Regionalna', to: '2. Ligi', teams: promotionToLigaTwoNames }
+      ],
+      relegations: [
+        { from: 'Ekstraklasy', to: '1. Ligi', teams: relegatedTeamsL1.map(t => t.name) },
+        { from: '1. Ligi', to: '2. Ligi', teams: relegatedTeamsL2.map(t => t.name) },
+        { from: '2. Ligi', to: 'Regionalnej', teams: [...new Set(relegateFromL3Ids
+          .map(id => clubs.find(c => c.id === id)?.name)
+          .filter((name): name is string => !!name))] }
+      ],
+      leagueAwards: [getAwards('L_PL_1', 'Ekstraklasa'), getAwards('L_PL_2', '1. Liga'), getAwards('L_PL_3', '2. Liga')]
+    };
+
+    const summaryMail = MailService.generateSeasonSummaryMail(summaryData);
+    setMessages(prev => [summaryMail, ...prev]);
+
+    if (userTeamId) {
+      const seasonLabel = `${newYear - 1}/${newYear}`;
+      const seasonEndDateForManager = new Date(newYear - 1, 5, 30);
+      const userClubBeforeSeasonEnd = clubs.find(c => c.id === userTeamId);
+      const userLeagueStandings = userClubBeforeSeasonEnd
+        ? [...clubs]
+            .filter(c => c.leagueId === userClubBeforeSeasonEnd.leagueId)
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor)
+        : [];
+      const userFinalRank = userLeagueStandings.findIndex(c => c.id === userTeamId) + 1;
+      const managerAwards: ManagerExpAwardInput[] = [];
+      const managerAchievements: import('../types').ManagerAchievement[] = [];
+      const userFinishedSeasonFixtures = allFixtures.filter(f =>
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        !String(f.leagueId).includes('_DRAW')
+      );
+      const managerSeasonRecord = userFinishedSeasonFixtures.reduce((record, f) => {
+        const homeScore = f.homeScore ?? 0;
+        const awayScore = f.awayScore ?? 0;
+        let winnerId: string | null = null;
+        if (homeScore > awayScore) winnerId = f.homeTeamId;
+        else if (awayScore > homeScore) winnerId = f.awayTeamId;
+        else if (f.homePenaltyScore !== undefined || f.awayPenaltyScore !== undefined) {
+          const homePens = f.homePenaltyScore ?? 0;
+          const awayPens = f.awayPenaltyScore ?? 0;
+          if (homePens > awayPens) winnerId = f.homeTeamId;
+          else if (awayPens > homePens) winnerId = f.awayTeamId;
+        }
+
+        if (winnerId === userTeamId) return { ...record, wins: record.wins + 1 };
+        if (winnerId === null) return { ...record, draws: record.draws + 1 };
+        return { ...record, losses: record.losses + 1 };
+      }, { wins: 0, draws: 0, losses: 0 });
+
+      if (champion?.id === userTeamId) {
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:ekstraklasa-champion`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: 50,
+          competition: 'Ekstraklasa',
+          label: 'Mistrzostwo Polski',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:ekstraklasa-champion`,
+          seasonLabel,
+          title: `Mistrz Polski ${seasonLabel}`,
+          competition: 'Ekstraklasa',
+        });
+      } else if (userClubBeforeSeasonEnd?.leagueId === 'L_PL_1' && userFinalRank === 2) {
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:ekstraklasa-runner-up`,
+          seasonLabel,
+          title: `Wicemistrz Polski ${seasonLabel}`,
+          competition: 'Ekstraklasa',
+        });
+      }
+
+      if (cupWinnerId === userTeamId) {
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:polish-cup-winner`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: 25,
+          competition: 'Puchar Polski',
+          label: 'Zdobycie Pucharu Polski',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:polish-cup-winner`,
+          seasonLabel,
+          title: `Puchar Polski ${newYear}`,
+          competition: 'Puchar Polski',
+        });
+      } else if (cupLoserId === userTeamId) {
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:polish-cup-finalist`,
+          seasonLabel,
+          title: `Finalista Pucharu Polski ${newYear}`,
+          competition: 'Puchar Polski',
+        });
+      }
+
+      if (promoteFromL2Ids.includes(userTeamId) || promoteFromL3Ids.includes(userTeamId)) {
+        const promotedToEkstraklasa = promoteFromL2Ids.includes(userTeamId);
+        const promotionDelta = ManagerExperienceService.promotionExpForReputation(userClubBeforeSeasonEnd?.reputation ?? 5);
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:promotion:${userTeamId}`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: promotionDelta,
+          competition: 'Liga Polska',
+          label: promotedToEkstraklasa ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi',
+        });
+        managerAchievements.push({
+          id: `achievement:${seasonLabel}:promotion-${promotedToEkstraklasa ? 'ekstraklasa' : '1liga'}:${userTeamId}`,
+          seasonLabel,
+          title: `${promotedToEkstraklasa ? 'Awans do Ekstraklasy' : 'Awans do 1. Ligi'} ${seasonLabel}`,
+          competition: 'Liga Polska',
+        });
+      }
+
+      if (relegateFromL1Ids.includes(userTeamId) || relegateFromL2Ids.includes(userTeamId) || relegateFromL3Ids.includes(userTeamId)) {
+        const relegationDelta = relegateFromL1Ids.includes(userTeamId) ? -40 : relegateFromL2Ids.includes(userTeamId) ? -30 : -25;
+        managerAwards.push({
+          sourceKey: `season:${seasonLabel}:relegation:${userTeamId}`,
+          date: seasonEndDateForManager,
+          season: seasonNumber,
+          delta: relegationDelta,
+          competition: 'Liga Polska',
+          label: relegateFromL1Ids.includes(userTeamId) ? 'Spadek z Ekstraklasy' : relegateFromL2Ids.includes(userTeamId) ? 'Spadek z 1. Ligi' : 'Spadek z 2. Ligi',
+        });
+      }
+
+      if (userClubBeforeSeasonEnd) {
+        setManagerProfile(prev => {
+          let next = ManagerExperienceService.applyExpAwards(prev, managerAwards);
+          next = ManagerExperienceService.addCareerSeason(next, {
+            id: `career:${seasonLabel}:${userTeamId}`,
+            seasonLabel,
+            clubId: userTeamId,
+            clubName: userClubBeforeSeasonEnd.name,
+            finalRank: userFinalRank > 0 ? userFinalRank : undefined,
+            points: userClubBeforeSeasonEnd.stats.points,
+            wins: managerSeasonRecord.wins,
+            draws: managerSeasonRecord.draws,
+            losses: managerSeasonRecord.losses,
+          });
+          next = ManagerExperienceService.addAchievements(next, managerAchievements);
+          return next;
+        });
+      }
+    }
+
+    // 4. Aktualizacja Klubów i Lig
+// 4. Aktualizacja Klubów i Trenerów (Nagrody i Kary)
+    const updatedCoaches = { ...coaches };
+    
+    // Funkcja pomocnicza do zmiany parametrów trenera (per-atrybut)
+    const adjustCoachIndividual = (coachId: string | undefined, exp: number, dec: number, mot: number, tra: number) => {
+      if (!coachId || !updatedCoaches[coachId]) return;
+      const c = updatedCoaches[coachId];
+      c.attributes.experience     = Math.max(1, Math.min(99, c.attributes.experience     + exp));
+      c.attributes.decisionMaking = Math.max(1, Math.min(99, c.attributes.decisionMaking + dec));
+      c.attributes.motivation     = Math.max(1, Math.min(99, c.attributes.motivation     + mot));
+      c.attributes.training       = Math.max(1, Math.min(99, c.attributes.training       + tra));
+    };
+
+    // Pomocnicza: ustal najgłębszą rundę pucharu na podstawie historii meczów
+    const getCupReached = (clubId: string): CoachSeasonStats['cupReached'] => {
+      if (clubId === cupWinnerId) return 'WINNER';
+      const cupFixtures = allFixtures.filter(f =>
+        f.leagueId === CompetitionType.POLISH_CUP &&
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === clubId || f.awayTeamId === clubId)
+      );
+      if (cupFixtures.length === 0) return 'NONE';
+      const roundPriority: Array<[string, CoachSeasonStats['cupReached']]> = [
+        ['FINAŁ', 'FINAL'],
+        ['1/2',   'SEMI'],
+        ['1/4',   'QUARTER'],
+        ['1/8',   'R8'],
+        ['1/16',  'R16'],
+        ['1/32',  'R32'],
+        ['1/64',  'R64'],
+      ];
+      for (const [keyword, level] of roundPriority) {
+        if (cupFixtures.some(f => f.id.includes(keyword))) return level;
+      }
+      return 'NONE';
+    };
+
+    // Zapis statystyk sezonu do trenera (przed resetem club.stats)
+    clubs.forEach(club => {
+      if (!club.coachId || !updatedCoaches[club.coachId]) return;
+      if (club.leagueId !== 'L_PL_1' && club.leagueId !== 'L_PL_2' && club.leagueId !== 'L_PL_3') return;
+      const leagueClubs = clubs.filter(c => c.leagueId === club.leagueId);
+      const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+      const finalRank = sorted.findIndex(c => c.id === club.id) + 1;
+      const stat: CoachSeasonStats = {
+        season: newYear - 1,
+        wins: club.stats.wins, draws: club.stats.draws, losses: club.stats.losses,
+        goalsFor: club.stats.goalsFor, goalsAgainst: club.stats.goalsAgainst,
+        finalRank, leagueId: club.leagueId, cupReached: getCupReached(club.id)
+      };
+      const c = updatedCoaches[club.coachId];
+      c.seasonStats = [...(c.seasonStats || []).slice(-4), stat];
+    });
+
+    const updatedClubs = clubs.map(club => {
+      let newLeagueId = club.leagueId;
+      let newReputation = club.reputation;
+      const isUser = club.id === userTeamId;
+
+      // Logika awansów / spadków i kar/nagród dla trenerów AI
+      if (relegateFromL1Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_2'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
+      }
+      else if (promoteFromL2Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_1'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
+      }
+      else if (relegateFromL2Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_3'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
+      }
+      else if (promoteFromL3Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_2'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
+      }
+      else if (relegateFromL3Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_4'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
+      }
+      else if (promoteFromL4Ids.includes(club.id)) {
+        newLeagueId = 'L_PL_3'; newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
+      }
+
+      // Nagroda za Mistrzostwo i Puchar
+      if (!isUser) {
+        if (club.id === champion?.id) adjustCoachIndividual(club.coachId, 3, 2, 3, 1);
+        if (club.id === cupWinnerId) adjustCoachIndividual(club.coachId, 2, 1, 3, 1);
+      }
+
+      // Ewaluacja per-statystyki (tylko AI, ligi polskie)
+      if (!isUser && club.coachId && (club.leagueId === 'L_PL_1' || club.leagueId === 'L_PL_2' || club.leagueId === 'L_PL_3')) {
+        const leagueClubs = clubs.filter(c => c.leagueId === club.leagueId);
+        const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const rank = sorted.findIndex(c => c.id === club.id) + 1;
+        const teamCount = leagueClubs.length;
+        const expectedRank = Math.max(1, 15 - club.reputation);
+        const overperform = expectedRank - rank;
+        const played = club.stats.played || 34;
+        const winRate = played > 0 ? club.stats.wins / played : 0;
+
+        // Doświadczenie: +1 za przeżycie pełnego sezonu
+        if (played >= 25) adjustCoachIndividual(club.coachId, 1, 0, 0, 0);
+
+        // Decyzyjność: rank vs oczekiwany
+        if (overperform >= 5 && Math.random() < 0.5)  adjustCoachIndividual(club.coachId, 0, 1, 0, 0);
+        if (overperform <= -5 && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, -1, 0, 0);
+
+        // Motywacja: win rate
+        if (winRate >= 0.55) adjustCoachIndividual(club.coachId, 0, 0, 1, 0);
+        if (winRate <= 0.30) adjustCoachIndividual(club.coachId, 0, 0, -1, 0);
+
+        // Trening: bramki zdobyte vs średnia ligowa
+        const tierGoalAvg = club.leagueId === 'L_PL_1' ? 35 : club.leagueId === 'L_PL_2' ? 30 : 28;
+        if (club.stats.goalsFor >= tierGoalAvg * 1.2) adjustCoachIndividual(club.coachId, 0, 0, 0, 1);
+        if (club.stats.goalsFor <= tierGoalAvg * 0.8) adjustCoachIndividual(club.coachId, 0, 0, 0, -1);
+
+        // Top 3 bez awansu — losowy bonus motywacji
+        const alreadyPromoted = promoteFromL2Ids.includes(club.id) || promoteFromL3Ids.includes(club.id) || promoteFromL4Ids.includes(club.id);
+        if (rank <= 3 && !alreadyPromoted && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, 0, 1, 0);
+
+        // Ostatnie 3 bez spadku — losowa kara
+        const alreadyRelegated = relegateFromL1Ids.includes(club.id) || relegateFromL2Ids.includes(club.id) || relegateFromL3Ids.includes(club.id);
+        if (rank >= teamCount - 2 && !alreadyRelegated && Math.random() < 0.5) adjustCoachIndividual(club.coachId, 0, -1, -1, 0);
+
+        // Puchar — bonusy i kary na podstawie getCupReached
+        const coachStat = updatedCoaches[club.coachId]?.seasonStats?.slice(-1)[0];
+        if (coachStat) {
+          // Kara dla silnej drużyny za wylot w 1. rundzie
+          if (club.reputation >= 7 && coachStat.cupReached === 'R64' && Math.random() < 0.4) {
+            adjustCoachIndividual(club.coachId, 0, 0, -1, 0);
+          }
+          // Bonus dla słabej drużyny za finał lub półfinał
+          if (club.reputation <= 3 && (coachStat.cupReached === 'FINAL' || coachStat.cupReached === 'SEMI') && Math.random() < 0.7) {
+            adjustCoachIndividual(club.coachId, 1, 1, 1, 0);
+          }
+          // Bonus za dotarcie do finału (finalista, nie zwycięzca)
+          if (coachStat.cupReached === 'FINAL' && Math.random() < 0.5) {
+            adjustCoachIndividual(club.coachId, 1, 0, 1, 0);
+          }
+        }
+      }
+
+      const parsedTier = parseInt(newLeagueId.split('_')[2]);
+      const newTier = !isNaN(parsedTier) ? parsedTier : (club.tier ?? 4);
+      
+      // Obliczanie rankingu klubu w nowej lidze (po potencjalnym awansie/spadku)
+      let leagueRanking = 10;
+      let currentLeagueStandings: Club[] = [];
+      
+      if (newLeagueId === 'L_PL_1') {
+        currentLeagueStandings = standingsL1;
+      } else if (newLeagueId === 'L_PL_2') {
+        currentLeagueStandings = standingsL2;
+      } else if (newLeagueId === 'L_PL_3') {
+        currentLeagueStandings = standingsL3;
+      }
+      
+      if (currentLeagueStandings.length > 0) {
+        leagueRanking = currentLeagueStandings.findIndex(c => c.id === club.id) + 1 || leagueRanking;
+      }
+      
+      const seasonalAwardRank = leagueRanking;
+      const sponsorshipMult = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
+      const isPolishClub = newLeagueId.startsWith('L_PL_');
+      let nextSeasonInjection = isPolishClub
+        ? FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank, sponsorshipMult)
+        : FinanceService.calculateEuropeanInitialBudget(newTier, newReputation, club.country ?? '', club.name, club.stadiumCapacity ?? 15000);
+      
+      // Bonusy ligowe (tylko dla Ekstraklasy - tier 1)
+      let leagueBonusAmount = 0;
+      if (newTier === 1 && newLeagueId === 'L_PL_1') {
+        leagueBonusAmount = FinanceService.calculateLeagueFinishBonus(leagueRanking, newTier);
+        nextSeasonInjection += leagueBonusAmount;
+      }
+      
+      // Bonusy za Puchar Polski
+      let cupBonusAmount = 0;
+      if (club.id === cupWinnerId) {
+        cupBonusAmount = FinanceService.calculatePolishCupBonus('WINNER');
+        nextSeasonInjection += cupBonusAmount;
+      }
+
+      // Tworzymy logi finansowe dla bonusów
+      const financeLogsToAdd: any[] = [];
+      let currentBalance = club.budget;
+
+      const seasonalLog = {
+        id: Math.random().toString(36).substring(2, 9),
+        date: currentDate.toISOString().split('T')[0],
+        amount: nextSeasonInjection,
+        type: 'INCOME' as const,
+        description: `Zastrzyk finansowy (TV, Sponsoring, Nagrody)`,
+        previousBalance: currentBalance
+      };
+      financeLogsToAdd.push(seasonalLog);
+
+      // Jeśli są bonusy ligowe lub pucharowe, dodaj je jako osobne wpisy
+      if (leagueBonusAmount > 0) {
+        currentBalance += nextSeasonInjection - leagueBonusAmount; // Uwzględniamy inne przychody
+        financeLogsToAdd.push({
+          id: Math.random().toString(36).substring(2, 9),
+          date: currentDate.toISOString().split('T')[0],
+          amount: leagueBonusAmount,
+          type: 'INCOME' as const,
+          description: `Nagroda za ${leagueRanking === 1 ? 'Mistrzostwo Polski' : (leagueRanking === 2 ? '2. miejsce w Ekstraklasie' : (leagueRanking === 3 ? '3. miejsce w Ekstraklasie' : (leagueRanking === 4 ? '4. miejsce w Ekstraklasie' : `${leagueRanking}. miejsce w Ekstraklasie`)))}`,
+          previousBalance: currentBalance
+        });
+      }
+      
+      if (cupBonusAmount > 0) {
+        currentBalance = currentBalance - (leagueBonusAmount > 0 ? leagueBonusAmount : 0) + nextSeasonInjection;
+        financeLogsToAdd.push({
+          id: Math.random().toString(36).substring(2, 9),
+          date: currentDate.toISOString().split('T')[0],
+          amount: cupBonusAmount,
+          type: 'INCOME' as const,
+          description: `Nagroda za zwycięstwo w Pucharze Polski`,
+          previousBalance: currentBalance
+        });
+      }
+
+      // Premie za osiągnięcia wypłacane z budżetu (koszt dla klubu)
+      const hojnosc = club.board?.hojnosc ?? 'przecietna';
+      let achievementBonusCost = 0;
+      let achievementDesc = '';
+
+      if (club.leagueId === 'L_PL_1') {
+        if (club.id === champion?.id) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('CHAMPION', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za Mistrzostwo Polski';
+        } else if (leagueRanking === 2) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('RUNNER_UP', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 2. miejsce w Ekstraklasie';
+        } else if (leagueRanking === 3) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('THIRD', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 3. miejsce w Ekstraklasie';
+        } else if (leagueRanking === 4) {
+          achievementBonusCost = FinanceService.calculateAchievementBonus('FOURTH', club.reputation, hojnosc);
+          achievementDesc = 'Premia dla sztabu za 4. miejsce w Ekstraklasie';
+        }
+      }
+      if (promoteFromL2Ids.includes(club.id)) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('PROMOTE_L2_L1', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za awans do Ekstraklasy';
+      } else if (promoteFromL3Ids.includes(club.id)) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('PROMOTE_L3_L2', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za awans do 1. Ligi';
+      }
+      if (club.id === cupWinnerId) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_WINNER', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za Puchar Polski';
+      } else if (club.id === cupLoserId) {
+        achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_FINALIST', club.reputation, hojnosc);
+        achievementDesc = achievementDesc || 'Premia dla sztabu za finał Pucharu Polski';
+      } else {
+        const cupReached = getCupReached(club.id);
+        if (cupReached === 'SEMI') {
+          achievementBonusCost += FinanceService.calculateAchievementBonus('CUP_SEMI', club.reputation, hojnosc);
+          achievementDesc = achievementDesc || 'Premia dla sztabu za półfinał Pucharu Polski';
+        }
+      }
+
+      if (achievementBonusCost > 0) {
+        const balanceAfterInjection = club.budget + nextSeasonInjection;
+        financeLogsToAdd.push({
+          id: Math.random().toString(36).substring(2, 9),
+          date: currentDate.toISOString().split('T')[0],
+          amount: -achievementBonusCost,
+          type: 'EXPENSE' as const,
+          description: achievementDesc,
+          previousBalance: balanceAfterInjection
+        });
+      }
+
+      return {
+        ...club,
+        leagueId: newLeagueId,
+        reputation: newReputation,
+        budget: club.budget + nextSeasonInjection - achievementBonusCost,
+        reserveBudget: Math.max(
+          0,
+          (club.reserveBudget ?? FinanceService.calculateInitialReserveBudget(club.budget, club.reputation)) +
+          FinanceService.calculateInitialReserveBudget(nextSeasonInjection, newReputation)
+        ),
+        transferBudget: (() => {
+          const KOMPETENCJA_BUDGET_MULT: Record<string, number> = {
+            bardzo_wysoka: 1.25, wysoka: 1.12, przecietna: 1.00, niska: 0.90, bardzo_niska: 0.80,
+          };
+          const kompMult = club.board ? (KOMPETENCJA_BUDGET_MULT[club.board.kompetencja] ?? 1.00) : 1.00;
+          const boostedInjection = nextSeasonInjection * kompMult;
+          const nextBudget = club.budget + boostedInjection - achievementBonusCost;
+          return FinanceService.calculateInitialTransferBudget(nextBudget, newReputation);
+        })(),
+        signingBonusPool: FinanceService.calculateInitialSigningPool(
+          club.budget + nextSeasonInjection - achievementBonusCost,
+          newReputation
+        ),
+        boardBudgetRequestsThisSeason: 0,
+        oneTimePlayerBonusesThisSeason: 0,
+        financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50),
+        stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+        europeanBonusPoints: 0,
+        isInPolishCup: false,
+        board: club.management ? computeBoardFromManagement(club.management) : generateRandomBoard(),
+        boardConfidence: 75,
+        sponsorAcquiredThisSeason: false,
+        nextSponsorCheckDate: undefined,
+        ownerRescueThisSeason: false
+      };
+    });
+
+    setCoaches(updatedCoaches);
+    setClubs(updatedClubs);
+
+// Reset europejskiego statusu — wszyscy z powrotem biorą udział w LM na nowy sezon
+    const freshEuropeanStatus: Record<string, EuropeanStatus> = {};
+    RAW_CHAMPIONS_LEAGUE_CLUBS.forEach(club => {
+      const clubId = generateEuropeanClubId(club.name);
+      freshEuropeanStatus[clubId] = {
+        isInChampionsLeague: true,
+        isInEuropeanLeague: false,
+        isInConferenceLeague: false,
+        isInChampionsLeagueNextPhase: false,
+        isInEuropeanLeagueNextPhase: false,
+        isInConferenceLeagueNextPhase: false,
+      };
+    });
+    setEuropeanStatus(freshEuropeanStatus);
+
+    setLeagues(prevLeagues => prevLeagues.map(l => ({
+      ...l,
+      teamIds: updatedClubs.filter(c => c.leagueId === l.id && c.isDefaultActive).map(c => c.id)
+    })));
+
+    setSeasonNumber(prev => prev + 1);
+    const newTemplate = SeasonTemplateGenerator.generate(newYear);
+    setSeasonTemplate(newTemplate);
+    const newSchedules = generateSchedules(newTemplate, updatedClubs);
+    setLeagueSchedules(newSchedules);
+
+    // 5. Generowanie meczu Superpucharu na nowy sezon
+    const nextSuperCup = SuperCupService.generateFixture(newYear, updatedClubs, champion?.id, cupWinnerId);
+    const nextUEFASuperCup = UEFASuperCupService.generateFixture(newYear, updatedClubs, currentCLWinnerId, currentELWinnerId);
+    setGlobalFixtures([nextSuperCup, nextUEFASuperCup]); // Czyścimy stare puchary, zostawiamy Superpuchary na nowy sezon
+    if (polishEuropeanQualification.championsLeagueR2TeamId) {
+      setCurrentPolishChampionId(polishEuropeanQualification.championsLeagueR2TeamId);
+    }
+    setCurrentPolishViceChampionId(polishEuropeanQualification.championsLeagueR1TeamId);
+
+    const polishCupEuropeTeamId = polishEuropeanQualification.europaLeagueR2TeamId ?? undefined;
+    if (polishCupEuropeTeamId) {
+      setCurrentPolishCupWinnerId(polishCupEuropeTeamId);
+    }
+    setConfR1QPolishTeamIds([]);
+    setConfR2QPolishTeamIds(polishEuropeanQualification.conferenceLeagueR2TeamIds);
+
+
+        const seasonEndDate = new Date(newYear - 1, 5, 30); // 30 czerwca kończącego się sezonu
+    const playersAfterReputationGrowth = PlayerReputationGrowthService.applySeasonEndGrowth(
+      players,
+      clubs,
+      MatchHistoryService.getAll(),
+      seasonNumber
+    );
+    const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationGrowth, updatedClubs, seasonEndDate, userTeamId);
+    const confEuropeTeamIds = polishEuropeanQualification.conferenceLeagueR2TeamIds;
+    const europeanQualificationIds = new Set([
+      polishEuropeanQualification.championsLeagueR2TeamId,
+      polishEuropeanQualification.championsLeagueR1TeamId,
+      polishCupEuropeTeamId,
+      ...confEuropeTeamIds,
+    ].filter((id): id is string => !!id));
+    const promotedIds = new Set([...promoteFromL2Ids, ...promoteFromL3Ids, ...promoteFromL4Ids]);
+    const relegatedIds = new Set([...relegateFromL1Ids, ...relegateFromL2Ids, ...relegateFromL3Ids]);
+    const seasonOutcomeMails: MailMessage[] = [];
+    const updatedPlayersWithSeasonMindflow = Object.fromEntries(
+      Object.entries(transitionResult.updatedPlayers).map(([clubId, squad]) => {
+        const club = updatedClubs.find(c => c.id === clubId);
+        if (!club || squad.length === 0) return [clubId, squad];
+        const squadAverage = squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+        const adjustedSquad = squad.map(player => {
+          const result = PlayerMoraleService.applySeasonOutcomeMindflow(player, {
+            club,
+            squadAverage,
+            currentDate: seasonEndDate,
+            createMail: clubId === userTeamId,
+            isChampion: champion?.id === clubId,
+            isPromoted: promotedIds.has(clubId),
+            isRelegated: relegatedIds.has(clubId),
+            qualifiedForEurope: europeanQualificationIds.has(clubId),
+            wonCup: cupWinnerId === clubId,
+          });
+          if (result.mail) seasonOutcomeMails.push(result.mail);
+          return result.player;
+        });
+        return [clubId, adjustedSquad];
+      })
+    ) as Record<string, Player[]>;
+    setPlayers(updatedPlayersWithSeasonMindflow);
+
+    if (userTeamId) {
+      const previousUserClub = clubs.find(c => c.id === userTeamId);
+      const nextUserClub = updatedClubs.find(c => c.id === userTeamId);
+      const userSquad = updatedPlayersWithSeasonMindflow[userTeamId] || [];
+      const userWasPromoted = promotedIds.has(userTeamId);
+      const userWasRelegated = relegatedIds.has(userTeamId);
+      const userWonChampionship = champion?.id === userTeamId;
+      const userWonCup = cupWinnerId === userTeamId;
+      const userQualifiedForEurope = europeanQualificationIds.has(userTeamId);
+      const userWasChasingPromotion =
+        previousUserClub?.leagueId === 'L_PL_2' ||
+        previousUserClub?.leagueId === 'L_PL_3' ||
+        previousUserClub?.leagueId === 'L_PL_4';
+
+      let seasonInterviewSituation: SeasonInterviewSituation = 'SEZON_UNIWERSALNY';
+      if (userWonChampionship && userWonCup) {
+        seasonInterviewSituation = 'SEZON_DUBLET';
+      } else if (userWasPromoted) {
+        seasonInterviewSituation = 'SEZON_AWANS';
+      } else if (userWonChampionship) {
+        seasonInterviewSituation = 'SEZON_MISTRZ';
+      } else if (userWonCup) {
+        seasonInterviewSituation = 'SEZON_PUCHAR';
+      } else if (userQualifiedForEurope) {
+        seasonInterviewSituation = 'SEZON_EUROPEJSKIE_PUCHARY';
+      } else if (userWasChasingPromotion && !userWasPromoted && !userWasRelegated) {
+        seasonInterviewSituation = 'SEZON_BRAK_AWANSU';
+      }
+
+      if (nextUserClub && userSquad.length > 0) {
+        const interviewDate = new Date(newYear, 6, 1);
+        const seasonInterviewMail = MediaInterviewService.generateSeasonInterviewMail(
+          nextUserClub,
+          userSquad,
+          managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : `${nextUserClub.name} trener`,
+          interviewDate,
+          seasonInterviewSituation
+        );
+        setMessages(prev => (
+          prev.some(message => message.id === seasonInterviewMail.id)
+            ? prev
+            : [seasonInterviewMail, ...prev]
+        ));
+      }
+    }
+
+    if (seasonOutcomeMails.length > 0) {
+      setMessages(prev => [...seasonOutcomeMails, ...prev]);
+    }
+
+    // Zwolnieni zawodnicy → wolni agenci
+    if (transitionResult.releasedPlayers.length > 0) {
+      setPlayers(prev => ({
+        ...prev,
+        'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...transitionResult.releasedPlayers]
+      }));
+    }
+
+    // Wygasłe kontrakty w drużynie gracza → wolni agenci
+    if (userTeamId) {
+      const userSquad = updatedPlayersWithSeasonMindflow[userTeamId] || [];
+      const expiredUserPlayers = userSquad.filter(p =>
+        p.contractEndDate &&
+        new Date(p.contractEndDate) <= seasonEndDate &&
+        !p.transferPendingClubId
+      );
+      if (expiredUserPlayers.length > 0) {
+        const userClub = updatedClubs.find(c => c.id === userTeamId);
+        const releasedFromUser = expiredUserPlayers.map(player => ({
+          ...PlayerCareerService.resetClubStatsForNewEntry(player),
+          clubId: 'FREE_AGENTS' as const,
+          annualSalary: 0,
+          history: PlayerCareerService.movePlayer(
+            player,
+            { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+            seasonEndDate.getFullYear(),
+            7,
+            { clubName: userClub?.name ?? userTeamId, clubId: userTeamId }
+          )
+        }));
+        setPlayers(prev => ({
+          ...prev,
+          [userTeamId]: (prev[userTeamId] || []).filter(p => !expiredUserPlayers.some(e => e.id === p.id)),
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...releasedFromUser]
+        }));
+        const expiryMail: MailMessage = {
+          id: `USER_CONTRACT_EXPIRY_${seasonEndDate.getFullYear()}_${userTeamId}`,
+          sender: 'Dział Kadr',
+          role: 'Administracja sportowa',
+          subject: `Wygasłe kontrakty – koniec sezonu`,
+          body: [
+            'Trenerze,',
+            '',
+            'Następujący zawodnicy opuścili klub po wygaśnięciu kontraktu:',
+            '',
+            ...expiredUserPlayers.map(p => `• ${p.firstName} ${p.lastName}`),
+            '',
+            'Zawodnicy stali się wolnymi agentami.',
+          ].join('\n'),
+          date: new Date(seasonEndDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 75,
+        };
+        setMessages(prev => [expiryMail, ...prev]);
+      }
+    }
+
+    // Koniec sezonu: czyszczenie i odświeżenie puli wolnych agentów
+    setPlayers(prev => {
+      const currentFreeAgents = prev['FREE_AGENTS'] || [];
+      const { remaining, newYouth } = SeasonTransitionService.cullAndRefreshFreeAgents(currentFreeAgents, seasonEndDate.getFullYear());
+      return { ...prev, 'FREE_AGENTS': [...remaining, ...newYouth] };
+    });
+
+if (userTeamId) {
+      const myRetirements = transitionResult.retirementLogs.filter(log => log.clubId === userTeamId);
+      const userClub = updatedClubs.find(c => c.id === userTeamId);
+      const retirementMail = MailService.generateRetirementReportMail(myRetirements, userClub?.name || "");
+      setMessages(prev => [retirementMail, ...prev]);
+    }
+
+    const staffRetirementResult = SeasonTransitionService.processStaffRetirement(staffMembers, coaches, updatedClubs, userTeamId);
+    setStaffMembers(staffRetirementResult.updatedStaff);
+    setCoaches(staffRetirementResult.updatedCoaches);
+    setClubs(prev => prev.map(c => {
+      const upd = staffRetirementResult.clubStaffUpdates[c.id];
+      if (!upd) return c;
+      return {
+        ...c,
+        staffIds: upd.staffIds,
+        coachId: upd.coachId === null ? undefined : (upd.coachId ?? c.coachId),
+      };
+    }));
+    if (userTeamId && staffRetirementResult.retiredFromUserTeam.length > 0) {
+      const staffRetireMail = MailService.generateStaffRetirementMail(staffRetirementResult.retiredFromUserTeam);
+      setMessages(prev => [staffRetireMail, ...prev]);
+    }
+
+    // 6. Poczta
+    if (userTeamId) {
+      const newEndMails: MailMessage[] = [];
+
+      // Email jeśli gracz wygrał ligę
+      if (champion?.id === userTeamId) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const leagueChampionMail = MailService.createFromTemplate('board_league_champion', {
+          'CLUB': userClub?.name || ''
+        });
+        newEndMails.push(leagueChampionMail);
+      }
+
+      if (newEndMails.length > 0) {
+        setMessages(prev => [...newEndMails, ...prev]);
+      }
+    }
+    RefereeService.applyEndOfSeasonAdjustments();
+    RefereeService.resetSeasonStats();
+    
+    // Zapisz zwycięzców do historii
+    const seasonKey = `${newYear - 1}/${newYear}`;
+    if (champion?.name) {
+      // Znajdź drugie miejsce w Ekstraklasie
+      const secondPlace = standingsL1[1];
+      ChampionshipHistoryService.addEkstraklasaChampion(
+        seasonKey,
+        champion.name,
+        secondPlace?.name || 'Nieznany',
+        newYear
+      );
+    }
+    
+    if (cupWinnerId) {
+      const cupWinner = updatedClubs.find(c => c.id === cupWinnerId);
+      if (cupWinner?.name) {
+        ChampionshipHistoryService.addCupChampion(seasonKey, 'PUCHAR_POLSKI', cupWinner.name, newYear);
+      }
+    }
+    // Superpuchar będzie uzupełniany po meczu (na razie tylko zwycięzcy ligi i pucharu)
+    
+    setRoundResults({});
+    sentMailIdsRef.current = new Set();
+    lastProcessedLeagueDateRef.current = null;
+
+    // Czyścimy fazy grupowe europejskich pucharów, aby nowy sezon startował od pustego widoku.
+    setClGroups(null);
+    setActiveGroupDraw(null);
+    setElGroups(null);
+    setActiveELGroupDraw(null);
+    setConfGroups(null);
+    setActiveConfGroupDraw(null);
+    setElHistoryInitialRound(null);
+    setConfHistoryInitialRound(null);
+
+    // Archiwizacja jest wykonywana wyłącznie po każdych pięciu zakończonych sezonach.
+    // Pomiędzy archiwizacjami ręczny zapis zachowuje wszystkie szczegółowe dane.
+    const nextSeasonNumber = seasonNumber + 1;
+    const nextSeasonStartDate = new Date(newYear, 6, 1);
+    setReserveFixtures([]);
+    if (SaveArchiveService.shouldArchiveAfterSeason(seasonNumber)) {
+      MatchHistoryService.archiveBeforeSeason(nextSeasonNumber);
+      setMessages(prev => SaveArchiveService.archiveMessagesBefore(prev, nextSeasonStartDate));
+      setReserveMatchResults(prev => SaveArchiveService.archiveReserveResultsBefore(prev, nextSeasonNumber));
+      setAiFriendlyPairs(prev => SaveArchiveService.archiveAiFriendlyPairsBefore(prev, nextSeasonStartDate));
+      setAiFriendlyReports(prev => SaveArchiveService.archiveAiFriendlyReportsBefore(prev, nextSeasonStartDate));
+      showGameNotification({
+        title: 'Archiwizacja zakończona',
+        message: `Dane sezonów ${Math.max(1, seasonNumber - 4)}–${seasonNumber} zostały zarchiwizowane. Wyniki i najważniejsze informacje historyczne pozostają dostępne.`,
+        tone: 'info',
+      });
+    }
+  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, showGameNotification]);
+
+  const getSaveState = (): SaveState => ({
+    version: SAVE_VERSION,
+    savedAt: new Date().toISOString(),
+    currentDate,
+    sessionSeed,
+    clubs,
+    leagues,
+    players,
+    reserves,
+    reserveCoachId,
+    reserveFixtures,
+    reserveMatchResults,
+    academy,
+    scoutPool,
+    scoutMarket,
+    scoutMarketRefreshDate,
+    scoutMarketManualRefreshCount,
+    scoutMarketPeriodStart,
+    mysteryAgentOffer,
+    lineups,
+    userTeamId,
+    seasonTemplate,
+    leagueSchedules,
+    lastRecoveryDate,
+    coaches,
+    staffMembers,
+    roundResults,
+    managerProfile,
+    managerJobOffers,
+    seasonNumber,
+    messages,
+    mediaRelationships,
+    sentUnfriendlyPressMonths,
+    sentFriendlyPressMonths,
+    pendingPressArticles,
+    completedPressConferenceFixtureIds,
+    pressConferenceEffects,
+    activeTrainingId,
+    activeIntensity,
+    trainingProgressHistory,
+    reserveProgressHistory,
+    pendingNegotiations,
+    pendingFriendlyRequests,
+    activeFriendlyFixtureId,
+    activeFriendlyConditions,
+    transferOffers,
+    incomingOffers,
+    aiTransferLog,
+    europeanStatus,
+    nationalTeams,
+    nationsLeagueState,
+    nationsLeagueArchive,
+    euroHostAnnouncements,
+    euroQualifiersState,
+    worldCupQualifiersState,
+    uefaNationalRankingState,
+    wcqPlayoffState,
+    wcState,
+    euroState,
+    cupParticipants,
+    activeCupDraw,
+    activeGroupDraw,
+    activePlayoffDraw,
+    relegationPlayoffFirstLegResults,
+    relegationPlayoffFinalResult,
+    promotionPlayoffSemiResults,
+    promotionPlayoffFinalResults,
+    activePlayoffMatch,
+    clGroups,
+    activeELGroupDraw,
+    elGroups,
+    activeConfGroupDraw,
+    confGroups,
+    elHistoryInitialRound,
+    confHistoryInitialRound,
+    processedDrawIds,
+    globalFixtures,
+    isResigned,
+    managerEmploymentStatus,
+    currentPolishChampionId,
+    currentPolishViceChampionId,
+    currentPolishCupWinnerId,
+    currentCLWinnerId,
+    currentELWinnerId,
+    lastUEFASuperCupResult,
+    confR1QPolishTeamIds,
+    confR2QPolishTeamIds,
+    supercupWinners,
+    matchHistory: MatchHistoryService.getAll(),
+    championshipHistory: ChampionshipHistoryService.getAll(),
+    winterCampInvitePending,
+    winterCampProgramPending,
+    summerCampInvitePending,
+    summerCampProgramPending,
+    lastNTMatchResults,
+    aiFriendlyPairs,
+    aiFriendlyReports,
+    pzpnDisciplinaryEvents,
+    sentMailIds: Array.from(sentMailIdsRef.current),
+    lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,
+  });
+
+  const repairNationalTeamSquadsForLoadedData = (
+    sourceTeams: NationalTeam[],
+    sourceCoaches: Record<string, Coach>,
+    sourcePlayers: Record<string, Player[]>
+  ): { nationalTeams: NationalTeam[]; players: Record<string, Player[]>; generatedCount: number; updateCount: number } => {
+    // National-team load/import repair:
+    // SAVE files and editor DATA PACK imports can contain national teams whose squadPlayerIds
+    // point to missing players, duplicated IDs, or fewer than the required 25 players. The
+    // normal calendar review may fix this later, but international fixtures can happen before
+    // that date, so the save/import boundary must enforce the invariant immediately.
+    //
+    // Calibration:
+    // - NationalTeamService.reviewMonthlySquad owns positional targets: 3 GK, 8 DEF, 8 MID,
+    //   6 FWD. Change those constants in NationalTeamService if the squad model changes.
+    // - Eight passes are intentionally generous because one pass may add players and the next
+    //   can then replace weak free agents with newly imported club players. Lower this if load
+    //   time ever becomes noticeable; raise it only if a future review rule needs more churn.
+    // - Generated player OVR is calibrated in NationalTeamService against team average -10/+2.
+    let currentTeams = Array.isArray(sourceTeams) ? sourceTeams : [];
+    let currentPlayers = sourcePlayers ?? {};
+    let generatedCount = 0;
+    let updateCount = 0;
+
+    for (let i = 0; i < 8; i++) {
+      const review = NationalTeamService.reviewMonthlySquad(currentTeams, sourceCoaches, currentPlayers);
+      const anyChanged =
+        review.updatedTeams.some((team, idx) => team !== currentTeams[idx]) ||
+        review.playerUpdates.length > 0 ||
+        review.newPlayers.length > 0;
+      if (!anyChanged) break;
+
+      currentTeams = review.updatedTeams;
+
+      if (review.newPlayers.length > 0) {
+        generatedCount += review.newPlayers.length;
+        currentPlayers = {
+          ...currentPlayers,
+          'FREE_AGENTS': [
+            ...(currentPlayers['FREE_AGENTS'] || []),
+            ...review.newPlayers.map(PlayerMoraleService.ensurePlayerState)
+          ]
+        };
+      }
+
+      if (review.playerUpdates.length > 0) {
+        updateCount += review.playerUpdates.length;
+        const updateMap: Record<string, string | null> = {};
+        review.playerUpdates.forEach(update => {
+          updateMap[update.id] = update.assignedNationalTeamId;
+        });
+        currentPlayers = Object.fromEntries(Object.entries(currentPlayers).map(([clubId, squad]) => [
+          clubId,
+          squad.map(player =>
+            player.id in updateMap ? { ...player, assignedNationalTeamId: updateMap[player.id] } : player
+          )
+        ]));
+      }
+    }
+
+    return { nationalTeams: currentTeams, players: currentPlayers, generatedCount, updateCount };
+  };
+
+  const loadGameFromFile = (data: SaveState): void => {
+    const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
+    const loadedClubById = new Map(loadedClubs.map(club => [club.id, club]));
+    const loadedNationalTeams = Array.isArray(data.nationalTeams) && data.nationalTeams.length > 0
+      ? data.nationalTeams
+      : NationalTeamService.initializeNationalTeams();
+    const loadedNtByCoachId = new Map(loadedNationalTeams.filter(team => team.coachId).map(team => [team.coachId!, team]));
+    const loadedCoaches = Object.fromEntries(Object.entries(data.coaches ?? {}).map(([id, coach]) => [
+      id,
+      CoachService.normalizeCoachContract(
+        coach,
+        coach.currentClubId ? loadedClubById.get(coach.currentClubId) ?? null : null,
+        coach.currentNationalTeamId ? loadedNtByCoachId.get(coach.id) ?? null : null
+      ),
+    ])) as Record<string, Coach>;
+    const repairedNationalData = repairNationalTeamSquadsForLoadedData(
+      loadedNationalTeams,
+      loadedCoaches,
+      data.players ?? {}
+    );
+    const retainedMessages = data.messages ?? [];
+    const retainedReserveResults = data.reserveMatchResults ?? [];
+    const retainedAiFriendlyPairs = data.aiFriendlyPairs ?? [];
+    const retainedAiFriendlyReports = data.aiFriendlyReports ?? [];
+    setCurrentDate(data.currentDate);
+    setSessionSeed(data.sessionSeed);
+    setRuntimeSimulationSeed(generateRuntimeSeed());
+    setClubs(loadedClubs);
+    setLeagues(data.leagues);
+    setPlayers(repairedNationalData.players);
+    setReserves(data.reserves);
+    setReserveCoachId(data.reserveCoachId);
+    setReserveFixtures(data.reserveFixtures ?? []);
+    setReserveMatchResults(retainedReserveResults);
+    setAcademy(data.academy);
+    setScoutPool(data.scoutPool);
+    setScoutMarket(data.scoutMarket);
+    setScoutMarketRefreshDate(data.scoutMarketRefreshDate);
+    setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
+    setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
+    setMysteryAgentOffer(data.mysteryAgentOffer ?? null);
+    setLineups(data.lineups);
+    setUserTeamId(data.userTeamId);
+    setSeasonTemplate(data.seasonTemplate);
+    setLeagueSchedules(data.leagueSchedules);
+    setLastRecoveryDate(data.lastRecoveryDate);
+    setCoaches(loadedCoaches);
+    setStaffMembers(data.staffMembers ?? {});
+    setRoundResults(data.roundResults);
+    setManagerProfile(data.managerProfile);
+    setManagerJobOffers(data.managerJobOffers ?? []);
+    setSeasonNumber(data.seasonNumber);
+    setMessages(retainedMessages);
+    setMediaRelationships(data.mediaRelationships ?? {});
+    setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
+    setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
+    setPendingPressArticles(data.pendingPressArticles ?? []);
+    setCompletedPressConferenceFixtureIds(data.completedPressConferenceFixtureIds ?? []);
+    setPressConferenceEffects(data.pressConferenceEffects ?? {});
+    setActiveTrainingId(data.activeTrainingId);
+    setActiveIntensity(data.activeIntensity);
+    setTrainingProgressHistory(data.trainingProgressHistory);
+    setReserveProgressHistory(data.reserveProgressHistory);
+    setPendingNegotiations(data.pendingNegotiations);
+    setPendingFriendlyRequests(data.pendingFriendlyRequests);
+    setActiveFriendlyFixtureId(data.activeFriendlyFixtureId);
+    setActiveFriendlyConditions(data.activeFriendlyConditions);
+    setTransferOffers(data.transferOffers);
+    setIncomingOffers(data.incomingOffers);
+    setAiTransferLog(data.aiTransferLog);
+    setEuropeanStatus(data.europeanStatus);
+    setNationalTeams(repairedNationalData.nationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.ensureState(data.uefaNationalRankingState, repairedNationalData.nationalTeams));
+    setNationsLeagueState(data.nationsLeagueState ?? null);
+    setNationsLeagueArchive(Array.isArray((data as any).nationsLeagueArchive) ? (data as any).nationsLeagueArchive : []);
+    setEuroHostAnnouncements(Array.isArray((data as any).euroHostAnnouncements) ? (data as any).euroHostAnnouncements : []);
+    setEuroQualifiersState(data.euroQualifiersState ?? null);
+    setWorldCupQualifiersState((data as any).worldCupQualifiersState ?? null);
+    setWcqPlayoffState(data.wcqPlayoffState);
+    setWcState(data.wcState ?? null);
+    setEuroState((data as any).euroState ?? null);
+    setCupParticipants(data.cupParticipants);
+    setActiveCupDraw(data.activeCupDraw);
+    setActiveGroupDraw(data.activeGroupDraw);
+    setActivePlayoffDraw(data.activePlayoffDraw);
+    setRelegationPlayoffFirstLegResults(data.relegationPlayoffFirstLegResults);
+    setRelegationPlayoffFinalResult(data.relegationPlayoffFinalResult);
+    setPromotionPlayoffSemiResults(data.promotionPlayoffSemiResults);
+    setPromotionPlayoffFinalResults(data.promotionPlayoffFinalResults);
+    setActivePlayoffMatch(data.activePlayoffMatch);
+    setClGroups(data.clGroups);
+    setActiveELGroupDraw(data.activeELGroupDraw);
+    setElGroups(data.elGroups);
+    setActiveConfGroupDraw(data.activeConfGroupDraw);
+    setConfGroups(data.confGroups);
+    setElHistoryInitialRound(data.elHistoryInitialRound ?? null);
+    setConfHistoryInitialRound(data.confHistoryInitialRound ?? null);
+    setProcessedDrawIds(data.processedDrawIds);
+    setGlobalFixtures(data.globalFixtures);
+    setIsResigned(data.isResigned);
+    setManagerEmploymentStatus(data.managerEmploymentStatus ?? (data.isResigned ? 'RESIGNED' : 'EMPLOYED'));
+    setCurrentPolishChampionId(data.currentPolishChampionId);
+    setCurrentPolishViceChampionId(data.currentPolishViceChampionId ?? null);
+    setCurrentPolishCupWinnerId(data.currentPolishCupWinnerId);
+    setCurrentCLWinnerId(data.currentCLWinnerId);
+    setCurrentELWinnerId(data.currentELWinnerId);
+    setLastUEFASuperCupResult(data.lastUEFASuperCupResult);
+    setConfR1QPolishTeamIds(data.confR1QPolishTeamIds ?? []);
+    setConfR2QPolishTeamIds(data.confR2QPolishTeamIds);
+    setSupercupWinners(data.supercupWinners);
+    setWinterCampInvitePending(data.winterCampInvitePending ?? false);
+    setWinterCampProgramPending(data.winterCampProgramPending ?? false);
+    setSummerCampInvitePending(data.summerCampInvitePending ?? false);
+    setSummerCampProgramPending(data.summerCampProgramPending ?? false);
+    setLastNTMatchResults(data.lastNTMatchResults ?? null);
+    setAiFriendlyPairs(retainedAiFriendlyPairs);
+    setAiFriendlyReports(retainedAiFriendlyReports);
+    setPzpnDisciplinaryEvents((data.pzpnDisciplinaryEvents || []) as PzpnDisciplinaryEvent[]);
+    const restoredSentMailIds = data.sentMailIds && data.sentMailIds.length > 0
+      ? data.sentMailIds
+      : (data.messages || []).map((message: any) => message?.id).filter(Boolean);
+    sentMailIdsRef.current = new Set(restoredSentMailIds);
+    lastProcessedLeagueDateRef.current = data.lastProcessedLeagueDate ?? null;
+    MatchHistoryService.clear();
+    (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
+    ChampionshipHistoryService.clear();
+    ChampionshipHistoryService.restore(data.championshipHistory || []);
+    setViewState(ViewState.DASHBOARD);
+  };
+
+  const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState }): { success: boolean; message: string } => {
+    const raw = data as any;
+    if (!raw || raw.type !== 'editor_full_pack' || !Array.isArray(raw.clubs)) {
+      return { success: false, message: 'Wybrany plik nie jest paczką full pack edytora.' };
+    }
+
+    const startYear = 2025;
+    const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
+    const template = SeasonTemplateGenerator.generate(startYear);
+    const baseClubs = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
+    const baseClubMap = new Map(baseClubs.map(club => [club.id, club]));
+    const importedClubs = raw.clubs
+      .map((entry: any) => {
+        const clubId = typeof entry?.id === 'string' ? entry.id : typeof entry?.clubId === 'string' ? entry.clubId : '';
+        if (!clubId) return null;
+        const { players: _players, coach: _coach, staff: _staff, lineup: _lineup, ...clubFields } = entry;
+        const baseClub = baseClubMap.get(clubId);
+        return {
+          ...(baseClub ?? {}),
+          ...clubFields,
+          id: clubId,
+          board: clubFields.board ?? baseClub?.board ?? generateRandomBoard(),
+          stats: clubFields.stats ?? baseClub?.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+          rosterIds: Array.isArray(clubFields.rosterIds) ? clubFields.rosterIds : [],
+        } as Club;
+      })
+      .filter(Boolean) as Club[];
+
+    if (importedClubs.length === 0) {
+      return { success: false, message: 'Full pack nie zawiera poprawnych klubów.' };
+    }
+
+    const finalClubs = importedClubs.some(club => club.id === UNEMPLOYED_MANAGER_CLUB_ID)
+      ? importedClubs
+      : [...importedClubs, UNEMPLOYED_MANAGER_CLUB];
+    const hasImportedCoaches = raw.coaches && typeof raw.coaches === 'object';
+    const importedCoachesRaw = hasImportedCoaches
+      ? raw.coaches as Record<string, Coach>
+      : CoachService.generateInitialCoaches(finalClubs).coaches;
+    const importedClubById = new Map(finalClubs.map(club => [club.id, club]));
+    const importedClubByCoachId = new Map(finalClubs
+      .filter(club => !!club.coachId)
+      .map(club => [club.coachId as string, club])
+    );
+    const importedCoaches = Object.fromEntries(Object.entries(importedCoachesRaw).map(([id, coach]) => [
+      id,
+      (() => {
+        const coachClub = coach.currentClubId
+          ? importedClubById.get(coach.currentClubId) ?? importedClubByCoachId.get(id) ?? null
+          : importedClubByCoachId.get(id) ?? null;
+        const normalizedCoach = CoachService.normalizeCoachContract(
+          coach,
+          coachClub,
+          null
+        );
+        return hasImportedCoaches && coach.expPoints === 1
+          ? {
+              ...normalizedCoach,
+              expPoints: CoachService.generateInitialExpPointsForImportedCoach(normalizedCoach, coachClub),
+            }
+          : normalizedCoach;
+      })()
+    ])) as Record<string, Coach>;
+    const importedStaffMembers = raw.staffMembers && typeof raw.staffMembers === 'object'
+      ? raw.staffMembers as Record<string, StaffMember>
+      : {};
+    const buildFullPackPlayer = (p: any, clubId: string, idx: number): Player => {
+      const attrs = p.attributes ?? {};
+      const position = p.position ?? PlayerPosition.MID;
+      const overall = typeof p.overallRating === 'number'
+        ? p.overallRating
+        : PlayerAttributesGenerator.calculateOverall(attrs, position);
+      return PlayerMoraleService.ensurePlayerState({
+        id: typeof p.id === 'string' ? p.id : `FULLPACK_${clubId}_${idx}_${Date.now()}`,
+        firstName: p.firstName ?? 'Zawodnik',
+        lastName: p.lastName ?? `Import ${idx + 1}`,
+        age: typeof p.age === 'number' ? p.age : 20,
+        clubId,
+        nationality: p.nationality ?? Region.POLAND,
+        nationalityCountry: p.nationalityCountry ?? pickNationalityForRegion(p.nationality ?? Region.POLAND),
+        position,
+        secondaryPosition: p.secondaryPosition ?? null,
+        secondaryPositionRating: p.secondaryPositionRating ?? undefined,
+        overallRating: overall,
+        attributes: attrs,
+        stats: p.stats ?? { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        nationalStats: p.nationalStats ?? { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+        health: p.health ?? { status: HealthStatus.HEALTHY },
+        condition: p.condition ?? 80,
+        suspensionMatches: p.suspensionMatches ?? 0,
+        cupSuspensionMatches: p.cupSuspensionMatches ?? 0,
+        euroSuspensionMatches: p.euroSuspensionMatches ?? 0,
+        nationalSuspensionMatches: p.nationalSuspensionMatches ?? 0,
+        contractEndDate: p.contractEndDate ?? new Date(START_DATE.getFullYear() + 2, START_DATE.getMonth(), START_DATE.getDate()).toISOString(),
+        annualSalary: p.annualSalary ?? Math.round(overall * 800),
+        marketValue: p.marketValue ?? Math.round(overall * 3000),
+        loan: p.loan ?? null,
+        isAvailableForLoan: !!p.isAvailableForLoan,
+        isOnTransferList: !!p.isOnTransferList,
+        isUntouchable: !!p.isUntouchable,
+        squadRole: p.squadRole ?? null,
+        history: p.history ?? [],
+        boardLockoutUntil: p.boardLockoutUntil ?? null,
+        negotiationStep: p.negotiationStep ?? 0,
+        negotiationLockoutUntil: p.negotiationLockoutUntil ?? null,
+        contractLockoutUntil: p.contractLockoutUntil ?? null,
+        fatigueDebt: p.fatigueDebt ?? 0,
+        isNegotiationPermanentBlocked: !!p.isNegotiationPermanentBlocked,
+        transferLockoutUntil: p.transferLockoutUntil ?? null,
+        freeAgentLockoutUntil: p.freeAgentLockoutUntil ?? null,
+        lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
+      } as Player);
+    };
+    const normalizeFullPackPlayerDump = (source: Record<string, Player[]>): Record<string, Player[]> => {
+      const clubRepMap = new Map(finalClubs.map(club => [club.id, club.reputation ?? 5]));
+      return Object.fromEntries(Object.entries(source).map(([clubId, squad]) => [
+        clubId,
+        Array.isArray(squad)
+          ? squad.map((p: any, idx: number) => {
+              const position = p.position ?? PlayerPosition.MID;
+              const attrs = p.attributes ?? {};
+              const overall = typeof p.overallRating === 'number'
+                ? p.overallRating
+                : PlayerAttributesGenerator.calculateOverall(attrs, position);
+              return PlayerMoraleService.ensurePlayerState({
+                ...p,
+                id: typeof p.id === 'string' ? p.id : `FULLPACK_${clubId}_${idx}_${Date.now()}`,
+                clubId: typeof p.clubId === 'string' ? p.clubId : clubId,
+                position,
+                attributes: attrs,
+                overallRating: overall,
+                history: p.history ?? [],
+                boardLockoutUntil: p.boardLockoutUntil ?? null,
+                reputacja: p.reputacja ?? calcReputacja(overall, clubRepMap.get(clubId) ?? 5),
+                lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
+              } as Player);
+            })
+          : []
+      ]));
+    };
+
+    const hasFullPlayerDump = raw.players && typeof raw.players === 'object';
+    const importedPlayers = hasFullPlayerDump
+      ? normalizeFullPackPlayerDump(raw.players as Record<string, Player[]>)
+      : raw.clubs.reduce((acc: Record<string, Player[]>, clubEntry: any) => {
+          const clubId = typeof clubEntry?.id === 'string' ? clubEntry.id : typeof clubEntry?.clubId === 'string' ? clubEntry.clubId : '';
+          if (clubId && Array.isArray(clubEntry.players)) {
+            acc[clubId] = clubEntry.players.map((player: any, idx: number) => buildFullPackPlayer(player, clubId, idx));
+          }
+          return acc;
+        }, {});
+    if (!Array.isArray(importedPlayers.FREE_AGENTS)) {
+      importedPlayers.FREE_AGENTS = FreeAgentService.generatePool(99).map(PlayerMoraleService.ensurePlayerState);
+    }
+
+    const importedLineups = hasFullPlayerDump && raw.lineups && typeof raw.lineups === 'object'
+      ? raw.lineups as Record<string, Lineup>
+      : Object.fromEntries(Object.entries(importedPlayers)
+          .filter(([clubId, squad]) => clubId !== 'FREE_AGENTS' && Array.isArray(squad) && squad.length > 0)
+          .map(([clubId, squad]) => [
+            clubId,
+            LineupService.autoPickLineup(clubId, squad as Player[], '4-4-2', Object.values(importedCoaches).find(coach => coach.currentClubId === clubId) ?? null)
+          ]));
+    const defaultNationalTeams = NationalTeamService.initializeNationalTeams();
+    const defaultNTMap = new Map(defaultNationalTeams.map(team => [team.id, team]));
+    const importedNationalTeams = Array.isArray(raw.nationalTeams)
+      ? raw.nationalTeams.map((entry: any) => {
+          const teamId = typeof entry?.id === 'string' ? entry.id : typeof entry?.teamId === 'string' ? entry.teamId : '';
+          const baseTeam = defaultNTMap.get(teamId);
+          return {
+            ...(baseTeam ?? {}),
+            ...entry,
+            id: teamId || entry.name,
+            capital: entry.capital ?? entry.capitalCity ?? baseTeam?.capital ?? '',
+            kits: Array.isArray(entry.kits) ? entry.kits : baseTeam?.kits,
+          } as NationalTeam;
+        }).filter((team: NationalTeam) => !!team.id)
+          .map((team: NationalTeam) => {
+            if (team.coachId && !team.tacticId && importedCoaches[team.coachId]) {
+              return { ...team, tacticId: NationalTeamService.selectTacticForCoach(importedCoaches[team.coachId]) };
+            }
+            return team;
+          })
+      : defaultNationalTeams;
+    const repairedImportedNationalData = repairNationalTeamSquadsForLoadedData(
+      importedNationalTeams,
+      importedCoaches,
+      importedPlayers
+    );
+
+    setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
+    MatchHistoryService.clear();
+    ChampionshipHistoryService.clear();
+    sentMailIdsRef.current = new Set();
+    lastProcessedLeagueDateRef.current = null;
+    setCurrentDate(START_DATE);
+    setSessionSeed(generateRuntimeSeed());
+    setRuntimeSimulationSeed(generateRuntimeSeed());
+    setClubs(finalClubs);
+    setLeagues(STATIC_LEAGUES);
+    setPlayers(repairedImportedNationalData.players);
+    setLineups(importedLineups);
+    setCoaches(importedCoaches);
+    setStaffMembers(importedStaffMembers);
+    setNationalTeams(repairedImportedNationalData.nationalTeams);
+    setUefaNationalRankingState(UefaNationalRankingService.createInitialState(repairedImportedNationalData.nationalTeams));
+    setUserTeamId(null);
+    setManagerProfile(null);
+    setSeasonTemplate(template);
+    setSeasonNumber(1);
+    setLeagueSchedules(generateSchedules(template, finalClubs));
+    setLastRecoveryDate(START_DATE);
+    setMessages([]);
+    setMediaRelationships({});
+    setSentUnfriendlyPressMonths([]);
+    setSentFriendlyPressMonths([]);
+    setPendingPressArticles([]);
+    setCompletedPressConferenceFixtureIds([]);
+    setPressConferenceEffects({});
+    setActiveTrainingId(null);
+    setTrainingProgressHistory([]);
+    setReserveProgressHistory([]);
+    setRoundResults({});
+    setPendingNegotiations([]);
+    setPendingFriendlyRequests([]);
+    setActiveFriendlyFixtureId(null);
+    setActiveFriendlyConditions(null);
+    setTransferOffers([]);
+    setIncomingOffers([]);
+    setAiTransferLog([]);
+    setEuropeanStatus({});
+    setCupParticipants([]);
+    setActiveCupDraw(null);
+    setActiveGroupDraw(null);
+    setActivePlayoffDraw(null);
+    setRelegationPlayoffFirstLegResults(null);
+    setRelegationPlayoffFinalResult(null);
+    setPromotionPlayoffSemiResults(null);
+    setPromotionPlayoffFinalResults(null);
+    setActivePlayoffMatch(null);
+    setClGroups(null);
+    setActiveELGroupDraw(null);
+    setElGroups(null);
+    setActiveConfGroupDraw(null);
+    setConfGroups(null);
+    setElHistoryInitialRound(null);
+    setConfHistoryInitialRound(null);
+    setProcessedDrawIds([]);
+    setCurrentPolishChampionId(initialPolishEuropeanQualification.championsLeagueR2TeamId);
+    setCurrentPolishViceChampionId(initialPolishEuropeanQualification.championsLeagueR1TeamId);
+    setCurrentPolishCupWinnerId(initialPolishEuropeanQualification.europaLeagueR2TeamId);
+    setConfR1QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR1TeamIds);
+    setConfR2QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR2TeamIds);
+    setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
+    setWinterCampInvitePending(false);
+    setWinterCampProgramPending(false);
+    setSummerCampInvitePending(false);
+    setSummerCampProgramPending(false);
+    setLastNTMatchResults(null);
+    setAiFriendlyPairs([]);
+    setAiFriendlyReports([]);
+    setPzpnDisciplinaryEvents([]);
+    setWcqPlayoffState(null);
+    setNationsLeagueState(null);
+    setNationsLeagueArchive([]);
+    setEuroHostAnnouncements([]);
+    setEuroQualifiersState(null);
+    setWorldCupQualifiersState(null);
+    setWcState(null);
+    setEuroState(null);
+    setReserves([]);
+    setReserveCoachId(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
+    setAcademy(null);
+    setGlobalFixtures([
+      SuperCupService.generateFixture(2025, finalClubs),
+      UEFASuperCupService.generateFixture(2025, finalClubs),
+    ]);
+    navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
+
+    return {
+      success: true,
+      message: `Zaimportowano full pack: ${finalClubs.length} klubów i ${repairedImportedNationalData.nationalTeams.length} reprezentacji.`,
+    };
+  };
+
+  const saveManagerProfile = (profile: ManagerProfile) => {
+    setManagerProfile(ManagerExperienceService.ensureManagerExperience(profile));
+    navigateTo(ViewState.TEAM_SELECTION);
+  };
+
+const selectUserTeam = (clubId: string) => {
+    setUserTeamId(clubId);
+    setIsResigned(false);
+    setManagerEmploymentStatus('EMPLOYED');
+    const club = clubs.find(c => c.id === clubId)!;
+    const squad = getOrGenerateSquad(clubId);
+    const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
+    if (club.coachId) {
+      setCoaches(prev => {
+        const prev_coach = prev[club.coachId!];
+        if (!prev_coach) return prev;
+        return { ...prev, [club.coachId!]: { ...prev_coach, currentClubId: null } };
+      });
+    }
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, coachId: undefined, sportingDirector } : c));
+    const selectedClub = { ...club, coachId: undefined, sportingDirector };
+
+    const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
+    const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
+    setReserves(generatedReserves);
+
+    // Generuj trenera rezerw: 75% szansy na Polaka, 25% na zagranicznego
+    const isPolish = Math.random() < 0.75;
+    const newReserveCoach = CoachService.createRandomCoach(isPolish);
+    const reserveHiredDate = currentDate.toISOString();
+    const reserveCoachWithClub = {
+      ...newReserveCoach,
+      currentClubId: clubId,
+      hiredDate: reserveHiredDate,
+      contractEndDate: CoachService.getDefaultContractEndDate(reserveHiredDate),
+      annualSalary: CoachService.calculateAnnualSalaryForClub(club, newReserveCoach),
+    };
+    setCoaches(prev => ({ ...prev, [newReserveCoach.id]: reserveCoachWithClub }));
+    setReserveCoachId(newReserveCoach.id);
+
+    const presetLevel = CLUBS_WITH_PRESET_ACADEMY[clubId] as ClubAcademy['level'] | undefined;
+    if (presetLevel) {
+      setAcademy({
+        level: presetLevel,
+        youthPlayers: [],
+        lastIntakeYear: 0,
+        operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(presetLevel),
+        upgradeInProgress: false,
+        upgradeCompletionDate: undefined,
+        regionFocus: undefined,
+        activeMissions: [],
+        promotedHistory: [],
+      });
+    } else {
+      setAcademy(null);
+    }
+
+    // Inicjalizacja puli skautów
+    const pool = ScoutService.generateScoutPool(Date.now());
+    setScoutPool(pool);
+    const market = ScoutService.generateMarket(pool, selectedClub.reputation ?? 5, selectedClub.board?.kompetencja);
+    setScoutMarket(market);
+    setScoutMarketRefreshDate(new Date().toISOString().split('T')[0]);
+
+    const lineup = LineupService.autoPickLineup(clubId, squad);
+    setLineups(prev => ({ ...prev, [clubId]: lineup }));
+    
+    const otherLineups: Record<string, Lineup> = {};
+    STATIC_CLUBS.filter(c => c.isDefaultActive && c.id !== clubId).forEach(c => {
+      const s = getOrGenerateSquad(c.id);
+      const clubCoach = c.coachId ? (coaches[c.coachId] ?? null) : null;
+      otherLineups[c.id] = LineupService.autoPickLineup(c.id, s, '4-4-2', clubCoach);
+    });
+    setLineups(prev => ({ ...prev, ...otherLineups }));
+
+   const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate);
+const fanMail = MailService.generateFanWelcomeMail(selectedClub, squad, currentDate); // Tę funkcję zaraz dopiszemy
+const isNewJobAfterGameStart = seasonNumber > 1 || isResigned || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+const takingOverInterviewMail = isNewJobAfterGameStart
+  ? MediaInterviewService.generateTakingOverInterviewMail(
+      selectedClub,
+      squad,
+      managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : `${selectedClub.name} trener`,
+      currentDate
+    )
+  : null;
+setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fanMail, ...prev] : [welcomeMail, fanMail, ...prev]);
+
+    navigateTo(ViewState.SQUAD_IMPORT);
+  };
+
+  const calculateManagerFiringExpPenalty = (profile: ManagerProfile | null, club: Club): number => {
+    const expPoints = Math.max(1, profile?.expPoints ?? 1);
+    if (expPoints <= 1) return 0;
+
+    const reputationPart = Math.max(3, Math.round((club.reputation ?? 5) * 1.1));
+    const experiencePart = Math.round(expPoints * 0.03);
+    return Math.min(expPoints - 1, Math.max(5, reputationPart + experiencePart));
+  };
+
+  const createManagerFiredMail = (club: Club, reason: string, rank: number, date: Date, expPenalty: number): MailMessage => ({
+    id: `MANAGER_FIRED_${club.id}_${date.getFullYear()}_${date.getMonth() + 1}_${date.getDate()}`,
+    sender: `Zarząd ${club.name}`,
+    role: 'Zarząd klubu',
+    subject: `Zwolnienie z funkcji trenera ${club.name}`,
+    body: `Po analizie wyników sportowych zarząd klubu ${club.name} podjął decyzję o zakończeniu współpracy. Aktualna pozycja w lidze: ${rank}. Powód: ${reason}\n\nKonsekwencja reputacyjna: ${expPenalty > 0 ? `-${expPenalty} punktów EXP.` : 'brak utraty EXP, ponieważ doświadczenie nie może spaść poniżej minimum.'}\n\nKlub natychmiast rozpoczyna pracę z nowym szkoleniowcem. Do czasu znalezienia kolejnego zatrudnienia pozostaje Pan bez klubu.`,
+    date,
+    isRead: false,
+    type: MailType.BOARD,
+    priority: 95,
+  });
+
+  const createManagerJobOfferRecord = (
+    club: Club,
+    source: ManagerJobOffer['source'],
+    status: ManagerJobOffer['status'],
+    date: Date,
+    customReason?: string
+  ): ManagerJobOffer => {
+    const evaluation = ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus);
+    const expiresAt = new Date(date);
+    expiresAt.setDate(expiresAt.getDate() + 14);
+
+    return {
+      id: `MANAGER_JOB_${source}_${club.id}_${date.toISOString().split('T')[0]}_${Math.random().toString(36).slice(2, 8)}`,
+      clubId: club.id,
+      createdAt: date.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      season: seasonNumber,
+      status,
+      source,
+      requiredExp: evaluation.requiredExp,
+      chance: evaluation.chance,
+      reason: customReason ?? evaluation.reason,
+    };
+  };
+
+  const createManagerJobOfferMail = (club: Club, offer: ManagerJobOffer, date: Date): MailMessage => ({
+    id: `MANAGER_JOB_OFFER_${offer.id}`,
+    sender: `Zarząd ${club.name}`,
+    role: 'Oferta pracy',
+    subject: `Propozycja pracy: ${club.name}`,
+    body: `Zarząd klubu ${club.name} zaprasza Pana do objęcia funkcji pierwszego trenera.\n\nPowód: ${offer.reason}.\nWymagane doświadczenie: ${offer.requiredExp} EXP.\nPańskie szanse w tej rekrutacji oceniono na ${offer.chance}%.\n\nOferta jest ważna do ${new Date(offer.expiresAt).toLocaleDateString('pl-PL')}. Można ją przyjąć z poziomu tej wiadomości albo rynku pracy.`,
+    date,
+    isRead: false,
+    type: MailType.BOARD,
+    priority: 98,
+    metadata: {
+      type: 'MANAGER_JOB_OFFER',
+      offerId: offer.id,
+      clubId: club.id,
+    },
+  });
+
+  const isManagerOutOfClub = (): boolean =>
+    isResigned || !userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+
+  const applyForManagerJob = (clubId: string): ManagerJobApplicationResult => {
+    if (!isManagerOutOfClub()) {
+      return { ok: false, message: 'Najpierw musisz odejść z obecnego klubu.' };
+    }
+
+    const club = clubs.find(item => item.id === clubId);
+    if (!club || !ManagerJobService.isPolishManagerJobClub(club)) {
+      return { ok: false, message: 'Ten klub nie prowadzi obecnie rekrutacji dla gracza.' };
+    }
+
+    const evaluation = ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus);
+    if (!evaluation.isVacant && !evaluation.isUnderReview) {
+      return { ok: false, message: 'Zarząd tego klubu nie szuka teraz nowego trenera.' };
+    }
+
+    const existingActive = managerJobOffers.find(offer =>
+      offer.clubId === clubId &&
+      (offer.status === 'OFFERED' || offer.status === 'APPLIED') &&
+      new Date(offer.expiresAt).getTime() >= currentDate.getTime()
+    );
+    if (existingActive) {
+      return { ok: false, offer: existingActive, message: 'Masz już aktywną sprawę z tym klubem.' };
+    }
+
+    const accepted = Math.random() * 100 <= evaluation.chance;
+    const offer = createManagerJobOfferRecord(
+      club,
+      'APPLICATION',
+      accepted ? 'OFFERED' : 'REJECTED',
+      currentDate,
+      evaluation.reason
+    );
+    const completedOffer = {
+      ...offer,
+      response: accepted
+        ? 'Klub zaakceptował aplikację i zaprasza do podpisania kontraktu.'
+        : 'Klub podziękował za aplikację i wybrał inny kierunek rozmów.',
+    };
+
+    setManagerJobOffers(prev => [completedOffer, ...prev].slice(0, 80));
+    if (accepted) {
+      setMessages(prev => [createManagerJobOfferMail(club, completedOffer, currentDate), ...prev]);
+    }
+
+    return {
+      ok: accepted,
+      offer: completedOffer,
+      message: completedOffer.response,
+    };
+  };
+
+  const acceptManagerJobOffer = (offerId: string): ManagerJobApplicationResult => {
+    const offer = managerJobOffers.find(item => item.id === offerId);
+    if (!offer || offer.status !== 'OFFERED') {
+      return { ok: false, message: 'Ta oferta pracy nie jest już aktywna.' };
+    }
+    if (new Date(offer.expiresAt).getTime() < currentDate.getTime()) {
+      setManagerJobOffers(prev => prev.map(item => item.id === offerId ? { ...item, status: 'EXPIRED' } : item));
+      return { ok: false, message: 'Oferta wygasła.' };
+    }
+
+    const club = clubs.find(item => item.id === offer.clubId);
+    if (!club) return { ok: false, message: 'Nie znaleziono klubu dla tej oferty.' };
+
+    setManagerJobOffers(prev => prev.map(item => {
+      if (item.id === offerId) return { ...item, status: 'ACCEPTED', response: 'Oferta przyjęta.' };
+      if (item.status === 'OFFERED' || item.status === 'APPLIED') return { ...item, status: 'EXPIRED' };
+      return item;
+    }));
+    selectUserTeam(club.id);
+    return { ok: true, offer: { ...offer, status: 'ACCEPTED' }, message: `Podpisałeś kontrakt z ${club.name}.` };
+  };
+
+  const assignReplacementCoachToClub = (
+    updatedCoaches: Record<string, Coach>,
+    club: Club,
+    hireDate: Date,
+    excludedCoachId?: string
+  ): Coach | undefined => {
+    const replacement = CoachService.findReplacementCoach(updatedCoaches, club, hireDate, excludedCoachId);
+    if (!replacement) {
+      club.coachId = undefined;
+      return undefined;
+    }
+
+    const replacementHiredDate = hireDate.toISOString();
+    replacement.currentClubId = club.id;
+    replacement.hiredDate = replacementHiredDate;
+    replacement.contractEndDate = CoachService.getDefaultContractEndDate(replacementHiredDate);
+    replacement.annualSalary = CoachService.calculateAnnualSalaryForClub(club, replacement);
+    replacement.favoritePlayerIds = undefined;
+    replacement.history.push({
+      clubId: club.id,
+      clubName: club.name,
+      fromYear: hireDate.getFullYear(),
+      fromMonth: hireDate.getMonth() + 1,
+      toYear: null,
+      toMonth: null,
+    });
+    club.coachId = replacement.id;
+    return replacement;
+  };
+
+  const resignFromClub = () => {
+    setIsResigned(true);
+    setManagerEmploymentStatus('RESIGNED');
+    setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+    setIncomingOffers([]);
+  };
+
+  const updateLineup = (clubId: string, lineup: Lineup) => {
+    setLineups(prev => ({ ...prev, [clubId]: lineup }));
+  };
+
+  const addRoundResults = useCallback((results: LeagueRoundResults) => {
+    DebugLoggerService.log('ROUND_SAVE', `dateKey=${results.dateKey} | L1=${results.league1Results.length} | L2=${results.league2Results.length} | L3=${results.league3Results.length}`, true);
+    setRoundResults(prev => ({ ...prev, [results.dateKey]: results }));
+  }, []);
+
+  const queueLeagueTeamOfWeekMail = useCallback((
+    sourceClubs: Club[],
+    sourcePlayers: Record<string, Player[]>,
+    sourceFixtures: Fixture[],
+    sourceLineups: Record<string, Lineup>,
+    sourceDate: Date,
+    sourceSeasonNumber: number,
+    liveRatings?: Record<string, number>
+  ) => {
+    if (!userTeamId) return;
+    const userClub = sourceClubs.find(club => club.id === userTeamId);
+    if (!userClub || userClub.leagueId === 'NONE') return;
+    const league = leagues.find(item => item.id === userClub.leagueId);
+    if (!league) return;
+
+    const mail = LeagueTeamOfWeekService.buildMail({
+      leagueId: userClub.leagueId,
+      leagueName: league.name,
+      date: sourceDate,
+      seasonNumber: sourceSeasonNumber,
+      fixtures: sourceFixtures,
+      clubs: sourceClubs,
+      players: sourcePlayers,
+      lineups: sourceLineups,
+      matchHistory: MatchHistoryService.getAll(),
+      liveRatings,
+    });
+
+    if (!mail || sentMailIdsRef.current.has(mail.id)) return;
+    sentMailIdsRef.current.add(mail.id);
+    prependUniqueMessages([mail]);
+  }, [leagues, prependUniqueMessages, userTeamId]);
+
+  const applySimulationResult = useCallback((simulation: SimulationOutput) => {
+    if (simulation.aiTransferLogEntries && simulation.aiTransferLogEntries.length > 0) {
+      setAiTransferLog(prev => [...simulation.aiTransferLogEntries!, ...prev].slice(0, 1000));
+    }
+    let finalClubs = simulation.updatedClubs;
+
+   let finalPlayers = simulation.updatedPlayers;
+    let fitnessCoachQuality: number | undefined = undefined;
+
+ if (simulation.ratings) {
+      for (const clubId in finalPlayers) {
+        finalPlayers[clubId] = finalPlayers[clubId].map(p => {
+          if (simulation.ratings && simulation.ratings[p.id]) {
+            const hist = p.stats.ratingHistory || [];
+            return PlayerFormService.withUpdatedForm({ ...p, stats: { ...p.stats, ratingHistory: [...hist, simulation.ratings[p.id]] } });
+          }
+          return p;
+        });
+      }
+    }
+
+
+    if (userTeamId) {
+      // TUTAJ WSTAW TEN KOD
+      const userClub = finalClubs.find(c => c.id === userTeamId);
+      const tier = parseInt(userClub?.leagueId.split('_')[2] || '1');
+      const userTrainingWeekKey = getUserTrainingWeekKey(currentDate);
+      const shouldProcessUserTraining = !!userClub && userClub.userWeeklyTrainingWeekKey !== userTrainingWeekKey;
+      
+      const gkCoachMember = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .find(s => s?.role === StaffRole.GOALKEEPER_COACH);
+      const gkCoachQuality = gkCoachMember ? Math.round(
+        ((gkCoachMember.attributes.gkTechnique ?? 10) +
+         (gkCoachMember.attributes.positioning ?? 10) +
+         (gkCoachMember.attributes.footwork ?? 10)) / 3
+      ) : undefined;
+      const assistantCoachMembers = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.ASSISTANT_COACH);
+      const assistantCoachQuality = assistantCoachMembers.length > 0
+        ? Math.round(
+            assistantCoachMembers.reduce((sum, s) =>
+              sum + ((s.attributes.offensiveTactics ?? 10) +
+                     (s.attributes.defensiveTactics ?? 10) +
+                     (s.attributes.motivation ?? 10)) / 3,
+              0
+            ) / assistantCoachMembers.length
+          )
+        : undefined;
+      const fitnessCoachMembers = (userClub?.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.FITNESS_COACH);
+      fitnessCoachQuality = fitnessCoachMembers.length > 0
+        ? Math.round(
+            fitnessCoachMembers.reduce((sum, s) =>
+              sum + ((s.attributes.periodization ?? 10) +
+                     (s.attributes.fitnessTests ?? 10) +
+                     (s.attributes.nutrition ?? 10)) / 3,
+              0
+            ) / fitnessCoachMembers.length
+          )
+        : undefined;
+
+      if (shouldProcessUserTraining) {
+        finalPlayers = TrainingService.processTrainingEffects(
+          finalPlayers,
+          userTeamId,
+          activeTrainingId,
+          lastMatchSummary,
+          userClub.reputation || 5,
+          tier,
+          activeIntensity,
+          userClub.country,
+          gkCoachQuality,
+          assistantCoachQuality,
+          fitnessCoachQuality
+        );
+        // KONIEC WSTAWKI
+
+        // Zapis tygodniowego progresu treningowego (średni OVR drużyny)
+        const teamAfterTraining = finalPlayers[userTeamId] || [];
+        if (teamAfterTraining.length > 0) {
+          const avgOvr = Math.round(
+            teamAfterTraining.reduce((sum, p) => sum + p.overallRating, 0) / teamAfterTraining.length
+          );
+          setTrainingProgressHistory(prev => [...prev.slice(-19), avgOvr]);
+        }
+
+        finalPlayers = TrainingService.applyAiTrainingFocuses(finalPlayers, userTeamId);
+
+        // Trening rezerw — automatyczny plan trenera rezerw
+        if (reserves.length > 0) {
+          const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
+          const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
+          const coachExperience = reserveCoach?.attributes.experience ?? 50;
+          const coachDecision = reserveCoach?.attributes.decisionMaking ?? 50;
+          const individualWork = Math.round((coachExperience + coachDecision) / 10);
+          const weekSeed = Math.floor(currentDate.getTime() / (7 * 86400000));
+          let rngOffset = 1;
+          const weekRng = () => { const x = Math.sin(weekSeed * 9301 + rngOffset++ * 49297 + 233) * 1000; return x - Math.floor(x); };
+          const reservePlan = TrainingAssistantService.buildPlan(reserves, weekRng, individualWork);
+          const updatedReserves = TrainingService.processReserveTrainingEffects(
+            reserves,
+            reservePlan.cycleId,
+            reservePlan.playerFocuses,
+            coachTrainingAttr,
+            userClub.reputation || 5,
+            tier,
+            userClub.country
+          );
+          const moraleReviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
+          const reserveProtestResult = PlayerMoraleService.processReserveProtestReviews(moraleReviewedReserves, currentDate, messages);
+          const reviewedReserves = reserveProtestResult.players;
+          setReserves(reviewedReserves);
+          if (reserveProtestResult.mails.length > 0) {
+            prependUniqueMessages(reserveProtestResult.mails);
+          }
+          if (reviewedReserves.length > 0) {
+            const avgOvrRes = Math.round(
+              reviewedReserves.reduce((sum, p) => sum + p.overallRating, 0) / reviewedReserves.length
+            );
+            setReserveProgressHistory(prev => [
+              ...prev.slice(-19),
+              { date: currentDate.toISOString(), overall: avgOvrRes },
+            ]);
+          }
+        }
+
+        finalClubs = finalClubs.map(club =>
+          club.id === userTeamId ? { ...club, userWeeklyTrainingWeekKey: userTrainingWeekKey } : club
+        );
+      }
+    }
+
+    const aiTrainingUpdate = AiWeeklyTrainingService.processWeeklyTraining(
+      finalPlayers,
+      finalClubs,
+      coaches,
+      userTeamId,
+      currentDate,
+      simulation.updatedFixtures,
+      sessionSeed,
+      staffMembers
+    );
+    finalPlayers = aiTrainingUpdate.updatedPlayers;
+    finalClubs = aiTrainingUpdate.updatedClubs;
+
+    const userSquadBeforeTrainingInjuries = userTeamId ? (finalPlayers[userTeamId] || []) : [];
+
+    finalPlayers = TrainingService.processWeeklyTrainingInjuries(
+      finalPlayers,
+      currentDate,
+      simulation.updatedFixtures,
+      fitnessCoachQuality,
+      userTeamId ?? undefined,
+      activeIntensity
+    );
+
+    if (userTeamId && userSquadBeforeTrainingInjuries.length > 0) {
+      const beforeById = new Map(userSquadBeforeTrainingInjuries.map(player => [player.id, player]));
+      const trainingInjuryMails = (finalPlayers[userTeamId] || [])
+        .filter(player => {
+          const before = beforeById.get(player.id);
+          return before?.health.status !== HealthStatus.INJURED && player.health.status === HealthStatus.INJURED;
+        })
+        .map(player => MailService.generateTrainingInjuryMail(player, currentDate));
+
+      if (trainingInjuryMails.length > 0) {
+        setMessages(prev => [...trainingInjuryMails, ...prev]);
+      }
+    }
+
+    const currentDateKey = currentDate.toISOString().split('T')[0];
+    if (userTeamId) {
+      const domesticMatchAwards = simulation.updatedFixtures
+        .filter(fixture => {
+          const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+          return !Number.isNaN(fixtureDate.getTime()) && fixtureDate.toISOString().split('T')[0] === currentDateKey;
+        })
+        .map(fixture => ManagerExperienceService.buildDomesticMatchAward(fixture, userTeamId, currentDate, seasonNumber))
+        .filter((award): award is ManagerExpAwardInput => !!award);
+
+      if (domesticMatchAwards.length > 0) {
+        setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, domesticMatchAwards));
+      }
+    }
+
+    const pzpnCandidates = simulation.updatedFixtures.filter(fixture => {
+      const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+      return PzpnDisciplinaryService.isEligibleFixture(fixture)
+        && !Number.isNaN(fixtureDate.getTime())
+        && fixtureDate.toISOString().split('T')[0] === currentDateKey;
+    });
+
+    if (pzpnCandidates.length > 0) {
+      const newPzpnEvents: PzpnDisciplinaryEvent[] = [];
+      let clubsWithPzpnPenalties = finalClubs;
+
+      pzpnCandidates.forEach(fixture => {
+        const homeClub = clubsWithPzpnPenalties.find(club => club.id === fixture.homeTeamId);
+        const awayClub = clubsWithPzpnPenalties.find(club => club.id === fixture.awayTeamId);
+        if (!homeClub || !awayClub) return;
+
+        const event = PzpnDisciplinaryService.evaluateAfterMatch({
+          fixture,
+          homeClub,
+          awayClub,
+          seasonNumber,
+          currentDate,
+          sessionSeed,
+          existingEvents: [...pzpnDisciplinaryEvents, ...newPzpnEvents],
+        });
+        if (!event) return;
+
+        newPzpnEvents.push(event);
+        clubsWithPzpnPenalties = PzpnDisciplinaryService.applyEventToClubs(clubsWithPzpnPenalties, event);
+      });
+
+      if (newPzpnEvents.length > 0) {
+        finalClubs = clubsWithPzpnPenalties;
+        setPzpnDisciplinaryEvents(prev => PzpnDisciplinaryService.mergeEvents(prev, newPzpnEvents));
+        prependUniqueMessages(newPzpnEvents.map(event => PzpnDisciplinaryService.createMail(event, currentDate, userTeamId)));
+      }
+    }
+
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      finalClubs,
+      simulation.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
+
+    setClubs(finalClubs);
+
+    finalPlayers = Object.fromEntries(
+      Object.entries(finalPlayers).map(([clubId, squad]) => [
+        clubId,
+        PlayerMoraleService.processPeriodicReview(squad, currentDate),
+      ])
+    );
+
+    if (userTeamId) {
+      const userClub = finalClubs.find(c => c.id === userTeamId);
+      const userSquad = finalPlayers[userTeamId] || [];
+      if (userClub && userSquad.length > 0) {
+        const demandResult = PlayerMoraleService.processPlayerDemands(userClub, userSquad, currentDate, messages, allFixtures, finalClubs);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: demandResult.players,
+        };
+        if (demandResult.mails.length > 0) {
+          prependUniqueMessages(demandResult.mails);
+        }
+        const appealResult = PlayerMoraleService.processBoardAppeals(userClub, finalPlayers[userTeamId], currentDate, messages);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: appealResult.players,
+        };
+        if (appealResult.mails.length > 0) {
+          prependUniqueMessages(appealResult.mails);
+        }
+        const bonusReview = PlayerMoraleService.reviewOneTimeBonusPromises(userClub, finalPlayers[userTeamId], currentDate, seasonNumber, sessionSeed ?? 1);
+        finalPlayers = {
+          ...finalPlayers,
+          [userTeamId]: bonusReview.players,
+        };
+        finalClubs = finalClubs.map(club => club.id === userTeamId ? bonusReview.club : club);
+        if (bonusReview.mails.length > 0) {
+          prependUniqueMessages(bonusReview.mails);
+        }
+
+        // ── Transfer Request Dialog checks ─────────────────────────────────────
+        // Trzy codzienne sprawdzenia dla systemu dialogu transferowego (A/B/C):
+        //   1. reviewPendingResponse — gracz w stanie THINKING odpowiada po X dniach
+        //   2. reviewContractPromise — przypomnienie / złamanie obietnicy kontraktowej (A)
+        //   3. reviewAllowAfterSeason — złamanie obietnicy odejścia po sezonie (B)
+        // Serwis: PlayerTransferRequestDialogService
+        // Typy maili: TRANSFER_REQUEST_PLAYER_RESPONSE, TRANSFER_CONTRACT_PROMISE_REMINDER,
+        //             TRANSFER_CONTRACT_PROMISE_BROKEN, TRANSFER_AFTER_SEASON_BROKEN
+        // ─────────────────────────────────────────────────────────────────────────
+        const transferRequestReviewedSquad: Player[] = [];
+        const transferRequestMails: MailMessage[] = [];
+
+        for (const squadPlayer of finalPlayers[userTeamId]) {
+          let reviewed = squadPlayer;
+
+          const pendingReview = PlayerTransferRequestDialogService.reviewPendingResponse(reviewed, currentDate, sessionSeed);
+          reviewed = pendingReview.player;
+          transferRequestMails.push(...pendingReview.mails);
+
+          const contractReview = PlayerTransferRequestDialogService.reviewContractPromise(reviewed, currentDate);
+          reviewed = contractReview.player;
+          transferRequestMails.push(...contractReview.mails);
+
+          const seasonReview = PlayerTransferRequestDialogService.reviewAllowAfterSeason(reviewed, currentDate);
+          reviewed = seasonReview.player;
+          transferRequestMails.push(...seasonReview.mails);
+
+          if (reviewed.transferListRemovalPromiseDeadline && !reviewed.isOnTransferList) {
+            reviewed = { ...reviewed, transferListRemovalPromiseDeadline: null };
+          } else if (reviewed.transferListRemovalPromiseDeadline && reviewed.isOnTransferList) {
+            const deadlineTime = new Date(reviewed.transferListRemovalPromiseDeadline).setHours(0, 0, 0, 0);
+            const todayTime = new Date(currentDate).setHours(0, 0, 0, 0);
+
+            if (!Number.isNaN(deadlineTime) && todayTime >= deadlineTime) {
+              const lockoutDate = new Date(currentDate);
+              lockoutDate.setMonth(lockoutDate.getMonth() + 6);
+              reviewed = PlayerMoraleService.withMoraleChange(
+                reviewed,
+                -(reviewed.morale ?? 50),
+                'Trener nie dotrzymał obietnicy zdjęcia z listy transferowej',
+                currentDate
+              );
+              reviewed = {
+                ...reviewed,
+                transferListRemovalPromiseDeadline: null,
+                negotiationLockoutUntil: lockoutDate.toISOString(),
+                transferLockoutUntil: lockoutDate.toISOString(),
+              };
+              transferRequestMails.push({
+                id: `TRANSFER_LIST_REMOVAL_PROMISE_BROKEN_${reviewed.id}_${currentDate.toISOString().split('T')[0]}`,
+                date: currentDate.toISOString(),
+                type: MailType.SYSTEM,
+                subject: `Zerwane zaufanie: ${reviewed.lastName}`,
+                sender: `${reviewed.firstName} ${reviewed.lastName}`,
+                role: 'Zawodnik',
+                body: `Trenerze,\n\nPowiedział pan, że zdejmie mnie z listy transferowej. Minął dzień, a ja nadal na niej jestem.\n\nDla mnie ta rozmowa straciła jakiekolwiek znaczenie. Nie chcę wracać do negocjacji ani rozmów o przyszłości przez najbliższe miesiące.\n\n${reviewed.firstName} ${reviewed.lastName}`,
+                isRead: false,
+              });
+            }
+          }
+
+          transferRequestReviewedSquad.push(reviewed);
+        }
+
+        finalPlayers = { ...finalPlayers, [userTeamId]: transferRequestReviewedSquad };
+        if (transferRequestMails.length > 0) {
+          prependUniqueMessages(transferRequestMails);
+        }
+      }
+    }
+
+    const clinchedCelebrationResult = triggerSeasonCelebrationIfClinched(finalClubs, simulation.updatedFixtures, finalPlayers);
+    if (clinchedCelebrationResult) {
+      finalPlayers = clinchedCelebrationResult.players;
+      finalClubs = clinchedCelebrationResult.clubs;
+      if (clinchedCelebrationResult.mails.length > 0) {
+        prependUniqueMessages(clinchedCelebrationResult.mails);
+      }
+    }
+
+    setClubs(finalClubs);
+
+    setPlayers(prev => {
+      return { ...prev, ...finalPlayers };
+    });
+    
+     const refinedLineups = { ...lineups };
+    if (simulation.updatedLineups && Object.keys(simulation.updatedLineups).length > 0) {
+      Object.assign(refinedLineups, simulation.updatedLineups);
+    }
+    Object.keys(refinedLineups).forEach(clubId => {
+      const squad = finalPlayers[clubId];
+      if (squad) {
+        if (clubId === userTeamId) {
+          refinedLineups[clubId] = LineupService.evictSuspendedPlayers(refinedLineups[clubId], squad);
+        } else {
+          refinedLineups[clubId] = LineupService.repairLineup(refinedLineups[clubId], squad);
+        }
+      }
+    });
+    setLineups(refinedLineups);
+    
+    if (simulation.roundResults) {
+      addRoundResults(simulation.roundResults);
+    }
+
+    queueLeagueTeamOfWeekMail(
+      finalClubs,
+      finalPlayers,
+      simulation.updatedFixtures,
+      refinedLineups,
+      currentDate,
+      simulation.seasonNumber,
+      simulation.ratings
+    );
+
+    setLeagueSchedules(prevSchedules => {
+      const updatedSchedules: Record<number, LeagueSchedule> = { ...prevSchedules };
+      Object.keys(updatedSchedules).forEach(tier => {
+        const t = parseInt(tier);
+        const sched = updatedSchedules[t];
+        if (sched) {
+          updatedSchedules[t] = {
+            ...sched,
+            matchdays: sched.matchdays.map(md => ({
+              ...md,
+              fixtures: md.fixtures.map(f => {
+                const updated = simulation.updatedFixtures.find(uf => uf.id === f.id);
+                return updated || f;
+              })
+            }))
+          };
+        }
+      });
+      return updatedSchedules;
+    });
+    setGlobalFixtures(prev => prev.map(f => {
+      const updated = simulation.updatedFixtures.find(uf => uf.id === f.id);
+      if (!updated) return f;
+      if (f.status === MatchStatus.FINISHED && updated.status === MatchStatus.SCHEDULED) return f;
+      return updated;
+    }));
+  }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail, triggerSeasonCelebrationIfClinched, allFixtures]);
+
+  const processBackgroundCupMatches = useCallback(() => {
+    // Added sessionSeed as the 7th argument
+    const result = BackgroundMatchProcessorPolishCup.processCupEvent(currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber);
+    
+    setGlobalFixtures(prev => prev.map(f => result.updatedFixtures.find(uf => uf.id === f.id) || f));
+    setPlayers(result.updatedPlayers);
+    setLineups(result.updatedLineups);
+    setClubs(result.updatedClubs);
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      result.updatedClubs,
+      result.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber]);
+
+  const processCLMatchDay = useCallback(() => {
+    // null zamiast userTeamId — gracz kliknął "Symuluj", więc symulujemy WSZYSTKIE mecze
+    // łącznie z drużyną gracza (brak trybu live dla CL)
+    const clResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+      currentDate, null, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches
+    );
+    setGlobalFixtures(prev => {
+      const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
+      return prev.map(f => {
+        const clF = clMap.get(f.id);
+        if (clF && (
+          clF.status !== f.status ||
+          clF.homeScore !== f.homeScore ||
+          clF.awayScore !== f.awayScore ||
+          clF.homePenaltyScore !== f.homePenaltyScore ||
+          clF.awayPenaltyScore !== f.awayPenaltyScore
+        )) {
+          return clF;
+        }
+        return f;
+      });
+    });
+    setPlayers(prev => ({ ...prev, ...clResult.updatedPlayers }));
+    setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+      prev,
+      clubs,
+      clResult.updatedFixtures,
+      allFixtures,
+      userTeamId
+    ));
+    clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches]);
+
+    const processNegotiationResponses = (simDate: Date) => {
+    const today = new Date(simDate).setHours(0,0,0,0);
+    const finished = pendingNegotiations.filter(n => new Date(n.responseDate).setHours(0,0,0,0) <= today);
+    
+    if (finished.length === 0) return;
+
+    finished.forEach(neg => {
+      const player = Object.values(players).flat().find(p => p.id === neg.playerId);
+      const userClub = clubs.find(c => c.id === userTeamId);
+      
+      if (!player || !userClub) return;
+
+      if (player.clubId !== 'FREE_AGENTS') {
+        const choseOtherMail: MailMessage = {
+          id: `MAIL_NEG_OTHER_${neg.id}`,
+          sender: `Agent gracza ${player.lastName}`,
+          role: 'Agencja Menadżerska',
+          subject: `Decyzja o kontrakcie: ${player.firstName} ${player.lastName}`,
+          body: `Szanowni Państwo,\n\nBardzo dziękuję za przedstawioną ofertę oraz zainteresowanie moją osobą. Doceniam czas poświęcony na rozmowy i możliwość poznania Państwa klubu.\n\nPo dokładnym rozważeniu wszystkich opcji zdecydowałem się jednak na kontynuowanie kariery w innym klubie. Decyzja nie była łatwa, dlatego chciałbym podkreślić, że z dużym szacunkiem podchodzę do Państwa propozycji.\n\nŻyczę klubowi wielu sukcesów w nadchodzącym sezonie i dziękuję za profesjonalne podejście.\n\nZ poważaniem,\n${player.firstName} ${player.lastName}`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 88,
+          metadata: {
+            type: 'CONTRACT_OFFER',
+            negotiationId: neg.id,
+            accepted: false,
+            salary: neg.salary,
+            years: neg.years,
+            bonus: neg.bonus,
+            goalBonus: neg.goalBonus,
+            assistBonus: neg.assistBonus,
+            cleanSheetBonus: neg.cleanSheetBonus,
+            responseDate: neg.responseDate,
+            status: NegotiationStatus.REJECTED,
+            isAiOffer: false,
+            playerId: player.id,
+            demands: null
+          }
+        };
+        setMessages(prev => [choseOtherMail, ...prev]);
+        return;
+      }
+
+      const decision = FinanceService.evaluateContractLogic(
+        player, neg.salary, neg.bonus, 
+        new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(), 
+        simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
+      );
+
+      const mail: MailMessage = {
+        id: `MAIL_NEG_${neg.id}`,
+        sender: `Agent gracza ${player.lastName}`,
+        role: 'Agencja Menadżerska',
+        subject: decision.accepted ? 'Decyzja w sprawie kontraktu: ZGODA' : 'Decyzja w sprawie kontraktu: ODMOWA',
+        body: `${decision.reason}${decision.demands ? `\n\nOczekiwana pensja roczna: ${decision.demands.salary.toLocaleString('pl-PL')} PLN\nOczekiwany bonus za podpis: ${decision.demands.bonus.toLocaleString('pl-PL')} PLN` : ''}`,
+        date: new Date(simDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 95,
+        metadata: {
+          type: 'CONTRACT_OFFER',
+          negotiationId: neg.id,
+          accepted: decision.accepted,
+          acceptanceExpiryDate: decision.accepted ? (() => { const d = new Date(simDate); d.setDate(d.getDate() + 4); return d.toISOString(); })() : undefined,
+          salary: neg.salary,
+          years: neg.years,
+          bonus: neg.bonus,
+          goalBonus: neg.goalBonus,
+          assistBonus: neg.assistBonus,
+          cleanSheetBonus: neg.cleanSheetBonus,
+           responseDate: neg.responseDate,
+          status: decision.accepted ? NegotiationStatus.ACCEPTED : NegotiationStatus.REJECTED,
+          isAiOffer: false,
+          playerId: player.id,
+          demands: decision.demands
+        }
+      };
+
+ setMessages(prev => [mail, ...prev]);
+
+    // JEŚLI OFERTA ZOSTAŁA ODRZUCONA (metadata.accepted jest false) I JEST TO WOLNY AGENT
+      if (!decision.accepted && player.clubId === 'FREE_AGENTS') {
+        const lockoutDate = new Date(simDate);
+        lockoutDate.setMonth(lockoutDate.getMonth() + 3);
+        
+        setPlayers(prevPlayers => {
+          const updated = { ...prevPlayers };
+          updated['FREE_AGENTS'] = (updated['FREE_AGENTS'] || []).map(p => 
+            p.id === player.id ? {
+              ...p,
+              freeAgentLockoutUntil: null,
+              isNegotiationPermanentBlocked: false,
+              freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                p.freeAgentClubLockouts,
+                neg.clubId,
+                lockoutDate.toISOString()
+              )
+            } : p
+          );
+          return updated;
+        });
+      }
+    });
+
+    setPendingNegotiations(prev => prev.filter(n => !finished.find(f => f.id === n.id)));
+  };
+
+  const processExpiredAcceptances = (simDate: Date) => {
+    const today = new Date(simDate).setHours(0,0,0,0);
+    const expired = messages.filter(m =>
+      m.metadata?.type === 'CONTRACT_OFFER' &&
+      m.metadata?.accepted === true &&
+      m.metadata?.acceptanceExpiryDate &&
+      new Date(m.metadata.acceptanceExpiryDate).setHours(0,0,0,0) <= today
+    );
+
+    if (expired.length === 0) return;
+
+    expired.forEach(mail => {
+      const { playerId } = mail.metadata as { playerId: string };
+      const player = (players['FREE_AGENTS'] || []).find(p => p.id === playerId);
+
+      if (!player) return;
+
+      const lockoutDate = new Date(simDate);
+      lockoutDate.setMonth(lockoutDate.getMonth() + 3);
+
+      setPlayers(prevPlayers => {
+        const updated = { ...prevPlayers };
+        updated['FREE_AGENTS'] = (updated['FREE_AGENTS'] || []).map(p =>
+          p.id === playerId ? {
+            ...p,
+            freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+              p.freeAgentClubLockouts,
+              userTeamId!,
+              lockoutDate.toISOString()
+            )
+          } : p
+        );
+        return updated;
+      });
+
+      const withdrawalMail: MailMessage = {
+        id: `MAIL_EXPIRED_${mail.id}`,
+        sender: `Agent gracza ${player.lastName}`,
+        role: 'Agencja Menadżerska',
+        subject: `Wycofanie zgody na transfer: ${player.lastName}`,
+        body: `Zawodnik ${player.firstName} ${player.lastName} wycofał swoją zgodę. Brak odpowiedzi z Państwa strony w ciągu 4 dni został potraktowany jako brak poważnego zainteresowania. Dalsze rozmowy są niemożliwe przez 3 miesiące.`,
+        date: new Date(simDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+        metadata: undefined
+      };
+
+      setMessages(prev => [withdrawalMail, ...prev.filter(m2 => m2.id !== mail.id)]);
+    });
+  };
+
+  // ── SPARINGI — propozycje i odpowiedzi ──────────────────────────────────────
+
+  const addFriendlyRequest = useCallback((req: Omit<PendingFriendlyRequest, 'id'>) => {
+    const parseDateKey = (dateKey: string): Date => {
+      const [year, month, day] = dateKey.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      date.setHours(12, 0, 0, 0);
+      return date;
+    };
+
+    const getFriendlyWindow = (dateKey: string): { start: Date; end: Date } | null => {
+      if (!seasonTemplate) return null;
+      const date = parseDateKey(dateKey);
+      const slot = seasonTemplate.slots.find(s => {
+        if (s.competition !== CompetitionType.FRIENDLY) return false;
+        const start = new Date(s.start); start.setHours(0, 0, 0, 0);
+        const end = new Date(s.end); end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end;
+      });
+      if (!slot) return null;
+      const start = new Date(slot.start); start.setHours(0, 0, 0, 0);
+      const end = new Date(slot.end); end.setHours(23, 59, 59, 999);
+      return { start, end };
+    };
+
+    const isInWindow = (date: Date, window: { start: Date; end: Date }): boolean => {
+      const d = new Date(date);
+      d.setHours(12, 0, 0, 0);
+      return d >= window.start && d <= window.end;
+    };
+
+    const requestedWindow = getFriendlyWindow(req.proposedDate);
+    const userId = userTeamId ?? '';
+    const hasConfirmedDuplicate = requestedWindow
+      ? globalFixtures.some(f =>
+          f.leagueId === CompetitionType.FRIENDLY &&
+          isInWindow(f.date instanceof Date ? f.date : new Date(f.date), requestedWindow) &&
+          ((f.homeTeamId === userId && f.awayTeamId === req.opponentClubId) ||
+            (f.awayTeamId === userId && f.homeTeamId === req.opponentClubId))
+        )
+      : false;
+
+    if (hasConfirmedDuplicate) return;
+
+    const id = `FRIENDLY_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setPendingFriendlyRequests(prev => {
+      const hasPendingDuplicate = requestedWindow
+        ? prev.some(r => r.opponentClubId === req.opponentClubId && isInWindow(parseDateKey(r.proposedDate), requestedWindow))
+        : false;
+      if (hasPendingDuplicate) return prev;
+      return [...prev, { ...req, id }];
+    });
+  }, [globalFixtures, seasonTemplate, userTeamId]);
+
+  const cancelFriendly = useCallback((fixtureId: string) => {
+    setGlobalFixtures(prev => prev.filter(f => f.id !== fixtureId));
+  }, []);
+
+  const processFriendlyRequests = (simDate: Date) => {
+    const todayMs = new Date(simDate).setHours(0, 0, 0, 0);
+    const due = pendingFriendlyRequests.filter(r =>
+      new Date(r.responseDate).setHours(0, 0, 0, 0) <= todayMs
+    );
+    if (due.length === 0) return;
+
+    const venueLabelMap: Record<string, string> = {
+      HOME: 'u siebie', AWAY: 'na wyjeździe', NEUTRAL: 'na terenie neutralnym',
+    };
+
+    const uid = userTeamId ?? '';
+    let inProgressFriendlies: Fixture[] = globalFixtures.filter(
+      f => f.leagueId === CompetitionType.FRIENDLY &&
+           (f.homeTeamId === uid || f.awayTeamId === uid) &&
+           f.status === MatchStatus.SCHEDULED
+    );
+
+    due.forEach(req => {
+      const opponent = clubs.find(c => c.id === req.opponentClubId);
+      if (!opponent) return;
+
+      const [fy, fm, fd] = req.proposedDate.split('-').map(Number);
+      const matchDateStr = new Date(fy, fm - 1, fd).toLocaleDateString('pl-PL', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      });
+
+      // ── Sprawdź czy rywal ma już zaplanowany sparing AI w tym dniu ──────────
+      const matchDay = new Date(fy, fm - 1, fd); matchDay.setHours(0, 0, 0, 0);
+      const aiPairConflict = aiFriendlyPairs.some(p => {
+        if (p.homeTeamId !== req.opponentClubId && p.awayTeamId !== req.opponentClubId) return false;
+        const pDate = p.date instanceof Date ? p.date : new Date(p.date);
+        pDate.setHours(0, 0, 0, 0);
+        return pDate.getTime() === matchDay.getTime();
+      });
+      if (aiPairConflict) {
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_AI_CONFLICT_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odrzucony — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} niestety nie może rozegrać sparingu w zaproponowanym terminie.\n\nData sparingu: ${matchDateStr}\n\nPowód: Klub ma już zaplanowany mecz sparingowy w tym dniu.\n\nProponujemy wybranie innej daty lub innego rywala.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+        setPendingFriendlyRequests(prev => prev.filter(r => r.id !== req.id));
+        return;
+      }
+
+      // ── Sprawdź konflikt kalendarza rywala (okno ±2 dni od daty sparingu) ──
+      const rangeStart = new Date(matchDay); rangeStart.setDate(rangeStart.getDate() - 2);
+      const rangeEnd   = new Date(matchDay); rangeEnd.setDate(rangeEnd.getDate() + 2);
+      const allFix = Object.values(leagueSchedules)
+        .flatMap(s => s.matchdays.flatMap(m => m.fixtures))
+        .concat(globalFixtures);
+      const conflict = allFix.find(f => {
+        if (f.homeTeamId !== req.opponentClubId && f.awayTeamId !== req.opponentClubId) return false;
+        if (f.leagueId === CompetitionType.FRIENDLY) return false; // inne sparingi nie blokują
+        const fDay = new Date(f.date); fDay.setHours(0, 0, 0, 0);
+        return fDay >= rangeStart && fDay <= rangeEnd;
+      });
+
+      if (conflict) {
+        const conflictDateStr = new Date(conflict.date).toLocaleDateString('pl-PL', {
+          weekday: 'long', day: 'numeric', month: 'long',
+        });
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_CONFLICT_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odwołany — ${opponent.name}`,
+          body: `Niestety drużyna ${opponent.name} musi odwołać sparing w zaproponowanym terminie.\n\nData sparingu: ${matchDateStr}\n\nPowód: ${opponent.name} rozgrywa mecz ${conflictDateStr}, co koliduje z terminem sparingu (wymagany bufor 2 dni).\n\nProponujemy wybranie innej daty lub innego rywala.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+        return;
+      }
+
+      const roll = Math.random() * 100;
+      const accepted = roll < req.chance;
+
+      if (accepted) {
+        const matchDate = new Date(fy, fm - 1, fd, 15, 0);
+        const isNeutral = req.venue === 'NEUTRAL';
+        const homeTeamId = req.venue === 'AWAY' ? req.opponentClubId : (userTeamId ?? '');
+        const awayTeamId = req.venue === 'AWAY' ? (userTeamId ?? '') : req.opponentClubId;
+        const fixture: Fixture = {
+          id: `FRIENDLY_${req.id}`,
+          leagueId: CompetitionType.FRIENDLY,
+          homeTeamId,
+          awayTeamId,
+          date: matchDate,
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+          neutralVenue: isNeutral || undefined,
+        };
+
+        // ── Reguła: max 2 sparingi pod rząd ──────────────────────────────────
+        const toDateStr = (d: Date): string => {
+          const dt = new Date(d); dt.setHours(0,0,0,0);
+          return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        };
+        const getVenueForUser = (f: Fixture): 'HOME' | 'AWAY' | 'NEUTRAL' => {
+          if (f.awayTeamId === uid) return 'AWAY';
+          if (f.neutralVenue) return 'NEUTRAL';
+          return 'HOME';
+        };
+        const cancelPriority: Record<'HOME' | 'AWAY' | 'NEUTRAL', number> = { AWAY: 0, NEUTRAL: 1, HOME: 2 };
+
+        const dateToFixture = new Map<string, Fixture>();
+        [...inProgressFriendlies, fixture].forEach(f => dateToFixture.set(toDateStr(f.date), f));
+        const sortedDates = [...dateToFixture.keys()].sort();
+
+        let cancelFixture: Fixture | null = null;
+        let runStart = 0;
+        let runLength = 1;
+        for (let i = 1; i < sortedDates.length; i++) {
+          const diff = Math.round(
+            (new Date(sortedDates[i]).getTime() - new Date(sortedDates[i-1]).getTime()) / 86400000
+          );
+          if (diff === 1) {
+            runLength++;
+            if (runLength >= 3) {
+              const runFixtures = sortedDates.slice(runStart, i + 1).map(ds => dateToFixture.get(ds)!);
+              cancelFixture = runFixtures.reduce((worst, f) =>
+                cancelPriority[getVenueForUser(f)] < cancelPriority[getVenueForUser(worst)] ? f : worst
+              );
+              break;
+            }
+          } else {
+            runStart = i;
+            runLength = 1;
+          }
+        }
+
+        if (cancelFixture) {
+          const cancelledIsNew = cancelFixture.id === fixture.id;
+          const cancelledOpponentId = cancelFixture.homeTeamId === uid ? cancelFixture.awayTeamId : cancelFixture.homeTeamId;
+          const cancelledOpponent = clubs.find(c => c.id === cancelledOpponentId);
+          const userClubName = clubs.find(c => c.id === uid)?.name ?? 'Twój klub';
+          const cf = cancelFixture;
+          if (!cancelledIsNew) {
+            setGlobalFixtures(prev => [...prev.filter(f => f.id !== cf.id), fixture]);
+            inProgressFriendlies = [...inProgressFriendlies.filter(f => f.id !== cf.id), fixture];
+          }
+          setMessages(prev => [{
+            id: `MAIL_FRIENDLY_CANCELLED_${cf.id}`,
+            sender: 'Sekretariat Sportowy',
+            role: 'Dział Organizacji Meczów',
+            subject: `📋 Sparing odwołany — ${userClubName} vs ${cancelledOpponent?.name ?? 'nieznany'}`,
+            body: `Szanowny Trenerze,\n\ninformujemy, że jeden z zaplanowanych meczów sparingowych "${userClubName} vs ${cancelledOpponent?.name ?? 'nieznany'}" musiał zostać odwołany.\n\nPowodem decyzji jest zbyt krótki odstęp czasowy pomiędzy terminami spotkań, który nie pozwala na prawidłową organizację oraz bezpieczne przeprowadzenie meczu.\n\nProsimy o uwzględnienie tej zmiany w planie przygotowań zespołu.\n\nZ poważaniem,\nSekretariat Sportowy\nDział Organizacji Meczów`,
+            date: new Date(simDate),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 85,
+          }, ...prev]);
+        } else {
+          setGlobalFixtures(prev => [...prev, fixture]);
+          inProgressFriendlies = [...inProgressFriendlies, fixture];
+        }
+
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_OK_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `✅ Sparing zaakceptowany — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} zaakceptowała Waszą propozycję sparingu.\n\nData: ${matchDateStr}\nMiejsce: ${venueLabelMap[req.venue]}\n\nMecz został automatycznie dodany do kalendarza.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+      } else {
+        setMessages(prev => [{
+          id: `MAIL_FRIENDLY_NO_${req.id}`,
+          sender: opponent.name,
+          role: 'Koordynator Rozgrywek',
+          subject: `❌ Sparing odrzucony — ${opponent.name}`,
+          body: `Drużyna ${opponent.name} odrzuciła Waszą propozycję sparingu ${venueLabelMap[req.venue]}.\n\nData: ${matchDateStr}\n\nKlub nie mógł dopasować terminu lub nie wyraził zainteresowania. Możecie spróbować z innym terminem lub wybrać inną drużynę.`,
+          date: new Date(simDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 80,
+        }, ...prev]);
+      }
+    });
+
+    setPendingFriendlyRequests(prev => prev.filter(r => !due.find(d => d.id === r.id)));
+  };
+
+  // ── AKADEMIA — akcje ────────────────────────────────────────────────────────
+
+  const initAcademy = useCallback(() => {
+    if (academy) return;
+    const newAcademy: ClubAcademy = {
+      level: 1,
+      youthPlayers: [],
+      lastIntakeYear: 0,
+      operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(1),
+      upgradeInProgress: false,
+      regionFocus: undefined,
+      activeMissions: [],
+      promotedHistory: [],
+    };
+    setAcademy(newAcademy);
+    const infoMail: MailMessage = {
+      id: `ACADEMY_INIT_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: 'Otwarto Akademię Piłkarską Pierwszego Stopnia.',
+      body: 'Gratulacje! Akademia Piłkarska Pierwszego Stopnia jest gotowa. Co roku przyjmiemy nowych wychowanków. Proszę monitorować ich rozwój i zlecić skautom ocenę talentów i awansować najlepszych do rezerw lub pierwszego składu.',
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 80,
+    };
+    setMessages(prev => [infoMail, ...prev]);
+  }, [academy, currentDate]);
+
+  const submitUpgradeProposal = useCallback(() => {
+    if (!academy || academy.level >= 5) return;
+    if (academy.upgradeInProgress) return;
+    if (academy.upgradeProposalStatus === 'PENDING') return;
+    if (academy.upgradeProposalStatus === 'APPROVED') return;
+    if (academy.upgradeProposalRejectedUntil) {
+      const rejectedUntil = new Date(academy.upgradeProposalRejectedUntil);
+      if (new Date(currentDate) < rejectedUntil) return;
+    }
+    const decisionDate = AcademyService.getProposalDecisionDate(academy.level, currentDate);
+    setAcademy(prev => prev ? {
+      ...prev,
+      upgradeProposalStatus: 'PENDING',
+      upgradeProposalDate: new Date(currentDate).toISOString().split('T')[0],
+      upgradeProposalDecisionDate: decisionDate,
+    } : prev);
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const cost = AcademyService.getUpgradeCostForClub(academy.level, userClub?.reputation ?? 5);
+    const proposalMail: MailMessage = {
+      id: `ACAD_PROPOSAL_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: `Propozycja rozbudowy Akademii (Poziom ${academy.level} → ${academy.level + 1})`,
+      body: `Złożono formalny wniosek do właściciela klubu o zgodę na rozbudowę Akademii do Poziomu ${academy.level + 1}. Szacowany koszt: ${cost?.toLocaleString('pl-PL') ?? '—'} PLN. Zarząd zapozna się z sytuacją finansową i sportową klubu i wyda decyzję do dnia ${decisionDate}.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 70,
+    };
+    setMessages(prev => [proposalMail, ...prev]);
+  }, [academy, currentDate, clubs, userTeamId]);
+
+  const startAcademyUpgrade = useCallback(() => {
+    if (!academy || academy.upgradeInProgress || academy.level >= 5) return;
+    if (academy.upgradeProposalStatus !== 'APPROVED') return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const cost = AcademyService.getUpgradeCostForClub(academy.level, userClub?.reputation ?? 5);
+    const days = AcademyService.getUpgradeDays(academy.level);
+    if (!cost || !days || !userTeamId) return;
+    if (!userClub || userClub.budget < cost) return;
+    const completionDate = new Date(currentDate);
+    completionDate.setDate(completionDate.getDate() + days);
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - cost } : c));
+    addFinanceLog(userTeamId, `Modernizacja Akademii (Poziom ${academy.level} → ${academy.level + 1})`, -cost, currentDate);
+    setAcademy(prev => prev ? {
+      ...prev,
+      upgradeInProgress: true,
+      upgradeCompletionDate: completionDate.toISOString().split('T')[0],
+      upgradeProposalStatus: undefined,
+      upgradeProposalDate: undefined,
+      upgradeProposalDecisionDate: undefined,
+    } : prev);
+  }, [academy, clubs, userTeamId, currentDate, addFinanceLog]);
+
+  const promoteYouthPlayer = useCallback((youthId: string, target: 'RESERVES' | 'FIRST_TEAM') => {
+    if (!academy || !userTeamId) return;
+    const youth = academy.youthPlayers.find(yp => yp.id === youthId);
+    if (!youth) return;
+    const club = clubs.find(c => c.id === userTeamId);
+    const promoted = AcademyService.promoteToPlayer(
+      youth,
+      userTeamId,
+      currentDate,
+      club?.reputation ?? 5,
+      club?.tier ?? 1,
+      club?.country
+    );
+    const overallKeys: (keyof import('../types').PlayerAttributes)[] = [
+      'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
+      'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning',
+      'goalkeeping', 'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
+    ];
+    const overallRating = Math.round(
+      overallKeys.reduce((s, k) => s + youth.attributes[k], 0) / overallKeys.length
+    );
+    if (target === 'RESERVES') {
+      setReserves(prev => [...prev, promoted]);
+    } else {
+      setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), promoted] }));
+    }
+    setAcademy(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        youthPlayers: prev.youthPlayers.filter(yp => yp.id !== youthId),
+        promotedHistory: [
+          {
+            id: promoted.id,
+            firstName: youth.firstName,
+            lastName: youth.lastName,
+            position: youth.position,
+            promotedYear: currentDate.getFullYear(),
+            promotedTo: target,
+            overallAtPromotion: overallRating,
+          },
+          ...prev.promotedHistory,
+        ].slice(0, 30),
+      };
+    });
+    const infoMail: MailMessage = {
+      id: `ACAD_PROMOTED_${Date.now()}`,
+      sender: 'Dyrektor Akademii',
+      role: 'Akademia Piłkarska',
+      subject: `Awans wychowanka: ${youth.firstName} ${youth.lastName}`,
+      body: `${youth.firstName} ${youth.lastName} (${youth.age} l.) awansował do ${target === 'RESERVES' ? 'rezerw' : 'pierwszego składu'}. Ogólna ocena: ${overallRating}. Życzymy powodzenia!`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 60,
+    };
+    setMessages(prev => [infoMail, ...prev]);
+  }, [academy, userTeamId, currentDate]);
+
+  const dismissYouthPlayer = useCallback((youthId: string) => {
+    if (!academy) return;
+    setAcademy(prev => prev ? {
+      ...prev,
+      youthPlayers: prev.youthPlayers.filter(yp => yp.id !== youthId),
+    } : prev);
+  }, [academy]);
+
+  const signYouthPlayerContract = useCallback((youthId: string) => {
+    setAcademy(prev => prev ? {
+      ...prev,
+      youthPlayers: prev.youthPlayers.map(yp =>
+        yp.id === youthId ? { ...yp, contractSigned: true } : yp
+      ),
+    } : prev);
+  }, []);
+
+  const setYouthFocus = useCallback((youthId: string, attr: keyof import('../types').PlayerAttributes | null) => {
+    if (!academy) return;
+    setAcademy(prev => prev ? {
+      ...prev,
+      youthPlayers: prev.youthPlayers.map(yp =>
+        yp.id === youthId ? { ...yp, developmentFocus: attr ?? undefined } : yp
+      ),
+    } : prev);
+  }, [academy]);
+
+  const startScoutMission = useCallback((targetYouthPlayerId?: string, regionFocus?: Region, positionFilter?: import('../types').PlayerPosition, ageMin?: number, ageMax?: number, scoutId?: string): boolean => {
+    if (!academy || !userTeamId) return false;
+    const mission = AcademyService.buildScoutMission(
+      targetYouthPlayerId,
+      regionFocus ?? academy.regionFocus,
+      academy.level,
+      currentDate,
+      positionFilter,
+      ageMin,
+      ageMax,
+    );
+    if (scoutId) mission.scoutId = scoutId;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub || userClub.budget < mission.cost) return false;
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - mission.cost } : c));
+    addFinanceLog(userTeamId, 'Misja skautingowa akademii', -mission.cost, currentDate);
+    setAcademy(prev => prev ? { ...prev, activeMissions: [...prev.activeMissions, mission] } : prev);
+    if (scoutId) setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, isOnMission: true } : s));
+    return true;
+  }, [academy, userTeamId, clubs, currentDate, addFinanceLog]);
+
+  const setAcademyRegionFocus = useCallback((region: Region | undefined) => {
+    setAcademy(prev => prev ? { ...prev, regionFocus: region } : prev);
+  }, []);
+
+  const setAcademyOperationalBudget = useCallback((amount: number) => {
+    setAcademy(prev => prev ? { ...prev, operationalBudgetWeekly: Math.max(0, amount) } : prev);
+  }, []);
+
+  const employedScouts = useMemo(
+    () => scoutPool.filter(s => s.employedByClubId === userTeamId),
+    [scoutPool, userTeamId]
+  );
+
+  const addMysteryAgentPlayerToHiddenPool = useCallback((offer: MysteryAgentOfferState) => {
+    setPlayers(prev => {
+      const freeAgents = prev['FREE_AGENTS'] || [];
+      if (freeAgents.some(player => player.id === offer.player.id)) return prev;
+
+      const hiddenPlayer: Player = {
+        ...offer.player,
+        clubId: 'FREE_AGENTS',
+        annualSalary: 0,
+        contractEndDate: offer.createdDate,
+        mysteryAgentHiddenUntilScouted: true,
+        mysteryAgentProspect: true,
+      };
+
+      return {
+        ...prev,
+        FREE_AGENTS: [hiddenPlayer, ...freeAgents],
+      };
+    });
+  }, []);
+
+  const submitMysteryAgentOffer = useCallback((contract: MysteryAgentContractOffer): MysteryAgentNegotiationResult => {
+    if (!mysteryAgentOffer || !userTeamId) {
+      return { accepted: false, ended: true, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+    }
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) {
+      return { accepted: false, ended: true, message: 'Nie znaleziono klubu gracza.' };
+    }
+
+    const availableBudget = userClub.transferBudget + (mysteryAgentOffer.boardSupportAmount ?? 0);
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    if (totalCost > availableBudget) {
+      return {
+        accepted: false,
+        ended: false,
+        message: `Pakiet kosztuje ${totalCost.toLocaleString('pl-PL')} PLN, a dostępny budżet to ${availableBudget.toLocaleString('pl-PL')} PLN.`,
+        nextOffer: mysteryAgentOffer,
+      };
+    }
+
+    const result = MysteryAgentService.evaluateOffer(mysteryAgentOffer, contract, currentDate);
+    if (result.nextOffer) {
+      setMysteryAgentOffer(result.nextOffer);
+      if (result.nextOffer.status === 'FAILED') {
+        addMysteryAgentPlayerToHiddenPool(result.nextOffer);
+      }
+    }
+
+    return result;
+  }, [addMysteryAgentPlayerToHiddenPool, clubs, currentDate, mysteryAgentOffer, userTeamId]);
+
+  const requestMysteryAgentBoardFunds = useCallback((contract: MysteryAgentContractOffer): MysteryAgentBoardRequestResult => {
+    if (!mysteryAgentOffer || !userTeamId) {
+      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie ma aktywnych rozmów z tajemniczym agentem.' };
+    }
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const userSquad = players[userTeamId] || [];
+    if (!userClub) {
+      return { approved: false, ended: true, grantedAmount: 0, message: 'Nie znaleziono klubu gracza.' };
+    }
+
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    const shortfall = Math.max(0, totalCost - userClub.transferBudget);
+    if (shortfall <= 0) {
+      return { approved: true, ended: false, grantedAmount: 0, message: 'Budżet klubu wystarcza na tę ofertę.', nextOffer: mysteryAgentOffer };
+    }
+
+    const result = MysteryAgentService.evaluateBoardRequest(mysteryAgentOffer, userClub, userSquad, shortfall);
+    setClubs(prev => prev.map(c => c.id === userTeamId
+      ? { ...c, boardBudgetRequestsThisSeason: (c.boardBudgetRequestsThisSeason ?? 0) + 1 }
+      : c
+    ));
+    if (result.nextOffer) {
+      setMysteryAgentOffer(result.nextOffer);
+      if (result.nextOffer.status === 'FAILED') {
+        addMysteryAgentPlayerToHiddenPool(result.nextOffer);
+      }
+    }
+
+    return result;
+  }, [addMysteryAgentPlayerToHiddenPool, clubs, mysteryAgentOffer, players, userTeamId]);
+
+  const declineMysteryAgentOffer = useCallback(() => {
+    if (!mysteryAgentOffer) return;
+    const failedOffer: MysteryAgentOfferState = {
+      ...mysteryAgentOffer,
+      status: 'FAILED',
+      lastAgentMessage: 'Klub nie podjął rozmów. Zawodnik trafia do ukrytej puli skautingu.',
+    };
+    setMysteryAgentOffer(failedOffer);
+    addMysteryAgentPlayerToHiddenPool(failedOffer);
+    navigateTo(ViewState.DASHBOARD);
+  }, [addMysteryAgentPlayerToHiddenPool, mysteryAgentOffer, navigateTo]);
+
+  useEffect(() => {
+    if (!userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    if (!MysteryAgentService.shouldTriggerOffer({
+      currentDate,
+      seasonNumber,
+      userClubId: userTeamId,
+      existingOffer: mysteryAgentOffer,
+    })) return;
+
+    const userSquad = players[userTeamId] || [];
+    if (userSquad.length === 0) return;
+
+    const offer = MysteryAgentService.createOffer({
+      seasonNumber,
+      club: userClub,
+      squad: userSquad,
+      currentDate,
+    });
+    setMysteryAgentOffer(offer);
+    navigateTo(ViewState.MYSTERY_AGENT_NEGOTIATION);
+  }, [clubs, currentDate, mysteryAgentOffer, navigateTo, players, seasonNumber, userTeamId]);
+
+  useEffect(() => {
+    if (!mysteryAgentOffer || mysteryAgentOffer.status !== 'AGREED' || !mysteryAgentOffer.joinDate || !mysteryAgentOffer.agreedContract) return;
+    if (!userTeamId || userTeamId !== mysteryAgentOffer.clubId) return;
+
+    const today = currentDate.toISOString().split('T')[0];
+    if (today < mysteryAgentOffer.joinDate) return;
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const contract = mysteryAgentOffer.agreedContract;
+    const totalCost = MysteryAgentService.getTotalCost(contract);
+    const availableBudget = userClub.transferBudget + (mysteryAgentOffer.boardSupportAmount ?? 0);
+    if (totalCost > availableBudget) return;
+
+    const player = mysteryAgentOffer.player;
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const updatedHistory = PlayerCareerService.movePlayer(
+      player,
+      { clubName: userClub.name, clubId: userTeamId },
+      currentYear,
+      currentMonth
+    );
+    const contractEnd = new Date(currentDate);
+    contractEnd.setFullYear(contractEnd.getFullYear() + contract.years);
+
+    const signedPlayer: Player = {
+      ...PlayerMoraleService.applyContractSigningMindflowReset(
+        PlayerCareerService.resetClubStatsForNewEntry(player),
+        currentDate
+      ),
+      clubId: userTeamId,
+      annualSalary: contract.salary,
+      contractEndDate: contractEnd.toISOString().split('T')[0],
+      goalBonus: contract.goalBonus,
+      assistBonus: contract.assistBonus,
+      cleanSheetBonus: contract.cleanSheetBonus,
+      history: updatedHistory,
+      mysteryAgentHiddenUntilScouted: false,
+      mysteryAgentProspect: true,
+      freeAgentClubLockouts: {},
+    };
+
+    setPlayers(prev => {
+      const existingSquad = prev[userTeamId] || [];
+      if (existingSquad.some(existingPlayer => existingPlayer.id === signedPlayer.id)) return prev;
+      return {
+        ...prev,
+        [userTeamId]: [...existingSquad, signedPlayer],
+        FREE_AGENTS: (prev['FREE_AGENTS'] || []).filter(freeAgent => freeAgent.id !== signedPlayer.id),
+      };
+    });
+
+    setClubs(prev => prev.map(c => c.id === userTeamId ? {
+      ...c,
+      transferBudget: Math.max(0, c.transferBudget - totalCost),
+      budget: Math.max(0, c.budget - contract.signingFee),
+      financeHistory: [
+        {
+          id: `MYSTERY_AGENT_SIGNING_${signedPlayer.id}_${today}`,
+          date: today,
+          amount: -totalCost,
+          type: 'EXPENSE' as const,
+          description: `Tajemniczy agent: podpis ${signedPlayer.firstName} ${signedPlayer.lastName}`,
+          previousBalance: c.budget,
+        },
+        ...(c.financeHistory || []),
+      ].slice(0, 50),
+    } : c));
+
+    setMysteryAgentOffer(prev => prev ? {
+      ...prev,
+      status: 'FAILED',
+      lastAgentMessage: 'Zawodnik dołączył do klubu.',
+    } : prev);
+
+    showGameNotification({
+      title: 'Tajemniczy talent w klubie',
+      message: `${signedPlayer.firstName} ${signedPlayer.lastName} pojawił się w klubie i podpisał kontrakt.`,
+      tone: 'success',
+    });
+  }, [clubs, currentDate, mysteryAgentOffer, showGameNotification, userTeamId]);
+
+  useEffect(() => {
+    if (!userTeamId || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const dateKey = currentDate.toISOString().split('T')[0];
+    const seasonAgentSentIds = Array.from(sentMailIdsRef.current).filter(id =>
+      id.startsWith(`AGENT_CLIENTS_${seasonNumber}_`)
+    );
+    const seasonAgentMails = messages.filter(mail =>
+      mail.metadata?.type === 'AGENT_CLIENTS_OFFER' && mail.metadata.seasonNumber === seasonNumber
+    );
+    const seasonAgentCount = Math.max(seasonAgentSentIds.length, seasonAgentMails.length);
+    if (seasonAgentCount >= 5) return;
+    if (
+      seasonAgentSentIds.some(id => id.includes(`_${dateKey}_`)) ||
+      seasonAgentMails.some(mail => mail.id.includes(`_${dateKey}_`))
+    ) return;
+
+    const month = currentDate.getMonth() + 1;
+    if (month === 6) return;
+
+    const day = currentDate.getDate();
+    const roll = PlayerMarketVisibilityService.getStableNumber(
+      `${dateKey}|${userTeamId}|agent-clients|${seasonNumber}`,
+      10_000
+    ) / 10_000;
+    const isLateSeasonGuarantee = seasonAgentCount === 0 && (month === 5 || (month === 4 && day >= 15));
+    const dailyChance = seasonAgentCount === 0 ? 0.012 : 0.008;
+    if (!isLateSeasonGuarantee && roll >= dailyChance) return;
+
+    const userSquad = players[userTeamId] || [];
+    const freeAgents = players['FREE_AGENTS'] || [];
+    const candidates = PlayerMarketVisibilityService.selectAgentClientRecommendations(
+      freeAgents,
+      userSquad,
+      userClub,
+      employedScouts,
+      academy?.activeMissions ?? [],
+      userTeamId,
+      `${dateKey}|${seasonNumber}`
+    );
+    if (candidates.length === 0) return;
+
+    const mail = MailService.generateAgentClientsOfferMail(candidates, userClub.name, currentDate, seasonNumber);
+    sentMailIdsRef.current.add(mail.id);
+    setMessages(prev => (
+      prev.some(existingMail => existingMail.id === mail.id || existingMail.id.includes(`AGENT_CLIENTS_${seasonNumber}_${dateKey}_`))
+        ? prev
+        : [mail, ...prev]
+    ));
+  }, [academy, clubs, currentDate, employedScouts, messages, players, seasonNumber, userTeamId]);
+
+  const refreshScoutMarket = useCallback(() => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const today = new Date(currentDate).toISOString().split('T')[0];
+    let currentCount = scoutMarketManualRefreshCount;
+    let periodStart = scoutMarketPeriodStart;
+
+    if (!periodStart) {
+      periodStart = today;
+      currentCount = 0;
+      setScoutMarketPeriodStart(today);
+      setScoutMarketManualRefreshCount(0);
+    } else {
+      const daysSince = Math.floor((new Date(today).getTime() - new Date(periodStart).getTime()) / 86400000);
+      if (daysSince >= 90) {
+        periodStart = today;
+        currentCount = 0;
+        setScoutMarketPeriodStart(today);
+        setScoutMarketManualRefreshCount(0);
+      }
+    }
+
+    if (currentCount >= 3) {
+      const resetDate = new Date(periodStart);
+      resetDate.setDate(resetDate.getDate() + 90);
+      showGameNotification({
+        title: 'Limit odświeżeń',
+        message: `Wykorzystano 3/3 odświeżeń w tym kwartale. Kolejne odświeżenie dostępne od ${resetDate.toISOString().split('T')[0]}.`,
+        tone: 'warning'
+      });
+      return;
+    }
+
+    const market = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5, userClub.board?.kompetencja);
+    setScoutMarket(market);
+    setScoutMarketRefreshDate(today);
+    setScoutMarketManualRefreshCount(currentCount + 1);
+  }, [scoutPool, userTeamId, clubs, currentDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart, showGameNotification]);
+
+  const hireScout = useCallback((scoutId: string): boolean => {
+    if (!academy || !userTeamId) return false;
+    const maxScouts = ScoutService.getMaxScouts(academy.level);
+    const currentEmployed = scoutPool.filter(s => s.employedByClubId === userTeamId).length;
+    if (currentEmployed >= maxScouts) return false;
+    const scout = scoutPool.find(s => s.id === scoutId);
+    if (!scout || scout.employedByClubId) return false;
+    const hiringFee = scout.weeklySalary * 4;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub || userClub.budget < hiringFee) return false;
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - hiringFee } : c));
+    addFinanceLog(userTeamId, `Zatrudnienie skauta: ${scout.firstName} ${scout.lastName}`, -hiringFee, currentDate);
+    setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, employedByClubId: userTeamId } : s));
+    setScoutMarket(prev => prev.filter(s => s.id !== scoutId));
+    return true;
+  }, [academy, userTeamId, scoutPool, clubs, currentDate, addFinanceLog]);
+
+  const fireScout = useCallback((scoutId: string) => {
+    if (!userTeamId) return;
+    setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, employedByClubId: undefined, isOnMission: false } : s));
+    setAcademy(prev => prev ? { ...prev, activeMissions: prev.activeMissions.filter(m => m.scoutId !== scoutId) } : prev);
+  }, [userTeamId]);
+
+  // ── END AKADEMIA ────────────────────────────────────────────────────────────
+
+  const fireStaffMember = useCallback((staffId: string): { success: boolean; message: string; cost?: number } => {
+    if (!userTeamId) return { success: false, message: 'Brak drużyny' };
+    const member = staffMembers[staffId];
+    if (!member) return { success: false, message: 'Nie znaleziono pracownika' };
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return { success: false, message: 'Brak drużyny' };
+    const attrValues = Object.values(member.attributes);
+    const staffAvg = attrValues.length > 0 ? attrValues.reduce((a, b) => a + b, 0) / attrValues.length : 0;
+    const rep = userClub.reputation;
+    const blockThreshold = rep <= 3 ? 8 : rep <= 6 ? 11 : rep <= 9 ? 14 : rep <= 14 ? 17 : 19;
+    if (staffAvg >= blockThreshold) {
+      return { success: false, message: 'Zarząd zablokował zwolnienie — pracownik jest zbyt wartościowy dla poziomu klubu.' };
+    }
+    const severance = Math.round((member.salary / 12) * 3);
+    if (userClub.budget < severance) {
+      return { success: false, message: `Brak funduszy na odprawę (${severance.toLocaleString('pl-PL')} PLN).` };
+    }
+    setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - severance, staffIds: (c.staffIds ?? []).filter(id => id !== staffId) } : c));
+    setStaffMembers(prev => ({ ...prev, [staffId]: { ...prev[staffId], currentClubId: null } }));
+    addFinanceLog(userTeamId, `Odprawa: ${member.firstName} ${member.lastName}`, -severance, currentDate);
+    return { success: true, message: `Pracownik zwolniony. Odprawa: ${severance.toLocaleString('pl-PL')} PLN.`, cost: severance };
+  }, [userTeamId, staffMembers, clubs, currentDate, addFinanceLog]);
+
+  const extendStaffContract = useCallback((staffId: string, years: number): void => {
+    setStaffMembers(prev => {
+      const member = prev[staffId];
+      if (!member) return prev;
+      const d = new Date(member.contractEndDate);
+      d.setFullYear(d.getFullYear() + years);
+      return { ...prev, [staffId]: { ...member, contractEndDate: d.toISOString() } };
+    });
+  }, []);
+
+  const negotiateStaffContract = useCallback((staffId: string, newSalary: number, years: number): void => {
+    const negotiationDate = currentDate instanceof Date ? currentDate.toISOString() : new Date(currentDate).toISOString();
+    setStaffMembers(prev => {
+      const member = prev[staffId];
+      if (!member) return prev;
+      const d = new Date(member.contractEndDate);
+      d.setFullYear(d.getFullYear() + years);
+      return { ...prev, [staffId]: { ...member, salary: newSalary, contractEndDate: d.toISOString(), lastNegotiationDate: negotiationDate } };
+    });
+  }, [currentDate]);
+
+  const hireStaffMember = useCallback((staffId: string, salary: number, years: number, kaucja: number): { success: boolean; message: string } => {
+    if (!userTeamId) return { success: false, message: 'Brak drużyny.' };
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return { success: false, message: 'Nie znaleziono klubu.' };
+    if (userClub.budget < kaucja) return { success: false, message: `Brak środków na kaucję (${kaucja.toLocaleString('pl-PL')} PLN).` };
+    const member = staffMembers[staffId];
+    if (!member) return { success: false, message: 'Nie znaleziono pracownika.' };
+    const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const contractEnd = new Date(now);
+    contractEnd.setFullYear(contractEnd.getFullYear() + years);
+    const prevClubId = member.currentClubId;
+    const prevClub = prevClubId ? clubs.find(c => c.id === prevClubId) : null;
+    const historyEntry = { clubId: userTeamId, clubName: userClub.name, fromYear: now.getFullYear(), fromMonth: now.getMonth() + 1, toYear: null, toMonth: null };
+
+    // Szukanie zastępcy dla starego klubu — wolni agenci tej samej roli
+    let replacementId: string | null = null;
+    let replacementUpdate: Record<string, typeof member> = {};
+    if (prevClubId && prevClub) {
+      const candidates = Object.values(staffMembers).filter(s =>
+        s.currentClubId === null && s.role === member.role && s.id !== staffId
+      );
+      if (candidates.length > 0) {
+        // Wybierz spośród top-5 wg doświadczenia
+        const sorted = [...candidates].sort((a, b) => (b.attributes['experience'] ?? 0) - (a.attributes['experience'] ?? 0));
+        const pick = sorted[Math.floor(Math.random() * Math.min(5, sorted.length))];
+        replacementId = pick.id;
+        const repYears = 1 + Math.floor(Math.random() * 2);
+        const repEnd = new Date(now);
+        repEnd.setFullYear(repEnd.getFullYear() + repYears);
+        const attrVals = Object.values(pick.attributes);
+        const avg = attrVals.length > 0 ? attrVals.reduce((a, b) => a + b, 0) / attrVals.length : 8;
+        const repSalary = Math.round((20_000 + (avg / 20) * 180_000) / 10_000) * 10_000;
+        const repHistory = { clubId: prevClubId, clubName: prevClub.name, fromYear: now.getFullYear(), fromMonth: now.getMonth() + 1, toYear: null, toMonth: null };
+        replacementUpdate[pick.id] = { ...pick, currentClubId: prevClubId, salary: repSalary, contractEndDate: repEnd.toISOString(), history: [...(pick.history ?? []), repHistory] };
+      }
+    }
+
+    setStaffMembers(prev => ({
+      ...prev,
+      [staffId]: { ...prev[staffId], currentClubId: userTeamId, salary, contractEndDate: contractEnd.toISOString(), history: [...(prev[staffId].history ?? []), historyEntry] },
+      ...replacementUpdate,
+    }));
+    setClubs(prev => prev.map(c => {
+      if (c.id === userTeamId) return { ...c, budget: c.budget - kaucja, staffIds: [...(c.staffIds ?? []), staffId] };
+      if (prevClubId && c.id === prevClubId) {
+        const filtered = (c.staffIds ?? []).filter(id => id !== staffId);
+        return { ...c, staffIds: replacementId ? [...filtered, replacementId] : filtered };
+      }
+      return c;
+    }));
+    if (kaucja > 0) addFinanceLog(userTeamId, `Kaucja transferowa: ${member.firstName} ${member.lastName}`, -kaucja, currentDate);
+    return { success: true, message: `${member.firstName} ${member.lastName} dołączył do sztabu.` };
+  }, [userTeamId, clubs, staffMembers, currentDate, addFinanceLog]);
+
+  const applyWeeklyMotivation = useCallback((moraleDelta: number) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      const newMorale = Math.max(5, Math.min(95, (c.morale ?? 50) + moraleDelta));
+      const todayIso = currentDate.toISOString().split('T')[0];
+      return {
+        ...c,
+        morale: newMorale,
+        lastMotivationDate: todayIso,
+        motivationMonitoringStartDate: todayIso,
+        motivationNeglectLevel: 0,
+      };
+    }));
+  }, [userTeamId, currentDate]);
+
+  const conductIndividualTalk = useCallback((playerId: string, talkType: IndividualTalkType): IndividualTalkResult | null => {
+    if (!userTeamId) return null;
+
+    const todayIso = currentDate.toISOString().split('T')[0];
+    const seed = (sessionSeed ?? 1) + currentDate.getTime();
+    const promiseDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 21).toISOString().split('T')[0];
+    const firstTeamPlayer = (players[userTeamId] || []).find(p => p.id === playerId);
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    const target = firstTeamPlayer ?? reservePlayer;
+
+    if (!target) return null;
+
+    const withMorale = PlayerMoraleService.ensurePlayerState(target);
+    if (!PlayerMoraleService.canTalk(withMorale, currentDate)) return null;
+
+    if (talkType === 'PROMISE_ONE_TIME_BONUS') {
+      if (!firstTeamPlayer) {
+        return {
+          moraleDelta: 0,
+          newMorale: withMorale.morale ?? 50,
+          isPositive: false,
+          reactionText: 'Jednorazowa premia od zarządu jest dostępna tylko dla zawodników pierwszej drużyny.',
+        };
+      }
+
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (!userClub) return null;
+
+      const blockReason = PlayerMoraleService.getOneTimeBonusRequestBlockReason(withMorale, userClub, seasonNumber);
+      if (blockReason) {
+        return {
+          moraleDelta: 0,
+          newMorale: withMorale.morale ?? 50,
+          isPositive: false,
+          reactionText: blockReason,
+        };
+      }
+
+      const updatedPlayer = {
+        ...PlayerMoraleService.createOneTimeBonusPromise(withMorale, currentDate, seasonNumber),
+        lastIndividualTalkDate: todayIso,
+      };
+
+      if (firstTeamPlayer) {
+        setPlayers(prev => ({
+          ...prev,
+          [userTeamId]: (prev[userTeamId] || []).map(p => p.id === playerId ? updatedPlayer : p),
+        }));
+      } else {
+        setReserves(prev => prev.map(p => p.id === playerId ? updatedPlayer : p));
+      }
+
+      return {
+        moraleDelta: (updatedPlayer.morale ?? 50) - (withMorale.morale ?? 50),
+        newMorale: updatedPlayer.morale ?? 50,
+        isPositive: true,
+        reactionText: 'Porozmawiam z zarządem o jednorazowej premii. Decyzja nie należy do mnie, ale przekażę im twoje liczby i wkład w sezon.',
+      };
+    }
+
+    const result = PlayerMoraleService.calculateTalkResult(withMorale, talkType, currentDate, seed);
+    const withTalkHistory = PlayerMoraleService.withMoraleChange(
+      withMorale,
+      result.newMorale - (withMorale.morale ?? 50),
+      result.isPositive ? 'Indywidualna rozmowa z trenerem' : 'Nieudana rozmowa z trenerem',
+      currentDate
+    );
+    const updatedPlayer: Player = {
+      ...withTalkHistory,
+      lastIndividualTalkDate: todayIso,
+      promisedMinutesUntil: talkType === 'PROMISE_MINUTES'
+        ? promiseDate
+        : withTalkHistory.promisedMinutesUntil ?? null,
+      promisedMinutesBaseline: talkType === 'PROMISE_MINUTES'
+        ? PlayerMoraleService.getTotalMinutesPlayed(withTalkHistory)
+        : withTalkHistory.promisedMinutesBaseline ?? null,
+    };
+
+    if (firstTeamPlayer) {
+      setPlayers(prev => ({
+        ...prev,
+        [userTeamId]: (prev[userTeamId] || []).map(p => p.id === playerId ? updatedPlayer : p),
+      }));
+    } else {
+      setReserves(prev => prev.map(p => p.id === playerId ? updatedPlayer : p));
+    }
+
+    return result;
+  }, [clubs, currentDate, players, reserves, seasonNumber, sessionSeed, userTeamId]);
+
+  const resolvePlayerRoleConversation = useCallback((playerId: string, result: PlayerRoleConversationResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => {
+      const squad = prev[userTeamId] || [];
+      const targetPlayer = squad.find(player => player.id === playerId);
+      const leadership = targetPlayer?.attributes.leadership ?? 0;
+      const teamMoraleDelta = result.moraleDelta < 0 && leadership >= 75
+        ? (leadership >= 85 ? -2 : -1)
+        : 0;
+      const userClub = clubs.find(club => club.id === userTeamId);
+      const nextFixture = result.promisedNextMatch && userClub
+        ? allFixtures
+            .filter(f =>
+              f.status === MatchStatus.SCHEDULED &&
+              f.leagueId === userClub.leagueId &&
+              (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+              new Date(f.date).setHours(0, 0, 0, 0) >= new Date(currentDate).setHours(0, 0, 0, 0)
+            )
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+        : null;
+
+      const nextPromiseDeadline = nextFixture ? new Date(nextFixture.date) : null;
+      if (nextPromiseDeadline) nextPromiseDeadline.setDate(nextPromiseDeadline.getDate() + 1);
+
+      return {
+        ...prev,
+        [userTeamId]: squad.map(player => {
+          if (player.id !== playerId) {
+            return teamMoraleDelta < 0
+              ? PlayerMoraleService.withMoraleChange(player, teamMoraleDelta, 'Napięcie w szatni po rozmowie o roli zawodnika', currentDate)
+              : player;
+          }
+
+          const nextPlayer = PlayerMoraleService.withMoraleChange(
+            player,
+            result.moraleDelta,
+            result.outcome === 'CONVINCED'
+              ? 'Udana rozmowa o statusie w drużynie'
+              : result.outcome === 'IGNORED'
+                ? 'Trener przerwał rozmowę o statusie'
+                : 'Nieudana rozmowa o statusie w drużynie',
+            currentDate
+          );
+
+          const playerAfterConversation = result.outcome === 'CONVINCED'
+            ? {
+                ...nextPlayer,
+                roleDemandUntil: null,
+                requestedSquadRole: null,
+                minutesDemandUntil: null,
+                minutesDemandBaseline: null,
+              }
+            : nextPlayer;
+
+          return result.promisedNextMatch && nextFixture && nextPromiseDeadline
+            ? {
+                ...playerAfterConversation,
+                promisedMinutesUntil: nextPromiseDeadline.toISOString(),
+                promisedMinutesBaseline: PlayerMoraleService.getTotalMinutesPlayed(playerAfterConversation),
+                promisedRoleNextMatchFixtureId: nextFixture.id,
+              }
+            : playerAfterConversation;
+        }),
+      };
+    });
+  }, [allFixtures, clubs, currentDate, userTeamId]);
+
+  const resolvePlayerTransferConversation = useCallback((playerId: string, result: PlayerTransferConversationResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        const nextPlayer = PlayerMoraleService.withMoraleChange(
+          player,
+          result.moraleDelta,
+          result.outcome === 'ACCEPTED_PLAN'
+            ? 'Zaakceptował plan klubu dotyczący przyszłego transferu'
+            : result.outcome === 'IGNORED'
+              ? 'Trener przerwał rozmowę o przyszłym transferze'
+              : 'Nieudana rozmowa o przyszłym transferze',
+          currentDate
+        );
+
+        return result.outcome === 'ACCEPTED_PLAN'
+          ? { ...nextPlayer, transferListDemandUntil: null }
+          : nextPlayer;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  const resolvePlayerTransferListObjection = useCallback((playerId: string, result: PlayerTransferListObjectionResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        const moraleDelta = result.moraleToMinimum
+          ? -(player.morale ?? 50)
+          : result.moraleDelta;
+        const nextPlayer = PlayerMoraleService.withMoraleChange(
+          player,
+          moraleDelta,
+          result.outcome === 'PROMISED_REMOVE'
+            ? 'Trener obiecał zdjęcie z listy transferowej'
+            : result.outcome === 'CONVINCED'
+            ? 'Udana rozmowa po wystawieniu na listę transferową'
+            : result.outcome === 'IGNORED'
+              ? 'Trener przerwał rozmowę o wystawieniu na listę transferową'
+              : 'Nieudana rozmowa po wystawieniu na listę transferową',
+          currentDate
+        );
+
+        const removalDeadline = result.promiseRemoveFromTransferList
+          ? new Date(currentDate)
+          : null;
+        if (removalDeadline) removalDeadline.setDate(removalDeadline.getDate() + 1);
+
+        return {
+          ...nextPlayer,
+          isOnTransferList: result.removeFromTransferList ? false : nextPlayer.isOnTransferList,
+          transferListPrice: result.removeFromTransferList ? undefined : nextPlayer.transferListPrice,
+          transferListRemovalPromiseDeadline: removalDeadline
+            ? removalDeadline.toISOString()
+            : result.removeFromTransferList
+              ? null
+              : nextPlayer.transferListRemovalPromiseDeadline,
+        };
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // resolvePlayerTransferRequestDialog
+  //
+  // Stosuje pełny wynik dialogu A/B/C/D na zawodniku.
+  // Wywoływane przez PlayerCard po zamknięciu PlayerTransferRequestModal.
+  //
+  // Co robi:
+  //   1. Aplikuje zmianę morale (withMoraleChange)
+  //   2. Aplikuje delty mindset (withMindsetChange)
+  //   3. Zapisuje obietnicę kontraktową (ścieżka A) → player.transferContractPromise
+  //   4. Ustawia flagę odejścia po sezonie (ścieżka B) → player.transferAllowAfterSeason
+  //   5. Zapisuje oczekującą odpowiedź (THINKING) → player.transferRequestPendingResponse
+  //   6. Czyści transferListDemandUntil jeśli reakcja = AGREED
+  //
+  // Daily checks (reviewContractPromise, reviewAllowAfterSeason, reviewPendingResponse)
+  // są wywoływane w advanceDay niżej — szukaj komentarza "Transfer Request Dialog checks".
+  // ═══════════════════════════════════════════════════════════════════════════
+  const resolvePlayerTransferRequestDialog = useCallback((playerId: string, result: TransferRequestDialogResult): void => {
+    if (!userTeamId) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(player => {
+        if (player.id !== playerId) return player;
+
+        // 1. Zmiana morale
+        let updated = PlayerMoraleService.withMoraleChange(
+          player,
+          result.moraleDelta,
+          `Transfer Request Dialog — ścieżka ${result.managerChoice}, reakcja ${result.reaction}`,
+          currentDate
+        );
+
+        // 2. Delty mindset
+        if (Object.keys(result.mindsetDeltas).length > 0) {
+          updated = PlayerMoraleService.withMindsetChange(
+            updated,
+            result.mindsetDeltas,
+            `Transfer Request Dialog — ${result.managerChoice}`,
+            currentDate
+          );
+        }
+
+        // 3. Obietnica kontraktowa (ścieżka A, AGREED lub THINKING)
+        if (result.promiseMade) {
+          updated = { ...updated, transferContractPromise: result.promiseMade };
+        }
+
+        // 4. Flaga odejścia po sezonie (ścieżka B, AGREED lub THINKING)
+        if (result.allowAfterSeasonFlag) {
+          // Deadline = 30 czerwca bieżącego lub następnego roku (wzór identyczny jak computeSeasonEnd w modalu)
+          const month = currentDate.getMonth();
+          const year = currentDate.getFullYear();
+          const seasonEndDeadline = month < 6
+            ? new Date(year, 5, 30)
+            : new Date(year + 1, 5, 30);
+          updated = {
+            ...updated,
+            transferAllowAfterSeason: true,
+            transferAllowAfterSeasonDeadline: seasonEndDeadline.toISOString(),
+          };
+        }
+
+        // 5. Oczekująca odpowiedź (THINKING)
+        if (result.pendingResponse) {
+          updated = { ...updated, transferRequestPendingResponse: result.pendingResponse };
+        }
+
+        // 6. Wyczyść demand jeśli AGREED
+        if (result.reaction === 'AGREED') {
+          updated = { ...updated, transferListDemandUntil: null };
+        }
+
+        return updated;
+      }),
+    }));
+  }, [currentDate, userTeamId]);
+
+  const ensureWinterCampInviteState = useCallback((baseDate: Date = currentDate) => {
+    if (!userTeamId) return;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || c.winterCamp) return c;
+
+      const priceSeed = sessionSeed + baseDate.getTime() % 100000;
+      return {
+        ...c,
+        winterCamp: {
+          location: null,
+          cost: 0,
+          program: null,
+          intensity: null,
+          spaOption: false,
+          isDeclined: false,
+          locationPrices: generateLocationPrices(priceSeed),
+          spaCost: generateSpaCost(priceSeed),
+          inviteSent: true,
+          programChosen: false,
+          effectsApplied: false,
+        },
+      };
+    }));
+  }, [currentDate, sessionSeed, userTeamId]);
+
+  const clearWinterCampInvitePending = useCallback(() => setWinterCampInvitePending(false), []);
+  const clearWinterCampProgramPending = useCallback(() => setWinterCampProgramPending(false), []);
+  const reopenWinterCampInvite = useCallback(() => {
+    ensureWinterCampInviteState();
+    setWinterCampInvitePending(true);
+  }, [ensureWinterCampInviteState]);
+
+  const saveWinterCampLocation = useCallback((location: WinterCampLocation | null, cost: number, spaOption: boolean) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.winterCamp) return c;
+      return { ...c, winterCamp: { ...c.winterCamp, location, cost, spaOption, isDeclined: location === null } };
+    }));
+    setWinterCampInvitePending(false);
+  }, [userTeamId]);
+
+  const completePreMatchPressConference = useCallback((fixtureId: string, answers: PressConferenceAnswer[]) => {
+    if (!userTeamId || completedPressConferenceFixtureIds.includes(fixtureId)) return;
+    const fixture = allFixtures.find(item => item.id === fixtureId);
+    const playoffOpponentId = activePlayoffMatch
+      ? (activePlayoffMatch.homeClub.id === userTeamId ? activePlayoffMatch.awayClub.id : activePlayoffMatch.homeClub.id)
+      : null;
+    const opponentTeamId = fixture
+      ? (fixture.homeTeamId === userTeamId ? fixture.awayTeamId : fixture.homeTeamId)
+      : playoffOpponentId;
+    if (!opponentTeamId) return;
+    const opponentClub = clubs.find(club => club.id === opponentTeamId);
+    const opponentCoach = opponentClub?.coachId ? coaches[opponentClub.coachId] : null;
+    const matchEffect = PreMatchPressConferenceService.calculateMatchEffect(
+      fixtureId,
+      userTeamId,
+      opponentTeamId,
+      answers,
+      opponentCoach?.attributes,
+    );
+    const moraleDelta = matchEffect.userMoraleDelta;
+    const reason = `Konferencja prasowa przed meczem: ${fixtureId}`;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] ?? []).map(player =>
+        PlayerMoraleService.withMoraleChange(player, moraleDelta, reason, currentDate)
+      ),
+    }));
+    setClubs(prev => prev.map(club => club.id === userTeamId
+      ? { ...club, morale: Math.max(5, Math.min(95, Math.round((club.morale ?? 50) + moraleDelta))) }
+      : club
+    ));
+    setPressConferenceEffects(prev => ({ ...prev, [fixtureId]: matchEffect }));
+    setCompletedPressConferenceFixtureIds(prev => prev.includes(fixtureId) ? prev : [...prev, fixtureId]);
+  }, [activePlayoffMatch, allFixtures, clubs, coaches, completedPressConferenceFixtureIds, currentDate, userTeamId]);
+
+  const saveWinterCampProgram = useCallback((program: WinterCampProgram, intensity: WinterCampIntensity) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.winterCamp) return c;
+      return { ...c, winterCamp: { ...c.winterCamp, program, intensity, programChosen: true } };
+    }));
+    setWinterCampProgramPending(false);
+  }, [userTeamId]);
+
+  const ensureSummerCampInviteState = useCallback((baseDate: Date = currentDate) => {
+    if (!userTeamId) return;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || c.summerCamp) return c;
+
+      const priceSeed = sessionSeed + baseDate.getTime() % 100000 + 1000;
+      return {
+        ...c,
+        summerCamp: {
+          location: null,
+          cost: 0,
+          program: null,
+          intensity: null,
+          spaOption: false,
+          isDeclined: false,
+          locationPrices: generateSummerLocationPrices(priceSeed),
+          spaCost: generateSummerSpaCost(priceSeed),
+          inviteSent: true,
+          programChosen: false,
+          effectsApplied: false,
+        },
+      };
+    }));
+  }, [currentDate, sessionSeed, userTeamId]);
+
+  const clearSummerCampInvitePending = useCallback(() => setSummerCampInvitePending(false), []);
+  const clearSummerCampProgramPending = useCallback(() => setSummerCampProgramPending(false), []);
+  const reopenSummerCampInvite = useCallback(() => {
+    ensureSummerCampInviteState();
+    setSummerCampInvitePending(true);
+  }, [ensureSummerCampInviteState]);
+  const [seasonCelebration, setSeasonCelebration] = useState<SeasonCelebrationType | null>(null);
+  const clearSeasonCelebration = useCallback(() => setSeasonCelebration(null), []);
+
+  const saveSummerCampLocation = useCallback((location: SummerCampLocation | null, cost: number, spaOption: boolean) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.summerCamp) return c;
+      return { ...c, summerCamp: { ...c.summerCamp, location, cost, spaOption, isDeclined: location === null } };
+    }));
+    setSummerCampInvitePending(false);
+  }, [userTeamId]);
+
+  const saveSummerCampProgram = useCallback((program: SummerCampProgram, intensity: SummerCampIntensity) => {
+    if (!userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId || !c.summerCamp) return c;
+      return { ...c, summerCamp: { ...c.summerCamp, program, intensity, programChosen: true } };
+    }));
+    setSummerCampProgramPending(false);
+  }, [userTeamId]);
+
+  const advanceDay = useCallback(() => {
+    if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW || viewState === ViewState.NATIONS_LEAGUE_DRAW) return;
+
+    const dateToProcess = new Date(currentDate);
+    // Czy to automatyczny skok (jumpToDate/jumpToNextEvent) — NIE ręczny klik gracza?
+    const isAutoJumping = targetJumpTime !== null;
+
+    processNegotiationResponses(dateToProcess);
+    processExpiredAcceptances(dateToProcess);
+    processFriendlyRequests(dateToProcess);
+
+    let pendingBoardMonitorUpdate: {
+      action: 'REDUCE' | 'RESTORE' | 'RESERVE_SUPPORT' | 'NONE';
+      newBudget: number;
+      newTransferBudget: number;
+      newReserveBudget: number;
+      newState: 'NORMAL' | 'ALERT' | 'SURPLUS';
+      amountChanged: number;
+      dateKey: string;
+    } | null = null;
+
+// --- BOARD FINANCE MONITOR ---
+    if (userTeamId && !isResigned) {
+      const currentUserClub = clubs.find(c => c.id === userTeamId);
+      if (currentUserClub) {
+        const monitorResult = BoardFinanceMonitorService.check(currentUserClub, dateToProcess);
+        if (
+          monitorResult.action !== 'NONE' ||
+          (currentUserClub.boardBudgetMonitorState ?? 'NORMAL') !== monitorResult.newState
+        ) {
+          pendingBoardMonitorUpdate = {
+            action: monitorResult.action,
+            newBudget: monitorResult.newBudget,
+            newTransferBudget: monitorResult.newTransferBudget,
+            newReserveBudget: monitorResult.newReserveBudget,
+            newState: monitorResult.newState,
+            amountChanged: monitorResult.amountChanged,
+            dateKey: dateToProcess.toISOString().split('T')[0],
+          };
+        }
+      }
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub) return prev;
+        const monitorResult = BoardFinanceMonitorService.check(userClub, dateToProcess);
+        if (monitorResult.action === 'NONE') {
+          if ((userClub.boardBudgetMonitorState ?? 'NORMAL') === monitorResult.newState) return prev;
+          return prev.map(c => c.id === userTeamId ? {
+            ...c,
+            boardBudgetMonitorState: monitorResult.newState,
+          } as Club : c);
+        }
+        const monitorDateKey = dateToProcess.toISOString().split('T')[0];
+        const monitorMailKey = `BOARD_BUDGET_${userTeamId}_${monitorResult.action}_${monitorResult.newState}_${monitorDateKey}`;
+        const budgetMail: MailMessage = {
+          id: monitorMailKey,
+          sender: 'Zarząd Klubu',
+          role: 'Dyrektor Finansowy',
+          subject: monitorResult.mailSubject,
+          body: monitorResult.mailBody,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 95,
+        };
+        if (!sentMailIdsRef.current.has(monitorMailKey)) {
+          sentMailIdsRef.current.add(monitorMailKey);
+          setMessages(prev => {
+            const withoutDuplicates = prev.filter(message =>
+              !(message.subject === budgetMail.subject &&
+                message.body === budgetMail.body &&
+                new Date(message.date).toISOString().split('T')[0] === monitorDateKey)
+            );
+            return [budgetMail, ...withoutDuplicates];
+          });
+        }
+        return prev.map(c => c.id === userTeamId ? {
+          ...c,
+          budget: monitorResult.newBudget,
+          transferBudget: monitorResult.newTransferBudget,
+          reserveBudget: monitorResult.newReserveBudget,
+          boardBudgetMonitorState: monitorResult.newState,
+          boardBudgetLastShiftDate: monitorDateKey,
+          boardBudgetLastShiftAction: monitorResult.action,
+          financeHistory: monitorResult.amountChanged > 0 && !(c.financeHistory || []).some(item => item.id === `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`) ? [
+            {
+              id: `BOARD_SHIFT_${monitorDateKey}_${monitorResult.action}`,
+              date: monitorDateKey,
+              amount: monitorResult.action === 'RESTORE' ? -monitorResult.amountChanged : monitorResult.amountChanged,
+              type: monitorResult.action === 'RESTORE' ? 'EXPENSE' as const : 'INCOME' as const,
+              description: monitorResult.action === 'RESTORE'
+                ? 'Przesunięcie środków z rezerwy zarządu na budżet transferowy'
+                : monitorResult.action === 'RESERVE_SUPPORT'
+                  ? 'Awaryjne wsparcie salda z rezerwy zarządu'
+                  : 'Awaryjne wsparcie salda z rezerwy zarządu i budżetu transferowego',
+              previousBalance: c.budget,
+            },
+            ...(c.financeHistory || [])
+          ].slice(0, 50) : c.financeHistory,
+        } as Club : c);
+      });
+    }
+
+    if (
+      userTeamId &&
+      !isResigned &&
+      !activeTrainingId &&
+      dateToProcess.getMonth() === 6 &&
+      dateToProcess.getDate() === 4
+    ) {
+      const trainingReminderKey = `TRAINING_PROGRAM_URGENT_${seasonNumber}_${userTeamId}`;
+      if (!sentMailIdsRef.current.has(trainingReminderKey)) {
+        sentMailIdsRef.current.add(trainingReminderKey);
+        const trainingReminderMail: MailMessage = {
+          id: trainingReminderKey,
+          sender: 'Asystent',
+          role: 'Asystent trenera',
+          subject: 'Program treningowy drużyny. PILNE!',
+          body: `Szanowny Trenerze,
+
+Chciałbym zwrócić uwagę na konieczność jak najszybszego ustalenia programu treningowego dla drużyny.
+
+Na obecnym etapie istnieje ryzyko, że forma zespołu może nie być wystarczająca na rozpoczęcie rozgrywek ligowych. W związku z tym uważam, że powinniśmy możliwie szybko określić plan zajęć, intensywność treningów oraz główne obszary wymagające poprawy.
+
+Pozwoli nam to lepiej przygotować zawodników pod względem fizycznym, taktycznym i mentalnym przed najbliższymi meczami.
+
+Z poważaniem,
+Asystent`,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 100,
+        };
+        setMessages(prev => [trainingReminderMail, ...prev]);
+      }
+    }
+
+// --- EMERGENCY GK PROTOCOL (STAGE 1 PRO) ---
+    if (userTeamId && !isResigned) {
+      const userSquad = players[userTeamId] || [];
+      const realGks = userSquad.filter(p => p.position === PlayerPosition.GK && !p.id.startsWith('EMERGENCY_GK_'));
+      const availableRealGks = realGks.filter(p => p.health.status === HealthStatus.HEALTHY && p.suspensionMatches === 0);
+      const emergencyGk = userSquad.find(p => p.id.startsWith('EMERGENCY_GK_'));
+
+      // 1. Wykrycie kryzysu (Brak GK)
+      if (availableRealGks.length === 0 && !emergencyGk) {
+         const userClub = clubs.find(c => c.id === userTeamId)!;
+         const tier = parseInt(userClub.leagueId.split('_')[2] || '4');
+         const newJunior = SeasonTransitionService.generateEmergencyGK(userTeamId, tier, userClub.reputation);
+         
+         setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] || []), newJunior] }));
+         
+         // Automatyczne wstawienie do składu, aby odblokować przycisk meczu
+         const currentLineup = lineups[userTeamId];
+         if (currentLineup) {
+           updateLineup(userTeamId, {
+             ...currentLineup,
+             startingXI: [newJunior.id, ...currentLineup.startingXI.slice(1)]
+           });
+         }
+
+         const hireMail = MailService.createFromTemplate('staff_emergency_gk_hired', { 'PLAYER': newJunior.lastName });
+         setMessages(prev => [hireMail, ...prev]);
+      }
+      
+      // 2. Powrót do normalności (Cleanup)
+      // Warunek: Realny GK zdrowy, bez kartek i kondycja >= 90%
+      if (emergencyGk && realGks.some(p => p.health.status === HealthStatus.HEALTHY && p.suspensionMatches === 0 && p.condition >= 90)) {
+         setPlayers(prev => ({ ...prev, [userTeamId]: (prev[userTeamId] || []).filter(p => p.id !== emergencyGk.id) }));
+         
+         const currentLineup = lineups[userTeamId];
+         if (currentLineup) {
+           updateLineup(userTeamId, {
+             ...currentLineup,
+             startingXI: currentLineup.startingXI.map(id => id === emergencyGk.id ? null : id)
+           });
+         }
+
+         const fireMail = MailService.createFromTemplate('staff_emergency_gk_fired', { 'PLAYER': emergencyGk.lastName });
+         setMessages(prev => [fireMail, ...prev]);
+      }
+    }
+    // --- END OF EMERGENCY GK PROTOCOL ---
+
+    // ── Dzienny przegląd kontuzji w reprezentacjach narodowych ────────────────
+    if (nationalTeams.length > 0) {
+      const ntReview = NationalTeamService.reviewDailyInjuries(nationalTeams, players, dateToProcess);
+      const anyChanged = ntReview.updatedTeams.some((t, i) => t !== nationalTeams[i]);
+      if (anyChanged) setNationalTeams(ntReview.updatedTeams);
+      if (ntReview.newPlayers.length > 0) {
+        setPlayers(prev => ({
+          ...prev,
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntReview.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
+        }));
+      }
+      if (ntReview.playerUpdates.length > 0) {
+        const updateMap: Record<string, string> = {};
+        ntReview.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
+        setPlayers(prev => {
+          const updated: Record<string, Player[]> = {};
+          for (const [clubId, squad] of Object.entries(prev)) {
+            updated[clubId] = squad.map(p =>
+              updateMap[p.id] ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
+            );
+          }
+          return updated;
+        });
+      }
+
+      // ── Tygodniowy przegląd kadry (każdy poniedziałek, poza oknem zamrożenia NT) ─
+      const ntSeasonYear = dateToProcess.getMonth() >= 6 ? dateToProcess.getFullYear() : dateToProcess.getFullYear() - 1;
+      if (dateToProcess.getDay() === 1 && !NationalTeamService.isSquadFrozen(dateToProcess, ntSeasonYear)) {
+        const ntMonthly = NationalTeamService.reviewMonthlySquad(nationalTeams, coaches, players);
+        const monthlyAnyChanged = ntMonthly.updatedTeams.some((t, i) => t !== nationalTeams[i]);
+        if (monthlyAnyChanged) setNationalTeams(ntMonthly.updatedTeams);
+        if (ntMonthly.newPlayers.length > 0) {
+          setPlayers(prev => ({
+            ...prev,
+            'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...ntMonthly.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
+          }));
+        }
+        if (ntMonthly.playerUpdates.length > 0) {
+          const monthlyUpdateMap: Record<string, string | null> = {};
+          ntMonthly.playerUpdates.forEach(u => { monthlyUpdateMap[u.id] = u.assignedNationalTeamId; });
+          setPlayers(prev => {
+            const updated: Record<string, Player[]> = {};
+            for (const [clubId, squad] of Object.entries(prev)) {
+              updated[clubId] = squad.map(p =>
+                p.id in monthlyUpdateMap ? { ...p, assignedNationalTeamId: monthlyUpdateMap[p.id] } : p
+              );
+            }
+            return updated;
+          });
+        }
+        if (userTeamId && ntMonthly.calledUpFromClub.length > 0) {
+          const userSquad = players[userTeamId] || [];
+          const callupMails: MailMessage[] = [];
+          ntMonthly.calledUpFromClub.forEach(({ playerId, teamName }) => {
+            const player = userSquad.find(p => p.id === playerId);
+            if (player) {
+              callupMails.push(MailService.generateNTCallUpMail(player, teamName, dateToProcess));
+            }
+          });
+          if (callupMails.length > 0) {
+            setMessages(prev => [...callupMails, ...prev]);
+          }
+        }
+      }
+    }
+    // ── Koniec przeglądu kontuzji NT ─────────────────────────────────────────
+
+
+        // ── Email o finale Pucharu Polski (wysyłany dzień po finale) ─────────────
+    if (userTeamId) {
+      const cupFinalFixture = allFixtures.find(f =>
+        f.id.includes('CUP_Puchar_Polski:_FINAŁ') &&
+        f.status === MatchStatus.FINISHED
+      );
+      if (cupFinalFixture) {
+        const dayAfterFinal = new Date(cupFinalFixture.date);
+        dayAfterFinal.setDate(dayAfterFinal.getDate() + 1);
+        if (dayAfterFinal.toDateString() === dateToProcess.toDateString()) {
+          const cupFinalMailKey = 'CUP_FINAL_SENT';
+          if (!sentMailIdsRef.current.has(cupFinalMailKey)) {
+            const hScore = cupFinalFixture.homeScore || 0;
+            const aScore = cupFinalFixture.awayScore || 0;
+            let homeWin = hScore > aScore;
+            if (hScore === aScore && cupFinalFixture.homePenaltyScore !== undefined) {
+              homeWin = cupFinalFixture.homePenaltyScore > (cupFinalFixture.awayPenaltyScore || 0);
+            }
+            const cupWinnerIdLocal = homeWin ? cupFinalFixture.homeTeamId : cupFinalFixture.awayTeamId;
+            const penScore = cupFinalFixture.homePenaltyScore !== undefined
+              ? `${hScore}:${aScore} (${cupFinalFixture.homePenaltyScore}:${cupFinalFixture.awayPenaltyScore} k.)`
+              : `${hScore}:${aScore}`;
+            const homeClubName = clubs.find(c => c.id === cupFinalFixture.homeTeamId)?.name ?? cupFinalFixture.homeTeamId;
+            const awayClubName = clubs.find(c => c.id === cupFinalFixture.awayTeamId)?.name ?? cupFinalFixture.awayTeamId;
+            const cupMail = MailService.generateCupFinalMail(
+              cupFinalFixture.homeTeamId,
+              cupFinalFixture.awayTeamId,
+              penScore,
+              userTeamId,
+              cupWinnerIdLocal,
+              homeClubName,
+              awayClubName
+            );
+            sentMailIdsRef.current.add(cupFinalMailKey);
+            setMessages(prev => [cupMail, ...prev]);
+          }
+        }
+      }
+    }
+
+    // Automatyczne generowanie finału Pucharu po wyłonieniu finalistów
+    // (zawsze w okolicach daty 9 kwietnia, ale sprawdzamy na bieżąco)
+    if (!globalFixtures.some(f => f.id.includes('FINAŁ'))) {
+      const finalists = clubs.filter(c => c.isInPolishCup);
+      if (finalists.length === 2) {
+        // Data finału: 2 maja danego roku
+        const finalDate = new Date(dateToProcess.getFullYear(), 4, 2);
+        if (finalDate > dateToProcess) {
+          const finalFixture: Fixture = {
+            id: 'CUP_Puchar_Polski:_FINAŁ_AUTO',
+            leagueId: CompetitionType.POLISH_CUP,
+            homeTeamId: finalists[0].id,
+            awayTeamId: finalists[1].id,
+            date: finalDate,
+            status: MatchStatus.SCHEDULED,
+            homeScore: null,
+            awayScore: null
+          };
+          setGlobalFixtures(prev => [...prev, finalFixture]);
+        }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FRIENDLY MATCH CHECK: Jeśli dziś gracz ma zaplanowany sparing, zatrzymaj
+    // ─────────────────────────────────────────────────────────────────────────
+    if (userTeamId && !isResigned) {
+      const friendlyToday = allFixtures.find(f =>
+        f.leagueId === CompetitionType.FRIENDLY &&
+        f.date.toDateString() === dateToProcess.toDateString() &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        f.status === MatchStatus.SCHEDULED
+      );
+      if (friendlyToday) {
+        setActiveFriendlyFixtureId(friendlyToday.id);
+        setActiveFriendlyConditions(null); // reset warunków — gracz ustali je na widoku
+        setTargetJumpTime(null);
+        navigateTo(ViewState.PRE_MATCH_FRIENDLY_STUDIO);
+        return; // nie przesuwaj dnia
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CALENDAR ENGINE: Jedyne źródło prawdy — co dzieje się dziś?
+    // ─────────────────────────────────────────────────────────────────────────
+    const dayEvents = CalendarEngine.getEventsForDate(
+      dateToProcess, seasonTemplate, allFixtures, userTeamId, clubs
+    );
+    const primaryEvent = dayEvents.find(e => e.participation !== 'info') ?? null;
+    const hasCompetitionToday = (competition: CompetitionType): boolean =>
+      dayEvents.some(e => e.slot.competition === competition);
+
+    // skipDayAdvance = true oznacza że data NIE zostanie przesunięta
+    // (gracz musi jeszcze zagrać mecz lub potwierdzić akcję tego dnia)
+    let skipDayAdvance = false;
+
+    const applyWorldCupEffectsAndMail = (completedState: WCState, wcYear: number) => {
+      const wcEffectsKey = `WC_EFFECTS_${wcYear}`;
+      if (sentMailIdsRef.current.has(wcEffectsKey)) return;
+
+      sentMailIdsRef.current.add(wcEffectsKey);
+      const allPlayers = Object.values(players).flat();
+      const effects = WorldCupService.computePlayerEffects(completedState, allPlayers, sessionSeed);
+      completedState.playerEffects = effects;
+
+      if (effects.length > 0) {
+        setPlayers(prev => {
+          if (!userTeamId) return prev;
+          const updatedSquad = (prev[userTeamId] || []).map(player => {
+            const pEffects = effects.filter(e => e.playerId === player.id);
+            if (pEffects.length === 0) return player;
+
+            let updated = { ...player };
+            const injuryEffect = pEffects.find(e => e.type === 'INJURY');
+            const fatigueEffect = pEffects.find(e => e.type === 'FATIGUE');
+
+            if (injuryEffect) {
+              updated = {
+                ...updated,
+                health: {
+                  status: HealthStatus.INJURED,
+                  injury: {
+                    type: 'Zmeczenie po MS',
+                    daysRemaining: injuryEffect.value,
+                    severity: InjurySeverity.LIGHT,
+                    injuryDate: dateToProcess.toISOString().split('T')[0],
+                    totalDays: injuryEffect.value,
+                  },
+                },
+              };
+            }
+
+            if (fatigueEffect) {
+              updated = { ...updated, fatigueDebt: Math.min(100, (updated.fatigueDebt ?? 0) + fatigueEffect.value) };
+            }
+
+            return updated;
+          });
+
+          return { ...prev, [userTeamId]: updatedSquad };
+        });
+      }
+
+      setWcState(prev => prev ? { ...prev, playerEffects: effects } : prev);
+
+      if (completedState.champion) {
+        ChampionshipHistoryService.addWorldCupResult(
+          wcYear,
+          completedState.champion,
+          completedState.runnerUp,
+          completedState.thirdPlace,
+          completedState.fourthPlace
+        );
+
+        const champMail: MailMessage = {
+          id: wcEffectsKey,
+          sender: 'FIFA',
+          role: 'Biuro Rozgrywek FIFA',
+          subject: `Mistrz Swiata ${wcYear}: ${completedState.champion}!`,
+          body: `Mistrzostwa Swiata ${wcYear} zakonczyly sie. Mistrzem Swiata zostaje ${completedState.champion}! Otworz widok Mistrzostw Swiata, aby zobaczyc pelne wyniki.`,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 100,
+        };
+        setMessages(prev => [champMail, ...prev]);
+      }
+    };
+
+    const applyEuroEffectsAndMail = (completedState: WCState, euroYear: number) => {
+      const euroEffectsKey = `EURO_EFFECTS_${euroYear}`;
+      if (sentMailIdsRef.current.has(euroEffectsKey)) return;
+
+      sentMailIdsRef.current.add(euroEffectsKey);
+      const allPlayers = Object.values(players).flat();
+      const effects = EuroTournamentService.computePlayerEffects(completedState, allPlayers, sessionSeed);
+      completedState.playerEffects = effects;
+
+      if (effects.length > 0) {
+        setPlayers(prev => {
+          if (!userTeamId) return prev;
+          const updatedSquad = (prev[userTeamId] || []).map(player => {
+            const pEffects = effects.filter(e => e.playerId === player.id);
+            if (pEffects.length === 0) return player;
+
+            let updated = { ...player };
+            const injuryEffect = pEffects.find(e => e.type === 'INJURY');
+            const fatigueEffect = pEffects.find(e => e.type === 'FATIGUE');
+
+            if (injuryEffect) {
+              updated = {
+                ...updated,
+                health: {
+                  status: HealthStatus.INJURED,
+                  injury: {
+                    type: 'Zmęczenie po EURO',
+                    daysRemaining: injuryEffect.value,
+                    severity: InjurySeverity.LIGHT,
+                    injuryDate: dateToProcess.toISOString().split('T')[0],
+                    totalDays: injuryEffect.value,
+                  },
+                },
+              };
+            }
+
+            if (fatigueEffect) {
+              updated = { ...updated, fatigueDebt: Math.min(100, (updated.fatigueDebt ?? 0) + fatigueEffect.value) };
+            }
+
+            return updated;
+          });
+
+          return { ...prev, [userTeamId]: updatedSquad };
+        });
+      }
+
+      setEuroState(prev => prev ? { ...prev, playerEffects: effects } : prev);
+
+      if (completedState.champion) {
+        ChampionshipHistoryService.addEuroChampion(euroYear, completedState.champion, completedState.runnerUp);
+
+        const champMail: MailMessage = {
+          id: euroEffectsKey,
+          sender: 'UEFA',
+          role: 'Biuro Rozgrywek UEFA',
+          subject: `Mistrz Europy ${euroYear}: ${completedState.champion}!`,
+          body: `Mistrzostwa Europy ${euroYear} zakończyły się. Mistrzem Europy zostaje ${completedState.champion}! Otwórz widok Mistrzostw Europy, aby zobaczyć pełne wyniki.`,
+          date: new Date(dateToProcess),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 98,
+        };
+        setMessages(prev => [champMail, ...prev]);
+      }
+    };
+
+    let playersAfterWorldCup = players;
+    const processWorldCupDay = () => {
+      if (!WorldCupService.isWorldCupYear(dateToProcess.getFullYear())) return;
+
+      const wcMonth = dateToProcess.getMonth() + 1;
+      const wcDay = dateToProcess.getDate();
+      const wcYear = dateToProcess.getFullYear();
+      const newProcessedIds: string[] = [];
+      let nextWcState = wcState;
+      let wcChanged = false;
+
+      if (wcMonth === 3 && wcDay === 21 && nextWcState && !nextWcState.playoffSlotsResolved) {
+        const wcFillKey = `WC_FILL_SLOTS_${wcYear}`;
+        const dynamicWcqWinners = worldCupQualifiersState?.tournamentYear === wcYear && worldCupQualifiersState.completed
+          ? worldCupQualifiersState.playoffPaths.map(path => path.winner).filter((q): q is string => !!q)
+          : [];
+        const legacyWcqWinners = wcqPlayoffState?.finalCompleted
+          ? wcqPlayoffState.paths.map(p => p.qualifier).filter((q): q is string => !!q)
+          : [];
+        const winners = dynamicWcqWinners.length > 0 ? dynamicWcqWinners : legacyWcqWinners;
+        if (!sentMailIdsRef.current.has(wcFillKey) && winners.length > 0) {
+
+            sentMailIdsRef.current.add(wcFillKey);
+            nextWcState = WorldCupService.fillPlayoffSlots(nextWcState, winners, nationalTeams);
+            wcChanged = true;
+            const fillMail: MailMessage = {
+              id: wcFillKey,
+              sender: 'FIFA',
+              role: 'Biuro Rozgrywek FIFA',
+              subject: `MS ${wcYear} - Grupy kompletne!`,
+              body: `Zwycięzcy baraży UEFA i play-off FIFA uzupełnili wszystkie grupy Mistrzostw Świata ${wcYear}. Skład wszystkich 12 grup jest już znany!`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 90,
+            };
+            setMessages(prev => [fillMail, ...prev]);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 2 && !nextWcState) {
+        const wcStartFallbackKey = `WC_START_FALLBACK_${wcYear}`;
+        if (!sentMailIdsRef.current.has(wcStartFallbackKey)) {
+          sentMailIdsRef.current.add(wcStartFallbackKey);
+          const wcTeams = WorldCupService.assembleTeams(nationalTeams, wcqPlayoffState, seasonNumber, wcYear, sessionSeed, worldCupQualifiersState);
+          const wcGroups = WorldCupService.drawGroups(wcTeams, sessionSeed, wcYear);
+          nextWcState = WorldCupService.createInitialState(wcTeams, wcGroups, wcYear);
+          wcChanged = true;
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 2) {
+        const wcStartKey = `WC_START_${wcYear}`;
+        if (!sentMailIdsRef.current.has(wcStartKey)) {
+          sentMailIdsRef.current.add(wcStartKey);
+          const wcMail: MailMessage = {
+            id: wcStartKey,
+            sender: 'FIFA',
+            role: 'Biuro Rozgrywek FIFA',
+            subject: `Mistrzostwa Swiata ${wcYear} - Start!`,
+            body: `Mistrzostwa Swiata ${wcYear} oficjalnie sie rozpoczely! Mecze beda rozgrywane w tle zgodnie z kalendarzem, a pelne wyniki i szczegoly znajdziesz w widoku Mistrzostw Swiata.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 100,
+          };
+          setMessages(prev => [wcMail, ...prev]);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay >= 2 && wcDay <= 12 && nextWcState) {
+        const wcGroupDayKey = `WC_GROUP_${wcYear}_${wcDay}`;
+        if (!processedDrawIds.includes(wcGroupDayKey)) {
+          if (!nextWcState.groupStageComplete) {
+            const groupSimulation = WorldCupService.simulateGroupDay(nextWcState.groups, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = groupSimulation.updatedPlayers ?? playersAfterWorldCup;
+            nextWcState = {
+              ...nextWcState,
+              groups: groupSimulation.groups,
+            };
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcGroupDayKey);
+        }
+      }
+
+      if (wcMonth === 6 && wcDay === 13 && nextWcState) {
+        const wcBracketKey = `WC_BRACKET_${wcYear}`;
+        if (!processedDrawIds.includes(wcBracketKey)) {
+          if (!nextWcState.groupStageComplete) {
+            nextWcState = {
+              ...nextWcState,
+              knockoutMatches: WorldCupService.buildKnockoutBracket(nextWcState.groups, wcYear),
+              groupStageComplete: true,
+            };
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcBracketKey);
+        }
+      }
+
+      const wcKnockoutDays = [
+        15, 16, 17, 18,
+        19, 20, 21, 22,
+        23, 24,
+        26, 27,
+        29, 30,
+      ];
+      const isKODay = wcMonth === 6 && wcKnockoutDays.includes(wcDay);
+
+      if (isKODay && nextWcState) {
+        const wcKODayKey = `WC_KO_${wcYear}_${wcDay}`;
+        if (!processedDrawIds.includes(wcKODayKey)) {
+          if (nextWcState.groupStageComplete && !nextWcState.knockoutComplete) {
+            const knockoutSimulation = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, wcDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+            nextWcState = { ...nextWcState, knockoutMatches: knockoutSimulation.matches };
+
+            wcChanged = true;
+          }
+          newProcessedIds.push(wcKODayKey);
+        }
+      }
+
+      if (nextWcState?.groupStageComplete && !nextWcState.knockoutComplete) {
+        const currentDayKey = Number(`${wcYear}${String(wcMonth).padStart(2, '0')}${String(wcDay).padStart(2, '0')}`);
+        for (const koDay of wcKnockoutDays) {
+          const koDayKey = Number(`${wcYear}06${String(koDay).padStart(2, '0')}`);
+          if (koDayKey > currentDayKey) continue;
+
+          const hasUnplayedDueMatch = nextWcState.knockoutMatches.some(m => m.date === `${wcYear}-06-${String(koDay).padStart(2, '0')}` && !m.winner && m.home && m.away);
+          if (!hasUnplayedDueMatch) continue;
+
+          const knockoutSimulation = WorldCupService.simulateKnockoutDay(nextWcState, nextWcState.teams, koDay, 6, wcYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+          playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+          nextWcState = { ...nextWcState, knockoutMatches: knockoutSimulation.matches };
+          wcChanged = true;
+        }
+      }
+
+      const completedFinalMatch = nextWcState?.knockoutMatches.find(m => m.round === 'FINAL' && m.winner);
+      if (nextWcState?.groupStageComplete && !nextWcState.knockoutComplete && completedFinalMatch) {
+        const thirdMatch = nextWcState.knockoutMatches.find(m => m.round === 'THIRD');
+        nextWcState = {
+          ...nextWcState,
+          knockoutComplete: true,
+          champion: completedFinalMatch.winner ?? undefined,
+          runnerUp: completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home,
+          thirdPlace: thirdMatch?.winner ?? undefined,
+          fourthPlace: thirdMatch?.winner === thirdMatch?.home ? thirdMatch?.away : thirdMatch?.home,
+        };
+        applyWorldCupEffectsAndMail(nextWcState, wcYear);
+        wcChanged = true;
+      }
+
+      if (((wcMonth === 6 && wcDay >= 30) || wcMonth > 6) && nextWcState?.knockoutComplete) {
+        applyWorldCupEffectsAndMail(nextWcState, wcYear);
+      }
+
+      if (wcChanged && nextWcState) setWcState(nextWcState);
+      if (newProcessedIds.length > 0) {
+        setProcessedDrawIds(prev => [...prev, ...newProcessedIds.filter(id => !prev.includes(id))]);
+      }
+    };
+
+    processWorldCupDay();
+
+    const processEuroTournamentDay = () => {
+      if (!EuroTournamentService.isEuroTournamentYear(dateToProcess.getFullYear())) return;
+
+      const euroMonth = dateToProcess.getMonth() + 1;
+      const euroDay = dateToProcess.getDate();
+      const euroYear = dateToProcess.getFullYear();
+      const newProcessedIds: string[] = [];
+      let nextEuroState = euroState?.year === euroYear ? euroState : null;
+      let euroChanged = false;
+
+      if (euroMonth === 6 && euroDay === 1 && !nextEuroState) {
+        const euroStartFallbackKey = `EURO_START_FALLBACK_${euroYear}`;
+        if (!sentMailIdsRef.current.has(euroStartFallbackKey)) {
+          sentMailIdsRef.current.add(euroStartFallbackKey);
+          const euroTeams = EuroTournamentService.assembleTeams(nationalTeams, euroQualifiersState, euroYear, sessionSeed);
+          const euroGroups = EuroTournamentService.drawGroups(euroTeams, sessionSeed, euroYear);
+          nextEuroState = EuroTournamentService.createInitialState(euroTeams, euroGroups, euroYear);
+          euroChanged = true;
+        }
+      }
+
+      if (euroMonth === 6 && euroDay === 1) {
+        const euroStartKey = `EURO_START_${euroYear}`;
+        if (!sentMailIdsRef.current.has(euroStartKey)) {
+          sentMailIdsRef.current.add(euroStartKey);
+          const euroMail: MailMessage = {
+            id: euroStartKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Mistrzostwa Europy ${euroYear} - Start!`,
+            body: `Mistrzostwa Europy ${euroYear} oficjalnie się rozpoczęły. Turniej potrwa do 30 czerwca, a wyniki będą rozgrywane w tle zgodnie z kalendarzem.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 98,
+          };
+          setMessages(prev => [euroMail, ...prev]);
+        }
+      }
+
+      if (euroMonth === 6 && EuroTournamentService.GROUP_DAYS.includes(euroDay) && nextEuroState) {
+        const euroGroupDayKey = `EURO_GROUP_${euroYear}_${euroDay}`;
+        if (!processedDrawIds.includes(euroGroupDayKey)) {
+          if (!nextEuroState.groupStageComplete) {
+            const groupSimulation = EuroTournamentService.simulateGroupDay(nextEuroState.groups, nextEuroState.teams, euroDay, 6, euroYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = groupSimulation.updatedPlayers ?? playersAfterWorldCup;
+            nextEuroState = { ...nextEuroState, groups: groupSimulation.groups };
+            euroChanged = true;
+          }
+          newProcessedIds.push(euroGroupDayKey);
+        }
+      }
+
+      if (euroMonth === 6 && euroDay >= 18 && nextEuroState) {
+        const euroBracketKey = `EURO_BRACKET_${euroYear}`;
+        if (!processedDrawIds.includes(euroBracketKey)) {
+          if (!nextEuroState.groupStageComplete) {
+            nextEuroState = {
+              ...nextEuroState,
+              knockoutMatches: EuroTournamentService.buildKnockoutBracket(nextEuroState.groups, euroYear),
+              groupStageComplete: true,
+            };
+            euroChanged = true;
+          }
+          newProcessedIds.push(euroBracketKey);
+        }
+      }
+
+      const isEuroKODay = euroMonth === 6 && EuroTournamentService.KNOCKOUT_DAYS.includes(euroDay);
+      if (isEuroKODay && nextEuroState) {
+        const euroKODayKey = `EURO_KO_${euroYear}_${euroDay}`;
+        if (!processedDrawIds.includes(euroKODayKey)) {
+          if (nextEuroState.groupStageComplete && !nextEuroState.knockoutComplete) {
+            const knockoutSimulation = EuroTournamentService.simulateKnockoutDay(nextEuroState, nextEuroState.teams, euroDay, 6, euroYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+            playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+            nextEuroState = { ...nextEuroState, knockoutMatches: knockoutSimulation.matches };
+            euroChanged = true;
+          }
+          newProcessedIds.push(euroKODayKey);
+        }
+      }
+
+      if (nextEuroState?.groupStageComplete && !nextEuroState.knockoutComplete) {
+        const currentDayKey = Number(`${euroYear}${String(euroMonth).padStart(2, '0')}${String(euroDay).padStart(2, '0')}`);
+        for (const koDay of EuroTournamentService.KNOCKOUT_DAYS) {
+          const koDayKey = Number(`${euroYear}06${String(koDay).padStart(2, '0')}`);
+          if (koDayKey > currentDayKey) continue;
+
+          const hasUnplayedDueMatch = nextEuroState.knockoutMatches.some(m => m.date === `${euroYear}-06-${String(koDay).padStart(2, '0')}` && !m.winner && m.home && m.away);
+          if (!hasUnplayedDueMatch) continue;
+
+          const knockoutSimulation = EuroTournamentService.simulateKnockoutDay(nextEuroState, nextEuroState.teams, koDay, 6, euroYear, matchSimulationSeed, nationalTeams, playersAfterWorldCup, coaches);
+          playersAfterWorldCup = knockoutSimulation.updatedPlayers ?? playersAfterWorldCup;
+          nextEuroState = { ...nextEuroState, knockoutMatches: knockoutSimulation.matches };
+          euroChanged = true;
+        }
+      }
+
+      const completedFinalMatch = nextEuroState?.knockoutMatches.find(m => m.round === 'FINAL' && m.winner);
+      if (nextEuroState?.groupStageComplete && !nextEuroState.knockoutComplete && completedFinalMatch) {
+        nextEuroState = {
+          ...nextEuroState,
+          knockoutComplete: true,
+          champion: completedFinalMatch.winner ?? undefined,
+          runnerUp: completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home,
+        };
+        applyEuroEffectsAndMail(nextEuroState, euroYear);
+        euroChanged = true;
+      }
+
+      if (((euroMonth === 6 && euroDay >= 30) || euroMonth > 6) && nextEuroState?.knockoutComplete) {
+        applyEuroEffectsAndMail(nextEuroState, euroYear);
+      }
+
+      if (euroChanged && nextEuroState) setEuroState(nextEuroState);
+      if (newProcessedIds.length > 0) {
+        setProcessedDrawIds(prev => [...prev, ...newProcessedIds.filter(id => !prev.includes(id))]);
+      }
+    };
+
+    processEuroTournamentDay();
+
+    if (primaryEvent?.participation === 'player') {
+      setTargetJumpTime(null);
+      const slot = primaryEvent.slot;
+
+      switch (slot.competition) {
+
+        // ── LE: Losowanie Rundy 1 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.EL_R1Q_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const elTeamIds = ELDrawService.getEligibleTeams(RAW_EUROPA_LEAGUE_CLUBS, sessionSeed);
+          const elPairs = ELDrawService.drawPairs(elTeamIds, clubs, dateToProcess, sessionSeed);
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: elPairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: Losowanie Rundy 1 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.CONF_R1Q_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const confTeamIds = CONFDrawService.getEligibleTeams(
+            RAW_CONFERENCE_LEAGUE_CLUBS,
+            sessionSeed,
+            64,
+            confR1QPolishTeamIds,
+          );
+          const confPairs = CONFDrawService.drawPairs(confTeamIds, RAW_CONFERENCE_LEAGUE_CLUBS, clubs, dateToProcess, sessionSeed);
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: confPairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: Mecze Rundy 1 ───────────────────────────────────────────────
+        case CompetitionType.CONF_R1Q:
+        case CompetitionType.CONF_R1Q_RETURN: {
+          const alreadyPlayedCONF = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CONF_R1Q || f.leagueId === CompetitionType.CONF_R1Q_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONF) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Losowanie Rundy 2 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.CONF_R2Q_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const confR2QPool = CONFDrawService.getR2QPool(RAW_CONFERENCE_LEAGUE_CLUBS, allFixtures, confR2QPolishTeamIds, sessionSeed);
+          const confR2QPairs = CONFDrawService.drawR2QPairs(confR2QPool, RAW_CONFERENCE_LEAGUE_CLUBS, clubs, dateToProcess, sessionSeed);
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: confR2QPairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_R2Q_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: Mecze Rundy 2 ───────────────────────────────────────────────
+        case CompetitionType.CONF_R2Q:
+        case CompetitionType.CONF_R2Q_RETURN: {
+          const alreadyPlayedCONFR2Q = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CONF_R2Q || f.leagueId === CompetitionType.CONF_R2Q_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONFR2Q) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Losowanie Fazy Grupowej ─────────────────────────────────────
+        case CompetitionType.CONF_GROUP_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const confR2QWinners = CONFDrawService.getGroupStagePool(allFixtures);
+          const confGroupsResult = CONFDrawService.drawGroupStage(confR2QWinners, RAW_CONFERENCE_LEAGUE_CLUBS, clubs, sessionSeed);
+          setActiveConfGroupDraw({ id: slot.id, label: slot.label, date: dateToProcess, groups: confGroupsResult });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_GROUP_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: Faza Grupowa ────────────────────────────────────────────────
+        case CompetitionType.CONF_GROUP_STAGE: {
+          const alreadyPlayedCONFGS = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            f.leagueId === CompetitionType.CONF_GROUP_STAGE &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONFGS) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Losowanie 1/8 Finału ────────────────────────────────────────
+        case CompetitionType.CONF_R16_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (!confGroups) break; // faza grupowa jeszcze nie zakończona
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_R16_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: 1/8 Finału ──────────────────────────────────────────────────
+        case CompetitionType.CONF_R16:
+        case CompetitionType.CONF_R16_RETURN: {
+          const alreadyPlayedCONFR16 = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CONF_R16 || f.leagueId === CompetitionType.CONF_R16_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONFR16) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Losowanie 1/4 Finału ────────────────────────────────────────
+        case CompetitionType.CONF_QF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_QF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: 1/4 Finału ──────────────────────────────────────────────────
+        case CompetitionType.CONF_QF:
+        case CompetitionType.CONF_QF_RETURN: {
+          const alreadyPlayedCONFQF = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CONF_QF || f.leagueId === CompetitionType.CONF_QF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONFQF) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Losowanie 1/2 Finału ─────────────────────────────────────────
+        case CompetitionType.CONF_SF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_SF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: 1/2 Finału ──────────────────────────────────────────────────
+        case CompetitionType.CONF_SF:
+        case CompetitionType.CONF_SF_RETURN: {
+          const alreadyPlayedCONFSF = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CONF_SF || f.leagueId === CompetitionType.CONF_SF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedCONFSF) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LK: Ogłoszenie Finalistów ─────────────────────────────────────
+        case CompetitionType.CONF_FINAL_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const confFinalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.CONF_FINAL);
+          if (!confFinalAlreadyExists) {
+            const sfWinnersCONF = CONFDrawService.getSFWinners(allFixtures);
+            const sfPoolCONF = CONFDrawService.getSFParticipants(allFixtures);
+            const safeSFWinnersCONF = CONFDrawService.guaranteeWinners(sfWinnersCONF, sfPoolCONF, 2);
+            if (safeSFWinnersCONF.length === 2) {
+              const finalDate = new Date(currentDate.getFullYear(), 4, 27);
+              const finalFixtureCONF = CONFDrawService.generateFinalFixture(
+                safeSFWinnersCONF[0], safeSFWinnersCONF[1], finalDate, finalDate.getFullYear()
+              );
+              setGlobalFixtures(prev => [...prev, finalFixtureCONF]);
+            }
+          }
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CONF_FINAL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LK: FINAŁ ─────────────────────────────────────────────────────
+        case CompetitionType.CONF_FINAL: {
+          const confFinalFixture = allFixtures.find(f => f.leagueId === CompetitionType.CONF_FINAL);
+          if (!confFinalFixture) break;
+          const alreadyPlayedCONFFinal = confFinalFixture.status === MatchStatus.FINISHED;
+          if (!alreadyPlayedCONFFinal) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CONF_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          if (alreadyPlayedCONFFinal) {
+            const mailKey = `CONF_FINAL_RESULT_${confFinalFixture.date.getFullYear()}`;
+            if (!sentMailIdsRef.current.has(mailKey)) {
+              sentMailIdsRef.current.add(mailKey);
+              const h = confFinalFixture.homeScore ?? 0;
+              const a = confFinalFixture.awayScore ?? 0;
+              let winnerId: string;
+              if (h > a) winnerId = confFinalFixture.homeTeamId;
+              else if (a > h) winnerId = confFinalFixture.awayTeamId;
+              else winnerId = (confFinalFixture.homePenaltyScore ?? 0) >= (confFinalFixture.awayPenaltyScore ?? 0)
+                ? confFinalFixture.homeTeamId : confFinalFixture.awayTeamId;
+              const winner = clubs.find(c => c.id === winnerId);
+              const mail: MailMessage = {
+                id: mailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Zdobywca Ligi Konferencji ${confFinalFixture.date.getFullYear()}`,
+                body: `Finał Ligi Konferencji zakończony. Zdobywcą Ligi Konferencji ${confFinalFixture.date.getFullYear()} został ${winner?.name ?? winnerId}.`,
+                date: new Date(currentDate),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 100,
+              };
+              setMessages(prev => [mail, ...prev]);
+            }
+          }
+          break;
+        }
+
+        // ── LE: Losowanie Rundy 2 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.EL_R2Q_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const elR2QPool = ELDrawService.getR2QPool(RAW_EUROPA_LEAGUE_CLUBS, allFixtures, currentPolishCupWinnerId);
+          const elR2QPairs = ELDrawService.drawR2QPairs(elR2QPool, clubs, dateToProcess, sessionSeed);
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: elR2QPairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_R2Q_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: Losowanie Fazy Grupowej ─────────────────────────────────────
+        case CompetitionType.EL_GROUP_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const elR2QWinners = ELDrawService.getGroupStagePool(allFixtures);
+          const elGroups = ELDrawService.drawGroupStage(elR2QWinners, RAW_EUROPA_LEAGUE_CLUBS, clubs, sessionSeed);
+          setActiveELGroupDraw({ id: slot.id, label: slot.label, date: dateToProcess, groups: elGroups });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_GROUP_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: Losowanie 1/8 Finału ────────────────────────────────────────
+        case CompetitionType.EL_R16_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (!elGroups) break; // faza grupowa jeszcze nie zakończona
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_R16_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: Losowanie 1/4 Finału ────────────────────────────────────────
+        case CompetitionType.EL_QF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_QF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: 1/4 Finału (mecze) ──────────────────────────────────────────
+        case CompetitionType.EL_QF:
+        case CompetitionType.EL_QF_RETURN: {
+          const alreadyPlayedELQF = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.EL_QF || f.leagueId === CompetitionType.EL_QF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedELQF) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_EL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          break;
+        }
+
+        // ── LE: Losowanie 1/2 Finału ────────────────────────────────────────
+        case CompetitionType.EL_SF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_SF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: 1/2 Finału (mecze) ──────────────────────────────────────────
+        case CompetitionType.EL_SF:
+        case CompetitionType.EL_SF_RETURN: {
+          const alreadyPlayedELSF = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.EL_SF || f.leagueId === CompetitionType.EL_SF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayedELSF) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_EL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          if (slot.competition === CompetitionType.EL_SF_RETURN) {
+            const allSFReturnDone = allFixtures
+              .filter(f => f.leagueId === CompetitionType.EL_SF_RETURN)
+              .every(f => f.status === MatchStatus.FINISHED);
+            if (allSFReturnDone) {
+              const finalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.EL_FINAL);
+              if (!finalAlreadyExists) {
+                const sfWinnersEL = ELDrawService.getSFWinners(allFixtures);
+                const sfPoolEL = ELDrawService.getSFParticipants(allFixtures);
+                const safeSFWinnersEL = ELDrawService.guaranteeWinners(sfWinnersEL, sfPoolEL, 2);
+                if (safeSFWinnersEL.length === 2) {
+                  const finalDateEL = new Date(dateToProcess.getFullYear(), 4, 20);
+                  const finalFixtureEL = ELDrawService.generateFinalFixture(
+                    safeSFWinnersEL[0], safeSFWinnersEL[1], finalDateEL, finalDateEL.getFullYear()
+                  );
+                  setGlobalFixtures(prev => [...prev, finalFixtureEL]);
+                }
+              }
+            }
+          }
+          break;
+        }
+
+        // ── LE: Ogłoszenie Finalistów ────────────────────────────────────────
+        case CompetitionType.EL_FINAL_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const elFinalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.EL_FINAL);
+          if (!elFinalAlreadyExists) {
+            const sfWinnersEL2 = ELDrawService.getSFWinners(allFixtures);
+            const sfPoolEL2 = ELDrawService.getSFParticipants(allFixtures);
+            const safeSFWinnersEL2 = ELDrawService.guaranteeWinners(sfWinnersEL2, sfPoolEL2, 2);
+            if (safeSFWinnersEL2.length === 2) {
+              const finalDateEL2 = new Date(dateToProcess.getFullYear(), 4, 20);
+              const finalFixtureEL2 = ELDrawService.generateFinalFixture(
+                safeSFWinnersEL2[0], safeSFWinnersEL2[1], finalDateEL2, finalDateEL2.getFullYear()
+              );
+              setGlobalFixtures(prev => [...prev, finalFixtureEL2]);
+            }
+          }
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.EL_FINAL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: FINAŁ ────────────────────────────────────────────────────────
+        case CompetitionType.EL_FINAL: {
+          const elFinalFixture = allFixtures.find(f => f.leagueId === CompetitionType.EL_FINAL);
+          if (!elFinalFixture) break;
+          const alreadyPlayedELFinal = elFinalFixture.status === MatchStatus.FINISHED;
+          if (!alreadyPlayedELFinal) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_EL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          if (userTeamId) {
+            const mailKey = `EL_FINAL_RESULT_${elFinalFixture.date.getFullYear()}`;
+            if (!sentMailIdsRef.current.has(mailKey)) {
+              sentMailIdsRef.current.add(mailKey);
+              const h = elFinalFixture.homeScore ?? 0;
+              const a = elFinalFixture.awayScore ?? 0;
+              let winnerId: string;
+              if (h > a) winnerId = elFinalFixture.homeTeamId;
+              else if (a > h) winnerId = elFinalFixture.awayTeamId;
+              else winnerId = (elFinalFixture.homePenaltyScore ?? 0) >= (elFinalFixture.awayPenaltyScore ?? 0)
+                ? elFinalFixture.homeTeamId : elFinalFixture.awayTeamId;
+              const winner = clubs.find(c => c.id === winnerId);
+              setCurrentELWinnerId(winnerId);
+              const isUserWinner = winnerId === userTeamId;
+              const mail: MailMessage = {
+                id: mailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Zdobywca Ligi Europy ${elFinalFixture.date.getFullYear()}`,
+                body: isUserWinner
+                  ? `GRATULACJE! Twój klub zdobył Ligę Europy ${elFinalFixture.date.getFullYear()}!`
+                  : `Finał Ligi Europy zakończony. Zdobywcą Ligi Europy ${elFinalFixture.date.getFullYear()} został ${winner?.name ?? winnerId}.`,
+                date: new Date(currentDate),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 100,
+              };
+              setMessages(prev => [mail, ...prev]);
+            }
+          }
+          break;
+        }
+
+        // ── LM: Losowanie Rundy 1 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.CHAMPIONS_LEAGUE_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const eligibleIds = CLDrawService.getEligibleTeams(RAW_CHAMPIONS_LEAGUE_CLUBS, currentPolishViceChampionId);
+          const pairs = CLDrawService.drawPairs(eligibleIds, clubs, dateToProcess, sessionSeed);
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: Losowanie Rundy 2 Preeliminacyjnej ──────────────────────────
+        case CompetitionType.CL_R2Q_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const r2qPool = CLDrawService.getR2QPool(
+            RAW_CHAMPIONS_LEAGUE_CLUBS, allFixtures, currentPolishChampionId, userTeamId,
+          );
+          const r2qPairs = CLDrawService.drawR2QPairs(
+            r2qPool, currentPolishChampionId, RAW_CHAMPIONS_LEAGUE_CLUBS, clubs, dateToProcess, sessionSeed,
+          );
+          setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: r2qPairs });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: Losowanie Fazy Grupowej ─────────────────────────────────────
+        case CompetitionType.CL_GROUP_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          const r2qWinners = CLDrawService.getGroupStagePool(allFixtures, RAW_CHAMPIONS_LEAGUE_CLUBS);
+          const groups = CLDrawService.drawGroupStage(
+            r2qWinners, RAW_CHAMPIONS_LEAGUE_CLUBS, clubs, sessionSeed,
+          );
+          setActiveGroupDraw({ id: slot.id, label: slot.label, date: dateToProcess, groups });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_GROUP_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: Faza Grupowa (mecz gracza) ──────────────────────────────────
+        case CompetitionType.CL_GROUP_STAGE: {
+          const alreadyPlayed = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            f.leagueId === CompetitionType.CL_GROUP_STAGE &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayed) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+
+          break;
+        }
+
+ // ── LM: Losowanie 1/8 Finału ────────────────────────────────────────
+        case CompetitionType.CL_R16_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (!clGroups) break; // faza grupowa jeszcze nie zakończona
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_R16_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: 1/8 Finału (mecze) ──────────────────────────────────────────
+        case CompetitionType.CL_R16:
+        case CompetitionType.CL_R16_RETURN: {
+          const alreadyPlayed = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CL_R16 || f.leagueId === CompetitionType.CL_R16_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayed) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+            break;
+        }
+
+        // ── LM: Losowanie 1/4 Finału ────────────────────────────────────────
+        case CompetitionType.CL_QF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_QF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: 1/4 Finału (mecze) ──────────────────────────────────────────
+        case CompetitionType.CL_QF:
+        case CompetitionType.CL_QF_RETURN: {
+          const alreadyPlayed = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CL_QF || f.leagueId === CompetitionType.CL_QF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayed) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+                   break;
+        }
+
+        // ── LM: Losowanie 1/2 Finału ────────────────────────────────────────
+        case CompetitionType.CL_SF_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_SF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: Ogłoszenie Finalistów ────────────────────────────────────────
+        case CompetitionType.CL_FINAL_DRAW: {
+          if (processedDrawIds.includes(slot.id)) break;
+          // Wygeneruj fixture finałowy jeśli jeszcze nie istnieje
+          const finalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.CL_FINAL);
+          if (!finalAlreadyExists) {
+            const sfWinners = CLDrawService.getSFWinners(allFixtures);
+            const sfPool2 = CLDrawService.getSFParticipants(allFixtures);
+            const safeSFWinners2 = CLDrawService.guaranteeWinners(sfWinners, sfPool2, 2);
+            if (safeSFWinners2.length === 2) {
+              const finalDate = new Date(dateToProcess.getFullYear(), 4, 30);
+              const finalFixture = CLDrawService.generateFinalFixture(
+                safeSFWinners2[0], safeSFWinners2[1], finalDate, finalDate.getFullYear()
+              );
+              setGlobalFixtures(prev => [...prev, finalFixture]);
+            }
+          }
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.CL_FINAL_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LM: 1/2 Finału (mecze) ──────────────────────────────────────────
+              // ── LM: 1/2 Finału (mecze) ──────────────────────────────────────────
+        case CompetitionType.CL_SF:
+        case CompetitionType.CL_SF_RETURN: {
+          const alreadyPlayed = allFixtures.some(f =>
+            f.date.toDateString() === dateToProcess.toDateString() &&
+            (f.leagueId === CompetitionType.CL_SF || f.leagueId === CompetitionType.CL_SF_RETURN) &&
+            f.status === MatchStatus.FINISHED
+          );
+          if (!alreadyPlayed) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          // Po rewanżu 1/2 finału: wygeneruj finał i pokaż parę finałową
+          if (slot.competition === CompetitionType.CL_SF_RETURN) {
+            const allSFReturnDone = allFixtures
+              .filter(f => f.leagueId === CompetitionType.CL_SF_RETURN)
+              .every(f => f.status === MatchStatus.FINISHED);
+            if (allSFReturnDone) {
+              const finalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.CL_FINAL);
+              if (!finalAlreadyExists) {
+                const sfWinners = CLDrawService.getSFWinners(allFixtures);
+                const sfPool = CLDrawService.getSFParticipants(allFixtures);
+                const safeSFWinners = CLDrawService.guaranteeWinners(sfWinners, sfPool, 2);
+                if (safeSFWinners.length === 2) {
+                  const finalDate = new Date(dateToProcess.getFullYear(), 4, 30);
+                  const finalFixture = CLDrawService.generateFinalFixture(
+                    safeSFWinners[0], safeSFWinners[1], finalDate, finalDate.getFullYear()
+                  );
+                  setGlobalFixtures(prev => [...prev, finalFixture]);
+                }
+              }
+              // Finaliści zostaną ogłoszeni 18 kwietnia przez dedykowany slot CL_FINAL_DRAW
+            }
+          }
+          break;
+        }
+
+        // ── LM: FINAŁ ────────────────────────────────────────────────────────
+        case CompetitionType.CL_FINAL: {
+          const finalFixture = allFixtures.find(f => f.leagueId === CompetitionType.CL_FINAL);
+          if (!finalFixture) break;
+
+
+          const alreadyPlayed = finalFixture.status === MatchStatus.FINISHED;
+          if (!alreadyPlayed) {
+            if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+            navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+            skipDayAdvance = true; break;
+          }
+          // Finał rozegrany — wyślij mail o zwycięzcy (raz)
+          if (userTeamId) {
+            const mailKey = `CL_FINAL_RESULT_${finalFixture.date.getFullYear()}`;
+            if (!sentMailIdsRef.current.has(mailKey)) {
+              sentMailIdsRef.current.add(mailKey);
+              const h = finalFixture.homeScore ?? 0;
+              const a = finalFixture.awayScore ?? 0;
+              const hasPens = finalFixture.homePenaltyScore != null;
+              let winnerId: string;
+              if (h > a) winnerId = finalFixture.homeTeamId;
+              else if (a > h) winnerId = finalFixture.awayTeamId;
+              else winnerId = (finalFixture.homePenaltyScore ?? 0) >= (finalFixture.awayPenaltyScore ?? 0)
+                ? finalFixture.homeTeamId : finalFixture.awayTeamId;
+              const winner = clubs.find(c => c.id === winnerId);
+              setCurrentCLWinnerId(winnerId);
+              const isUserWinner = winnerId === userTeamId;
+              const mail: MailMessage = {
+                id: mailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Mistrz Europy ${finalFixture.date.getFullYear()}`,
+                body: isUserWinner
+                  ? `GRATULACJE! Twój klub zdobył Puchar Europy! Jesteście Mistrzem Europy ${finalFixture.date.getFullYear()}!`
+                  : `Finał Ligi Mistrzów zakończony. Mistrzem Europy ${finalFixture.date.getFullYear()} został ${winner?.name ?? winnerId}.`,
+                date: new Date(currentDate),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 100,
+              };
+              setMessages(prev => [mail, ...prev]);
+            }
+          }
+          break;
+        }
+
+
+
+
+
+
+        // ── LM: Mecze preeliminacyjne (gracz uczestniczy) ───────────────────
+        case CompetitionType.CL_R1Q:
+        case CompetitionType.CL_R1Q_RETURN:
+        case CompetitionType.CL_R2Q:
+        case CompetitionType.CL_R2Q_RETURN: {
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          navigateTo(ViewState.PRE_MATCH_CL_STUDIO);
+          skipDayAdvance = true; break;
+        }
+
+        // ── LE: Mecze (gracz uczestniczy) ───────────────────────────────────
+        case CompetitionType.EL_R1Q:
+        case CompetitionType.EL_R1Q_RETURN:
+        case CompetitionType.EL_R2Q:
+        case CompetitionType.EL_R2Q_RETURN:
+        case CompetitionType.EL_GROUP_STAGE:
+        case CompetitionType.EL_R16:
+        case CompetitionType.EL_R16_RETURN: {
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          navigateTo(ViewState.PRE_MATCH_EL_STUDIO);
+          skipDayAdvance = true; break;
+        }
+
+        // ── Puchar Polski: Losowanie ─────────────────────────────────────────
+        case CompetitionType.POLISH_CUP: {
+          if (slot.label.toUpperCase().includes('LOSOWANIE')) {
+            if (processedDrawIds.includes(slot.id)) break;
+            let participants: string[] = [];
+            if (slot.label.includes('1/64')) {
+              participants = PolishCupDrawService.getInitialParticipants(clubs);
+            } else {
+              participants = clubs.filter(c => c.isInPolishCup).map(c => c.id);
+              if (participants.length === 0) participants = cupParticipants;
+            }
+            const cupDrawMapping: Record<string, string> = {
+              'LOSOWANIE PUCHARU POLSKI 1/64': 'Puchar Polski: 1/64',
+              'LOSOWANIE PUCHARU POLSKI 1/32': 'Puchar Polski: 1/32',
+              'LOSOWANIE PUCHARU POLSKI 1/16': 'Puchar Polski: 1/16',
+              'LOSOWANIE PUCHARU POLSKI 1/8':  'Puchar Polski: 1/8',
+              'LOSOWANIE PUCHARU POLSKI 1/4':  'Puchar Polski: 1/4',
+              'LOSOWANIE PUCHARU POLSKI 1/2':  'Puchar Polski: 1/2',
+            };
+            const matchLabel = cupDrawMapping[slot.label] || slot.label.replace('LOSOWANIE ', '');
+            const matchSlot = seasonTemplate?.slots.find(s => s.label === matchLabel);
+            const cupPairs = PolishCupDrawService.drawPairs(
+              participants, clubs, matchSlot?.start || dateToProcess, matchLabel, sessionSeed,
+            );
+            setActiveCupDraw({ id: slot.id, label: slot.label, date: dateToProcess, pairs: cupPairs });
+            setCupParticipants(participants);
+            navigateTo(ViewState.CUP_DRAW);
+            skipDayAdvance = true; break;
+          }
+          // Ogłoszenie finalistów PP — pokaż ekran finalistów (raz)
+          if (slot.label.toUpperCase().includes('OGŁOSZENIE') || slot.label.toUpperCase().includes('OGLOSZENIE')) {
+            if (processedDrawIds.includes(slot.id)) break;
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.POLISH_CUP_FINALISTS);
+            skipDayAdvance = true; break;
+          }
+          // Dzień meczowy PP — gracz uczestniczy
+          // Jeśli to automatyczny skok: zatrzymaj i wróć na Dashboard (gracz edytuje skład)
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          navigateTo(ViewState.PRE_MATCH_CUP_STUDIO);
+          skipDayAdvance = true; break;
+        }
+
+        // ── Superpuchar (gracz uczestniczy) ────────────────────────────────
+        case CompetitionType.SUPER_CUP: {
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          navigateTo(ViewState.PRE_MATCH_CUP_STUDIO);
+          skipDayAdvance = true; break;
+        }
+
+        // ── SUPERPUCHAR EUROPY (23 Sierpnia) ─────────────────────────────────
+        // Mecz NPC — gracz jest tylko obserwatorem, symulacja w tle
+        case CompetitionType.UEFA_SUPER_CUP: {
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          if (processedDrawIds.includes(slot.id)) break; // mecz już przetworzony — dzień przesuwa się normalnie
+          const uefaScResult = BackgroundMatchUEFASuperCup.processSuperCupMatch(
+            dateToProcess, allFixtures, clubs, players, lineups, seasonNumber, matchSimulationSeed, coaches
+          );
+          setGlobalFixtures(prev => {
+            const clMap = new Map(uefaScResult.updatedFixtures.map(f => [f.id, f]));
+            return prev.map(f => {
+              const updated = clMap.get(f.id);
+              if (updated && (
+                updated.status !== f.status ||
+                updated.homeScore !== f.homeScore ||
+                updated.awayScore !== f.awayScore ||
+                updated.homePenaltyScore !== f.homePenaltyScore ||
+                updated.awayPenaltyScore !== f.awayPenaltyScore
+              )) return updated;
+              return f;
+            });
+          });
+          setPlayers(prev => ({ ...prev, ...uefaScResult.updatedPlayers }));
+          setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+            prev,
+            clubs,
+            uefaScResult.updatedFixtures,
+            allFixtures,
+            userTeamId
+          ));
+          uefaScResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+          const uefaEntry = uefaScResult.matchHistoryEntries.find(e => e.competition === CompetitionType.UEFA_SUPER_CUP);
+          if (uefaEntry) setLastUEFASuperCupResult(uefaEntry);
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.UEFA_SUPER_CUP_VIEW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── OGŁOSZENIE PAR BARAŻOWYCH (24 maja) ─────────────────────────────
+        case CompetitionType.PLAYOFF_DRAW_CEREMONY: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          const sL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const sL3 = [...clubs].filter(c => c.leagueId === 'L_PL_3')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const l4Pool = [...clubs].filter(c => c.leagueId === 'L_PL_4')
+            .sort(() => Math.random() - 0.5);
+          setActivePlayoffDraw({
+            ekstraklasaPlayoffs: [
+              { homeId: sL2[2]?.id || '', awayId: sL2[5]?.id || '', homePos: 3, awayPos: 6 },
+              { homeId: sL2[3]?.id || '', awayId: sL2[4]?.id || '', homePos: 4, awayPos: 5 },
+            ],
+            ligaOnePlayoffs: [
+              { homeId: sL3[2]?.id || '', awayId: sL3[5]?.id || '', homePos: 3, awayPos: 6 },
+              { homeId: sL3[3]?.id || '', awayId: sL3[4]?.id || '', homePos: 4, awayPos: 5 },
+            ],
+            relegationPlayoffs: [
+              { homeId: sL3[12]?.id || '', awayId: l4Pool[0]?.id || '', homePos: 13, awayPos: 0 },
+              { homeId: sL3[13]?.id || '', awayId: l4Pool[1]?.id || '', homePos: 14, awayPos: 0 },
+            ],
+          });
+          setProcessedDrawIds(prev => [...prev, slot.id]);
+          navigateTo(ViewState.PLAYOFF_DRAW);
+          skipDayAdvance = true; break;
+        }
+
+        // ── BARAŻE O UTRZYMANIE — 1. MECZE (26 maja) ────────────────────────────
+        // 13. i 14. miejsce 2.Ligi (L_PL_3) vs dwie losowe drużyny z 3.Ligi (L_PL_4)
+        // Wyniki są przechowywane w stanie gry do obliczenia agregatu 29 maja.
+        case CompetitionType.RELEGATION_PLAYOFF_1: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+
+          const pairs = activePlayoffDraw?.relegationPlayoffs;
+          if (!pairs || pairs.length < 2) { break; } // bezpieczeństwo — pary muszą być losowane 24 maja
+
+          const p0home = clubs.find(c => c.id === pairs[0].homeId);
+          const p0away = clubs.find(c => c.id === pairs[0].awayId);
+          const p1home = clubs.find(c => c.id === pairs[1].homeId);
+          const p1away = clubs.find(c => c.id === pairs[1].awayId);
+
+          if (!p0home || !p0away || !p1home || !p1away) { break; } // bezpieczeństwo
+
+          // Seed unikalny per data + para, ale z runtime'owym składnikiem symulacji.
+          // Dzięki temu reload save'a sprzed barażu nie wymusza zawsze tego samego wyniku.
+          const dateSeed26 = dateToProcess.getTime() + matchSimulationSeed;
+          const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
+
+          // Sprawdzenie czy drużyna gracza gra w barażu
+          const userInPair0_leg1 = userTeamId && (pairs[0].homeId === userTeamId || pairs[0].awayId === userTeamId);
+          const userInPair1_leg1 = userTeamId && (pairs[1].homeId === userTeamId || pairs[1].awayId === userTeamId);
+
+          if (userInPair0_leg1 || userInPair1_leg1) {
+            const playerPairIdx = userInPair0_leg1 ? 0 : 1;
+            const otherPairIdx = playerPairIdx === 0 ? 1 : 0;
+            const otherHome = clubs.find(c => c.id === pairs[otherPairIdx].homeId)!;
+            const otherAway = clubs.find(c => c.id === pairs[otherPairIdx].awayId)!;
+            const otherResult = RelegationPlayoffSimulator.simulateMatch(otherHome, otherAway, dateSeed26 + (otherPairIdx + 1), playoffSimulationContext);
+            // Placeholder dla pary gracza — zostanie nadpisany po interaktywnym meczu
+            const placeholder: RelegationPlayoffLegResult = { homeId: pairs[playerPairIdx].homeId, awayId: pairs[playerPairIdx].awayId, homeGoals: 0, awayGoals: 0 };
+            setRelegationPlayoffFirstLegResults(playerPairIdx === 0
+              ? { pair0: placeholder, pair1: otherResult }
+              : { pair0: otherResult, pair1: placeholder }
+            );
+            const playerPair = pairs[playerPairIdx];
+            setActivePlayoffMatch({
+              matchType: 'RELEGATION_LEG1',
+              homeClub: clubs.find(c => c.id === playerPair.homeId)!,
+              awayClub: clubs.find(c => c.id === playerPair.awayId)!,
+              userSide: playerPair.homeId === userTeamId ? 'HOME' : 'AWAY',
+              pairIndex: playerPairIdx,
+            });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
+          } else {
+            const leg1pair0 = RelegationPlayoffSimulator.simulateMatch(p0home, p0away, dateSeed26 + 1, playoffSimulationContext);
+            const leg1pair1 = RelegationPlayoffSimulator.simulateMatch(p1home, p1away, dateSeed26 + 2, playoffSimulationContext);
+            setRelegationPlayoffFirstLegResults({ pair0: leg1pair0, pair1: leg1pair1 });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.RELEGATION_PLAYOFF_MATCH_1);
+          }
+          skipDayAdvance = true; break;
+        }
+
+        // ── BARAŻE O UTRZYMANIE — REWANŻE (29 maja) ─────────────────────────────
+        // Oblicza agregat z obu meczów. Remis → rzuty karne.
+        // Wynik finalny zapisywany w relegationPlayoffFinalResult — używany w startNextSeason.
+        case CompetitionType.RELEGATION_PLAYOFF_2: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+
+          const firstLeg = relegationPlayoffFirstLegResults;
+          const pairs2 = activePlayoffDraw?.relegationPlayoffs;
+          if (!firstLeg || !pairs2 || pairs2.length < 2) { break; } // bezpieczeństwo — 1. mecze muszą istnieć
+
+          // W rewanżu strony się zamieniają: dotychczasowy gość gra u siebie
+          const p0homeR = clubs.find(c => c.id === pairs2[0].awayId); // 3.Liga gra u siebie w rewanżu
+          const p0awayR = clubs.find(c => c.id === pairs2[0].homeId); // 2.Liga gości w rewanżu
+          const p1homeR = clubs.find(c => c.id === pairs2[1].awayId);
+          const p1awayR = clubs.find(c => c.id === pairs2[1].homeId);
+
+          if (!p0homeR || !p0awayR || !p1homeR || !p1awayR) { break; }
+
+          const dateSeed29 = dateToProcess.getTime() + matchSimulationSeed;
+          const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
+
+          // clubs z 2.Ligi — para 0 i para 1 (homeId w leg1 = klub 2.Ligi)
+          const clubL3pair0 = clubs.find(c => c.id === pairs2[0].homeId)!;
+          const clubL4pair0 = clubs.find(c => c.id === pairs2[0].awayId)!;
+          const clubL3pair1 = clubs.find(c => c.id === pairs2[1].homeId)!;
+          const clubL4pair1 = clubs.find(c => c.id === pairs2[1].awayId)!;
+
+          // Sprawdzenie czy drużyna gracza gra w rewanżu
+          const userInPair0_leg2 = userTeamId && (pairs2[0].homeId === userTeamId || pairs2[0].awayId === userTeamId);
+          const userInPair1_leg2 = userTeamId && (pairs2[1].homeId === userTeamId || pairs2[1].awayId === userTeamId);
+
+          if (userInPair0_leg2 || userInPair1_leg2) {
+            const playerPairIdx = userInPair0_leg2 ? 0 : 1;
+            const otherPairIdx = playerPairIdx === 0 ? 1 : 0;
+            // Symuluj tylko rewanż pary bez gracza
+            const otherL2Home = clubs.find(c => c.id === pairs2[otherPairIdx].awayId)!; // w rewanżu strony zamienione
+            const otherL2Away = clubs.find(c => c.id === pairs2[otherPairIdx].homeId)!;
+            const otherLeg2 = RelegationPlayoffSimulator.simulateMatch(otherL2Home, otherL2Away, dateSeed29 + (otherPairIdx + 1), playoffSimulationContext);
+            const otherClubL3 = otherPairIdx === 0 ? clubL3pair0 : clubL3pair1;
+            const otherClubL4 = otherPairIdx === 0 ? clubL4pair0 : clubL4pair1;
+            const otherFirstLeg = otherPairIdx === 0 ? firstLeg.pair0 : firstLeg.pair1;
+            const otherOutcome = RelegationPlayoffSimulator.resolveAggregate(otherFirstLeg, otherLeg2, otherClubL3, otherClubL4, dateSeed29 + (otherPairIdx === 0 ? 10 : 20), playoffSimulationContext);
+            // Wynik gracza zostanie ustalony po interaktywnym meczu — zapisujemy tylko drugą parę
+            setRelegationPlayoffFinalResult(playerPairIdx === 0
+              ? { pair0: null as any, pair1: otherOutcome }
+              : { pair0: otherOutcome, pair1: null as any }
+            );
+            const playerPair = pairs2[playerPairIdx];
+            const playerFirstLeg = playerPairIdx === 0 ? firstLeg.pair0 : firstLeg.pair1;
+            // W rewanżu strony zamienione: awayId z leg1 (L4) gra u siebie
+            setActivePlayoffMatch({
+              matchType: 'RELEGATION_LEG2',
+              homeClub: clubs.find(c => c.id === playerPair.awayId)!, // L4 gra u siebie w rewanżu
+              awayClub: clubs.find(c => c.id === playerPair.homeId)!, // L3 gości w rewanżu
+              userSide: playerPair.homeId === userTeamId ? 'AWAY' : 'HOME',
+              pairIndex: playerPairIdx,
+              firstLegResult: playerFirstLeg,
+              otherRelegationPairOutcome: otherOutcome,
+            });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
+          } else {
+            const leg2pair0 = RelegationPlayoffSimulator.simulateMatch(p0homeR, p0awayR, dateSeed29 + 1, playoffSimulationContext);
+            const leg2pair1 = RelegationPlayoffSimulator.simulateMatch(p1homeR, p1awayR, dateSeed29 + 2, playoffSimulationContext);
+            const outcome0 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair0, leg2pair0, clubL3pair0, clubL4pair0, dateSeed29 + 10, playoffSimulationContext);
+            const outcome1 = RelegationPlayoffSimulator.resolveAggregate(firstLeg.pair1, leg2pair1, clubL3pair1, clubL4pair1, dateSeed29 + 20, playoffSimulationContext);
+            setRelegationPlayoffFinalResult({ pair0: outcome0, pair1: outcome1 });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.RELEGATION_PLAYOFF_MATCH_2);
+          }
+          skipDayAdvance = true; break;
+        }
+
+        // ── Zakończenie sezonu — pauza, gracz czyta emaile i klika "Nowy sezon" ──
+        // â”€â”€ BARAÅ»E O AWANS â€” PÃ“ÅFINAÅY (31 maja) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        case CompetitionType.PROMOTION_PLAYOFF_31_MAY: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+
+          const ekstraklasaPairs = activePlayoffDraw?.ekstraklasaPlayoffs;
+          const ligaOnePairs = activePlayoffDraw?.ligaOnePlayoffs;
+          if (!ekstraklasaPairs || !ligaOnePairs || ekstraklasaPairs.length < 2 || ligaOnePairs.length < 2) { break; }
+
+          const e0home = clubs.find(c => c.id === ekstraklasaPairs[0].homeId);
+          const e0away = clubs.find(c => c.id === ekstraklasaPairs[0].awayId);
+          const e1home = clubs.find(c => c.id === ekstraklasaPairs[1].homeId);
+          const e1away = clubs.find(c => c.id === ekstraklasaPairs[1].awayId);
+          const l0home = clubs.find(c => c.id === ligaOnePairs[0].homeId);
+          const l0away = clubs.find(c => c.id === ligaOnePairs[0].awayId);
+          const l1home = clubs.find(c => c.id === ligaOnePairs[1].homeId);
+          const l1away = clubs.find(c => c.id === ligaOnePairs[1].awayId);
+
+          if (!e0home || !e0away || !e1home || !e1away || !l0home || !l0away || !l1home || !l1away) { break; }
+
+          // Sekcja przygotowania składów barażowych — kopia silnika pucharowego potrzebuje lineupów
+          const e0Lineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(e0home, e0away, players, lineups, userTeamId, coaches);
+          const e1Lineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(e1home, e1away, players, lineups, userTeamId, coaches);
+          const l0Lineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(l0home, l0away, players, lineups, userTeamId, coaches);
+          const l1Lineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(l1home, l1away, players, lineups, userTeamId, coaches);
+
+          const dateSeed31 = dateToProcess.getTime();
+
+          // Sprawdzenie czy drużyna gracza gra w półfinale
+          const userInE0 = userTeamId && (e0home.id === userTeamId || e0away.id === userTeamId);
+          const userInE1 = userTeamId && (e1home.id === userTeamId || e1away.id === userTeamId);
+          const userInL0 = userTeamId && (l0home.id === userTeamId || l0away.id === userTeamId);
+          const userInL1 = userTeamId && (l1home.id === userTeamId || l1away.id === userTeamId);
+          const userInSemi = userInE0 || userInE1 || userInL0 || userInL1;
+
+          if (userInSemi) {
+            // Symuluj wszystkie mecze OPRÓCZ meczu gracza
+            const simsE0 = !userInE0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0', seasonNumber, coaches) : null;
+            const simsE1 = !userInE1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1', seasonNumber, coaches) : null;
+            const simsL0 = !userInL0 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0', seasonNumber, coaches) : null;
+            const simsL1 = !userInL1 ? BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1', seasonNumber, coaches) : null;
+            const otherSemiResults: Partial<PromotionPlayoffSemiResults> = {};
+            if (simsE0) otherSemiResults.ekstraklasaSemi0 = simsE0;
+            if (simsE1) otherSemiResults.ekstraklasaSemi1 = simsE1;
+            if (simsL0) otherSemiResults.ligaOneSemi0 = simsL0;
+            if (simsL1) otherSemiResults.ligaOneSemi1 = simsL1;
+            const playerHome = userInE0 ? e0home : userInE1 ? e1home : userInL0 ? l0home : l1home;
+            const playerAway = userInE0 ? e0away : userInE1 ? e1away : userInL0 ? l0away : l1away;
+            const playerLeague = (userInE0 || userInE1) ? 'EKSTRAKLASA' : 'LIGA_ONE' as 'EKSTRAKLASA' | 'LIGA_ONE';
+            const playerPairIdx = (userInE0 || userInL0) ? 0 : 1;
+            setActivePlayoffMatch({
+              matchType: 'PROMOTION_SEMI',
+              homeClub: playerHome,
+              awayClub: playerAway,
+              userSide: playerHome.id === userTeamId ? 'HOME' : 'AWAY',
+              pairIndex: playerPairIdx,
+              leagueContext: playerLeague,
+              otherPromotionSemiResults: otherSemiResults,
+            });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
+          } else {
+            const ekstraklasaSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e0home, e0away, players, e0Lineups, dateSeed31 + 1, 'PROMOTION_EKSTRAKLASA_SEMI_0', seasonNumber, coaches);
+            const ekstraklasaSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, e1home, e1away, players, e1Lineups, dateSeed31 + 2, 'PROMOTION_EKSTRAKLASA_SEMI_1', seasonNumber, coaches);
+            const ligaOneSemi0 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l0home, l0away, players, l0Lineups, dateSeed31 + 3, 'PROMOTION_LIGAONE_SEMI_0', seasonNumber, coaches);
+            const ligaOneSemi1 = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, l1home, l1away, players, l1Lineups, dateSeed31 + 4, 'PROMOTION_LIGAONE_SEMI_1', seasonNumber, coaches);
+            setPromotionPlayoffSemiResults({ ekstraklasaSemi0, ekstraklasaSemi1, ligaOneSemi0, ligaOneSemi1 });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PROMOTION_PLAYOFF_SEMI_VIEW);
+          }
+          skipDayAdvance = true; break;
+        }
+
+        // â”€â”€ BARAÅ»E O AWANS â€” FINAÅY (4 czerwca) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        case CompetitionType.PROMOTION_PLAYOFF_4_JUNE: {
+          if (processedDrawIds.includes(slot.id)) break;
+          if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+
+          const semiResults = promotionPlayoffSemiResults;
+          const playoffDraw = activePlayoffDraw;
+          if (!semiResults || !playoffDraw) { break; }
+          if (playoffDraw.ekstraklasaPlayoffs.length < 2 || playoffDraw.ligaOnePlayoffs.length < 2) { break; }
+
+          const ekstraklasaFinalist0Id = semiResults.ekstraklasaSemi0.winnerId;
+          const ekstraklasaFinalist1Id = semiResults.ekstraklasaSemi1.winnerId;
+          const ekstraklasaFinalist0Pos = playoffDraw.ekstraklasaPlayoffs[0].homeId === ekstraklasaFinalist0Id
+            ? playoffDraw.ekstraklasaPlayoffs[0].homePos
+            : playoffDraw.ekstraklasaPlayoffs[0].awayPos;
+          const ekstraklasaFinalist1Pos = playoffDraw.ekstraklasaPlayoffs[1].homeId === ekstraklasaFinalist1Id
+            ? playoffDraw.ekstraklasaPlayoffs[1].homePos
+            : playoffDraw.ekstraklasaPlayoffs[1].awayPos;
+          const ekstraklasaClub0 = clubs.find(c => c.id === ekstraklasaFinalist0Id);
+          const ekstraklasaClub1 = clubs.find(c => c.id === ekstraklasaFinalist1Id);
+
+          const ligaOneFinalist0Id = semiResults.ligaOneSemi0.winnerId;
+          const ligaOneFinalist1Id = semiResults.ligaOneSemi1.winnerId;
+          const ligaOneFinalist0Pos = playoffDraw.ligaOnePlayoffs[0].homeId === ligaOneFinalist0Id
+            ? playoffDraw.ligaOnePlayoffs[0].homePos
+            : playoffDraw.ligaOnePlayoffs[0].awayPos;
+          const ligaOneFinalist1Pos = playoffDraw.ligaOnePlayoffs[1].homeId === ligaOneFinalist1Id
+            ? playoffDraw.ligaOnePlayoffs[1].homePos
+            : playoffDraw.ligaOnePlayoffs[1].awayPos;
+          const ligaOneClub0 = clubs.find(c => c.id === ligaOneFinalist0Id);
+          const ligaOneClub1 = clubs.find(c => c.id === ligaOneFinalist1Id);
+
+          if (!ekstraklasaClub0 || !ekstraklasaClub1 || !ligaOneClub0 || !ligaOneClub1) { break; }
+
+          const ekstraklasaHomeClub = ekstraklasaFinalist0Pos < ekstraklasaFinalist1Pos ? ekstraklasaClub0 : ekstraklasaClub1;
+          const ekstraklasaAwayClub = ekstraklasaHomeClub.id === ekstraklasaClub0.id ? ekstraklasaClub1 : ekstraklasaClub0;
+          const ligaOneHomeClub = ligaOneFinalist0Pos < ligaOneFinalist1Pos ? ligaOneClub0 : ligaOneClub1;
+          const ligaOneAwayClub = ligaOneHomeClub.id === ligaOneClub0.id ? ligaOneClub1 : ligaOneClub0;
+
+          // Sekcja przygotowania składów finałowych — silnik playoff korzysta ze składów AI lub istniejących lineupów
+          const ekstraklasaFinalLineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(ekstraklasaHomeClub, ekstraklasaAwayClub, players, lineups, userTeamId, coaches);
+          const ligaOneFinalLineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(ligaOneHomeClub, ligaOneAwayClub, players, lineups, userTeamId, coaches);
+
+          const dateSeed4June = dateToProcess.getTime();
+
+          // Sprawdzenie czy drużyna gracza gra w finale
+          const userInEFinal = userTeamId && (ekstraklasaHomeClub.id === userTeamId || ekstraklasaAwayClub.id === userTeamId);
+          const userInLFinal = userTeamId && (ligaOneHomeClub.id === userTeamId || ligaOneAwayClub.id === userTeamId);
+
+          if (userInEFinal || userInLFinal) {
+            const playerHome = userInEFinal ? ekstraklasaHomeClub : ligaOneHomeClub;
+            const playerAway = userInEFinal ? ekstraklasaAwayClub : ligaOneAwayClub;
+            const playerLeague: 'EKSTRAKLASA' | 'LIGA_ONE' = userInEFinal ? 'EKSTRAKLASA' : 'LIGA_ONE';
+            // Symuluj drugi finał (bez gracza)
+            const otherHomeClub = userInEFinal ? ligaOneHomeClub : ekstraklasaHomeClub;
+            const otherAwayClub = userInEFinal ? ligaOneAwayClub : ekstraklasaAwayClub;
+            const otherLineups = BackgroundPlayOffMatchPolishCup.preparePlayoffLineups(otherHomeClub, otherAwayClub, players, lineups, userTeamId, coaches);
+            const otherFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, otherHomeClub, otherAwayClub, players, otherLineups, dateSeed4June + (userInEFinal ? 2 : 1), userInEFinal ? 'PROMOTION_LIGAONE_FINAL' : 'PROMOTION_EKSTRAKLASA_FINAL', seasonNumber, coaches);
+            setActivePlayoffMatch({
+              matchType: 'PROMOTION_FINAL',
+              homeClub: playerHome,
+              awayClub: playerAway,
+              userSide: playerHome.id === userTeamId ? 'HOME' : 'AWAY',
+              pairIndex: 0,
+              leagueContext: playerLeague,
+              otherPromotionFinalResult: otherFinal,
+            });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PRE_MATCH_PLAYOFF_STUDIO);
+          } else {
+            const ekstraklasaFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ekstraklasaHomeClub, ekstraklasaAwayClub, players, ekstraklasaFinalLineups, dateSeed4June + 1, 'PROMOTION_EKSTRAKLASA_FINAL', seasonNumber, coaches);
+            const ligaOneFinal = BackgroundPlayOffMatchPolishCup.simulatePlayoffMatch(dateToProcess, ligaOneHomeClub, ligaOneAwayClub, players, ligaOneFinalLineups, dateSeed4June + 2, 'PROMOTION_LIGAONE_FINAL', seasonNumber, coaches);
+            setPromotionPlayoffFinalResults({ ekstraklasaFinal, ligaOneFinal });
+            setProcessedDrawIds(prev => [...prev, slot.id]);
+            navigateTo(ViewState.PROMOTION_PLAYOFF_FINAL_VIEW);
+          }
+          skipDayAdvance = true; break;
+        }
+
+              case CompetitionType.OFF_SEASON: {
+          setTargetJumpTime(null);
+
+          // ── Podsumowanie sezonu (wysyłane raz, 30 czerwca) ─────────────────
+          if (userTeamId) {
+            const currentYear = dateToProcess.getFullYear();
+            const seasonSummaryKey = `SEASON_SUMMARY_${currentYear}`;
+            if (!sentMailIdsRef.current.has(seasonSummaryKey)) {
+              const standingsL1 = [...clubs]
+                .filter(c => c.leagueId === 'L_PL_1')
+                .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+              const standingsL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2')
+                .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+              const standingsL3 = [...clubs].filter(c => c.leagueId === 'L_PL_3')
+                .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+
+              const getAwardsLocal = (leagueId: string, leagueName: string) => {
+                const rows = LeagueStatsService.getPlayersForLeague(leagueId, clubs, players);
+                const topScorerRow = LeagueStatsService.getTopScorers(rows, 1)[0];
+                const topAssistantRow = LeagueStatsService.getTopAssists(rows, 1)[0];
+                const topScorer = topScorerRow?.player;
+                const topAssistant = topAssistantRow?.player;
+                return {
+                  leagueName,
+                  topScorer: {
+                    name: topScorer ? `${topScorer.firstName} ${topScorer.lastName}` : 'Brak',
+                    goals: topScorer?.stats.goals || 0,
+                    clubId: topScorerRow?.club.id,
+                    clubName: topScorerRow?.club.name,
+                  },
+                  topAssistant: {
+                    name: topAssistant ? `${topAssistant.firstName} ${topAssistant.lastName}` : 'Brak',
+                    assists: topAssistant?.stats.assists || 0,
+                    clubId: topAssistantRow?.club.id,
+                    clubName: topAssistantRow?.club.name,
+                  }
+                };
+              };
+
+              const summaryDataLocal: SeasonSummaryData = {
+                year: currentYear - 1,
+                championName: standingsL1[0]?.name || 'Nieznany',
+                promotions: [
+                  { from: '1. Liga', to: 'Ekstraklasy', teams: standingsL2.slice(0, 2).map(t => t.name) },
+                  { from: '2. Liga', to: '1. Ligi', teams: standingsL3.slice(0, 2).map(t => t.name) },
+                  { from: 'Regionalna', to: '2. Ligi', teams: [] }
+                ],
+                relegations: [
+                  { from: 'Ekstraklasy', to: '1. Ligi', teams: standingsL1.slice(15, 18).map(t => t.name) },
+                  { from: '1. Ligi', to: '2. Ligi', teams: standingsL2.slice(15, 18).map(t => t.name) },
+                  { from: '2. Ligi', to: 'Regionalnej', teams: standingsL3.slice(14, 18).map(t => t.name) }
+                ],
+                leagueAwards: [
+                  getAwardsLocal('L_PL_1', 'Ekstraklasa'),
+                  getAwardsLocal('L_PL_2', '1. Liga'),
+                  getAwardsLocal('L_PL_3', '2. Liga')
+                ]
+              };
+
+              const summaryMail = MailService.generateSeasonSummaryMail(summaryDataLocal);
+              sentMailIdsRef.current.add(seasonSummaryKey);
+              setMessages(prev => [summaryMail, ...prev]);
+            }
+          }
+
+          navigateTo(ViewState.DASHBOARD);
+          return; // Data NIE zostaje przesunięta — gracz musi potwierdzić
+        }
+
+        default:
+          break;
+      }
+    }
+
+    // ── Puchar Polski / Superpuchar / LM / LE: background — zatrzymaj auto-skok ─────
+    // Gracz musi ręcznie kliknąć przycisk na Dashboardzie (wyniki).
+    if (isAutoJumping &&
+        primaryEvent?.participation === 'background' &&
+        (primaryEvent.slot.competition === CompetitionType.POLISH_CUP ||
+         primaryEvent.slot.competition === CompetitionType.SUPER_CUP ||
+         primaryEvent.slot.competition === CompetitionType.CL_R1Q ||
+         primaryEvent.slot.competition === CompetitionType.CL_R1Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CL_R2Q ||
+         primaryEvent.slot.competition === CompetitionType.CL_R2Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CL_GROUP_STAGE ||
+         primaryEvent.slot.competition === CompetitionType.CL_R16 ||
+         primaryEvent.slot.competition === CompetitionType.CL_R16_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CL_QF ||
+         primaryEvent.slot.competition === CompetitionType.CL_QF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CL_SF ||
+         primaryEvent.slot.competition === CompetitionType.CL_SF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_R1Q ||
+         primaryEvent.slot.competition === CompetitionType.EL_R1Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_R2Q ||
+         primaryEvent.slot.competition === CompetitionType.EL_R2Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_GROUP_STAGE ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R1Q ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R1Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R2Q ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R2Q_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CONF_GROUP_STAGE ||
+         primaryEvent.slot.competition === CompetitionType.EL_R16 ||
+         primaryEvent.slot.competition === CompetitionType.EL_R16_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_QF ||
+         primaryEvent.slot.competition === CompetitionType.EL_QF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_SF ||
+         primaryEvent.slot.competition === CompetitionType.EL_SF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.EL_FINAL ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R16 ||
+         primaryEvent.slot.competition === CompetitionType.CONF_R16_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CONF_QF ||
+         primaryEvent.slot.competition === CompetitionType.CONF_QF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CONF_SF ||
+         primaryEvent.slot.competition === CompetitionType.CONF_SF_RETURN ||
+         primaryEvent.slot.competition === CompetitionType.CONF_FINAL)) {
+      setTargetJumpTime(null);
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. GUARD + SYMULACJA + FINANSE — wykonywane ZAWSZE, niezależnie od eventu dnia.
+    //    Dzięki temu pensje, squad review i inne zadania dnia nie są pomijane
+    //    gdy tego samego dnia jest losowanie (LE/LM/PP) lub mecz.
+    // ─────────────────────────────────────────────────────────────────────────
+    const dateKey = dateToProcess.toDateString();
+    if (lastProcessedLeagueDateRef.current === dateKey) {
+      DebugLoggerService.log('GUARD', `ZABLOKOWANO advanceDay dla: ${dateKey} (stale closure)`);
+      return;
+    }
+    DebugLoggerService.log('GUARD', `advanceDay PRZECHODZI dla: ${dateKey}`);
+    lastProcessedLeagueDateRef.current = dateKey;
+
+    // ── YOUTH REFILL: EUROPA + POLSKA (3 lipca) ──────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3) {
+      const seasonYear = dateToProcess.getFullYear();
+      const europeanLeagueIds = new Set(['L_CL', 'L_EL', 'L_CONF', 'L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4']);
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && europeanLeagueIds.has(c.leagueId) && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AZJA (7 lipca) ─────────────────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 7) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_ASIA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AFRYKA (12 lipca) ──────────────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 12) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_AFRICA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AMERYKA POŁUDNIOWA (17 lipca) ───────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 17) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_SA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── YOUTH REFILL: AMERYKA PÓŁNOCNA (19 lipca) ────────────────────────────
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 19) {
+      const seasonYear = dateToProcess.getFullYear();
+      const updates: Record<string, Player[]> = {};
+      clubs
+        .filter(c => c.id !== userTeamId && c.leagueId === 'L_NA' && (players[c.id] || []).length < 22)
+        .forEach(club => {
+          const currentSquad = players[club.id] || [];
+          const youthPlayers = SquadGeneratorService.generateYouthPlayersForClub(club, currentSquad, seasonYear);
+          if (youthPlayers.length > 0) updates[club.id] = [...currentSquad, ...youthPlayers];
+        });
+      if (Object.keys(updates).length > 0) setPlayers(prev => ({ ...prev, ...updates }));
+    }
+
+    // ── SPARINGI AI: GENEROWANIE PAR (3 lipca) ────────────────────────────────
+    const isSameFriendlyDate = (a: Date, b: Date): boolean =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+
+    const hasAiFriendlyPairOnDates = (targetDates: Date[]): boolean =>
+      aiFriendlyPairs.some(p => {
+        const pairDate = p.date instanceof Date ? p.date : new Date(p.date);
+        return targetDates.some(targetDate => isSameFriendlyDate(pairDate, targetDate));
+      });
+
+    const getBusyFriendlyClubIds = (targetDates: Date[]): Set<string> => new Set<string>(
+      globalFixtures
+        .filter(f => {
+          if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+          const fDate = f.date instanceof Date ? f.date : new Date(f.date);
+          return targetDates.some(targetDate => isSameFriendlyDate(fDate, targetDate));
+        })
+        .flatMap(f => [f.homeTeamId, f.awayTeamId])
+    );
+
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 3 && !hasAiFriendlyPairOnDates(AiFriendlyGeneratorService.getSummerFriendlyDates(dateToProcess.getFullYear()))) {
+      const busyClubIds = new Set<string>(
+        globalFixtures
+          .filter(f => {
+            if (f.leagueId !== CompetitionType.FRIENDLY) return false;
+            const fDate = f.date instanceof Date ? f.date : new Date(f.date);
+            return fDate.getMonth() === 6 && (fDate.getDate() === 8 || fDate.getDate() === 9);
+          })
+          .flatMap(f => [f.homeTeamId, f.awayTeamId])
+      );
+      const pairs = AiFriendlyGeneratorService.generate(clubs, userTeamId, dateToProcess.getFullYear(), busyClubIds);
+      setAiFriendlyPairs(pairs);
+    }
+
+    if (dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 5) {
+      const winterYear = dateToProcess.getFullYear() + 1;
+      const winterDates = AiFriendlyGeneratorService.getWinterFriendlyDates(winterYear);
+      if (!hasAiFriendlyPairOnDates(winterDates)) {
+        const busyClubIds = getBusyFriendlyClubIds(winterDates);
+        const pairs = AiFriendlyGeneratorService.generateWinter(clubs, userTeamId, winterYear, busyClubIds);
+        setAiFriendlyPairs(prev => [...prev, ...pairs]);
+      }
+    }
+
+    // ── NT FREE AGENT TOP-UP (8 lipca) ───────────────────────────────────────
+    // Each year on July 8, generates missing players for national teams with fewer than 25
+    // squad members and adds them to the free agent pool for coaches to call up.
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 8) {
+      const topUp = NationalTeamService.topUpFreeAgentPool(nationalTeams, players, dateToProcess.getFullYear());
+      if (topUp.newPlayers.length > 0) {
+        setPlayers(prev => ({
+          ...prev,
+          'FREE_AGENTS': [...(prev['FREE_AGENTS'] || []), ...topUp.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
+        }));
+      }
+    }
+
+    // ── SPARINGI AI: SYMULACJA W TLE (8 i 9 lipca) ───────────────────────────
+    if ((dateToProcess.getMonth() === 6 && (dateToProcess.getDate() === 8 || dateToProcess.getDate() === 9)) || (dateToProcess.getMonth() === 0 && dateToProcess.getDate() >= 2 && dateToProcess.getDate() <= 18)) {
+      const dayDate = dateToProcess.getDate();
+      const dayMonth = dateToProcess.getMonth();
+      const dayYear = dateToProcess.getFullYear();
+      const alreadySimulated = aiFriendlyReports.some(r => {
+        const d = r.date instanceof Date ? r.date : new Date(r.date);
+        return isSameFriendlyDate(d, dateToProcess);
+      });
+      if (!alreadySimulated && aiFriendlyPairs.length > 0) {
+        const dayPairs = aiFriendlyPairs.filter(p => {
+          const d = p.date instanceof Date ? p.date : new Date(p.date);
+          return isSameFriendlyDate(d, dateToProcess);
+        });
+        const newReports: AiFriendlyMatchReport[] = [];
+        const generatedSquads: Record<string, Player[]> = {};
+        dayPairs.forEach((pair, idx) => {
+          const homePlayers = getOrGenerateSquad(pair.homeTeamId);
+          const awayPlayers = getOrGenerateSquad(pair.awayTeamId);
+        if (homePlayers.length < 11 || awayPlayers.length < 11) return;
+          generatedSquads[pair.homeTeamId] = homePlayers;
+          generatedSquads[pair.awayTeamId] = awayPlayers;
+          const homeClub = clubs.find(c => c.id === pair.homeTeamId);
+          const awayClub = clubs.find(c => c.id === pair.awayTeamId);
+          const homeCoach = homeClub?.coachId ? (coaches[homeClub.coachId] ?? null) : null;
+          const awayCoach = awayClub?.coachId ? (coaches[awayClub.coachId] ?? null) : null;
+          const pairSeed = matchSimulationSeed + pair.id.length + idx * 137;
+          newReports.push(AiFriendlyMatchSimulator.simulate(pair, homePlayers, awayPlayers, homeCoach, awayCoach, pairSeed));
+        });
+        if (newReports.length > 0) {
+          setPlayers(prev => applyAiFriendlyStatsToPlayers(prev, newReports, generatedSquads));
+          setAiFriendlyReports(prev => [...prev, ...newReports]);
+          newReports.forEach(r => {
+            const cardTypeMap: Record<string, 'YELLOW' | 'RED' | 'SECOND_YELLOW'> = {
+              YELLOW_CARD: 'YELLOW',
+              RED_CARD: 'RED',
+              SECOND_YELLOW: 'SECOND_YELLOW',
+            };
+            MatchHistoryService.logMatch({
+              matchId: r.pairId,
+              date: (r.date instanceof Date ? r.date : new Date(r.date)).toISOString(),
+              season: seasonNumber,
+              competition: 'FRIENDLY',
+              homeTeamId: r.homeTeamId,
+              awayTeamId: r.awayTeamId,
+              homeScore: r.homeScore,
+              awayScore: r.awayScore,
+              addedTime: r.extraTime,
+              goals: r.scorers.map(s => ({
+                playerId: s.playerId,
+                playerName: s.playerName,
+                minute: s.minute,
+                teamId: s.teamId,
+                isPenalty: s.isPenalty,
+                assistantId: s.assistId,
+                assistantName: s.assistName,
+                isMiss: s.isMiss,
+              })),
+              cards: r.cards.map(c => ({
+                playerId: c.playerId,
+                playerName: c.playerName,
+                minute: c.minute,
+                teamId: c.teamId,
+                type: cardTypeMap[c.type] ?? 'YELLOW',
+              })),
+              substitutions: r.substitutions.map(s => ({
+                playerOutId: s.playerOutId,
+                playerOutName: s.playerOutName,
+                playerInId: s.playerInId,
+                playerInName: s.playerInName,
+                minute: s.minute,
+                teamId: s.teamId,
+              })),
+              injuries: r.injuries.map(i => ({
+                playerId: i.playerId,
+                playerName: i.playerName,
+                minute: i.minute,
+                teamId: i.teamId,
+                severity: i.severity as InjurySeverity,
+                days: i.days,
+                type: i.type,
+              })),
+              ratings: r.ratings,
+              homeTacticId: r.homeTacticId,
+              awayTacticId: r.awayTacticId,
+              homeLineup: r.homeStartingXI,
+              awayLineup: r.awayStartingXI,
+            });
+          });
+          const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+          const dateLabel = `${dayDate} ${monthNames[dayMonth]}`;
+          const friendlyMatches = newReports.map(r => {
+            const hClub = clubs.find(c => c.id === r.homeTeamId);
+            const aClub = clubs.find(c => c.id === r.awayTeamId);
+            const hName = hClub?.name ?? r.homeTeamId;
+            const aName = aClub?.name ?? r.awayTeamId;
+            return {
+              homeName: hName,
+              awayName: aName,
+              homeScore: r.homeScore,
+              awayScore: r.awayScore,
+              homeCountry: hClub?.country ?? (hClub?.leagueId?.startsWith('L_PL') ? 'POL' : undefined),
+              awayCountry: aClub?.country ?? (aClub?.leagueId?.startsWith('L_PL') ? 'POL' : undefined),
+            };
+          });
+          const lines = friendlyMatches.map(match => `${match.homeName} ${match.homeScore}-${match.awayScore} ${match.awayName}`);
+          const friendlyNewsMail: MailMessage = {
+            id: `MAIL_AI_FRIENDLY_${dayYear}_${dayMonth}_${dayDate}`,
+            sender: 'Serwis Sportowy',
+            role: 'Redakcja',
+            subject: `Wyniki sparingów — ${dateLabel}`,
+            body: `Wyniki sparingów z dnia ${dateLabel}:\n\n${lines.join('\n')}`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.MEDIA,
+            priority: 20,
+            metadata: {
+              type: 'AI_FRIENDLY_REPORT_LINK',
+              reportDateKey: `${dayYear}-${String(dayMonth + 1).padStart(2, '0')}-${String(dayDate).padStart(2, '0')}`,
+              matches: friendlyMatches,
+            },
+          };
+          prependUniqueMessages([friendlyNewsMail]);
+        }
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
+    if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
+      const foreignBackgroundClubs = clubs.filter(isForeignBackgroundStatsClub);
+      if (foreignBackgroundClubs.length > 0) {
+        setPlayers(prev => {
+          let changed = false;
+          const next = { ...prev };
+          foreignBackgroundClubs.forEach(club => {
+            const squad = prev[club.id] ?? generatedSquadCacheRef.current[club.id];
+            if (!squad?.length) return;
+            const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
+            generatedSquadCacheRef.current[club.id] = updatedSquad;
+            if (prev[club.id]) {
+              next[club.id] = updatedSquad;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
+    }
+
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_INVITE) && userTeamId && !isResigned) {
+      const campInviteKey = `WINTER_CAMP_INVITE_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campInviteKey)) {
+        sentMailIdsRef.current.add(campInviteKey);
+        const priceSeed = sessionSeed + dateToProcess.getTime() % 100000;
+        const prices = generateLocationPrices(priceSeed);
+        const spaCost = generateSpaCost(priceSeed);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? {
+          ...c,
+          winterCamp: {
+            location: null,
+            cost: 0,
+            program: null,
+            intensity: null,
+            spaOption: false,
+            isDeclined: false,
+            locationPrices: prices,
+            spaCost,
+            inviteSent: true,
+            programChosen: false,
+            effectsApplied: false,
+          },
+        } : c));
+        const inviteMail = MailService.createFromTemplate('winter_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
+        if (inviteMail) {
+          inviteMail.date = new Date(dateToProcess);
+          inviteMail.metadata = { type: 'WINTER_CAMP_INVITE', expiryDate: new Date(dateToProcess.getFullYear(), 11, 23).toISOString() };
+          setMessages(prev => [inviteMail, ...prev]);
+        }
+        setWinterCampInvitePending(true);
+        setTargetJumpTime(null);
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: TERMIN WYBORU (23 grudnia) — auto-odrzucenie ────────────
+    if (dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 23 && userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub?.winterCamp && !userClub.winterCamp.isDeclined && userClub.winterCamp.location === null) {
+        setClubs(prev => prev.map(c => c.id === userTeamId && c.winterCamp
+          ? { ...c, winterCamp: { ...c.winterCamp, isDeclined: true } }
+          : c));
+        setWinterCampInvitePending(false);
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: PROGRAM (22 grudnia) ───────────────────────────────────
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_PROGRAM) && userTeamId && !isResigned) {
+      const campProgramKey = `WINTER_CAMP_PROGRAM_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campProgramKey)) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.winterCamp && !userClub.winterCamp.isDeclined && userClub.winterCamp.location !== null) {
+          sentMailIdsRef.current.add(campProgramKey);
+          const squad = players[userTeamId] || [];
+          const suggestion = getAssistantSuggestion(squad, userClub);
+          const templateId = suggestion.program === 'tactical' ? 'winter_camp_assistant_tactical' : 'winter_camp_assistant_fitness';
+          const assistantMail = MailService.createFromTemplate(templateId, { CLUB: userClub.name });
+          if (assistantMail) {
+            assistantMail.date = new Date(dateToProcess);
+            setMessages(prev => [assistantMail, ...prev]);
+          }
+          setWinterCampProgramPending(true);
+          setTargetJumpTime(null);
+        }
+      }
+    }
+
+    // ── OBÓZ ZIMOWY: ZAKOŃCZENIE (15 stycznia) ───────────────────────────────
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_END) && userTeamId) {
+      const winterYear = dateToProcess.getFullYear();
+      const aiCampDecisions = clubs
+        .filter(c => c.id !== userTeamId && isPolishLeagueClub(c) && c.aiWinterCampDecisionYear !== winterYear)
+        .map(club => {
+          const cost = getAiWinterCampCost(club);
+          const formAdjustment = getAiWinterCampFormAdjustment(club, cost);
+          return {
+            clubId: club.id,
+            cost,
+            formAdjustment,
+            type: formAdjustment >= 0 ? 'AWAY' as const : 'LOCAL' as const,
+          };
+        });
+
+      if (aiCampDecisions.length > 0) {
+        setPlayers(prev => {
+          let changed = false;
+          const next = { ...prev };
+          aiCampDecisions.forEach(decision => {
+            const squad = prev[decision.clubId] ?? generatedSquadCacheRef.current[decision.clubId];
+            if (!squad?.length) return;
+            const updatedSquad = squad.map(player => PlayerFormService.withUpdatedForm(player, decision.formAdjustment));
+            generatedSquadCacheRef.current[decision.clubId] = updatedSquad;
+            if (prev[decision.clubId]) {
+              next[decision.clubId] = updatedSquad;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+
+        setClubs(prev => prev.map(club => {
+          const decision = aiCampDecisions.find(item => item.clubId === club.id);
+          if (!decision) return club;
+          const attendsCamp = decision.type === 'AWAY';
+          const nextBudget = attendsCamp ? Math.max(0, club.budget - decision.cost) : club.budget;
+          const financeEntry = attendsCamp ? {
+            id: `AI_WINTER_CAMP_${winterYear}_${club.id}`,
+            date: dateToProcess.toISOString().split('T')[0],
+            amount: -decision.cost,
+            type: 'EXPENSE' as const,
+            description: 'Obóz zimowy AI',
+            previousBalance: club.budget,
+          } : null;
+          return {
+            ...club,
+            budget: nextBudget,
+            morale: Math.max(0, Math.min(100, (club.morale ?? 70) + (attendsCamp ? 1 : -2))),
+            aiWinterCampDecisionYear: winterYear,
+            aiWinterCampFormAdjustment: decision.formAdjustment,
+            aiWinterCampType: decision.type,
+            financeHistory: financeEntry ? [financeEntry, ...(club.financeHistory || [])].slice(0, 50) : club.financeHistory,
+          };
+        }));
+      }
+    }
+
+    if (hasCompetitionToday(CompetitionType.WINTER_CAMP_END) && userTeamId && !isResigned) {
+      const campEndKey = `WINTER_CAMP_END_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campEndKey)) {
+        sentMailIdsRef.current.add(campEndKey);
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.winterCamp && !userClub.winterCamp.effectsApplied) {
+          const squad = players[userTeamId] || [];
+          const effectSeed = sessionSeed + dateToProcess.getTime() % 100000 + 777;
+          const { effects, moraleDelta } = applyWinterCampEffects(squad, userClub.winterCamp, effectSeed);
+          const injuredCount = effects.filter(e => e.injured).length;
+          const improvedCount = effects.filter(e => Object.keys(e.attrChanges).some(k => (e.attrChanges as any)[k] > (squad.find(p => p.id === e.playerId)?.attributes as any)[k])).length;
+          const locationLabel = userClub.winterCamp.location
+            ? ({ turkey: 'Turcja', cyprus: 'Cypr', greece: 'Grecja', poland: 'Polska' } as Record<string,string>)[userClub.winterCamp.location]
+            : 'Polska';
+          const programLabel = userClub.winterCamp.program
+            ? ({ fitness: 'Kondycyjny', tactical: 'Taktyczny', technical: 'Techniczny', strength: 'Siłowy', recovery: 'Regeneracyjny' } as Record<string,string>)[userClub.winterCamp.program]
+            : 'Brak';
+          const intensityLabel = userClub.winterCamp.intensity
+            ? ({ light: 'Lekka', moderate: 'Umiarkowana', intense: 'Intensywna' } as Record<string,string>)[userClub.winterCamp.intensity]
+            : 'Brak';
+          const moraleSign = moraleDelta >= 0 ? `+${moraleDelta}` : `${moraleDelta}`;
+          const reportTemplateId = (userClub.winterCamp.isDeclined || !userClub.winterCamp.programChosen) ? 'winter_camp_report_declined' : 'winter_camp_report_success';
+          const reportMail = MailService.createFromTemplate(reportTemplateId, {
+            CLUB: userClub.name,
+            CAMP_LOCATION: locationLabel,
+            CAMP_PROGRAM: programLabel,
+            CAMP_INTENSITY: intensityLabel,
+            IMPROVED_COUNT: String(improvedCount),
+            INJURY_COUNT: String(injuredCount),
+            MORALE_CHANGE: moraleSign,
+          });
+          if (reportMail) {
+            reportMail.date = new Date(dateToProcess);
+            setMessages(prev => [reportMail, ...prev]);
+          }
+          setPlayers(prev => {
+            const updatedSquad = (prev[userTeamId] || []).map(player => {
+              const effect = effects.find(e => e.playerId === player.id);
+              if (!effect) return player;
+              const seasonalChanges = { ...(player.stats?.seasonalChanges || {}) };
+              let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+                seasonalChanges,
+                player.stats?.seasonalGrowthPoints
+              );
+              const newAttrs = { ...player.attributes };
+              Object.entries(effect.attrChanges).forEach(([rawKey, rawValue]) => {
+                const key = rawKey as keyof import('../types').PlayerAttributes;
+                const nextValue = rawValue as number;
+                const currentValue = player.attributes[key];
+                if (nextValue > currentValue) {
+                  const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+                    clubReputation: userClub.reputation,
+                  });
+                  const attrRoom = Math.max(0, 2 - (seasonalChanges[key] || 0));
+                  const seasonRoom = Math.max(0, growthCap - seasonalGrowthPoints);
+                  const appliedDelta = Math.min(nextValue - currentValue, attrRoom, seasonRoom);
+                  if (appliedDelta <= 0) return;
+                  seasonalGrowthPoints += appliedDelta;
+                  seasonalChanges[key] = (seasonalChanges[key] || 0) + appliedDelta;
+                  newAttrs[key] = currentValue + appliedDelta;
+                  return;
+                }
+                newAttrs[key] = nextValue;
+              });
+              const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
+              const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
+              const newOverall = PlayerAttributesGenerator.calculateOverall(newAttrs, player.position);
+              const updatedMarketValue = FinanceService.calculateMarketValue(
+                { ...player, attributes: newAttrs, overallRating: newOverall },
+                userClub.reputation,
+                parseInt(userClub.leagueId?.split('_')[2] || '1') || 1,
+                userClub.country
+              );
+              const nextStats = {
+                ...player.stats,
+                seasonalChanges,
+                seasonalGrowthPoints,
+              };
+              const nextPlayer = { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
+              if (effect.injured) {
+                return PlayerFormService.withUpdatedForm({ ...nextPlayer, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } }, effect.formDelta ?? 0);
+              }
+              return PlayerFormService.withUpdatedForm(nextPlayer, effect.formDelta ?? 0);
+            });
+            return { ...prev, [userTeamId]: updatedSquad };
+          });
+          setClubs(prev => prev.map(c => {
+            if (c.id !== userTeamId) return c;
+            const campCost = c.winterCamp?.cost ?? 0;
+            const newBudget = Math.max(0, c.budget - campCost);
+            const financeEntry = campCost > 0 ? {
+              id: Math.random().toString(36).substr(2, 9),
+              date: dateToProcess.toISOString().split('T')[0],
+              amount: -campCost,
+              type: 'EXPENSE' as const,
+              description: `Obóz zimowy (${locationLabel})`,
+              previousBalance: c.budget,
+            } : null;
+            return {
+              ...c,
+              budget: newBudget,
+              morale: Math.min(100, Math.max(0, (c.morale ?? 70) + moraleDelta)),
+              financeHistory: financeEntry ? [financeEntry, ...(c.financeHistory || [])].slice(0, 50) : c.financeHistory,
+              winterCamp: c.winterCamp ? { ...c.winterCamp, effectsApplied: true } : c.winterCamp,
+            };
+          }));
+        }
+      }
+    }
+
+    // Zimowe sparingi: kara do formy za zbyt mało meczów kontrolnych.
+    if (dateToProcess.getMonth() === 0 && dateToProcess.getDate() === 19 && userTeamId && !isResigned) {
+      const winterYear = dateToProcess.getFullYear();
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub?.winterCamp?.winterFriendlyFormPenaltyYear !== winterYear) {
+        const winterFriendliesPlayed = allFixtures.filter(f => {
+          if (f.leagueId !== CompetitionType.FRIENDLY || f.status !== MatchStatus.PLAYED) return false;
+          if (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId) return false;
+          const fixtureDate = f.date instanceof Date ? f.date : new Date(f.date);
+          return fixtureDate.getFullYear() === winterYear && fixtureDate.getMonth() === 0 && fixtureDate.getDate() >= 2 && fixtureDate.getDate() <= 18;
+        }).length;
+        const friendlyFormPenalty = winterFriendliesPlayed >= 4
+          ? 0
+          : winterFriendliesPlayed === 3
+            ? -4
+            : winterFriendliesPlayed === 2
+              ? -8
+              : winterFriendliesPlayed === 1
+                ? -13
+                : -18;
+
+        if (friendlyFormPenalty < 0) {
+          setPlayers(prev => ({
+            ...prev,
+            [userTeamId]: (prev[userTeamId] || []).map(player => PlayerFormService.withUpdatedForm(player, friendlyFormPenalty)),
+          }));
+        }
+
+        setClubs(prev => prev.map(c => c.id === userTeamId
+          ? { ...c, winterCamp: c.winterCamp ? { ...c.winterCamp, winterFriendlyFormPenaltyYear: winterYear } : c.winterCamp }
+          : c
+        ));
+      }
+    }
+
+    // ── OBÓZ LETNI: ZAPROSZENIE (19 maja) ───────────────────────────────────
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_INVITE) && userTeamId && !isResigned) {
+      const campInviteKey = `SUMMER_CAMP_INVITE_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campInviteKey)) {
+        sentMailIdsRef.current.add(campInviteKey);
+        const priceSeed = sessionSeed + dateToProcess.getTime() % 100000 + 1000;
+        const prices = generateSummerLocationPrices(priceSeed);
+        const spaCost = generateSummerSpaCost(priceSeed);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? {
+          ...c,
+          summerCamp: {
+            location: null,
+            cost: 0,
+            program: null,
+            intensity: null,
+            spaOption: false,
+            isDeclined: false,
+            locationPrices: prices,
+            spaCost,
+            inviteSent: true,
+            programChosen: false,
+            effectsApplied: false,
+          },
+        } : c));
+        const inviteMail = MailService.createFromTemplate('summer_camp_invite', { CLUB: clubs.find(c => c.id === userTeamId)?.name || '' });
+        if (inviteMail) {
+          inviteMail.date = new Date(dateToProcess);
+          inviteMail.metadata = { type: 'SUMMER_CAMP_INVITE', expiryDate: new Date(dateToProcess.getFullYear(), 4, 19).toISOString() };
+          setMessages(prev => [inviteMail, ...prev]);
+        }
+        setSummerCampInvitePending(true);
+      }
+    }
+
+    // ── OBÓZ LETNI: PROGRAM (5 czerwca) ─────────────────────────────────────
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_PROGRAM) && userTeamId && !isResigned) {
+      const campProgramKey = `SUMMER_CAMP_PROGRAM_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campProgramKey)) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.summerCamp && !userClub.summerCamp.isDeclined && userClub.summerCamp.location !== null) {
+          sentMailIdsRef.current.add(campProgramKey);
+          const squad = players[userTeamId] || [];
+          const suggestion = getSummerAssistantSuggestion(squad, userClub);
+          const templateId = suggestion.program === 'tactical' ? 'summer_camp_assistant_tactical' : 'summer_camp_assistant_fitness';
+          const assistantMail = MailService.createFromTemplate(templateId, { CLUB: userClub.name });
+          if (assistantMail) setMessages(prev => [assistantMail, ...prev]);
+          setSummerCampProgramPending(true);
+        }
+      }
+    }
+
+    // ── OBÓZ LETNI: ZAKOŃCZENIE (28 czerwca) ────────────────────────────────
+    if (hasCompetitionToday(CompetitionType.SUMMER_CAMP_END) && userTeamId && !isResigned) {
+      const campEndKey = `SUMMER_CAMP_END_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(campEndKey)) {
+        sentMailIdsRef.current.add(campEndKey);
+        const userClub = clubs.find(c => c.id === userTeamId);
+        if (userClub?.summerCamp && !userClub.summerCamp.effectsApplied) {
+          const squad = players[userTeamId] || [];
+          const effectSeed = sessionSeed + dateToProcess.getTime() % 100000 + 888;
+          const { effects, moraleDelta } = applySummerCampEffects(squad, userClub.summerCamp, effectSeed);
+          const injuredCount = effects.filter(e => e.injured).length;
+          const improvedCount = effects.filter(e => Object.keys(e.attrChanges).some(k => (e.attrChanges as any)[k] > (squad.find(p => p.id === e.playerId)?.attributes as any)[k])).length;
+          const locationLabel = userClub.summerCamp.location
+            ? ({ poland: 'Polska', czech_republic: 'Czechy', slovakia: 'Słowacja', austria: 'Austria', switzerland: 'Szwajcaria' } as Record<string,string>)[userClub.summerCamp.location]
+            : 'Polska';
+          const programLabel = userClub.summerCamp.program
+            ? ({ fitness: 'Kondycyjny', tactical: 'Taktyczny', technical: 'Techniczny', strength: 'Siłowy', recovery: 'Regeneracyjny' } as Record<string,string>)[userClub.summerCamp.program]
+            : 'Brak';
+          const intensityLabel = userClub.summerCamp.intensity
+            ? ({ light: 'Lekka', moderate: 'Umiarkowana', intense: 'Intensywna' } as Record<string,string>)[userClub.summerCamp.intensity]
+            : 'Brak';
+          const moraleSign = moraleDelta >= 0 ? `+${moraleDelta}` : `${moraleDelta}`;
+          const reportTemplateId = (userClub.summerCamp.isDeclined || !userClub.summerCamp.programChosen) ? 'summer_camp_report_declined' : 'summer_camp_report_success';
+          const reportMail = MailService.createFromTemplate(reportTemplateId, {
+            CLUB: userClub.name,
+            CAMP_LOCATION: locationLabel,
+            CAMP_PROGRAM: programLabel,
+            CAMP_INTENSITY: intensityLabel,
+            IMPROVED_COUNT: String(improvedCount),
+            INJURY_COUNT: String(injuredCount),
+            MORALE_CHANGE: moraleSign,
+          });
+          if (reportMail) setMessages(prev => [reportMail, ...prev]);
+          setPlayers(prev => {
+            const updatedSquad = (prev[userTeamId] || []).map(player => {
+              const effect = effects.find(e => e.playerId === player.id);
+              if (!effect) return player;
+              const seasonalChanges = { ...(player.stats?.seasonalChanges || {}) };
+              let seasonalGrowthPoints = PlayerDevelopmentService.getSeasonalGrowthUsed(
+                seasonalChanges,
+                player.stats?.seasonalGrowthPoints
+              );
+              const newAttrs = { ...player.attributes };
+              Object.entries(effect.attrChanges).forEach(([rawKey, rawValue]) => {
+                const key = rawKey as keyof import('../types').PlayerAttributes;
+                const nextValue = rawValue as number;
+                const currentValue = player.attributes[key];
+                if (nextValue > currentValue) {
+                  const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(player, {
+                    clubReputation: userClub.reputation,
+                  });
+                  const attrRoom = Math.max(0, 2 - (seasonalChanges[key] || 0));
+                  const seasonRoom = Math.max(0, growthCap - seasonalGrowthPoints);
+                  const appliedDelta = Math.min(nextValue - currentValue, attrRoom, seasonRoom);
+                  if (appliedDelta <= 0) return;
+                  seasonalGrowthPoints += appliedDelta;
+                  seasonalChanges[key] = (seasonalChanges[key] || 0) + appliedDelta;
+                  newAttrs[key] = currentValue + appliedDelta;
+                  return;
+                }
+                newAttrs[key] = nextValue;
+              });
+              const newDebt = Math.max(0, Math.min(100, (player.fatigueDebt ?? 0) + effect.fatigueDebtDelta));
+              const newCondition = Math.max(1, Math.min(100, player.condition + (effect.conditionDelta ?? 0)));
+              const newOverall = PlayerAttributesGenerator.calculateOverall(newAttrs, player.position);
+              const updatedMarketValue = FinanceService.calculateMarketValue(
+                { ...player, attributes: newAttrs, overallRating: newOverall },
+                userClub.reputation,
+                parseInt(userClub.leagueId?.split('_')[2] || '1') || 1,
+                userClub.country
+              );
+              const nextStats = {
+                ...player.stats,
+                seasonalChanges,
+                seasonalGrowthPoints,
+              };
+              if (effect.injured) {
+                return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition, health: { status: 'INJURED' as any, injury: { type: 'Kontuzja obozowa', daysRemaining: 7 + Math.floor(Math.random() * 8), severity: 'LIGHT' as any, injuryDate: dateToProcess.toISOString().split('T')[0], totalDays: 7 + Math.floor(Math.random() * 8) } } };
+              }
+              return { ...player, attributes: newAttrs, overallRating: newOverall, marketValue: updatedMarketValue, stats: nextStats, fatigueDebt: newDebt, condition: newCondition };
+            });
+            return { ...prev, [userTeamId]: updatedSquad };
+          });
+          setClubs(prev => prev.map(c => {
+            if (c.id !== userTeamId) return c;
+            const campCost = c.summerCamp?.cost ?? 0;
+            const newBudget = Math.max(0, c.budget - campCost);
+            const financeEntry = campCost > 0 ? {
+              id: Math.random().toString(36).substr(2, 9),
+              date: dateToProcess.toISOString().split('T')[0],
+              amount: -campCost,
+              type: 'EXPENSE' as const,
+              description: `Obóz letni (${locationLabel})`,
+              previousBalance: c.budget,
+            } : null;
+            return {
+              ...c,
+              budget: newBudget,
+              morale: Math.min(100, Math.max(0, (c.morale ?? 70) + moraleDelta)),
+              financeHistory: financeEntry ? [financeEntry, ...(c.financeHistory || [])].slice(0, 50) : c.financeHistory,
+              summerCamp: c.summerCamp ? { ...c.summerCamp, effectsApplied: true } : c.summerCamp,
+            };
+          }));
+        }
+      }
+    }
+
+    let pendingSponsorAmount: number | null = null;
+    let pendingSponsorDate: string | null = null;
+    let pendingSponsorNextCheckDate: string | null = null;
+    let pendingNoSponsorNextCheckDate: string | null = null;
+
+    // ── SPONSOR: losowe sprawdzenie co kilkanaście dni ───────────────────────
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub && !userClub.sponsorAcquiredThisSeason) {
+        const todayStr = dateToProcess.toISOString().split('T')[0];
+        const shouldCheck = !userClub.nextSponsorCheckDate || todayStr >= userClub.nextSponsorCheckDate;
+        if (shouldCheck) {
+          const mgmt = userClub.management;
+          const avg = mgmt
+            ? (mgmt.cfo.doswiadczenie + mgmt.cfo.zdolnosciMarketingowe +
+               mgmt.marketingDirector.doswiadczenie + mgmt.marketingDirector.zdolnosciMarketingowe) / 4
+            : 5;
+          const probability = FinanceService.getSponsorCheckProbability(avg);
+          const nextCheckDays = 10 + Math.floor(Math.random() * 11);
+          const nextCheckDate = new Date(dateToProcess);
+          nextCheckDate.setDate(nextCheckDate.getDate() + nextCheckDays);
+          const nextCheckStr = nextCheckDate.toISOString().split('T')[0];
+          if (Math.random() < probability) {
+            const amount = FinanceService.getSponsorAmount(avg);
+            const sponsorMailKey = `SPONSOR_${seasonNumber}`;
+            pendingSponsorAmount = amount;
+            pendingSponsorDate = todayStr;
+            pendingSponsorNextCheckDate = nextCheckStr;
+            if (!sentMailIdsRef.current.has(sponsorMailKey)) {
+              sentMailIdsRef.current.add(sponsorMailKey);
+              const sponsorMail: MailMessage = {
+                id: `sponsor_${Date.now()}`,
+                sender: 'Dział Marketingu',
+                role: 'Dyrektor Marketingu',
+                subject: 'Nowy sponsor klubu',
+                body: `Z przyjemnością informujemy, że udało nam się pozyskać nowego sponsora dla naszego klubu. Kontrakt wchodzi w życie natychmiast, a środki zostały zasilone na konto klubu. Szczegóły finansowe dostępne są w wykazie finansowym.`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.MEDIA,
+                priority: 2,
+              };
+              setMessages(prev => [sponsorMail, ...prev]);
+            }
+          } else {
+            pendingNoSponsorNextCheckDate = nextCheckStr;
+          }
+        }
+      }
+    }
+
+    // ── Symulacja meczów reprezentacji ──────────────────────────────────────
+    // Gdy primaryEvent to NATIONAL_TEAM_MATCH: pobierz mecze z NT_SCHEDULE_BY_YEAR,
+    // zasymuluj wyniki w tle i wyświetl je graczowi w NationalTeamResultsView.
+    // Data zostanie przesunięta dopiero gdy gracz kliknie "Kontynuuj" w tym widoku.
+    // Używamy processedDrawIds żeby nie symulować ponownie przy tym samym slocie.
+    if (dateToProcess.getFullYear() === 2025 && dateToProcess.getMonth() === 11 && dateToProcess.getDate() === 30 && wcqPlayoffState?.drawCompleted) {
+      const marchFriendlyScheduleKey = `MARCH_2026_WORLD_NT_FRIENDLY_SCHEDULE_${seasonNumber}`;
+      if (!sentMailIdsRef.current.has(marchFriendlyScheduleKey)) {
+        const matchDays = WorldNationalFriendlyService.generatePlayoffWindowMatchDays(
+          nationalTeams,
+          wcqPlayoffState,
+          matchSimulationSeed
+        );
+        const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+        const scheduleLines = matchDays.flatMap(matchDay => [
+          `${matchDay.day} ${monthNames[matchDay.month]}`,
+          ...matchDay.matches.map(match => `- ${match.home} vs ${match.away}`),
+          '',
+        ]);
+        if (scheduleLines.length > 0) {
+          sentMailIdsRef.current.add(marchFriendlyScheduleKey);
+          const scheduleMail: MailMessage = {
+            id: marchFriendlyScheduleKey,
+            sender: 'FIFA',
+            role: 'Departament Meczów Międzynarodowych',
+            subject: 'Terminarz marcowych meczów towarzyskich',
+            body: `Zatwierdzono terminarz meczów towarzyskich reprezentacji na marcowe okno barażowe 2026.\n\nW sparingach zagrają reprezentacje spoza Europy oraz europejskie kadry, które nie uczestniczą w barażach MŚ.\n\n${scheduleLines.join('\n').trim()}`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.MEDIA,
+            priority: 18,
+          };
+          setMessages(prev => [scheduleMail, ...prev]);
+        }
+      }
+    }
+
+    if (primaryEvent?.kind === EventKind.NATIONAL_TEAM_MATCH &&
+        !processedDrawIds.includes(primaryEvent.slot.id)) {
+      const scheduledMatchDay = getNTMatchDayForDate(dateToProcess, dateToProcess.getFullYear());
+      const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+      if (!uefaNationalRankingState) setUefaNationalRankingState(ensuredUefaRankingState);
+      const latestCompletedNationsLeagueEdition = nationsLeagueState?.completed
+        ? nationsLeagueState
+        : nationsLeagueArchive.find(entry => entry.completed) ?? null;
+      const ensuredNationsLeagueState = NationsLeagueService.ensureState(
+        nationsLeagueState,
+        dateToProcess,
+        nationalTeams,
+        ensuredUefaRankingState,
+        latestCompletedNationsLeagueEdition
+      );
+      const nationsLeagueMatchDay = scheduledMatchDay
+        ? null
+        : NationsLeagueService.getMatchDayForDate(ensuredNationsLeagueState, dateToProcess);
+      const ensuredEuroQualifiersState = EuroQualifiersService.ensurePlayoffsReady(
+        euroQualifiersState,
+        dateToProcess,
+        ensuredUefaRankingState
+      );
+      if (ensuredEuroQualifiersState !== euroQualifiersState) {
+        setEuroQualifiersState(ensuredEuroQualifiersState);
+      }
+      const euroQualifiersMatchDay = EuroQualifiersService.getMatchDayForDate(ensuredEuroQualifiersState, dateToProcess);
+      const worldCupQualifiersMatchDay = WorldCupQualifiersService.getMatchDayForDate(worldCupQualifiersState, dateToProcess);
+      const mergeMatchDays = (matchDays: (NTMatchDay | null)[]): NTMatchDay | null => {
+        const active = matchDays.filter((item): item is NTMatchDay => !!item);
+        if (active.length === 0) return null;
+        const usedTeams = new Set<string>();
+        const matches = active.flatMap(item => item.matches).filter(match => {
+          if (usedTeams.has(match.home) || usedTeams.has(match.away)) return false;
+          usedTeams.add(match.home);
+          usedTeams.add(match.away);
+          return true;
+        });
+        if (matches.length === 0 && !active.some(item => item.eventType)) return null;
+        return {
+          day: dateToProcess.getDate(),
+          month: dateToProcess.getMonth(),
+          competitionLabel: active.map(item => item.competitionLabel).join(' / '),
+          matches,
+          eventType: active.find(item => item.eventType)?.eventType,
+        };
+      };
+      const matchDay = mergeMatchDays([scheduledMatchDay, nationsLeagueMatchDay, euroQualifiersMatchDay, worldCupQualifiersMatchDay]);
+      const isNationsLeagueMatchDay = !!nationsLeagueMatchDay;
+      const isEuroQualifiersMatchDay = !!euroQualifiersMatchDay;
+      const isWorldCupQualifiersMatchDay = !!worldCupQualifiersMatchDay;
+      if (matchDay) {
+        const dateSeed = dateToProcess.getTime();
+        const ntCareerSeed = buildCareerScopedSeed(
+          dateToProcess,
+          matchSimulationSeed,
+          `NT_${matchDay.eventType ?? 'GROUP_MATCH'}_${seasonNumber}`
+        );
+
+        // ── Baraże MŚ 2026: Losowanie (29 listopada 2025) ──────────────────────
+        const simulateMarchPlayoffFriendlies = (basePlayers: Record<string, Player[]>): Record<string, Player[]> | null => {
+          const friendlyMatchDay = WorldNationalFriendlyService.generatePlayoffWindowMatchDay(
+            dateToProcess,
+            nationalTeams,
+            wcqPlayoffState,
+            matchSimulationSeed
+          );
+          if (!friendlyMatchDay) return null;
+
+          const friendlySimulation = NationalTeamSimulator.simulateMatchDay(
+            friendlyMatchDay,
+            dateSeed + 202603,
+            dateToProcess,
+            nationalTeams,
+            basePlayers,
+            coaches,
+            seasonNumber,
+            matchSimulationSeed
+          );
+          friendlySimulation.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+          setLastNTMatchResults(friendlySimulation.results);
+
+          const resultsMailKey = `MARCH_2026_WORLD_NT_FRIENDLY_RESULTS_${dateToProcess.getDate()}_${seasonNumber}`;
+          if (!sentMailIdsRef.current.has(resultsMailKey) && friendlySimulation.results.length > 0) {
+            sentMailIdsRef.current.add(resultsMailKey);
+            const monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+            const dateLabel = `${dateToProcess.getDate()} ${monthNames[dateToProcess.getMonth()]}`;
+            const friendlyResultMatches = friendlySimulation.results.map(result => ({
+              matchId: result.matchId,
+              homeName: result.home,
+              awayName: result.away,
+              homeScore: result.homeGoals,
+              awayScore: result.awayGoals,
+            }));
+            const resultLines = friendlyResultMatches.map(match => `${match.homeName} ${match.homeScore}-${match.awayScore} ${match.awayName}`);
+            const resultsMail: MailMessage = {
+              id: resultsMailKey,
+              sender: 'FIFA',
+              role: 'Serwis Meczów Międzynarodowych',
+              subject: `Wyniki meczów towarzyskich - ${dateLabel}`,
+              body: `Rozegrano mecze towarzyskie reprezentacji z dnia ${dateLabel}:\n\n${resultLines.join('\n')}`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.MEDIA,
+              priority: 18,
+              metadata: { type: 'NATIONAL_TEAM_FRIENDLY_RESULTS', matches: friendlyResultMatches },
+            };
+            setMessages(prev => [resultsMail, ...prev]);
+          }
+
+          return friendlySimulation.updatedPlayers;
+        };
+
+        if (matchDay.eventType === 'WCQ_PLAYOFF_DRAW') {
+          const playoffState = WCQPlayoffService.conductDraw(
+            nationalTeams,
+            dateToProcess.getFullYear(),
+            seasonNumber,
+            ntCareerSeed
+          );
+          setWcqPlayoffState(playoffState);
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_DRAW_VIEW);
+          return;
+        }
+
+        // ── Baraże MŚ 2026: Półfinały (17 marca 2026) ─────────────────────────
+        if (matchDay.eventType === 'WCQ_PLAYOFF_SF') {
+          if (wcqPlayoffState) {
+            const playoffSimulation = WCQPlayoffService.simulateSF(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
+            setWcqPlayoffState(playoffSimulation.state);
+            const friendlyUpdatedPlayers = simulateMarchPlayoffFriendlies(playoffSimulation.updatedPlayers);
+            setPlayers(friendlyUpdatedPlayers ?? playoffSimulation.updatedPlayers);
+            const playoffSfMailKey = `WCQ_PLAYOFF_POLAND_SF_${seasonNumber}`;
+            if (!sentMailIdsRef.current.has(playoffSfMailKey)) {
+              const playoffSfMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'SF', dateToProcess);
+              if (playoffSfMail) {
+                sentMailIdsRef.current.add(playoffSfMailKey);
+                setMessages(prev => [playoffSfMail, ...prev]);
+              }
+            }
+          }
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_RESULTS_SF);
+          return;
+        }
+
+        // ── Baraże MŚ 2026: Finały (20 marca 2026) ────────────────────────────
+        if (matchDay.eventType === 'WCQ_PLAYOFF_FINAL') {
+          if (wcqPlayoffState) {
+            const playoffSimulation = WCQPlayoffService.simulateFinal(wcqPlayoffState, nationalTeams, players, coaches, ntCareerSeed);
+            setWcqPlayoffState(playoffSimulation.state);
+            const friendlyUpdatedPlayers = simulateMarchPlayoffFriendlies(playoffSimulation.updatedPlayers);
+            setPlayers(friendlyUpdatedPlayers ?? playoffSimulation.updatedPlayers);
+            const playoffFinalMailKey = `WCQ_PLAYOFF_POLAND_FINAL_${seasonNumber}`;
+            if (!sentMailIdsRef.current.has(playoffFinalMailKey)) {
+              const playoffFinalMail = MailService.generateWCQPlayoffPolandMail(playoffSimulation.state, 'FINAL', dateToProcess);
+              if (playoffFinalMail) {
+                sentMailIdsRef.current.add(playoffFinalMailKey);
+                setMessages(prev => [playoffFinalMail, ...prev]);
+              }
+            }
+          }
+          setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+          setTargetJumpTime(null);
+          lastProcessedLeagueDateRef.current = '';
+          navigateTo(ViewState.WCQ_PLAYOFF_RESULTS_FINAL);
+          return;
+        }
+
+        // ── Normalne mecze reprezentacji ─────────────────────────────────────
+        const ntSimulation = NationalTeamSimulator.simulateMatchDay(
+          matchDay,
+          dateSeed,
+          dateToProcess,
+          nationalTeams,
+          players,
+          coaches,
+          seasonNumber,
+          matchSimulationSeed
+        );
+        const worldFriendlyMatchDay = WorldNationalFriendlyService.generateMatchDay(
+          matchDay,
+          nationalTeams,
+          dateToProcess.getFullYear(),
+          matchSimulationSeed
+        );
+        const worldFriendlySimulation = worldFriendlyMatchDay
+          ? NationalTeamSimulator.simulateMatchDay(
+            worldFriendlyMatchDay,
+            dateSeed + 919191,
+            dateToProcess,
+            nationalTeams,
+            ntSimulation.updatedPlayers,
+            coaches,
+            seasonNumber,
+            matchSimulationSeed
+          )
+          : null;
+        const finalNTPlayers = worldFriendlySimulation?.updatedPlayers ?? ntSimulation.updatedPlayers;
+        const finalNTResults = worldFriendlySimulation
+          ? [...ntSimulation.results, ...worldFriendlySimulation.results]
+          : ntSimulation.results;
+        const finalNTMatchHistoryEntries = worldFriendlySimulation
+          ? [...ntSimulation.matchHistoryEntries, ...worldFriendlySimulation.matchHistoryEntries]
+          : ntSimulation.matchHistoryEntries;
+        if (isNationsLeagueMatchDay && ensuredNationsLeagueState) {
+          const nextNationsLeagueState = NationsLeagueService.applyResults(
+            ensuredNationsLeagueState,
+            dateToProcess,
+            ntSimulation.results
+          );
+          const nextUefaRankingState = UefaNationalRankingService.updateFromNationsLeagueState(
+            ensuredUefaRankingState,
+            nextNationsLeagueState,
+            nationalTeams
+          );
+          setNationsLeagueState(nextNationsLeagueState);
+          if (nextNationsLeagueState.completed) {
+            setNationsLeagueArchive(prev => upsertNationsLeagueArchive(prev, nextNationsLeagueState));
+          }
+          if (nextNationsLeagueState.stage === 'QUARTER_FINALS' && ensuredNationsLeagueState.stage === 'LEAGUE_PHASE') {
+            const leaguePhaseMailKey = `UNL_LEAGUE_PHASE_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(leaguePhaseMailKey)) {
+              sentMailIdsRef.current.add(leaguePhaseMailKey);
+              const qfTeams = nextNationsLeagueState.quarterFinalists.join(', ');
+              const playoffLines = (nextNationsLeagueState.playoffs ?? []).map(tie =>
+                `${tie.level}: ${tie.highLeagueTeam} - ${tie.lowLeagueTeam}`
+              );
+              const leaguePhaseMail: MailMessage = {
+                id: leaguePhaseMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - faza ligowa zakończona`,
+                body: `Faza ligowa Ligi Narodów UEFA ${nextNationsLeagueState.editionLabel} dobiegła końca.\n\nĆwierćfinaliści Ligi A: ${qfTeams || 'najlepsze reprezentacje z Ligi A'}.\n\nPary barażowe o przydział lig w kolejnej edycji:\n${playoffLines.length ? playoffLines.join('\n') : 'Brak par barażowych w tej edycji.'}\n\nRanking UEFA reprezentacji został odświeżony według tabel fazy ligowej.`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 82,
+              };
+              setMessages(prev => [leaguePhaseMail, ...prev]);
+            }
+          }
+          if (nextNationsLeagueState.stage === 'FINALS' && ensuredNationsLeagueState.stage === 'QUARTER_FINALS') {
+            const finalsPreviewMailKey = `UNL_FINALS_PREVIEW_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(finalsPreviewMailKey)) {
+              sentMailIdsRef.current.add(finalsPreviewMailKey);
+              const semiFinalists = nextNationsLeagueState.semiFinalists.join(', ');
+              const playoffOutcomes = (nextNationsLeagueState.playoffs ?? []).map(tie =>
+                `${tie.level}: ${tie.winner ?? 'zwycięzca'} zostaje wyżej, ${tie.loser ?? 'przegrany'} spada niżej`
+              );
+              const finalsPreviewMail: MailMessage = {
+                id: finalsPreviewMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - znamy finalistów i wyniki baraży`,
+                body: `Zakończono lutowe dwumecze Ligi Narodów UEFA ${nextNationsLeagueState.editionLabel}.\n\nFinal Four stworzą: ${semiFinalists || 'cztery najlepsze reprezentacje Ligi A'}.\n\nRozstrzygnięcia baraży:\n${playoffOutcomes.length ? playoffOutcomes.join('\n') : 'W tej edycji nie rozegrano baraży.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 86,
+              };
+              setMessages(prev => [finalsPreviewMail, ...prev]);
+            }
+          }
+          if (nextNationsLeagueState.completed && !ensuredNationsLeagueState.completed) {
+            const finalMailKey = `UNL_FINAL_${nextNationsLeagueState.editionStartYear}`;
+            if (!sentMailIdsRef.current.has(finalMailKey)) {
+              sentMailIdsRef.current.add(finalMailKey);
+              const rankingTop = nextUefaRankingState.entries.slice(0, 10).map(entry => `${entry.rank}. ${entry.teamName}`).join('\n');
+              const promotionSummary = (nextNationsLeagueState.playoffs ?? [])
+                .map(tie => `${tie.level}: ${tie.winner ?? 'zwycięzca'} wyżej / ${tie.loser ?? 'przegrany'} niżej`)
+                .join('\n');
+              const finalMail: MailMessage = {
+                id: finalMailKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Liga Narodów UEFA ${nextNationsLeagueState.editionLabel} - triumfator wyłoniony`,
+                body: `${nextNationsLeagueState.finals?.champion ?? 'Zwycięzca'} wygrał Ligę Narodów UEFA ${nextNationsLeagueState.editionLabel}. Edycja została zapisana w archiwum, a jej rozstrzygnięcia wpłyną na skład dywizji przy kolejnym losowaniu.\n\nTop 10 finalnego rankingu UEFA LN:\n${rankingTop}\n\nBaraże i przydział lig:\n${promotionSummary || 'Brak baraży do podsumowania.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 88,
+              };
+              setMessages(prev => [finalMail, ...prev]);
+            }
+          }
+          setUefaNationalRankingState(nextUefaRankingState);
+        }
+        if (isEuroQualifiersMatchDay && ensuredEuroQualifiersState) {
+          const nextEuroQualifiersState = EuroQualifiersService.applyResults(
+            ensuredEuroQualifiersState,
+            ntSimulation.results,
+            ensuredUefaRankingState
+          );
+          setEuroQualifiersState(nextEuroQualifiersState);
+
+          if (nextEuroQualifiersState.stage === 'PLAYOFFS' && euroQualifiersState?.stage === 'GROUP_STAGE') {
+            const euroGroupSummaryKey = `EUROQ_GROUP_SUMMARY_${nextEuroQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(euroGroupSummaryKey)) {
+              sentMailIdsRef.current.add(euroGroupSummaryKey);
+              const directLines = nextEuroQualifiersState.directQualifiers.map(team => `- ${team}`);
+              const hostLines = nextEuroQualifiersState.hostReservedQualifiers.map(team => `- ${team}`);
+              const playoffLines = nextEuroQualifiersState.playoffPaths.map(path =>
+                `${path.mode === 'TIE' ? 'Dwumecz' : 'Ścieżka'} ${path.label}: ${path.teams.join(', ')}`
+              );
+              const euroSummaryMail: MailMessage = {
+                id: euroGroupSummaryKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextEuroQualifiersState.editionLabel} - faza grupowa zakończona`,
+                body: `Zakończono fazę grupową eliminacji ${nextEuroQualifiersState.editionLabel}.\n\nBezpośredni awans:\n${directLines.join('\n') || 'Brak rozstrzygnięć.'}\n\nMiejsca rezerwowe gospodarzy:\n${hostLines.join('\n') || 'Żaden gospodarz nie potrzebował miejsca rezerwowego.'}\n\nPary barażowe:\n${playoffLines.join('\n') || 'Baraże nie są potrzebne.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 84,
+              };
+              setMessages(prev => [euroSummaryMail, ...prev]);
+            }
+          }
+
+          if (nextEuroQualifiersState.completed && !(euroQualifiersState?.completed ?? false)) {
+            const euroFinalKey = `EUROQ_FINAL_${nextEuroQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(euroFinalKey)) {
+              sentMailIdsRef.current.add(euroFinalKey);
+              const playoffWinners = nextEuroQualifiersState.playoffPaths
+                .map(path => `${path.mode === 'TIE' ? 'Dwumecz' : 'Ścieżka'} ${path.label}: ${path.winner ?? 'brak rozstrzygnięcia'}`)
+                .join('\n');
+              const qualifiedLines = nextEuroQualifiersState.qualifiedTeams.map(team => `- ${team}`);
+              const euroFinalMail: MailMessage = {
+                id: euroFinalKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextEuroQualifiersState.editionLabel} - znamy komplet finalistów`,
+                body: `Zakończono baraże eliminacji ${nextEuroQualifiersState.editionLabel}.\n\nZwycięzcy ścieżek:\n${playoffWinners || 'Brak baraży.'}\n\nZakwalifikowane reprezentacje:\n${qualifiedLines.join('\n')}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 88,
+              };
+              setMessages(prev => [euroFinalMail, ...prev]);
+            }
+          }
+        }
+        if (isWorldCupQualifiersMatchDay && worldCupQualifiersState) {
+          const nextWorldCupQualifiersState = WorldCupQualifiersService.applyResults(
+            worldCupQualifiersState,
+            ntSimulation.results,
+            ensuredUefaRankingState
+          );
+          setWorldCupQualifiersState(nextWorldCupQualifiersState);
+
+          // The new WCQ cycle mirrors the existing EURO qualifier reporting: the
+          // player receives a clear summary when group play creates playoff paths,
+          // then another one when the March finals determine the last UEFA World Cup
+          // places. Match-level reports are already written by NationalTeamSimulator
+          // and remain available from the results screen and match history modal.
+          if (nextWorldCupQualifiersState.stage === 'PLAYOFFS' && worldCupQualifiersState.stage === 'GROUP_STAGE') {
+            const wcqGroupSummaryKey = `WCQ_DYNAMIC_GROUP_SUMMARY_${nextWorldCupQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(wcqGroupSummaryKey)) {
+              sentMailIdsRef.current.add(wcqGroupSummaryKey);
+              const directLines = nextWorldCupQualifiersState.directQualifiers.map(team => `- ${team}`);
+              const hostLines = nextWorldCupQualifiersState.hostReservedQualifiers.map(team => `- ${team}`);
+              const playoffLines = nextWorldCupQualifiersState.playoffPaths.map(path =>
+                `Ścieżka ${path.label}: ${path.teams.join(', ')}`
+              );
+              const wcqSummaryMail: MailMessage = {
+                id: wcqGroupSummaryKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextWorldCupQualifiersState.editionLabel} - faza grupowa zakończona`,
+                body: `Zakończono fazę grupową europejskich eliminacji ${nextWorldCupQualifiersState.editionLabel}.\n\nBezpośredni awans:\n${directLines.join('\n') || 'Brak rozstrzygnięć.'}\n\nGospodarze z automatycznym udziałem:\n${hostLines.join('\n') || 'Brak europejskich gospodarzy.'}\n\nPary barażowe:\n${playoffLines.join('\n') || 'Baraże nie są potrzebne.'}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 86,
+              };
+              setMessages(prev => [wcqSummaryMail, ...prev]);
+            }
+          }
+
+          if (nextWorldCupQualifiersState.completed && !worldCupQualifiersState.completed) {
+            const wcqFinalKey = `WCQ_DYNAMIC_FINAL_${nextWorldCupQualifiersState.tournamentYear}`;
+            if (!sentMailIdsRef.current.has(wcqFinalKey)) {
+              sentMailIdsRef.current.add(wcqFinalKey);
+              const playoffWinners = nextWorldCupQualifiersState.playoffPaths
+                .map(path => `Ścieżka ${path.label}: ${path.winner ?? 'brak rozstrzygnięcia'}`)
+                .join('\n');
+              const qualifiedLines = nextWorldCupQualifiersState.qualifiedTeams.map(team => `- ${team}`);
+              const wcqFinalMail: MailMessage = {
+                id: wcqFinalKey,
+                sender: 'UEFA',
+                role: 'Biuro Rozgrywek UEFA',
+                subject: `Eliminacje ${nextWorldCupQualifiersState.editionLabel} - znamy finalistów z Europy`,
+                body: `Zakończono baraże europejskich eliminacji ${nextWorldCupQualifiersState.editionLabel}.\n\nZwycięzcy ścieżek:\n${playoffWinners || 'Brak baraży.'}\n\nZakwalifikowane reprezentacje UEFA:\n${qualifiedLines.join('\n')}`,
+                date: new Date(dateToProcess),
+                isRead: false,
+                type: MailType.SYSTEM,
+                priority: 90,
+              };
+              setMessages(prev => [wcqFinalMail, ...prev]);
+            }
+          }
+        }
+        setPlayers(finalNTPlayers);
+        finalNTMatchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+        setCoaches(prev => CoachService.applyNationalTeamExpForResults(prev, nationalTeams, finalNTResults));
+        setLastNTMatchResults(finalNTResults);
+        // ── Po ostatniej kolejce fazy grupowej MŚ (17 listopada) → email-podsumowanie ──
+        if (dateToProcess.getFullYear() === 2025 && dateToProcess.getMonth() === 10 && dateToProcess.getDate() === 17) {
+          const wcqSummaryKey = `WCQ_GROUPS_SUMMARY_${seasonNumber}`;
+          if (!sentMailIdsRef.current.has(wcqSummaryKey)) {
+            sentMailIdsRef.current.add(wcqSummaryKey);
+            const wcqSummary = WCQPlayoffService.getWCQGroupSummary(nationalTeams, seasonNumber);
+            const wcqMail = MailService.generateWCQGroupsSummaryMail(wcqSummary.groups, wcqSummary.extras, dateToProcess);
+            setMessages(prev => [wcqMail, ...prev]);
+          }
+        }
+        setProcessedDrawIds(prev => [...prev, primaryEvent.slot.id]);
+        setTargetJumpTime(null);
+        navigateTo(ViewState.NATIONAL_TEAM_RESULTS);
+        // Zresetuj GUARD — następne wywołanie advanceDay (po kliknięciu "Kontynuuj")
+        // musi przejść i przesunąć datę
+        lastProcessedLeagueDateRef.current = '';
+        return;
+      }
+    }
+
+    // ── LOSOWANIE MISTRZOSTW ŚWIATA (5 grudnia roku poprzedzającego MŚ) ─────
+    {
+      const euroHostTournamentYear = EuroQualifiersService.getTournamentYearForHostAnnouncement(dateToProcess);
+      if (euroHostTournamentYear) {
+        const euroHostKey = `EURO_HOSTS_${euroHostTournamentYear}`;
+        const alreadyAnnounced = euroHostAnnouncements.some(entry => entry.tournamentYear === euroHostTournamentYear);
+        if (!alreadyAnnounced && !processedDrawIds.includes(euroHostKey)) {
+          const announcement = EuroQualifiersService.createHostAnnouncement(
+            nationalTeams,
+            euroHostTournamentYear,
+            euroHostAnnouncements
+          );
+          setEuroHostAnnouncements(prev => prev.some(entry => entry.tournamentYear === announcement.tournamentYear)
+            ? prev
+            : [...prev, announcement].sort((a, b) => a.tournamentYear - b.tournamentYear));
+          setProcessedDrawIds(prev => prev.includes(euroHostKey) ? prev : [...prev, euroHostKey]);
+
+          if (!sentMailIdsRef.current.has(euroHostKey)) {
+            sentMailIdsRef.current.add(euroHostKey);
+            const hostMail: MailMessage = {
+              id: euroHostKey,
+              sender: 'UEFA',
+              role: 'Komitet Wykonawczy UEFA',
+              subject: `Gospodarze EURO ${announcement.tournamentYear}`,
+              body: `UEFA ogłosiła gospodarzy turnieju EURO ${announcement.tournamentYear}.\n\nGospodarze: ${announcement.hosts.join(', ')}.\n\nDecyzja zapadła sześć lat przed turniejem, dzięki czemu kolejne losowanie eliminacji uwzględni gospodarzy i ich miejsca rezerwowe.`,
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 86,
+            };
+            setMessages(prev => [hostMail, ...prev]);
+          }
+        }
+      }
+
+      const euroTournamentYear = dateToProcess.getFullYear() + 2;
+      const euroQualifiersDrawKey = `EUROQ_DRAW_${euroTournamentYear}`;
+      if (
+        EuroQualifiersService.isEuroTournamentYear(euroTournamentYear) &&
+        EuroQualifiersService.isDrawDay(dateToProcess) &&
+        euroQualifiersState?.tournamentYear !== euroTournamentYear &&
+        !processedDrawIds.includes(euroQualifiersDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const drawState = EuroQualifiersService.createInitialState(
+          nationalTeams,
+          euroTournamentYear,
+          ensuredUefaRankingState,
+          nationsLeagueState,
+          euroHostAnnouncements
+        );
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setEuroQualifiersState(drawState);
+        setProcessedDrawIds(prev => prev.includes(euroQualifiersDrawKey) ? prev : [...prev, euroQualifiersDrawKey]);
+
+        if (!sentMailIdsRef.current.has(euroQualifiersDrawKey)) {
+          sentMailIdsRef.current.add(euroQualifiersDrawKey);
+          const hostLine = drawState.hostTeams.length
+            ? `Gospodarze turnieju (${drawState.hostTeams.join(', ')}) biorą udział w eliminacjach i zostali rozdzieleni do różnych grup. UEFA zachowuje dla nich maksymalnie dwa miejsca rezerwowe, jeśli nie awansują sportowo.`
+            : 'W tej edycji gra nie ma zdefiniowanych gospodarzy turnieju.';
+          const qualifyingYear = drawState.tournamentYear - 1;
+          const groupLines = drawState.groups.map(group =>
+            `Grupa ${group.id}: ${group.teams.join(', ')}`
+          );
+          const euroDrawMail: MailMessage = {
+            id: euroQualifiersDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie eliminacji ${drawState.editionLabel}`,
+            body: `Odbyło się losowanie eliminacji ${drawState.editionLabel}.\n\n${hostLine}\n\n${groupLines.join('\n')}\n\nTerminarz korzysta z okien reprezentacyjnych ${qualifyingYear} i omija znane kolizje z Ligą Narodów UEFA.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 89,
+          };
+          setMessages(prev => [euroDrawMail, ...prev]);
+        }
+      }
+
+      const wcqTournamentYear = dateToProcess.getFullYear() + 2;
+      const worldCupQualifiersDrawKey = `WCQ_DYNAMIC_DRAW_${wcqTournamentYear}`;
+      if (
+        WorldCupService.isWorldCupYear(wcqTournamentYear) &&
+        WorldCupQualifiersService.isDrawDay(dateToProcess) &&
+        worldCupQualifiersState?.tournamentYear !== wcqTournamentYear &&
+        !processedDrawIds.includes(worldCupQualifiersDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const drawState = WorldCupQualifiersService.createInitialState(
+          nationalTeams,
+          wcqTournamentYear,
+          ensuredUefaRankingState
+        );
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setWorldCupQualifiersState(drawState);
+        setProcessedDrawIds(prev => prev.includes(worldCupQualifiersDrawKey) ? prev : [...prev, worldCupQualifiersDrawKey]);
+
+        if (!sentMailIdsRef.current.has(worldCupQualifiersDrawKey)) {
+          sentMailIdsRef.current.add(worldCupQualifiersDrawKey);
+          const allHosts = WorldCupQualifiersService.getHostsForTournament(wcqTournamentYear, nationalTeams);
+          const europeanHosts = drawState.hostTeams;
+          const qualifyingYear = drawState.tournamentYear - 1;
+          const groupLines = drawState.groups.map(group =>
+            `Grupa ${group.id}: ${group.teams.join(', ')}`
+          );
+          const wcqDrawMail: MailMessage = {
+            id: worldCupQualifiersDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie eliminacji ${drawState.editionLabel}`,
+            body: `Odbyło się losowanie europejskich eliminacji ${drawState.editionLabel}.\n\nGospodarze turnieju: ${allHosts.join(', ') || 'do ustalenia'}.\nEuropejscy gospodarze z automatycznym udziałem: ${europeanHosts.join(', ') || 'brak'}.\n\n${groupLines.join('\n')}\n\nTerminarz korzysta z istniejących okien reprezentacyjnych ${qualifyingYear}. Drużyny z innych kontynentów na potrzeby MŚ nadal są wybierane z najlepszych dostępnych reprezentacji, co zostawia miejsce na pełniejsze eliminacje kontynentalne w przyszłości.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 90,
+          };
+          setMessages(prev => [wcqDrawMail, ...prev]);
+        }
+      }
+
+      const nextYear = dateToProcess.getFullYear() + 1;
+      const curMonth = dateToProcess.getMonth() + 1;
+      const curDay = dateToProcess.getDate();
+      if (WorldCupService.isWorldCupYear(nextYear) && curMonth === 12 && curDay === 5 && !wcState) {
+        const wcDrawKey = `WC_DRAW_${nextYear}`;
+        if (!sentMailIdsRef.current.has(wcDrawKey)) {
+          sentMailIdsRef.current.add(wcDrawKey);
+          const wcTeams = WorldCupService.assembleTeamsForDraw(nationalTeams, seasonNumber, nextYear, sessionSeed, worldCupQualifiersState);
+          const { groups: wcGroups } = WorldCupService.drawGroupsWithFIFARules(wcTeams, sessionSeed, nextYear);
+          const newWcState: WCState = {
+            year: nextYear,
+            teams: wcTeams,
+            groups: wcGroups,
+            knockoutMatches: [],
+            playerEffects: [],
+            groupStageComplete: false,
+            knockoutComplete: false,
+            drawComplete: true,
+            playoffSlotsResolved: false,
+          };
+          setWcState(newWcState);
+          const wcDrawMail: MailMessage = {
+            id: wcDrawKey,
+            sender: 'FIFA',
+            role: 'Biuro Rozgrywek FIFA',
+            subject: `Losowanie Grup MŚ ${nextYear} — 5 grudnia`,
+            body: `Ceremonia losowania grup Mistrzostw Świata ${nextYear} właśnie się odbyła! 42 drużyny z całego świata poznały swoich grupowych rywali. 4 miejsca są zarezerwowane dla zwycięzców baraży UEFA, a 2 dla zwycięzców play-off FIFA (marzec ${nextYear}). Otwórz widok losowania aby zobaczyć pełny wynik ceremonii.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 100,
+          };
+          setMessages(prev => [wcDrawMail, ...prev]);
+        }
+      }
+    }
+
+    {
+      const seasonStartYearForNationsLeague = dateToProcess.getMonth() >= 6
+        ? dateToProcess.getFullYear()
+        : dateToProcess.getFullYear() - 1;
+      const isNationsLeagueDrawDay = dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 17;
+      const nationsLeagueDrawKey = `UNL_DRAW_${seasonStartYearForNationsLeague}`;
+
+      if (
+        isNationsLeagueDrawDay &&
+        NationsLeagueService.isNationsLeagueSeason(seasonStartYearForNationsLeague) &&
+        nationsLeagueState?.editionStartYear !== seasonStartYearForNationsLeague &&
+        !processedDrawIds.includes(nationsLeagueDrawKey)
+      ) {
+        const ensuredUefaRankingState = UefaNationalRankingService.ensureState(uefaNationalRankingState, nationalTeams);
+        const latestCompletedNationsLeagueEdition = nationsLeagueState?.completed
+          ? nationsLeagueState
+          : nationsLeagueArchive.find(entry => entry.completed) ?? null;
+        const drawState = NationsLeagueService.createInitialState(
+          nationalTeams,
+          seasonStartYearForNationsLeague,
+          ensuredUefaRankingState,
+          latestCompletedNationsLeagueEdition ?? nationsLeagueState
+        );
+        if (nationsLeagueState) {
+          setNationsLeagueArchive(prev => upsertNationsLeagueArchive(prev, nationsLeagueState));
+        }
+        setUefaNationalRankingState(ensuredUefaRankingState);
+        setNationsLeagueState(drawState);
+        setProcessedDrawIds(prev => prev.includes(nationsLeagueDrawKey) ? prev : [...prev, nationsLeagueDrawKey]);
+
+        if (!sentMailIdsRef.current.has(nationsLeagueDrawKey)) {
+          sentMailIdsRef.current.add(nationsLeagueDrawKey);
+          const nationsLeagueMail: MailMessage = {
+            id: nationsLeagueDrawKey,
+            sender: 'UEFA',
+            role: 'Biuro Rozgrywek UEFA',
+            subject: `Losowanie Ligi Narodów UEFA ${drawState.editionLabel}`,
+            body: `17 lipca odbyło się losowanie Ligi Narodów UEFA ${drawState.editionLabel}. Grupy zostały ułożone na podstawie aktualnego rankingu UEFA reprezentacji, a pierwsze mecze fazy ligowej zaplanowano na wrześniowe okno reprezentacyjne.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: 90,
+          };
+          setMessages(prev => [nationsLeagueMail, ...prev]);
+        }
+
+        setTargetJumpTime(null);
+        lastProcessedLeagueDateRef.current = '';
+        navigateTo(ViewState.NATIONS_LEAGUE_DRAW);
+        return;
+      }
+    }
+
+    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, playersAfterWorldCup, lineups, seasonNumber, coaches, matchSimulationSeed);
+
+    if (userTeamId && !celebrationAlreadyFiredRef.current) {
+      const userClubNow = simulation.updatedClubs.find(c => c.id === userTeamId);
+      if (userClubNow) {
+        const remaining = (leagueId: string, teamId: string) =>
+          simulation.updatedFixtures.filter(f =>
+            f.leagueId === leagueId &&
+            f.status === MatchStatus.SCHEDULED &&
+            (f.homeTeamId === teamId || f.awayTeamId === teamId)
+          ).length;
+        if (userClubNow.leagueId === 'L_PL_1') {
+          const sortedL1 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_1')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const second = sortedL1[1];
+          if (sortedL1[0]?.id === userTeamId && second && second.stats.points + remaining('L_PL_1', second.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('championship');
+          }
+        } else if (userClubNow.leagueId === 'L_PL_2') {
+          const sortedL2 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_2')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const pos = sortedL2.findIndex(c => c.id === userTeamId);
+          const third = sortedL2[2];
+          if (pos <= 1 && third && third.stats.points + remaining('L_PL_2', third.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('promotion-ekst');
+          }
+        } else if (userClubNow.leagueId === 'L_PL_3') {
+          const sortedL3 = [...simulation.updatedClubs]
+            .filter(c => c.leagueId === 'L_PL_3')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+          const pos = sortedL3.findIndex(c => c.id === userTeamId);
+          const third = sortedL3[2];
+          if (pos <= 1 && third && third.stats.points + remaining('L_PL_3', third.id) * 3 < userClubNow.stats.points) {
+            celebrationAlreadyFiredRef.current = true;
+            setSeasonCelebration('promotion-1liga');
+          }
+        }
+      }
+    }
+
+    // 2. Obliczanie regeneracji kondycji i urazów
+    const diffTime = Math.abs(dateToProcess.getTime() - lastRecoveryDate.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const recoveryDelta = diffDays > 0 ? diffDays : 1;
+    const userClubForRecovery = userTeamId ? simulation.updatedClubs.find(c => c.id === userTeamId) : null;
+    const recoveryBoost = userClubForRecovery && isRecoveryFocusReady(userClubForRecovery, dateToProcess.toISOString().split('T')[0]) ? 1.15 : 1.0;
+    const medicalQuality = (() => {
+      if (!userClubForRecovery) return undefined;
+      const physioMembers = (userClubForRecovery.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.PHYSIOTHERAPIST);
+      const doctorMembers = (userClubForRecovery.staffIds ?? [])
+        .map(id => staffMembers[id])
+        .filter((s): s is StaffMember => s?.role === StaffRole.CLUB_DOCTOR);
+      const qualityValues: number[] = [];
+      if (physioMembers.length > 0) {
+        qualityValues.push(physioMembers.reduce((sum, s) =>
+          sum + ((s.attributes.sportsMassage ?? 10) + (s.attributes.rehabilitation ?? 10) + (s.attributes.muscleInjuries ?? 10)) / 3, 0
+        ) / physioMembers.length);
+      }
+      if (doctorMembers.length > 0) {
+        qualityValues.push(doctorMembers.reduce((sum, s) =>
+          sum + ((s.attributes.diagnostics ?? 10) + (s.attributes.sportsSurgery ?? 10) + (s.attributes.pharmacology ?? 10)) / 3, 0
+        ) / doctorMembers.length);
+      }
+      return qualityValues.length > 0
+        ? Math.round(qualityValues.reduce((a, b) => a + b, 0) / qualityValues.length)
+        : undefined;
+    })();
+    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta, recoveryBoost, medicalQuality, userTeamId ?? undefined);
+
+    // 3. Budowanie finalnego wyniku
+    // 2 lipca: automatyczny przegląd składów AI na początku sezonu
+    let postReviewPlayers = recoveredPlayers;
+    let postReviewClubs = simulation.updatedClubs;
+
+    if (dateToProcess.getDate() === 1) {
+      // MIESIĘCZNA DECYZYJNOŚĆ KLUBÓW AI DLA LISTY WYPOŻYCZEŃ:
+      // Ten przegląd nie tworzy jeszcze żadnej oferty. On tylko ustawia albo zdejmuje
+      // flagę isAvailableForLoan u zawodników AI, czyli mówi rynkowi: "ten zawodnik
+      // może iść na wypożyczenie". Osobny generator ofert dalej decyduje, czy znajdzie
+      // się klub, który faktycznie potrzebuje takiego wzmocnienia i ma na nie pieniądze.
+      //
+      // Najważniejsze bezpieczniki:
+      // - klub AI analizuje kadrę tylko raz w miesiącu,
+      // - kadra musi mieć więcej niż 26 zawodników,
+      // - lista jest ograniczona do 2 zawodników, a przy bardzo szerokiej kadrze do 3,
+      // - zawodnik z listy transferowej, aktywną sprzedażą, prekontraktem albo aktywną
+      //   ofertą nie trafia na listę wypożyczeń,
+      // - jeśli przy zawodniku istnieje już aktywna oferta wypożyczenia, nie zdejmujemy
+      //   flagi w połowie rozmów, żeby nie psuć trwającego procesu.
+      postReviewPlayers = processAiMonthlyLoanListReview(
+        postReviewClubs,
+        postReviewPlayers,
+        lineups,
+        coaches,
+        dateToProcess,
+        sessionSeed,
+        userTeamId,
+        incomingOffers,
+        transferOffers
+      );
+    }
+
+    // 20 lipca: przedsprzedaż karnetów sezonowych (przed Kolejką 1 — 24 lipca)
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 20) {
+      const seasonYear = dateToProcess.getFullYear();
+      const seasonLabel = `${seasonYear}/${String(seasonYear + 1).slice(2)}`;
+      postReviewClubs = postReviewClubs.map(club => {
+        const seasonTicketPackage = FinanceService.calculateSeasonTicketPackageForClub(club);
+        const seasonTicketRevenue = seasonTicketPackage.revenue;
+        const ticketsSold = seasonTicketPackage.ticketsSold;
+        const newFinanceLog = {
+          id: Math.random().toString(36).substr(2, 9),
+          date: dateToProcess.toISOString().split('T')[0],
+          amount: seasonTicketRevenue,
+          type: 'INCOME' as const,
+          description: `Przedsprzedaż karnetów: ${ticketsSold.toLocaleString('pl-PL')} szt.`,
+          previousBalance: club.budget
+        };
+        return {
+          ...club,
+          budget: club.budget + seasonTicketRevenue,
+          financeHistory: [newFinanceLog, ...(club.financeHistory || [])].slice(0, 50)
+        };
+      });
+      // E-mail do gracza z raportem
+      if (userTeamId) {
+        const userClub = postReviewClubs.find(c => c.id === userTeamId);
+        if (userClub) {
+          const ticketMail = MailService.generateSeasonTicketMail(
+            { name: userClub.name, stadiumName: userClub.stadiumName, stadiumCapacity: userClub.stadiumCapacity, reputation: userClub.reputation, leagueId: userClub.leagueId, country: userClub.country },
+            seasonLabel,
+            dateToProcess
+          );
+          setMessages(prev => [ticketMail, ...prev]);
+        }
+      }
+    }
+
+    // 20 lipca: roczny wynajem stref VIP i lóż (Skybox)
+    // Warunek: tylko Ekstraklasa (tier 1) i pojemność stadionu > 15 000
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 20) {
+      postReviewClubs = postReviewClubs.map(club => {
+        const vipRevenue = FinanceService.calculateVIPBoxRevenueForClub(club);
+        if (vipRevenue <= 0) return club;
+        const newFinanceLog = {
+          id: Math.random().toString(36).substr(2, 9),
+          date: dateToProcess.toISOString().split('T')[0],
+          amount: vipRevenue,
+          type: 'INCOME' as const,
+          description: `Wynajem stref VIP i lóż (Skybox) — sezon`,
+          previousBalance: club.budget
+        };
+        return {
+          ...club,
+          budget: club.budget + vipRevenue,
+          financeHistory: [newFinanceLog, ...(club.financeHistory || [])].slice(0, 50)
+        };
+      });
+    }
+
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 2) {
+      const updatedCoachesJuly = AiTransferDecisionService.updateCoachFavorites(postReviewClubs, postReviewPlayers, coaches, dateToProcess, sessionSeed, userTeamId);
+      postReviewPlayers = AiContractService.updateClubStars(postReviewClubs, postReviewPlayers, userTeamId, updatedCoachesJuly, dateToProcess, sessionSeed);
+      const review = AiContractService.performSeasonSquadReview(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = review.updatedClubs;
+      postReviewPlayers = review.updatedPlayers;
+      const weakReviewSummer = AiContractService.processWeakPlayerContractCuts(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = weakReviewSummer.updatedClubs;
+      postReviewPlayers = weakReviewSummer.updatedPlayers;
+      // Sezonowy nabór wychowanków AI jest wykonywany po porządkach kontraktowych,
+      // ale przed startową decyzją transferową. Taka kolejność jest istotna:
+      // - najpierw klub usuwa lub wystawia zawodników, których i tak nie chce trzymać,
+      // - potem akademia AI może uzupełnić realne braki do 4 zawodników,
+      // - dopiero na końcu skauci i dyrektor sportowy decydują, czy nadal trzeba
+      //   kupować na rynku transferowym, liście transferowej albo wśród wolnych agentów.
+      // Dzięki temu wychowankowie pomagają w głębi kadry, ale nie blokują progresywnie
+      // silniejszych transferów tam, gdzie klub nadal ma za małą jakość.
+      const youthIntake = AiContractService.generateSeasonYouthIntakeForAiClubs(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = youthIntake.updatedClubs;
+      postReviewPlayers = youthIntake.updatedPlayers;
+      postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
+      const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, updatedCoachesJuly, dateToProcess, userTeamId);
+      postReviewClubs = seasonDecision.updatedClubs;
+      postReviewPlayers = AiContractService.enforceTransferListLimits(seasonDecision.updatedPlayers, dateToProcess, userTeamId);
+      setCoaches(updatedCoachesJuly);
+      if (youthIntake.generatedCount > 0) {
+        DebugLoggerService.log('SQUAD_REVIEW', `Nabór wychowanków AI (2 lipca): ${youthIntake.generatedCount} nowych zawodników.`, true);
+      }
+      DebugLoggerService.log('SQUAD_REVIEW', `Przegląd składów AI (2 lipca) wykonany.`, true);
+      
+      // Wyplata pensji zawodników na start sezonu
+      postReviewClubs = postReviewClubs.map(club => {
+        const squad = postReviewPlayers[club.id] || [];
+        const totalSalaries = FinanceService.calculateTotalSalaries(squad);
+        
+        // Obliczanie wynagrodzenia trenera (1-3 * 2.5% budżetu rocznie)
+        const trainerSalaryFactor = (1 + Math.random() * 2) * 0.025; // 2.5% - 7.5%
+        const trainerSalary = Math.floor(club.budget * trainerSalaryFactor);
+        
+        const totalCost = totalSalaries + trainerSalary;
+        const newBudget = club.budget - totalCost;
+        
+        // Tworzymy wpisy do finansów
+        const financeLogsToAdd: any[] = [];
+        
+        if (totalSalaries > 0) {
+          financeLogsToAdd.push({
+            id: Math.random().toString(36).substr(2, 9),
+            date: dateToProcess.toISOString().split('T')[0],
+            amount: -totalSalaries,
+            type: 'EXPENSE' as const,
+            description: `Pensje zawodników za sezon`,
+            previousBalance: club.budget
+          });
+        }
+        
+        if (trainerSalary > 0) {
+          financeLogsToAdd.push({
+            id: Math.random().toString(36).substr(2, 9),
+            date: dateToProcess.toISOString().split('T')[0],
+            amount: -trainerSalary,
+            type: 'EXPENSE' as const,
+            description: `Wynagrodzenie sztabu trenera`,
+            previousBalance: club.budget - totalSalaries
+          });
+        }
+        
+        return {
+          ...club,
+          budget: newBudget,
+          financeHistory: [...financeLogsToAdd, ...(club.financeHistory || [])].slice(0, 50)
+        };
+      });
+    }
+
+    const isAiYouthLateSummerIntakeDay =
+      (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 31) ||
+      (dateToProcess.getMonth() === 8 && dateToProcess.getDate() === 30);
+
+    if (isAiYouthLateSummerIntakeDay) {
+      // Późnoletni nabór AI działa jako dodatkowa kontrola po kilku tygodniach rynku.
+      // Na początku sezonu klub może wyglądać stabilnie, ale po sprzedażach, wypożyczeniach,
+      // wygasających kontraktach albo nieudanych transferach może znowu spaść poniżej
+      // zdrowej głębi kadry. Dlatego pod koniec lipca, sierpnia i września AI ponownie
+      // uruchamia ten sam generator wychowanków, zamiast czekać bezczynnie do zimy.
+      //
+      // Generator sam pilnuje limitu 4 wychowanków na klub w danym sezonie przez stały
+      // prefiks ID zawodnika. To oznacza, że późniejsze wywołanie nie produkuje duplikatów:
+      // jeśli klub dostał już komplet w lipcu, ten blok tylko przejdzie po danych i nic
+      // nie dopisze. Jeśli jednak kadra skurczyła się po transferach, klub może dobrać
+      // brakujące sloty, nadal zgodnie z zasadą "im mniejsza kadra, tym większa szansa".
+      const lateYouthIntake = AiContractService.generateSeasonYouthIntakeForAiClubs(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
+      postReviewClubs = lateYouthIntake.updatedClubs;
+      postReviewPlayers = lateYouthIntake.updatedPlayers;
+
+      if (lateYouthIntake.generatedCount > 0) {
+        DebugLoggerService.log(
+          'SQUAD_REVIEW',
+          `Dodatkowy nabór wychowanków AI (${dateToProcess.toLocaleDateString('pl-PL')}): ${lateYouthIntake.generatedCount} nowych zawodników.`,
+          true
+        );
+      }
+    }
+
+    if (userTeamId) {
+      if (pendingSponsorAmount !== null && pendingSponsorDate !== null && pendingSponsorNextCheckDate !== null) {
+        postReviewClubs = postReviewClubs.map(c => {
+          if (c.id !== userTeamId) return c;
+          const financeLog = {
+            id: Math.random().toString(36).substr(2, 9),
+            date: pendingSponsorDate!,
+            amount: pendingSponsorAmount!,
+            type: 'INCOME' as const,
+            description: 'Przychód ze sponsoringu — nowy kontrakt sponsorski',
+            previousBalance: c.budget,
+          };
+          return {
+            ...c,
+            budget: c.budget + pendingSponsorAmount!,
+            sponsorAcquiredThisSeason: true,
+            nextSponsorCheckDate: pendingSponsorNextCheckDate!,
+            financeHistory: [financeLog, ...(c.financeHistory || [])].slice(0, 50),
+          };
+        });
+      } else if (pendingNoSponsorNextCheckDate !== null) {
+        postReviewClubs = postReviewClubs.map(c =>
+          c.id === userTeamId ? { ...c, nextSponsorCheckDate: pendingNoSponsorNextCheckDate! } : c
+        );
+      }
+
+      const boardMonitorUpdate = pendingBoardMonitorUpdate;
+      if (boardMonitorUpdate !== null) {
+        postReviewClubs = postReviewClubs.map(c => {
+          if (c.id !== userTeamId) return c;
+          if (boardMonitorUpdate.action === 'NONE') {
+            return {
+              ...c,
+              boardBudgetMonitorState: boardMonitorUpdate.newState,
+            };
+          }
+
+          const financeLogId = `BOARD_SHIFT_${boardMonitorUpdate.dateKey}_${boardMonitorUpdate.action}`;
+          const financeLog = {
+            id: financeLogId,
+            date: boardMonitorUpdate.dateKey,
+            amount: boardMonitorUpdate.action === 'RESTORE' ? -boardMonitorUpdate.amountChanged : boardMonitorUpdate.amountChanged,
+            type: boardMonitorUpdate.action === 'RESTORE' ? 'EXPENSE' as const : 'INCOME' as const,
+            description: boardMonitorUpdate.action === 'RESTORE'
+              ? 'Przesunięcie środków z rezerwy zarządu na budżet transferowy'
+              : boardMonitorUpdate.action === 'RESERVE_SUPPORT'
+                ? 'Awaryjne wsparcie salda z rezerwy zarządu'
+                : 'Awaryjne wsparcie salda z rezerwy zarządu i budżetu transferowego',
+            previousBalance: c.budget,
+          };
+
+          return {
+            ...c,
+            budget: boardMonitorUpdate.newBudget,
+            transferBudget: boardMonitorUpdate.newTransferBudget,
+            reserveBudget: boardMonitorUpdate.newReserveBudget,
+            boardBudgetMonitorState: boardMonitorUpdate.newState,
+            boardBudgetLastShiftDate: boardMonitorUpdate.dateKey,
+            boardBudgetLastShiftAction: boardMonitorUpdate.action,
+            financeHistory: boardMonitorUpdate.amountChanged > 0 && !(c.financeHistory || []).some(item => item.id === financeLogId)
+              ? [financeLog, ...(c.financeHistory || [])].slice(0, 50)
+              : c.financeHistory,
+          };
+        });
+      }
+    }
+
+    const loanReturnMails: MailMessage[] = [];
+    let postLoanLineups = lineups;
+    {
+      let loanPlayersChanged = false;
+      let loanLineupsChanged = false;
+      const nextPlayers: Record<string, Player[]> = {};
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        nextPlayers[clubId] = [...squad];
+      });
+
+      const repairClubIds = new Set<string>();
+      Object.entries(postReviewPlayers).forEach(([currentClubId, squad]) => {
+        squad.forEach(player => {
+          if (!player.loan) return;
+          const loanEnd = new Date(player.loan.endDate);
+          if (Number.isNaN(loanEnd.getTime()) || loanEnd > dateToProcess) return;
+
+          const parentClub = postReviewClubs.find(club => club.id === player.loan?.parentClubId);
+          const sourceClub = postReviewClubs.find(club => club.id === currentClubId);
+          if (!parentClub) return;
+          const returnDate = new Date(dateToProcess);
+
+          const returnedPlayer: Player = {
+            ...player,
+            clubId: parentClub.id,
+            history: PlayerCareerService.closeLoanEntry(
+              player.history || [],
+              player,
+              returnDate.getFullYear(),
+              returnDate.getMonth() + 1
+            ),
+            loan: null,
+            isAvailableForLoan: false,
+          };
+
+          nextPlayers[currentClubId] = (nextPlayers[currentClubId] ?? []).filter(p => p.id !== player.id);
+          nextPlayers[parentClub.id] = [
+            ...(nextPlayers[parentClub.id] ?? []).filter(p => p.id !== player.id),
+            returnedPlayer,
+          ];
+          repairClubIds.add(currentClubId);
+          repairClubIds.add(parentClub.id);
+          loanPlayersChanged = true;
+
+          if (userTeamId && (currentClubId === userTeamId || parentClub.id === userTeamId)) {
+            loanReturnMails.push({
+              id: `LOAN_RETURN_${player.id}_${dateToProcess.toISOString().split('T')[0]}`,
+              sender: 'Dział Kadr',
+              role: 'Administracja sportowa',
+              subject: `Koniec wypożyczenia: ${player.firstName} ${player.lastName}`,
+              body: [
+                'Trenerze,',
+                '',
+                `Zawodnik: ${player.firstName} ${player.lastName}`,
+                `Poprzedni klub wypożyczenia: ${sourceClub?.name ?? currentClubId}`,
+                `Klub macierzysty: ${parentClub.name}`,
+                '',
+                'STATUS',
+                'Wypożyczenie dobiegło końca. Zawodnik wrócił do kadry klubu macierzystego i może zostać ponownie uwzględniony przy wyborze składu.',
+              ].join('\n'),
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 55,
+            });
+          }
+        });
+      });
+
+      if (loanPlayersChanged) {
+        postReviewPlayers = nextPlayers;
+        const nextLineups = { ...lineups };
+        repairClubIds.forEach(clubId => {
+          if (!nextLineups[clubId]) return;
+          nextLineups[clubId] = LineupService.repairLineup(nextLineups[clubId], nextPlayers[clubId] ?? []);
+          loanLineupsChanged = true;
+        });
+        if (loanLineupsChanged) {
+          postLoanLineups = nextLineups;
+          setLineups(nextLineups);
+        }
+      }
+    }
+
+    const aiAiLoanMoves = processAiToAiLoanMoves(
+      postReviewClubs,
+      postReviewPlayers,
+      postLoanLineups,
+      coaches,
+      dateToProcess,
+      sessionSeed,
+      userTeamId,
+      incomingOffers,
+      transferOffers
+    );
+    postReviewClubs = aiAiLoanMoves.updatedClubs;
+    postReviewPlayers = aiAiLoanMoves.updatedPlayers;
+    postLoanLineups = aiAiLoanMoves.updatedLineups;
+
+    // Wygasłe kontrakty (mid-season) → wolni agenci, każdy klub
+    const contractExpiryMails: MailMessage[] = [];
+    {
+      let anyExpired = false;
+      const nextPlayersExp: Record<string, Player[]> = {};
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        nextPlayersExp[clubId] = [...squad];
+      });
+      if (!nextPlayersExp['FREE_AGENTS']) nextPlayersExp['FREE_AGENTS'] = [];
+
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        if (clubId === 'FREE_AGENTS') return;
+        squad.forEach(player => {
+          if (!player.contractEndDate || player.transferPendingClubId) return;
+          const contractEnd = new Date(player.contractEndDate);
+          if (contractEnd >= dateToProcess) return;
+
+          const club = postReviewClubs.find(c => c.id === clubId);
+          const released = {
+            ...PlayerCareerService.resetClubStatsForNewEntry(player),
+            clubId: 'FREE_AGENTS' as const,
+            annualSalary: 0,
+            isUntouchable: false,
+            history: PlayerCareerService.movePlayer(
+              player,
+              { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+              dateToProcess.getFullYear(),
+              dateToProcess.getMonth() + 1,
+              { clubName: club?.name ?? clubId, clubId }
+            )
+          };
+          nextPlayersExp[clubId] = (nextPlayersExp[clubId] ?? []).filter(p => p.id !== player.id);
+          nextPlayersExp['FREE_AGENTS'] = [...(nextPlayersExp['FREE_AGENTS'] ?? []), released];
+          anyExpired = true;
+
+          if (userTeamId && clubId === userTeamId) {
+            contractExpiryMails.push({
+              id: `CONTRACT_EXPIRY_${player.id}_${dateToProcess.toISOString().split('T')[0]}`,
+              sender: 'Dział Kadr',
+              role: 'Administracja sportowa',
+              subject: `Wygasł kontrakt: ${player.firstName} ${player.lastName}`,
+              body: [
+                'Trenerze,',
+                '',
+                `Kontrakt zawodnika ${player.firstName} ${player.lastName} wygasł ${contractEnd.toLocaleDateString('pl-PL')}.`,
+                '',
+                'Zawodnik stał się wolnym agentem i opuścił klub.',
+              ].join('\n'),
+              date: new Date(dateToProcess),
+              isRead: false,
+              type: MailType.SYSTEM,
+              priority: 70,
+            });
+          }
+        });
+      });
+
+      if (anyExpired) {
+        postReviewPlayers = nextPlayersExp;
+      }
+    }
+
+    const aiTrainingEarly = AiWeeklyTrainingService.processWeeklyTraining(
+      postReviewPlayers,
+      postReviewClubs,
+      coaches,
+      userTeamId,
+      dateToProcess,
+      simulation.updatedFixtures,
+      sessionSeed,
+      staffMembers
+    );
+    postReviewPlayers = aiTrainingEarly.updatedPlayers;
+    postReviewClubs = aiTrainingEarly.updatedClubs;
+
+const finalResult: SimulationOutput = {
+      ...simulation,
+      updatedClubs: postReviewClubs,
+      updatedPlayers: postReviewPlayers,
+      updatedLineups: postLoanLineups,
+      // TUTAJ WSTAW TEN KOD
+      newOffers: simulation.newOffers || [],
+      aiTransferLogEntries: [
+        ...(simulation.aiTransferLogEntries || []),
+        ...aiAiLoanMoves.aiTransferLogEntries,
+      ],
+      // KONIEC KODU
+    };
+    
+    // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
+       // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
+    applySimulationResult(finalResult);
+
+    if (loanReturnMails.length > 0) {
+      prependUniqueMessages(loanReturnMails);
+    }
+
+    if (contractExpiryMails.length > 0) {
+      prependUniqueMessages(contractExpiryMails);
+    }
+
+    if (userTeamId) {
+      const formatPln = (value?: number) => `${(value || 0).toLocaleString('pl-PL')} PLN`;
+      const gulfMegaOfferMails: MailMessage[] = (finalResult.aiTransferLogEntries || [])
+        .filter(entry => entry.isGulfMegaOffer && (entry.status === 'OFFER_MADE' || entry.status === 'TRANSFER_SIGNED'))
+        .map(entry => {
+          const signed = entry.status === 'TRANSFER_SIGNED';
+          const fromClub = entry.fromClub || 'poprzedni klub';
+          const years = entry.contractYears || 1;
+          return {
+            id: `gulf-mega-${entry.id}`,
+            sender: 'Dział Transferowy',
+            role: 'Rynek międzynarodowy',
+            subject: signed
+              ? `Bajeczny kontrakt podpisany: ${entry.playerName}`
+              : `Gigantyczna oferta z Azji: ${entry.playerName}`,
+            body: signed
+              ? `${entry.playerName} zaakceptował ofertę klubu ${entry.toClub}. Zawodnik przechodzi z: ${fromClub}. Kontrakt: ${years} ${years === 1 ? 'rok' : 'lata'}, pensja ${formatPln(entry.salary)}, premia za podpis ${formatPln(entry.bonus)}.`
+              : `${entry.toClub} złożył gigantyczną ofertę zawodnikowi ${entry.playerName}. Źródło zainteresowania: ${fromClub}. Propozycja: ${years} ${years === 1 ? 'rok' : 'lata'}, pensja ${formatPln(entry.salary)}, premia za podpis ${formatPln(entry.bonus)}.`,
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.SYSTEM,
+            priority: signed ? 85 : 75,
+          };
+        });
+
+      if (gulfMegaOfferMails.length > 0) prependUniqueMessages(gulfMegaOfferMails);
+    }
+
+    // 4c. Generowanie terminarza rezerw (4 lipca każdego sezonu)
+    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 4 && userTeamId) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const alreadyGenerated = reserveFixtures.some(f => f.id.startsWith(`res_r1_${seasonNumber}_`));
+      if (userClub && !alreadyGenerated) {
+        const polishClubs = clubs.filter(c =>
+          c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4'
+        );
+        const schedule = ReserveScheduleService.generate(userClub, polishClubs, seasonNumber, sessionSeed);
+        setReserveFixtures(schedule);
+      }
+    }
+
+    // 4d. Symulacja meczu rezerw w tle
+    if (userTeamId && reserves.length > 0 && reserveCoachId) {
+      const todayIso = dateToProcess.toISOString().split('T')[0];
+      const reserveFixture = reserveFixtures.find(f => !f.resultId && (typeof f.date === 'string' ? f.date : new Date(f.date).toISOString().split('T')[0]).startsWith(todayIso));
+      if (reserveFixture) {
+        const opponentClub = clubs.find(c => c.id === reserveFixture.opponentClubId);
+        const oppReputation = opponentClub?.reputation ?? 5;
+        const matchSeed = sessionSeed + (dateToProcess.getTime() % 1000000);
+        const opponentPlayers = ReserveOpponentGeneratorService.generate(reserveFixture.opponentClubId, oppReputation, matchSeed);
+        const reserveCoachObj = coaches[reserveCoachId];
+        if (reserveCoachObj) {
+          const engineResult = ReserveMatchEngine.simulate(
+            reserves,
+            opponentPlayers,
+            reserveCoachObj,
+            oppReputation,
+            reserveFixture.isHome,
+            matchSeed,
+            dateToProcess.toISOString()
+          );
+          const userClub = clubs.find(c => c.id === userTeamId);
+          const userTeamName = `${userClub?.shortName || userClub?.name || 'Drużyna'} II`;
+          const opponentName = `${opponentClub?.shortName || opponentClub?.name || 'Rywal'} II`;
+          const matchResult: ReserveMatchResult = {
+            id: `res_match_${dateToProcess.getTime()}`,
+            date: dateToProcess.toISOString(),
+            season: seasonNumber,
+            homeTeamName: reserveFixture.isHome ? userTeamName : opponentName,
+            awayTeamName: reserveFixture.isHome ? opponentName : userTeamName,
+            isUserHome: reserveFixture.isHome,
+            homeScore: engineResult.homeScore,
+            awayScore: engineResult.awayScore,
+            venue: reserveFixture.isHome
+              ? (userClub?.stadiumName ?? 'Stadion')
+              : (opponentClub?.stadiumName ?? 'Stadion'),
+            opponentClubId: reserveFixture.opponentClubId,
+            goals: engineResult.goals,
+            missedPenalties: engineResult.missedPenalties,
+            cards: engineResult.cards,
+            substitutions: engineResult.substitutions,
+            injuries: engineResult.injuries,
+            ratings: engineResult.ratings,
+            userStartingXI: engineResult.userStartingXI,
+            manOfTheMatch: engineResult.manOfTheMatch,
+            matchPlayers: engineResult.matchPlayers,
+          };
+          setReserveFixtures(prev => prev.map(f =>
+            f.id === reserveFixture.id ? { ...f, resultId: matchResult.id } : f
+          ));
+          setReserveMatchResults(prev => [...prev, matchResult]);
+          setReserves(prev => {
+            const updatedInjured = engineResult.updatedUserReserves;
+            return prev.map(p => {
+              const injuredVersion = updatedInjured.find(u => u.id === p.id);
+              const basePlayer = injuredVersion ?? p;
+              const servedReserveSuspension = (p.suspensionMatches ?? 0) > 0;
+              const baseSuspension = servedReserveSuspension
+                ? Math.max(0, (basePlayer.suspensionMatches ?? 0) - 1)
+                : (basePlayer.suspensionMatches ?? 0);
+              const rating = engineResult.ratings[p.id];
+              const wasInXI = engineResult.userStartingXI.includes(p.id);
+              const wasSub = engineResult.substitutions.some(s => s.playerInId === p.id);
+              if (!wasInXI && !wasSub) {
+                return { ...basePlayer, suspensionMatches: baseSuspension };
+              }
+              const userSide = reserveFixture.isHome ? 'HOME' : 'AWAY';
+              const playerGoals = engineResult.goals.filter(g => g.teamId === userSide && g.playerId === p.id).length;
+              const playerAssists = engineResult.goals.filter(g => g.teamId === userSide && g.assistantId === p.id).length;
+              const playerYellowCards = engineResult.cards.filter(c => c.playerId === p.id && c.type === 'YELLOW').length;
+              const playerRedCards = engineResult.cards.filter(c => c.playerId === p.id && (c.type === 'RED' || c.type === 'SECOND_YELLOW')).length;
+              const gotRedCard = playerRedCards > 0;
+              const prev2 = basePlayer.reserveStats ?? { matches: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, totalRatingPoints: 0 };
+              const newStats: ReserveSeasonStats = {
+                matches: (prev2.matches ?? 0) + 1,
+                goals: (prev2.goals ?? 0) + playerGoals,
+                assists: (prev2.assists ?? 0) + playerAssists,
+                yellowCards: (prev2.yellowCards ?? 0) + playerYellowCards,
+                redCards: (prev2.redCards ?? 0) + playerRedCards,
+                totalRatingPoints: (prev2.totalRatingPoints ?? 0) + (rating ?? 6.0),
+              };
+              const reserveFormAdjustment =
+                (rating >= 7.5 ? 5 : rating >= 7.0 ? 3 : rating <= 5.8 ? -4 : rating <= 6.1 ? -2 : 0) +
+                Math.min(3, playerGoals * 2 + playerAssists) -
+                (gotRedCard ? 3 : 0);
+              return PlayerFormService.withUpdatedForm({
+                ...basePlayer,
+                reserveStats: newStats,
+                suspensionMatches: gotRedCard ? 1 : baseSuspension
+              }, reserveFormAdjustment);
+            });
+          });
+        }
+      }
+    }
+
+    // 4e. Regeneracja kondycji rezerw
+    if (reserves.length > 0) {
+      setReserves(prev => {
+        const reservesMap = { RES: prev };
+        return RecoveryService.applyDailyRecovery(reservesMap, dateToProcess, TrainingIntensity.NORMAL, recoveryDelta, 1.0)['RES'];
+      });
+    }
+
+    // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
+    // Pomijamy dzień UEFA_SUPER_CUP — mecz jest przetwarzany bezpośrednio w case CompetitionType.UEFA_SUPER_CUP
+    const isUEFASuperCupDay = primaryEvent?.slot.competition === CompetitionType.UEFA_SUPER_CUP;
+    const clResult = isUEFASuperCupDay
+      ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
+      : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+          dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, matchSimulationSeed, coaches
+        );
+    // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
+    // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
+    // Pomijamy aktualizację fixtures i graczy z clResult gdy to dzień UEFA Super Cup,
+    // bo clResult.updatedFixtures = stare allFixtures (SCHEDULED) i nadpisałoby FINISHED z case UEFA_SUPER_CUP
+    if (!isUEFASuperCupDay) {
+      setGlobalFixtures(prev => {
+        const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
+        return prev.map(f => {
+          const clF = clMap.get(f.id);
+          if (clF && (
+            clF.status !== f.status ||
+            clF.homeScore !== f.homeScore ||
+            clF.awayScore !== f.awayScore ||
+            clF.homePenaltyScore !== f.homePenaltyScore ||
+            clF.awayPenaltyScore !== f.awayPenaltyScore
+          )) {
+            return clF;
+          }
+          return f;
+        });
+      });
+      if (clResult.matchHistoryEntries.length > 0) {
+        const clParticipantIds = new Set(
+          clResult.matchHistoryEntries.flatMap(entry => [entry.homeTeamId, entry.awayTeamId])
+        );
+        setPlayers(prev => {
+          const nextPlayers = { ...prev };
+          clParticipantIds.forEach(clubId => {
+            const updatedSquad = clResult.updatedPlayers[clubId];
+            if (updatedSquad) nextPlayers[clubId] = updatedSquad;
+          });
+          return nextPlayers;
+        });
+      }
+    }
+    if (!isUEFASuperCupDay) {
+      setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
+        prev,
+        clubs,
+        clResult.updatedFixtures,
+        allFixtures,
+        userTeamId
+      ));
+    }
+    clResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
+
+    // Przetwarzanie bonusów za Superpuchar Polski
+    const superCupFixture = clResult.updatedFixtures.find(f => f.leagueId === CompetitionType.SUPER_CUP && f.status === MatchStatus.FINISHED);
+    const superCupWinnerId = (() => {
+      if (!superCupFixture) return null;
+      const homeScore = superCupFixture.homeScore ?? 0;
+      const awayScore = superCupFixture.awayScore ?? 0;
+      if (homeScore > awayScore) return superCupFixture.homeTeamId;
+      if (awayScore > homeScore) return superCupFixture.awayTeamId;
+      const homePens = superCupFixture.homePenaltyScore ?? 0;
+      const awayPens = superCupFixture.awayPenaltyScore ?? 0;
+      if (homePens > awayPens) return superCupFixture.homeTeamId;
+      if (awayPens > homePens) return superCupFixture.awayTeamId;
+      return null;
+    })();
+    const updatedClubsForSuperCup = finalResult.updatedClubs.map(club => {
+      
+      if (superCupFixture && (club.id === superCupFixture.homeTeamId || club.id === superCupFixture.awayTeamId)) {
+        // Sprawdzenie czy bonus za Superpuchar był już kiedykolwiek przyznany (ignorujemy datę)
+        const bonusAlreadyApplied = club.financeHistory?.some(entry => 
+          entry.description === 'Nagroda za zwycięstwo w Superpucharze Polski' || 
+          entry.description === 'Nagroda za udział w Superpucharze Polski'
+        );
+        
+        if (bonusAlreadyApplied) {
+          return club;
+        }
+        
+        let isWinner = false;
+        
+        // Sprawdzenie czy klub wygrał w regulaminowym czasie
+        if (club.id === superCupFixture.homeTeamId && (superCupFixture.homeScore || 0) > (superCupFixture.awayScore || 0)) {
+          isWinner = true;
+        } else if (club.id === superCupFixture.awayTeamId && (superCupFixture.awayScore || 0) > (superCupFixture.homeScore || 0)) {
+          isWinner = true;
+        }
+        
+        // Sprawdzenie dla rzutów karnych w przypadku remisu
+        if (!isWinner && superCupFixture.homeScore === superCupFixture.awayScore && superCupFixture.homePenaltyScore !== undefined) {
+          if (club.id === superCupFixture.homeTeamId && (superCupFixture.homePenaltyScore || 0) > (superCupFixture.awayPenaltyScore || 0)) {
+            isWinner = true;
+          } else if (club.id === superCupFixture.awayTeamId && (superCupFixture.awayPenaltyScore || 0) > (superCupFixture.homePenaltyScore || 0)) {
+            isWinner = true;
+          }
+        }
+        
+        const bonusAmount = FinanceService.calculateSuperCupBonus(isWinner);
+        
+        const financeLog = {
+          id: Math.random().toString(36).substring(2, 9),
+          date: dateToProcess.toISOString().split('T')[0],
+          amount: bonusAmount,
+          type: 'INCOME' as const,
+          description: isWinner ? 'Nagroda za zwycięstwo w Superpucharze Polski' : 'Nagroda za udział w Superpucharze Polski',
+          previousBalance: club.budget
+        };
+        
+        return {
+          ...club,
+          budget: club.budget + bonusAmount,
+          financeHistory: [financeLog, ...(club.financeHistory || [])].slice(0, 50)
+        };
+      }
+      
+      return club;
+    });
+
+    if (superCupFixture && userTeamId && superCupWinnerId === userTeamId) {
+      const superCupDate = superCupFixture.date instanceof Date ? superCupFixture.date : dateToProcess;
+      const year = superCupDate.getFullYear();
+      const month = superCupDate.getMonth();
+      const seasonStartYear = month >= 6 ? year : year - 1;
+      const seasonEndYear = seasonStartYear + 1;
+      const seasonLabel = `${seasonStartYear}/${seasonEndYear}`;
+
+      setManagerProfile(prev => {
+        let next = ManagerExperienceService.applyExpAwards(prev, [{
+          sourceKey: `supercup:${superCupFixture.id}:winner`,
+          date: superCupDate,
+          season: seasonNumber,
+          delta: 15,
+          competition: 'Superpuchar Polski',
+          label: 'Zdobycie Superpucharu Polski',
+        }]);
+        next = ManagerExperienceService.addAchievements(next, [{
+          id: `achievement:supercup:${superCupFixture.id}:winner`,
+          seasonLabel,
+          title: `Superpuchar Polski ${seasonEndYear}`,
+          competition: 'Superpuchar Polski',
+        }]);
+        return next;
+      });
+    }
+    
+    // Aktualizacja boardConfidence dla wszystkich klubów
+    const leagueGroups = new Map<string, { id: string; points: number; goalDifference: number }[]>();
+    updatedClubsForSuperCup.forEach(c => {
+      const arr = leagueGroups.get(c.leagueId) || [];
+      arr.push({ id: c.id, points: c.stats.points, goalDifference: c.stats.goalDifference });
+      leagueGroups.set(c.leagueId, arr);
+    });
+    const leagueSortedIds = new Map<string, string[]>();
+    leagueGroups.forEach((arr, lId) => {
+      const sorted = [...arr].sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference);
+      leagueSortedIds.set(lId, sorted.map(c => c.id));
+    });
+    const updatedClubsWithConfidence = updatedClubsForSuperCup.map(club => {
+      const resultScore = (club.stats.wins * 4) - (club.stats.losses * 6);
+      let newConfidence: number;
+      if (club.leagueId === 'NONE') {
+        const base = 100 - (club.reputation * 2);
+        newConfidence = Math.min(99, Math.max(5, base + resultScore + (club.europeanBonusPoints ?? 0) + (club.sportingDirectorBoardInfluence ?? 0)));
+      } else {
+        const rankList = leagueSortedIds.get(club.leagueId) || [];
+        const rank = rankList.indexOf(club.id) + 1 || 1;
+        const rankImpact = (18 - rank) * 2;
+        newConfidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (club.reputation * 2) + (club.sportingDirectorBoardInfluence ?? 0)));
+      }
+      return { ...club, boardConfidence: newConfidence };
+    });
+    setClubs(updatedClubsWithConfidence);
+
+    // 5. Integracja NOWYCH OFERT AI do stanu
+
+    // 5. Integracja NOWYCH OFERT AI do stanu
+    if (finalResult.newOffers && finalResult.newOffers.length > 0) {
+      setPendingNegotiations(prev => [...prev, ...finalResult.newOffers]);
+    }
+
+    // 6. Generowanie Raportu Dnia i Poczty (używamy finalResult zamiast result)
+    if (userTeamId) {
+      const userClub = finalResult.updatedClubs.find(c => c.id === userTeamId)!;
+      const leagueClubs = finalResult.updatedClubs.filter(c => c.leagueId === userClub.leagueId);
+      const sorted = [...leagueClubs].sort((a,b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+      const userRank = sorted.findIndex(c => c.id === userTeamId) + 1;
+      
+      const resultScore = (userClub.stats.wins * 4) - (userClub.stats.losses * 6);
+      let confidence: number;
+      if (userClub.leagueId === 'NONE') {
+        const base = 100 - (userClub.reputation * 2);
+        confidence = Math.min(99, Math.max(5, base + resultScore + (userClub.europeanBonusPoints ?? 0) + (userClub.sportingDirectorBoardInfluence ?? 0)));
+      } else {
+        const rankImpact = (18 - userRank) * 2;
+        confidence = Math.min(100, Math.max(5, 75 + resultScore + rankImpact - (userClub.reputation * 2) + (userClub.sportingDirectorBoardInfluence ?? 0)));
+      }
+      
+      const recentFixture = allFixtures.find(f => f.date.toDateString() === dateToProcess.toDateString() && (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId));
+      const nextFixture = allFixtures
+        .filter(f =>
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          f.status === MatchStatus.SCHEDULED &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= new Date(dateToProcess).setHours(0, 0, 0, 0)
+        )
+        .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+      
+      // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll());
+      if (newMails.length > 0) {
+        prependUniqueMessages(newMails);
+        const sentUnfriendlyPressMonthKeys = newMails
+          .map(mail => /^PRESS_UNFRIENDLY_LOSS_(\d{4}_\d{2})_/.exec(mail.id)?.[1])
+          .filter((key): key is string => Boolean(key));
+        if (sentUnfriendlyPressMonthKeys.length > 0) {
+          setSentUnfriendlyPressMonths(prev => Array.from(new Set([...prev, ...sentUnfriendlyPressMonthKeys])));
+        }
+        const sentFriendlyPressMonthKeys = newMails
+          .map(mail => /^PRESS_FRIENDLY_START_(\d{4}_\d{2})_/.exec(mail.id)?.[1])
+          .filter((key): key is string => Boolean(key));
+        if (sentFriendlyPressMonthKeys.length > 0) {
+          setSentFriendlyPressMonths(prev => Array.from(new Set([...prev, ...sentFriendlyPressMonthKeys])));
+        }
+      }
+
+      const todayIso = dateToProcess.toISOString().split('T')[0];
+      const duePressArticles = pendingPressArticles.filter(p => p.deliveryDate <= todayIso);
+      if (duePressArticles.length > 0) {
+        prependUniqueMessages(duePressArticles.map(p => p.mail));
+        setPendingPressArticles(prev => prev.filter(p => p.deliveryDate > todayIso));
+      }
+
+      const directorCommunication = SportingDirectorService.generateCommunicationMails({
+        club: userClub,
+        players: recoveredPlayers[userTeamId] || [],
+        date: dateToProcess,
+        recentFixture,
+      });
+      if (directorCommunication.length > 0) {
+        prependUniqueMessages(directorCommunication, true);
+      }
+
+      const promotionMailAlreadySent = messages.some(m => m.id.startsWith('BOARD_PROMOTION_EKSTRAKLASA_'));
+      if (!promotionMailAlreadySent && userClub.leagueId === 'L_PL_2') {
+        const sortedL2 = [...finalResult.updatedClubs]
+          .filter(c => c.leagueId === 'L_PL_2')
+          .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const userIndexL2 = sortedL2.findIndex(c => c.id === userTeamId);
+        const thirdPlaceClub = sortedL2[2];
+        const maxThirdPoints = thirdPlaceClub ? thirdPlaceClub.stats.points + Math.max(0, 34 - thirdPlaceClub.stats.played) * 3 : 0;
+        const hasClinchedPromotion = userIndexL2 < 2 && thirdPlaceClub && (
+          userClub.stats.points > maxThirdPoints ||
+          (thirdPlaceClub.stats.played >= 34 && userClub.stats.points >= thirdPlaceClub.stats.points)
+        );
+        if (hasClinchedPromotion) {
+          const promotionMail: MailMessage = {
+            id: `BOARD_PROMOTION_EKSTRAKLASA_${dateToProcess.getTime()}`,
+            sender: 'Zarząd Klubu',
+            role: 'Prezes Zarządu',
+            subject: '[ OFICJALNIE ] Awans do Ekstraklasy – Gratulacje od Zarządu',
+            body: '',
+            date: new Date(dateToProcess),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 100
+          };
+          prependUniqueMessages([promotionMail]);
+        }
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayIso = nextDay.toISOString().split('T')[0];
+
+    // --- STAFF: miesięczny przegląd kończących się kontraktów ---
+    if (userTeamId && !isResigned && nextDay.getDate() === 1) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const userSquad = players[userTeamId] || [];
+      if (userClub) {
+        const contractMail = buildContractStaffAlert(userClub, userSquad, nextDay, lineups[userTeamId]);
+        if (contractMail && !sentMailIdsRef.current.has(contractMail.id)) {
+          sentMailIdsRef.current.add(contractMail.id);
+          setMessages(prev => {
+            if (prev.some(message => message.id === contractMail.id)) return prev;
+            return [contractMail, ...prev];
+          });
+        }
+      }
+    }
+    // --- END STAFF CONTRACT REVIEW ---
+
+    // --- SPORTING DIRECTOR: active objective review ---
+    if (userTeamId && !isResigned) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector || !userClub.sportingDirectorObjective) return prev;
+
+        const objectiveReview = SportingDirectorService.evaluateActiveObjective({
+          club: userClub,
+          players: userSquad,
+          date: nextDay,
+          leagueClubs: prev.filter(c => c.leagueId === userClub.leagueId),
+        });
+
+        if (!objectiveReview.mail) return prev;
+        prependUniqueMessages([objectiveReview.mail], true);
+        return prev.map(c => c.id === userTeamId ? objectiveReview.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
+    // --- SPORTING DIRECTOR: transfer window policy ---
+    if (
+      userTeamId &&
+      !isResigned &&
+      ((nextDay.getMonth() === 6 && nextDay.getDate() === 1) || (nextDay.getMonth() === 0 && nextDay.getDate() === 12))
+    ) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector) return prev;
+
+        const policy = SportingDirectorService.createTransferWindowPolicy({
+          club: userClub,
+          players: userSquad,
+          date: nextDay,
+        });
+
+        if (!policy.mail) return prev;
+        prependUniqueMessages([policy.mail], true);
+        return prev.map(c => c.id === userTeamId ? policy.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
+    // --- SPORTING DIRECTOR: monthly manager review ---
+    if (userTeamId && !isResigned && nextDay.getDate() === 1) {
+      const userSquad = players[userTeamId] || [];
+      setClubs(prev => {
+        const userClub = prev.find(c => c.id === userTeamId);
+        if (!userClub || !userClub.sportingDirector || userClub.leagueId === 'NONE') return prev;
+        const nextDayStart = new Date(nextDay).setHours(0, 0, 0, 0);
+        const hasUpcomingLeagueMatch = allFixtures.some(f =>
+          f.status === MatchStatus.SCHEDULED &&
+          f.leagueId === userClub.leagueId &&
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= nextDayStart
+        );
+        if (!hasUpcomingLeagueMatch) return prev;
+
+        const leagueClubs = prev.filter(c => c.leagueId === userClub.leagueId);
+        const review = SportingDirectorService.reviewManagerMonthly({
+          club: userClub,
+          players: userSquad,
+          leagueClubs,
+          date: nextDay,
+        });
+        const relationshipPressure = SportingDirectorService.evaluateRelationshipPressure({
+          club: review.updatedClub,
+          date: nextDay,
+        });
+        const objective = SportingDirectorService.createMonthlyObjective({
+          club: relationshipPressure.updatedClub,
+          players: userSquad,
+          date: nextDay,
+          leagueClubs,
+          fixtures: allFixtures,
+        });
+        const budgetAdjustment = SportingDirectorService.applyTransferBudgetAdjustment({
+          club: objective.updatedClub,
+          players: userSquad,
+          date: nextDay,
+        });
+
+        const directorMails = [
+          objective.mail,
+          relationshipPressure.mail,
+          review.mail,
+          budgetAdjustment.mail,
+          ...SportingDirectorService.generateCommunicationMails({
+            club: budgetAdjustment.updatedClub,
+            players: userSquad,
+            date: nextDay,
+          }),
+        ].filter(Boolean) as MailMessage[];
+        if (directorMails.length > 0) {
+          prependUniqueMessages(directorMails, true);
+        }
+        return prev.map(c => c.id === userTeamId ? budgetAdjustment.updatedClub : c);
+      });
+    }
+    // --- END SPORTING DIRECTOR ---
+
+    if (userTeamId) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub) {
+        const nextDayStart = new Date(nextDay).setHours(0, 0, 0, 0);
+        const seasonEndYear = nextDay.getMonth() >= 7 ? nextDay.getFullYear() + 1 : nextDay.getFullYear();
+        const isBeforeLeagueSeasonEnd = nextDayStart <= new Date(seasonEndYear, 4, 23).getTime();
+        const hasUpcomingUserLeagueMatch = allFixtures.some(f =>
+          f.status === MatchStatus.SCHEDULED &&
+          f.leagueId === userClub.leagueId &&
+          (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+          new Date(f.date).setHours(0, 0, 0, 0) >= nextDayStart
+        );
+        const isMotivationTalkSeasonActive =
+          userClub.leagueId !== 'NONE' &&
+          userClub.stats.played > 0 &&
+          isBeforeLeagueSeasonEnd &&
+          hasUpcomingUserLeagueMatch;
+
+        if (isMotivationTalkSeasonActive) {
+          const neglectStatus = WeeklyMotivationService.getNeglectStatus(userClub, nextDay);
+
+        if (!userClub.lastMotivationDate && !userClub.motivationMonitoringStartDate) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? {
+            ...c,
+            motivationMonitoringStartDate: nextDayIso,
+            motivationNeglectLevel: c.motivationNeglectLevel ?? 0,
+          } : c));
+        } else if (neglectStatus.isOverdue) {
+          const squad = players[userTeamId] || [];
+          const captain = squad.find(p => p.id === userClub.captainId) || squad[0];
+          const captainName = captain ? `${captain.firstName} ${captain.lastName}` : 'Kapitan druzyny';
+          const reminderLevel = userClub.motivationNeglectLevel ?? 0;
+          const captainMailBody =
+            reminderLevel <= 0
+              ? 'Trenerze,\n\nW szatni zaczyna brakować wspólnego impulsu. Chłopaki czekają na rozmowę, bo atmosfera powoli się rozluznia i nie wszyscy są już na tej samej fali.\n\nMyslę, że kilka słów od trenera dobrze by nam teraz zrobiło.\n\n' + captainName
+              : reminderLevel === 1
+                ? 'Trenerze,\n\nW szatni widać, że zbyt długo nie było żadnej rozmowy. Atmosfera nie jest jeszcze zła, ale pojawia się frustracja i coraz cześciej każdy idzie w swoją stronę.\n\nDrużyna potrzebuje jasnego sygnału i zebrania nas razem.\n\n' + captainName
+                : 'Trenerze,\n\nAtmosfera w szatni wyraźnie się psuje i zawodnicy od dawna czekają na reakcję. Bez rozmowy będzie nam coraz trudniej utrzymać jedność i koncentracje.\n\nTo jest moment, w którym zespół potrzebuje trenera najbardziej.\n\n' + captainName;
+
+          setClubs(prev => prev.map(c => {
+            if (c.id !== userTeamId) return c;
+            return {
+              ...c,
+              morale: Math.max(5, Math.min(95, (c.morale ?? 50) - neglectStatus.nextPenalty)),
+              motivationMonitoringStartDate: c.motivationMonitoringStartDate ?? c.lastMotivationDate ?? nextDayIso,
+              motivationNeglectLevel: (c.motivationNeglectLevel ?? 0) + 1,
+            };
+          }));
+
+          if ((userClub.morale ?? 50) <= 64) {
+            setMessages(prev => [{
+              id: `CAPTAIN_MOTIVATION_${Date.now()}`,
+              sender: captainName,
+              role: 'Kapitan druzyny',
+              subject: reminderLevel <= 0 ? 'Atmosfera w szatni' : 'Drużyna czeka na rozmowę',
+              body: captainMailBody,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 58,
+            }, ...prev]);
+          }
+        }
+        }
+      }
+    }
+    // Nowy sezon jest teraz uruchamiany przez confirmSeasonEnd (przycisk "NOWY SEZON" na Dashboardzie)
+    // Fallback: jeśli data jakoś przeskoczyła bez zatrzymania na OFF_SEASON (np. save z przyszłości)
+    // if (nextDay.getMonth() === 6 && nextDay.getDate() === 1) startNextSeason(nextDay.getFullYear());
+
+    // STAGE 1 PRO: Board Review at Checkpoints (Rounds 17, 24, 34)
+ 
+// NOWA LOGIKA: SESJE ZARZĄDU (7 Grudnia, 1 Marca, 1 Czerwca)
+    const isBoardMeeting = (nextDay.getMonth() === 11 && nextDay.getDate() === 7) || // 7 Grudnia
+                           (nextDay.getMonth() === 2 && nextDay.getDate() === 1) ||  // 1 Marca
+                           (nextDay.getMonth() === 5 && nextDay.getDate() === 1);   // 1 Czerwca
+
+    const processCoachContractRenewals = (
+      baseCoaches: Record<string, Coach>,
+      baseClubs: Club[]
+    ): { updatedCoaches: Record<string, Coach>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedCoaches = { ...baseCoaches };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || !club.coachId) return;
+        const coach = updatedCoaches[club.coachId];
+        if (!coach?.contractEndDate) return;
+
+        const contractEnd = new Date(coach.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return;
+        if (contractEnd.setHours(0, 0, 0, 0) > new Date(nextDay).setHours(0, 0, 0, 0)) return;
+
+        changed = true;
+        const renewalDate = nextDay.toISOString();
+        const refusesExtension = CoachService.shouldRefuseContractExtension(coach, club, nextDay);
+
+        if (!refusesExtension) {
+          updatedCoaches[coach.id] = {
+            ...coach,
+            contractEndDate: CoachService.getDefaultContractEndDate(renewalDate),
+            annualSalary: CoachService.calculateRenewedAnnualSalary(coach),
+          };
+          return;
+        }
+
+        const leavingCoach: Coach = {
+          ...coach,
+          currentClubId: null,
+          favoritePlayerIds: undefined,
+          blacklist: {
+            ...(coach.blacklist ?? {}),
+            [club.id]: nextDay.getFullYear() + 2,
+          },
+          history: (coach.history ?? []).map((entry, index, list) =>
+            index === list.length - 1 && entry.toYear === null
+              ? { ...entry, toYear: nextDay.getFullYear(), toMonth: nextDay.getMonth() + 1 }
+              : entry
+          ),
+        };
+        updatedCoaches[coach.id] = leavingCoach;
+
+        const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, leavingCoach.id);
+
+        if (!replacement) {
+          club.coachId = undefined;
+          return;
+        }
+
+        const replacementHistory = {
+          clubId: club.id,
+          clubName: club.name,
+          fromYear: nextDay.getFullYear(),
+          fromMonth: nextDay.getMonth() + 1,
+          toYear: null,
+          toMonth: null,
+        };
+
+        updatedCoaches[replacement.id] = {
+          ...replacement,
+          currentClubId: club.id,
+          hiredDate: renewalDate,
+          contractEndDate: CoachService.getDefaultContractEndDate(renewalDate),
+          annualSalary: CoachService.calculateAnnualSalaryForClub(club, replacement),
+          favoritePlayerIds: undefined,
+          history: [...(replacement.history ?? []), replacementHistory],
+        };
+        club.coachId = replacement.id;
+      });
+
+      return { updatedCoaches, updatedClubs, changed };
+    };
+
+    const processVacantCoachHiring = (
+      baseCoaches: Record<string, Coach>,
+      baseClubs: Club[]
+    ): { updatedCoaches: Record<string, Coach>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedCoaches = { ...baseCoaches };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || club.leagueId === 'NONE') return;
+        if (
+          managerJobHoldClubIds.has(club.id) ||
+          managerJobOffers.some(offer =>
+            offer.clubId === club.id &&
+            offer.status === 'OFFERED' &&
+            new Date(offer.expiresAt).getTime() >= nextDay.getTime()
+          )
+        ) return;
+
+        const currentCoach = club.coachId ? updatedCoaches[club.coachId] : null;
+        if (currentCoach?.currentClubId === club.id) return;
+
+        const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, club.coachId);
+        if (!replacement) {
+          if (club.coachId) {
+            club.coachId = undefined;
+            changed = true;
+          }
+          return;
+        }
+
+        const replacementHiredDate = nextDay.toISOString();
+        updatedCoaches[replacement.id] = {
+          ...replacement,
+          currentClubId: club.id,
+          hiredDate: replacementHiredDate,
+          contractEndDate: CoachService.getDefaultContractEndDate(replacementHiredDate),
+          annualSalary: CoachService.calculateAnnualSalaryForClub(club, replacement),
+          favoritePlayerIds: undefined,
+          history: [
+            ...(replacement.history ?? []),
+            {
+              clubId: club.id,
+              clubName: club.name,
+              fromYear: nextDay.getFullYear(),
+              fromMonth: nextDay.getMonth() + 1,
+              toYear: null,
+              toMonth: null,
+            },
+          ],
+        };
+        club.coachId = replacement.id;
+        changed = true;
+      });
+
+      return { updatedCoaches, updatedClubs, changed };
+    };
+
+    const processVacantStaffHiring = (
+      baseStaffMembers: Record<string, StaffMember>,
+      baseClubs: Club[]
+    ): { updatedStaffMembers: Record<string, StaffMember>; updatedClubs: Club[]; changed: boolean } => {
+      const updatedStaffMembers = { ...baseStaffMembers };
+      const updatedClubs = [...baseClubs];
+      let changed = false;
+
+      const getLeagueTier = (club: Club): number => {
+        const fromLeagueId = parseInt((club.leagueId as string).split('_')[2] || '', 10);
+        if (Number.isFinite(fromLeagueId)) return fromLeagueId;
+        return club.tier ?? 1;
+      };
+
+      const getStaffAvg = (member: StaffMember): number => {
+        const values = Object.values(member.attributes ?? {});
+        return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+      };
+
+      const getAnnualStaffCost = (club: Club): number =>
+        (club.staffIds ?? []).reduce((sum, staffId) => sum + (updatedStaffMembers[staffId]?.salary ?? 0), 0);
+
+      const canAffordOptionalStaff = (club: Club, member: StaffMember): boolean => {
+        const budget = Math.max(0, club.budget ?? 0);
+        if (budget <= 0) return false;
+
+        const annualStaffCost = getAnnualStaffCost(club);
+        const optionalBudgetShare = getLeagueTier(club) >= 4 ? 0.05 : 0.07;
+        return annualStaffCost + member.salary <= budget * optionalBudgetShare;
+      };
+
+      const findStaffReplacement = (club: Club, role: StaffRole, optional: boolean): StaffMember | undefined => {
+        const candidates = Object.values(updatedStaffMembers)
+          .filter(member => member.currentClubId === null && member.role === role)
+          .filter(member => !optional || canAffordOptionalStaff(club, member));
+
+        if (candidates.length === 0) return undefined;
+
+        return [...candidates].sort((a, b) =>
+          getStaffAvg(b) - getStaffAvg(a) ||
+          (b.attributes.experience ?? 0) - (a.attributes.experience ?? 0) ||
+          a.salary - b.salary
+        )[0];
+      };
+
+      const hireStaffForClub = (club: Club, member: StaffMember): void => {
+        const hireDate = nextDay.toISOString();
+        const contractEnd = new Date(nextDay);
+        contractEnd.setFullYear(contractEnd.getFullYear() + (getLeagueTier(club) >= 3 ? 1 : 2));
+
+        updatedStaffMembers[member.id] = {
+          ...member,
+          currentClubId: club.id,
+          hiredDate: hireDate,
+          contractEndDate: contractEnd.toISOString(),
+          history: [
+            ...(member.history ?? []),
+            {
+              clubId: club.id,
+              clubName: club.name,
+              fromYear: nextDay.getFullYear(),
+              fromMonth: nextDay.getMonth() + 1,
+              toYear: null,
+              toMonth: null,
+            },
+          ],
+          lastNegotiationDate: null,
+        };
+
+        club.staffIds = [...(club.staffIds ?? []), member.id];
+        changed = true;
+      };
+
+      updatedClubs.forEach(club => {
+        if (club.id === userTeamId || club.leagueId === 'NONE') return;
+
+        const validStaffIds = (club.staffIds ?? []).filter(staffId => updatedStaffMembers[staffId]?.currentClubId === club.id);
+        if (validStaffIds.length !== (club.staffIds ?? []).length) {
+          club.staffIds = validStaffIds;
+          changed = true;
+        }
+
+        const leagueTier = getLeagueTier(club);
+        const requiredRoles = leagueTier >= 3
+          ? [StaffRole.ASSISTANT_COACH, StaffRole.CLUB_DOCTOR]
+          : [
+              StaffRole.ASSISTANT_COACH,
+              StaffRole.GOALKEEPER_COACH,
+              StaffRole.FITNESS_COACH,
+              StaffRole.PHYSIOTHERAPIST,
+              StaffRole.CLUB_DOCTOR,
+            ];
+        const optionalRoles = leagueTier >= 3
+          ? [StaffRole.GOALKEEPER_COACH, StaffRole.FITNESS_COACH, StaffRole.PHYSIOTHERAPIST]
+          : [];
+
+        const hasRole = (role: StaffRole): boolean =>
+          (club.staffIds ?? []).some(staffId => updatedStaffMembers[staffId]?.role === role);
+
+        requiredRoles.forEach(role => {
+          if (hasRole(role)) return;
+          const replacement = findStaffReplacement(club, role, false);
+          if (replacement) hireStaffForClub(club, replacement);
+        });
+
+        optionalRoles.forEach(role => {
+          if (hasRole(role)) return;
+          const replacement = findStaffReplacement(club, role, true);
+          if (replacement) hireStaffForClub(club, replacement);
+        });
+      });
+
+      return { updatedStaffMembers, updatedClubs, changed };
+    };
+
+    let coachClubStateChanged = false;
+    let nextCoachesState = coaches;
+    let nextClubsState = clubs;
+    let staffClubStateChanged = false;
+    let nextStaffMembersState = staffMembers;
+    const managerJobHoldClubIds = new Set<string>();
+
+    if (isBoardMeeting) {
+      const updatedCoaches = { ...coaches };
+      const updatedClubsList = [...clubs];
+      const newMails: MailMessage[] = [];
+
+      if (userTeamId && !isResigned && userTeamId !== UNEMPLOYED_MANAGER_CLUB_ID) {
+        const userClub = updatedClubsList.find(club => club.id === userTeamId);
+        if (userClub && (userClub.leagueId === 'L_PL_1' || userClub.leagueId === 'L_PL_2' || userClub.leagueId === 'L_PL_3')) {
+          const leagueClubs = updatedClubsList.filter(club => club.leagueId === userClub.leagueId);
+          const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
+          const rank = sorted.findIndex(club => club.id === userClub.id) + 1;
+          const pressure = CoachService.getPerformancePressure(userClub, rank, managerProfile?.expPoints);
+
+          if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
+            const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
+            assignReplacementCoachToClub(updatedCoaches, userClub, nextDay, userClub.coachId);
+            newMails.push(createManagerFiredMail(userClub, pressure.reason, rank, nextDay, expPenalty));
+            if (expPenalty > 0) {
+              setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, [{
+                sourceKey: `manager-fired:${userClub.id}:${nextDay.toISOString().split('T')[0]}`,
+                date: nextDay,
+                season: seasonNumber,
+                delta: -expPenalty,
+                competition: userClub.name,
+                label: 'Zwolnienie przez zarząd',
+              }]));
+            }
+            setIsResigned(true);
+            setManagerEmploymentStatus('FIRED');
+            setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+            setIncomingOffers([]);
+            setActiveTrainingId(null);
+            coachClubStateChanged = true;
+          }
+        }
+      }
+
+      updatedClubsList.forEach(club => {
+        if (club.id === userTeamId || !club.coachId) return;
+        if (club.leagueId !== 'L_PL_1' && club.leagueId !== 'L_PL_2' && club.leagueId !== 'L_PL_3') return;
+        
+        const coach = updatedCoaches[club.coachId];
+
+        const leagueClubs = updatedClubsList.filter(c => c.leagueId === club.leagueId);
+        const sorted = [...leagueClubs].sort((a,b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+        const rank = sorted.findIndex(c => c.id === club.id) + 1;
+        const pressure = CoachService.getPerformancePressure(club, rank, coach.expPoints);
+
+        // 6-miesięczny immunitet zostaje, ale katastrofalne wyniki mogą otworzyć wcześniejszy przegląd.
+        const hireDate = new Date(coach.hiredDate);
+        const diffTime = Math.abs(nextDay.getTime() - hireDate.getTime());
+        const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30.44);
+        const isProtected = diffMonths < 6 && !pressure.earlyReviewAllowed;
+
+        if (isProtected) return;
+
+        const evaluation = CoachService.evaluatePerformance(club, coach, rank);
+        
+        if (evaluation.fire) {
+
+// ZASTĄP TEN KOD (sekcja zwolnienia AI) TYM KODEM:
+          // 1. Wyślij informację do mediów
+           const playerClub = updatedClubsList.find(c => c.id === userTeamId);
+          const playerTier = parseInt(playerClub?.leagueId.split('_')[2] || '4');
+          const firingClubTier = parseInt(club.leagueId.split('_')[2] || '4');
+
+          // Wiadomość trafia do skrzynki tylko, jeśli liga zwolnienia jest równa lub wyższa (niższy Tier) niż gracza
+          if (firingClubTier <= playerTier) {
+            newMails.push(MailService.generateCoachFiredMail(club.name, `${coach.firstName} ${coach.lastName}`, rank));
+          }
+          // 2. Wykonaj fizyczne zwolnienie
+          Object.keys(coach.attributes).forEach(attr => {
+            const key = attr as keyof typeof coach.attributes;
+            coach.attributes[key] = Math.max(1, coach.attributes[key] - 1);
+          });
+          
+          coach.blacklist[club.id] = nextDay.getFullYear() + 5;
+          coach.currentClubId = null;
+          coach.favoritePlayerIds = undefined;
+          coach.history[coach.history.length-1].toYear = nextDay.getFullYear();
+          coach.history[coach.history.length-1].toMonth = nextDay.getMonth()+1;
+          // Szukanie następcy
+          const shouldConsiderPlayer = isManagerOutOfClub() && managerProfile && ManagerJobService.isPolishManagerJobClub(club);
+          const playerJobEvaluation = ManagerJobService.evaluateManagerJob(club, updatedClubsList, updatedCoaches, managerProfile, managerEmploymentStatus);
+          const shouldOfferPlayerJob =
+            shouldConsiderPlayer &&
+            playerJobEvaluation.chance >= 28 &&
+            Math.random() * 100 <= Math.min(78, playerJobEvaluation.chance + 8);
+
+          if (shouldOfferPlayerJob) {
+            club.coachId = undefined;
+            const managerOffer = createManagerJobOfferRecord(
+              club,
+              'CLUB_OFFER',
+              'OFFERED',
+              nextDay,
+              `Zarząd zwolnił ${coach.firstName} ${coach.lastName} i chce szybko rozpocząć nowy projekt.`
+            );
+            managerJobHoldClubIds.add(club.id);
+            setManagerJobOffers(prev => [managerOffer, ...prev].slice(0, 80));
+            newMails.push(createManagerJobOfferMail(club, managerOffer, nextDay));
+            return;
+          }
+
+          const replacement = CoachService.findReplacementCoach(updatedCoaches, club, nextDay, coach.id);
+          
+          if (replacement) {
+            const replacementHiredDate = nextDay.toISOString();
+            replacement.currentClubId = club.id;
+            replacement.hiredDate = replacementHiredDate;
+            replacement.contractEndDate = CoachService.getDefaultContractEndDate(replacementHiredDate);
+            replacement.annualSalary = CoachService.calculateAnnualSalaryForClub(club, replacement);
+            replacement.favoritePlayerIds = undefined;
+            replacement.history.push({
+              clubId: club.id, clubName: club.name,
+              fromYear: nextDay.getFullYear(), fromMonth: nextDay.getMonth()+1,
+              toYear: null, toMonth: null
+            });
+            club.coachId = replacement.id;
+          } else {
+            club.coachId = undefined;
+          }
+        }
+      });
+        if (newMails.length > 0) setMessages(prev => [...newMails, ...prev]);
+      nextCoachesState = updatedCoaches;
+      nextClubsState = updatedClubsList;
+      coachClubStateChanged = true;
+    }
+
+    const coachContractRenewals = processCoachContractRenewals(nextCoachesState, nextClubsState);
+    if (coachContractRenewals.changed) {
+      nextCoachesState = coachContractRenewals.updatedCoaches;
+      nextClubsState = coachContractRenewals.updatedClubs;
+      coachClubStateChanged = true;
+    }
+
+    const vacantCoachHiring = processVacantCoachHiring(nextCoachesState, nextClubsState);
+    if (vacantCoachHiring.changed) {
+      nextCoachesState = vacantCoachHiring.updatedCoaches;
+      nextClubsState = vacantCoachHiring.updatedClubs;
+      coachClubStateChanged = true;
+    }
+
+    const vacantStaffHiring = processVacantStaffHiring(nextStaffMembersState, nextClubsState);
+    if (vacantStaffHiring.changed) {
+      nextStaffMembersState = vacantStaffHiring.updatedStaffMembers;
+      nextClubsState = vacantStaffHiring.updatedClubs;
+      staffClubStateChanged = true;
+    }
+
+    if (coachClubStateChanged || staffClubStateChanged) {
+      setCoaches(nextCoachesState);
+      if (staffClubStateChanged) setStaffMembers(nextStaffMembersState);
+      setClubs(nextClubsState);
+    }
+
+
+    // --- SCOUT ASSISTANT: Raport przedmeczowy (dzień przed meczem ligowym, pucharowym lub sparingowym) ---
+    if (userTeamId) {
+      const tomorrowStr = nextDay.toDateString();
+      const tomorrowFixture = allFixtures.find(f =>
+        f.date.toDateString() === tomorrowStr &&
+        f.status === 'SCHEDULED' &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        (typeof f.leagueId === 'string' && (
+          f.leagueId.startsWith('L_PL_') ||
+          f.leagueId === 'FRIENDLY' ||
+          f.leagueId === 'POLISH_CUP' ||
+          f.leagueId === 'SUPER_CUP' ||
+          (f.leagueId.startsWith('CL_') && !f.leagueId.endsWith('_DRAW')) ||
+          (f.leagueId.startsWith('EL_') && !f.leagueId.endsWith('_DRAW')) ||
+          (f.leagueId.startsWith('CONF_') && !f.leagueId.endsWith('_DRAW'))
+        ))
+      );
+
+      if (tomorrowFixture) {
+        const isFriendlyReport = tomorrowFixture.leagueId === 'FRIENDLY';
+        const scoutMailKey = `SCOUT_REPORT_${tomorrowFixture.id}`;
+        if (!sentMailIdsRef.current.has(scoutMailKey)) {
+          const opponentId = tomorrowFixture.homeTeamId === userTeamId
+            ? tomorrowFixture.awayTeamId
+            : tomorrowFixture.homeTeamId;
+          const opponentClub = clubs.find(c => c.id === opponentId);
+          const opponentPlayers = players[opponentId] || [];
+          const opponentLineup = lineups[opponentId];
+          const userPlayersList = players[userTeamId] || [];
+          const userLineup = lineups[userTeamId];
+
+          if (opponentClub && opponentLineup && userLineup) {
+            const clLeagueNames: Record<string, string> = {
+              'CL_R1Q': 'LM - Kwalifikacje R1',
+              'CL_R1Q_RETURN': 'LM - Kwalifikacje R1 Rewanż',
+              'CL_R2Q': 'LM - Kwalifikacje R2',
+              'CL_R2Q_RETURN': 'LM - Kwalifikacje R2 Rewanż',
+              'CL_GROUP_STAGE': 'Liga Mistrzów - Faza Grupowa',
+              'CL_R16': 'Liga Mistrzów - 1/8 Finału',
+              'CL_R16_RETURN': 'LM - 1/8 Finału Rewanż',
+              'CL_QF': 'Liga Mistrzów - Ćwierćfinał',
+              'CL_QF_RETURN': 'LM - Ćwierćfinał Rewanż',
+              'CL_SF': 'Liga Mistrzów - Półfinał',
+              'CL_SF_RETURN': 'LM - Półfinał Rewanż',
+              'CL_FINAL': 'Liga Mistrzów - Finał',
+              'EL_R1Q': 'LE - Kwalifikacje R1',
+              'EL_R1Q_RETURN': 'LE - Kwalifikacje R1 Rewanż',
+              'EL_R2Q': 'LE - Kwalifikacje R2',
+              'EL_R2Q_RETURN': 'LE - Kwalifikacje R2 Rewanż',
+              'EL_GROUP_STAGE': 'Liga Europy - Faza Grupowa',
+              'EL_R16': 'Liga Europy - 1/8 Finału',
+              'EL_R16_RETURN': 'LE - 1/8 Finału Rewanż',
+              'EL_QF': 'Liga Europy - Ćwierćfinał',
+              'EL_QF_RETURN': 'LE - Ćwierćfinał Rewanż',
+              'EL_SF': 'Liga Europy - Półfinał',
+              'EL_SF_RETURN': 'LE - Półfinał Rewanż',
+              'EL_FINAL': 'Liga Europy - Finał',
+              'CONF_R1Q': 'PKonf - Kwalifikacje R1',
+              'CONF_R1Q_RETURN': 'PKonf - Kwalifikacje R1 Rewanż',
+              'CONF_R2Q': 'PKonf - Kwalifikacje R2',
+              'CONF_R2Q_RETURN': 'PKonf - Kwalifikacje R2 Rewanż',
+              'CONF_GROUP_STAGE': 'Puchar Konferencji - Faza Grupowa',
+              'CONF_R16': 'Puchar Konferencji - 1/8 Finału',
+              'CONF_R16_RETURN': 'PKonf - 1/8 Finału Rewanż',
+              'CONF_QF': 'Puchar Konferencji - Ćwierćfinał',
+              'CONF_QF_RETURN': 'PKonf - Ćwierćfinał Rewanż',
+              'CONF_SF': 'Puchar Konferencji - Półfinał',
+              'CONF_SF_RETURN': 'PKonf - Półfinał Rewanż',
+              'CONF_FINAL': 'Puchar Konferencji - Finał',
+            };
+            const leagueName = tomorrowFixture.leagueId === 'L_PL_1' ? 'Ekstraklasa'
+              : tomorrowFixture.leagueId === 'L_PL_2' ? '1. Liga'
+              : tomorrowFixture.leagueId === 'L_PL_3' ? '2. Liga'
+              : tomorrowFixture.leagueId === 'FRIENDLY' ? 'Sparing'
+              : tomorrowFixture.leagueId === 'POLISH_CUP' ? 'Puchar Polski'
+              : tomorrowFixture.leagueId === 'SUPER_CUP' ? 'Superpuchar'
+              : clLeagueNames[tomorrowFixture.leagueId as string] ?? 'Liga Mistrzów';
+            const opponentLeagueStandings = [...clubs]
+              .filter(c => c.leagueId === opponentClub.leagueId)
+              .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
+            const opponentLeaguePosition = opponentLeagueStandings.findIndex(c => c.id === opponentClub.id) + 1;
+            const scoutClub = clubs.find(c => c.id === userTeamId);
+            const scoutStaff = (scoutClub?.staffIds ?? [])
+              .map(id => staffMembers[id])
+              .filter((s): s is StaffMember => !!s);
+            const assistantAnalysisQuality = (() => {
+              const assistants = scoutStaff.filter(s => s.role === StaffRole.ASSISTANT_COACH);
+              if (assistants.length === 0) return 5;
+              const averageQuality = assistants.reduce((sum, s) => sum +
+                (s.attributes.opponentAnalysis ?? 10) * 0.55 +
+                (s.attributes.experience ?? 10) * 0.20 +
+                (s.attributes.communication ?? 10) * 0.10 +
+                (s.attributes.offensiveTactics ?? 10) * 0.075 +
+                (s.attributes.defensiveTactics ?? 10) * 0.075,
+              0) / assistants.length;
+              const cooperationBonus = Math.min(2, Math.max(0, assistants.length - 1) * 0.75);
+              return Math.min(20, Math.round(averageQuality + cooperationBonus));
+            })();
+            const analystQuality = (() => {
+              const analysts = scoutStaff.filter(s => s.role === StaffRole.VIDEO_ANALYST);
+              if (analysts.length === 0) return 5;
+              const averageQuality = analysts.reduce((sum, s) => sum +
+                (s.attributes.videoAnalysis ?? 10) * 0.30 +
+                (s.attributes.statsAnalysis ?? 10) * 0.20 +
+                (s.attributes.reporting ?? 10) * 0.15 +
+                (s.attributes.scouting ?? 10) * 0.15 +
+                (s.attributes.tactics ?? 10) * 0.15 +
+                (s.attributes.experience ?? 10) * 0.05,
+              0) / analysts.length;
+              const cooperationBonus = Math.min(1.5, Math.max(0, analysts.length - 1) * 0.75);
+              return Math.min(20, Math.round(averageQuality + cooperationBonus));
+            })();
+            const analysisQuality = Math.round(
+              assistantAnalysisQuality * 0.40 +
+              analystQuality * 0.60
+            );
+            const isHome = tomorrowFixture.homeTeamId === userTeamId;
+            const scoutMail = ScoutAssistantService.generatePreMatchReport({
+              opponentClub,
+              opponentPlayers,
+              opponentLineup,
+              userPlayers: userPlayersList,
+              userLineup,
+              matchDate: tomorrowFixture.date,
+              managerName: managerProfile?.firstName || 'Managerze',
+              clubs,
+              opponentLeaguePosition,
+              opponentLeaguePlayed: opponentClub.stats.played,
+              opponentLeaguePoints: opponentClub.stats.points,
+              opponentLeagueGoalDiff: opponentClub.stats.goalDifference,
+              leagueName,
+              analysisQuality,
+              userClubId: userTeamId!,
+              isHome,
+              isFriendly: isFriendlyReport,
+              seasonNumber,
+            });
+            sentMailIdsRef.current.add(scoutMailKey);
+            setMessages(prev => [scoutMail, ...prev]);
+          }
+        }
+      }
+    }
+    // --- END SCOUT ASSISTANT ---
+
+    // --- INCOMING TRANSFER OFFERS (AI -> Player's Club) ---
+    if (userTeamId && !isResigned) {
+      const userSquad = players[userTeamId] || [];
+      const userClub = clubs.find(c => c.id === userTeamId)!;
+      const findIncomingOfferPlayer = (playerId: string): { player?: Player; isReserve: boolean } => {
+        for (const cId in players) {
+          const found = players[cId].find(p => p.id === playerId);
+          if (found) return { player: found, isReserve: false };
+        }
+        const reservePlayer = reserves.find(p => p.id === playerId);
+        return { player: reservePlayer, isReserve: !!reservePlayer };
+      };
+      const isInsideWindow = (() => {
+        const m = nextDay.getMonth(); const d = nextDay.getDate();
+        const isSummer = (m === 6 && d >= 1) || m === 7 || (m === 8 && d <= 8);
+        const isWinter = (m === 0 && d >= 12) || (m === 1 && d <= 13);
+        return isSummer || isWinter;
+      })();
+      const dateStr = nextDay.toISOString().split('T')[0];
+      const newIncomingMails: MailMessage[] = [];
+      const spontaneousInterestAdds = new Map<string, Set<string>>();
+      const reserveTalentInterestAdds = new Map<string, Set<string>>();
+      const newOffersToAdd: IncomingTransferOffer[] = [];
+      const reserveBoardAutoSales: Array<{
+        player: Player;
+        aiClub: Club;
+        fee: number;
+        reason: 'GREED' | 'FINANCES' | 'PREMIUM';
+      }> = [];
+      const reserveBoardAutoSalePlayerIds = new Set<string>();
+      const boardLevelScore = (level?: string): number => {
+        switch (level) {
+          case 'bardzo_niska': return 0;
+          case 'niska': return 1;
+          case 'wysoka': return 3;
+          case 'bardzo_wysoka': return 4;
+          default: return 2;
+        }
+      };
+      const evaluateReserveBoardSaleDecision = (player: Player, fee: number, seed: number) => {
+        const greedScore = boardLevelScore(userClub.board?.chciwosc);
+        const marketValue = Math.max(50_000, FinanceService.calculateMarketValue(player, userClub.reputation, FinanceService.getClubTier(userClub), userClub.country));
+        const feePremium = fee / marketValue;
+        const talent = player.attributes?.talent ?? player.overallRating;
+        const moneyPressure =
+          (userClub.boardBudgetMonitorState === 'ALERT' ? 0.34 : 0) +
+          (userClub.budget < 0 ? 0.34 : userClub.budget < 1_000_000 ? 0.18 : 0) +
+          (userClub.transferBudget < 250_000 ? 0.10 : 0);
+        const talentProtection = Math.max(0, talent - 68) * 0.018 + (player.age <= 18 ? 0.06 : 0);
+        const askCoachChance = Math.max(
+          0.18,
+          Math.min(
+            0.88,
+            0.74 -
+              greedScore * 0.095 -
+              moneyPressure * 0.62 -
+              Math.max(0, feePremium - 1.15) * 0.20 +
+              talentProtection
+          )
+        );
+        const sellBehindCoachBack = IncomingTransferService.seededRandom(seed + 811) > askCoachChance;
+        const reason =
+          moneyPressure >= 0.34 ? 'FINANCES' :
+          greedScore >= 3 ? 'GREED' :
+          'PREMIUM';
+
+        return {
+          sellBehindCoachBack,
+          boardPressure: moneyPressure >= 0.20 || greedScore >= 3 || feePremium >= 1.25,
+          reason,
+        };
+      };
+      const generateReserveBoardSaleMail = (
+        player: Player,
+        buyerClub: Club,
+        fee: number,
+        reason: 'GREED' | 'FINANCES' | 'PREMIUM'
+      ): MailMessage => {
+        const reasonText =
+          reason === 'FINANCES'
+            ? 'Zarząd uznał, że sytuacja finansowa klubu wymaga przyjęcia tej propozycji bez zwłoki.'
+            : reason === 'GREED'
+              ? 'Zarząd uznał, że kwota jest zbyt atrakcyjna, aby ryzykować przeciąganie rozmów.'
+              : 'Zarząd potraktował ofertę jako wyjątkowo korzystną biznesowo.';
+
+        return {
+          id: `MAIL_RESERVE_BOARD_SALE_${player.id}_${buyerClub.id}_${dateStr}`,
+          sender: 'Zarząd Klubu',
+          role: 'Prezes Zarządu',
+          subject: `Rezerwy: sprzedano ${player.firstName} ${player.lastName}`,
+          body: `${player.firstName} ${player.lastName} został sprzedany z rezerw do klubu ${buyerClub.name} za ${fee.toLocaleString('pl-PL')} PLN.\n\n${reasonText}\n\nDecyzja została podjęta na poziomie zarządu, dlatego sztab szkoleniowy otrzymuje informację po fakcie.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 88,
+        };
+      };
+      const shouldUsePreContractInsteadOfPaidOffer = (player: Player, timing: TransferTiming): boolean => {
+        if (!player.contractEndDate) return false;
+        const contractEnd = new Date(player.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return false;
+        const daysLeft = Math.floor((contractEnd.getTime() - nextDay.getTime()) / 86_400_000);
+        if (daysLeft > 0 && daysLeft <= 330) return true;
+        if (timing === TransferTiming.IMMEDIATE) return false;
+
+        const effectiveDate = new Date(nextDay);
+        if (timing === TransferTiming.IN_SIX_MONTHS) effectiveDate.setMonth(effectiveDate.getMonth() + 6);
+        if (timing === TransferTiming.IN_TWELVE_MONTHS) effectiveDate.setFullYear(effectiveDate.getFullYear() + 1);
+        return contractEnd <= effectiveDate;
+      };
+      const getPreContractJoinDate = (player: Player): string => {
+        const contractEnd = new Date(player.contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return player.contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
+      const isElitePreContractWatchlistPlayer = (player: Player, daysLeft: number): boolean =>
+        player.overallRating >= 90 &&
+        player.isNegotiationPermanentBlocked &&
+        daysLeft > 0 &&
+        daysLeft <= 330;
+      const queueIncomingMail = (mail: MailMessage) => {
+        if (mail.metadata?.type !== 'INCOMING_TRANSFER_OFFER') {
+          newIncomingMails.push(mail);
+          return;
+        }
+
+        const mailOfferId = mail.metadata.offerId;
+        const duplicateExists = [...messages, ...newIncomingMails].some(existingMail =>
+          existingMail.metadata?.type === 'INCOMING_TRANSFER_OFFER' &&
+          existingMail.metadata.offerId === mailOfferId &&
+          existingMail.subject === mail.subject
+        );
+
+        if (!duplicateExists) {
+          newIncomingMails.push(mail);
+        }
+      };
+
+      
+        // 1. Przetwarzaj timery istniejących ofert
+        const { updatedOffers, actions } = IncomingTransferService.processDailyTimers(incomingOffers, dateStr);
+        let processed = [...updatedOffers];
+
+        actions.forEach(action => {
+          const off = processed.find(o => o.id === action.offerId);
+          if (!off) return;
+          const { player } = findIncomingOfferPlayer(off.playerId);
+          const buyerClub = clubs.find(c => c.id === off.buyerClubId);
+          if (!player || !buyerClub || !userClub) return;
+
+          if (action.type === 'SEND_REMINDER') {
+            queueIncomingMail(MailService.generateIncomingOfferReminderMail(
+              player, buyerClub.name, off.fee, userClub.name, nextDay, off.id
+            ));
+          } else if (action.type === 'EXPIRE') {
+            newIncomingMails.push(MailService.generateIncomingOfferExpiredMail(
+              player, buyerClub.name, userClub.name, nextDay
+            ));
+            handleTemptingTransferOfferBlocked(off, player, buyerClub, userClub, 'EXPIRED', nextDay);
+          } else if (action.type === 'PROCESS_AI_COUNTER') {
+            const seed = nextDay.getTime() + off.id.charCodeAt(0);
+            const result = IncomingTransferService.processAICounterResponse(off, seed);
+            const idx = processed.findIndex(o => o.id === off.id);
+            if (result.verdict === 'ACCEPT') {
+              const resolveIn = Math.random() < 0.5 ? 2 : 3;
+              const resolveDate = IncomingTransferService.addDays(dateStr, resolveIn);
+              processed[idx] = {
+                ...processed[idx],
+                status: IncomingOfferStatus.NEGOTIATION_IN_PROGRESS,
+                fee: result.newFee ?? off.counterFee ?? off.fee,
+                playerNegotiationStartedAt: dateStr,
+                playerNegotiationResolvesAt: resolveDate,
+              };
+              queueIncomingMail(MailService.generateAIAcceptedCounterMail(
+                player, buyerClub.name, processed[idx].fee, userClub.name, nextDay, off.id
+              ));
+            } else if (result.verdict === 'COUNTER' && result.newFee) {
+              processed[idx] = {
+                ...processed[idx],
+                status: IncomingOfferStatus.AI_COUNTERED,
+                aiCounterFee: result.newFee,
+                negotiationRound: processed[idx].negotiationRound + 1,
+              };
+              queueIncomingMail(MailService.generateAICounteredMail(
+                player, buyerClub.name, result.newFee, processed[idx].negotiationRound, userClub.name, nextDay, off.id
+              ));
+            } else {
+              processed[idx] = { ...processed[idx], status: IncomingOfferStatus.EXPIRED };
+              newIncomingMails.push(MailService.generateAIRejectedCounterMail(
+                player, buyerClub.name, userClub.name, nextDay
+              ));
+              handleTemptingTransferOfferBlocked(off, player, buyerClub, userClub, 'CLUB_BLOCKED', nextDay);
+            }
+          } else if (action.type === 'RESOLVE_PLAYER_NEGOTIATION') {
+            const seed = nextDay.getTime() + off.id.charCodeAt(1);
+            const result = IncomingTransferService.simulatePlayerNegotiation(player, buyerClub, userClub, seed, nextDay);
+            const idx = processed.findIndex(o => o.id === off.id);
+            processed[idx] = { ...processed[idx], playerNegotiationResult: result };
+            if (result === 'accepted') {
+              processed[idx].status = IncomingOfferStatus.AWAITING_CONFIRMATION;
+              queueIncomingMail(MailService.generatePlayerAcceptedConfirmMail(
+                player, buyerClub.name, off.fee,
+                IncomingTransferService.getTimingLabel(off.timing),
+                userClub.name, nextDay, off.id
+              ));
+            } else {
+              processed[idx].status = IncomingOfferStatus.PLAYER_REFUSED;
+              newIncomingMails.push(MailService.generatePlayerRefusedMail(
+                player, buyerClub.name, userClub.name, nextDay
+              ));
+            }
+          }
+        });
+
+        // 2. Generuj nowe oferty AI
+        const dailyOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + 404);
+        const maxDailyNewOffers = isInsideWindow
+          ? (dailyOfferRoll < 0.08 ? 2 : 1)
+          : (dailyOfferRoll < 0.80 ? 0 : 1);
+        const rotateBySeed = <T,>(items: T[], seedOffset: number): T[] => {
+          if (items.length <= 1) return items;
+          const start = Math.floor(IncomingTransferService.seededRandom(nextDay.getTime() + seedOffset) * items.length);
+          return [...items.slice(start), ...items.slice(0, start)];
+        };
+        const aiClubs = rotateBySeed(clubs.filter(c => c.id !== userTeamId), 911);
+        const offerCandidateSquad = rotateBySeed(userSquad, 1301);
+        aiClubs.forEach(aiClub => {
+          if (newOffersToAdd.length >= maxDailyNewOffers) return;
+          const buyerSquad = players[aiClub.id] || [];
+          offerCandidateSquad.forEach(p => {
+            if (newOffersToAdd.length >= maxDailyNewOffers) return;
+            const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, p.id);
+            const offerDecision = IncomingTransferService.shouldGenerateOffer(
+              p,
+              aiClub,
+              userClub,
+              [...newOffersToAdd, ...processed],
+              seed,
+              nextDay,
+              userSquad,
+              buyerSquad
+            );
+            if (!offerDecision.shouldGenerate) return;
+            const { fee, aiMaxFee, aiUrgency, timing } = IncomingTransferService.calculateOffer(
+              p, aiClub, userClub, isInsideWindow, seed
+            );
+            if (shouldUsePreContractInsteadOfPaidOffer(p, timing)) return;
+            if (fee <= 0 || fee > aiClub.budget) return;
+            const boardPressure = IncomingTransferService.evaluateBoardPressure({ fee }, p, userClub, aiClub, seed);
+            const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
+            const newOffer: IncomingTransferOffer = {
+              id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              playerId: p.id,
+              buyerClubId: aiClub.id,
+              fee,
+              timing,
+              status: IncomingOfferStatus.EMAIL_SENT,
+              createdAt: dateStr,
+              emailSentAt: dateStr,
+              aiMaxFee,
+              aiUrgency,
+              negotiationRound: 0,
+              boardPressure,
+            };
+            newOffersToAdd.push(newOffer);
+            if (offerDecision.source === 'SPONTANEOUS') {
+              const existingClubs = spontaneousInterestAdds.get(p.id) ?? new Set<string>();
+              existingClubs.add(aiClub.id);
+              spontaneousInterestAdds.set(p.id, existingClubs);
+            }
+            queueIncomingMail(MailService.generateIncomingOfferMail(
+              p, aiClub.name, buyerLeague?.name ?? aiClub.leagueId,
+              fee, IncomingTransferService.getTimingLabel(timing),
+              userClub.name, boardPressure, nextDay, newOffer.id
+            ));
+          });
+        });
+        // Monthly reserve talent lookup: rare AI interest in user reserve players aged 16-20.
+        // At most 5 clubs can become interested at once, and at most 1 real offer is created per month.
+        if (nextDay.getDate() === 1 && reserves.length > 0) {
+          const reserveTalentCandidates = rotateBySeed(
+            reserves
+              .filter(player => {
+                if (player.age < 16 || player.age > 20) return false;
+                if (player.loan || player.transferPendingClubId) return false;
+                if (player.transferLockoutUntil && nextDay < new Date(player.transferLockoutUntil)) return false;
+                if (player.transferOfferBanUntil && nextDay < new Date(player.transferOfferBanUntil)) return false;
+                if (hasActiveTransferConflict(player.id, transferOffers)) return false;
+                if (hasActiveIncomingConflict(player.id, [...newOffersToAdd, ...processed])) return false;
+
+                const talent = player.attributes?.talent ?? player.overallRating;
+                const reserveForm = player.reserveStats && player.reserveStats.matches > 0
+                  ? player.reserveStats.totalRatingPoints / player.reserveStats.matches
+                  : 6.5;
+                return talent >= Math.max(70, player.overallRating + 8) || (talent >= 66 && reserveForm >= 7.1);
+              })
+              .sort((a, b) => {
+                const aTalent = a.attributes?.talent ?? a.overallRating;
+                const bTalent = b.attributes?.talent ?? b.overallRating;
+                if (bTalent !== aTalent) return bTalent - aTalent;
+                if (b.overallRating !== a.overallRating) return b.overallRating - a.overallRating;
+                return a.age - b.age;
+              }),
+            4301
+          );
+          const reserveRaidClubs = rotateBySeed(
+            clubs.filter(club =>
+              club.id !== userTeamId &&
+              club.reputation >= userClub.reputation + 2 &&
+              club.transferBudget > 0 &&
+              (players[club.id]?.length ?? club.rosterIds.length) < 30
+            ),
+            4701
+          );
+          const monthlyInterestLimit = Math.min(5, reserveRaidClubs.length);
+          const monthlyOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + sessionSeed + 7701);
+          const maxReserveRaidOffers = isInsideWindow && monthlyOfferRoll < 0.38 ? 1 : 0;
+          let reserveInterestCount = 0;
+          let reserveOfferCount = 0;
+
+          reserveTalentCandidates.forEach(player => {
+            if (reserveInterestCount >= monthlyInterestLimit) return;
+
+            reserveRaidClubs.forEach(aiClub => {
+              if (reserveInterestCount >= monthlyInterestLimit) return;
+              if (player.interestedClubs?.includes(aiClub.id)) return;
+
+              const buyerSquad = players[aiClub.id] || [];
+              const seed = IncomingTransferService.buildOfferSeed(
+                nextDay,
+                aiClub.id,
+                `${player.id}_RESERVE_TALENT_RAID_${sessionSeed}`
+              );
+              const interestChance = Math.min(
+                0.70,
+                0.18 +
+                  Math.max(0, (player.attributes?.talent ?? player.overallRating) - 66) * 0.018 +
+                  Math.max(0, aiClub.reputation - userClub.reputation - 2) * 0.035
+              ) * IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(player, aiClub, userClub);
+              if (IncomingTransferService.seededRandom(seed + 31) >= interestChance) return;
+
+              const existingClubs = reserveTalentInterestAdds.get(player.id) ?? new Set<string>();
+              existingClubs.add(aiClub.id);
+              reserveTalentInterestAdds.set(player.id, existingClubs);
+              reserveInterestCount += 1;
+
+              if (reserveOfferCount >= maxReserveRaidOffers) return;
+              if (hasActiveIncomingConflict(player.id, [...newOffersToAdd, ...processed], 'TRANSFER')) return;
+              if (!IncomingTransferService.isPlausibleBuyerForPlayer(player, aiClub, buyerSquad)) {
+                const talent = player.attributes?.talent ?? player.overallRating;
+                if (talent < IncomingTransferService.getBuyerIdealOverall(aiClub) - 6) return;
+              }
+
+              const offerTerms = IncomingTransferService.calculateOffer(player, aiClub, userClub, true, seed);
+              const fee = Math.max(50_000, offerTerms.fee);
+              if (fee <= 0 || fee > aiClub.budget || fee > aiClub.transferBudget) return;
+
+              const reserveBoardDecision = evaluateReserveBoardSaleDecision(player, fee, seed);
+              const boardPressure =
+                reserveBoardDecision.boardPressure ||
+                IncomingTransferService.evaluateBoardPressure({ fee }, player, userClub, aiClub, seed);
+              if (reserveBoardDecision.sellBehindCoachBack) {
+                reserveBoardAutoSales.push({
+                  player,
+                  aiClub,
+                  fee,
+                  reason: reserveBoardDecision.reason,
+                });
+                reserveBoardAutoSalePlayerIds.add(player.id);
+                reserveOfferCount += 1;
+                return;
+              }
+
+              const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
+              const newOffer: IncomingTransferOffer = {
+                id: `res_inc_${dateStr}_${player.id}_${aiClub.id}`,
+                playerId: player.id,
+                buyerClubId: aiClub.id,
+                fee,
+                timing: TransferTiming.IMMEDIATE,
+                status: IncomingOfferStatus.EMAIL_SENT,
+                createdAt: dateStr,
+                emailSentAt: dateStr,
+                aiMaxFee: Math.max(fee, offerTerms.aiMaxFee),
+                aiUrgency: offerTerms.aiUrgency,
+                negotiationRound: 0,
+                boardPressure,
+              };
+
+              newOffersToAdd.push(newOffer);
+              reserveOfferCount += 1;
+              queueIncomingMail(MailService.generateIncomingOfferMail(
+                player,
+                aiClub.name,
+                buyerLeague?.name ?? aiClub.leagueId,
+                fee,
+                IncomingTransferService.getTimingLabel(TransferTiming.IMMEDIATE),
+                userClub.name,
+                boardPressure,
+                nextDay,
+                newOffer.id
+              ));
+            });
+          });
+        }
+
+        if (reserveBoardAutoSales.length > 0) {
+          let nextClubs = clubs;
+          let nextPlayers = players;
+          let nextReserves = reserves;
+          let nextLineups = lineups;
+
+          reserveBoardAutoSales.forEach(({ player, aiClub, fee, reason }) => {
+            const sellerClub = nextClubs.find(c => c.id === userTeamId);
+            const buyerClub = nextClubs.find(c => c.id === aiClub.id);
+            if (!sellerClub || !buyerClub) return;
+
+            const estimatedSalary = Math.round(Math.max(
+              FinanceService.getFairMarketSalary(player.overallRating),
+              player.annualSalary * 1.15
+            ) / 10000) * 10000;
+            const estimatedYears = player.age <= 21 ? 4 : player.age <= 27 ? 3 : 2;
+            const syntheticOffer: TransferOffer = {
+              id: `BOARD_RESERVE_SALE_${player.id}_${buyerClub.id}_${dateStr}`,
+              playerId: player.id,
+              sellerClubId: userTeamId,
+              buyerClubId: buyerClub.id,
+              fee,
+              timing: TransferTiming.IMMEDIATE,
+              salary: estimatedSalary,
+              bonus: 0,
+              years: estimatedYears,
+              createdAt: dateStr,
+              status: TransferOfferStatus.READY_TO_FINALIZE,
+              attemptNumber: 1,
+              maxAttempts: 1,
+            };
+            const executionPlayers = {
+              ...nextPlayers,
+              [userTeamId]: [...(nextPlayers[userTeamId] || []), player],
+            };
+            const result = TransferExecutionService.finalizeTransfer(syntheticOffer, nextClubs, executionPlayers, nextDay);
+            const movedPlayer = (result.updatedPlayers[buyerClub.id] || []).some(p => p.id === player.id);
+            if (!movedPlayer) return;
+
+            nextClubs = result.updatedClubs;
+            nextPlayers = result.updatedPlayers;
+            nextReserves = nextReserves.filter(p => p.id !== player.id);
+            nextLineups = { ...nextLineups };
+            if (nextLineups[sellerClub.id]) {
+              nextLineups[sellerClub.id] = LineupService.repairLineup(
+                nextLineups[sellerClub.id],
+                nextPlayers[sellerClub.id] || []
+              );
+            }
+            if (nextLineups[buyerClub.id]) {
+              nextLineups[buyerClub.id] = LineupService.repairLineup(
+                nextLineups[buyerClub.id],
+                nextPlayers[buyerClub.id] || []
+              );
+            }
+
+            queueIncomingMail(generateReserveBoardSaleMail(player, buyerClub, fee, reason));
+          });
+
+          setClubs(nextClubs);
+          setPlayers(nextPlayers);
+          setReserves(nextReserves);
+          setLineups(nextLineups);
+        }
+
+        // 3. Loan offers for players intentionally made available by the user club.
+        const dailyLoanOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + 2404);
+        const maxDailyLoanOffers = isInsideWindow && dailyLoanOfferRoll < 0.24 ? 1 : 0;
+        const loanCandidateSquad = rotateBySeed(
+          userSquad.filter(p =>
+            p.isAvailableForLoan &&
+            !p.loan &&
+            !p.transferPendingClubId
+          ),
+          2711
+        );
+        aiClubs.forEach(aiClub => {
+          if (newOffersToAdd.filter(offer => offer.kind === 'LOAN').length >= maxDailyLoanOffers) return;
+          const buyerSquad = players[aiClub.id] || [];
+          loanCandidateSquad.forEach(p => {
+            if (newOffersToAdd.filter(offer => offer.kind === 'LOAN').length >= maxDailyLoanOffers) return;
+            const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, `${p.id}_LOAN`);
+            const loanDecision = IncomingTransferService.shouldGenerateLoanOffer(
+              p,
+              aiClub,
+              userClub,
+              [...newOffersToAdd, ...processed],
+              seed,
+              nextDay,
+              buyerSquad
+            );
+            if (!loanDecision.shouldGenerate) return;
+
+            const loanTerms = IncomingTransferService.calculateLoanOffer(p, aiClub, userClub, nextDay, seed);
+            if (!loanTerms) return;
+
+            const buyerLeague = leagues.find(l => l.id === aiClub.leagueId);
+            const newOffer: IncomingTransferOffer = {
+              id: `loan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              kind: 'LOAN',
+              playerId: p.id,
+              buyerClubId: aiClub.id,
+              fee: loanTerms.loanFee ?? 0,
+              timing: TransferTiming.IMMEDIATE,
+              status: IncomingOfferStatus.EMAIL_SENT,
+              createdAt: dateStr,
+              emailSentAt: dateStr,
+              aiMaxFee: loanTerms.aiMaxFee,
+              aiUrgency: loanTerms.aiUrgency,
+              negotiationRound: 0,
+              boardPressure: false,
+              loanDuration: loanTerms.loanDuration,
+              loanStartDate: loanTerms.loanStartDate,
+              loanEndDate: loanTerms.loanEndDate,
+              wageCoveragePercent: loanTerms.wageCoveragePercent,
+              loanFee: loanTerms.loanFee,
+              loanTotalCost: loanTerms.loanTotalCost,
+              loanPlayerCanBeForced: loanTerms.loanPlayerCanBeForced,
+            };
+
+            newOffersToAdd.push(newOffer);
+            queueIncomingMail(MailService.generateIncomingLoanOfferMail(
+              p,
+              aiClub.name,
+              buyerLeague?.name ?? aiClub.leagueId,
+              newOffer.loanFee ?? 0,
+              IncomingTransferService.getLoanDurationLabel(newOffer.loanDuration),
+              newOffer.wageCoveragePercent ?? 0,
+              userClub.name,
+              nextDay,
+              newOffer.id
+            ));
+          });
+        });
+
+        // 4. AI pre-contracts: last contract year, without seller-club approval.
+        // The AI club can agree terms directly with the player; the move executes after contract expiry.
+        const hasRecentAiPreContract = transferOffers.some(offer => {
+          if (!offer.id.startsWith('AI_PRECONTRACT_')) return false;
+          if (offer.status !== TransferOfferStatus.AGREED_PRECONTRACT) return false;
+          const createdAt = new Date(offer.createdAt);
+          const daysSince = Math.floor((nextDay.getTime() - createdAt.getTime()) / 86_400_000);
+          return daysSince >= 0 && daysSince < 21;
+        });
+        let aiPreContractSigned = hasRecentAiPreContract;
+        aiClubs.forEach(aiClub => {
+          if (aiPreContractSigned) return;
+          const buyerSquad = players[aiClub.id] || [];
+          offerCandidateSquad.forEach(p => {
+            if (aiPreContractSigned) return;
+            if (p.transferPendingClubId) return;
+            if (p.transferOfferBanUntil && nextDay < new Date(p.transferOfferBanUntil)) return;
+
+            const contractDaysLeft = Math.floor((new Date(p.contractEndDate).getTime() - nextDay.getTime()) / 86_400_000);
+            if (contractDaysLeft <= 0 || contractDaysLeft > 330) return;
+            const isEliteWatchlistOpportunity = isElitePreContractWatchlistPlayer(p, contractDaysLeft);
+            if (isEliteWatchlistOpportunity && aiClub.reputation < 17) return;
+            if (!isEliteWatchlistOpportunity && !IncomingTransferService.isPlausibleBuyerForPlayer(p, aiClub, buyerSquad)) return;
+
+            const existingPreContract = transferOffers.some(offer =>
+              offer.playerId === p.id &&
+              offer.status === TransferOfferStatus.AGREED_PRECONTRACT
+            );
+            if (existingPreContract) return;
+
+            const seed = IncomingTransferService.buildOfferSeed(nextDay, aiClub.id, `${p.id}_PRECONTRACT`);
+            const isShortlisted = !!p.interestedClubs?.includes(aiClub.id);
+            const repDelta = aiClub.reputation - userClub.reputation;
+            const samePosition = buyerSquad.filter(player => player.position === p.position);
+            const positionAverage = samePosition.length > 0
+              ? samePosition.reduce((sum, player) => sum + player.overallRating, 0) / samePosition.length
+              : IncomingTransferService.getSquadAverageOverall(buyerSquad);
+            const sportingFit = p.overallRating >= positionAverage + 1;
+            if (isEliteWatchlistOpportunity) {
+              if (p.overallRating < positionAverage - 2) return;
+            } else if (!sportingFit && !isShortlisted && repDelta < 2) return;
+
+            const interestedClubsForMindflow = (p.interestedClubs || [])
+              .map(clubId => clubs.find(club => club.id === clubId))
+              .filter((club): club is Club => !!club);
+            const contractMindflow = PlayerContractMindflowService.evaluate({
+              player: p,
+              currentClub: userClub,
+              currentSquad: userSquad,
+              currentDate: nextDay,
+              interestedClubs: interestedClubsForMindflow,
+              targetClub: aiClub,
+              targetSquad: buyerSquad,
+            });
+
+            if (!contractMindflow.externalOfferGate.willListen) return;
+            if (!contractMindflow.externalOfferGate.canSignPreContract) return;
+
+            let chance = isEliteWatchlistOpportunity
+              ? (contractDaysLeft <= 90 ? 0.28 : contractDaysLeft <= 180 ? 0.20 : 0.13)
+              : contractDaysLeft <= 90 ? 0.055 : contractDaysLeft <= 180 ? 0.035 : 0.018;
+            if (isShortlisted) chance *= 2.5;
+            if (repDelta >= 3) chance *= 1.8;
+            else if (repDelta >= 1) chance *= 1.35;
+            else if (repDelta < 0) chance *= 0.45;
+            if (!isEliteWatchlistOpportunity && (p.squadRole === 'KEY_PLAYER' || p.isUntouchable)) chance *= 0.55;
+            if (p.isNegotiationPermanentBlocked) chance *= 2.0;
+            chance *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(p, aiClub, userClub);
+            chance *= contractMindflow.externalOfferGate.preContractChanceMultiplier;
+            chance *= IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(p, aiClub, userClub);
+
+            if (IncomingTransferService.seededRandom(seed + 73) >= Math.min(isEliteWatchlistOpportunity ? 0.60 : 0.18, chance)) return;
+
+            const negotiation = IncomingTransferService.simulatePlayerNegotiation(p, aiClub, userClub, seed + 101, nextDay);
+            if (negotiation !== 'accepted') return;
+
+            const rawPreContractSalary = Math.max(
+              FinanceService.getFairMarketSalary(p.overallRating),
+              Math.round(p.annualSalary * (
+                isEliteWatchlistOpportunity
+                  ? (repDelta >= 2 ? 1.42 : repDelta >= 0 ? 1.32 : 1.55)
+                  : repDelta >= 2 ? 1.20 : repDelta >= 0 ? 1.12 : 1.35
+              ) / 10000) * 10000
+            );
+            const preContractSalaryCeiling = FinanceService.calculatePolishLeagueSalaryCeiling(
+              FinanceService.getClubTier(aiClub),
+              aiClub.reputation
+            );
+            const salary = preContractSalaryCeiling
+              ? Math.min(rawPreContractSalary, preContractSalaryCeiling)
+              : rawPreContractSalary;
+            const bonusMultiplier = isEliteWatchlistOpportunity
+              ? (p.age < 24 ? 0.75 : p.age <= 30 ? 1.05 : p.age <= 34 ? 1.25 : 1.45)
+              : (p.age < 24 ? 0.35 : p.age <= 30 ? 0.55 : 0.75);
+            const bonus = Math.round(p.annualSalary * bonusMultiplier / 10000) * 10000;
+            const years = p.age <= 27 ? 4 : p.age <= 31 ? 3 : p.age <= 34 ? 2 : 1;
+            if (aiClub.transferBudget < salary * years + bonus) return;
+
+            const preContractId = `AI_PRECONTRACT_${p.id}_${aiClub.id}_${dateStr}`;
+            const preContractJoinDate = getPreContractJoinDate(p);
+            const agreedOffer: TransferOffer = {
+              id: preContractId,
+              playerId: p.id,
+              sellerClubId: userTeamId,
+              buyerClubId: aiClub.id,
+              fee: 0,
+              timing: TransferTiming.CONTRACT_END,
+              salary,
+              bonus,
+              years,
+              createdAt: dateStr,
+              status: TransferOfferStatus.AGREED_PRECONTRACT,
+              effectiveDate: preContractJoinDate,
+              sellerReason: 'Zawodnik podpisał umowę obowiązującą od wygaśnięcia obecnego kontraktu.',
+              playerReason: 'Zawodnik uznał, że to korzystny następny krok w karierze.',
+              attemptNumber: 1,
+              maxAttempts: 1,
+            };
+
+            setTransferOffers(prev => {
+              if (prev.some(offer => offer.id === agreedOffer.id || (
+                offer.playerId === p.id &&
+                offer.status === TransferOfferStatus.AGREED_PRECONTRACT
+              ))) return prev;
+              return [agreedOffer, ...prev].slice(0, 100);
+            });
+
+            setPlayers(prev => ({
+              ...prev,
+              [userTeamId]: (prev[userTeamId] || []).map(player =>
+                player.id === p.id
+                  ? {
+                      ...player,
+                      transferPendingClubId: aiClub.id,
+                      transferReportDate: preContractJoinDate,
+                      transferPendingFee: 0,
+                      transferPendingSalary: salary,
+                      transferPendingBonus: bonus,
+                      transferPendingContractYears: years,
+                      interestedClubs: [],
+                      isOnTransferList: false,
+                      transferListPrice: undefined,
+                      transferListDemandUntil: null,
+                      transferListRemovalPromiseDeadline: null,
+                      isAvailableForLoan: false,
+                    }
+                  : player
+              )
+            }));
+
+            const mailKey = `MAIL_AI_PRECONTRACT_${preContractId}`;
+            if (!sentMailIdsRef.current.has(mailKey)) {
+              sentMailIdsRef.current.add(mailKey);
+              newIncomingMails.push({
+                id: mailKey,
+                sender: `Agent gracza ${p.lastName}`,
+                role: 'Agencja menedżerska',
+                subject: `Prekontrakt podpisany: ${p.firstName} ${p.lastName}`,
+                body: `${p.firstName} ${p.lastName} uzgodnił warunki z klubem ${aiClub.name}. Zawodnik wypełni obecny kontrakt do ${new Date(p.contractEndDate).toLocaleDateString('pl-PL')} i dołączy do nich ${new Date(preContractJoinDate).toLocaleDateString('pl-PL')}.\n\n`,
+                date: new Date(nextDay),
+                isRead: false,
+                type: MailType.STAFF,
+                priority: 99,
+              });
+            }
+
+            aiPreContractSigned = true;
+          });
+        });
+
+      setIncomingOffers(
+        [...newOffersToAdd, ...processed]
+          .filter(offer => !reserveBoardAutoSalePlayerIds.has(offer.playerId))
+          .slice(0, 200)
+      );
+
+      if (newIncomingMails.length > 0) {
+        setMessages(prev => [...newIncomingMails, ...prev]);
+      }
+
+      if (spontaneousInterestAdds.size > 0) {
+        setPlayers(prev => {
+          const userPlayers = prev[userTeamId] || [];
+          let changed = false;
+
+          const updatedUserPlayers = userPlayers.map(player => {
+            const clubsToAdd = spontaneousInterestAdds.get(player.id);
+            if (!clubsToAdd || clubsToAdd.size === 0) return player;
+
+            const existingInterestedClubs = player.interestedClubs || [];
+            const mergedInterestedClubs = [
+              ...existingInterestedClubs,
+              ...Array.from(clubsToAdd).filter(clubId => !existingInterestedClubs.includes(clubId))
+            ];
+
+            if (mergedInterestedClubs.length === existingInterestedClubs.length) return player;
+            changed = true;
+            return { ...player, interestedClubs: mergedInterestedClubs };
+          });
+
+          if (!changed) return prev;
+          return { ...prev, [userTeamId]: updatedUserPlayers };
+        });
+      }
+
+      if (reserveTalentInterestAdds.size > 0) {
+        setReserves(prev => {
+          let changed = false;
+
+          const updatedReserves = prev.map(player => {
+            const clubsToAdd = reserveTalentInterestAdds.get(player.id);
+            if (!clubsToAdd || clubsToAdd.size === 0) return player;
+
+            const existingInterestedClubs = player.interestedClubs || [];
+            const mergedInterestedClubs = [
+              ...existingInterestedClubs,
+              ...Array.from(clubsToAdd).filter(clubId => !existingInterestedClubs.includes(clubId))
+            ].slice(0, 5);
+
+            if (mergedInterestedClubs.length === existingInterestedClubs.length) return player;
+            changed = true;
+            return { ...player, interestedClubs: mergedInterestedClubs };
+          });
+
+          return changed ? updatedReserves : prev;
+        });
+      }
+    }
+    // --- END INCOMING TRANSFER OFFERS ---
+
+    // ── AKADEMIA: tygodniowy tick (każdy poniedziałek) ───────────────────────
+    if (academy && userTeamId && nextDay.getDay() === 1) {
+      // 1. Tygodniowy rozwój wychowanków
+      const developed = AcademyService.processWeeklyDevelopment(
+        academy.youthPlayers,
+        academy.level,
+        academy.operationalBudgetWeekly
+      );
+
+      // 2. Sprawdź zakończone misje skautingowe
+      const { updatedMissions, completedMissions, updatedYouthPlayers } =
+        AcademyService.processCompletedMissions({ ...academy, youthPlayers: developed }, nextDay);
+
+      // 3. Zwolnij skautów po zakończeniu misji
+      const scoutIdsToFree = completedMissions.filter(m => m.scoutId).map(m => m.scoutId!);
+      if (scoutIdsToFree.length > 0) {
+        setScoutPool(prev => prev.map(s => scoutIdsToFree.includes(s.id) ? { ...s, isOnMission: false } : s));
+      }
+
+      // 3b. Wyniki misji regionalnych — skaut może wrócić z pustymi rękami
+      let finalYouthPlayers = [...updatedYouthPlayers];
+      const regionalMissionResults = new Map<string, YouthPlayer[]>();
+      completedMissions.forEach(m => {
+        if (!m.isRegionScouting) return;
+        const scout = scoutPool.find(s => s.id === m.scoutId);
+        const networkDepth = scout?.networkDepth ?? 10;
+        const slotsLeft = ACADEMY_MAX_SLOTS[academy.level] - finalYouthPlayers.length;
+        const found = AcademyService.resolveRegionalScoutingResult(m, academy.level, slotsLeft, networkDepth, new Date(nextDay));
+        regionalMissionResults.set(m.id, found);
+        finalYouthPlayers = [...finalYouthPlayers, ...found];
+      });
+
+      // Maile o zakończonych misjach (poza updaterem — unikamy podwójnego wywołania w StrictMode)
+      if (completedMissions.length > 0) {
+        const mails: MailMessage[] = completedMissions.map(m => {
+          if (m.isRegionScouting) {
+            const foundYouths = regionalMissionResults.get(m.id) ?? [];
+            const body = foundYouths.length > 0
+              ? `Skaut wrócił z misji skautingowej. Udało się pozyskać ${foundYouths.length} wychowanka${foundYouths.length > 1 ? 'ów' : ''}: ${foundYouths.map(y => `${y.firstName} ${y.lastName} (${y.age} l.)`).join(', ')}. Sprawdź zakładkę Wychowankowie.`
+              : `Skaut wrócił z misji z pustymi rękami. Tym razem nie udało się znaleźć odpowiednich kandydatów do akademii.`;
+            return {
+              id: `SCOUT_DONE_${m.id}`,
+              sender: 'Szef Skautingu Akademii',
+              role: 'Akademia Piłkarska',
+              subject: foundYouths.length > 0 ? `Skaut wrócił — znaleziono ${foundYouths.length} talent${foundYouths.length > 1 ? 'ów' : ''}` : 'Skaut wrócił bez kandydatów',
+              body,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: foundYouths.length > 0 ? 65 : 40,
+            };
+          }
+          const targetYouth = finalYouthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
+          const body = targetYouth
+            ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}. Zalecamy dalszą obserwację.`
+            : `Zakończono obserwację. Raport dostępny w Akademii.`;
+          return {
+            id: `SCOUT_DONE_${m.id}`,
+            sender: 'Szef Skautingu Akademii',
+            role: 'Akademia Piłkarska',
+            subject: m.targetYouthPlayerId ? `Raport skautingowy: ${targetYouth?.lastName ?? '—'}` : 'Raport skautingowy',
+            body,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 50,
+          };
+        });
+        setMessages(msgs => [...mails, ...msgs]);
+      }
+
+      // 4. Sprawdź zakończenie upgrade'u akademii
+      const upgradeCheck = AcademyService.checkUpgradeCompletion(academy, nextDay);
+      if (upgradeCheck.completed && upgradeCheck.newLevel) {
+        const upgradeMail: MailMessage = {
+          id: `ACAD_UPGRADE_${Date.now()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: `Modernizacja Akademii ukończona – Poziom ${upgradeCheck.newLevel}!`,
+          body: `Prace budowlane dobiegły końca. Akademia Piłkarska osiągnęła Poziom ${upgradeCheck.newLevel}. Zwiększono liczbę miejsc i jakość szkolenia.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 85,
+        };
+        setMessages(msgs => [upgradeMail, ...msgs]);
+      }
+
+      // Czysty updater — bez efektów ubocznych (setMessages/setScoutPool wywołane wyżej)
+      const capturedFinalYouthPlayers = finalYouthPlayers;
+      const capturedUpdatedMissions = updatedMissions;
+      const capturedUpgradeCheck = upgradeCheck;
+      setAcademy(prev => {
+        if (!prev) return prev;
+        const baseResult: ClubAcademy = {
+          ...prev,
+          youthPlayers: capturedFinalYouthPlayers,
+          activeMissions: capturedUpdatedMissions,
+        };
+        if (capturedUpgradeCheck.completed && capturedUpgradeCheck.newLevel) {
+          return {
+            ...baseResult,
+            level: capturedUpgradeCheck.newLevel,
+            upgradeInProgress: false,
+            upgradeCompletionDate: undefined,
+            operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(capturedUpgradeCheck.newLevel),
+          };
+        }
+        return baseResult;
+      });
+
+      // 5. Tygońniówki zatrudnionych skautów
+      const employedThisWeek = scoutPool.filter(s => s.employedByClubId === userTeamId);
+      if (employedThisWeek.length > 0) {
+        const totalSalary = employedThisWeek.reduce((sum, s) => sum + s.weeklySalary, 0);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - totalSalary } : c));
+        addFinanceLog(userTeamId, `Tygońniówki skautów (${employedThisWeek.length})`, -totalSalary, nextDay);
+      }
+
+      // 6. Odświeżenie rynku skautów co 45 dni
+      if (scoutMarketRefreshDate) {
+        const lastRefresh = new Date(scoutMarketRefreshDate);
+        const daysSince = Math.floor((nextDay.getTime() - lastRefresh.getTime()) / 86400000);
+        if (daysSince >= 45) {
+          const userClub = clubs.find(c => c.id === userTeamId);
+          if (userClub) {
+            const newMarket = ScoutService.generateMarket(scoutPool, userClub.reputation ?? 5, userClub.board?.kompetencja);
+            setScoutMarket(newMarket);
+            setScoutMarketRefreshDate(nextDay.toISOString().split('T')[0]);
+          }
+        }
+      }
+
+      // 7. Tygodniowe utrzymanie wychowanków ze skauta
+      const signedScoutYouths = academy.youthPlayers.filter(
+        yp => yp.contractSigned === true && (yp.weeklyMaintenanceCost ?? 0) > 0
+      );
+      if (signedScoutYouths.length > 0) {
+        const totalMaintenance = signedScoutYouths.reduce((sum, yp) => sum + (yp.weeklyMaintenanceCost ?? 0), 0);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - totalMaintenance } : c));
+        addFinanceLog(userTeamId, `Utrzymanie wychowanków skauta (${signedScoutYouths.length})`, -totalMaintenance, nextDay);
+      }
+    }
+
+    // ── AKADEMIA: nabór wychowanków (1 Sierpnia każdego roku) ─────────────────
+    if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1
+        && academy.lastIntakeYear < nextDay.getFullYear()) {
+      const newYouths = AcademyService.generateYouthIntake(
+        academy.level,
+        academy.regionFocus,
+        nextDay.getFullYear(),
+        academy.youthPlayers.length
+      );
+      if (newYouths.length > 0) {
+        const intakeMail: MailMessage = {
+          id: `ACAD_INTAKE_${nextDay.getFullYear()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: `Nowy Nabór Akademii ${nextDay.getFullYear()}`,
+          body: `Do akademii dołączyło ${newYouths.length} nowych wychowanków (rocznik ${nextDay.getFullYear()}). Ich ukryte talenty czekają na odkrycie przez skautów. Odwiedź Akademię, aby sprawdzić profil każdego zawodnika.`,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 75,
+        };
+        setMessages(msgs => [intakeMail, ...msgs]);
+        const capturedNewYouths = newYouths;
+        setAcademy(prev => {
+          if (!prev || prev.lastIntakeYear >= nextDay.getFullYear()) return prev;
+          return {
+            ...prev,
+            youthPlayers: [...prev.youthPlayers, ...capturedNewYouths],
+            lastIntakeYear: nextDay.getFullYear(),
+          };
+        });
+      }
+    }
+
+    // ── AKADEMIA: decyzja właściciela o rozbudowie (sprawdzana codziennie) ────
+    if (academy && userTeamId && academy.upgradeProposalStatus === 'PENDING' && academy.upgradeProposalDecisionDate) {
+      const decisionDate = new Date(academy.upgradeProposalDecisionDate);
+      if (nextDay >= decisionDate) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const decision = AcademyService.evaluateUpgradeProposal(academy, userClub?.reputation ?? 5);
+        if (decision === 'APPROVED') {
+          const approveMail: MailMessage = {
+            id: `ACAD_APPROVED_${Date.now()}`,
+            sender: 'Właściciel Klubu',
+            role: 'Zarząd',
+            subject: `✅ Zgoda na rozbudowę Akademii do Poziomu ${academy.level + 1}`,
+            body: `Po dokładnej analizie sytuacji finansowej i sportowej klubu, zarząd wyraża zgodę na rozbudowę Akademii Piłkarskiej do Poziomu ${academy.level + 1}. Możesz teraz zlecić rozpoczęcie prac budowlanych w zakładce Infrastruktura.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 85,
+          };
+          setMessages(msgs => [approveMail, ...msgs]);
+          setAcademy(prev => prev ? {
+            ...prev,
+            upgradeProposalStatus: 'APPROVED',
+            upgradeProposalDecisionDate: undefined,
+          } : prev);
+        } else {
+          const rejectedUntil = new Date(nextDay);
+          rejectedUntil.setDate(rejectedUntil.getDate() + 90);
+          const rejectMail: MailMessage = {
+            id: `ACAD_REJECTED_${Date.now()}`,
+            sender: 'Właściciel Klubu',
+            role: 'Zarząd',
+            subject: `❌ Odmowa rozbudowy Akademii`,
+            body: `Zarząd przeanalizował sytuację i podjął decyzję o odmowie finansowania rozbudowy Akademii w chwili obecnej. Prosimy o poprawę wyników sportowych i sytuacji finansowej klubu. Kolejny wniosek można złożyć po ${rejectedUntil.toLocaleDateString('pl-PL')}.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 80,
+          };
+          setMessages(msgs => [rejectMail, ...msgs]);
+          setAcademy(prev => prev ? {
+            ...prev,
+            upgradeProposalStatus: 'REJECTED',
+            upgradeProposalDecisionDate: undefined,
+            upgradeProposalRejectedUntil: rejectedUntil.toISOString().split('T')[0],
+          } : prev);
+        }
+      }
+    }
+
+    // ── ULUBIEŃCY TRENERÓW AI: aktualizacja (1. dzień miesiąca) ─────────────
+    if (nextDay.getDate() === 1) {
+      const updatedCoachesMonthly = AiTransferDecisionService.updateCoachFavorites(clubs, players, coaches, nextDay, sessionSeed, userTeamId);
+      setCoaches(updatedCoachesMonthly);
+      setPlayers(prev => AiContractService.updateClubStars(clubs, prev, userTeamId, updatedCoachesMonthly, nextDay, sessionSeed));
+    }
+
+    // ── KOSZTY OPERACYJNE: odliczenie miesięczne (1. dzień miesiąca) ─────────
+    if (nextDay.getDate() === 1) {
+      const dateStr = nextDay.toISOString().split('T')[0];
+      setClubs(prev => prev.map(club => {
+        if (club.leagueId === 'NONE') return club;
+        const monthlyCost = FinanceService.calculateMonthlyOperationalCosts(club);
+        const mgmtSalary = FinanceService.calculateManagementMonthlySalary(club);
+        const budgetAfterOps = club.budget - monthlyCost;
+        const newBudget = budgetAfterOps - mgmtSalary;
+        const opexEntry = {
+          id: `OPEX_${club.id}_${dateStr}`,
+          date: dateStr,
+          amount: -monthlyCost,
+          type: 'EXPENSE' as const,
+          description: 'Koszty operacyjne (stadion, infrastruktura, administracja)',
+          previousBalance: club.budget,
+        };
+        const mgmtEntry = mgmtSalary > 0 ? {
+          id: `MGMT_${club.id}_${dateStr}`,
+          date: dateStr,
+          amount: -mgmtSalary,
+          type: 'EXPENSE' as const,
+          description: 'Wynagrodzenia zarządu',
+          previousBalance: budgetAfterOps,
+        } : null;
+        const newEntries = mgmtEntry
+          ? [mgmtEntry, opexEntry]
+          : [opexEntry];
+        return {
+          ...club,
+          budget: newBudget,
+          financeHistory: [...newEntries, ...(club.financeHistory || [])].slice(0, 50),
+        };
+      }));
+    }
+
+    // ── RATUNEK WŁAŚCICIELA: miesięczne sprawdzenie długu ────────────────────
+    if (nextDay.getDate() === 1) {
+      const rescueDateStr = nextDay.toISOString().split('T')[0];
+      const rescueMap: Record<string, { amount: number; ownerName: string; clubName: string }> = {};
+      clubs.forEach(club => {
+        if (club.leagueId === 'NONE' || club.ownerRescueThisSeason || !club.management) return;
+        const projected = club.budget
+          - FinanceService.calculateMonthlyOperationalCosts(club)
+          - FinanceService.calculateManagementMonthlySalary(club);
+        if (projected >= -1_000_000) return;
+        const prob = FinanceService.getOwnerRescueProbability(club.management.owner.hojnosc);
+        if (Math.random() < prob) {
+          const debt = Math.abs(projected);
+          const bonus = FinanceService.getOwnerRescueBonus(club.management.owner.hojnosc);
+          rescueMap[club.id] = {
+            amount: debt + bonus,
+            ownerName: `${club.management.owner.firstName} ${club.management.owner.lastName}`,
+            clubName: club.name,
+          };
+        }
+      });
+      if (Object.keys(rescueMap).length > 0) {
+        setClubs(prev => prev.map(club => {
+          const rescue = rescueMap[club.id];
+          if (!rescue) return club;
+          const rescueEntry = {
+            id: `RESCUE_${club.id}_${rescueDateStr}`,
+            date: rescueDateStr,
+            amount: rescue.amount,
+            type: 'INCOME' as const,
+            description: `Zastrzyk kapitałowy od właściciela — ratowanie klubu`,
+            previousBalance: club.budget,
+          };
+          return {
+            ...club,
+            budget: club.budget + rescue.amount,
+            ownerRescueThisSeason: true,
+            financeHistory: [rescueEntry, ...(club.financeHistory || [])].slice(0, 50),
+          };
+        }));
+        if (userTeamId) {
+          const userClub = clubs.find(c => c.id === userTeamId);
+          if (userClub) {
+            Object.entries(rescueMap).forEach(([clubId, info]) => {
+              const rescuedClub = clubs.find(c => c.id === clubId);
+              if (!rescuedClub || rescuedClub.leagueId !== userClub.leagueId) return;
+              const mailKey = `OWNER_RESCUE_${clubId}_${seasonNumber}`;
+              if (!sentMailIdsRef.current.has(mailKey)) {
+                sentMailIdsRef.current.add(mailKey);
+                const mail: MailMessage = {
+                  id: `rescue_${Date.now()}`,
+                  sender: 'Przegląd Sportowy',
+                  role: 'Redakcja',
+                  subject: `${info.ownerName} ratuje ${info.clubName} przed katastrofą finansową`,
+                  body: `Właściciel klubu ${info.clubName}, ${info.ownerName}, zdecydował się pokryć zobowiązania finansowe klubu z własnej kieszeni. Klub znajdował się w poważnych tarapatach finansowych zagrażających jego dalszemu funkcjonowaniu. Decyzja właściciela ocaliła klub przed bankructwem i pozwoli kontynuować rozgrywki sezonu.`,
+                  date: new Date(nextDay),
+                  isRead: false,
+                  type: MailType.MEDIA,
+                  priority: 3,
+                };
+                setMessages(prev => [mail, ...prev]);
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // ── SPRAWOZDANIE FINANSOWE: mail miesięczny (1. dzień miesiąca) ──────────
+    if (nextDay.getDate() === 1 && userTeamId && !isResigned) {
+      const dateStr = nextDay.toISOString().split('T')[0];
+      const reportKey = `LOAN_MONTHLY_${userTeamId}_${dateStr}`;
+      const loanedPlayers = Object.values(players)
+        .flat()
+        .filter(player => player.loan?.parentClubId === userTeamId);
+      const reportRows = loanedPlayers
+        .filter(player => {
+          const lastReport = player.loan?.lastReportDate ? new Date(player.loan.lastReportDate) : null;
+          if (!lastReport || Number.isNaN(lastReport.getTime())) return true;
+          return lastReport.getFullYear() !== nextDay.getFullYear() || lastReport.getMonth() !== nextDay.getMonth();
+        })
+        .map(player => {
+          const loan = player.loan!;
+          const lastMatches = loan.lastReportMatches ?? loan.reportBaselineMatches ?? player.stats.matchesPlayed ?? 0;
+          const lastMinutes = loan.lastReportMinutes ?? loan.reportBaselineMinutes ?? player.stats.minutesPlayed ?? 0;
+          const lastGoals = loan.lastReportGoals ?? loan.reportBaselineGoals ?? player.stats.goals ?? 0;
+          const lastAssists = loan.lastReportAssists ?? loan.reportBaselineAssists ?? player.stats.assists ?? 0;
+          const lastRatingCount = loan.lastReportRatingCount ?? loan.reportBaselineRatingCount ?? (player.stats.ratingHistory?.length ?? 0);
+          const ratingSlice = (player.stats.ratingHistory || []).slice(lastRatingCount);
+          const avgRating = ratingSlice.length > 0
+            ? ratingSlice.reduce((sum, rating) => sum + rating, 0) / ratingSlice.length
+            : null;
+          const matches = Math.max(0, (player.stats.matchesPlayed ?? 0) - lastMatches);
+          const minutes = Math.max(0, (player.stats.minutesPlayed ?? 0) - lastMinutes);
+          const goals = Math.max(0, (player.stats.goals ?? 0) - lastGoals);
+          const assists = Math.max(0, (player.stats.assists ?? 0) - lastAssists);
+          const daysLeft = Math.max(0, Math.ceil((new Date(loan.endDate).getTime() - nextDay.getTime()) / 86_400_000));
+          const status = matches === 0
+            ? 'bez gry'
+            : minutes < 90
+              ? 'mało minut'
+              : minutes >= 270 || matches >= 3
+                ? 'regularnie gra'
+                : 'rotacja';
+          return { player, loan, matches, minutes, goals, assists, avgRating, daysLeft, status };
+        });
+      const loanDevelopmentResults = new Map<string, LoanDevelopmentResult>();
+      reportRows.forEach(row => {
+        const destinationClub = clubs.find(club => club.id === row.loan.destinationClubId);
+        const destinationSquad = players[row.loan.destinationClubId] || [];
+        const result = LoanDevelopmentService.applyMonthlyDevelopment({
+          player: row.player,
+          destinationClub,
+          destinationSquad,
+          matches: row.matches,
+          minutes: row.minutes,
+          averageRating: row.avgRating,
+          reportDate: nextDay,
+        });
+        loanDevelopmentResults.set(row.player.id, result);
+      });
+
+      if (reportRows.length > 0 && !sentMailIdsRef.current.has(reportKey)) {
+        sentMailIdsRef.current.add(reportKey);
+        const monthLabelDate = new Date(nextDay);
+        monthLabelDate.setMonth(monthLabelDate.getMonth() - 1);
+        const monthLabel = monthLabelDate.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        const bodyLines = reportRows.map(row => {
+          const ratingLabel = row.avgRating === null ? '-' : row.avgRating.toFixed(2);
+          const returnNote = row.daysLeft <= 30 ? `, powrót za ${row.daysLeft} dni` : '';
+          const development = loanDevelopmentResults.get(row.player.id);
+          const developmentNote = development
+            ? `, rozwój: ${development.note}${development.changed && development.previousOverall !== development.nextOverall ? `, OVR ${development.previousOverall}→${development.nextOverall}` : ''}`
+            : '';
+          return [
+            `• ${row.player.firstName} ${row.player.lastName}`,
+            `  Klub: ${row.loan.destinationClubName}`,
+            `  Występy: ${row.matches} mecz. / ${row.minutes} min`,
+            `  Liczby: ${row.goals} goli / ${row.assists} asyst / śr. ocena ${ratingLabel}`,
+            `  Status: ${row.status}${returnNote}${developmentNote}.`,
+          ].join('\n');
+        });
+        const warningRows = reportRows.filter(row => row.matches === 0 || row.minutes < 90);
+        const warningText = warningRows.length > 0
+          ? `\n\nDO OBSERWACJI\n${warningRows.map(row => `• ${row.player.firstName} ${row.player.lastName} - ${row.loan.destinationClubName}, ${row.minutes} min`).join('\n')}\n\nJeśli sytuacja z minutami się powtórzy, warto rozważyć skrócenie wypożyczenia.`
+          : '\n\nOCENA SZTABU\nOgólnie wypożyczenia wyglądają stabilnie. Zawodnicy dostają minuty i sztab nie zgłasza pilnych zastrzeżeń.';
+        const reportPeriodStart = new Date(nextDay.getFullYear(), nextDay.getMonth() - 1, 1);
+        const reportPeriodEnd = new Date(nextDay);
+        reportPeriodEnd.setHours(0, 0, 0, 0);
+        const playtimeWarningMails = warningRows.flatMap(row => {
+          const destinationClub = clubs.find(club => club.id === row.loan.destinationClubId);
+          const hadLeagueFixture = !!destinationClub && allFixtures.some(fixture => {
+            const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+            if (Number.isNaN(fixtureDate.getTime())) return false;
+            const involved = fixture.homeTeamId === row.loan.destinationClubId || fixture.awayTeamId === row.loan.destinationClubId;
+            return involved &&
+              fixture.leagueId === destinationClub.leagueId &&
+              fixtureDate >= reportPeriodStart &&
+              fixtureDate < reportPeriodEnd;
+          });
+          if (!hadLeagueFixture) return [];
+
+          const warningKey = `LOAN_PLAYTIME_WARNING_${row.player.id}_${dateStr}`;
+          if (sentMailIdsRef.current.has(warningKey)) return [];
+          sentMailIdsRef.current.add(warningKey);
+
+          const minutesText = row.matches === 0
+            ? 'nie zagrał ani jednego meczu'
+            : `zagrał tylko ${row.minutes} minut`;
+          return [{
+            id: warningKey,
+            sender: 'Sztab Szkoleniowy',
+            role: 'Kontrola wypożyczeń',
+            subject: `Problem z wypożyczeniem: ${row.player.firstName} ${row.player.lastName}`,
+            body: [
+              'Trenerze,',
+              '',
+              `Zawodnik: ${row.player.firstName} ${row.player.lastName}`,
+              `Klub wypożyczenia: ${row.loan.destinationClubName}`,
+              `Okres raportu: ostatni miesiąc`,
+              '',
+              'PROBLEM',
+              `${row.player.firstName} ${row.player.lastName} ${minutesText}. Klub rozgrywał w tym czasie mecze ligowe, więc brak minut może realnie hamować jego rozwój.`,
+              '',
+              'MOŻLIWE DECYZJE',
+              '• Skróć wypożyczenie - zawodnik wróci natychmiast do Twojego klubu.',
+              '• Ignoruj - dajesz klubowi kolejny miesiąc na zmianę sytuacji.',
+            ].join('\n'),
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 75,
+            metadata: { type: 'LOAN_PLAYTIME_WARNING' as const, playerId: row.player.id },
+          }];
+        });
+        const reportMail: MailMessage = {
+          id: reportKey,
+          sender: 'Sztab Szkoleniowy',
+          role: 'Raport wypożyczeń',
+          subject: `Raport wypożyczeń — ${monthLabel}`,
+          body: [
+            'Trenerze,',
+            '',
+            `Raport wypożyczeń za: ${monthLabel}`,
+            '',
+            'Liczymy tylko okres od poprzedniego raportu, żeby było widać realną aktywność zawodnika.',
+            '',
+            'ZAWODNICY',
+            bodyLines.join('\n\n'),
+            warningText,
+            '',
+            `Sztab ${clubs.find(c => c.id === userTeamId)?.name ?? ''}`,
+          ].join('\n'),
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: warningRows.length > 0 ? 65 : 35,
+        };
+        setMessages(prev => [...playtimeWarningMails, reportMail, ...prev]);
+      }
+
+      if (reportRows.length > 0) {
+        const reportPlayerIds = new Set(reportRows.map(row => row.player.id));
+        setPlayers(prev => {
+          let changed = false;
+          const nextPlayers: Record<string, Player[]> = {};
+          Object.entries(prev).forEach(([clubId, squad]) => {
+            nextPlayers[clubId] = squad.map(player => {
+              if (!reportPlayerIds.has(player.id) || !player.loan) return player;
+              const developedPlayer = loanDevelopmentResults.get(player.id)?.player ?? player;
+              const development = loanDevelopmentResults.get(player.id);
+              const reportRow = reportRows.find(row => row.player.id === player.id);
+              // HISTORIA RAPORTÓW WYPOŻYCZENIA:
+              // Każdy miesięczny raport zapisujemy bezpośrednio w player.loan.monthlyReports,
+              // bo mail może zostać usunięty przez gracza, a ekran szczegółów wypożyczenia
+              // powinien nadal pokazywać archiwum minut, ocen i wpływu na rozwój zawodnika.
+              // Najnowszy raport trzymamy na początku tablicy i ograniczamy archiwum do 24 wpisów,
+              // żeby zapis gry nie rósł bez końca przy długich karierach.
+              const nextMonthlyReports = reportRow
+                ? [
+                    {
+                      id: `LOAN_REPORT_${player.id}_${dateStr}`,
+                      date: dateStr,
+                      monthLabel: new Date(nextDay.getFullYear(), nextDay.getMonth() - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' }),
+                      matches: reportRow.matches,
+                      minutes: reportRow.minutes,
+                      goals: reportRow.goals,
+                      assists: reportRow.assists,
+                      averageRating: reportRow.avgRating,
+                      status: reportRow.status,
+                      daysLeft: reportRow.daysLeft,
+                      previousOverall: development?.previousOverall ?? player.overallRating,
+                      nextOverall: development?.nextOverall ?? developedPlayer.overallRating,
+                      developmentNote: development?.note ?? 'bez zmian rozwojowych',
+                      developmentChanged: !!development?.changed,
+                    },
+                    ...(developedPlayer.loan?.monthlyReports ?? player.loan.monthlyReports ?? []),
+                  ].slice(0, 24)
+                : (developedPlayer.loan?.monthlyReports ?? player.loan.monthlyReports);
+              changed = true;
+              return {
+                ...developedPlayer,
+                loan: {
+                  ...developedPlayer.loan!,
+                  lastReportDate: dateStr,
+                  lastReportMatches: developedPlayer.stats.matchesPlayed ?? 0,
+                  lastReportMinutes: developedPlayer.stats.minutesPlayed ?? 0,
+                  lastReportGoals: developedPlayer.stats.goals ?? 0,
+                  lastReportAssists: developedPlayer.stats.assists ?? 0,
+                  lastReportRatingCount: developedPlayer.stats.ratingHistory?.length ?? 0,
+                  monthlyReports: nextMonthlyReports,
+                },
+              };
+            });
+          });
+          return changed ? nextPlayers : prev;
+        });
+      }
+    }
+
+    if (nextDay.getDate() === 1 && userTeamId) {
+      const monthLabel = nextDay.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+      const reportMail = {
+        id: `FINANCE_REPORT_${nextDay.toISOString().split('T')[0]}`,
+        sender: 'Biuro Ligowe PZPN',
+        role: 'Dział Finansowy',
+        subject: `Sprawozdanie finansowe lig — ${monthLabel}`,
+        body: `Szanowny Panie Menedżerze,\n\nPrzesyłamy miesięczne sprawozdanie finansowe polskich lig piłkarskich.\n\nAby zobaczyć aktualne salda drużyn, proszę wybrać ligę z przycisków poniżej.`,
+        date: new Date(nextDay),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 30,
+          metadata: { type: 'LEAGUE_FINANCE_REPORT' as const },
+        };
+        setMessages(prev => [reportMail, ...prev]);
+      }
+
+    // ── ROZBUDOWA STADIONU: codzienna aktualizacja faz ───────────────────────
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub && (userClub.stadiumExpansionProjects?.length ?? 0) > 0) {
+        const dateStr = nextDay.toISOString().split('T')[0];
+        const { updatedClub, events } = StadiumExpansionService.advanceDay(userClub, dateStr);
+        if (events.length > 0) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? updatedClub : c));
+          const stadiumMails: MailMessage[] = events.map(ev => ({
+            id: `STADIUM_EV_${ev.projectId}_${dateStr}_${ev.newPhase}`,
+            sender: 'Zarząd Klubu',
+            role: 'Dyrektor Infrastruktury',
+            subject: ev.subject,
+            body: ev.body,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: ev.isGoodNews ? 65 : 80,
+          }));
+          setMessages(prev => [...stadiumMails, ...prev]);
+          if (events.some(e => e.newPhase === 'COMPLETED')) {
+            showGameNotification({
+              title: 'Rozbudowa zakończona!',
+              message: `Nowa trybuna na stadionie ${userClub.stadiumName} jest gotowa!`,
+              tone: 'success',
+            });
+          }
+        }
+      }
+    }
+    // ── END ROZBUDOWA STADIONU ────────────────────────────────────────────────
+
+    // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────
+    if (academy && userTeamId && nextDay.getDate() === 1 && academy.youthPlayers.length > 0) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const eventMsg = AcademyService.tryGenerateEvent(academy, nextDay, userClub?.name ?? 'Klub');
+      if (eventMsg) {
+        setMessages(prev => [{
+          id: `ACAD_EVENT_${Date.now()}`,
+          sender: 'Dyrektor Akademii',
+          role: 'Akademia Piłkarska',
+          subject: 'Wiadomość z Akademii',
+          body: eventMsg,
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.STAFF,
+          priority: 45,
+        }, ...prev]);
+      }
+    }
+    // ── END AKADEMIA ──────────────────────────────────────────────────────────
+
+    // Nie przesuwamy daty jeśli gracz musi jeszcze zagrać mecz lub potwierdzić akcję tego dnia
+    if (skipDayAdvance) {
+      // Resetuj GUARD ref — następne wywołanie advanceDay dla tej samej daty
+      // MUSI przejść i faktycznie przesunąć datę (slot będzie już w processedDrawIds)
+      lastProcessedLeagueDateRef.current = '';
+      return;
+    }
+
+    setCurrentDate(nextDay);
+    setLastRecoveryDate(new Date(dateToProcess));
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+
+  const advanceDayWithProcessing = useCallback(() => {
+    const processingDay = currentDate.getDate();
+    const processingMonth = currentDate.getMonth();
+    const isJulySeasonCrunch = processingMonth === 6 && (processingDay === 1 || processingDay === 2);
+    const isMonthlyCrunch = processingDay === 1;
+
+    void runWithProcessing(
+      () => advanceDay(),
+      {
+        status: isJulySeasonCrunch
+          ? 'Aktualizuję składy, kontrakty, finanse i rynek transferowy'
+          : isMonthlyCrunch
+            ? 'Przetwarzam miesięczne raporty, finanse i wydarzenia'
+            : 'Przetwarzam kolejny dzień kariery',
+        minVisibleMs: isJulySeasonCrunch ? 700 : isMonthlyCrunch ? 450 : 280,
+      }
+    );
+  }, [advanceDay, currentDate, runWithProcessing]);
+
+
+   const confirmCLGroupDraw = () => {
+    if (!activeGroupDraw) return;
+    // Zapisz grupy trwale przed wyczyszczeniem activeGroupDraw
+    setClGroups(activeGroupDraw.groups);
+
+    // Generuj fixtury fazy grupowej (6 kolejek)
+    const year = activeGroupDraw.date.getFullYear();
+    const matchdayDates = [
+      new Date(year, 8,  18),  // MD1 — 18 września
+      new Date(year, 9,  17),  // MD2 — 17 października
+      new Date(year, 9,  25),  // MD3 — 25 października
+      new Date(year, 10, 25),  // MD4 — 25 listopada
+      new Date(year, 11,  4),  // MD5 — 4 grudnia
+      new Date(year, 11, 14),  // MD6 — 14 grudnia
+    ];
+    const groupFixtures = CLDrawService.generateGroupStageFixtures(
+      activeGroupDraw.groups,
+      matchdayDates,
+      year,
+    );
+    setGlobalFixtures(prev => [...prev, ...groupFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, activeGroupDraw.id]);
+    setActiveGroupDraw(null);
+    if (userTeamId && activeGroupDraw.groups.some(g => g.includes(userTeamId))) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const mail: MailMessage = {
+        id: `CL_GROUP_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie Fazy Grupowej Ligi Mistrzów',
+        body: `Zakończono ceremonię losowania fazy grupowej Ligi Mistrzów. Sprawdź skład swojej grupy.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 85
+      };
+      const congratsMail = MailService.createFromTemplate('board_european_advance_group_cl', { 'CLUB': userClub?.name ?? '' });
+      setMessages(prev => [mail, congratsMail, ...prev]);
+      setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 4 } : c));
+    }
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  const confirmELGroupDraw = () => {
+    if (!activeELGroupDraw) return;
+    setElGroups(activeELGroupDraw.groups);
+
+    const year = activeELGroupDraw.date.getFullYear();
+    const matchdayDates = [
+      new Date(year, 8,  19),  // MD1 — 19 września
+      new Date(year, 9,  18),  // MD2 — 18 października
+      new Date(year, 9,  26),  // MD3 — 26 października
+      new Date(year, 10, 26),  // MD4 — 26 listopada
+      new Date(year, 11,  5),  // MD5 — 5 grudnia
+      new Date(year, 11, 15),  // MD6 — 15 grudnia
+    ];
+    const groupFixtures = ELDrawService.generateGroupStageFixtures(
+      activeELGroupDraw.groups,
+      matchdayDates,
+      year,
+    );
+    setGlobalFixtures(prev => [...prev, ...groupFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, activeELGroupDraw.id]);
+    setActiveELGroupDraw(null);
+    if (userTeamId && activeELGroupDraw.groups.some(g => g.includes(userTeamId))) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const mail: MailMessage = {
+        id: `EL_GROUP_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie Fazy Grupowej Ligi Europy',
+        body: `Zakończono ceremonię losowania fazy grupowej Ligi Europy. Sprawdź skład swojej grupy.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 82
+      };
+      const congratsMail = MailService.createFromTemplate('board_european_advance_group_el', { 'CLUB': userClub?.name ?? '' });
+      setMessages(prev => [mail, congratsMail, ...prev]);
+      setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 3 } : c));
+    }
+    const nextDayEL = new Date(currentDate);
+    nextDayEL.setDate(nextDayEL.getDate() + 1);
+    setCurrentDate(nextDayEL);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  const confirmCONFGroupDraw = () => {
+    if (!activeConfGroupDraw) return;
+    setConfGroups(activeConfGroupDraw.groups);
+    const year = activeConfGroupDraw.date.getFullYear();
+    const matchdayDates = [
+      new Date(year, 8,  20),
+      new Date(year, 9,  19),
+      new Date(year, 9,  27),
+      new Date(year, 10, 27),
+      new Date(year, 11,  6),
+      new Date(year, 11, 16),
+    ];
+    const groupFixtures = CONFDrawService.generateGroupStageFixtures(activeConfGroupDraw.groups, matchdayDates, year);
+    setGlobalFixtures(prev => [...prev, ...groupFixtures]);
+    setProcessedDrawIds(prev => [...prev, activeConfGroupDraw.id]);
+    setActiveConfGroupDraw(null);
+    if (userTeamId && activeConfGroupDraw.groups.some(g => g.includes(userTeamId))) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const mail: MailMessage = {
+        id: `CONF_GROUP_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie Fazy Grupowej Ligi Konferencji',
+        body: `Zakończono ceremonię losowania fazy grupowej Ligi Konferencji UEFA. Sprawdź skład swojej grupy.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 84
+      };
+      const congratsMail = MailService.createFromTemplate('board_european_advance_group_conf', { 'CLUB': userClub?.name ?? '' });
+      setMessages(prev => [mail, congratsMail, ...prev]);
+      setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 2 } : c));
+    }
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  const confirmCONFR16Draw = useCallback(() => {
+    if (!confGroups) return;
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear + 1, 0, 21); // 21 stycznia
+    const leg2Date = new Date(drawYear + 1, 0, 29); // 29 stycznia
+    const fixtureYear = drawYear + 1;
+
+    const r16Fixtures = CONFDrawService.generateCONFR16Fixtures(
+      confGroups, allFixtures, leg1Date, leg2Date, fixtureYear,
+    );
+    setGlobalFixtures(prev => [...prev, ...r16Fixtures]);
+
+    if (userTeamId) {
+      const isUserIn = r16Fixtures.some(
+        f => f.leagueId === CompetitionType.CONF_R16 &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CONF_R16_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/8 Finału Ligi Konferencji',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/8 finału Ligi Konferencji! Sprawdź swojego rywala w historii LK.'
+          : 'Przeprowadzono losowanie 1/8 finału Ligi Konferencji. Sprawdź pary w historii LK.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 87,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_r16_conf', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 2 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [confGroups, allFixtures, currentDate, userTeamId, navigateTo]);
+
+  const confirmCONFQFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 1, 18); // 18 lutego
+    const leg2Date = new Date(drawYear, 2, 4);  // 4 marca
+    const fixtureYear = drawYear;
+
+    const r16Winners = CONFDrawService.getR16Winners(allFixtures);
+    const r16Pool = CONFDrawService.getR16Participants(allFixtures);
+    const safeR16Winners = CONFDrawService.guaranteeWinners(r16Winners, r16Pool, 8);
+    const qfFixtures = CONFDrawService.generateCONFQFFixtures(
+      safeR16Winners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...qfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = qfFixtures.some(
+        f => f.leagueId === CompetitionType.CONF_QF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CONF_QF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/4 Finału Ligi Konferencji',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/4 finału Ligi Konferencji! Sprawdź swojego rywala w historii LK.'
+          : 'Przeprowadzono losowanie 1/4 finału Ligi Konferencji. Sprawdź pary w historii LK.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 86,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_qf_conf', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 3 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmCONFSFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 2, 28); // 28 marca
+    const leg2Date = new Date(drawYear, 3, 17); // 17 kwietnia
+    const fixtureYear = drawYear;
+
+    const qfWinners = CONFDrawService.getQFWinners(allFixtures);
+    const qfPool = CONFDrawService.getQFParticipants(allFixtures);
+    const safeQFWinners = CONFDrawService.guaranteeWinners(qfWinners, qfPool, 4);
+    const sfFixtures = CONFDrawService.generateCONFSFFixtures(
+      safeQFWinners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...sfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = sfFixtures.some(
+        f => f.leagueId === CompetitionType.CONF_SF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CONF_SF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/2 Finału Ligi Konferencji',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/2 finału Ligi Konferencji! Sprawdź swojego rywala w historii LK.'
+          : 'Przeprowadzono losowanie 1/2 finału Ligi Konferencji. Sprawdź pary w historii LK.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 88,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_sf_conf', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 4 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmELR16Draw = useCallback(() => {
+    if (!elGroups) return;
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear + 1, 0, 20); // 20 stycznia
+    const leg2Date = new Date(drawYear + 1, 0, 26); // 26 stycznia
+    const fixtureYear = drawYear + 1;
+
+    const r16Fixtures = ELDrawService.generateELR16Fixtures(
+      elGroups, allFixtures, leg1Date, leg2Date, fixtureYear,
+    );
+    setGlobalFixtures(prev => [...prev, ...r16Fixtures]);
+
+    if (userTeamId) {
+      const isUserIn = r16Fixtures.some(
+        f => f.leagueId === CompetitionType.EL_R16 &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `EL_R16_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/8 Finału Ligi Europy',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/8 finału Ligi Europy! Sprawdź swojego rywala w historii LE.'
+          : 'Przeprowadzono losowanie 1/8 finału Ligi Europy. Sprawdź pary w historii LE.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 88,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_r16_el', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 3 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, elGroups, userTeamId, navigateTo]);
+
+  const confirmCLR16Draw = useCallback(() => {
+    if (!clGroups) return;
+    // Draw jest w grudniu roku Y → mecze są w styczniu roku Y+1
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear + 1, 0, 19); // 19 stycznia
+    const leg2Date = new Date(drawYear + 1, 0, 25); // 25 stycznia
+    const fixtureYear = drawYear + 1;
+
+    const r16Fixtures = CLDrawService.generateR16Fixtures(
+      clGroups, allFixtures, leg1Date, leg2Date, fixtureYear,
+    );
+    setGlobalFixtures(prev => [...prev, ...r16Fixtures]);
+
+    if (userTeamId) {
+      const isUserIn = r16Fixtures.some(
+        f => f.leagueId === CompetitionType.CL_R16 &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CL_R16_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/8 Finału Ligi Mistrzów',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/8 finału Ligi Mistrzów! Sprawdź swojego rywala w historii LM.'
+          : 'Przeprowadzono losowanie 1/8 finału Ligi Mistrzów. Sprawdź pary w historii LM.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_r16_cl', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 4 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+        const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+        navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmCLQFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 1, 16); // 16 lutego
+    const leg2Date = new Date(drawYear, 2, 2);  // 2 marca
+    const fixtureYear = drawYear;
+
+    const r16Winners = CLDrawService.getR16Winners(allFixtures);
+    const r16Pool = CLDrawService.getR16Participants(allFixtures);
+    const safeR16Winners = CLDrawService.guaranteeWinners(r16Winners, r16Pool, 8);
+    const qfFixtures = CLDrawService.generateQFFixtures(
+      safeR16Winners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...qfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = qfFixtures.some(
+        f => f.leagueId === CompetitionType.CL_QF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CL_QF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/4 Finału Ligi Mistrzów',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/4 finału Ligi Mistrzów! Sprawdź swojego rywala w historii LM.'
+          : 'Przeprowadzono losowanie 1/4 finału Ligi Mistrzów. Sprawdź pary w historii LM.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_qf_cl', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 5 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmCLSFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 2, 26); // 26 marca
+    const leg2Date = new Date(drawYear, 3, 15); // 15 kwietnia
+    const fixtureYear = drawYear;
+
+    const qfWinners = CLDrawService.getQFWinners(allFixtures);
+    const qfPool = CLDrawService.getQFParticipants(allFixtures);
+    const safeQFWinners = CLDrawService.guaranteeWinners(qfWinners, qfPool, 4);
+    const sfFixtures = CLDrawService.generateSFFixtures(
+      safeQFWinners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...sfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = sfFixtures.some(
+        f => f.leagueId === CompetitionType.CL_SF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `CL_SF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/2 Finału Ligi Mistrzów',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/2 finału Ligi Mistrzów! Sprawdź swojego rywala w historii LM.'
+          : 'Przeprowadzono losowanie 1/2 finału Ligi Mistrzów. Sprawdź pary w historii LM.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_sf_cl', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 6 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmELQFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 1, 17); // 17 lutego
+    const leg2Date = new Date(drawYear, 2, 3);  // 3 marca
+    const fixtureYear = drawYear;
+
+    const r16Winners = ELDrawService.getR16Winners(allFixtures);
+    const r16Pool = ELDrawService.getR16Participants(allFixtures);
+    const safeR16Winners = ELDrawService.guaranteeWinners(r16Winners, r16Pool, 8);
+    const qfFixtures = ELDrawService.generateQFFixtures(
+      safeR16Winners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...qfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = qfFixtures.some(
+        f => f.leagueId === CompetitionType.EL_QF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `EL_QF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/4 Finału Ligi Europy',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/4 finału Ligi Europy! Sprawdź swojego rywala w historii LE.'
+          : 'Przeprowadzono losowanie 1/4 finału Ligi Europy. Sprawdź pary w historii LE.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 88,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_qf_el', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 4 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmELSFDraw = useCallback(() => {
+    const drawYear = currentDate.getFullYear();
+    const leg1Date = new Date(drawYear, 2, 27); // 27 marca
+    const leg2Date = new Date(drawYear, 3, 16); // 16 kwietnia
+    const fixtureYear = drawYear;
+
+    const qfWinners = ELDrawService.getQFWinners(allFixtures);
+    const qfPool = ELDrawService.getQFParticipants(allFixtures);
+    const safeQFWinners = ELDrawService.guaranteeWinners(qfWinners, qfPool, 4);
+    const sfFixtures = ELDrawService.generateSFFixtures(
+      safeQFWinners, leg1Date, leg2Date, fixtureYear, sessionSeed,
+    );
+    setGlobalFixtures(prev => [...prev, ...sfFixtures]);
+
+    if (userTeamId) {
+      const isUserIn = sfFixtures.some(
+        f => f.leagueId === CompetitionType.EL_SF &&
+             (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      const mail: MailMessage = {
+        id: `EL_SF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Losowanie 1/2 Finału Ligi Europy',
+        body: isUserIn
+          ? 'Twój klub awansował do 1/2 finału Ligi Europy! Sprawdź swojego rywala w historii LE.'
+          : 'Przeprowadzono losowanie 1/2 finału Ligi Europy. Sprawdź pary w historii LE.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 88,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_sf_el', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 5 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, sessionSeed, navigateTo]);
+
+  const confirmELFinalDraw = useCallback(() => {
+    const finalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.EL_FINAL);
+    if (!finalAlreadyExists) {
+      const sfWinners = ELDrawService.getSFWinners(allFixtures);
+      const sfPool = ELDrawService.getSFParticipants(allFixtures);
+      const safeSFWinners = ELDrawService.guaranteeWinners(sfWinners, sfPool, 2);
+      if (safeSFWinners.length === 2) {
+        const finalDate = new Date(currentDate.getFullYear(), 4, 20);
+        const finalFixture = ELDrawService.generateFinalFixture(
+          safeSFWinners[0], safeSFWinners[1], finalDate, finalDate.getFullYear()
+        );
+        setGlobalFixtures(prev => [...prev, finalFixture]);
+      }
+    }
+
+    if (userTeamId) {
+      const sfWinners = ELDrawService.getSFWinners(allFixtures);
+      const isUserIn = sfWinners.includes(userTeamId);
+      const mail: MailMessage = {
+        id: `EL_FINAL_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Ogłoszenie Finalistów Ligi Europy',
+        body: isUserIn
+          ? 'Twój klub awansował do Finału Ligi Europy! Sprawdź szczegóły w historii LE.'
+          : 'Ogłoszono finaliśtów Ligi Europy. Sprawdź parę finałową w historii LE.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_final_el', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 6 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, navigateTo]);
+
+  const confirmCONFFinalDraw = useCallback(() => {
+    const finalAlreadyExists = allFixtures.some(f => f.leagueId === CompetitionType.CONF_FINAL);
+    if (!finalAlreadyExists) {
+      const sfWinners = CONFDrawService.getSFWinners(allFixtures);
+      const sfPool = CONFDrawService.getSFParticipants(allFixtures);
+      const safeSFWinners = CONFDrawService.guaranteeWinners(sfWinners, sfPool, 2);
+      if (safeSFWinners.length === 2) {
+        const finalDate = new Date(currentDate.getFullYear(), 4, 27);
+        const finalFixture = CONFDrawService.generateFinalFixture(
+          safeSFWinners[0], safeSFWinners[1], finalDate, finalDate.getFullYear()
+        );
+        setGlobalFixtures(prev => [...prev, finalFixture]);
+      }
+    }
+    if (userTeamId) {
+      const sfWinners = CONFDrawService.getSFWinners(allFixtures);
+      const isUserIn = sfWinners.includes(userTeamId);
+      const mail: MailMessage = {
+        id: `CONF_FINAL_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Ogłoszenie Finalistów Ligi Konferencji',
+        body: isUserIn
+          ? 'Twój klub awansował do Finału Ligi Konferencji! Sprawdź szczegóły w historii LK.'
+          : 'Ogłoszono finalistów Ligi Konferencji. Sprawdź parę finałową w historii LK.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 90,
+      };
+      if (isUserIn) {
+        const userClub = clubs.find(c => c.id === userTeamId);
+        const congratsMail = MailService.createFromTemplate('board_european_advance_final_conf', { 'CLUB': userClub?.name ?? '' });
+        setMessages(prev => [mail, congratsMail, ...prev]);
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, europeanBonusPoints: (c.europeanBonusPoints ?? 0) + 5 } : c));
+      } else {
+        setMessages(prev => [mail, ...prev]);
+      }
+    }
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [allFixtures, currentDate, userTeamId, navigateTo]);
+
+  const confirmPlayoffDraw = useCallback(() => {
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [currentDate, navigateTo]);
+
+  // ── BARAŻE O UTRZYMANIE — przyciski "Dalej" ──────────────────────────────
+
+  // Gracz potwierdza widok wyników 26 maja — przechodzi do następnego dnia
+  const confirmRelegationPlayoffMatch1 = useCallback(() => {
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [currentDate, navigateTo]);
+
+  // Gracz potwierdza widok wyników 29 maja — czyści stan i przechodzi do następnego dnia
+  const confirmRelegationPlayoffMatch2 = useCallback(() => {
+    // Nie czyścimy relegationPlayoffFinalResult — startNextSeason potrzebuje go do zmiany lig
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [currentDate, navigateTo]);
+
+  // Gracz potwierdza widok półfinałów 31 maja — przechodzi do następnego dnia
+  const confirmPromotionPlayoffSemi = useCallback(() => {
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [currentDate, navigateTo]);
+
+  // Gracz potwierdza widok finałów 4 czerwca — przechodzi do następnego dnia
+  const confirmPromotionPlayoffFinal = useCallback(() => {
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  }, [currentDate, navigateTo]);
+
+  const confirmSeasonEnd = useCallback(() => {
+    const nextSeasonYear = currentDate.getFullYear();
+    // Uruchom nowy sezon i przesuń datę na 1 lipca
+    // Przegląd składów AI zostanie wykonany automatycznie 2 lipca przez advanceDay
+    startNextSeason(nextSeasonYear);
+    setCurrentDate(new Date(nextSeasonYear, 6, 1));
+  }, [currentDate, userTeamId, startNextSeason]);
+
+  const confirmCupDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+    
+    const participantIds = new Set<string>();
+    pairs.forEach(f => { participantIds.add(f.homeTeamId); participantIds.add(f.awayTeamId); });
+    
+    setClubs(prev => prev.map(c => ({
+       ...c,
+       isInPolishCup: participantIds.has(c.id)
+    })));
+
+       setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    // ── Tworzenie fixtures meczowych po losowaniu ──
+    const year = currentDate.getFullYear();
+  
+
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+
+
+    setActiveCupDraw(null);
+
+    if (userTeamId) {
+      const isUserIn = pairs.some(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId);
+      const mail: MailMessage = { 
+        id: `CUP_DRAW_${Date.now()}`, 
+        sender: 'Sekretariat PZPN', 
+        role: 'Biuro Rozgrywek', 
+        subject: 'Zakończono losowanie Pucharu Polski', 
+        body: isUserIn ? `Wylosowano pary nadchodzącej rundy. Nasz zespół trafił na kolejnego przeciwnika. Szczegóły w terminarzu.` : `Zakończono losowanie kolejnej rundy Pucharu Polski. Nasz zespół niestety odpadł z rozgrywek.`, 
+        date: new Date(currentDate), 
+        isRead: false, 
+        type: MailType.SYSTEM, 
+        priority: 80 
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  const confirmCLDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+    setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    const year = currentDate.getFullYear();
+    const matchFixtures: Fixture[] = [];
+    const isR2Q = pairs.length > 0 && pairs[0].leagueId === CompetitionType.CL_R2Q_DRAW;
+
+    pairs.forEach((pair, i) => {
+      const pairNum = i + 1;
+      if (isR2Q) {
+        matchFixtures.push({
+          id: `CL_R2Q_MATCH_${pairNum}_${year}`,
+          leagueId: CompetitionType.CL_R2Q,
+          homeTeamId: pair.homeTeamId,
+          awayTeamId: pair.awayTeamId,
+          date: new Date(year, 6, 27),  // 27 lipca
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+        });
+        matchFixtures.push({
+          id: `CL_R2Q_MATCH_${pairNum}_${year}_RETURN`,
+          leagueId: CompetitionType.CL_R2Q_RETURN,
+          homeTeamId: pair.awayTeamId,
+          awayTeamId: pair.homeTeamId,
+          date: new Date(year, 7, 14),  // 14 sierpnia
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+        });
+      } else {
+        matchFixtures.push({
+          id: `CL_R1Q_MATCH_${pairNum}_${year}`,
+          leagueId: CompetitionType.CL_R1Q,
+          homeTeamId: pair.homeTeamId,
+          awayTeamId: pair.awayTeamId,
+          date: new Date(year, 6, 11),
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+        });
+        matchFixtures.push({
+          id: `CL_R1Q_MATCH_${pairNum}_${year}_RETURN`,
+          leagueId: CompetitionType.CL_R1Q_RETURN,
+          homeTeamId: pair.awayTeamId,
+          awayTeamId: pair.homeTeamId,
+          date: new Date(year, 6, 15),
+          status: MatchStatus.SCHEDULED,
+          homeScore: null,
+          awayScore: null,
+        });
+      }
+    });
+    setGlobalFixtures(prev => [...prev, ...matchFixtures]);
+    // ── koniec ──
+
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+    setActiveCupDraw(null);
+    if (userTeamId) {
+      const isUserIn = pairs.some(f => f.homeTeamId === userTeamId || f.awayTeamId === userTeamId);
+      const mail: MailMessage = {
+        id: `CL_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Zakończono losowanie Ligi Mistrzów',
+        body: isUserIn
+          ? `Wylosowano pary rundy wstępnej Ligi Mistrzów. Nasz zespół trafił na przeciwnika. Szczegóły dostępne w drabince rozgrywek.`
+          : `Zakończono ceremonię losowania rundy wstępnej Ligi Mistrzów. Zapraszamy do zapoznania się z wylosowanymi parami.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 85
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  // ── Liga Europy: potwierdzenie losowania R1Q ─────────────────────────────
+  const confirmELDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+
+    // Zapisz pary (draw fixtures)
+    setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    const year = currentDate.getFullYear();
+    const matchFixtures: Fixture[] = [];
+
+    pairs.forEach((pair, i) => {
+      const pairNum = i + 1;
+      matchFixtures.push({
+        id: `EL_R1Q_MATCH_${pairNum}_${year}`,
+        leagueId: CompetitionType.EL_R1Q,
+        homeTeamId: pair.homeTeamId,
+        awayTeamId: pair.awayTeamId,
+        date: new Date(year, 6, 5),   // 5 lipca
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+      matchFixtures.push({
+        id: `EL_R1Q_MATCH_${pairNum}_${year}_RETURN`,
+        leagueId: CompetitionType.EL_R1Q_RETURN,
+        homeTeamId: pair.awayTeamId,
+        awayTeamId: pair.homeTeamId,
+        date: new Date(year, 6, 10),  // 10 lipca
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+    });
+    setGlobalFixtures(prev => [...prev, ...matchFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+    setActiveCupDraw(null);
+
+    if (userTeamId) {
+      const mail: MailMessage = {
+        id: `EL_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Zakończono losowanie Ligi Europy — Runda 1',
+        body: 'Zakończono ceremonię losowania Rundy 1 Kwalifikacyjnej Ligi Europy UEFA. Zapraszamy do zapoznania się z wylosowanymi parami.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 82,
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  // ── Liga Konferencji: potwierdzenie losowania R1Q ────────────────────────
+  const confirmCONFDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+
+    // Zapisz pary (draw fixtures)
+    setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    const year = currentDate.getFullYear();
+    const matchFixtures: Fixture[] = [];
+
+    pairs.forEach((pair, i) => {
+      const pairNum = i + 1;
+      matchFixtures.push({
+        id: `CONF_R1Q_MATCH_${pairNum}_${year}`,
+        leagueId: CompetitionType.CONF_R1Q,
+        homeTeamId: pair.homeTeamId,
+        awayTeamId: pair.awayTeamId,
+        date: new Date(year, 6, 14),   // 14 lipca
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+      matchFixtures.push({
+        id: `CONF_R1Q_MATCH_${pairNum}_${year}_RETURN`,
+        leagueId: CompetitionType.CONF_R1Q_RETURN,
+        homeTeamId: pair.awayTeamId,
+        awayTeamId: pair.homeTeamId,
+        date: new Date(year, 6, 17),  // 17 lipca
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+    });
+    setGlobalFixtures(prev => [...prev, ...matchFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+    setActiveCupDraw(null);
+
+    if (userTeamId) {
+      const mail: MailMessage = {
+        id: `CONF_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Zakończono losowanie Ligi Konferencji — Runda 1',
+        body: 'Zakończono ceremonię losowania Rundy 1 Kwalifikacyjnej Ligi Konferencji UEFA. Zapraszamy do zapoznania się z wylosowanymi parami.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 87,
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  // ── Liga Konferencji: potwierdzenie losowania R2Q ───────────────────────
+  const confirmCONFR2QDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+
+    setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    const year = currentDate.getFullYear();
+    const matchFixtures: Fixture[] = [];
+
+    pairs.forEach((pair, i) => {
+      const pairNum = i + 1;
+      matchFixtures.push({
+        id: `CONF_R2Q_MATCH_${pairNum}_${year}`,
+        leagueId: CompetitionType.CONF_R2Q,
+        homeTeamId: pair.homeTeamId,
+        awayTeamId: pair.awayTeamId,
+        date: new Date(year, 6, 28),   // 28 lipca
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+      matchFixtures.push({
+        id: `CONF_R2Q_MATCH_${pairNum}_${year}_RETURN`,
+        leagueId: CompetitionType.CONF_R2Q_RETURN,
+        homeTeamId: pair.awayTeamId,
+        awayTeamId: pair.homeTeamId,
+        date: new Date(year, 7, 16),  // 16 sierpnia
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+    });
+    setGlobalFixtures(prev => [...prev, ...matchFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+    setActiveCupDraw(null);
+
+    if (userTeamId) {
+      const mail: MailMessage = {
+        id: `CONF_R2Q_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Zakończono losowanie Ligi Konferencji — Runda 2',
+        body: 'Zakończono ceremonię losowania Rundy 2 Kwalifikacyjnej Ligi Konferencji UEFA. Zapraszamy do zapoznania się z wylosowanymi parami.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 87,
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  // ── Liga Europy: potwierdzenie losowania R2Q ─────────────────────────────
+  const confirmELR2QDraw = (pairs: Fixture[]) => {
+    if (!activeCupDraw) return;
+    const drawId = activeCupDraw.id;
+
+    setGlobalFixtures(prev => [...prev, ...pairs]);
+
+    const year = currentDate.getFullYear();
+    const matchFixtures: Fixture[] = [];
+
+    pairs.forEach((pair, i) => {
+      const pairNum = i + 1;
+      matchFixtures.push({
+        id: `EL_R2Q_MATCH_${pairNum}_${year}`,
+        leagueId: CompetitionType.EL_R2Q,
+        homeTeamId: pair.homeTeamId,
+        awayTeamId: pair.awayTeamId,
+        date: new Date(year, 7, 8),   // 8 sierpnia
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+      matchFixtures.push({
+        id: `EL_R2Q_MATCH_${pairNum}_${year}_RETURN`,
+        leagueId: CompetitionType.EL_R2Q_RETURN,
+        homeTeamId: pair.awayTeamId,
+        awayTeamId: pair.homeTeamId,
+        date: new Date(year, 7, 15),  // 15 sierpnia
+        status: MatchStatus.SCHEDULED,
+        homeScore: null,
+        awayScore: null,
+      });
+    });
+    setGlobalFixtures(prev => [...prev, ...matchFixtures]);
+
+    setProcessedDrawIds(prev => [...prev, drawId]);
+    setActiveCupDraw(null);
+
+    if (userTeamId) {
+      const mail: MailMessage = {
+        id: `EL_R2Q_DRAW_${Date.now()}`,
+        sender: 'UEFA',
+        role: 'Biuro Rozgrywek UEFA',
+        subject: 'Zakończono losowanie Ligi Europy — Runda 2',
+        body: 'Zakończono ceremonię losowania Rundy 2 Kwalifikacyjnej Ligi Europy UEFA. Zapraszamy do zapoznania się z wylosowanymi parami.',
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 82,
+      };
+      setMessages(prev => [mail, ...prev]);
+    }
+
+    const nextDay = new Date(currentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCurrentDate(nextDay);
+    navigateTo(ViewState.DASHBOARD);
+  };
+
+  const markMessageRead = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
+  const deleteMessage = (id: string) => setMessages(prev => prev.filter(m => m.id !== id));
+  const addPendingPressArticle = (item: { mail: MailMessage; deliveryDate: string }) =>
+    setPendingPressArticles(prev => [...prev, item]);
+
+  const respondToSportingDirectorObjective = useCallback((response: import('../types').SportingDirectorObjectiveResponse) => {
+    if (!userTeamId) return;
+
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub?.sportingDirector || !userClub.sportingDirectorObjective || userClub.sportingDirectorObjective.status !== 'ACTIVE') {
+      showGameNotification({
+        title: 'Brak aktywnego celu',
+        message: 'Dyrektor sportowy nie ma teraz celu do omowienia.',
+        tone: 'info',
+      });
+      return;
+    }
+
+    if (sportingDirectorObjectiveResponseLockRef.current === userClub.sportingDirectorObjective.id) {
+      showGameNotification({
+        title: 'Odpowiedz juz wyslana',
+        message: 'Dyrektor czeka juz na rozliczenie tego celu.',
+        tone: 'info',
+      });
+      return;
+    }
+
+    sportingDirectorObjectiveResponseLockRef.current = userClub.sportingDirectorObjective.id;
+
+    const decision = SportingDirectorService.respondToObjective({
+      club: userClub,
+      date: currentDate,
+      response,
+    });
+
+    setClubs(prev => prev.map(club => club.id === userTeamId ? decision.updatedClub : club));
+    if (decision.mail) {
+      prependUniqueMessages([decision.mail], true);
+    }
+    showGameNotification({
+      title: 'Rozmowa z dyrektorem',
+      message: decision.message,
+      tone: response === 'CHALLENGE' ? 'warning' : 'info',
+    });
+  }, [clubs, currentDate, showGameNotification, userTeamId]);
+
+  const submitBoardClubRequest = useCallback((requestType: BoardClubRequestType) => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const date = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const squad = players[userTeamId] || [];
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const avgSalary = squad.length > 0 ? Math.round(wageBill / squad.length) : 0;
+    const formatPln = (value: number) => `${Math.round(value).toLocaleString('pl-PL')} PLN`;
+    const levelScore = (level?: import('../types').BoardAttributeLevel): number => ({
+      bardzo_niska: 0,
+      niska: 1,
+      przecietna: 2,
+      wysoka: 3,
+      bardzo_wysoka: 4,
+    }[level ?? 'przecietna']);
+
+    if (requestType === 'WAGE_COST_CONTROL') {
+      const pressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
+      const pressureLabel = pressureRatio >= 0.85
+        ? 'bardzo wysoka'
+        : pressureRatio >= 0.65
+          ? 'wysoka'
+          : pressureRatio >= 0.45
+            ? 'umiarkowana'
+            : 'bezpieczna';
+      const message = `Roczny fundusz płac: ${formatPln(wageBill)}. Średnia pensja: ${formatPln(avgSalary)}. Presja względem salda klubu: ${pressureLabel}.`;
+
+      setMessages(prev => [{
+        id: `BOARD_WAGE_REPORT_${userTeamId}_${Date.now()}`,
+        sender: 'Zarząd Klubu',
+        role: 'Dyrektor finansowy',
+        subject: 'Raport kontroli kosztów płac',
+        body: `Panie Managerze,\n\nPrzygotowaliśmy krótką ocenę struktury płacowej pierwszej drużyny.\n\n${message}\n\n${pressureRatio >= 0.65 ? 'Zalecamy ostrożność przy nowych kontraktach i rozważenie sprzedaży lub renegocjacji najdroższych umów.' : 'Aktualna struktura płac nie wymaga natychmiastowej interwencji.'}\n\nZ poważaniem,\nZarząd Klubu`,
+        date,
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 62,
+      }, ...prev]);
+      showGameNotification({
+        title: 'Raport płacowy',
+        message,
+        tone: pressureRatio >= 0.65 ? 'warning' : 'info',
+      });
+      return;
+    }
+
+    if (requestType === 'RESERVE_STATUS') {
+      const reserveBudget = Math.max(0, userClub.reserveBudget ?? FinanceService.calculateInitialReserveBudget(userClub.budget, userClub.reputation));
+      const transferCap = FinanceService.calculateTransferBudgetCap(userClub.budget, userClub.reputation, wageBill);
+      const reserveLabel = reserveBudget >= transferCap * 0.45
+        ? 'wysoka'
+        : reserveBudget >= transferCap * 0.22
+          ? 'stabilna'
+          : reserveBudget > 0
+            ? 'niska'
+            : 'wyczerpana';
+      const message = `Rezerwa zarządu: ${formatPln(reserveBudget)}. Ocena: ${reserveLabel}. Te środki mogą zostać użyte przy specjalnych prośbach, dofinansowaniu budżetu transferowego albo awaryjnym wsparciu salda klubu.`;
+
+      setMessages(prev => [{
+        id: `BOARD_RESERVE_REPORT_${userTeamId}_${Date.now()}`,
+        sender: 'Zarząd Klubu',
+        role: 'Dyrektor finansowy',
+        subject: 'Raport rezerwy zarządu',
+        body: `Panie Managerze,\n\n${message}\n\nZ poważaniem,\nZarząd Klubu`,
+        date,
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 62,
+      }, ...prev]);
+      showGameNotification({
+        title: 'Rezerwa zarządu',
+        message,
+        tone: reserveBudget > 0 ? 'info' : 'warning',
+      });
+      return;
+    }
+
+    const requestsUsed = userClub.boardBudgetRequestsThisSeason ?? 0;
+    if (requestsUsed >= 2) {
+      showGameNotification({
+        title: 'Wniosek odrzucony',
+        message: 'Zarząd wyczerpał limit specjalnych próśb finansowych w tym sezonie.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const board = userClub.board;
+    const confidence = userClub.boardConfidence ?? 70;
+    const generosity = levelScore(board?.hojnosc);
+    const ambition = levelScore(board?.ambicja);
+    const greed = levelScore(board?.chciwosc);
+    const competence = levelScore(board?.kompetencja);
+    const reserveBudget = Math.max(0, userClub.reserveBudget ?? FinanceService.calculateInitialReserveBudget(userClub.budget, userClub.reputation));
+    const reservePressure = reserveBudget <= 0 ? -35 : reserveBudget < userClub.budget * 0.025 ? -14 : 0;
+    const wagePressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
+    const pressureBonus = userClub.budget < Math.max(wageBill * 0.65, 2_000_000) ? 10 : 0;
+    const roll = Math.random() * 100;
+    let chance = 12 + generosity * 7 + Math.max(0, confidence - 55) * 0.25 - greed * 6;
+    const financialChanceCap = {
+      CLUB_FUNDS: [5, 16, 34, 56, 76],
+      TRANSFER_BUDGET: [7, 20, 40, 62, 82],
+    } as const;
+    let amount = 0;
+    let subject = '';
+    let successTitle = '';
+    let successMessage = '';
+    let updatedClubPatch: Partial<Club> = {};
+
+    if (requestType === 'CLUB_FUNDS') {
+      chance += pressureBonus - 18 + (wagePressureRatio >= 0.9 ? 8 : 0) + reservePressure;
+      const generosityAmountFactor = [0.018, 0.028, 0.045, 0.065, 0.085][generosity];
+      amount = Math.max(150_000, Math.round(userClub.budget * generosityAmountFactor));
+      amount = Math.min(amount, Math.max(350_000, userClub.reputation * (450_000 + generosity * 220_000)));
+      amount = Math.min(amount, reserveBudget);
+      if (amount <= 0) chance = 0;
+      chance = Math.min(chance, financialChanceCap.CLUB_FUNDS[generosity] + Math.floor(pressureBonus * 0.5));
+      subject = 'Dodatkowe środki klubowe';
+      successTitle = 'Środki przyznane';
+      successMessage = `Zarząd przyznał dodatkowe środki klubowe z rezerwy: ${formatPln(amount)}.`;
+      updatedClubPatch = {
+        budget: userClub.budget + amount,
+        reserveBudget: reserveBudget - amount,
+      };
+    }
+
+    if (requestType === 'TRANSFER_BUDGET') {
+      chance += ambition * 4 - 14 + reservePressure;
+      amount = Math.max(200_000, Math.round(userClub.transferBudget * (0.045 + generosity * 0.018) + userClub.budget * (0.008 + generosity * 0.004)));
+      amount = Math.min(amount, Math.max(450_000, userClub.reputation * (550_000 + generosity * 240_000)));
+      amount = Math.min(amount, reserveBudget);
+      const transferBudgetCap = FinanceService.calculateTransferBudgetCap(userClub.budget, userClub.reputation, wageBill);
+      const nextTransferBudget = Math.max(
+        userClub.transferBudget,
+        Math.min(userClub.transferBudget + amount, transferBudgetCap)
+      );
+      amount = Math.max(0, nextTransferBudget - userClub.transferBudget);
+      if (amount <= 0) chance = 0;
+      chance = Math.min(chance, financialChanceCap.TRANSFER_BUDGET[generosity]);
+      subject = 'Zwiększenie budżetu transferowego';
+      successTitle = 'Budżet transferowy zwiększony';
+      successMessage = `Zarząd przesunął z rezerwy na budżet transferowy ${formatPln(amount)}.`;
+      updatedClubPatch = {
+        transferBudget: nextTransferBudget,
+        reserveBudget: reserveBudget - amount,
+      };
+    }
+
+    if (requestType === 'EXCEPTIONAL_CONTRACT') {
+      chance += competence * 5 + Math.max(0, confidence - 60) * 0.25 - 10 + (reserveBudget < avgSalary ? -8 : 0);
+      subject = 'Zgoda na wyjątkowy kontrakt';
+      successTitle = 'Zgoda kontraktowa';
+      successMessage = 'Zarząd przyznał jednorazową zgodę na wyjątkowy kontrakt. Zgoda złagodzi veto zarządu przy najbliższym zaakceptowanym kontrakcie.';
+      updatedClubPatch = { boardExceptionalContractApprovals: (userClub.boardExceptionalContractApprovals ?? 0) + 1 };
+    }
+
+    const approved = chance > 0 && roll <= Math.max(2, Math.min(82, chance));
+    const nextRequestsUsed = requestsUsed + 1;
+    const financeLog = amount > 0 && approved && (requestType === 'CLUB_FUNDS' || requestType === 'TRANSFER_BUDGET')
+      ? {
+          id: Math.random().toString(36).substr(2, 9),
+          date: date.toISOString().split('T')[0],
+          amount: requestType === 'CLUB_FUNDS' ? amount : -amount,
+          type: requestType === 'CLUB_FUNDS' ? 'INCOME' as const : 'EXPENSE' as const,
+          description: requestType === 'CLUB_FUNDS'
+            ? 'Przesunięcie środków z rezerwy zarządu na saldo klubu'
+            : 'Przesunięcie środków z rezerwy zarządu na budżet transferowy',
+          previousBalance: userClub.budget,
+        }
+      : null;
+
+    setClubs(prev => prev.map(c => {
+      if (c.id !== userTeamId) return c;
+      if (!approved) {
+        return { ...c, boardBudgetRequestsThisSeason: nextRequestsUsed };
+      }
+      return {
+        ...c,
+        ...updatedClubPatch,
+        boardBudgetRequestsThisSeason: nextRequestsUsed,
+        financeHistory: financeLog ? [financeLog, ...(c.financeHistory || [])].slice(0, 50) : c.financeHistory,
+      };
+    }));
+
+    const resultMessage = approved
+      ? successMessage
+      : `Zarząd odrzucił wniosek: ${subject.toLowerCase()}. W obecnej sytuacji klub nie chce zwiększać ryzyka finansowego.`;
+
+    setMessages(prev => [{
+      id: `BOARD_REQ_${requestType}_${userTeamId}_${Date.now()}`,
+      sender: 'Zarząd Klubu',
+      role: approved ? 'Prezes Zarządu' : 'Dyrektor finansowy',
+      subject: approved ? `Wniosek zaakceptowany — ${subject}` : `Wniosek odrzucony — ${subject}`,
+      body: `Panie Managerze,\n\n${resultMessage}\n\nWykorzystane specjalne prośby w tym sezonie: ${nextRequestsUsed}/2.\n\nZ poważaniem,\nZarząd Klubu`,
+      date,
+      isRead: false,
+      type: MailType.BOARD,
+      priority: approved ? 72 : 66,
+    }, ...prev]);
+
+    showGameNotification({
+      title: approved ? successTitle : 'Wniosek odrzucony',
+      message: resultMessage,
+      tone: approved ? 'success' : 'warning',
+    });
+  }, [clubs, currentDate, players, showGameNotification, userTeamId]);
+
+  const requestStadiumExpansion = useCallback((stand: StadiumStand, requestedIncrease: number) => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+    const dateStr = currentDate instanceof Date
+      ? currentDate.toISOString().split('T')[0]
+      : String(currentDate);
+    const project = StadiumExpansionService.createRequest(userTeamId, stand, requestedIncrease, dateStr, userClub);
+    setClubs(prev => prev.map(c =>
+      c.id === userTeamId
+        ? { ...c, stadiumExpansionProjects: [...(c.stadiumExpansionProjects ?? []), project] }
+        : c
+    ));
+    const standLabel = StadiumExpansionService.getStandLabel(stand);
+    const needsCityAid = project.financeType === 'CITY_AID';
+    setMessages(prev => [{
+      id: `STADIUM_REQ_${project.id}`,
+      sender: 'Zarząd Klubu',
+      role: 'Sekretariat',
+      subject: `Wniosek o rozbudowę przyjęty — ${standLabel}`,
+      body: needsCityAid
+        ? `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWstępna analiza wskazuje, że klub będzie potrzebował udziału miasta w finansowaniu projektu. Wniosek zostanie najpierw rozpatrzony przez zarząd, a w przypadku pozytywnej rekomendacji trafi do urzędu miejskiego.\n\nZ poważaniem,\nSekretariat Klubu`
+        : `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę stadionu (${standLabel}).\n\nWniosek zostanie rozpatrzony przez zarząd w ciągu 2–4 tygodni. O decyzji zostanie Pan niezwłocznie poinformowany drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
+      date: new Date(dateStr),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 60,
+    }, ...prev]);
+    showGameNotification({
+      title: 'Wniosek złożony',
+      message: needsCityAid
+        ? `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Możliwa będzie prośba o pomoc miasta.`
+        : `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Odpowiedź w ciągu 2–4 tygodni.`,
+      tone: 'info',
+    });
+  }, [clubs, currentDate, showGameNotification, userTeamId]);
+
+ const updatePlayer = (clubId: string, playerId: string, newData: Partial<Player>) => {
+    setPlayers(prev => ({
+      ...prev,
+      [clubId]: prev[clubId].map(p => p.id === playerId ? { ...p, ...newData } : p)
+    }));
+  };
+
+  const importSquad = (entries: { clubId: string; players: ImportedSquadPlayer[] }[]) => {
+    const newPlayersChunk: Record<string, Player[]> = {};
+    const newLineupsChunk: Record<string, Lineup> = {};
+    const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+    const importBatchId = `${now.getTime()}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+    const importedClubIds = new Set(entries.map(entry => entry.clubId));
+    entries.forEach(({ clubId, players: imported }) => {
+      const sourceClubName = clubs.find(c => c.id === clubId)?.name ?? clubId;
+      const importClubRep = clubs.find(c => c.id === clubId)?.reputation ?? 5;
+      if (!newPlayersChunk[clubId]) newPlayersChunk[clubId] = [];
+      imported.forEach((p, idx) => {
+        const targetClubId = typeof p.clubId === 'string' && importedClubIds.has(p.clubId) ? p.clubId : clubId;
+        const nat = p.nationality ?? Region.POLAND;
+        const country = p.nationalityCountry ?? pickNationalityForRegion(nat);
+        const attrs = { ...p.attributes };
+        const overall = PlayerAttributesGenerator.calculateOverall(attrs, p.position);
+        const contractYears = p.age < 25 ? 3 : p.age < 32 ? 2 : 1;
+        const contractEnd = p.contractEndDate
+          ? p.contractEndDate
+          : new Date(now.getFullYear() + contractYears, now.getMonth(), now.getDate()).toISOString();
+        const salary = p.annualSalary ?? Math.round(overall * 800);
+        const mval = p.marketValue ?? Math.round(overall * 3000);
+        const id = `IMPORT_${targetClubId}_${idx}_${importBatchId}`;
+        const loan = sanitizeImportedLoan(p.loan, clubId, sourceClubName);
+        const pendingClubExists = !!p.transferPendingClubId && clubs.some(c => c.id === p.transferPendingClubId);
+        const hasImportedPendingTransfer = pendingClubExists && !!p.transferReportDate;
+        const pendingTransferFields = hasImportedPendingTransfer
+          ? {
+              transferPendingClubId: p.transferPendingClubId,
+              transferReportDate: p.transferReportDate,
+              transferPendingFee: typeof p.transferPendingFee === 'number' && p.transferPendingFee > 0 ? p.transferPendingFee : undefined,
+              transferPendingSalary: typeof p.transferPendingSalary === 'number' && p.transferPendingSalary > 0 ? p.transferPendingSalary : undefined,
+              transferPendingBonus: typeof p.transferPendingBonus === 'number' && p.transferPendingBonus > 0 ? p.transferPendingBonus : undefined,
+              transferPendingContractYears: typeof p.transferPendingContractYears === 'number' && p.transferPendingContractYears > 0 ? p.transferPendingContractYears : undefined,
+              isOnTransferList: false,
+              isAvailableForLoan: false,
+            }
+          : {};
+        const cleanSecondaryPosition = p.secondaryPosition && p.secondaryPosition !== p.position ? p.secondaryPosition : null;
+        const cleanSecondaryPositionRating = cleanSecondaryPosition && typeof p.secondaryPositionRating === 'number'
+          ? Math.max(1, Math.min(99, p.secondaryPositionRating))
+          : undefined;
+        const importedPlayer = PlayerMoraleService.ensurePlayerState({
+          id, firstName: p.firstName, lastName: p.lastName, age: p.age,
+          clubId: targetClubId, nationality: nat, nationalityCountry: country,
+          position: p.position,
+          secondaryPosition: cleanSecondaryPosition,
+          secondaryPositionRating: cleanSecondaryPositionRating,
+          overallRating: overall, attributes: attrs,
+          stats: { goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+          nationalStats: { goals: p.nationalStats?.goals ?? 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: p.nationalStats?.matchesPlayed ?? 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] },
+          health: { status: HealthStatus.HEALTHY },
+          condition: 80, suspensionMatches: 0,
+          cupSuspensionMatches: 0, euroSuspensionMatches: 0, nationalSuspensionMatches: 0,
+          contractEndDate: contractEnd, annualSalary: salary, marketValue: mval, loan,
+          ...pendingTransferFields,
+          isAvailableForLoan: !!p.isAvailableForLoan && !loan && !hasImportedPendingTransfer,
+          history: [], boardLockoutUntil: null, isUntouchable: !!p.isUntouchable,
+          squadRole: p.squadRole ?? null,
+          negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
+          fatigueDebt: 0, isNegotiationPermanentBlocked: false,
+          reputacja: p.reputacja ?? calcReputacja(overall, importClubRep),
+          lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
+          transferLockoutUntil: null, freeAgentLockoutUntil: null,
+        } as Player);
+        if (!newPlayersChunk[targetClubId]) newPlayersChunk[targetClubId] = [];
+        newPlayersChunk[targetClubId].push(importedPlayer);
+      });
+    });
+    Object.entries(newPlayersChunk).forEach(([clubId, squad]) => {
+      const coach = Object.values(coaches).find(c => c.currentClubId === clubId) ?? null;
+      newLineupsChunk[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
+    });
+    const hasImportedPlayers = Object.keys(newPlayersChunk).length > 0;
+    const canReviewNT = hasImportedPlayers && nationalTeams.length > 0;
+
+    if (!canReviewNT) {
+      setPlayers(prev => ({ ...prev, ...newPlayersChunk }));
+      setLineups(prev => ({ ...prev, ...newLineupsChunk }));
+      return;
+    }
+
+    const mergedPlayers = { ...players, ...newPlayersChunk };
+    let currentTeams = nationalTeams;
+    let currentPlayers = mergedPlayers;
+    for (let i = 0; i < 8; i++) {
+      const review = NationalTeamService.reviewMonthlySquad(currentTeams, coaches, currentPlayers);
+      const anyChanged = review.updatedTeams.some((t, idx) => t !== currentTeams[idx]) || review.playerUpdates.length > 0 || review.newPlayers.length > 0;
+      if (!anyChanged) break;
+      currentTeams = review.updatedTeams;
+      let updatedPlayers: Record<string, Player[]> = currentPlayers;
+      if (review.newPlayers.length > 0) {
+        updatedPlayers = {
+          ...updatedPlayers,
+          'FREE_AGENTS': [...(updatedPlayers['FREE_AGENTS'] || []), ...review.newPlayers.map(PlayerMoraleService.ensurePlayerState)]
+        };
+      }
+      if (review.playerUpdates.length > 0) {
+        const updateMap: Record<string, string | null> = {};
+        review.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
+        const remapped: Record<string, Player[]> = {};
+        for (const [clubId, squad] of Object.entries(updatedPlayers)) {
+          remapped[clubId] = squad.map(p =>
+            p.id in updateMap ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
+          );
+        }
+        updatedPlayers = remapped;
+      }
+      currentPlayers = updatedPlayers;
+    }
+
+    setPlayers(currentPlayers);
+    if (currentTeams !== nationalTeams) setNationalTeams(currentTeams);
+    setLineups(prev => ({ ...prev, ...newLineupsChunk }));
+  };
+
+  const toggleTransferList = (playerId: string, price?: number) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (player) {
+      if (player.transferPendingClubId) return;
+      if (player.loan) {
+        showGameNotification({
+          title: 'Ruch zablokowany',
+          message: `${player.firstName} ${player.lastName} jest wypożyczony do ${player.loan.destinationClubName} do ${new Date(player.loan.endDate).toLocaleDateString('pl-PL')}. Nie można wystawić go na listę transferową.`,
+          tone: 'warning',
+        });
+        return;
+      }
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (!player.isOnTransferList && userClub?.sportingDirector) {
+        const directorDecision = SportingDirectorService.evaluateTransferListDecision({
+          club: userClub,
+          player,
+          squad,
+          requestedPrice: price,
+          date: currentDate,
+        });
+
+        if (directorDecision.blocked) {
+          setClubs(prev => prev.map(c => c.id === userTeamId ? directorDecision.updatedClub : c));
+          if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
+          showGameNotification({
+            title: 'Ruch zablokowany',
+            message: `Dyrektor sportowy blokuje ruch: ${directorDecision.message}`,
+            tone: 'warning',
+          });
+          return;
+        }
+      }
+
+      const isAddingToTransferList = !player.isOnTransferList;
+      let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+      let transferListObjectionMail: MailMessage | null = null;
+      if (isAddingToTransferList) {
+        const hasRequestedTransferList = !!moraleAdjustedPlayer.transferListDemandUntil;
+        const hasRequestedDevelopmentExit = !!moraleAdjustedPlayer.developmentExitDemandUntil;
+        if (hasRequestedTransferList) {
+          moraleAdjustedPlayer = {
+            ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 8, 'Trener zgodził się na listę transferową', currentDate),
+            transferListDemandUntil: null,
+          };
+        } else if (hasRequestedDevelopmentExit) {
+          moraleAdjustedPlayer = {
+            ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 6, 'Trener zgodził się na transfer po braku minut', currentDate),
+            developmentExitDemandUntil: null,
+            developmentExitDemandBaseline: null,
+            unresolvedMinutesDemandDate: null,
+            unresolvedMinutesDemandBaseline: null,
+          };
+        } else {
+          const personality = moraleAdjustedPlayer.moralePersonality ?? 'CALM';
+          const moralePenalty = personality === 'LOYAL'
+            ? -14
+            : personality === 'AMBITIOUS' || personality === 'EGOIST'
+              ? -12
+              : -9;
+          moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+            moraleAdjustedPlayer,
+            moralePenalty,
+            'Wystawienie na listę transferową bez zgody zawodnika',
+            currentDate
+          );
+
+          const morale = moraleAdjustedPlayer.morale ?? 50;
+          const loyalty = Math.max(1, Math.min(99, moraleAdjustedPlayer.lojalnosc ?? 50));
+          const transferOpenness = moraleAdjustedPlayer.playerMindset?.transferOpenness ?? 50;
+          const objectionChance = Math.max(0.08, Math.min(0.70,
+            0.18 + (loyalty / 99) * 0.35 + (morale / 100) * 0.25 - (transferOpenness / 100) * 0.25
+          ));
+
+          if (Math.random() < objectionChance) {
+            const responseDeadline = new Date(currentDate);
+            responseDeadline.setDate(responseDeadline.getDate() + 14);
+            const dateKey = currentDate.toISOString().split('T')[0];
+            transferListObjectionMail = {
+              id: `PLAYER_TRANSFER_LIST_OBJECTION_${player.id}_${dateKey}`,
+              date: currentDate.toISOString(),
+              type: MailType.SYSTEM,
+              subject: `Prośba o rozmowę po wystawieniu na listę: ${player.lastName}`,
+              sender: `${player.firstName} ${player.lastName}`,
+              role: 'Zawodnik',
+              body: `Trenerze,\n\nDowiedziałem się, że zostałem wystawiony na listę transferową. Nie prosiłem o odejście i chcę zostać w zespole, dlatego potrzebuję rozmowy i jasnego wyjaśnienia tej decyzji.\n\nChcę wiedzieć, czy nadal mam miejsce w planie drużyny i czy mogę jeszcze przekonać sztab swoją pracą. Taka decyzja bez rozmowy jest dla mnie bardzo trudna do zaakceptowania.\n\n${player.firstName} ${player.lastName}`,
+              isRead: false,
+              metadata: {
+                type: 'PLAYER_MORALE_REQUEST',
+                playerId: player.id,
+                requestType: 'TRANSFER_LIST_OBJECTION',
+                responseDeadline: responseDeadline.toISOString(),
+              },
+            };
+          }
+        }
+      }
+
+      updatePlayer(userTeamId, playerId, {
+        morale: moraleAdjustedPlayer.morale,
+        moralePersonality: moraleAdjustedPlayer.moralePersonality,
+        moraleHistory: moraleAdjustedPlayer.moraleHistory,
+        playerMindset: moraleAdjustedPlayer.playerMindset,
+        transferListDemandUntil: moraleAdjustedPlayer.transferListDemandUntil,
+        transferListRemovalPromiseDeadline: isAddingToTransferList
+          ? moraleAdjustedPlayer.transferListRemovalPromiseDeadline
+          : null,
+        developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
+        developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
+        unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
+        unresolvedMinutesDemandBaseline: moraleAdjustedPlayer.unresolvedMinutesDemandBaseline,
+        squadRole: isAddingToTransferList ? null : player.squadRole,
+        isUntouchable: isAddingToTransferList ? false : player.isUntouchable,
+        isOnTransferList: !player.isOnTransferList,
+        isAvailableForLoan: isAddingToTransferList ? false : player.isAvailableForLoan,
+        transferListPrice: !player.isOnTransferList ? price : undefined
+      });
+
+      if (transferListObjectionMail) {
+        prependUniqueMessages([transferListObjectionMail]);
+      }
+    }
+  };
+
+  const toggleLoanAvailability = (playerId: string) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (!player) return;
+
+    if (player.transferPendingClubId) {
+      showGameNotification({
+        title: 'Ruch zablokowany',
+        message: `${player.firstName} ${player.lastName} ma już uzgodniony transfer. Nie można oznaczyć go jako dostępnego do wypożyczenia.`,
+        tone: 'warning',
+      });
+      return;
+    }
+
+    if (player.loan) {
+      showGameNotification({
+        title: 'Ruch zablokowany',
+        message: `${player.firstName} ${player.lastName} jest już wypożyczony do ${player.loan.destinationClubName}.`,
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const isMakingAvailable = !player.isAvailableForLoan;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    let boardOverrideApplied = false;
+    let boardOverrideConfidence: number | null = null;
+
+    if (isMakingAvailable && userClub) {
+      // VETO ZARZĄDU PRZY WYPOŻYCZENIU WAŻNEGO ZAWODNIKA:
+      // Ta kontrola odpala się tylko wtedy, gdy gracz próbuje dodać zawodnika do listy wypożyczeń.
+      // Zdejmowanie statusu z listy zawsze działa od razu, bo to jest decyzja zgodna z ochroną kadry.
+      const sortedByOverall = [...squad].sort((a, b) => b.overallRating - a.overallRating);
+      const playerRank = sortedByOverall.findIndex(p => p.id === player.id) + 1;
+      const squadAverage = squad.length > 0
+        ? squad.reduce((sum, p) => sum + p.overallRating, 0) / squad.length
+        : player.overallRating;
+      const seasonMinutes = player.stats?.minutesPlayed ?? 0;
+      const boardStrictness = userClub.boardStrictness ?? 5;
+      const boardConfidence = userClub.boardConfidence ?? 75;
+
+      // Im wyższy wynik, tym mocniej zarząd uważa zawodnika za zbyt ważnego,
+      // żeby bez walki pozwolić go wypożyczyć.
+      let vetoScore = 0;
+      if (playerRank > 0 && playerRank <= 3) vetoScore += 28;
+      if (playerRank > 0 && playerRank <= 6) vetoScore += 14;
+      if (player.overallRating >= squadAverage + 8) vetoScore += 22;
+      if (player.overallRating >= squadAverage + 5) vetoScore += 12;
+      if (player.squadRole === 'KEY_PLAYER') vetoScore += 28;
+      if (player.squadRole === 'STARTER') vetoScore += 18;
+      if (player.isUntouchable) vetoScore += 22;
+      if (player.age <= 21) vetoScore -= 10;
+      if (seasonMinutes < 450) vetoScore -= 10;
+      if (!player.squadRole) vetoScore -= 7;
+
+      const vetoThreshold = Math.max(34, 56 - boardStrictness * 2 + Math.max(0, boardConfidence - 72) * 0.15);
+      const boardWouldVeto = vetoScore >= vetoThreshold;
+
+      if (boardWouldVeto) {
+        // Zawodnik może przepchnąć wypożyczenie, jeśli ma sportowy argument:
+        // jest młody, nie gra regularnie albo nie ma formalnej roli w hierarchii.
+        // Wtedy ruch przechodzi, ale zarząd traci zaufanie do decyzji menedżera.
+        let playerPushChance = 0.12;
+        if (player.age <= 23) playerPushChance += 0.24;
+        if (seasonMinutes < 450) playerPushChance += 0.22;
+        if (!player.squadRole) playerPushChance += 0.14;
+        if (player.moralePersonality === 'AMBITIOUS' || player.moralePersonality === 'EGOIST') playerPushChance += 0.10;
+        if (player.moralePersonality === 'LOYAL') playerPushChance -= 0.10;
+        if (player.squadRole === 'KEY_PLAYER' || player.isUntouchable) playerPushChance -= 0.18;
+        if (boardConfidence >= 82) playerPushChance -= 0.08;
+
+        const seed = IncomingTransferService.buildOfferSeed(currentDate, userClub.id, `${player.id}_BOARD_LOAN_VETO_${sessionSeed}`);
+        const playerPushesThrough = IncomingTransferService.seededRandom(seed + 77) < Math.max(0.04, Math.min(0.68, playerPushChance));
+
+        if (!playerPushesThrough) {
+          const mail: MailMessage = {
+            id: `BOARD_LOAN_VETO_${player.id}_${Date.now()}`,
+            sender: 'Zarząd Klubu',
+            role: 'Decyzja kadrowa',
+            subject: `Veto zarządu: ${player.firstName} ${player.lastName}`,
+            body: `Panie Managerze,\n\nZarząd nie wyraża zgody na wystawienie zawodnika ${player.firstName} ${player.lastName} na listę wypożyczeń.\n\nNasza ocena jest jednoznaczna: zawodnik ma zbyt duże znaczenie sportowe dla pierwszej drużyny, aby klub ryzykował jego odejście nawet czasowe. Taki ruch może osłabić kadrę i negatywnie wpłynąć na realizację celów sezonu.\n\nJeśli sytuacja zawodnika w hierarchii zespołu zmieni się w kolejnych miesiącach, temat może zostać oceniony ponownie.\n\nZ poważaniem,\nZarząd ${userClub.name}`,
+            date: new Date(currentDate),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 9,
+          };
+
+          prependUniqueMessages([mail], true);
+          showGameNotification({
+            title: 'Veto zarządu',
+            message: `Zarząd blokuje wypożyczenie: ${player.firstName} ${player.lastName} jest oceniany jako zbyt ważny dla kadry.`,
+            tone: 'warning',
+          });
+          return;
+        }
+
+        const relationPenalty = player.squadRole === 'KEY_PLAYER' || player.isUntouchable ? -9 : -6;
+        const nextBoardConfidence = Math.max(0, Math.min(100, boardConfidence + relationPenalty));
+        boardOverrideApplied = true;
+        boardOverrideConfidence = nextBoardConfidence;
+        const nextDirectorRelation = userClub.sportingDirector
+          ? Math.max(0, Math.min(100, userClub.sportingDirector.relationshipWithManager - 3))
+          : undefined;
+        const overrideMail: MailMessage = {
+          id: `BOARD_LOAN_VETO_OVERRIDDEN_${player.id}_${Date.now()}`,
+          sender: 'Zarząd Klubu',
+          role: 'Decyzja kadrowa',
+          subject: `Wypożyczenie mimo sprzeciwu: ${player.firstName} ${player.lastName}`,
+          body: `Panie Managerze,\n\nOdnotowujemy, że mimo naszych zastrzeżeń zawodnik ${player.firstName} ${player.lastName} został wystawiony na listę wypożyczeń.\n\nZawodnik wyraził silną wolę szukania minut poza klubem, dlatego nie blokujemy formalnie tej decyzji. Jednocześnie zarząd traktuje ten ruch jako sportowe ryzyko i obniża ocenę zaufania do obecnego zarządzania kadrą.\n\nAktualne zaufanie zarządu: ${nextBoardConfidence}/100.\n\nZ poważaniem,\nZarząd ${userClub.name}`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 8,
+        };
+
+        setClubs(prev => prev.map(c => {
+          if (c.id !== userTeamId) return c;
+          return {
+            ...c,
+            boardConfidence: nextBoardConfidence,
+            sportingDirector: c.sportingDirector && nextDirectorRelation !== undefined
+              ? { ...c.sportingDirector, relationshipWithManager: nextDirectorRelation }
+              : c.sportingDirector,
+          };
+        }));
+        prependUniqueMessages([overrideMail], true);
+      }
+    }
+
+    let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+    if (isMakingAvailable && moraleAdjustedPlayer.developmentExitDemandUntil) {
+      moraleAdjustedPlayer = {
+        ...PlayerMoraleService.withMoraleChange(moraleAdjustedPlayer, 6, 'Trener zgodził się na wypożyczenie po braku minut', currentDate),
+        developmentExitDemandUntil: null,
+        developmentExitDemandBaseline: null,
+        unresolvedMinutesDemandDate: null,
+        unresolvedMinutesDemandBaseline: null,
+      };
+    }
+
+    updatePlayer(userTeamId, playerId, {
+      morale: moraleAdjustedPlayer.morale,
+      moralePersonality: moraleAdjustedPlayer.moralePersonality,
+      moraleHistory: moraleAdjustedPlayer.moraleHistory,
+      playerMindset: moraleAdjustedPlayer.playerMindset,
+      developmentExitDemandUntil: moraleAdjustedPlayer.developmentExitDemandUntil,
+      developmentExitDemandBaseline: moraleAdjustedPlayer.developmentExitDemandBaseline,
+      unresolvedMinutesDemandDate: moraleAdjustedPlayer.unresolvedMinutesDemandDate,
+      unresolvedMinutesDemandBaseline: moraleAdjustedPlayer.unresolvedMinutesDemandBaseline,
+      isAvailableForLoan: isMakingAvailable,
+      isUntouchable: isMakingAvailable ? false : player.isUntouchable,
+      squadRole: isMakingAvailable ? null : player.squadRole,
+    });
+
+    showGameNotification({
+      title: boardOverrideApplied
+        ? 'Wypożyczenie przepchnięte'
+        : isMakingAvailable ? 'Dostępny do wypożyczenia' : 'Status wypożyczenia zdjęty',
+      message: boardOverrideApplied
+        ? `${player.firstName} ${player.lastName} został wystawiony mimo sprzeciwu zarządu. Zaufanie zarządu spada do ${boardOverrideConfidence}/100.`
+        : isMakingAvailable
+        ? `${player.firstName} ${player.lastName} został oznaczony jako dostępny do wypożyczenia.`
+        : `${player.firstName} ${player.lastName} nie jest już dostępny do wypożyczenia.`,
+      tone: boardOverrideApplied ? 'warning' : isMakingAvailable ? 'info' : 'success',
+    });
+  };
+
+  const terminateLoanEarly = (playerId: string) => {
+    if (!userTeamId) return;
+
+    let loanedPlayer: Player | undefined;
+    let currentClubId: string | undefined;
+    Object.entries(players).some(([clubId, squad]) => {
+      const found = squad.find(player => player.id === playerId);
+      if (found) {
+        loanedPlayer = found;
+        currentClubId = clubId;
+        return true;
+      }
+      return false;
+    });
+
+    if (!loanedPlayer?.loan || loanedPlayer.loan.parentClubId !== userTeamId || !currentClubId) {
+      showGameNotification({
+        title: 'Nie można skrócić wypożyczenia',
+        message: 'Nie znaleziono aktywnego wypożyczenia tego zawodnika do Twojego klubu.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const parentClub = clubs.find(club => club.id === loanedPlayer!.loan?.parentClubId);
+    const sourceClub = clubs.find(club => club.id === currentClubId);
+    if (!parentClub) return;
+
+    const returnDate = new Date(currentDate);
+    const returnedPlayer: Player = {
+      ...loanedPlayer,
+      clubId: parentClub.id,
+      history: PlayerCareerService.closeLoanEntry(
+        loanedPlayer.history || [],
+        loanedPlayer,
+        returnDate.getFullYear(),
+        returnDate.getMonth() + 1
+      ),
+      loan: null,
+      isAvailableForLoan: false,
+    };
+
+    setPlayers(prev => {
+      const currentSquad = (prev[currentClubId!] || []).filter(player => player.id !== playerId);
+      const parentSquad = [
+        ...(prev[parentClub.id] || []).filter(player => player.id !== playerId),
+        returnedPlayer,
+      ];
+      return {
+        ...prev,
+        [currentClubId!]: currentSquad,
+        [parentClub.id]: parentSquad,
+      };
+    });
+
+    setClubs(prev => prev.map(club => {
+      if (club.id === currentClubId) {
+        return {
+          ...club,
+          rosterIds: club.rosterIds.filter(id => id !== playerId),
+        };
+      }
+      if (club.id === parentClub.id) {
+        return {
+          ...club,
+          rosterIds: [...club.rosterIds.filter(id => id !== playerId), playerId],
+        };
+      }
+      return club;
+    }));
+
+    setLineups(prev => {
+      const next = { ...prev };
+      const sourceSquad = (players[currentClubId!] || []).filter(player => player.id !== playerId);
+      const parentSquad = [
+        ...(players[parentClub.id] || []).filter(player => player.id !== playerId),
+        returnedPlayer,
+      ];
+
+      if (next[currentClubId!]) {
+        next[currentClubId!] = LineupService.repairLineup(next[currentClubId!], sourceSquad);
+      }
+      if (next[parentClub.id]) {
+        next[parentClub.id] = LineupService.repairLineup(next[parentClub.id], parentSquad);
+      } else {
+        const coach = parentClub.coachId ? coaches[parentClub.coachId] ?? null : null;
+        next[parentClub.id] = LineupService.autoPickLineup(parentClub.id, parentSquad, '4-4-2', coach);
+      }
+      return next;
+    });
+
+    showGameNotification({
+      title: 'Wypożyczenie skrócone',
+      message: `${loanedPlayer.firstName} ${loanedPlayer.lastName} wrócił z ${sourceClub?.name ?? loanedPlayer.loan.destinationClubName} do ${parentClub.name}.`,
+      tone: 'success',
+    });
+  };
+
+  const toggleUntouchable = (playerId: string) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (!player || player.transferPendingClubId) return;
+
+    const isMarkingUntouchable = !player.isUntouchable;
+    updatePlayer(userTeamId, playerId, {
+      isUntouchable: isMarkingUntouchable,
+      isOnTransferList: isMarkingUntouchable ? false : player.isOnTransferList,
+      transferListPrice: isMarkingUntouchable ? undefined : player.transferListPrice,
+      isAvailableForLoan: isMarkingUntouchable ? false : player.isAvailableForLoan,
+    });
+  };
+
+  const setSquadRole = (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => {
+    if (!userTeamId) return;
+    const squad = players[userTeamId] || [];
+    const player = squad.find(p => p.id === playerId);
+    if (!player) return;
+    if ((player.squadRole ?? null) === role) return;
+
+    const roleRank = (r: 'STARTER' | 'KEY_PLAYER' | null | undefined): number =>
+      r === 'KEY_PLAYER' ? 2 : r === 'STARTER' ? 1 : 0;
+    const roleLabel = (r: 'STARTER' | 'KEY_PLAYER' | null | undefined): string =>
+      r === 'KEY_PLAYER' ? 'kluczowy zawodnik' : r === 'STARTER' ? 'podstawowa jedenastka' : 'bez roli';
+
+    const previousRole = player.squadRole ?? null;
+    const previousRank = roleRank(previousRole);
+    const nextRank = roleRank(role);
+    const isPromotion = nextRank > previousRank;
+    const isDemotion = nextRank < previousRank;
+    const lockUntilDate = player.squadRoleMindsetLockUntil ? new Date(player.squadRoleMindsetLockUntil) : null;
+    const positiveRoleEffectLocked =
+      !!lockUntilDate &&
+      !Number.isNaN(lockUntilDate.getTime()) &&
+      new Date(currentDate).setHours(0, 0, 0, 0) < lockUntilDate.setHours(0, 0, 0, 0);
+
+    let moraleAdjustedPlayer = PlayerMoraleService.ensurePlayerState(player);
+    let nextRoleMindsetLockUntil = moraleAdjustedPlayer.squadRoleMindsetLockUntil ?? null;
+
+    if (isPromotion && !positiveRoleEffectLocked) {
+      const lockUntil = new Date(currentDate);
+      lockUntil.setDate(lockUntil.getDate() + 60);
+      nextRoleMindsetLockUntil = lockUntil.toISOString();
+
+      const moraleDelta =
+        previousRank === 0 && role === 'KEY_PLAYER' ? 3 :
+        previousRank === 0 && role === 'STARTER' ? 2 :
+        role === 'KEY_PLAYER' ? 1 :
+        0;
+      const mindsetDeltas =
+        previousRank === 0 && role === 'KEY_PLAYER'
+          ? { roleClarity: 14, playingTimeSatisfaction: 6, coachTrust: 4, clubHappiness: 2, conflictLevel: -4 }
+          : previousRank === 0 && role === 'STARTER'
+            ? { roleClarity: 10, playingTimeSatisfaction: 4, coachTrust: 3, conflictLevel: -3 }
+            : { roleClarity: 6, playingTimeSatisfaction: 2, coachTrust: 2, conflictLevel: -2 };
+
+      moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+        moraleAdjustedPlayer,
+        moraleDelta,
+        `Nadanie roli: ${roleLabel(role)}`,
+        currentDate
+      );
+      moraleAdjustedPlayer = PlayerMoraleService.withMindsetChange(
+        moraleAdjustedPlayer,
+        mindsetDeltas,
+        `Nadanie roli: ${roleLabel(role)}`,
+        currentDate
+      );
+    } else if (isDemotion) {
+      const moraleDelta =
+        previousRole === 'KEY_PLAYER' && role === null ? -6 :
+        previousRole === 'KEY_PLAYER' && role === 'STARTER' ? -2 :
+        previousRole === 'STARTER' && role === null ? -3 :
+        -1;
+      const mindsetDeltas =
+        previousRole === 'KEY_PLAYER' && role === null
+          ? { roleClarity: -16, playingTimeSatisfaction: -8, coachTrust: -6, clubHappiness: -3, conflictLevel: 10 }
+          : previousRole === 'KEY_PLAYER' && role === 'STARTER'
+            ? { roleClarity: -6, playingTimeSatisfaction: -3, coachTrust: -2, conflictLevel: 3 }
+            : { roleClarity: -9, playingTimeSatisfaction: -5, coachTrust: -3, conflictLevel: 5 };
+
+      moraleAdjustedPlayer = PlayerMoraleService.withMoraleChange(
+        moraleAdjustedPlayer,
+        moraleDelta,
+        `Zmiana roli: ${roleLabel(previousRole)} → ${roleLabel(role)}`,
+        currentDate
+      );
+      moraleAdjustedPlayer = PlayerMoraleService.withMindsetChange(
+        moraleAdjustedPlayer,
+        mindsetDeltas,
+        `Zmiana roli: ${roleLabel(previousRole)} → ${roleLabel(role)}`,
+        currentDate
+      );
+    }
+
+    const updates: Partial<Player> = {
+      squadRole: role,
+      morale: moraleAdjustedPlayer.morale,
+      moralePersonality: moraleAdjustedPlayer.moralePersonality,
+      moraleHistory: moraleAdjustedPlayer.moraleHistory,
+      playerMindset: moraleAdjustedPlayer.playerMindset,
+      squadRoleMindsetLockUntil: nextRoleMindsetLockUntil,
+    };
+    if (role === 'STARTER' || role === 'KEY_PLAYER') {
+      updates.isOnTransferList = false;
+      updates.transferListPrice = undefined;
+      updates.isAvailableForLoan = false;
+    }
+    updatePlayer(userTeamId, playerId, updates);
+  };
+
+  const navigateToIncomingOffer = (offerId: string): void => {
+    setViewedIncomingOfferId(offerId);
+    navigateWithoutHistory(ViewState.INCOMING_OFFER);
+  };
+
+  const findIncomingPlayerInUserClub = (playerId: string): { player?: Player; isReserve: boolean } => {
+    const firstTeamPlayer = (players[userTeamId || ''] || []).find(p => p.id === playerId);
+    if (firstTeamPlayer) return { player: firstTeamPlayer, isReserve: false };
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    return { player: reservePlayer, isReserve: !!reservePlayer };
+  };
+
+  const getForcedLoanMoralePenalty = (player: Player, buyerClub: Club, sellerClub: Club): number => {
+    const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+    const personality = moralePlayer.moralePersonality ?? 'CALM';
+    let penalty = -12;
+
+    if (personality === 'PROFESSIONAL') penalty = -8;
+    if (personality === 'CALM') penalty = -10;
+    if (personality === 'LOYAL') penalty = -15;
+    if (personality === 'CONFIDENT') penalty = -14;
+    if (personality === 'AMBITIOUS') penalty = -17;
+    if (personality === 'EGOIST') penalty = -19;
+
+    const reputationGap = (buyerClub.reputation ?? 1) - (sellerClub.reputation ?? 1);
+    if (reputationGap >= 1) penalty += 3;
+    if (reputationGap <= -1) penalty -= 4;
+
+    return Math.max(-24, Math.min(-5, penalty));
+  };
+
+  const completeIncomingLoanOffer = (
+    offer: IncomingTransferOffer,
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    forced: boolean = false
+  ): void => {
+    const dateStr = new Date(currentDate).toISOString().split('T')[0];
+    const loanEndDate = offer.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, offer.loanDuration || 'SEASON');
+    const loanFee = offer.loanFee ?? offer.fee ?? 0;
+    const baselineRatingCount = player.stats.ratingHistory?.length ?? 0;
+    const loanInfo: PlayerLoanInfo = {
+      parentClubId: sellerClub.id,
+      parentClubName: sellerClub.name,
+      destinationClubId: buyerClub.id,
+      destinationClubName: buyerClub.name,
+      startDate: offer.loanStartDate || dateStr,
+      endDate: loanEndDate,
+      wageCoveragePercent: offer.wageCoveragePercent,
+      loanFee,
+      forcedByClub: forced,
+      reportBaselineMatches: player.stats.matchesPlayed ?? 0,
+      reportBaselineMinutes: player.stats.minutesPlayed ?? 0,
+      reportBaselineGoals: player.stats.goals ?? 0,
+      reportBaselineAssists: player.stats.assists ?? 0,
+      reportBaselineYellowCards: player.stats.yellowCards ?? 0,
+      reportBaselineRedCards: player.stats.redCards ?? 0,
+      reportBaselineRatingCount: baselineRatingCount,
+      lastReportDate: dateStr,
+      lastReportMatches: player.stats.matchesPlayed ?? 0,
+      lastReportMinutes: player.stats.minutesPlayed ?? 0,
+      lastReportGoals: player.stats.goals ?? 0,
+      lastReportAssists: player.stats.assists ?? 0,
+      lastReportRatingCount: baselineRatingCount,
+    };
+    const forcedLoanMoralePenalty = forced
+      ? getForcedLoanMoralePenalty(player, buyerClub, sellerClub)
+      : 0;
+    const loanSourcePlayer = forced
+      ? PlayerMoraleService.withMoraleChange(
+          player,
+          forcedLoanMoralePenalty,
+          `Wymuszone wypożyczenie do ${buyerClub.name}`,
+          new Date(currentDate)
+        )
+      : player;
+    const loanStart = new Date(loanInfo.startDate);
+    const loanStartYear = Number.isNaN(loanStart.getTime()) ? new Date(currentDate).getFullYear() : loanStart.getFullYear();
+    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? new Date(currentDate).getMonth() + 1 : loanStart.getMonth() + 1;
+    const baseHistory = loanSourcePlayer.history && loanSourcePlayer.history.length > 0
+      ? loanSourcePlayer.history
+      : [{
+          clubName: sellerClub.name,
+          clubId: sellerClub.id,
+          fromYear: loanStartYear - 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null,
+        }];
+    const loanedPlayer: Player = {
+      ...loanSourcePlayer,
+      clubId: buyerClub.id,
+      loan: loanInfo,
+      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
+      isAvailableForLoan: false,
+      isOnTransferList: false,
+      transferListPrice: undefined,
+      squadRole: null,
+      isUntouchable: false,
+      interestedClubs: [],
+    };
+
+    setPlayers(prev => {
+      const sellerSquad = (prev[sellerClub.id] || []).filter(p => p.id !== player.id);
+      const buyerSquad = [
+        ...(prev[buyerClub.id] || []).filter(p => p.id !== player.id),
+        loanedPlayer,
+      ];
+      return {
+        ...prev,
+        [sellerClub.id]: sellerSquad,
+        [buyerClub.id]: buyerSquad,
+      };
+    });
+
+    setClubs(prev => prev.map(club => {
+      if (club.id === sellerClub.id) {
+        return {
+          ...club,
+          budget: club.budget + loanFee,
+          transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== player.id),
+        };
+      }
+      if (club.id === buyerClub.id) {
+        return {
+          ...club,
+          budget: Math.max(0, club.budget - loanFee),
+          transferBudget: Math.max(0, club.transferBudget - loanFee),
+          rosterIds: [...club.rosterIds.filter(id => id !== player.id), player.id],
+        };
+      }
+      return club;
+    }));
+
+    setLineups(prev => {
+      const next = { ...prev };
+      const sellerSquad = (players[sellerClub.id] || []).filter(p => p.id !== player.id);
+      const buyerSquad = [
+        ...(players[buyerClub.id] || []).filter(p => p.id !== player.id),
+        loanedPlayer,
+      ];
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], sellerSquad);
+      }
+      if (next[buyerClub.id]) {
+        next[buyerClub.id] = LineupService.repairLineup(next[buyerClub.id], buyerSquad);
+      } else {
+        const coach = buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null;
+        next[buyerClub.id] = LineupService.autoPickLineup(buyerClub.id, buyerSquad, '4-4-2', coach);
+      }
+      return next;
+    });
+
+    setIncomingOffers(prev => prev.map(o => {
+      if (o.id === offer.id) {
+        return {
+          ...o,
+          status: IncomingOfferStatus.COMPLETED,
+          playerNegotiationResult: forced ? 'refused' : 'accepted',
+        };
+      }
+      if (
+        o.playerId === offer.playerId &&
+        o.status !== IncomingOfferStatus.COMPLETED &&
+        o.status !== IncomingOfferStatus.REJECTED_BY_MANAGER &&
+        o.status !== IncomingOfferStatus.REJECTED_AT_CONFIRM &&
+        o.status !== IncomingOfferStatus.PLAYER_REFUSED
+      ) return { ...o, status: IncomingOfferStatus.EXPIRED };
+      return o;
+    }));
+
+    setTransferOffers(prev => prev.map(transferOffer => {
+      // KONFLIKT INTERESÓW: wypożyczenie wygrywa w momencie finalizacji.
+      // Jeżeli ten sam zawodnik miał równolegle aktywną ścieżkę sprzedaży,
+      // zamykamy ją od razu, żeby nie dało się sprzedać zawodnika, który właśnie
+      // fizycznie przeszedł do innego klubu na wypożyczenie.
+      if (transferOffer.playerId !== offer.playerId || !isActiveTransferOffer(transferOffer)) return transferOffer;
+      return {
+        ...transferOffer,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        sellerReason: 'Rozmowy zamknięte automatycznie, ponieważ zawodnik został wypożyczony do innego klubu.',
+      };
+    }));
+
+    showGameNotification({
+      title: forced ? 'Zawodnik wysłany na wypożyczenie' : 'Wypożyczenie zaakceptowane',
+      message: `${player.firstName} ${player.lastName} przechodzi do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.${forced ? ` Morale zawodnika spada o ${Math.abs(forcedLoanMoralePenalty)}.` : ''}`,
+      tone: 'success',
+    });
+    navigateWithoutHistory(ViewState.DASHBOARD);
+  };
+
+  function handleTemptingTransferOfferBlocked(
+    offer: IncomingTransferOffer,
+    player: Player,
+    buyerClub: Club,
+    sellerClub: Club,
+    reason: 'REJECTED' | 'EXPIRED' | 'CONFIRM_REJECTED' | 'CLUB_BLOCKED',
+    date: Date
+  ): void {
+    if (!userTeamId || (offer.kind ?? 'TRANSFER') !== 'TRANSFER') return;
+
+    const withMorale = PlayerMoraleService.ensurePlayerState(player);
+    const dateKey = date.toISOString().split('T')[0];
+    const lastConflictDate = withMorale.lastTemptingOfferConflictDate
+      ? new Date(withMorale.lastTemptingOfferConflictDate)
+      : null;
+    if (lastConflictDate && !Number.isNaN(lastConflictDate.getTime())) {
+      const daysSince = Math.floor((date.getTime() - lastConflictDate.getTime()) / 86_400_000);
+      if (daysSince >= 0 && daysSince < 21) return;
+    }
+
+    const sellerTier = IncomingTransferService.getClubTier(sellerClub);
+    const marketValue = FinanceService.calculateMarketValue(
+      withMorale,
+      sellerClub.reputation,
+      sellerTier,
+      sellerClub.country
+    );
+    const fee = offer.aiCounterFee ?? offer.counterFee ?? offer.fee;
+    const feeRatio = marketValue > 0 ? fee / marketValue : 1;
+    const reputationDelta = buyerClub.reputation - sellerClub.reputation;
+    const personality = withMorale.moralePersonality ?? 'CALM';
+    const morale = withMorale.morale ?? 50;
+    const isDemandLockedAfterContract = PlayerMoraleService.isMoraleDemandLocked(withMorale, date);
+    const isInterestedInBuyer = !!withMorale.interestedClubs?.includes(buyerClub.id);
+    const alreadyWantsExit =
+      !!withMorale.isOnTransferList ||
+      !!withMorale.transferListDemandUntil ||
+      !!withMorale.developmentExitDemandUntil ||
+      !!withMorale.isNegotiationPermanentBlocked;
+    const temptingFinancially =
+      feeRatio >= 1.35 ||
+      offer.boardPressure ||
+      (feeRatio >= 1.12 && reputationDelta >= 2);
+    const temptingSportingly =
+      reputationDelta >= 3 ||
+      (reputationDelta >= 1 && isInterestedInBuyer) ||
+      (reputationDelta >= 2 && morale <= 45);
+    const wantsToListen =
+      alreadyWantsExit ||
+      isInterestedInBuyer ||
+      morale <= 38 ||
+      personality === 'AMBITIOUS' ||
+      personality === 'EGOIST' ||
+      (personality === 'CONFIDENT' && reputationDelta >= 2);
+
+    if (!wantsToListen || (!temptingFinancially && !temptingSportingly)) return;
+
+    const reasonPressure =
+      reason === 'CONFIRM_REJECTED' || reason === 'CLUB_BLOCKED'
+        ? 6
+        : reason === 'EXPIRED'
+          ? 4
+          : 3;
+    const personalityPressure =
+      personality === 'EGOIST' ? 7 :
+      personality === 'AMBITIOUS' ? 6 :
+      personality === 'CONFIDENT' ? 4 :
+      personality === 'LOYAL' ? -4 :
+      personality === 'PROFESSIONAL' ? -2 :
+      personality === 'CALM' ? -1 :
+      1;
+    const conflictScore =
+      Math.round((feeRatio - 1) * 10) +
+      Math.max(0, reputationDelta) * 3 +
+      (isInterestedInBuyer ? 5 : 0) +
+      (alreadyWantsExit ? 5 : 0) +
+      (morale <= 25 ? 6 : morale <= 40 ? 4 : morale <= 55 ? 1 : -2) +
+      personalityPressure +
+      reasonPressure;
+
+    if (conflictScore < 9) return;
+
+    const strongConflict = !isDemandLockedAfterContract && (conflictScore >= 16 || reason === 'CONFIRM_REJECTED');
+    const deadline = new Date(date);
+    deadline.setDate(deadline.getDate() + 14);
+    const deadlineKey = deadline.toISOString().split('T')[0];
+    const moraleDelta =
+      strongConflict
+        ? (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -8 : personality === 'EGOIST' || personality === 'AMBITIOUS' ? -15 : -11)
+        : (personality === 'LOYAL' || personality === 'PROFESSIONAL' ? -4 : personality === 'EGOIST' || personality === 'AMBITIOUS' ? -9 : -6);
+
+    const managerActionText =
+      reason === 'EXPIRED'
+        ? 'nie doczekałem się żadnej reakcji klubu'
+        : reason === 'CONFIRM_REJECTED'
+          ? 'po mojej zgodzie klub zablokował odejście'
+          : reason === 'CLUB_BLOCKED'
+            ? 'klub zablokował rozmowy'
+            : 'klub odrzucił ofertę';
+    const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
+    const bodyLines = strongConflict
+      ? [
+          'Trenerze,',
+          '',
+          `Oferta z ${buyerClub.name} była dla mnie poważnym sygnałem, że mogę zrobić kolejny krok. Tymczasem ${managerActionText}.`,
+          '',
+          'Nie chodzi mi o odejście za wszelką cenę, ale nie chcę mieć poczucia, że klub automatycznie zamyka mi drogę, gdy pojawia się realna szansa. Proszę o wystawienie mnie na listę transferową albo jasną deklarację, że przy podobnej ofercie klub podejdzie do sprawy inaczej.',
+          '',
+          `Proszę o decyzję do ${deadline.toLocaleDateString('pl-PL')}.`,
+          '',
+          playerName,
+        ]
+      : [
+          'Trenerze,',
+          '',
+          `Chciałbym wrócić do tematu oferty z ${buyerClub.name}. Rozumiem interes klubu, ale ta propozycja była dla mnie kusząca i ${managerActionText}.`,
+          '',
+          'Proszę, żeby przy kolejnych takich ofertach klub rozmawiał ze mną otwarcie. Ta sytuacja odbiła się na moim nastawieniu.',
+          '',
+          playerName,
+        ];
+
+    const mail: MailMessage = {
+      id: `PLAYER_TEMPTING_OFFER_CONFLICT_${withMorale.id}_${offer.id}_${dateKey}`,
+      sender: playerName,
+      role: 'Zawodnik',
+      subject: `Niezadowolenie po ofercie: ${withMorale.lastName}`,
+      body: bodyLines.join('\n'),
+      date: new Date(date),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: strongConflict ? 5 : 4,
+      metadata: strongConflict
+        ? {
+            type: 'PLAYER_MORALE_REQUEST',
+            playerId: withMorale.id,
+            requestType: 'TRANSFER_LIST',
+            responseDeadline: deadlineKey,
+          }
+        : undefined,
+    };
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(currentPlayer => {
+        if (currentPlayer.id !== withMorale.id) return currentPlayer;
+        const adjusted = PlayerMoraleService.withMoraleChange(
+          PlayerMoraleService.ensurePlayerState(currentPlayer),
+          moraleDelta,
+          strongConflict
+            ? 'Konflikt po zablokowaniu kuszącej oferty transferowej'
+            : 'Niezadowolenie po zignorowanej kuszącej ofercie transferowej',
+          date
+        );
+        return {
+          ...adjusted,
+          lastTemptingOfferConflictDate: dateKey,
+          transferListDemandUntil: strongConflict
+            ? adjusted.transferListDemandUntil ?? deadlineKey
+            : adjusted.transferListDemandUntil,
+          isUntouchable: strongConflict ? false : adjusted.isUntouchable,
+        };
+      }),
+    }));
+    prependUniqueMessages([mail]);
+  }
+
+  const respondToIncomingOffer = (
+    offerId: string,
+    response: 'accept' | 'counter' | 'reject',
+    counterFee?: number,
+    loanCounterTerms?: {
+      loanFee: number;
+      wageCoveragePercent: number;
+      loanDuration: LoanOfferDuration;
+    }
+  ): void => {
+    if (!userTeamId) return;
+
+    const selectedOffer = incomingOffers.find(o => o.id === offerId);
+    if (selectedOffer?.kind === 'LOAN') {
+      let loanPlayer: Player | undefined;
+      for (const cId in players) {
+        loanPlayer = players[cId].find(p => p.id === selectedOffer.playerId);
+        if (loanPlayer) break;
+      }
+      const buyerClub = clubs.find(c => c.id === selectedOffer.buyerClubId);
+      const sellerClub = clubs.find(c => c.id === userTeamId);
+      if (!loanPlayer || !buyerClub || !sellerClub) return;
+
+      if (response === 'reject') {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_BY_MANAGER } : o
+        ));
+        return;
+      }
+
+      if (response === 'counter') {
+        if (!loanCounterTerms) return;
+        const counterResult = IncomingTransferService.evaluateLoanCounterOffer(
+          loanPlayer,
+          buyerClub,
+          selectedOffer,
+          currentDate,
+          loanCounterTerms
+        );
+        if (counterResult.result === 'REJECT') {
+          setIncomingOffers(prev => prev.map(o =>
+            o.id === offerId
+              ? {
+                  ...o,
+                  status: IncomingOfferStatus.REJECTED_AT_CONFIRM,
+                  loanNegotiationResult: 'AI_REJECTED_COUNTER',
+                  loanNegotiationNote: counterResult.note,
+                }
+              : o
+          ));
+          showGameNotification({
+            title: 'Kontroferta odrzucona',
+            message: counterResult.note,
+            tone: 'warning',
+          });
+          return;
+        }
+
+        const acceptedCounter = counterResult.result === 'ACCEPT';
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId
+            ? {
+                ...o,
+                fee: counterResult.loanFee,
+                loanFee: counterResult.loanFee,
+                loanDuration: counterResult.loanDuration,
+                loanStartDate: counterResult.loanStartDate,
+                loanEndDate: counterResult.loanEndDate,
+                wageCoveragePercent: counterResult.wageCoveragePercent,
+                loanTotalCost: counterResult.loanTotalCost,
+                status: IncomingOfferStatus.AI_COUNTERED,
+                negotiationRound: o.negotiationRound + 1,
+                loanNegotiationResult: acceptedCounter ? 'AI_ACCEPTED_COUNTER' : 'AI_COUNTERED',
+                loanNegotiationNote: counterResult.note,
+              }
+            : o
+        ));
+        showGameNotification({
+          title: acceptedCounter ? 'Kontroferta zaakceptowana' : 'Klub proponuje kompromis',
+          message: counterResult.note,
+          tone: acceptedCounter ? 'success' : 'info',
+        });
+        return;
+      }
+
+      if (loanPlayer.loan) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        showGameNotification({
+          title: 'Oferta odrzucona',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} jest już wypożyczony.`,
+          tone: 'warning',
+        });
+        return;
+      }
+
+      const hasSaleConflict =
+        !!loanPlayer.transferPendingClubId ||
+        hasActiveTransferConflict(loanPlayer.id, transferOffers) ||
+        incomingOffers.some(o =>
+          o.id !== offerId &&
+          o.playerId === loanPlayer!.id &&
+          (o.kind ?? 'TRANSFER') === 'TRANSFER' &&
+          IncomingTransferService.isActiveIncomingOfferStatus(o.status)
+        );
+      if (hasSaleConflict) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        showGameNotification({
+          title: 'Wypożyczenie zablokowane',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} ma aktywną ścieżkę sprzedaży. Najpierw zamknij transfer albo odrzuć ofertę kupna.`,
+          tone: 'warning',
+        });
+        return;
+      }
+
+      const seed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${loanPlayer.id}_LOAN_DECISION`);
+      const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+        loanPlayer,
+        buyerClub,
+        sellerClub,
+        players[buyerClub.id] || [],
+        seed
+      );
+
+      if (playerDecision === 'refused') {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId
+            ? { ...o, status: IncomingOfferStatus.PLAYER_REFUSED, playerNegotiationResult: 'refused' }
+            : o
+        ));
+        showGameNotification({
+          title: 'Zawodnik nie chce wypożyczenia',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} odmówił przejścia do ${buyerClub.name}. Możesz go wysłać mimo odmowy w oknie oferty.`,
+          tone: 'warning',
+        });
+        return;
+      }
+
+      completeIncomingLoanOffer(selectedOffer, loanPlayer, buyerClub, sellerClub);
+      return;
+    }
+
+    setIncomingOffers(prev => {
+      const idx = prev.findIndex(o => o.id === offerId);
+      if (idx === -1) return prev;
+      const offer = prev[idx];
+
+      const { player, isReserve } = findIncomingPlayerInUserClub(offer.playerId);
+      const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
+      const sellerClub = clubs.find(c => c.id === userTeamId);
+      if (!player || !buyerClub || !sellerClub) return prev;
+
+      const dateStr = new Date(currentDate).toISOString().split('T')[0];
+      const updated = [...prev];
+      const currentActiveFee =
+        offer.status === IncomingOfferStatus.AI_COUNTERED
+          ? offer.aiCounterFee ?? offer.fee
+          : offer.fee;
+
+      if (response === 'reject') {
+        updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_BY_MANAGER };
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'REJECTED', new Date(currentDate));
+        if (offer.boardPressure) {
+          const penaltyMail: MailMessage = {
+            id: `board_reject_penalty_${Date.now()}`,
+            sender: 'Zarząd Klubu',
+            role: 'Prezes Zarządu',
+            subject: `Niezadowolenie zarządu — odrzucona oferta za ${player.firstName} ${player.lastName}`,
+            body: `Panie Managerze,\n\nZ niepokojem przyjęliśmy Pana decyzję o odrzuceniu oferty klubu ${buyerClub.name} za zawodnika ${player.firstName} ${player.lastName}.\n\nBiorąc pod uwagę sytuację finansową klubu i atrakcyjność propozycji, zarząd wyraża swoje niezadowolenie z tej decyzji.\n\nZarząd ${sellerClub.name}`,
+            date: currentDate,
+            isRead: false,
+            type: MailType.BOARD,
+            priority: 2,
+          };
+          setMessages(prev2 => [penaltyMail, ...prev2]);
+        }
+      } else if (
+        response === 'counter' &&
+        counterFee !== undefined &&
+        offer.negotiationRound < 3
+      ) {
+        updated[idx] = {
+          ...offer,
+          status: IncomingOfferStatus.COUNTER_PENDING_AI,
+          counterFee: Math.max(counterFee, currentActiveFee),
+          negotiationRound: offer.negotiationRound + 1,
+          playerNegotiationStartedAt: dateStr,
+        };
+      } else if (response === 'accept') {
+        if (player.loan) {
+          updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
+          showGameNotification({
+            title: 'Oferta odrzucona',
+            message: `${player.firstName} ${player.lastName} jest wypożyczony do ${player.loan.destinationClubName}. Transfer nie może zostać zaakceptowany przed końcem wypożyczenia.`,
+            tone: 'warning',
+          });
+          return updated;
+        }
+
+        if (sellerClub.sportingDirector) {
+          const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
+            club: sellerClub,
+            player,
+            squad: isReserve ? reserves : players[userTeamId] || [],
+            buyerClub,
+            fee: currentActiveFee,
+            date: currentDate,
+          });
+
+          if (directorDecision.blocked) {
+            updated[idx] = { ...offer, status: IncomingOfferStatus.REJECTED_AT_CONFIRM };
+            setClubs(prevClubs => prevClubs.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
+            if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
+            handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CLUB_BLOCKED', new Date(currentDate));
+            showGameNotification({
+              title: 'Transfer zawetowany',
+              message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
+              tone: 'warning',
+            });
+            return updated;
+          }
+        }
+
+        const resolveIn = Math.random() < 0.5 ? 2 : 3;
+        const resolveDate = IncomingTransferService.addDays(dateStr, resolveIn);
+        const acceptedFee = currentActiveFee;
+        updated[idx] = {
+          ...offer,
+          fee: acceptedFee,
+          status: IncomingOfferStatus.NEGOTIATION_IN_PROGRESS,
+          playerNegotiationStartedAt: dateStr,
+          playerNegotiationResolvesAt: resolveDate,
+        };
+
+        for (let i = 0; i < updated.length; i += 1) {
+          // KONFLIKT INTERESÓW: sprzedaż wchodzi w aktywną fazę negocjacji
+          // z zawodnikiem, więc wszystkie równoległe oferty wypożyczenia dla
+          // tego samego piłkarza zamykamy jako wygasłe. Dzięki temu gracz nie
+          // dostanie dwóch sprzecznych ścieżek decyzyjnych naraz.
+          if (
+            i !== idx &&
+            updated[i].playerId === offer.playerId &&
+            updated[i].kind === 'LOAN' &&
+            IncomingTransferService.isActiveIncomingOfferStatus(updated[i].status)
+          ) {
+            updated[i] = { ...updated[i], status: IncomingOfferStatus.EXPIRED };
+          }
+        }
+      }
+
+      return updated;
+    });
+  };
+
+  const confirmIncomingTransfer = (offerId: string, confirm: boolean): void => {
+    if (!userTeamId) return;
+
+    const offer = incomingOffers.find(o => o.id === offerId);
+    if (!offer) return;
+
+    if (offer.kind === 'LOAN') {
+      if (!confirm) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        return;
+      }
+
+      let loanPlayer: Player | undefined;
+      for (const cId in players) {
+        loanPlayer = players[cId].find(p => p.id === offer.playerId);
+        if (loanPlayer) break;
+      }
+      const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
+      const sellerClub = clubs.find(c => c.id === userTeamId);
+      if (!loanPlayer || !buyerClub || !sellerClub) return;
+      if (offer.status !== IncomingOfferStatus.PLAYER_REFUSED && offer.status !== IncomingOfferStatus.AWAITING_CONFIRMATION) return;
+      const hasSaleConflict =
+        !!loanPlayer.transferPendingClubId ||
+        hasActiveTransferConflict(loanPlayer.id, transferOffers) ||
+        incomingOffers.some(o =>
+          o.id !== offerId &&
+          o.playerId === loanPlayer!.id &&
+          (o.kind ?? 'TRANSFER') === 'TRANSFER' &&
+          IncomingTransferService.isActiveIncomingOfferStatus(o.status)
+        );
+      if (hasSaleConflict) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        showGameNotification({
+          title: 'Wypożyczenie zablokowane',
+          message: `${loanPlayer.firstName} ${loanPlayer.lastName} ma aktywną ścieżkę sprzedaży. Wypożyczenie zostało zamknięte, żeby uniknąć konfliktu ofert.`,
+          tone: 'warning',
+        });
+        return;
+      }
+      completeIncomingLoanOffer(offer, loanPlayer, buyerClub, sellerClub, true);
+      return;
+    }
+
+    if (offer.status !== IncomingOfferStatus.AWAITING_CONFIRMATION) return;
+
+    if (!confirm) {
+      setIncomingOffers(prev => prev.map(o =>
+        o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+      ));
+      const { player } = findIncomingPlayerInUserClub(offer.playerId);
+      const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
+      const sellerClub = clubs.find(c => c.id === userTeamId);
+      if (player && buyerClub && sellerClub) {
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CONFIRM_REJECTED', new Date(currentDate));
+      }
+      return;
+    }
+
+    const { player, isReserve } = findIncomingPlayerInUserClub(offer.playerId);
+    const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
+    const sellerClub = clubs.find(c => c.id === userTeamId);
+    if (!player || !buyerClub || !sellerClub) return;
+
+    if (player.loan) {
+      setIncomingOffers(prev => prev.map(o =>
+        o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+      ));
+      showGameNotification({
+        title: 'Transfer zablokowany',
+        message: `${player.firstName} ${player.lastName} jest wypożyczony do ${player.loan.destinationClubName}. Transfer będzie możliwy po zakończeniu wypożyczenia.`,
+        tone: 'warning',
+      });
+      return;
+    }
+
+    if (sellerClub.sportingDirector) {
+      const directorDecision = SportingDirectorService.evaluateIncomingSaleDecision({
+        club: sellerClub,
+        player,
+        squad: isReserve ? reserves : players[userTeamId] || [],
+        buyerClub,
+        fee: offer.fee,
+        date: currentDate,
+      });
+
+      if (directorDecision.blocked) {
+        setIncomingOffers(prev => prev.map(o =>
+          o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+        ));
+        setClubs(prev => prev.map(c => c.id === sellerClub.id ? directorDecision.updatedClub : c));
+        if (directorDecision.mail) prependUniqueMessages([directorDecision.mail], true);
+        handleTemptingTransferOfferBlocked(offer, player, buyerClub, sellerClub, 'CLUB_BLOCKED', new Date(currentDate));
+        showGameNotification({
+          title: 'Transfer zawetowany',
+          message: `Dyrektor sportowy zawetował transfer: ${directorDecision.message}`,
+          tone: 'warning',
+        });
+        return;
+      }
+    }
+
+    // Estymuj warunki kontraktu (negocjowane przez AI w tle)
+    const estimatedSalary = Math.round(player.annualSalary * 1.15 / 10000) * 10000;
+    const estimatedYears = player.age <= 27 ? 3 : player.age <= 32 ? 2 : 1;
+    const getPreContractJoinDate = (contractEndDate: string): string => {
+      const contractEnd = new Date(contractEndDate);
+      if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+      contractEnd.setDate(contractEnd.getDate() + 1);
+      return contractEnd.toISOString();
+    };
+    const resolveEffectiveDate = (): string | undefined => {
+      if (offer.timing === TransferTiming.IMMEDIATE) return undefined;
+      if (offer.timing === TransferTiming.CONTRACT_END) return getPreContractJoinDate(player.contractEndDate);
+
+      const effectiveDate = new Date(currentDate);
+      if (offer.timing === TransferTiming.IN_SIX_MONTHS) {
+        effectiveDate.setMonth(effectiveDate.getMonth() + 6);
+        return effectiveDate.toISOString();
+      }
+
+      if (offer.timing === TransferTiming.IN_TWELVE_MONTHS) {
+        effectiveDate.setFullYear(effectiveDate.getFullYear() + 1);
+        return effectiveDate.toISOString();
+      }
+
+      return undefined;
+    };
+    const effectiveDate = resolveEffectiveDate();
+
+    const syntheticOffer: TransferOffer = {
+      id: offer.id,
+      playerId: offer.playerId,
+      sellerClubId: userTeamId,
+      buyerClubId: offer.buyerClubId,
+      fee: offer.timing === TransferTiming.CONTRACT_END ? 0 : offer.fee,
+      timing: offer.timing,
+      salary: estimatedSalary,
+      bonus: 0,
+      years: estimatedYears,
+      createdAt: offer.createdAt,
+      status: TransferOfferStatus.READY_TO_FINALIZE,
+      effectiveDate,
+      attemptNumber: offer.negotiationRound,
+      maxAttempts: 3,
+    };
+
+    if (isReserve && offer.timing !== TransferTiming.IMMEDIATE) {
+      setIncomingOffers(prev => prev.map(o =>
+        o.id === offerId ? { ...o, status: IncomingOfferStatus.REJECTED_AT_CONFIRM } : o
+      ));
+      showGameNotification({
+        title: 'Transfer zablokowany',
+        message: 'Rezerwowych można sprzedać tylko w transferze natychmiastowym.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    if (offer.timing !== TransferTiming.IMMEDIATE) {
+      const agreedOffer: TransferOffer = {
+        ...syntheticOffer,
+        status: TransferOfferStatus.AGREED_PRECONTRACT,
+        effectiveDate: effectiveDate || player.contractEndDate
+      };
+
+      setTransferOffers(prev => [agreedOffer, ...prev].slice(0, 100));
+      setPlayers(prev => ({
+        ...prev,
+        [userTeamId]: (prev[userTeamId] || []).map(p =>
+          p.id === player!.id
+            ? {
+                ...p,
+                transferPendingClubId: buyerClub.id,
+                transferReportDate: agreedOffer.effectiveDate || player!.contractEndDate,
+                interestedClubs: [],
+                isOnTransferList: false,
+                transferListPrice: undefined,
+                transferListDemandUntil: null,
+                transferListRemovalPromiseDeadline: null,
+                isAvailableForLoan: false,
+              }
+            : p
+        )
+      }));
+      setIncomingOffers(prev => prev.map(o => {
+        if (o.id === offerId) return { ...o, status: IncomingOfferStatus.COMPLETED };
+        if (
+          o.playerId === offer.playerId &&
+          o.status !== IncomingOfferStatus.COMPLETED &&
+          o.status !== IncomingOfferStatus.REJECTED_BY_MANAGER &&
+          o.status !== IncomingOfferStatus.REJECTED_AT_CONFIRM &&
+          o.status !== IncomingOfferStatus.PLAYER_REFUSED
+        ) return { ...o, status: IncomingOfferStatus.EXPIRED };
+        return o;
+      }));
+      navigateWithoutHistory(ViewState.DASHBOARD);
+      return;
+    }
+
+    const executionPlayers = isReserve
+      ? {
+          ...players,
+          [userTeamId]: [...(players[userTeamId] || []), player],
+        }
+      : players;
+    const result = TransferExecutionService.finalizeTransfer(syntheticOffer, clubs, executionPlayers, currentDate);
+    setClubs(result.updatedClubs);
+    setPlayers(result.updatedPlayers);
+    if (isReserve) {
+      setReserves(prev => prev.filter(p => p.id !== player.id));
+    }
+    setLineups(prev => {
+      const next = { ...prev };
+      const updatedSellerSquad = result.updatedPlayers[sellerClub.id] || [];
+      const updatedBuyerSquad = result.updatedPlayers[buyerClub.id] || [];
+
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], updatedSellerSquad);
+      }
+      if (next[buyerClub.id]) {
+        next[buyerClub.id] = LineupService.repairLineup(next[buyerClub.id], updatedBuyerSquad);
+      }
+
+      return next;
+    });
+    setIncomingOffers(prev => prev.map(o => {
+      if (o.id === offerId) return { ...o, status: IncomingOfferStatus.COMPLETED };
+      if (
+        o.playerId === offer.playerId &&
+        o.status !== IncomingOfferStatus.COMPLETED &&
+        o.status !== IncomingOfferStatus.REJECTED_BY_MANAGER &&
+        o.status !== IncomingOfferStatus.REJECTED_AT_CONFIRM &&
+        o.status !== IncomingOfferStatus.PLAYER_REFUSED
+      ) return { ...o, status: IncomingOfferStatus.EXPIRED };
+      return o;
+    }));
+    navigateWithoutHistory(ViewState.DASHBOARD);
+  };
+
+  const submitTransferOffer = useCallback((playerId: string, offerInput: TransferClubBidInput): TransferOfferSubmissionResult => {
+    if (!userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz wybrać klub użytkownika.' };
+    }
+
+    const buyerClub = clubs.find(c => c.id === userTeamId);
+    if (!buyerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono danych twojego klubu.' };
+    }
+
+    let sellerClubId: string | null = null;
+    let targetPlayer: Player | null = null;
+    for (const clubId in players) {
+      const found = players[clubId].find(p => p.id === playerId);
+      if (found) {
+        sellerClubId = clubId;
+        targetPlayer = found;
+        break;
+      }
+    }
+
+    if (!sellerClubId || !targetPlayer) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono wskazanego zawodnika.' };
+    }
+
+    if (targetPlayer.loan) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} jest wypożyczony do ${targetPlayer.loan.destinationClubName} do ${new Date(targetPlayer.loan.endDate).toLocaleDateString('pl-PL')}. Transfer będzie możliwy po zakończeniu wypożyczenia.`
+      };
+    }
+
+    const sellerClub = clubs.find(c => c.id === sellerClubId);
+    if (!sellerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu sprzedającego.' };
+    }
+
+    const buyerSquad = players[userTeamId] || [];
+    const sellerSquad = players[sellerClubId] || [];
+    const sellerCoachFavoriteIds = sellerClub.coachId ? coaches[sellerClub.coachId]?.favoritePlayerIds : undefined;
+    const sellerOpeningStance = TransferSellerLogicService.getNegotiationStance(
+      targetPlayer,
+      sellerClub,
+      buyerClub,
+      sellerSquad,
+      currentDate,
+      offerInput.timing,
+      sellerClub.board?.kompetencja,
+      sellerCoachFavoriteIds
+    );
+    const latestClubOffer = transferOffers.find(
+      offer =>
+        offer.playerId === playerId &&
+        offer.buyerClubId === userTeamId &&
+        offer.timing === offerInput.timing &&
+        (
+          offer.status === TransferOfferStatus.SELLER_COUNTERED ||
+          offer.status === TransferOfferStatus.SELLER_REJECTED ||
+          offer.status === TransferOfferStatus.PLAYER_NEGOTIATION
+        )
+    ) || null;
+
+    const existingNegotiation = transferOffers.find(
+      offer =>
+        offer.playerId === playerId &&
+        offer.buyerClubId === userTeamId &&
+        (
+          offer.status === TransferOfferStatus.PLAYER_NEGOTIATION ||
+          offer.status === TransferOfferStatus.AGREED_PRECONTRACT
+        )
+    );
+    if (existingNegotiation) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: existingNegotiation.status === TransferOfferStatus.AGREED_PRECONTRACT
+          ? 'Masz juz podpisane porozumienie z tym zawodnikiem.'
+          : 'Kwota z klubem jest juz uzgodniona. Przejdz do rozmowy z zawodnikiem.'
+      };
+    }
+
+    if (targetPlayer.transferLockoutUntil && new Date(currentDate) < new Date(targetPlayer.transferLockoutUntil)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Ten klub nie chce wracac do rozmow w sprawie tego zawodnika przed ${new Date(targetPlayer.transferLockoutUntil).toLocaleDateString('pl-PL')}.`
+      };
+    }
+
+    const transferClubLockoutUntil = targetPlayer.transferClubLockouts?.[userTeamId];
+    if (transferClubLockoutUntil && new Date(currentDate) < new Date(transferClubLockoutUntil)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Agent zawodnika odrzuca kontakt z twoim klubem po poprzednio anulowanym transferze. Mozesz sprobowac ponownie za kilka miesiecy.'
+      };
+    }
+
+    if (targetPlayer.transferOfferBanUntil && new Date(currentDate) < new Date(targetPlayer.transferOfferBanUntil)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Ten zawodnik niedawno zmienil klub. Zlozenie nowej oferty bedzie mozliwe dopiero po ${new Date(targetPlayer.transferOfferBanUntil).toLocaleDateString('pl-PL')}.`
+      };
+    }
+
+    if (offerInput.timing !== TransferTiming.CONTRACT_END && !sellerOpeningStance.allowTalks) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: sellerOpeningStance.reason
+      };
+    }
+
+    const buyerDecision = TransferBuyerLogicService.validateClubBid(
+      targetPlayer,
+      buyerClub,
+      buyerSquad,
+      offerInput,
+      currentDate
+    );
+
+    if (!buyerDecision.approved) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: buyerDecision.reason };
+    }
+
+    const createdOffer: TransferOffer = {
+      id: `TRANSFER_${Date.now()}_${playerId}`,
+      playerId,
+      sellerClubId,
+      buyerClubId: userTeamId,
+      fee: Math.round(offerInput.fee),
+      timing: offerInput.timing,
+      createdAt: currentDate.toISOString(),
+      status: TransferOfferStatus.SELLER_REVIEW,
+      attemptNumber: latestClubOffer?.status === TransferOfferStatus.SELLER_COUNTERED
+        ? latestClubOffer.attemptNumber + 1
+        : 1,
+      maxAttempts: latestClubOffer?.maxAttempts || TransferSellerLogicService.generateNegotiationAttemptLimit()
+    };
+
+    const getPreContractJoinDate = (contractEndDate: string): string => {
+      const contractEnd = new Date(contractEndDate);
+      if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+      contractEnd.setDate(contractEnd.getDate() + 1);
+      return contractEnd.toISOString();
+    };
+
+    const resolveEffectiveDate = () => {
+      if (offerInput.timing === TransferTiming.CONTRACT_END) {
+        return getPreContractJoinDate(targetPlayer.contractEndDate);
+      }
+
+      const effectiveDate = new Date(currentDate);
+
+      if (offerInput.timing === TransferTiming.IN_SIX_MONTHS) {
+        effectiveDate.setMonth(effectiveDate.getMonth() + 6);
+        return effectiveDate.toISOString();
+      }
+
+      if (offerInput.timing === TransferTiming.IN_TWELVE_MONTHS) {
+        effectiveDate.setFullYear(effectiveDate.getFullYear() + 1);
+        return effectiveDate.toISOString();
+      }
+
+      return targetPlayer.contractEndDate;
+    };
+
+    if (offerInput.timing === TransferTiming.CONTRACT_END) {
+      const preContractOffer: TransferOffer = {
+        ...createdOffer,
+        fee: 0,
+        status: TransferOfferStatus.PLAYER_NEGOTIATION,
+        effectiveDate: resolveEffectiveDate(),
+        sellerReason: `Zawodnik moze podpisac umowe obowiazujaca od ${new Date(targetPlayer.contractEndDate).toLocaleDateString('pl-PL')}. Klub nie otrzyma odstepnego.`
+      };
+
+      setTransferOffers(prev => [preContractOffer, ...prev].slice(0, 100));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClubId]: (prev[sellerClubId] || []).map(player =>
+          player.id === targetPlayer.id
+            ? { ...player, isAvailableForLoan: false }
+            : player
+        )
+      }));
+      setMessages(prev => [{
+        id: `MAIL_TRANSFER_PRECONTRACT_${preContractOffer.id}`,
+        sender: 'Dzial prawny',
+        role: 'Rejestr kontraktow',
+        subject: `Mozesz rozmawiac z ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `${preContractOffer.sellerReason}\n\nJesli uzgodnisz warunki z zawodnikiem, dolaczy do twojego klubu po wygasnieciu obecnej umowy.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 95
+      }, ...prev]);
+
+      return {
+        ok: true,
+        status: TransferOfferStatus.PLAYER_NEGOTIATION,
+        message: `${preContractOffer.sellerReason}\n\nMozesz przejsc bezposrednio do rozmowy z zawodnikiem.`,
+        offer: preContractOffer
+      };
+    }
+
+    const sellerDecision = TransferSellerLogicService.evaluateSellerDecision(
+      offerInput,
+      targetPlayer,
+      sellerClub,
+      buyerClub,
+      sellerSquad,
+      currentDate,
+      {
+        currentAskingPrice: latestClubOffer?.status === TransferOfferStatus.SELLER_COUNTERED
+          ? latestClubOffer.askingPrice
+          : sellerOpeningStance.askingPrice,
+        attemptNumber: createdOffer.attemptNumber,
+        maxAttempts: createdOffer.maxAttempts
+      },
+      sellerCoachFavoriteIds
+    );
+
+    if (sellerDecision.verdict === 'REJECT') {
+      const transferLockoutDate = new Date(currentDate);
+      transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClubId]: (prev[sellerClubId] || []).map(player =>
+          player.id === targetPlayer.id
+            ? { ...player, transferLockoutUntil: transferLockoutDate.toISOString() }
+            : player
+        )
+      }));
+
+      const rejectedOffer: TransferOffer = {
+        ...createdOffer,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        askingPrice: sellerDecision.askingPrice,
+        sellerReason: sellerDecision.reason
+      };
+      setTransferOffers(prev => [rejectedOffer, ...prev].slice(0, 100));
+      setMessages(prev => [{
+        id: `MAIL_TRANSFER_REJECT_${rejectedOffer.id}`,
+        sender: sellerClub.name,
+        role: 'Zarząd klubu',
+        subject: `Oferta odrzucona: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `${sellerDecision.reason}\n\nKlub zamyka rozmowy w sprawie tego zawodnika do ${transferLockoutDate.toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 92
+      }, ...prev]);
+
+      return {
+        ok: false,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        message: `${sellerDecision.reason}\n\nKolejna oferta bedzie mozliwa dopiero po ${transferLockoutDate.toLocaleDateString('pl-PL')}.`,
+        offer: rejectedOffer
+      };
+    }
+
+    if (sellerDecision.verdict === 'COUNTER') {
+      const counterOffer: TransferOffer = {
+        ...createdOffer,
+        status: TransferOfferStatus.SELLER_COUNTERED,
+        askingPrice: sellerDecision.askingPrice,
+        sellerReason: sellerDecision.reason
+      };
+      setTransferOffers(prev => [counterOffer, ...prev].slice(0, 100));
+      setMessages(prev => [{
+        id: `MAIL_TRANSFER_COUNTER_${counterOffer.id}`,
+        sender: sellerClub.name,
+        role: 'Zarzad klubu',
+        subject: `Klub przedstawia oczekiwania za ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: sellerDecision.reason,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 94
+      }, ...prev]);
+
+      return { ok: false, status: TransferOfferStatus.SELLER_COUNTERED, message: sellerDecision.reason, offer: counterOffer };
+    }
+
+    /* const playerDecision = TransferPlayerDecisionService.evaluateMove(
+      offerInput,
+      targetPlayer,
+      sellerClub,
+      buyerClub,
+      sellerSquad,
+      buyerSquad,
+      currentDate,
+      managerProfile
+    );
+
+    if (!playerDecision.accepted) {
+      const playerRejectedOffer = {
+        ...createdOffer,
+        status: TransferOfferStatus.PLAYER_REJECTED,
+        sellerReason: sellerDecision.reason,
+        playerReason: playerDecision.reason
+      };
+      setTransferOffers(prev => [playerRejectedOffer, ...prev].slice(0, 100));
+      setMessages(prev => [{
+        id: `MAIL_TRANSFER_PLAYER_REJECT_${playerRejectedOffer.id}`,
+        sender: `Agent gracza ${targetPlayer.lastName}`,
+        role: 'Agencja menadżerska',
+        subject: `Zawodnik odrzucił transfer: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: playerDecision.reason,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 94
+      }, ...prev]);
+
+      return { ok: false, status: TransferOfferStatus.PLAYER_REJECTED, message: playerDecision.reason, offer: playerRejectedOffer };
+    }
+
+    const readyOffer: TransferOffer = {
+      ...createdOffer,
+      status: TransferOfferStatus.READY_TO_FINALIZE,
+      sellerReason: sellerDecision.reason,
+      playerReason: playerDecision.reason
+    };
+
+    const execution = TransferExecutionService.finalizeTransfer(
+      readyOffer,
+      clubs,
+      players,
+      currentDate
+    );
+
+    setClubs(execution.updatedClubs);
+    setPlayers(execution.updatedPlayers);
+    setLineups(prev => {
+      const next = { ...prev };
+      const updatedSellerSquad = execution.updatedPlayers[sellerClub.id] || [];
+      const updatedBuyerSquad = execution.updatedPlayers[buyerClub.id] || [];
+
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], updatedSellerSquad);
+      }
+
+      if (next[buyerClub.id]) {
+        const buyerLineup = next[buyerClub.id];
+        const allKnownIds = new Set([
+          ...buyerLineup.bench,
+          ...buyerLineup.reserves,
+          ...(buyerLineup.startingXI.filter(Boolean) as string[])
+        ]);
+
+        if (!allKnownIds.has(playerId)) {
+          next[buyerClub.id] = {
+            ...buyerLineup,
+            reserves: [...buyerLineup.reserves, playerId]
+          };
+        }
+      }
+
+      return next;
+    });
+
+    const completedOffer = { ...readyOffer, status: TransferOfferStatus.COMPLETED };
+    setTransferOffers(prev => [completedOffer, ...prev].slice(0, 100));
+    setMessages(prev => [{
+      id: `MAIL_TRANSFER_DONE_${completedOffer.id}`,
+      sender: 'Centrum transferowe',
+      role: 'System rejestracji transferów',
+      subject: `Transfer potwierdzony: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      body: `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name}. Klub ${sellerClub.name} zaakceptował ofertę ${offerInput.fee.toLocaleString()} PLN, a zawodnik podpisał kontrakt na ${offerInput.years} lata.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 98
+    }, ...prev]);
+
+    return {
+      ok: true,
+      status: TransferOfferStatus.COMPLETED,
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptował transfer do ${buyerClub.name}.`,
+      offer: completedOffer
+    };
+    */
+
+    const acceptedOffer: TransferOffer = {
+      ...createdOffer,
+      status: TransferOfferStatus.PLAYER_NEGOTIATION,
+      askingPrice: sellerDecision.askingPrice,
+      sellerReason: sellerDecision.reason
+    };
+
+    setTransferOffers(prev => [acceptedOffer, ...prev].slice(0, 100));
+    setPlayers(prev => ({
+      ...prev,
+      [sellerClubId]: (prev[sellerClubId] || []).map(player =>
+        player.id === targetPlayer.id
+          ? { ...player, isAvailableForLoan: false }
+          : player
+      )
+    }));
+    setMessages(prev => [{
+      id: `MAIL_TRANSFER_ACCEPT_${acceptedOffer.id}`,
+      sender: sellerClub.name,
+      role: 'Zarzad klubu',
+      subject: `Kluby uzgodnily kwote za ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      body: `${sellerDecision.reason}\n\nMozesz teraz przejsc do rozmowy z zawodnikiem i ustalic warunki kontraktu.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 96
+    }, ...prev]);
+
+    return {
+      ok: true,
+      status: TransferOfferStatus.PLAYER_NEGOTIATION,
+      message: `${sellerDecision.reason}\n\nKluby uzgodnily warunki transferu. Teraz musisz porozmawiac z zawodnikiem.`,
+      offer: acceptedOffer
+    };
+  }, [userTeamId, clubs, players, currentDate, transferOffers]);
+
+  const submitLoanOffer = useCallback((playerId: string, offerInput: LoanOfferSubmissionInput): LoanOfferSubmissionResult => {
+    if (!userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz wybrać klub użytkownika.' };
+    }
+
+    const buyerClub = clubs.find(club => club.id === userTeamId);
+    if (!buyerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono danych twojego klubu.' };
+    }
+
+    let sellerClubId: string | null = null;
+    let targetPlayer: Player | null = null;
+    for (const clubId in players) {
+      const found = players[clubId].find(player => player.id === playerId);
+      if (found) {
+        sellerClubId = clubId;
+        targetPlayer = found;
+        break;
+      }
+    }
+
+    if (!sellerClubId || !targetPlayer) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono wskazanego zawodnika.' };
+    }
+
+    if (sellerClubId === userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie możesz wypożyczyć zawodnika z własnego klubu.' };
+    }
+
+    const sellerClub = clubs.find(club => club.id === sellerClubId);
+    if (!sellerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu macierzystego zawodnika.' };
+    }
+
+    if (!targetPlayer.isAvailableForLoan) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest dostępny do wypożyczenia.` };
+    }
+
+    if (targetPlayer.loan) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} jest już wypożyczony.` };
+    }
+
+    if (
+      targetPlayer.transferPendingClubId ||
+      hasActiveTransferConflict(targetPlayer.id, transferOffers) ||
+      hasActiveIncomingConflict(targetPlayer.id, incomingOffers)
+    ) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Ten zawodnik ma aktywną ścieżkę transferową albo inną ofertę. Wypożyczenie jest zablokowane, żeby uniknąć konfliktu interesów.',
+      };
+    }
+
+    const buyerSquad = players[userTeamId] || [];
+    const sellerSquad = players[sellerClubId] || [];
+    const need = IncomingTransferService.getLoanSquadNeed(targetPlayer, buyerSquad);
+    const samePositionPlayers = buyerSquad.filter(player => player.position === targetPlayer.position);
+    const samePositionAverage = samePositionPlayers.length > 0
+      ? samePositionPlayers.reduce((sum, player) => sum + player.overallRating, 0) / samePositionPlayers.length
+      : IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const isClearSquadUpgrade =
+      targetPlayer.overallRating >= samePositionAverage + 4 ||
+      need.needScore >= 8;
+    const postLoanSquadSize = buyerSquad.length + 1;
+
+    if (postLoanSquadSize > 30) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Zarząd blokuje wypożyczenie. Kadra po tym ruchu liczyłaby ${postLoanSquadSize} zawodników, a limit organizacyjny klubu to 30.`,
+      };
+    }
+
+    if (postLoanSquadSize > 28 && !isClearSquadUpgrade) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Zarząd blokuje wypożyczenie. Kadra liczyłaby ${postLoanSquadSize} zawodników, a sztab nie widzi w tym ruchu wyraźnego wzmocnienia pierwszej rotacji.`,
+      };
+    }
+
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const loanFee = Math.max(0, Math.round(offerInput.loanFee / 1000) * 1000);
+    const wageCoveragePercent = Math.max(0, Math.min(100, Math.round(offerInput.wageCoveragePercent)));
+    const loanDuration = offerInput.loanDuration;
+    const loanEndDate = IncomingTransferService.resolveLoanEndDate(currentDate, loanDuration);
+    const totalCost = IncomingTransferService.calculateLoanTotalCost(
+      targetPlayer,
+      loanFee,
+      wageCoveragePercent,
+      dateStr,
+      loanEndDate
+    );
+
+    if (loanFee > buyerClub.transferBudget || totalCost > buyerClub.transferBudget) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Łączny koszt wypożyczenia (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${buyerClub.transferBudget.toLocaleString('pl-PL')} PLN).`,
+      };
+    }
+
+    const marketValue = FinanceService.calculateMarketValue(
+      targetPlayer,
+      sellerClub.reputation,
+      IncomingTransferService.getClubTier(sellerClub),
+      sellerClub.country
+    );
+    const expectedLoanFee = Math.round(marketValue * 0.003 / 1000) * 1000;
+    const repDelta = buyerClub.reputation - sellerClub.reputation;
+    const requiredCoverage = repDelta >= 1 ? 40 : repDelta === 0 ? 50 : 65;
+    const loanOfferStart = new Date(dateStr);
+    const loanOfferEnd = new Date(loanEndDate);
+    const loanDays = Math.max(30, Math.ceil((loanOfferEnd.getTime() - loanOfferStart.getTime()) / 86_400_000));
+    const sellerWageSaving = Math.round((targetPlayer.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
+    const financialValueForSeller = loanFee + sellerWageSaving;
+    const expectedFinancialValue = expectedLoanFee + Math.round((targetPlayer.annualSalary || 0) * 0.5 * (loanDays / 365));
+
+    // FINANCIAL ESCAPE: klub wystawiający nie patrzy już tylko na minuty.
+    // Jeśli sportowo wypożyczenie jest słabsze, ale oferta daje realny zarobek
+    // albo znacząco amortyzuje pensję zawodnika, zarząd AI może mimo wszystko
+    // uznać ruch za opłacalny.
+    const isStrongFinancialLoan =
+      financialValueForSeller >= expectedFinancialValue * 1.25 ||
+      (wageCoveragePercent >= 85 && loanFee >= expectedLoanFee * 0.75) ||
+      (wageCoveragePercent === 100 && loanFee > 0);
+
+    if (!need.fits && !isStrongFinancialLoan) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} odrzuca propozycję. Klub nie widzi wystarczającej gwarancji minut i sportowego sensu wypożyczenia.`,
+      };
+    }
+
+    const sportNeedScore = Math.max(0, need.needScore);
+    const sellerScore =
+      sportNeedScore * 7 +
+      Math.min(35, wageCoveragePercent * 0.35) +
+      Math.min(25, expectedLoanFee > 0 ? (loanFee / expectedLoanFee) * 18 : loanFee > 0 ? 18 : 8) +
+      Math.min(18, expectedFinancialValue > 0 ? (financialValueForSeller / expectedFinancialValue) * 12 : 0) +
+      (repDelta >= 1 ? 10 : repDelta === 0 ? 4 : -8);
+
+    if ((wageCoveragePercent < requiredCoverage && !isStrongFinancialLoan) || sellerScore < 58) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} odrzuca ofertę. Oczekują mocniejszej gwarancji gry, wyższego pokrycia pensji albo lepszej opłaty za wypożyczenie.`,
+      };
+    }
+
+    const playerDecisionSeed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${targetPlayer.id}_USER_LOAN_DECISION_${sessionSeed}`);
+    const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+      targetPlayer,
+      buyerClub,
+      sellerClub,
+      buyerSquad,
+      playerDecisionSeed
+    );
+
+    if (playerDecision === 'refused') {
+      return {
+        ok: false,
+        status: 'PLAYER_REFUSED',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest przekonany do wypożyczenia do ${buyerClub.name}.`,
+      };
+    }
+
+    const baselineRatingCount = targetPlayer.stats.ratingHistory?.length ?? 0;
+    const loanInfo: PlayerLoanInfo = {
+      parentClubId: sellerClub.id,
+      parentClubName: sellerClub.name,
+      destinationClubId: buyerClub.id,
+      destinationClubName: buyerClub.name,
+      startDate: dateStr,
+      endDate: loanEndDate,
+      wageCoveragePercent,
+      loanFee,
+      forcedByClub: false,
+      reportBaselineMatches: targetPlayer.stats.matchesPlayed ?? 0,
+      reportBaselineMinutes: targetPlayer.stats.minutesPlayed ?? 0,
+      reportBaselineGoals: targetPlayer.stats.goals ?? 0,
+      reportBaselineAssists: targetPlayer.stats.assists ?? 0,
+      reportBaselineYellowCards: targetPlayer.stats.yellowCards ?? 0,
+      reportBaselineRedCards: targetPlayer.stats.redCards ?? 0,
+      reportBaselineRatingCount: baselineRatingCount,
+      lastReportDate: dateStr,
+      lastReportMatches: targetPlayer.stats.matchesPlayed ?? 0,
+      lastReportMinutes: targetPlayer.stats.minutesPlayed ?? 0,
+      lastReportGoals: targetPlayer.stats.goals ?? 0,
+      lastReportAssists: targetPlayer.stats.assists ?? 0,
+      lastReportRatingCount: baselineRatingCount,
+      monthlyReports: [],
+    };
+
+    const loanStart = new Date(loanInfo.startDate);
+    const loanStartYear = Number.isNaN(loanStart.getTime()) ? currentDate.getFullYear() : loanStart.getFullYear();
+    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? currentDate.getMonth() + 1 : loanStart.getMonth() + 1;
+    const baseHistory = targetPlayer.history && targetPlayer.history.length > 0
+      ? targetPlayer.history
+      : [{
+          clubName: sellerClub.name,
+          clubId: sellerClub.id,
+          fromYear: loanStartYear - 1,
+          fromMonth: 7,
+          toYear: null,
+          toMonth: null,
+        }];
+    const loanedPlayer: Player = {
+      ...targetPlayer,
+      clubId: buyerClub.id,
+      loan: loanInfo,
+      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
+      isAvailableForLoan: false,
+      isOnTransferList: false,
+      transferListPrice: undefined,
+      squadRole: null,
+      isUntouchable: false,
+      interestedClubs: [],
+    };
+
+    setPlayers(prev => ({
+      ...prev,
+      [sellerClub.id]: (prev[sellerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
+      [buyerClub.id]: [
+        ...(prev[buyerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
+        loanedPlayer,
+      ],
+    }));
+
+    setClubs(prev => prev.map(club => {
+      if (club.id === sellerClub.id) {
+        return {
+          ...club,
+          budget: club.budget + loanFee,
+          transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== targetPlayer!.id),
+        };
+      }
+      if (club.id === buyerClub.id) {
+        return {
+          ...club,
+          budget: Math.max(0, club.budget - loanFee),
+          transferBudget: Math.max(0, club.transferBudget - loanFee),
+          rosterIds: [...club.rosterIds.filter(id => id !== targetPlayer!.id), targetPlayer!.id],
+        };
+      }
+      return club;
+    }));
+
+    setLineups(prev => {
+      const next = { ...prev };
+      const nextSellerSquad = sellerSquad.filter(player => player.id !== targetPlayer!.id);
+      const nextBuyerSquad = [...buyerSquad.filter(player => player.id !== targetPlayer!.id), loanedPlayer];
+
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], nextSellerSquad);
+      }
+
+      if (next[buyerClub.id]) {
+        const buyerLineup = next[buyerClub.id];
+        const knownIds = new Set([
+          ...buyerLineup.bench,
+          ...buyerLineup.reserves,
+          ...(buyerLineup.startingXI.filter(Boolean) as string[]),
+        ]);
+        next[buyerClub.id] = knownIds.has(loanedPlayer.id)
+          ? buyerLineup
+          : {
+              ...buyerLineup,
+              reserves: [...buyerLineup.reserves, loanedPlayer.id],
+            };
+      } else {
+        const coach = buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null;
+        next[buyerClub.id] = LineupService.autoPickLineup(buyerClub.id, nextBuyerSquad, '4-4-2', coach);
+      }
+
+      return next;
+    });
+
+    setTransferOffers(prev => prev.map(transferOffer => {
+      // KONFLIKT INTERESÓW: po zaakceptowanym wypożyczeniu zamykamy aktywne
+      // rozmowy transferowe tego zawodnika. W praktyce oznacza to, że gracz nie
+      // może najpierw wypożyczyć zawodnika, a chwilę później sfinalizować jego kupna
+      // z wcześniej otwartej ścieżki negocjacji.
+      if (transferOffer.playerId !== targetPlayer!.id || !isActiveTransferOffer(transferOffer)) return transferOffer;
+      return {
+        ...transferOffer,
+        status: TransferOfferStatus.SELLER_REJECTED,
+        sellerReason: 'Rozmowy zamknięte automatycznie, ponieważ zawodnik został wypożyczony.',
+      };
+    }));
+
+    setIncomingOffers(prev => prev.map(incomingOffer => {
+      if (
+        incomingOffer.playerId === targetPlayer!.id &&
+        IncomingTransferService.isActiveIncomingOfferStatus(incomingOffer.status)
+      ) {
+        return { ...incomingOffer, status: IncomingOfferStatus.EXPIRED };
+      }
+      return incomingOffer;
+    }));
+
+    setMessages(prev => [{
+      id: `MAIL_USER_LOAN_DONE_${targetPlayer!.id}_${Date.now()}`,
+      sender: 'Centrum wypożyczeń',
+      role: 'System rejestracji wypożyczeń',
+      subject: `Wypożyczenie potwierdzone: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      body: [
+        `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} na zasadzie wypożyczenia z klubu ${sellerClub.name}.`,
+        '',
+        `Okres: ${new Date(dateStr).toLocaleDateString('pl-PL')} - ${new Date(loanEndDate).toLocaleDateString('pl-PL')}`,
+        `Pokrycie pensji: ${wageCoveragePercent}%`,
+        `Opłata za wypożyczenie: ${loanFee.toLocaleString('pl-PL')} PLN`,
+      ].join('\n'),
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 96,
+    }, ...prev]);
+
+    showGameNotification({
+      title: 'Wypożyczenie zaakceptowane',
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.`,
+      tone: 'success',
+    });
+
+    return {
+      ok: true,
+      status: 'ACCEPTED',
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} został wypożyczony do ${buyerClub.name}.`,
+      loan: loanInfo,
+    };
+  }, [userTeamId, clubs, players, currentDate, transferOffers, incomingOffers, lineups, coaches, sessionSeed]);
+
+  const finalizeTransferNegotiation = useCallback((offerId: string, contractInput: TransferContractInput, bypassBoardCheck?: boolean): TransferOfferSubmissionResult => {
+    if (!userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz wybrac klub uzytkownika.' };
+    }
+
+    const transferOffer = transferOffers.find(offer => offer.id === offerId);
+    if (!transferOffer) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono aktywnej oferty transferowej.' };
+    }
+
+    if (transferOffer.buyerClubId !== userTeamId) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Ta oferta nie nalezy do twojego klubu.' };
+    }
+
+    if (transferOffer.status !== TransferOfferStatus.PLAYER_NEGOTIATION) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Najpierw musisz uzgodnic kwote z klubem sprzedajacym.' };
+    }
+
+    const buyerClub = clubs.find(c => c.id === transferOffer.buyerClubId);
+    const sellerClub = clubs.find(c => c.id === transferOffer.sellerClubId);
+    if (!buyerClub || !sellerClub) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Brakuje danych jednego z klubow.' };
+    }
+
+    const buyerSquad = players[buyerClub.id] || [];
+    const sellerSquad = players[sellerClub.id] || [];
+    const targetPlayer = sellerSquad.find(p => p.id === transferOffer.playerId);
+    if (!targetPlayer) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Zawodnik nie jest juz dostepny w klubie sprzedajacym.' };
+    }
+
+    if (targetPlayer.loan) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} jest wypożyczony do ${targetPlayer.loan.destinationClubName}. Finalizacja transferu będzie możliwa po zakończeniu wypożyczenia.`
+      };
+    }
+
+    const buyerBidValidation = TransferBuyerLogicService.validateClubBid(
+      targetPlayer,
+      buyerClub,
+      buyerSquad,
+      { fee: transferOffer.fee, timing: transferOffer.timing },
+      currentDate
+    );
+    if (!buyerBidValidation.approved) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: buyerBidValidation.reason };
+    }
+
+    const contractValidation = TransferBuyerLogicService.validateContractTerms(
+      targetPlayer,
+      buyerClub,
+      buyerSquad,
+      contractInput,
+      bypassBoardCheck
+    );
+    if (!contractValidation.approved) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: contractValidation.reason };
+    }
+
+    const totalCommitment = transferOffer.fee + contractInput.salary * contractInput.years + contractInput.bonus;
+    if (totalCommitment > buyerClub.transferBudget) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `Łączny koszt transferu i kontraktu (${totalCommitment.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${buyerClub.transferBudget.toLocaleString('pl-PL')} PLN).` };
+    }
+
+    const playerDecision = TransferPlayerDecisionService.evaluateMove(
+      contractInput,
+      targetPlayer,
+      sellerClub,
+      buyerClub,
+      sellerSquad,
+      buyerSquad,
+      currentDate
+    );
+
+    if (!playerDecision.accepted) {
+      const transferLockoutDate = new Date(currentDate);
+      transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClub.id]: (prev[sellerClub.id] || []).map(player =>
+          player.id === targetPlayer.id
+            ? { ...player, transferLockoutUntil: transferLockoutDate.toISOString() }
+            : player
+        )
+      }));
+
+      const rejectedOffer: TransferOffer = {
+        ...transferOffer,
+        salary: Math.round(contractInput.salary),
+        bonus: Math.round(contractInput.bonus),
+        years: contractInput.years,
+        goalBonus: contractInput.goalBonus,
+        assistBonus: contractInput.assistBonus,
+        cleanSheetBonus: contractInput.cleanSheetBonus,
+        status: TransferOfferStatus.PLAYER_REJECTED,
+        playerReason: playerDecision.reason
+      };
+
+      setTransferOffers(prev => prev.map(offer => offer.id === offerId ? rejectedOffer : offer));
+      setMessages(prev => [{
+        id: `MAIL_TRANSFER_PLAYER_REJECT_${rejectedOffer.id}`,
+        sender: `Agent gracza ${targetPlayer.lastName}`,
+        role: 'Agencja menadzerska',
+        subject: `Zawodnik odrzucil transfer: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `${playerDecision.reason}\n\nZawodnik nie chce wracac do rozmow przed ${transferLockoutDate.toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 95
+      }, ...prev]);
+
+      return {
+        ok: false,
+        status: TransferOfferStatus.PLAYER_REJECTED,
+        message: `${playerDecision.reason}\n\nKolejna proba bedzie mozliwa dopiero po ${transferLockoutDate.toLocaleDateString('pl-PL')}.`,
+        offer: rejectedOffer
+      };
+    }
+
+    const readyOffer: TransferOffer = {
+      ...transferOffer,
+      salary: Math.round(contractInput.salary),
+      bonus: Math.round(contractInput.bonus),
+      years: contractInput.years,
+      goalBonus: contractInput.goalBonus,
+      assistBonus: contractInput.assistBonus,
+      cleanSheetBonus: contractInput.cleanSheetBonus,
+      status: TransferOfferStatus.READY_TO_FINALIZE,
+      playerReason: playerDecision.reason
+    };
+
+    const directorPurchaseDecision = buyerClub.sportingDirector
+      ? SportingDirectorService.evaluateIncomingPurchaseDecision({
+          club: buyerClub,
+          player: targetPlayer,
+          squad: buyerSquad,
+          sellerClub,
+          fee: readyOffer.fee,
+          contract: contractInput,
+          date: currentDate,
+        })
+      : null;
+
+    if (directorPurchaseDecision?.blocked) {
+      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+      const cancelledOffer: TransferOffer = {
+        ...readyOffer,
+        status: TransferOfferStatus.PLAYER_REJECTED,
+        sellerReason: `Klub ${buyerClub.name} wycofal sie po zgodzie zawodnika. Agent nie chce wracac do rozmow przez najblizsze miesiace.`,
+        playerReason: `Klub ${buyerClub.name} wycofal sie po zgodzie zawodnika. Agent nie chce wracac do rozmow przez najblizsze miesiace.`
+      };
+
+      setClubs(prev => prev.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club));
+      setTransferOffers(prev => prev.map(offer => offer.id === offerId ? cancelledOffer : offer));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClub.id]: (prev[sellerClub.id] || []).map(player =>
+          player.id === targetPlayer.id
+            ? {
+                ...player,
+                transferClubLockouts: {
+                  ...(player.transferClubLockouts || {}),
+                  [buyerClub.id]: lockoutDate.toISOString()
+                }
+              }
+            : player
+        )
+      }));
+      if (directorPurchaseDecision.mail) prependUniqueMessages([directorPurchaseDecision.mail], true);
+      prependUniqueMessages([{
+        id: `MAIL_TRANSFER_PLAYER_OFFENDED_${offerId}`,
+        sender: `Agent gracza ${targetPlayer.lastName}`,
+        role: 'Agencja menadzerska',
+        subject: `Rozmowy zerwane: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `Po zaakceptowaniu warunkow przez zawodnika klub ${buyerClub.name} wycofal sie z transferu decyzja pionu klubowego. Moj klient odebral to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 97
+      }]);
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: `Dyrektor sportowy zablokowal transfer: ${directorPurchaseDecision.message} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
+        offer: cancelledOffer,
+      };
+    }
+
+    const finalFee = directorPurchaseDecision?.negotiatedFee && directorPurchaseDecision.negotiatedFee < readyOffer.fee
+      ? directorPurchaseDecision.negotiatedFee
+      : readyOffer.fee;
+    const finalReadyOffer: TransferOffer = {
+      ...readyOffer,
+      fee: finalFee,
+    };
+
+    const clubsAfterDirectorApproval = directorPurchaseDecision && directorPurchaseDecision.relationDelta !== 0
+      ? clubs.map(club => club.id === buyerClub.id ? directorPurchaseDecision.updatedClub : club)
+      : clubs;
+
+    if (transferOffer.timing !== TransferTiming.IMMEDIATE) {
+      const getPreContractJoinDate = (contractEndDate: string): string => {
+        const contractEnd = new Date(contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
+      const agreedEffectiveDate = transferOffer.timing === TransferTiming.CONTRACT_END
+        ? getPreContractJoinDate(targetPlayer.contractEndDate)
+        : transferOffer.effectiveDate || targetPlayer.contractEndDate;
+      const agreedOffer: TransferOffer = {
+        ...finalReadyOffer,
+        status: TransferOfferStatus.AGREED_PRECONTRACT,
+        effectiveDate: agreedEffectiveDate
+      };
+
+      if (directorPurchaseDecision?.relationDelta) {
+        setClubs(clubsAfterDirectorApproval);
+      }
+      setTransferOffers(prev => prev.map(offer => offer.id === offerId ? agreedOffer : offer));
+      setPlayers(prev => ({
+        ...prev,
+        [sellerClub.id]: (prev[sellerClub.id] || []).map(player =>
+          player.id === targetPlayer.id
+            ? {
+                ...player,
+                transferPendingClubId: buyerClub.id,
+                transferReportDate: agreedOffer.effectiveDate || targetPlayer.contractEndDate,
+                transferPendingFee: finalFee,
+                transferPendingSalary: Math.round(contractInput.salary),
+                transferPendingBonus: Math.round(contractInput.bonus),
+                transferPendingContractYears: contractInput.years,
+                interestedClubs: [],
+                isOnTransferList: false,
+                transferListPrice: undefined,
+                transferListDemandUntil: null,
+                transferListRemovalPromiseDeadline: null,
+                isAvailableForLoan: false,
+              }
+            : player
+        )
+      }));
+      prependUniqueMessages([
+        ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
+        {
+        id: `MAIL_TRANSFER_PRECONTRACT_DONE_${agreedOffer.id}`,
+        sender: `Agent gracza ${targetPlayer.lastName}`,
+        role: 'Agencja menadzerska',
+        subject: `Umowa podpisana: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: transferOffer.timing === TransferTiming.CONTRACT_END
+          ? `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal warunki kontraktu. Dolaczy do ${buyerClub.name} od ${new Date(agreedOffer.effectiveDate || targetPlayer.contractEndDate).toLocaleDateString('pl-PL')} po wygasnieciu obecnej umowy.`
+          : `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal warunki kontraktu. Transfer do ${buyerClub.name} zostal uzgodniony z data ${new Date(agreedOffer.effectiveDate || currentDate).toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 98
+      }]);
+
+      return {
+        ok: true,
+        status: TransferOfferStatus.AGREED_PRECONTRACT,
+        message: transferOffer.timing === TransferTiming.CONTRACT_END
+          ? `${targetPlayer.firstName} ${targetPlayer.lastName} podpisal umowe z data obowiazywania od ${new Date(agreedOffer.effectiveDate || targetPlayer.contractEndDate).toLocaleDateString('pl-PL')}.`
+          : `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal transfer z data wejscia w zycie ${new Date(agreedOffer.effectiveDate || currentDate).toLocaleDateString('pl-PL')}.`,
+        offer: agreedOffer
+      };
+    }
+
+    const execution = TransferExecutionService.finalizeTransfer(
+      finalReadyOffer,
+      clubsAfterDirectorApproval,
+      players,
+      currentDate
+    );
+
+    const arrivalDate = new Date(currentDate);
+    arrivalDate.setDate(arrivalDate.getDate() + 1);
+    arrivalDate.setHours(0, 0, 0, 0);
+    const updatedBuyerSquad = (execution.updatedPlayers[buyerClub.id] || []).map(p =>
+      p.id === readyOffer.playerId
+        ? { ...p, transferReportDate: arrivalDate.toISOString() }
+        : p
+    );
+
+    setClubs(execution.updatedClubs);
+    setPlayers({
+      ...execution.updatedPlayers,
+      [buyerClub.id]: updatedBuyerSquad
+    });
+    setLineups(prev => {
+      const next = { ...prev };
+      const updatedSellerSquad = execution.updatedPlayers[sellerClub.id] || [];
+
+      if (next[sellerClub.id]) {
+        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], updatedSellerSquad);
+      }
+
+      return next;
+    });
+
+    const completedOffer: TransferOffer = {
+      ...finalReadyOffer,
+      status: TransferOfferStatus.COMPLETED
+    };
+
+    setTransferOffers(prev => prev.map(offer => offer.id === offerId ? completedOffer : offer));
+    prependUniqueMessages([
+      ...(directorPurchaseDecision?.mail ? [directorPurchaseDecision.mail] : []),
+      {
+      id: `MAIL_TRANSFER_DONE_${completedOffer.id}`,
+      sender: 'Centrum transferowe',
+      role: 'System rejestracji transferow',
+      subject: `Transfer potwierdzony: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolacza do ${buyerClub.name}. Klub ${sellerClub.name} zaakceptowal kwote ${completedOffer.fee.toLocaleString()} PLN, a zawodnik podpisal kontrakt na ${contractInput.years} lata.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 98
+    }]);
+
+    return {
+      ok: true,
+      status: TransferOfferStatus.COMPLETED,
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal transfer do ${buyerClub.name}.`,
+      offer: completedOffer
+    };
+  }, [userTeamId, transferOffers, clubs, players, currentDate, managerProfile]);
+
+const finalizeFreeAgentContract = useCallback((mailId: string) => {
+    const mail = messages.find(m => m.id === mailId);
+    // TUTAJ WSTAW TEN KOD (Weryfikacja typu metadanych)
+    if (!mail || !mail.metadata || mail.metadata.type !== 'CONTRACT_OFFER' || !userTeamId) return;
+
+    const { playerId, salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus } = mail.metadata;
+    // KONIEC KODU
+    const freeAgents = players['FREE_AGENTS'] || [];
+    const playerToSign = freeAgents.find(p => p.id === playerId);
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const userSquad = players[userTeamId] || [];
+
+    if (!playerToSign || !userClub) return;
+    const resolvedPlayer = playerToSign;
+
+    const failForNoFunds = () => {
+      const lockoutDate = new Date(currentDate);
+      lockoutDate.setFullYear(lockoutDate.getFullYear() + 1);
+
+      setPlayers(prevPlayers => ({
+        ...prevPlayers,
+        ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+          player.id === resolvedPlayer.id
+            ? {
+                ...player,
+                freeAgentLockoutUntil: null,
+                isNegotiationPermanentBlocked: false,
+                freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                  player.freeAgentClubLockouts,
+                  userTeamId,
+                  lockoutDate.toISOString()
+                )
+              }
+            : player
+        )
+      }));
+
+      const offendedMail: MailMessage = {
+        id: `MAIL_FA_NO_FUNDS_${mail.id}`,
+        sender: `Agent gracza ${resolvedPlayer.lastName}`,
+        role: 'Agencja Menadzerska',
+        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+        body: `Po ponownej weryfikacji okazalo sie, ze klub ${userClub.name} nie ma srodkow na realizacje uzgodnionych warunkow. Moj klient potraktowal to jako brak powagi. Wracamy do rozmow najwczesniej po ${lockoutDate.toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 96
+      };
+
+      setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
+
+      return showGameNotification({
+        title: 'Transfer anulowany',
+        message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodkow. Kolejna proba bedzie mozliwa dopiero za rok.`,
+        tone: 'error'
+      });
+    };
+
+    // 1. Zabierz bonus i wartość kontraktu (pensja × lata) z budżetu transferowego
+    const contractCost = bonus + salary * years;
+    if (contractCost > userClub.transferBudget) {
+      return failForNoFunds();
+    }
+
+    const hasExceptionalContractApproval = (userClub.boardExceptionalContractApprovals ?? 0) > 0;
+    if (!hasExceptionalContractApproval) {
+      const boardDecision = FinanceService.evaluateFASigningBoardDecision(
+        resolvedPlayer,
+        salary,
+        bonus,
+        userSquad,
+        userClub
+      );
+      if (!boardDecision.approved) {
+        const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+        setPlayers(prevPlayers => ({
+          ...prevPlayers,
+          ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+            player.id === resolvedPlayer.id
+              ? {
+                  ...player,
+                  freeAgentLockoutUntil: null,
+                  isNegotiationPermanentBlocked: false,
+                  freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                    player.freeAgentClubLockouts,
+                    userTeamId,
+                    lockoutDate.toISOString()
+                  )
+                }
+              : player
+          )
+        }));
+
+        const offendedMail: MailMessage = {
+          id: `MAIL_FA_BOARD_VETO_${mail.id}`,
+          sender: `Agent gracza ${resolvedPlayer.lastName}`,
+          role: 'Agencja Menadzerska',
+          subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+          body: `Po zaakceptowaniu warunkow klub ${userClub.name} wycofal sie z podpisania kontraktu decyzja zarzadu. Moj klient potraktowal to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 97
+        };
+
+        setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
+        return showGameNotification({
+          title: 'Veto zarzadu',
+          message: `${boardDecision.reason} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
+          tone: 'error'
+        });
+      }
+    }
+
+    const directorFreeAgentDecision = userClub.sportingDirector
+      ? SportingDirectorService.evaluateFreeAgentSigningDecision({
+          club: userClub,
+          player: resolvedPlayer,
+          squad: userSquad,
+          contract: { salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus },
+          date: currentDate,
+        })
+      : null;
+
+    if (directorFreeAgentDecision?.blocked) {
+      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+      setPlayers(prevPlayers => ({
+        ...prevPlayers,
+        ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
+          player.id === resolvedPlayer.id
+            ? {
+                ...player,
+                freeAgentLockoutUntil: null,
+                isNegotiationPermanentBlocked: false,
+                freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+                  player.freeAgentClubLockouts,
+                  userTeamId,
+                  lockoutDate.toISOString()
+                )
+              }
+            : player
+        )
+      }));
+      setClubs(prev => prev.map(c => c.id === userTeamId ? directorFreeAgentDecision.updatedClub : c));
+      const offendedMail: MailMessage = {
+        id: `MAIL_FA_DIRECTOR_VETO_${mail.id}`,
+        sender: `Agent gracza ${resolvedPlayer.lastName}`,
+        role: 'Agencja Menadzerska',
+        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+        body: `Po zaakceptowaniu warunkow klub ${userClub.name} wycofal sie z podpisania kontraktu. Moj klient potraktowal to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 97
+      };
+      setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
+      if (directorFreeAgentDecision.mail) {
+        prependUniqueMessages([directorFreeAgentDecision.mail], true);
+      }
+
+      return showGameNotification({
+        title: 'Weto dyrektora sportowego',
+        message: `${directorFreeAgentDecision.message} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
+        tone: 'error'
+      });
+    }
+
+    const nextTransferBudget = Math.max(0, userClub.transferBudget - contractCost);
+
+    setClubs(prev => prev.map(c => c.id === userTeamId ? {
+      ...(directorFreeAgentDecision?.relationDelta ? directorFreeAgentDecision.updatedClub : c),
+      transferBudget: nextTransferBudget,
+      boardExceptionalContractApprovals: hasExceptionalContractApproval
+        ? Math.max(0, (c.boardExceptionalContractApprovals ?? 0) - 1)
+        : c.boardExceptionalContractApprovals,
+      financeHistory: [
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          date: currentDate.toISOString().split('T')[0],
+          amount: -contractCost,
+          type: 'EXPENSE' as const,
+          description: `Kontrakt z wolnym agentem: ${resolvedPlayer.lastName} (${years}L × ${salary.toLocaleString('pl-PL')} PLN + bonus)`
+        },
+        ...(c.financeHistory || [])
+      ].slice(0, 50)
+    } : c));
+
+    // 2. Przygotuj dane piłkarza (nowy klub, pensja, data)
+    const newEndDate = new Date(currentDate.getFullYear() + years, 5, 30).toISOString();
+    const transferLockoutDate = new Date(currentDate);
+    transferLockoutDate.setMonth(transferLockoutDate.getMonth() + 3);
+    const faArrivalDate = new Date(currentDate);
+    faArrivalDate.setDate(faArrivalDate.getDate() + 1);
+    faArrivalDate.setHours(0, 0, 0, 0);
+   // AKTUALIZACJA HISTORII - TUTAJ WSTAW TEN KOD
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const updatedHistory = PlayerCareerService.movePlayer(
+      resolvedPlayer,
+      { clubName: userClub?.name || 'Nieznany Klub', clubId: userTeamId },
+      currentYear,
+      currentMonth
+    );
+
+    const updatedPlayer = {
+      ...PlayerMoraleService.applyContractSigningMindflowReset(
+        PlayerCareerService.resetClubStatsForNewEntry(resolvedPlayer),
+        currentDate
+      ),
+      clubId: userTeamId,
+      annualSalary: salary,
+      goalBonus: goalBonus ?? undefined,
+      assistBonus: assistBonus ?? undefined,
+      cleanSheetBonus: cleanSheetBonus ?? undefined,
+      contractEndDate: newEndDate,
+      transferLockoutUntil: transferLockoutDate.toISOString(),
+      marketValue: FinanceService.calculateMarketValue(
+        { ...resolvedPlayer, clubId: userTeamId },
+        userClub?.reputation ?? 5,
+        userClub?.tier ?? 1,
+        userClub?.country
+      ),
+      history: updatedHistory, // Podpinamy zaktualizowaną historię
+      transferReportDate: faArrivalDate.toISOString()
+    };
+
+    // 3. Przenieś piłkarza: usuń z wolnych, dodaj do klubu
+    setPlayers(prev => ({
+      ...prev,
+      ['FREE_AGENTS']: prev['FREE_AGENTS'].filter(p => p.id !== playerId),
+      [userTeamId]: [...(prev[userTeamId] || []), updatedPlayer]
+    }));
+
+    // 4. Usuń wiadomość e-mail
+    setMessages(prev => prev.filter(m => m.id !== mailId));
+    if (directorFreeAgentDecision?.mail) {
+      prependUniqueMessages([directorFreeAgentDecision.mail], true);
+    }
+    return showGameNotification({
+      title: 'Kontrakt podpisany',
+      message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} dolaczy do klubu ${userClub?.name || ''} najpozniej jutro.`,
+      tone: 'success'
+    });
+  }, [messages, players, userTeamId, currentDate, clubs, showGameNotification]);
+
+  useEffect(() => {
+    const duePreContracts = transferOffers.filter(offer =>
+      offer.status === TransferOfferStatus.AGREED_PRECONTRACT &&
+      offer.effectiveDate &&
+      new Date(currentDate).setHours(0, 0, 0, 0) >= new Date(offer.effectiveDate).setHours(0, 0, 0, 0)
+    );
+
+    if (duePreContracts.length === 0) return;
+
+    let nextClubs = clubs;
+    let nextPlayers = players;
+    let nextLineups = { ...lineups };
+    const completedIds = new Set<string>();
+    const completionMessages: MailMessage[] = [];
+
+    duePreContracts.forEach(offer => {
+      const sellerClub = nextClubs.find(club => club.id === offer.sellerClubId);
+      const buyerClub = nextClubs.find(club => club.id === offer.buyerClubId);
+      const sellerSquad = nextPlayers[offer.sellerClubId] || [];
+      const targetPlayer = sellerSquad.find(player => player.id === offer.playerId);
+
+      if (!sellerClub || !buyerClub || !targetPlayer) return;
+      const getPreContractJoinDate = (contractEndDate: string): string => {
+        const contractEnd = new Date(contractEndDate);
+        if (Number.isNaN(contractEnd.getTime())) return contractEndDate;
+        contractEnd.setDate(contractEnd.getDate() + 1);
+        return contractEnd.toISOString();
+      };
+      const executionDate = offer.timing === TransferTiming.CONTRACT_END
+        ? getPreContractJoinDate(targetPlayer.contractEndDate)
+        : offer.effectiveDate || currentDate.toISOString();
+      if (
+        offer.timing === TransferTiming.CONTRACT_END &&
+        new Date(currentDate).setHours(0, 0, 0, 0) < new Date(executionDate).setHours(0, 0, 0, 0)
+      ) return;
+
+      const execution = TransferExecutionService.finalizeTransfer(
+        offer,
+        nextClubs,
+        nextPlayers,
+        new Date(executionDate)
+      );
+
+      nextClubs = execution.updatedClubs;
+      nextPlayers = execution.updatedPlayers;
+
+      const updatedSellerSquad = execution.updatedPlayers[sellerClub.id] || [];
+      if (nextLineups[sellerClub.id]) {
+        nextLineups[sellerClub.id] = LineupService.repairLineup(nextLineups[sellerClub.id], updatedSellerSquad);
+      }
+
+      if (nextLineups[buyerClub.id]) {
+        const buyerLineup = nextLineups[buyerClub.id];
+        const allKnownIds = new Set([
+          ...buyerLineup.bench,
+          ...buyerLineup.reserves,
+          ...(buyerLineup.startingXI.filter(Boolean) as string[])
+        ]);
+
+        if (!allKnownIds.has(offer.playerId)) {
+          nextLineups[buyerClub.id] = {
+            ...buyerLineup,
+            reserves: [...buyerLineup.reserves, offer.playerId]
+          };
+        }
+      }
+
+      completedIds.add(offer.id);
+      completionMessages.push({
+        id: `MAIL_TRANSFER_PRECONTRACT_EXEC_${offer.id}`,
+        sender: 'Centrum transferowe',
+        role: 'System rejestracji transferow',
+        subject: `Transfer wszedl w zycie: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+        body: `${targetPlayer.firstName} ${targetPlayer.lastName} dolaczyl do ${buyerClub.name} zgodnie z podpisana wczesniej umowa obowiazujaca od ${new Date(executionDate).toLocaleDateString('pl-PL')}.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 97
+      });
+    });
+
+    if (completedIds.size === 0) return;
+
+    setClubs(nextClubs);
+    setPlayers(nextPlayers);
+    setLineups(nextLineups);
+    setTransferOffers(prev => prev.map(offer =>
+      completedIds.has(offer.id)
+        ? { ...offer, status: TransferOfferStatus.COMPLETED }
+        : offer
+    ));
+    setMessages(prev => [...completionMessages, ...prev]);
+  }, [currentDate, transferOffers, clubs, players, lineups]);
+
+  useEffect(() => {
+    if (!userTeamId) return;
+    const userSquad = players[userTeamId] || [];
+    const today = new Date(currentDate).setHours(0, 0, 0, 0);
+    const arriving = userSquad.filter(p =>
+      p.transferReportDate &&
+      !p.transferPendingClubId &&
+      new Date(p.transferReportDate).setHours(0, 0, 0, 0) <= today
+    );
+    if (arriving.length === 0) return;
+
+    setPlayers(prev => ({
+      ...prev,
+      [userTeamId]: (prev[userTeamId] || []).map(p =>
+        arriving.some(a => a.id === p.id)
+          ? { ...p, transferReportDate: undefined }
+          : p
+      )
+    }));
+    setLineups(prev => {
+      const next = { ...prev };
+      if (!next[userTeamId]) return next;
+      const lineup = next[userTeamId];
+      const allKnownIds = new Set([
+        ...lineup.bench,
+        ...lineup.reserves,
+        ...(lineup.startingXI.filter(Boolean) as string[])
+      ]);
+      const newReserves = [...lineup.reserves];
+      arriving.forEach(p => {
+        if (!allKnownIds.has(p.id)) {
+          newReserves.push(p.id);
+        }
+      });
+      next[userTeamId] = { ...lineup, reserves: newReserves };
+      return next;
+    });
+    const arrivalMails: MailMessage[] = arriving.map(p => ({
+      id: `MAIL_ARRIVAL_${p.id}`,
+      sender: 'Sekretariat klubu',
+      role: 'Administracja',
+      subject: `Zawodnik zameldował się: ${p.firstName} ${p.lastName}`,
+      body: `${p.firstName} ${p.lastName} zameldował się w klubie i jest gotowy do treningów. Znajdziesz go na liście rezerwowych w widoku Składu.`,
+      date: new Date(currentDate),
+      isRead: false,
+      type: MailType.SYSTEM,
+      priority: 90
+    }));
+    setMessages(prev => [...arrivalMails, ...prev]);
+    if (arriving.length > 0) {
+      showGameNotification({
+        title: 'Zawodnik zameldował się',
+        message: `${arriving[0].firstName} ${arriving[0].lastName} zameldował się w klubie i trafił na listę rezerwowych.`,
+        tone: 'success',
+        onAction: () => navigateTo(ViewState.SQUAD_VIEW),
+        actionLabel: 'Przejdź do składu →'
+      });
+    }
+  }, [currentDate, userTeamId, players, lineups, showGameNotification, navigateTo]);
+
+  useEffect(() => {
+    if (targetJumpTime !== null && viewState !== ViewState.CUP_DRAW) {
+      const today = new Date(currentDate).setHours(0,0,0,0);
+      if (today < targetJumpTime) {
+        const timer = setTimeout(() => {
+          advanceDay();
+        }, 5);
+        return () => clearTimeout(timer);
+      } else {
+        setTargetJumpTime(null);
+      }
+    }
+  }, [currentDate, targetJumpTime, advanceDay, viewState]);
+
+  // ── Premie UEFA za Puchary Europejskie ─────────────────────────────────────
+  useEffect(() => {
+    if (!userTeamId) return;
+
+    const GROUP_STAGES: string[] = [CompetitionType.CL_GROUP_STAGE, CompetitionType.EL_GROUP_STAGE, CompetitionType.CONF_GROUP_STAGE];
+    const RETURN_LEG_MAP: Record<string, { comp: 'CL'|'EL'|'CONF'; event: 'Q1_ADVANCE'|'Q2_ADVANCE'|'R16'|'QF'|'SF'; label: string }> = {
+      [CompetitionType.CL_R1Q_RETURN]:   { comp: 'CL',   event: 'Q1_ADVANCE', label: 'awans do II rundy kwalifikacyjnej Ligi Mistrzów' },
+      [CompetitionType.CL_R2Q_RETURN]:   { comp: 'CL',   event: 'Q2_ADVANCE', label: 'awans do fazy ligowej Ligi Mistrzów' },
+      [CompetitionType.CL_R16_RETURN]:   { comp: 'CL',   event: 'R16',        label: 'awans do ćwierćfinału Ligi Mistrzów' },
+      [CompetitionType.CL_QF_RETURN]:    { comp: 'CL',   event: 'QF',         label: 'awans do półfinału Ligi Mistrzów' },
+      [CompetitionType.CL_SF_RETURN]:    { comp: 'CL',   event: 'SF',         label: 'awans do finału Ligi Mistrzów' },
+      [CompetitionType.EL_R1Q_RETURN]:   { comp: 'EL',   event: 'Q1_ADVANCE', label: 'awans do II rundy kwalifikacyjnej Ligi Europy' },
+      [CompetitionType.EL_R2Q_RETURN]:   { comp: 'EL',   event: 'Q2_ADVANCE', label: 'awans do fazy ligowej Ligi Europy' },
+      [CompetitionType.EL_R16_RETURN]:   { comp: 'EL',   event: 'R16',        label: 'awans do ćwierćfinału Ligi Europy' },
+      [CompetitionType.EL_QF_RETURN]:    { comp: 'EL',   event: 'QF',         label: 'awans do półfinału Ligi Europy' },
+      [CompetitionType.EL_SF_RETURN]:    { comp: 'EL',   event: 'SF',         label: 'awans do finału Ligi Europy' },
+      [CompetitionType.CONF_R1Q_RETURN]: { comp: 'CONF', event: 'Q1_ADVANCE', label: 'awans do II rundy kwalifikacyjnej Ligi Konferencji' },
+      [CompetitionType.CONF_R2Q_RETURN]: { comp: 'CONF', event: 'Q2_ADVANCE', label: 'awans do fazy ligowej Ligi Konferencji' },
+      [CompetitionType.CONF_R16_RETURN]: { comp: 'CONF', event: 'R16',        label: 'awans do ćwierćfinału Ligi Konferencji' },
+      [CompetitionType.CONF_QF_RETURN]:  { comp: 'CONF', event: 'QF',         label: 'awans do półfinału Ligi Konferencji' },
+      [CompetitionType.CONF_SF_RETURN]:  { comp: 'CONF', event: 'SF',         label: 'awans do finału Ligi Konferencji' },
+    };
+    const FINALS_MAP: Record<string, { comp: 'CL'|'EL'|'CONF'; name: string }> = {
+      [CompetitionType.CL_FINAL]:   { comp: 'CL',   name: 'Ligi Mistrzów' },
+      [CompetitionType.EL_FINAL]:   { comp: 'EL',   name: 'Ligi Europy' },
+      [CompetitionType.CONF_FINAL]: { comp: 'CONF', name: 'Ligi Konferencji' },
+    };
+    const GROUP_STAGE_COMP: Record<string, 'CL'|'EL'|'CONF'> = {
+      [CompetitionType.CL_GROUP_STAGE]:   'CL',
+      [CompetitionType.EL_GROUP_STAGE]:   'EL',
+      [CompetitionType.CONF_GROUP_STAGE]: 'CONF',
+    };
+    const GROUP_STAGE_NAMES: Record<string, string> = {
+      CL: 'Ligi Mistrzów', EL: 'Ligi Europy', CONF: 'Ligi Konferencji',
+    };
+
+    const GROUP_EXIT_TYPES: Record<string, 'CL'|'EL'|'CONF'> = {
+      [CompetitionType.CL_R16]: 'CL',
+      [CompetitionType.EL_R16]: 'EL',
+      [CompetitionType.CONF_R16]: 'CONF',
+    };
+    const PROGRESS_STAGE_BY_EVENT: Record<string, 'GROUP_ENTRY' | 'NEXT_ROUND' | 'FINAL'> = {
+      Q1_ADVANCE: 'NEXT_ROUND',
+      Q2_ADVANCE: 'GROUP_ENTRY',
+      R16: 'NEXT_ROUND',
+      QF: 'NEXT_ROUND',
+      SF: 'FINAL',
+    };
+
+    const awardPrize = (prize: number, description: string, date: string) => {
+      setClubs(prev => prev.map(c => {
+        if (c.id !== userTeamId) return c;
+        const log: FinanceLog = {
+          id: `UEFA_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          date,
+          amount: prize,
+          type: 'INCOME',
+          description,
+          previousBalance: c.budget,
+        };
+        return { ...c, budget: c.budget + prize, financeHistory: [log, ...(c.financeHistory || [])].slice(0, 50) };
+      }));
+    };
+
+    const managerEuroAwards: ManagerExpAwardInput[] = [];
+    const managerEuroAchievements: import('../types').ManagerAchievement[] = [];
+    const addManagerEuroAward = (award: ManagerExpAwardInput) => {
+      managerEuroAwards.push(award);
+    };
+
+    globalFixtures
+      .filter(f =>
+        f.status === MatchStatus.FINISHED &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+        !String(f.leagueId).includes('_DRAW') &&
+        !!ManagerExperienceService.getEuropeanCompetitionCode(String(f.leagueId))
+      )
+      .forEach(f => {
+        const fixtureDate = f.date instanceof Date ? f.date : new Date(f.date);
+        const award = ManagerExperienceService.buildEuropeanMatchAward(f, userTeamId, fixtureDate, seasonNumber, clubs);
+        if (award) addManagerEuroAward(award);
+      });
+
+    Object.entries(GROUP_STAGE_COMP).forEach(([leagueId, comp]) => {
+      const groupFixture = globalFixtures.find(f =>
+        f.leagueId === leagueId &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      if (!groupFixture) return;
+      addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+        `euro-progress:${comp}:group-entry:${seasonNumber}`,
+        comp,
+        'GROUP_ENTRY',
+        groupFixture.date instanceof Date ? groupFixture.date : new Date(groupFixture.date),
+        seasonNumber,
+      ));
+    });
+
+    Object.entries(GROUP_EXIT_TYPES).forEach(([leagueId, comp]) => {
+      const r16Fixture = globalFixtures.find(f =>
+        f.leagueId === leagueId &&
+        (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId)
+      );
+      if (!r16Fixture) return;
+      addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+        `euro-progress:${comp}:group-exit:${seasonNumber}`,
+        comp,
+        'GROUP_EXIT',
+        r16Fixture.date instanceof Date ? r16Fixture.date : new Date(r16Fixture.date),
+        seasonNumber,
+      ));
+    });
+
+    const userEurFixtures = globalFixtures.filter(f =>
+      f.status === MatchStatus.FINISHED &&
+      (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
+      (GROUP_STAGES.includes(f.leagueId) || !!RETURN_LEG_MAP[f.leagueId] || !!FINALS_MAP[f.leagueId])
+    );
+
+    userEurFixtures.forEach(f => {
+      const fDate = f.date instanceof Date ? f.date.toISOString().split('T')[0] : new Date(f.date).toISOString().split('T')[0];
+      const isHome = f.homeTeamId === userTeamId;
+      const teamScore = isHome ? (f.homeScore ?? 0) : (f.awayScore ?? 0);
+      const oppScore  = isHome ? (f.awayScore ?? 0) : (f.homeScore ?? 0);
+
+      // ── Faza grupowa / ligowa: premia za wygraną lub remis ──────────────
+      if (GROUP_STAGES.includes(f.leagueId)) {
+        const comp = GROUP_STAGE_COMP[f.leagueId];
+        const compName = GROUP_STAGE_NAMES[comp];
+        if (teamScore > oppScore) {
+          const key = `UEFA_GS_WIN_${f.id}`;
+          if (!sentMailIdsRef.current.has(key)) {
+            sentMailIdsRef.current.add(key);
+            awardPrize(FinanceService.calculateEuropeanPrizeMoney(comp, 'WIN'), `Premia UEFA — zwycięstwo w fazie ligowej ${compName}`, fDate);
+          }
+        } else if (teamScore === oppScore) {
+          const key = `UEFA_GS_DRAW_${f.id}`;
+          if (!sentMailIdsRef.current.has(key)) {
+            sentMailIdsRef.current.add(key);
+            awardPrize(FinanceService.calculateEuropeanPrizeMoney(comp, 'DRAW'), `Premia UEFA — remis w fazie ligowej ${compName}`, fDate);
+          }
+        }
+        return;
+      }
+
+      // ── Rewanże — ustalenie zwycięzcy agregatu ──────────────────────────
+      const retInfo = RETURN_LEG_MAP[f.leagueId];
+      if (retInfo) {
+        const key = `UEFA_ADV_${f.id}`;
+        if (sentMailIdsRef.current.has(key)) return;
+        const firstLegId = f.id.replace('_RETURN', '');
+        const firstLeg = globalFixtures.find(fl => fl.id === firstLegId);
+        if (!firstLeg || firstLeg.homeScore === null || firstLeg.awayScore === null) return;
+
+        const leg1HomeId = firstLeg.homeTeamId;
+        const leg1AwayId = firstLeg.awayTeamId;
+        const firstLegHomeIsReturnAway = f.awayTeamId === leg1HomeId;
+        const retH = f.homeScore ?? 0;
+        const retA = f.awayScore ?? 0;
+        const aggH = firstLegHomeIsReturnAway
+          ? (firstLeg.homeScore ?? 0) + retA
+          : (firstLeg.homeScore ?? 0) + retH;
+        const aggA = firstLegHomeIsReturnAway
+          ? (firstLeg.awayScore ?? 0) + retH
+          : (firstLeg.awayScore ?? 0) + retA;
+
+        let winnerId: string | null = null;
+        if (aggH > aggA) winnerId = leg1HomeId;
+        else if (aggA > aggH) winnerId = leg1AwayId;
+        else {
+          const pH = f.homePenaltyScore ?? 0;
+          const pA = f.awayPenaltyScore ?? 0;
+          if (pH > pA) winnerId = f.homeTeamId;
+          else if (pA > pH) winnerId = f.awayTeamId;
+        }
+        if (winnerId !== userTeamId) return;
+
+        sentMailIdsRef.current.add(key);
+        awardPrize(FinanceService.calculateEuropeanPrizeMoney(retInfo.comp, retInfo.event), `Premia UEFA — ${retInfo.label}`, fDate);
+        const managerProgressSourceKey = retInfo.event === 'Q2_ADVANCE'
+          ? `euro-progress:${retInfo.comp}:group-entry:${seasonNumber}`
+          : retInfo.event === 'SF'
+            ? `euro-progress:${retInfo.comp}:final:${seasonNumber}`
+            : `euro-progress:${retInfo.comp}:${retInfo.event.toLowerCase()}:${seasonNumber}:${f.id}`;
+        addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+          managerProgressSourceKey,
+          retInfo.comp,
+          PROGRESS_STAGE_BY_EVENT[retInfo.event],
+          fDate,
+          seasonNumber,
+        ));
+
+        // Awans z kwalifikacji do fazy ligowej → osobna premia za uczestnictwo
+        if (retInfo.event === 'Q2_ADVANCE') {
+          const gsKey = `UEFA_GS_ENTRY_${f.id}`;
+          if (!sentMailIdsRef.current.has(gsKey)) {
+            sentMailIdsRef.current.add(gsKey);
+            const gsName = GROUP_STAGE_NAMES[retInfo.comp];
+            awardPrize(FinanceService.calculateEuropeanPrizeMoney(retInfo.comp, 'GROUP_STAGE_ENTRY'), `Premia UEFA — uczestnictwo w fazie ligowej ${gsName}`, fDate);
+          }
+        }
+        return;
+      }
+
+      // ── Finał — premia za udział + premia za zwycięstwo ─────────────────
+      const finalInfo = FINALS_MAP[f.leagueId];
+      if (finalInfo) {
+        const finalistKey = `UEFA_FINALIST_${f.id}`;
+        if (!sentMailIdsRef.current.has(finalistKey)) {
+          sentMailIdsRef.current.add(finalistKey);
+          awardPrize(FinanceService.calculateEuropeanPrizeMoney(finalInfo.comp, 'FINALIST'), `Premia UEFA — udział w finale ${finalInfo.name}`, fDate);
+        }
+        addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+          `euro-progress:${finalInfo.comp}:final:${seasonNumber}`,
+          finalInfo.comp,
+          'FINAL',
+          fDate,
+          seasonNumber,
+        ));
+        managerEuroAchievements.push({
+          id: `achievement:euro:${finalInfo.comp}:finalist:${seasonNumber}:${f.id}`,
+          seasonLabel: fDate.slice(0, 4),
+          title: `Finalista ${ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp)} ${fDate.slice(0, 4)}`,
+          competition: ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp),
+        });
+        const h = f.homeScore ?? 0;
+        const a = f.awayScore ?? 0;
+        let winnerId: string | null = null;
+        if (h > a) winnerId = f.homeTeamId;
+        else if (a > h) winnerId = f.awayTeamId;
+        else {
+          const pH = f.homePenaltyScore ?? 0;
+          const pA = f.awayPenaltyScore ?? 0;
+          if (pH > pA) winnerId = f.homeTeamId;
+          else if (pA > pH) winnerId = f.awayTeamId;
+        }
+        if (winnerId === userTeamId) {
+          const winnerKey = `UEFA_WINNER_${f.id}`;
+          if (!sentMailIdsRef.current.has(winnerKey)) {
+            sentMailIdsRef.current.add(winnerKey);
+            awardPrize(FinanceService.calculateEuropeanPrizeMoney(finalInfo.comp, 'WINNER'), `Premia UEFA — zwycięstwo w ${finalInfo.name}`, fDate);
+          }
+          addManagerEuroAward(ManagerExperienceService.buildEuropeanProgressAward(
+            `euro-progress:${finalInfo.comp}:winner:${seasonNumber}:${f.id}`,
+            finalInfo.comp,
+            'WINNER',
+            fDate,
+            seasonNumber,
+          ));
+          managerEuroAchievements.push({
+            id: `achievement:euro:${finalInfo.comp}:winner:${seasonNumber}:${f.id}`,
+            seasonLabel: fDate.slice(0, 4),
+            title: `Mistrz ${ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp)} ${fDate.slice(0, 4)}`,
+            competition: ManagerExperienceService.getEuropeanCompetitionName(finalInfo.comp),
+          });
+        }
+      }
+    });
+
+    if (managerEuroAwards.length > 0 || managerEuroAchievements.length > 0) {
+      setManagerProfile(prev => {
+        let next = ManagerExperienceService.applyExpAwards(prev, managerEuroAwards);
+        next = ManagerExperienceService.addAchievements(next, managerEuroAchievements);
+        return next;
+      });
+    }
+  }, [globalFixtures, userTeamId, setClubs, clubs, seasonNumber]);
+
+  const jumpToDate = (date: Date) => setTargetJumpTime(new Date(date).setHours(0,0,0,0));
+  const jumpToNextEvent = () => {
+    if (nextEvent) {
+       const today = new Date(currentDate).setHours(0, 0, 0, 0);
+       const eventDate = new Date(nextEvent.startDate).setHours(0, 0, 0, 0);
+       if (eventDate <= today) advanceDayWithProcessing();
+       else jumpToDate(nextEvent.startDate);
+    } else advanceDayWithProcessing();
+  };
+
+  const viewClubDetails = (clubId: string) => { setViewedClubId(clubId); navigateTo(ViewState.CLUB_DETAILS); };
+  const viewPlayerDetails = (playerId: string) => { setViewedPlayerId(playerId); navigateTo(ViewState.PLAYER_CARD); };
+  const viewCoachDetails = (coachId: string) => { setViewedCoachId(coachId); navigateTo(ViewState.COACH_CARD); };
+  const viewRefereeDetails = (refId: string) => { setViewedRefereeId(refId); navigateTo(ViewState.REFEREE_CARD); };
+
+  useEffect(() => {
+    if (userTeamId && seasonTemplate) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      const tierStr = userClub?.leagueId.split('_')[2];
+      const tier = tierStr ? parseInt(tierStr) : 1;
+      const ev = CalendarEngine.getNextPlayerEvent(currentDate, userTeamId, tier, leagueSchedules, seasonTemplate, allFixtures, clubs);
+      setNextEvent(ev);
+    }
+  }, [currentDate, userTeamId, leagueSchedules, seasonTemplate, clubs, allFixtures]);
+
+  return (
+    <GameContext.Provider value={{
+      currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
+    viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
+      lastRecoveryDate,
+      managerProfile, managerJobOffers, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
+      activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
+      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
+      setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
+      pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
+      aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,
+      activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
+      setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
+            markMessageRead, deleteMessage, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
+    confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
+    nationalTeams, setNationalTeams,
+    lastNTMatchResults, setLastNTMatchResults,
+    nationsLeagueState, setNationsLeagueState,
+    nationsLeagueArchive,
+    euroHostAnnouncements,
+    euroQualifiersState, setEuroQualifiersState,
+    worldCupQualifiersState, setWorldCupQualifiersState,
+    uefaNationalRankingState, setUefaNationalRankingState,
+    wcqPlayoffState, setWcqPlayoffState,
+    wcState, setWcState,
+    euroState, setEuroState,
+    europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, managerEmploymentStatus, resignFromClub, applyForManagerJob, acceptManagerJobOffer,
+    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, submitBoardClubRequest,
+    // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
+    relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,
+    confirmRelegationPlayoffMatch1, confirmRelegationPlayoffMatch2,
+    promotionPlayoffSemiResults, promotionPlayoffFinalResults,
+    confirmPromotionPlayoffSemi, confirmPromotionPlayoffFinal,
+    activePlayoffMatch, setActivePlayoffMatch,
+    setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
+    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
+    reserves, setReserves, reserveCoachId,
+    reserveFixtures, setReserveFixtures,
+    reserveMatchResults, setReserveMatchResults,
+    academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
+    scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
+    mysteryAgentOffer, submitMysteryAgentOffer, requestMysteryAgentBoardFunds, declineMysteryAgentOffer,
+    pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
+    pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, resolvePlayerTransferRequestDialog,
+    pendingOpenTransferListObjection, setPendingOpenTransferListObjection, resolvePlayerTransferListObjection,
+    applyWeeklyMotivation, completedPressConferenceFixtureIds, pressConferenceEffects, completePreMatchPressConference, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, fireStaffMember, extendStaffContract, negotiateStaffContract, hireStaffMember,
+    winterCampInvitePending, winterCampProgramPending,
+    clearWinterCampInvitePending, clearWinterCampProgramPending, reopenWinterCampInvite,
+    saveWinterCampLocation, saveWinterCampProgram,
+    summerCampInvitePending, summerCampProgramPending,
+    clearSummerCampInvitePending, clearSummerCampProgramPending, reopenSummerCampInvite,
+    saveSummerCampLocation, saveSummerCampProgram,
+    seasonCelebration, clearSeasonCelebration,
+    }}>
+      {children}
+    </GameContext.Provider>
+  );
+};
+
+export const useGame = () => {
+  const context = useContext(GameContext);
+  if (context === undefined) throw new Error('useGame must be used within a GameProvider');
+  return context;
+};

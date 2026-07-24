@@ -2,6 +2,7 @@ import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMinds
 import { TacticRepository } from '../resources/tactics_db';
 import { AiOpponentMatchReport, isDefensiveStartJustified } from './AiOpponentAnalysisService';
 import { TacticalInstructionMatrixService } from './TacticalInstructionMatrixService';
+import { getLegacyMinuteSeededValue } from './match/live/LiveMatchRandom';
 
 type AiInstructions = {
   tempo: InstructionTempo;
@@ -64,11 +65,8 @@ type InMatchDecisionContext = {
   userTacticId?: string;
 };
 
-const seededRng = (seed: number, minute: number, offset: number = 0): number => {
-  let s = seed + minute + offset;
-  const x = Math.sin(s) * 10000;
-  return x - Math.floor(x);
-};
+// Migration bridge: reuse the exact legacy live-match RNG formula so AI timing remains unchanged.
+const seededRng = getLegacyMinuteSeededValue;
 
 // Reguły spójności: DEFENSIVE nigdy FAST; OFFENSIVE nigdy SLOW ani CAUTIOUS
 const enforceConsistency = (m: InstructionMindset, t: InstructionTempo, i: InstructionIntensity): AiInstructions => {
