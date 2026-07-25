@@ -14141,7 +14141,7 @@ const finalResult: SimulationOutput = {
       sender: 'Zarząd Klubu',
       role: 'Sekretariat',
       subject: `Wniosek o rozbudowę bazy treningowej — Poziom ${project.targetLevel}`,
-      body: `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę bazy treningowej z Poziomu ${project.fromLevel} do Poziomu ${project.targetLevel}.\n\nSzacowany koszt inwestycji: ${project.estimatedCost.toLocaleString('pl-PL')} PLN.\n\nWniosek przejdzie przez zarząd, audyt techniczny, pozwolenia, przetarg, budowę oraz odbiór jakościowy. O postępach będziemy informować drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
+      body: `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę bazy treningowej z Poziomu ${project.fromLevel} do Poziomu ${project.targetLevel}.\n\nZarząd najpierw przygotuje klubową wycenę inwestycji. Dopiero po wycenie zostanie ocenione, czy klub stać na uruchomienie procedury rozbudowy.\n\nOrientacyjne widełki dla klubu: ${project.initialCostRangeMin?.toLocaleString('pl-PL') ?? '—'} - ${project.initialCostRangeMax?.toLocaleString('pl-PL') ?? '—'} PLN.\n\nJeśli zarząd zaakceptuje wycenę, wniosek przejdzie przez audyt techniczny, pozwolenia, przetarg, budowę oraz odbiór jakościowy. O postępach będziemy informować drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
       date: new Date(dateStr),
       isRead: false,
       type: MailType.BOARD,

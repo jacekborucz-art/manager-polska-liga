@@ -67,10 +67,13 @@ export const TrainingView: React.FC = () => {
   const [reportPlayer, setReportPlayer] = useState<Player | null>(null);
   const [modalPos, setModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dragging, setDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const [trainingFacilityModalPos, setTrainingFacilityModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [trainingFacilityDragging, setTrainingFacilityDragging] = useState<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'training' | 'focus' | 'load'>('training');
   const [selectedFocusId, setSelectedFocusId] = useState<string | null>(null);
   const [hasIndividualFocusChange, setHasIndividualFocusChange] = useState(false);
   const [hasIndividualLoadChange, setHasIndividualLoadChange] = useState(false);
+  const [isTrainingFacilityModalOpen, setIsTrainingFacilityModalOpen] = useState(false);
   const [hoveredCycleHint, setHoveredCycleHint] = useState<{ name: string; description: string; x: number; y: number } | null>(null);
   const teamPlayers = (userTeamId ? players[userTeamId] : []) || [];
   const allLeaguePlayers = useMemo(() => Object.values(players).flat(), [players]);
@@ -123,7 +126,7 @@ export const TrainingView: React.FC = () => {
     return Math.round(assistantScore * 0.55 + fitnessScore * 0.30 + goalkeeperScore * 0.15);
   }, [myClub, staffMembers]);
   const trainingFacilityProfile = TrainingFacilityService.getDevelopmentProfile(currentTrainingFacilityLevel, trainingFacilityStaffQuality);
-  const trainingFacilityCosts = useMemo(() => TrainingFacilityService.getUpgradeCostTable(), []);
+  const trainingFacilityCosts = useMemo(() => TrainingFacilityService.getUpgradeCostTable(myClub), [myClub]);
   const hasAssistant = (myClub?.staffIds ?? [])
     .some(id => staffMembers[id]?.role === StaffRole.ASSISTANT_COACH);
   const assistantTrainingWeekKey = getAssistantTrainingWeekKey(currentDate);
@@ -442,6 +445,176 @@ export const TrainingView: React.FC = () => {
         document.body
       )}
 
+      {isTrainingFacilityModalOpen && createPortal(
+        <PortalScaleWrapper>
+          <div
+            className="fixed inset-0 z-[145] bg-slate-950/86 px-6 py-8 backdrop-blur-md"
+            onMouseMove={e => {
+              if (!trainingFacilityDragging) return;
+              const modalWidth = Math.min(1120, window.innerWidth - 48);
+              const modalHeight = Math.min(780, window.innerHeight - 48);
+              const nextX = trainingFacilityDragging.originX + (e.clientX - trainingFacilityDragging.startX);
+              const nextY = trainingFacilityDragging.originY + (e.clientY - trainingFacilityDragging.startY);
+              setTrainingFacilityModalPos({
+                x: Math.max(16, Math.min(nextX, window.innerWidth - modalWidth - 16)),
+                y: Math.max(16, Math.min(nextY, window.innerHeight - Math.min(modalHeight, window.innerHeight - 32) - 16))
+              });
+            }}
+            onMouseUp={() => setTrainingFacilityDragging(null)}
+            onMouseLeave={() => setTrainingFacilityDragging(null)}
+          >
+            <button
+              type="button"
+              aria-label="Zamknij okno bazy treningowej"
+              className="absolute inset-0 cursor-default"
+              onClick={() => {
+                setIsTrainingFacilityModalOpen(false);
+                setTrainingFacilityDragging(null);
+              }}
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Baza treningowa"
+              className="fixed z-10 max-h-[calc(100vh-48px)] w-[min(1120px,calc(100vw-48px))] overflow-y-auto overflow-x-hidden rounded-[28px] border border-cyan-400/30 bg-slate-950/90 p-7 shadow-[0_32px_100px_rgba(0,0,0,0.82)] custom-scrollbar"
+              style={{
+                left: trainingFacilityModalPos.x || 'max(24px, calc(50vw - 560px))',
+                top: trainingFacilityModalPos.y || 24
+              }}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(34,211,238,0.18),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.26),rgba(2,6,23,0.1))]" />
+              <div
+                className="relative z-10 flex cursor-move select-none items-start justify-between gap-5 border-b border-white/10 pb-4"
+                onMouseDown={e => {
+                  e.preventDefault();
+                  const rect = e.currentTarget.closest('[role="dialog"]')?.getBoundingClientRect();
+                  setTrainingFacilityDragging({
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    originX: trainingFacilityModalPos.x || rect?.left || Math.max(24, (window.innerWidth - Math.min(1120, window.innerWidth - 48)) / 2),
+                    originY: trainingFacilityModalPos.y || rect?.top || 24
+                  });
+                }}
+              >
+                <div className="min-w-0">
+                  <span className="block text-[11px] text-cyan-300/80 font-black italic uppercase tracking-tighter">
+                    Baza treningowa
+                  </span>
+                  <h2 className="mt-1 text-[46px] text-white font-black italic uppercase tracking-tighter leading-none">
+                    Poziom {currentTrainingFacilityLevel}/10
+                  </h2>
+                  <p className="mt-3 text-[13px] text-slate-300 font-black italic uppercase tracking-tighter">
+                    Sztab: {trainingFacilityStaffQuality}/20 • Typowy wzrost: +{trainingFacilityProfile.typicalSeasonOverallGain} OVR/sezon • Szczyt: +{trainingFacilityProfile.peakSeasonOverallGain}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-cyan-200/80 font-black italic uppercase tracking-tighter">
+                    Wykorzystanie ośrodka przez sztab: {Math.round(trainingFacilityProfile.facilityUtilization * 100)}%
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!trainingFacilityEligibility.eligible}
+                    onClick={requestTrainingFacilityUpgrade}
+                    onMouseDown={e => e.stopPropagation()}
+                    className="rounded-2xl border-t border-x border-b border-t-cyan-300/50 border-x-cyan-400/25 border-b-black/60 bg-cyan-500/15 px-6 py-4 text-[12px] text-cyan-200 font-black italic uppercase tracking-tighter transition-all hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-35 active:translate-y-[2px]"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 18px rgba(8,145,178,0.22), inset 0 1px 0 rgba(255,255,255,0.12)' }}
+                  >
+                    Rozbuduj
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsTrainingFacilityModalOpen(false)}
+                    onMouseDown={e => e.stopPropagation()}
+                    className="rounded-2xl border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 bg-white/5 px-5 py-4 text-[12px] text-slate-300 font-black italic uppercase tracking-tighter transition-all hover:bg-white/10 hover:text-white active:translate-y-[2px]"
+                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                  >
+                    Zamknij
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-5">
+                  <span className="block text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">Szansa wzrostu</span>
+                  <span className="mt-1.5 block text-3xl text-emerald-300 font-black italic uppercase tracking-tighter">
+                    x{trainingFacilityProfile.growthChanceMultiplier.toFixed(2)}
+                  </span>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-5">
+                  <span className="block text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">Ochrona regresji</span>
+                  <span className="mt-1.5 block text-3xl text-blue-300 font-black italic uppercase tracking-tighter">
+                    x{trainingFacilityProfile.regressionChanceMultiplier.toFixed(2)}
+                  </span>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-5">
+                  <span className="block text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">Potencjał limitu</span>
+                  <span className="mt-1.5 block text-3xl text-amber-300 font-black italic uppercase tracking-tighter">
+                    +{trainingFacilityProfile.extraSeasonalGrowthCap}
+                  </span>
+                </div>
+              </div>
+
+              {activeTrainingFacilityProject ? (
+                <div className="relative z-10 mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[13px] text-white font-black italic uppercase tracking-tighter">
+                      W toku: Poziom {activeTrainingFacilityProject.fromLevel} → {activeTrainingFacilityProject.targetLevel}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] text-amber-300 font-black italic uppercase tracking-tighter">
+                      {TrainingFacilityService.getPhaseLabel(activeTrainingFacilityProject.phase)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-300 font-black italic uppercase tracking-tighter">
+                    Termin fazy: {new Date(activeTrainingFacilityProject.phaseEndDate).toLocaleDateString('pl-PL')}
+                  </p>
+                  <p className="mt-1 text-[11px] text-cyan-200 font-black italic uppercase tracking-tighter">
+                    Wycena zarządu: {activeTrainingFacilityProject.boardValuationCost
+                      ? `${activeTrainingFacilityProject.boardValuationCost.toLocaleString('pl-PL')} PLN`
+                      : 'w toku'}
+                  </p>
+                </div>
+              ) : (
+                <div className="relative z-10 mt-5 rounded-2xl border border-white/10 bg-black/25 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-slate-400 font-black italic uppercase tracking-tighter">Następny poziom</span>
+                    <span className="text-[13px] text-white font-black italic uppercase tracking-tighter">
+                      {trainingFacilityEligibility.nextLevel ? `Poziom ${trainingFacilityEligibility.nextLevel}` : 'Maksimum'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[13px] text-cyan-200 font-black italic uppercase tracking-tighter">
+                    Orientacyjne widełki: {trainingFacilityEligibility.estimatedCostRange
+                      ? `${trainingFacilityEligibility.estimatedCostRange.min.toLocaleString('pl-PL')} - ${trainingFacilityEligibility.estimatedCostRange.max.toLocaleString('pl-PL')} PLN`
+                      : 'wycena zarządu'}
+                  </p>
+                  {!trainingFacilityEligibility.eligible && (
+                    <p className="mt-2 text-[11px] text-rose-300 font-black italic uppercase tracking-tighter">
+                      {trainingFacilityEligibility.reasons[0]}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="relative z-10 mt-5 rounded-2xl border border-white/10 bg-black/25 p-5">
+                <span className="block text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">Przybliżone koszty rozbudowy</span>
+                <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  {trainingFacilityCosts.map(row => (
+                    <div key={row.fromLevel} className={`rounded-xl border px-4 py-3 ${row.fromLevel === currentTrainingFacilityLevel ? 'border-cyan-400/35 bg-cyan-500/15' : 'border-white/5 bg-white/[0.04]'}`}>
+                      <span className="block text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">
+                        {row.fromLevel}→{row.targetLevel}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-white font-black italic uppercase tracking-tighter">
+                        {(row.minCost / 1_000_000).toFixed(row.minCost >= 10_000_000 ? 0 : 1)}-{(row.maxCost / 1_000_000).toFixed(row.maxCost >= 10_000_000 ? 0 : 1)} mln
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </PortalScaleWrapper>,
+        document.body
+      )}
+
       {/* TŁO KINEMATYCZNE */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div 
@@ -459,7 +632,7 @@ export const TrainingView: React.FC = () => {
                🏋️‍♂️
             </div>
             <div className="flex flex-col">
-               <div className="flex items-center gap-3">
+               <div className="flex flex-wrap items-center gap-3">
                   <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">
                     Centrum <span className="text-emerald-500">Treningowe</span>
                   </h1>
@@ -467,6 +640,20 @@ export const TrainingView: React.FC = () => {
                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                      <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">System Aktywny</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsTrainingFacilityModalOpen(true)}
+                    className="group flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-cyan-500/12 px-5 py-2.5 text-left shadow-[0_10px_28px_rgba(8,145,178,0.14)] transition-all hover:border-cyan-300/50 hover:bg-cyan-500/20 active:translate-y-[2px]"
+                    title="Szczegóły i rozbudowa bazy treningowej"
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
+                    <span className="text-[12px] text-cyan-300 font-black italic uppercase tracking-tighter leading-none">
+                      Ośrodek treningowy
+                    </span>
+                    <span className="text-[14px] text-white font-black italic uppercase tracking-tighter leading-none">
+                      Poziom {currentTrainingFacilityLevel}/10
+                    </span>
+                  </button>
                </div>
                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mt-2">Optymalizacja Rozwoju • {myClub?.name.toUpperCase()}</p>
             </div>
@@ -657,7 +844,7 @@ export const TrainingView: React.FC = () => {
         <div className="relative z-20 w-[640px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
 
            {/* Training facility controls live inside the training view because the level directly affects weekly development. */}
-           <div className="relative overflow-hidden rounded-3xl border border-cyan-400/20 bg-slate-950/75 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-md">
+           <div className="hidden relative overflow-hidden rounded-3xl border border-cyan-400/20 bg-slate-950/75 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-md">
              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.35),rgba(2,6,23,0.1))]" />
              <div className="relative z-10 flex items-start justify-between gap-4">
                <div>
@@ -727,7 +914,9 @@ export const TrainingView: React.FC = () => {
                    </span>
                  </div>
                  <p className="mt-1 text-[10px] text-cyan-200 font-black italic uppercase tracking-tighter">
-                   Koszt: {trainingFacilityEligibility.estimatedCost ? trainingFacilityEligibility.estimatedCost.toLocaleString('pl-PL') : '—'} PLN
+                   Widełki: {trainingFacilityEligibility.estimatedCostRange
+                     ? `${trainingFacilityEligibility.estimatedCostRange.min.toLocaleString('pl-PL')} - ${trainingFacilityEligibility.estimatedCostRange.max.toLocaleString('pl-PL')} PLN`
+                     : 'wycena zarządu'}
                  </p>
                  {!trainingFacilityEligibility.eligible && (
                    <p className="mt-1 text-[9px] text-rose-300 font-black italic uppercase tracking-tighter">
@@ -738,7 +927,7 @@ export const TrainingView: React.FC = () => {
              )}
 
              <div className="relative z-10 mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-               <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Koszty rozbudowy</span>
+               <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Orientacyjne widełki rozbudowy</span>
                <div className="mt-2 grid grid-cols-3 gap-1.5">
                  {trainingFacilityCosts.map(row => (
                    <div key={row.fromLevel} className={`rounded-lg border px-2 py-1.5 ${row.fromLevel === currentTrainingFacilityLevel ? 'border-cyan-400/35 bg-cyan-500/15' : 'border-white/5 bg-white/[0.03]'}`}>
@@ -746,7 +935,7 @@ export const TrainingView: React.FC = () => {
                        {row.fromLevel}→{row.targetLevel}
                      </span>
                      <span className="block text-[9px] text-white font-black italic uppercase tracking-tighter">
-                       {(row.cost / 1_000_000).toFixed(row.cost >= 10_000_000 ? 0 : 1)} mln
+                       {(row.minCost / 1_000_000).toFixed(row.minCost >= 10_000_000 ? 0 : 1)}-{(row.maxCost / 1_000_000).toFixed(row.maxCost >= 10_000_000 ? 0 : 1)} mln
                      </span>
                    </div>
                  ))}

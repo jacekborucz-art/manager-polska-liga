@@ -11,6 +11,7 @@ export interface TrainingFacilityEligibility {
   reasons: string[];
   nextLevel?: TrainingFacilityLevel;
   estimatedCost?: number;
+  estimatedCostRange?: { min: number; max: number };
   minimumCashRequired?: number;
 }
 
@@ -51,6 +52,18 @@ export const TRAINING_FACILITY_UPGRADE_COSTS: Record<number, number> = {
   9: 180_000_000,
 };
 
+export const TRAINING_FACILITY_UPGRADE_COST_RANGES: Record<number, [number, number]> = {
+  1: [1_200_000, 2_200_000],
+  2: [3_200_000, 5_400_000],
+  3: [7_000_000, 12_000_000],
+  4: [14_000_000, 24_000_000],
+  5: [25_000_000, 42_000_000],
+  6: [43_000_000, 70_000_000],
+  7: [65_000_000, 110_000_000],
+  8: [96_000_000, 160_000_000],
+  9: [135_000_000, 235_000_000],
+};
+
 const TRAINING_FACILITY_CONSTRUCTION_DAYS: Record<number, [number, number]> = {
   1: [75, 105],
   2: [90, 135],
@@ -62,8 +75,6 @@ const TRAINING_FACILITY_CONSTRUCTION_DAYS: Record<number, [number, number]> = {
   8: [360, 480],
   9: [420, 540],
 };
-
-const MIN_CASH_SHARE_TO_FILE = 0.12;
 
 const addDays = (dateStr: string, days: number): string => {
   const d = new Date(dateStr);
@@ -101,6 +112,46 @@ const normalizeStaffQuality = (quality?: number): number => {
   return quality > 20 ? clamp(quality / 5, 1, 20) : clamp(quality, 1, 20);
 };
 
+const getClubCostScale = (club: Club): number => {
+  const reputationPressure = 0.90 + clamp(club.reputation, 1, 20) / 20 * 0.24;
+  const tierPressure = club.tier ? clamp(1.08 - club.tier * 0.035, 0.88, 1.05) : 1;
+  const boardCompetenceDiscount = 1 - (levelToScore(club.board?.kompetencja) - 3) * 0.025;
+  const ambitionPremium = 1 + Math.max(0, levelToScore(club.board?.ambicja) - 3) * 0.025;
+  const strictnessDiscount = 1 - clamp(club.boardStrictness ?? 50, 0, 100) / 100 * 0.04;
+  return clamp(reputationPressure * tierPressure * boardCompetenceDiscount * ambitionPremium * strictnessDiscount, 0.82, 1.24);
+};
+
+const getClubUpgradeCostRange = (club: Club, fromLevel: TrainingFacilityLevel): { min: number; max: number } => {
+  const [baseMin, baseMax] = TRAINING_FACILITY_UPGRADE_COST_RANGES[fromLevel] ?? [0, 0];
+  const scale = getClubCostScale(club);
+  const localComplexity = 0.94 + hashSeed(`${club.id}_${club.name}_${fromLevel}_facility_market`) * 0.16;
+  return {
+    min: Math.round(baseMin * scale * localComplexity),
+    max: Math.round(baseMax * scale * localComplexity),
+  };
+};
+
+const getBoardValuationCost = (
+  club: Club,
+  fromLevel: TrainingFacilityLevel,
+  projectId: string,
+): { cost: number; range: { min: number; max: number }; minimumCashRequired: number } => {
+  const range = getClubUpgradeCostRange(club, fromLevel);
+  const quoteSeed = hashSeed(`${projectId}_${club.id}_${fromLevel}_board_valuation`);
+  const boardQuality = levelToScore(club.board?.kompetencja);
+  const negotiationDiscount = (boardQuality - 3) * 0.025;
+  const quotedCost = Math.round((range.min + quoteSeed * (range.max - range.min)) * (1 - negotiationDiscount));
+  const cost = Math.round(clamp(quotedCost, range.min * 0.92, range.max * 1.04));
+  const minimumCashRequired = Math.round(cost * (0.14 + Math.max(0, 4 - levelToScore(club.board?.hojnosc)) * 0.025));
+  return { cost, range, minimumCashRequired };
+};
+
+const getProjectCostBasis = (club: Club, project: TrainingFacilityUpgradeProject): number => {
+  if (project.estimatedCost > 0) return project.estimatedCost;
+  if ((project.boardValuationCost ?? 0) > 0) return project.boardValuationCost ?? 0;
+  return getBoardValuationCost(club, project.fromLevel, project.id).cost;
+};
+
 const getConstructionDays = (fromLevel: TrainingFacilityLevel, seed: number): number => {
   const [minDays, maxDays] = TRAINING_FACILITY_CONSTRUCTION_DAYS[fromLevel] ?? [180, 270];
   return minDays + Math.floor(seed * (maxDays - minDays + 1));
@@ -131,15 +182,31 @@ const advancePhase = (
 
   switch (project.phase) {
     case 'BOARD_REVIEW': {
+      const valuation = getBoardValuationCost(club, project.fromLevel, project.id);
+      const projectWithValuation: TrainingFacilityUpgradeProject = {
+        ...project,
+        estimatedCost: valuation.cost,
+        boardValuationCost: valuation.cost,
+        initialCostRangeMin: project.initialCostRangeMin ?? valuation.range.min,
+        initialCostRangeMax: project.initialCostRangeMax ?? valuation.range.max,
+        minimumCashRequired: valuation.minimumCashRequired,
+      };
       const boardScore = levelToScore(club.board?.ambicja) + levelToScore(club.board?.kompetencja) + levelToScore(club.board?.hojnosc);
-      const costPressure = project.estimatedCost / Math.max(1, club.budget);
-      const approvalChance = clamp(0.48 + boardScore * 0.045 + club.reputation * 0.018 - Math.max(0, costPressure - 1) * 0.12, 0.18, 0.88);
-      if (s1 > approvalChance) {
+      const budgetPressure = valuation.cost / Math.max(1, club.budget);
+      const canFundPreparation = club.budget >= valuation.minimumCashRequired;
+      const approvalChance = clamp(0.44 + boardScore * 0.042 + club.reputation * 0.016 - Math.max(0, budgetPressure - 2.5) * 0.08, 0.16, 0.86);
+      if (!canFundPreparation || s1 > approvalChance) {
         const updatedProject: TrainingFacilityUpgradeProject = {
-          ...project,
+          ...projectWithValuation,
           phase: 'REJECTED',
           phaseEndDate: currentDate,
-          log: [...project.log, { date: currentDate, message: 'Zarząd odrzucił wniosek o rozbudowę bazy treningowej.', type: 'WARNING' }],
+          log: [...project.log, {
+            date: currentDate,
+            message: canFundPreparation
+              ? `Zarząd wykonał wycenę (${valuation.cost.toLocaleString('pl-PL')} PLN), ale odrzucił wniosek o rozbudowę bazy treningowej.`
+              : `Zarząd wykonał wycenę (${valuation.cost.toLocaleString('pl-PL')} PLN) i uznał, że klub nie ma wymaganych wolnych środków (${valuation.minimumCashRequired.toLocaleString('pl-PL')} PLN).`,
+            type: 'WARNING'
+          }],
         };
         return {
           updatedProject,
@@ -150,8 +217,10 @@ const advancePhase = (
           event: {
             projectId: project.id,
             newPhase: 'REJECTED',
-            subject: `Odrzucono rozbudowę bazy treningowej — ${levelLabel}`,
-            body: `Szanowny Panie Menedżerze,\n\nZarząd odrzucił wniosek o rozbudowę bazy treningowej (${levelLabel}).\n\nW ocenie zarządu obecny moment finansowy lub sportowy nie uzasadnia tej inwestycji. Do tematu można wrócić po poprawie budżetu albo wyników zespołu.\n\nZ poważaniem,\nZarząd Klubu`,
+            subject: `Wycena bazy treningowej odrzucona — ${levelLabel}`,
+            body: canFundPreparation
+              ? `Szanowny Panie Menedżerze,\n\nZarząd zakończył wstępną wycenę rozbudowy bazy treningowej (${levelLabel}).\n\nWycena klubowa: ${valuation.cost.toLocaleString('pl-PL')} PLN.\nWidełki dla naszego klubu: ${valuation.range.min.toLocaleString('pl-PL')} - ${valuation.range.max.toLocaleString('pl-PL')} PLN.\n\nPo analizie zarząd uznał, że obecny moment finansowy lub sportowy nie uzasadnia tej inwestycji. Do tematu można wrócić po poprawie budżetu albo wyników zespołu.\n\nZ poważaniem,\nZarząd Klubu`
+              : `Szanowny Panie Menedżerze,\n\nZarząd zakończył wstępną wycenę rozbudowy bazy treningowej (${levelLabel}).\n\nWycena klubowa: ${valuation.cost.toLocaleString('pl-PL')} PLN.\nMinimalne wolne środki wymagane do uruchomienia procedury: ${valuation.minimumCashRequired.toLocaleString('pl-PL')} PLN.\nAktualny budżet klubu: ${club.budget.toLocaleString('pl-PL')} PLN.\n\nZarząd uznał, że klubu nie stać teraz na bezpieczne rozpoczęcie procesu, dlatego wniosek został odrzucony.\n\nZ poważaniem,\nZarząd Klubu`,
             isGoodNews: false,
           },
         };
@@ -159,10 +228,10 @@ const advancePhase = (
 
       const auditDays = 28 + Math.floor(s2 * 28);
       const updatedProject: TrainingFacilityUpgradeProject = {
-        ...project,
+        ...projectWithValuation,
         phase: 'TECHNICAL_AUDIT',
         phaseEndDate: addDays(currentDate, auditDays),
-        log: [...project.log, { date: currentDate, message: 'Zarząd zaakceptował wniosek. Rozpoczynamy audyt techniczny i analizę zakresu prac.', type: 'SUCCESS' }],
+        log: [...project.log, { date: currentDate, message: `Zarząd zakończył wycenę (${valuation.cost.toLocaleString('pl-PL')} PLN) i zaakceptował wniosek. Rozpoczynamy audyt techniczny i analizę zakresu prac.`, type: 'SUCCESS' }],
       };
       return {
         updatedProject,
@@ -173,15 +242,16 @@ const advancePhase = (
         event: {
           projectId: project.id,
           newPhase: 'TECHNICAL_AUDIT',
-          subject: `Zarząd zaakceptował bazę treningową — ${levelLabel}`,
-          body: `Szanowny Panie Menedżerze,\n\nZarząd wyraził zgodę na rozpoczęcie procedury rozbudowy bazy treningowej (${levelLabel}).\n\nPierwszy etap to audyt techniczny boisk, siłowni, zaplecza medycznego i infrastruktury analitycznej. Potrwa około ${Math.round(auditDays / 7)} tygodni.\n\nZ poważaniem,\nZarząd Klubu`,
+          subject: `Wycena bazy zaakceptowana — ${levelLabel}`,
+          body: `Szanowny Panie Menedżerze,\n\nZarząd zakończył wstępną wycenę rozbudowy bazy treningowej (${levelLabel}).\n\nWycena klubowa: ${valuation.cost.toLocaleString('pl-PL')} PLN.\nWidełki dla naszego klubu: ${valuation.range.min.toLocaleString('pl-PL')} - ${valuation.range.max.toLocaleString('pl-PL')} PLN.\nMinimalne wolne środki wymagane do uruchomienia procedury: ${valuation.minimumCashRequired.toLocaleString('pl-PL')} PLN.\n\nZarząd wyraził zgodę na rozpoczęcie procedury. Pierwszy etap to audyt techniczny boisk, siłowni, zaplecza medycznego i infrastruktury analitycznej. Potrwa około ${Math.round(auditDays / 7)} tygodni.\n\nZ poważaniem,\nZarząd Klubu`,
           isGoodNews: true,
         },
       };
     }
 
     case 'TECHNICAL_AUDIT': {
-      const auditCost = Math.round(clamp(project.estimatedCost * (0.012 + s1 * 0.014), 80_000, 1_800_000));
+      const costBasis = getProjectCostBasis(club, project);
+      const auditCost = Math.round(clamp(costBasis * (0.012 + s1 * 0.014), 80_000, 1_800_000));
       if (club.budget < auditCost) {
         const updatedProject: TrainingFacilityUpgradeProject = {
           ...project,
@@ -259,11 +329,12 @@ const advancePhase = (
 
       const procurementDays = 21 + Math.floor(s2 * 35);
       const conditionMultiplier = outcome === 'CONDITIONAL' ? 1.06 + hashSeed(project.id + 'conditions') * 0.08 : 1;
+      const costBasis = getProjectCostBasis(club, project);
       const updatedProject: TrainingFacilityUpgradeProject = {
         ...project,
         phase: 'PROCUREMENT',
         phaseEndDate: addDays(currentDate, procurementDays),
-        estimatedCost: Math.round(project.estimatedCost * conditionMultiplier),
+        estimatedCost: Math.round(costBasis * conditionMultiplier),
         log: [...project.log, {
           date: currentDate,
           message: outcome === 'CONDITIONAL'
@@ -289,7 +360,7 @@ const advancePhase = (
     }
 
     case 'PROCUREMENT': {
-      const totalCost = Math.round(project.estimatedCost * (0.94 + s1 * 0.18));
+      const totalCost = Math.round(getProjectCostBasis(club, project) * (0.94 + s1 * 0.18));
       if (club.budget < totalCost) {
         const updatedProject: TrainingFacilityUpgradeProject = {
           ...project,
@@ -429,12 +500,24 @@ export class TrainingFacilityService {
     return TRAINING_FACILITY_UPGRADE_COSTS[clampLevel(currentLevel)] ?? null;
   }
 
-  static getUpgradeCostTable(): Array<{ fromLevel: TrainingFacilityLevel; targetLevel: TrainingFacilityLevel; cost: number }> {
-    return Object.entries(TRAINING_FACILITY_UPGRADE_COSTS).map(([fromLevel, cost]) => ({
-      fromLevel: Number(fromLevel) as TrainingFacilityLevel,
-      targetLevel: (Number(fromLevel) + 1) as TrainingFacilityLevel,
-      cost,
-    }));
+  static getUpgradeCostRange(club: Club, currentLevel: number): { min: number; max: number } | null {
+    const level = clampLevel(currentLevel);
+    if (level >= 10) return null;
+    return getClubUpgradeCostRange(club, level);
+  }
+
+  static getUpgradeCostTable(club?: Club): Array<{ fromLevel: TrainingFacilityLevel; targetLevel: TrainingFacilityLevel; cost: number; minCost: number; maxCost: number }> {
+    return Object.entries(TRAINING_FACILITY_UPGRADE_COST_RANGES).map(([fromLevel, range]) => {
+      const level = Number(fromLevel) as TrainingFacilityLevel;
+      const clubRange = club ? getClubUpgradeCostRange(club, level) : { min: range[0], max: range[1] };
+      return {
+        fromLevel: level,
+        targetLevel: (Number(fromLevel) + 1) as TrainingFacilityLevel,
+        cost: Math.round((clubRange.min + clubRange.max) / 2),
+        minCost: clubRange.min,
+        maxCost: clubRange.max,
+      };
+    });
   }
 
   static getDevelopmentProfile(level: number, staffQuality?: number): TrainingFacilityDevelopmentProfile {
@@ -493,26 +576,21 @@ export class TrainingFacilityService {
       return { eligible: false, reasons: ['Rozbudowa bazy treningowej już jest w toku.'] };
     }
 
-    const estimatedCost = TrainingFacilityService.getUpgradeCost(currentLevel) ?? 0;
-    const minimumCashRequired = Math.round(estimatedCost * MIN_CASH_SHARE_TO_FILE);
+    const estimatedCostRange = TrainingFacilityService.getUpgradeCostRange(club, currentLevel) ?? undefined;
     const reasons: string[] = [];
-    if (club.budget < minimumCashRequired) {
-      reasons.push(`Zarząd wymaga co najmniej ${minimumCashRequired.toLocaleString('pl-PL')} PLN wolnych środków, aby przyjąć wniosek.`);
-    }
 
     return {
       eligible: reasons.length === 0,
       reasons,
       nextLevel: (currentLevel + 1) as TrainingFacilityLevel,
-      estimatedCost,
-      minimumCashRequired,
+      estimatedCostRange,
     };
   }
 
   static createRequest(clubId: string, club: Club, currentDate: string): TrainingFacilityUpgradeProject {
     const fromLevel = TrainingFacilityService.getEffectiveLevel(club);
     const targetLevel = clampLevel(fromLevel + 1);
-    const estimatedCost = TrainingFacilityService.getUpgradeCost(fromLevel) ?? 0;
+    const estimatedCostRange = TrainingFacilityService.getUpgradeCostRange(club, fromLevel) ?? { min: 0, max: 0 };
     const id = `tf_${clubId}_${fromLevel}_${targetLevel}_${Date.now()}`;
     return {
       id,
@@ -521,8 +599,10 @@ export class TrainingFacilityService {
       phase: 'BOARD_REVIEW',
       startDate: currentDate,
       phaseEndDate: addDays(currentDate, 14 + Math.floor(hashSeed(id) * 14)),
-      estimatedCost,
-      log: [{ date: currentDate, message: 'Wniosek o rozbudowę bazy treningowej złożony do zarządu.', type: 'INFO' }],
+      initialCostRangeMin: estimatedCostRange.min,
+      initialCostRangeMax: estimatedCostRange.max,
+      estimatedCost: 0,
+      log: [{ date: currentDate, message: 'Wniosek o rozbudowę bazy treningowej złożony do zarządu. Zarząd przygotuje klubową wycenę przed decyzją finansową.', type: 'INFO' }],
     };
   }
 

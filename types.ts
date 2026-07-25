@@ -1796,7 +1796,11 @@ export interface TrainingFacilityUpgradeProject {
   phase: TrainingFacilityUpgradePhase;
   startDate: string;
   phaseEndDate: string;
+  initialCostRangeMin?: number;
+  initialCostRangeMax?: number;
   estimatedCost: number;
+  boardValuationCost?: number;
+  minimumCashRequired?: number;
   technicalAuditCost?: number;
   totalCost?: number;
   log: TrainingFacilityUpgradeEvent[];
