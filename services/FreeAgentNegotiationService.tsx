@@ -1,5 +1,6 @@
 import { Player, Club, PendingNegotiation, NegotiationStatus, ManagerProfile } from '../types';
 import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
+import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -82,6 +83,17 @@ export const FreeAgentNegotiationService = {
   evaluateInitialInterest: (player: Player, club: Club, squad: Player[] = [], managerProfile?: ManagerProfile | null): { interested: boolean, message: string } => {
     const tier = getClubTier(club);
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, club);
+
+    if (
+      prestigeAssessment.blocksNegotiation ||
+      !PrestigeTransferGuardService.shouldConsiderDestination(player, club, managerInfluence.chanceAdjustment)
+    ) {
+      return {
+        interested: false,
+        message: PrestigeTransferGuardService.getRejectionReason(player, club)
+      };
+    }
 
     if (player.overallRating > 69 && club.reputation < 5) {
       const reputationGateChance = clamp(0.01 + Math.max(0, managerInfluence.chanceAdjustment) * 0.5, 0.01, 0.04);

@@ -12,6 +12,7 @@ import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { NameGeneratorService } from './NameGeneratorService';
 import { pickNationalityForRegion } from './NationalityService';
 import { calcReputacja } from './SquadGeneratorService';
+import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -73,6 +74,8 @@ const _buildTransferOfferBanUntil = (currentDate: Date): string => {
 const GULF_STAR_HUNTER_COUNTRIES = new Set(['KSA', 'QAT', 'UAE']);
 const BIG_CLUB_REPUTATION = 18;
 const VETERAN_STAR_MIN_AGE = 33;
+const GULF_STAR_EXCEPTION_MIN_AGE = 35;
+const GULF_STAR_EXCEPTION_RARE_MIN_AGE = 30;
 const VETERAN_STAR_MIN_OVR = 85;
 const GULF_SHOWPIECE_STAR_MIN_REPUTATION = 80;
 const GULF_MEGA_OFFER_ACCEPTANCE_CHANCE = 0.75;
@@ -220,7 +223,14 @@ const _wasReleasedByBigClub = (player: Player, clubMap: Map<string, Club>): bool
 };
 
 const _isGulfMegaOfferTarget = (player: Player, clubMap: Map<string, Club>): boolean =>
-  _isGulfShowpieceStar(player) || (_isVeteranStar(player) && _wasReleasedByBigClub(player, clubMap));
+  player.age >= GULF_STAR_EXCEPTION_RARE_MIN_AGE &&
+  (_isGulfShowpieceStar(player) || (_isVeteranStar(player) && _wasReleasedByBigClub(player, clubMap)));
+
+const _getGulfMegaOfferAcceptanceChance = (player: Player): number => {
+  if (player.age >= GULF_STAR_EXCEPTION_MIN_AGE) return GULF_MEGA_OFFER_ACCEPTANCE_CHANCE;
+  if (player.age >= 32) return 0.18;
+  return 0.06;
+};
 
 const _isExpiringBigClubVeteranStar = (
   player: Player,
@@ -1990,6 +2000,7 @@ processAiRecruitment: (
       const freeAgentCandidates = (updatedPlayersMap['FREE_AGENTS'] || []).filter(fa => {
         const needFA = needsFA.find(n => n.position === fa.position);
         if (!needFA) return false;
+        if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
         if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA)) return false;
         const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
         const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
@@ -2119,6 +2130,12 @@ processAiRecruitment: (
       const gulfStarOffer = _isGulfStarHunterClub(aiClub) && _isGulfMegaOfferTarget(fa, clubMap)
         ? _buildGulfStarOffer(fa, aiClub, currentDate)
         : null;
+      if (!gulfStarOffer && !PrestigeTransferGuardService.isAllowedDestinationForHighPrestigePlayer(fa, aiClub)) {
+        updatedPlayersMap['FREE_AGENTS'] = (updatedPlayersMap['FREE_AGENTS'] || []).map(p =>
+          p.id === fa.id ? { ...p, aiNegotiationClubId: undefined, aiNegotiationResponseDate: undefined } : p
+        );
+        continue;
+      }
       const proposedSalary = gulfStarOffer?.proposedSalary ?? FinanceLogic.getFairMarketSalary(fa.overallRating);
       const proposedBonus = gulfStarOffer?.proposedBonus ?? Math.floor(proposedSalary * 0.4);
       const newEndDate = gulfStarOffer?.newEndDate ?? new Date(currentDate.getFullYear() + 2, 5, 30).toISOString();
@@ -2152,7 +2169,7 @@ processAiRecruitment: (
 
       const result = FinanceLogic.evaluateContractLogic(fa, proposedSalary, proposedBonus, newEndDate, currentDate, aiClub.reputation, FinanceLogic.getClubTier(aiClub));
       const accepted = gulfStarOffer
-        ? Math.random() < GULF_MEGA_OFFER_ACCEPTANCE_CHANCE
+        ? Math.random() < _getGulfMegaOfferAcceptanceChance(fa)
         : result.accepted;
 
       if (accepted) {
@@ -2724,6 +2741,7 @@ processAiRecruitment: (
           if (p.isOnTransferList || p.transferPendingClubId) return false;
           const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
           if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
+          if (!PrestigeTransferGuardService.shouldConsiderDestination(p, club)) return false;
 
           const sellerClub = sellerClubMap.get(p.clubId || '');
           const isGulfVeteranStarTarget = !!sellerClub &&
@@ -2839,7 +2857,7 @@ processAiRecruitment: (
         contractInput, target, sellerClub, club, sellerSquad, squad, currentDate
       );
       const gulfVeteranStarOverrideAccepted = isGulfVeteranStarTarget &&
-        Math.random() < GULF_MEGA_OFFER_ACCEPTANCE_CHANCE;
+        Math.random() < _getGulfMegaOfferAcceptanceChance(target);
       if (!playerDecision.accepted && !gulfVeteranStarOverrideAccepted) {
         logEntries.push({
           id: `IT_REJ_${target.id}_${club.id}_${currentDate.getTime()}`,
@@ -3116,6 +3134,55 @@ processAiRecruitment: (
         }
 
         // Spójna z logiką negocjacji: bonus zależy od kierunku ruchu reputacyjnego
+        const prestigeBlockReason = PrestigeTransferGuardService.getBlockedReason(player, buyerClub);
+        if (prestigeBlockReason) {
+          const refundFee = player.transferPendingFee ?? 0;
+          if (refundFee > 0) {
+            updatedClubs = updatedClubs.map(c => {
+              if (c.id === buyerClubId) {
+                return {
+                  ...c,
+                  budget: c.budget + refundFee,
+                  transferBudget: (c.transferBudget || 0) + refundFee,
+                };
+              }
+              if (c.id === sellerClubId) return { ...c, budget: c.budget - refundFee };
+              return c;
+            });
+          }
+
+          updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
+            p.id === player.id
+              ? {
+                  ...p,
+                  transferPendingClubId: undefined,
+                  transferReportDate: undefined,
+                  transferPendingFee: undefined,
+                  transferPendingSalary: undefined,
+                  transferPendingBonus: undefined,
+                  transferPendingContractYears: undefined,
+                }
+              : p
+          );
+
+          logEntries.push({
+            id: `RES_PRESTIGE_REJ_${player.id}_${buyerClubId}_${currentDate.getTime()}`,
+            date: currentDate.toISOString(),
+            playerName: `${player.lastName} ${player.firstName}`,
+            playerOvr: player.overallRating,
+            playerPosition: player.position,
+            fromClub: sellerClub.name,
+            toClub: buyerClub.name,
+            status: 'PLAYER_REJECTED',
+            reason: prestigeBlockReason,
+            fee: refundFee,
+            playerId: player.id,
+            fromClubId: sellerClub.id,
+            toClubId: buyerClub.id,
+          });
+          continue;
+        }
+
         const repDeltaRes = buyerClub.reputation - sellerClub.reputation;
         const salaryMultAI_Res = repDeltaRes <= -2 ? 1.40 : repDeltaRes === -1 ? 1.25 : 1.12;
         const proposedSalary = player.transferPendingSalary ?? Math.max(FinanceLogic.getFairMarketSalary(player.overallRating), Math.round(player.annualSalary * salaryMultAI_Res));

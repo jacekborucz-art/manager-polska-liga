@@ -4,6 +4,7 @@ import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
 import { ViewState, Player, StaffRole, PlayerPosition, TrainingIntensity } from '../../types';
 import { TrainingAssistantService, generatePlayerReport } from '../../services/TrainingAssistantService';
+import { TrainingFacilityService } from '../../services/TrainingFacilityService';
 import { MATCH_PREP_FOCUSES } from '../../data/match_prep_focuses_pl';
 import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusService';
 import { getTrainableAttributesForPosition } from '../../services/TrainingAttributeRules';
@@ -55,6 +56,7 @@ export const TrainingView: React.FC = () => {
     currentDate,
     setClubs,
     staffMembers,
+    requestTrainingFacilityUpgrade,
   } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(
     isTeamTrainingCycleId(activeTrainingId) ? activeTrainingId : null
@@ -96,6 +98,32 @@ export const TrainingView: React.FC = () => {
   }, [reportPlayer, clubs, userTeamId, staffMembers, teamPlayers, allLeaguePlayers, activeTrainingId, activeIntensity]);
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const currentTrainingFacilityLevel = TrainingFacilityService.getEffectiveLevel(myClub);
+  const activeTrainingFacilityProject = (myClub?.trainingFacilityUpgradeProjects ?? [])
+    .find(project => project.phase !== 'COMPLETED' && project.phase !== 'REJECTED');
+  const trainingFacilityEligibility = myClub
+    ? TrainingFacilityService.checkEligibility(myClub)
+    : { eligible: false, reasons: ['Brak klubu użytkownika.'] };
+  const trainingFacilityStaffQuality = useMemo(() => {
+    if (!myClub) return 10;
+    const clubStaff = (myClub.staffIds ?? [])
+      .map(id => staffMembers[id])
+      .filter((s): s is NonNullable<typeof s> => !!s);
+    const roleAverage = (role: StaffRole, keys: string[]): number => {
+      const roleStaff = clubStaff.filter(member => member.role === role);
+      if (roleStaff.length === 0) return 4;
+      return roleStaff.reduce((sum, member) =>
+        sum + keys.reduce((keySum, key) => keySum + (member.attributes[key] ?? 10), 0) / keys.length,
+        0
+      ) / roleStaff.length;
+    };
+    const assistantScore = roleAverage(StaffRole.ASSISTANT_COACH, ['offensiveTactics', 'defensiveTactics', 'motivation']);
+    const fitnessScore = roleAverage(StaffRole.FITNESS_COACH, ['periodization', 'fitnessTests', 'nutrition']);
+    const goalkeeperScore = roleAverage(StaffRole.GOALKEEPER_COACH, ['gkTechnique', 'positioning', 'footwork']);
+    return Math.round(assistantScore * 0.55 + fitnessScore * 0.30 + goalkeeperScore * 0.15);
+  }, [myClub, staffMembers]);
+  const trainingFacilityProfile = TrainingFacilityService.getDevelopmentProfile(currentTrainingFacilityLevel, trainingFacilityStaffQuality);
+  const trainingFacilityCosts = useMemo(() => TrainingFacilityService.getUpgradeCostTable(), []);
   const hasAssistant = (myClub?.staffIds ?? [])
     .some(id => staffMembers[id]?.role === StaffRole.ASSISTANT_COACH);
   const assistantTrainingWeekKey = getAssistantTrainingWeekKey(currentDate);
@@ -627,6 +655,104 @@ export const TrainingView: React.FC = () => {
 
         {/* PRAWA STRONA: PROGRAMY + DIAGNOSTYKA */}
         <div className="relative z-20 w-[640px] shrink-0 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-slide-left pb-20">
+
+           {/* Training facility controls live inside the training view because the level directly affects weekly development. */}
+           <div className="relative overflow-hidden rounded-3xl border border-cyan-400/20 bg-slate-950/75 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-md">
+             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(34,211,238,0.18),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.35),rgba(2,6,23,0.1))]" />
+             <div className="relative z-10 flex items-start justify-between gap-4">
+               <div>
+                 <span className="block text-[9px] text-cyan-300/80 font-black italic uppercase tracking-tighter">Baza treningowa</span>
+                 <h3 className="mt-1 text-2xl text-white font-black italic uppercase tracking-tighter leading-none">
+                   Poziom {currentTrainingFacilityLevel}/10
+                 </h3>
+                 <p className="mt-1 text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">
+                   Sztab: {trainingFacilityStaffQuality}/20 • Typowy wzrost: +{trainingFacilityProfile.typicalSeasonOverallGain} OVR/sezon • Szczyt: +{trainingFacilityProfile.peakSeasonOverallGain}
+                 </p>
+                 <p className="mt-1 text-[9px] text-cyan-200/75 font-black italic uppercase tracking-tighter">
+                   Wykorzystanie ośrodka przez sztab: {Math.round(trainingFacilityProfile.facilityUtilization * 100)}%
+                 </p>
+               </div>
+               <button
+                 type="button"
+                 disabled={!trainingFacilityEligibility.eligible}
+                 onClick={requestTrainingFacilityUpgrade}
+                 className="shrink-0 rounded-2xl border-t border-x border-b border-t-cyan-300/50 border-x-cyan-400/25 border-b-black/60 bg-cyan-500/15 px-5 py-3 text-[10px] text-cyan-200 font-black italic uppercase tracking-tighter transition-all hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-35 active:translate-y-[2px]"
+                 style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 8px 18px rgba(8,145,178,0.22), inset 0 1px 0 rgba(255,255,255,0.12)' }}
+               >
+                 Rozbuduj
+               </button>
+             </div>
+
+             <div className="relative z-10 mt-4 grid grid-cols-3 gap-2">
+               <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                 <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Szansa wzrostu</span>
+                 <span className="mt-1 block text-lg text-emerald-300 font-black italic uppercase tracking-tighter">
+                   x{trainingFacilityProfile.growthChanceMultiplier.toFixed(2)}
+                 </span>
+               </div>
+               <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                 <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Ochrona regresji</span>
+                 <span className="mt-1 block text-lg text-blue-300 font-black italic uppercase tracking-tighter">
+                   x{trainingFacilityProfile.regressionChanceMultiplier.toFixed(2)}
+                 </span>
+               </div>
+               <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                 <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Potencjał limitu</span>
+                 <span className="mt-1 block text-lg text-amber-300 font-black italic uppercase tracking-tighter">
+                   +{trainingFacilityProfile.extraSeasonalGrowthCap}
+                 </span>
+               </div>
+             </div>
+
+             {activeTrainingFacilityProject ? (
+               <div className="relative z-10 mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3">
+                 <div className="flex items-center justify-between gap-3">
+                   <span className="text-[10px] text-white font-black italic uppercase tracking-tighter">
+                     W toku: Poziom {activeTrainingFacilityProject.fromLevel} → {activeTrainingFacilityProject.targetLevel}
+                   </span>
+                   <span className="shrink-0 rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[8px] text-amber-300 font-black italic uppercase tracking-tighter">
+                     {TrainingFacilityService.getPhaseLabel(activeTrainingFacilityProject.phase)}
+                   </span>
+                 </div>
+                 <p className="mt-1 text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">
+                   Termin fazy: {new Date(activeTrainingFacilityProject.phaseEndDate).toLocaleDateString('pl-PL')}
+                 </p>
+               </div>
+             ) : (
+               <div className="relative z-10 mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                 <div className="flex items-center justify-between gap-3">
+                   <span className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Następny poziom</span>
+                   <span className="text-[10px] text-white font-black italic uppercase tracking-tighter">
+                     {trainingFacilityEligibility.nextLevel ? `Poziom ${trainingFacilityEligibility.nextLevel}` : 'Maksimum'}
+                   </span>
+                 </div>
+                 <p className="mt-1 text-[10px] text-cyan-200 font-black italic uppercase tracking-tighter">
+                   Koszt: {trainingFacilityEligibility.estimatedCost ? trainingFacilityEligibility.estimatedCost.toLocaleString('pl-PL') : '—'} PLN
+                 </p>
+                 {!trainingFacilityEligibility.eligible && (
+                   <p className="mt-1 text-[9px] text-rose-300 font-black italic uppercase tracking-tighter">
+                     {trainingFacilityEligibility.reasons[0]}
+                   </p>
+                 )}
+               </div>
+             )}
+
+             <div className="relative z-10 mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+               <span className="block text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">Koszty rozbudowy</span>
+               <div className="mt-2 grid grid-cols-3 gap-1.5">
+                 {trainingFacilityCosts.map(row => (
+                   <div key={row.fromLevel} className={`rounded-lg border px-2 py-1.5 ${row.fromLevel === currentTrainingFacilityLevel ? 'border-cyan-400/35 bg-cyan-500/15' : 'border-white/5 bg-white/[0.03]'}`}>
+                     <span className="block text-[8px] text-slate-400 font-black italic uppercase tracking-tighter">
+                       {row.fromLevel}→{row.targetLevel}
+                     </span>
+                     <span className="block text-[9px] text-white font-black italic uppercase tracking-tighter">
+                       {(row.cost / 1_000_000).toFixed(row.cost >= 10_000_000 ? 0 : 1)} mln
+                     </span>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           </div>
 
            {/* WYKRES PROGRESU TRENINGOWEGO */}
            {trainingProgressHistory.length >= 2 && (() => {

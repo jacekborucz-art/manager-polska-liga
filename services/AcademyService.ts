@@ -8,6 +8,7 @@ import { pickNationalityForRegion } from './NationalityService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { calcReputacja } from './SquadGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
+import { TrainingFacilityService } from './TrainingFacilityService';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -105,6 +106,12 @@ const PROMOTION_CORE_KEYS: Record<PlayerPosition, (keyof PlayerAttributes)[]> = 
   [PlayerPosition.MID]: ['passing', 'technique', 'dribbling', 'pace', 'vision', 'attacking', 'crossing', 'freeKicks', 'corners', 'stamina'],
   [PlayerPosition.FWD]: ['finishing', 'attacking', 'pace', 'dribbling', 'positioning', 'heading', 'technique', 'mentality'],
 };
+
+const ACADEMY_DEVELOPMENT_ATTR_KEYS: (keyof PlayerAttributes)[] = [
+  'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking', 'finishing',
+  'technique', 'vision', 'dribbling', 'heading', 'positioning',
+  'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
+];
 
 // ── Pomocnicze losowanie ──────────────────────────────────────────────────────
 
@@ -209,6 +216,57 @@ function getPromotionOverallTarget(
 }
 
 // ── Generowanie atrybutów wychowanka ─────────────────────────────────────────
+
+function calculateYouthRegressionRisk(
+  trainingFacilityLevel: number,
+  budgetMultiplier: number,
+  academyStaffQuality: number,
+  hiddenTalent: number,
+  trainingFacilityYouthMultiplier: number
+): number {
+  const staffQuality = clamp(academyStaffQuality, 1, 20);
+  const facilityLevel = clamp(trainingFacilityLevel, 1, 10);
+  const trainingFacilityWeakness = clamp((4 - facilityLevel) / 3, 0, 1);
+  const staffWeakness = clamp((10 - staffQuality) / 9, 0, 1);
+  const budgetWeakness = clamp((1 - budgetMultiplier) / 0.5, 0, 1);
+  const facilityMultiplierWeakness = clamp((1.03 - trainingFacilityYouthMultiplier) / 0.03, 0, 1);
+
+  if (trainingFacilityWeakness + staffWeakness + budgetWeakness < 0.2) return 0;
+
+  const environmentPressure =
+    trainingFacilityWeakness * 0.45 +
+    staffWeakness * 0.35 +
+    budgetWeakness * 0.15 +
+    facilityMultiplierWeakness * 0.05;
+  const talentResistance = clamp((hiddenTalent - 50) / 49, 0, 1);
+  const resistanceFactor = 1 - talentResistance * 0.86;
+
+  return clamp((0.006 + environmentPressure * 0.036) * resistanceFactor, 0.001, 0.045);
+}
+
+function applyYouthRegressionPressure(
+  youth: YouthPlayer,
+  attributes: PlayerAttributes,
+  risk: number
+): { attributes: PlayerAttributes; readinessPenalty: number } {
+  if (risk <= 0 || Math.random() >= risk) {
+    return { attributes, readinessPenalty: 0 };
+  }
+
+  const updated = { ...attributes };
+  const currentOverall = PlayerAttributesGenerator.calculateOverall(updated, youth.position);
+  const protectedFloor = Math.max(42, Math.min(currentOverall - 2, youth.hiddenTalent - 18));
+  const eligibleKeys = ACADEMY_DEVELOPMENT_ATTR_KEYS.filter(key => updated[key] > protectedFloor);
+  const key = eligibleKeys[Math.floor(Math.random() * eligibleKeys.length)];
+
+  // Youth regression is mostly lost momentum; attribute loss stays rare and shallow.
+  if (key && Math.random() < 0.65) {
+    updated[key] = Math.max(1, updated[key] - 1);
+  }
+
+  const readinessPenalty = 0.25 + Math.random() * 0.55;
+  return { attributes: updated, readinessPenalty };
+}
 
 const ATTR_PROFILES: Record<PlayerPosition, Partial<Record<keyof PlayerAttributes, number>>> = {
   [PlayerPosition.GK]: {
@@ -411,40 +469,49 @@ export const AcademyService = {
   processWeeklyDevelopment(
     youthPlayers: YouthPlayer[],
     level: ClubAcademy['level'],
-    operationalBudgetWeekly: number
+    operationalBudgetWeekly: number,
+    trainingFacilityLevel: number = 1,
+    academyStaffQuality: number = 4
   ): YouthPlayer[] {
     const budgetEntry = BUDGET_MULTIPLIERS.find(
       b => operationalBudgetWeekly >= b.min && operationalBudgetWeekly < b.max
     ) ?? BUDGET_MULTIPLIERS[2];
     const budgetMult = budgetEntry.multiplier;
     const levelMult = 0.7 + (level - 1) * 0.15; // 0.70 – 1.30
+    const trainingFacilityYouthMult = TrainingFacilityService.getAcademyDevelopmentMultiplier(trainingFacilityLevel);
+    const facilityCapBonus = Math.floor(((Math.max(1, Math.min(10, trainingFacilityLevel)) - 1) / 9) * 2);
 
     return youthPlayers.map(youth => {
       if (youth.contractSigned === false) return youth;
       const talentMod = 0.6 + (youth.hiddenTalent / 100) * 0.8;
       const focusBonus = youth.developmentFocus ? 0.5 : 0;
-      const rawGain = BASE_WEEKLY_READINESS_GAIN * talentMod * budgetMult * levelMult + focusBonus;
-      const newReadiness = Math.min(100, youth.readinessScore + rawGain);
+      const rawGain = BASE_WEEKLY_READINESS_GAIN * talentMod * budgetMult * levelMult * trainingFacilityYouthMult + focusBonus;
+      let newReadiness = Math.min(100, youth.readinessScore + rawGain);
 
       // Mały przyrost atrybutów co tydzień
       const updatedAttrs = { ...youth.attributes };
-      const allKeys: (keyof PlayerAttributes)[] = [
-        'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking', 'finishing',
-        'technique', 'vision', 'dribbling', 'heading', 'positioning',
-        'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
-      ];
-      allKeys.forEach(key => {
-        if (Math.random() < 0.04 + (youth.developmentFocus === key ? 0.05 : 0)) {
-          const growthCap = Math.round(clamp(Math.max(62, youth.hiddenTalent + 4, 58 + level * 4), 62, 88));
+      ACADEMY_DEVELOPMENT_ATTR_KEYS.forEach(key => {
+        if (Math.random() < (0.04 + (youth.developmentFocus === key ? 0.05 : 0)) * trainingFacilityYouthMult) {
+          const growthCap = Math.round(clamp(Math.max(62, youth.hiddenTalent + 4 + facilityCapBonus, 58 + level * 4 + facilityCapBonus), 62, 90));
           updatedAttrs[key] = Math.min(growthCap, updatedAttrs[key] + 1);
         }
       });
+
+      const regressionRisk = calculateYouthRegressionRisk(
+        trainingFacilityLevel,
+        budgetMult,
+        academyStaffQuality,
+        youth.hiddenTalent,
+        trainingFacilityYouthMult
+      );
+      const regression = applyYouthRegressionPressure(youth, updatedAttrs, regressionRisk);
+      newReadiness = Math.max(0, newReadiness - regression.readinessPenalty);
 
       return {
         ...youth,
         readinessScore: newReadiness,
         monthsInAcademy: youth.monthsInAcademy + 0.25,
-        attributes: updatedAttrs,
+        attributes: regression.attributes,
       };
     });
   },

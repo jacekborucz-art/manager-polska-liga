@@ -1771,6 +1771,37 @@ export interface StadiumExpansionProject {
   log: StadiumExpansionEvent[];
 }
 
+export type TrainingFacilityLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+export type TrainingFacilityUpgradePhase =
+  | 'BOARD_REVIEW'
+  | 'TECHNICAL_AUDIT'
+  | 'PLANNING_PERMISSION'
+  | 'PROCUREMENT'
+  | 'CONSTRUCTION'
+  | 'QUALITY_INSPECTION'
+  | 'COMPLETED'
+  | 'REJECTED';
+
+export interface TrainingFacilityUpgradeEvent {
+  date: string;
+  message: string;
+  type: 'INFO' | 'WARNING' | 'SUCCESS' | 'DELAY' | 'COST';
+}
+
+export interface TrainingFacilityUpgradeProject {
+  id: string;
+  fromLevel: TrainingFacilityLevel;
+  targetLevel: TrainingFacilityLevel;
+  phase: TrainingFacilityUpgradePhase;
+  startDate: string;
+  phaseEndDate: string;
+  estimatedCost: number;
+  technicalAuditCost?: number;
+  totalCost?: number;
+  log: TrainingFacilityUpgradeEvent[];
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -1843,6 +1874,8 @@ export interface Club {
   summerCamp?: SummerCampState;
   stadiumSeatColors?: string[];
   stadiumExpansionProjects?: StadiumExpansionProject[];
+  trainingFacilityLevel?: TrainingFacilityLevel;
+  trainingFacilityUpgradeProjects?: TrainingFacilityUpgradeProject[];
   management?: ClubManagement;
 }
 

@@ -588,6 +588,8 @@ function normalizeSaveState(data: SaveState): SaveState {
       signingBonusPool: club.signingBonusPool ?? 0,
       financeHistory: asArray(club.financeHistory),
       stadiumExpansionProjects: asArray(club.stadiumExpansionProjects),
+      trainingFacilityLevel: Math.max(1, Math.min(10, Math.round(Number.isFinite(club.trainingFacilityLevel) ? club.trainingFacilityLevel : 1))),
+      trainingFacilityUpgradeProjects: asArray(club.trainingFacilityUpgradeProjects),
     };
   });
   const normalizedPlayersBase = Object.fromEntries(

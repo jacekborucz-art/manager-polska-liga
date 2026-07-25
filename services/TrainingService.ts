@@ -7,6 +7,7 @@ import { PlayerDevelopmentService } from './PlayerDevelopmentService';
 import { PlayerFormService } from './PlayerFormService';
 import { getTrainableAttributesForPosition } from './TrainingAttributeRules';
 import { findTeamTrainingCycle, getDefaultTeamTrainingCycle } from './TrainingProgramRules';
+import { TrainingFacilityService } from './TrainingFacilityService';
 
 const DAILY_TRAINING_INJURY_CHANCE = 0.005;
 const TRAINING_SEVERE_INJURY_CHANCE = 0.15;
@@ -33,6 +34,28 @@ const getSeasonalRegressionCap = (player: Player): number => {
   if (player.age >= 28) return 3;
   if (player.age >= 24) return 2;
   return 1;
+};
+
+const getFacilitySeasonalGrowthCapBonus = (player: Player, rawFacilityCapBonus: number): number => {
+  const talent = player.attributes?.talent ?? 50;
+  const ageMultiplier =
+    player.age <= 19 ? 1.00 :
+    player.age <= 21 ? 0.90 :
+    player.age <= 23 ? 0.75 :
+    player.age <= 26 ? 0.55 :
+    player.age <= 29 ? 0.30 :
+    player.age <= 32 ? 0.15 :
+    0.05;
+  const talentMultiplier =
+    talent >= 95 ? 1.00 :
+    talent >= 85 ? 0.86 :
+    talent >= 75 ? 0.70 :
+    talent >= 65 ? 0.48 :
+    talent >= 55 ? 0.28 :
+    0.12;
+
+  // The facility expands the ceiling only when the player's age and talent can absorb extra work.
+  return Math.round(rawFacilityCapBonus * ageMultiplier * talentMultiplier);
 };
 
 const getRegressionIntensityMultiplier = (intensity: TrainingIntensity): number => {
@@ -191,7 +214,8 @@ export const TrainingService = {
     clubCountry?: string,
     gkCoachQuality?: number,
     assistantCoachQuality?: number,
-    fitnessCoachQuality?: number
+    fitnessCoachQuality?: number,
+    trainingFacilityLevel?: number
   ): Record<string, Player[]> => {
     const updatedMap = { ...playersMap };
     if (!updatedMap[userTeamId]) return updatedMap;
@@ -282,8 +306,17 @@ export const TrainingService = {
         if (q >= 5)  return 0.08 + (q - 5) / 5 * 0.07;
         return Math.max(0.05, 0.05 + (q - 1) / 4 * 0.03);
       })();
+      const getRelevantFacilityStaffQuality = (key: keyof PlayerAttributes): number => {
+        if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) return gkCoachQuality ?? 4;
+        if (FITNESS_COACHED_ATTRS.includes(key)) return fitnessCoachQuality ?? 4;
+        return assistantCoachQuality ?? 4;
+      };
 
       attrKeys.forEach(key => {
+        const facilityProfile = TrainingFacilityService.getDevelopmentProfile(
+          trainingFacilityLevel ?? 1,
+          getRelevantFacilityStaffQuality(key)
+        );
         let pGrowth = 0.005;
 
         if (hasGeneralPlan && cycle.primaryAttributes.includes(key)) pGrowth += 0.05;
@@ -327,14 +360,15 @@ export const TrainingService = {
         pGrowth *= coachGrowthMult;
         if (isGkPlayer && GK_COACHED_ATTRS.includes(key)) pGrowth *= gkCoachMultiplier;
         if (FITNESS_COACHED_ATTRS.includes(key)) pGrowth *= fitnessCoachMult;
+        pGrowth *= facilityProfile.growthChanceMultiplier;
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
           const seasonalCap = (isGkPlayer && GK_COACHED_ATTRS.includes(key)) ? gkAttrSeasonalCap : 3;
           const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(updated, {
             clubReputation,
-            coachQuality: Math.max(assistantCoachQuality ?? 10, fitnessCoachQuality ?? 10, gkCoachQuality ?? 10)
-          });
+            coachQuality: getRelevantFacilityStaffQuality(key)
+          }) + getFacilitySeasonalGrowthCapBonus(updated, facilityProfile.extraSeasonalGrowthCap);
           if (seasonalGrowthPoints < growthCap && currentChange < Math.min(2, seasonalCap) && attributes[key] < 99) {
             attributes[key] += 1;
             seasonalChanges[key] = currentChange + 1;
@@ -379,6 +413,7 @@ export const TrainingService = {
         pRegress *= talentProtection;
         pRegress *= moraleTrainingModifier.regression;
         pRegress *= getRegressionIntensityMultiplier(effectiveIntensity);
+        pRegress *= facilityProfile.regressionChanceMultiplier;
         pRegress += coachDeficitRegressionChance;
 
         if (pRegress > 0 && Math.random() < pRegress) {
@@ -467,10 +502,12 @@ export const TrainingService = {
     coachTrainingAttr: number,
     clubReputation: number,
     leagueTier: number,
-    clubCountry?: string
+    clubCountry?: string,
+    trainingFacilityLevel?: number
   ): Player[] => {
     const cycle = findTeamTrainingCycle(trainingId) || getDefaultTeamTrainingCycle();
     const coachScore = coachTrainingAttr / 100;
+    const facilityProfile = TrainingFacilityService.getDevelopmentProfile(trainingFacilityLevel ?? 1, coachTrainingAttr);
 
     return reserves.map(player => {
       if (player.health.status === HealthStatus.INJURED) {
@@ -535,13 +572,14 @@ export const TrainingService = {
         const growthMod = Math.max(0, (talentScore * coachScore - 0.10) * 4.0);
         pGrowth *= growthMod;
         pGrowth *= moraleTrainingModifier.growth;
+        pGrowth *= facilityProfile.growthChanceMultiplier;
 
         if (Math.random() < pGrowth) {
           const currentChange = seasonalChanges[key] || 0;
           const growthCap = PlayerDevelopmentService.getSeasonalGrowthCap(updated, {
             clubReputation,
             coachQuality: coachTrainingAttr
-          });
+          }) + getFacilitySeasonalGrowthCapBonus(updated, facilityProfile.extraSeasonalGrowthCap);
           if (seasonalGrowthPoints < growthCap && currentChange < 2 && attributes[key] < 99) {
             attributes[key] += 1;
             seasonalChanges[key] = currentChange + 1;
@@ -566,6 +604,7 @@ export const TrainingService = {
         if (mentalAttrs.includes(key as string)) pRegress *= 0.55;
         pRegress *= moraleTrainingModifier.regression;
         pRegress *= Math.max(0.35, 1.25 - coachScore * 0.90);
+        pRegress *= facilityProfile.regressionChanceMultiplier;
 
         if (Math.random() < pRegress) {
           const currentChange = seasonalChanges[key] || 0;

@@ -1,5 +1,6 @@
 import { Club, ManagerProfile, Player, Region, TransferContractInput } from '../types';
 import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
+import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
 
 type SquadRole = 'STAR' | 'FIRST_TEAM' | 'ROTATION' | 'BACKUP';
 
@@ -204,6 +205,18 @@ export const TransferPlayerDecisionService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
+    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+
+    if (prestigeAssessment.blocksNegotiation) {
+      return {
+        willingToTalk: false,
+        reason: prestigeAssessment.reason,
+        targetRole,
+        desiredSalary: roundMoney(currentSalaryBase * 1.4),
+        desiredBonus: roundMoney(currentSalaryBase),
+        desiredYears: 2
+      };
+    }
 
     if (getPlayerLoyalty(player) >= 88 && loyaltyResistance >= 0.72 && daysLeft > PRE_CONTRACT_PRIORITY_DAYS) {
       return {
@@ -241,6 +254,7 @@ export const TransferPlayerDecisionService = {
     if (targetRoleLevel < currentRoleLevel) salaryMultiplier += 0.10;
     salaryMultiplier += loyaltyResistance * 0.14;
     salaryMultiplier += ageMovePremium * 0.45;
+    salaryMultiplier += prestigeAssessment.salaryPremium;
     salaryMultiplier *= managerInfluence.expectationMultiplier;
 
     let bonusMultiplier = 0.35;
@@ -254,6 +268,7 @@ export const TransferPlayerDecisionService = {
     if (lowAppealDestination) bonusMultiplier += player.overallRating >= 82 ? 0.42 : 0.30;
     bonusMultiplier += loyaltyResistance * 0.18;
     bonusMultiplier += ageMovePremium;
+    bonusMultiplier += prestigeAssessment.bonusPremium;
     bonusMultiplier *= managerInfluence.expectationMultiplier;
 
     const desiredSalary = roundMoney(currentSalaryBase * salaryMultiplier);
@@ -269,6 +284,10 @@ export const TransferPlayerDecisionService = {
       negotiationReason = `Moj klient traktuje ten ruch jako sportowo porownywalny i oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'}.`;
     } else if (reputationDelta > 0) {
       negotiationReason = `Mój klient jest zainteresowany przejściem do Waszego klubu i oczekuje kontraktu na ${desiredYears} ${desiredYears === 1 ? 'rok' : 'lata'} i warunkow adekwatnych do tego kroku.`;
+    }
+
+    if (prestigeAssessment.reason) {
+      negotiationReason = prestigeAssessment.reason;
     }
 
     return {
@@ -323,6 +342,7 @@ export const TransferPlayerDecisionService = {
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
     const lowAppealDestinationPenalty = getLowAppealDestinationPenalty(player, targetClub);
     const lowAppealAcceptanceCap = getLowAppealAcceptanceCap(player, targetClub);
+    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
 
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;
@@ -417,13 +437,15 @@ export const TransferPlayerDecisionService = {
       roleUpgradeBonus +
       managerInfluence.scoreAdjustment +
       Math.round((financialFit - 1) * 35) -
-      lowAppealDestinationPenalty;
+      lowAppealDestinationPenalty -
+      prestigeAssessment.scorePenalty;
 
     const margin = offerScore - stayScore;
     const requiredFinancialFit = player.age >= 30 ? 0.98 : 0.92;
     const lowerClubMoveWithoutPremium = reputationDrop >= 4 && financialFit < 0.98 && !transferListSalaryDiscountApplied;
     const flatForeignMoveWithoutUpgrade = reputationDelta === 0 && isForeignMove && financialFit < 0.96;
     const lowAppealMoveWithoutExceptionalPremium = lowAppealDestinationPenalty > 0 && financialFit < 1.12;
+    const prestigeMoveWithoutExceptionalPremium = prestigeAssessment.scorePenalty >= 24 && financialFit < 1.18;
     const allowedNegativeMargin = reputationDrop === 0 ? -8 : reputationDrop <= 5 ? -35 : -24;
 
     if (
@@ -431,11 +453,14 @@ export const TransferPlayerDecisionService = {
       lowerClubMoveWithoutPremium ||
       flatForeignMoveWithoutUpgrade ||
       lowAppealMoveWithoutExceptionalPremium ||
+      prestigeMoveWithoutExceptionalPremium ||
       margin < allowedNegativeMargin
     ) {
       let reason = 'Zawodnik uznal, ze warunki kontraktu i projekt sportowy nie sa dla niego wystarczajaco korzystne.';
 
-      if (lowAppealMoveWithoutExceptionalPremium) {
+      if (prestigeMoveWithoutExceptionalPremium) {
+        reason = 'Prestiż klubu jest wyraźnie poniżej naturalnych oczekiwań zawodnika. Przy takim ruchu potrzebny byłby wyjątkowo mocny kontrakt i bardzo jasna rola w projekcie.';
+      } else if (lowAppealMoveWithoutExceptionalPremium) {
         reason = 'Zawodnik nie traktuje tego kierunku jako atrakcyjnego sportowo. Przy takim profilu kariery potrzebowalby wyjatkowej premii finansowej i bardzo mocnej roli.';
       } else if (lowerClubMoveWithoutPremium) {
         reason = 'Przy tak duzym spadku reputacji zawodnik oczekuje mocniejszej rekompensaty finansowej i stabilnego kontraktu.';
@@ -472,12 +497,17 @@ export const TransferPlayerDecisionService = {
       0.01,
       0.999
     );
-    const finalAcceptanceChance = lowAppealAcceptanceCap === null
-      ? rawAcceptanceChance
-      : Math.min(rawAcceptanceChance, lowAppealAcceptanceCap);
+    const prestigeAcceptanceCap = PrestigeTransferGuardService.getAcceptanceChanceCap(player, targetClub);
+    const finalAcceptanceChance = Math.min(
+      rawAcceptanceChance,
+      lowAppealAcceptanceCap ?? rawAcceptanceChance,
+      prestigeAcceptanceCap
+    );
 
     if (Math.random() > finalAcceptanceChance) {
-      const reason = lowAppealDestinationPenalty > 0
+      const reason = prestigeAssessment.scorePenalty > 0
+        ? PrestigeTransferGuardService.getRejectionReason(player, targetClub)
+        : lowAppealDestinationPenalty > 0
         ? 'Zawodnik po analizie odrzucil kierunek transferu. Przy jego poziomie sportowym liga docelowa nie jest dla niego wystarczajaco atrakcyjna poza wyjatkowymi okolicznosciami.'
         : loyaltyResistance >= 0.45
         ? 'Zawodnik docenia oferte, ale jego przywiazanie do obecnego klubu przewazylo. Bez statusu zawodnika przeznaczonego do odejscia lub bardzo duzego kroku sportowego nie chce zmieniac klubu.'

@@ -58,6 +58,7 @@ MysteryAgentBoardRequestResult,
 ReserveReleaseDirective,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
+import { TrainingFacilityService } from '../services/TrainingFacilityService';
 import { AiFriendlyGeneratorService } from '../services/AiFriendlyGeneratorService';
 import { AiFriendlyMatchSimulator } from '../services/AiFriendlyMatchSimulator';
 import { KitSelection } from '../services/KitSelectionService';
@@ -122,6 +123,7 @@ import { TransferPlayerDecisionService } from '../services/TransferPlayerDecisio
 import { TransferExecutionService } from '../services/TransferExecutionService';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
+import { PrestigeTransferGuardService } from '../services/PrestigeTransferGuardService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
 import { WorldNationalFriendlyService } from '../services/WorldNationalFriendlyService';
 import { NationsLeagueService } from '../services/NationsLeagueService';
@@ -1112,6 +1114,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   clearGameNotification: () => void;
   respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
   requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
+  requestTrainingFacilityUpgrade: () => void;
   submitBoardClubRequest: (requestType: BoardClubRequestType) => void;
   // Ostatnie wyniki meczów reprezentacji (symulacja w tle) — wyświetlane w NationalTeamResultsView
   lastNTMatchResults: NTMatchResult[] | null;
@@ -4155,7 +4158,8 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
           userClub.country,
           gkCoachQuality,
           assistantCoachQuality,
-          fitnessCoachQuality
+          fitnessCoachQuality,
+          TrainingFacilityService.getEffectiveLevel(userClub)
         );
         // KONIEC WSTAWKI
 
@@ -4188,7 +4192,8 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
             coachTrainingAttr,
             userClub.reputation || 5,
             tier,
-            userClub.country
+            userClub.country,
+            TrainingFacilityService.getEffectiveLevel(userClub)
           );
           const moraleReviewedReserves = PlayerMoraleService.processPeriodicReview(updatedReserves, currentDate);
           const reserveProtestResult = PlayerMoraleService.processReserveProtestReviews(moraleReviewedReserves, currentDate, messages);
@@ -4590,11 +4595,14 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         return;
       }
 
-      const decision = FinanceService.evaluateContractLogic(
-        player, neg.salary, neg.bonus, 
-        new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(), 
-        simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
-      );
+      const prestigeBlockReason = PrestigeTransferGuardService.getBlockedReason(player, userClub);
+      const decision = prestigeBlockReason
+        ? { accepted: false, reason: prestigeBlockReason, demands: null }
+        : FinanceService.evaluateContractLogic(
+            player, neg.salary, neg.bonus,
+            new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(),
+            simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
+          );
 
       const mail: MailMessage = {
         id: `MAIL_NEG_${neg.id}`,
@@ -11994,11 +12002,18 @@ const finalResult: SimulationOutput = {
 
     // ── AKADEMIA: tygodniowy tick (każdy poniedziałek) ───────────────────────
     if (academy && userTeamId && nextDay.getDay() === 1) {
+      const academyUserClub = clubs.find(c => c.id === userTeamId);
+      const academyDirector = academyUserClub?.management?.academyDirector;
+      const academyStaffQuality = academyDirector
+        ? academyDirector.rozwojMlodziezy * 0.6 + academyDirector.doswiadczenie * 0.25 + academyDirector.zarzadzanie * 0.15
+        : 4;
       // 1. Tygodniowy rozwój wychowanków
       const developed = AcademyService.processWeeklyDevelopment(
         academy.youthPlayers,
         academy.level,
-        academy.operationalBudgetWeekly
+        academy.operationalBudgetWeekly,
+        TrainingFacilityService.getEffectiveLevel(academyUserClub),
+        academyStaffQuality
       );
 
       // 2. Sprawdź zakończone misje skautingowe
@@ -12593,6 +12608,56 @@ const finalResult: SimulationOutput = {
       }
     }
     // ── END ROZBUDOWA STADIONU ────────────────────────────────────────────────
+
+    // Training facility upgrades advance through their formal phases once per day.
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(c => c.id === userTeamId);
+      if (userClub && (userClub.trainingFacilityUpgradeProjects?.length ?? 0) > 0) {
+        const dateStr = nextDay.toISOString().split('T')[0];
+        const { updatedClub, events } = TrainingFacilityService.advanceDay(userClub, dateStr);
+        if (events.length > 0) {
+          let previousBalance = userClub.budget;
+          const financeEntries = events
+            .filter(ev => typeof ev.costDeducted === 'number' && ev.costDeducted > 0)
+            .map(ev => {
+              const entry = {
+                id: `TF_COST_${ev.projectId}_${dateStr}_${ev.newPhase}`,
+                date: dateStr,
+                amount: -(ev.costDeducted ?? 0),
+                type: 'EXPENSE' as const,
+                description: `Rozbudowa bazy treningowej: ${TrainingFacilityService.getPhaseLabel(ev.newPhase)}`,
+                previousBalance,
+              };
+              previousBalance -= ev.costDeducted ?? 0;
+              return entry;
+            });
+          const updatedClubWithFinance = financeEntries.length > 0
+            ? { ...updatedClub, financeHistory: [...financeEntries, ...(updatedClub.financeHistory ?? [])].slice(0, 50) }
+            : updatedClub;
+
+          setClubs(prev => prev.map(c => c.id === userTeamId ? updatedClubWithFinance : c));
+          const facilityMails: MailMessage[] = events.map(ev => ({
+            id: `TRAINING_FACILITY_EV_${ev.projectId}_${dateStr}_${ev.newPhase}`,
+            sender: 'Zarząd Klubu',
+            role: 'Dyrektor Infrastruktury',
+            subject: ev.subject,
+            body: ev.body,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.BOARD,
+            priority: ev.isGoodNews ? 66 : 82,
+          }));
+          setMessages(prev => [...facilityMails, ...prev]);
+          if (events.some(e => e.newPhase === 'COMPLETED')) {
+            showGameNotification({
+              title: 'Baza treningowa gotowa!',
+              message: 'Nowy poziom ośrodka od następnego tygodnia wpłynie na rozwój zawodników.',
+              tone: 'success',
+            });
+          }
+        }
+      }
+    }
 
     // ── AKADEMIA: losowy event (1. dzień miesiąca) ────────────────────────────
     if (academy && userTeamId && nextDay.getDate() === 1 && academy.youthPlayers.length > 0) {
@@ -14002,6 +14067,48 @@ const finalResult: SimulationOutput = {
       message: needsCityAid
         ? `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Możliwa będzie prośba o pomoc miasta.`
         : `Wniosek o rozbudowę (${standLabel}) trafił do zarządu. Odpowiedź w ciągu 2–4 tygodni.`,
+      tone: 'info',
+    });
+  }, [clubs, currentDate, showGameNotification, userTeamId]);
+
+  const requestTrainingFacilityUpgrade = useCallback(() => {
+    if (!userTeamId) return;
+    const userClub = clubs.find(c => c.id === userTeamId);
+    if (!userClub) return;
+
+    const eligibility = TrainingFacilityService.checkEligibility(userClub);
+    if (!eligibility.eligible) {
+      showGameNotification({
+        title: 'Wniosek niedostępny',
+        message: eligibility.reasons[0] ?? 'Rozbudowa bazy treningowej nie jest teraz możliwa.',
+        tone: 'warning',
+      });
+      return;
+    }
+
+    const dateStr = currentDate instanceof Date
+      ? currentDate.toISOString().split('T')[0]
+      : String(currentDate);
+    const project = TrainingFacilityService.createRequest(userTeamId, userClub, dateStr);
+    setClubs(prev => prev.map(c =>
+      c.id === userTeamId
+        ? { ...c, trainingFacilityLevel: TrainingFacilityService.getEffectiveLevel(c), trainingFacilityUpgradeProjects: [...(c.trainingFacilityUpgradeProjects ?? []), project] }
+        : c
+    ));
+    setMessages(prev => [{
+      id: `TRAINING_FACILITY_REQ_${project.id}`,
+      sender: 'Zarząd Klubu',
+      role: 'Sekretariat',
+      subject: `Wniosek o rozbudowę bazy treningowej — Poziom ${project.targetLevel}`,
+      body: `Szanowny Panie Menedżerze,\n\nPotwierdzamy przyjęcie wniosku o rozbudowę bazy treningowej z Poziomu ${project.fromLevel} do Poziomu ${project.targetLevel}.\n\nSzacowany koszt inwestycji: ${project.estimatedCost.toLocaleString('pl-PL')} PLN.\n\nWniosek przejdzie przez zarząd, audyt techniczny, pozwolenia, przetarg, budowę oraz odbiór jakościowy. O postępach będziemy informować drogą mailową.\n\nZ poważaniem,\nSekretariat Klubu`,
+      date: new Date(dateStr),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: 64,
+    }, ...prev]);
+    showGameNotification({
+      title: 'Wniosek złożony',
+      message: `Rozbudowa bazy treningowej do Poziomu ${project.targetLevel} trafiła do zarządu.`,
       tone: 'info',
     });
   }, [clubs, currentDate, showGameNotification, userTeamId]);
@@ -17316,7 +17423,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     wcState, setWcState,
     euroState, setEuroState,
     europeanViewTab, setEuropeanViewTab, selectedNTId, setSelectedNTId, isResigned, managerEmploymentStatus, resignFromClub, applyForManagerJob, acceptManagerJobOffer,
-    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, submitBoardClubRequest,
+    gameNotification, showGameNotification, clearGameNotification, respondToSportingDirectorObjective, requestStadiumExpansion, requestTrainingFacilityUpgrade, submitBoardClubRequest,
     // ── BARAŻE O UTRZYMANIE ─────────────────────────────────────────────────
     relegationPlayoffFirstLegResults, relegationPlayoffFinalResult,
     confirmRelegationPlayoffMatch1, confirmRelegationPlayoffMatch2,
