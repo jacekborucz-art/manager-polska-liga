@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
 import { 
@@ -8,7 +8,8 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
-  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack,
+  PlayerLiveInstructions,
+  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack, InstructionMarking,
   Referee,
   Fixture,
   WeatherSnapshot
@@ -801,6 +802,8 @@ export const MatchLiveView = () => {
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
+  const [playerInstructionMenu, setPlayerInstructionMenu] = useState<{ x: number; y: number; side: 'HOME' | 'AWAY'; playerId: string } | null>(null);
+  const playerInstructionDragRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
   const [showBriefing, setShowBriefing] = useState(() => !matchState?.preMatchMotivation);
   const [isCelebratingGoal, setIsCelebratingGoal] = useState(false);
     const [showCommentHistory, setShowCommentHistory] = useState(false);
@@ -871,7 +874,10 @@ export const MatchLiveView = () => {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const closeTacticalSelect = () => setOpenTacticalSelect(null);
+    const closeTacticalSelect = () => {
+      setOpenTacticalSelect(null);
+      setPlayerInstructionMenu(null);
+    };
     document.addEventListener('click', closeTacticalSelect);
     return () => document.removeEventListener('click', closeTacticalSelect);
   }, []);
@@ -1215,6 +1221,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           passing: 'MIXED',
           pressing: 'NORMAL',
           counterAttack: 'NORMAL',
+          marking: 'NONE',
           expiryMinute: -1,
           tempoExpiry: -1,
           mindsetExpiry: -1,
@@ -1225,13 +1232,17 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           passingCooldown: -1,
           pressingCooldown: -1,
           counterAttackCooldown: -1,
+          markingCooldown: -1,
           tempoResponseFactor: 1.0,
           mindsetResponseFactor: 1.0,
           intensityResponseFactor: 1.0,
           passingResponseFactor: 1.0,
           pressingResponseFactor: 1.0,
           counterAttackResponseFactor: 1.0,
+          markingResponseFactor: 1.0,
           lastChangeMinute: -5,},
+          homeIndividualInstructions: {},
+          awayIndividualInstructions: {},
           playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
         // AI Exploit Window state:
@@ -1663,6 +1674,67 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
       setClubs(prev => prev.map(c => c.id !== userTeamId ? c : { ...c, captainId, penaltyTakerId, freeKickTakerId }));
     }
     setIsTacticsOpen(false);
+  };
+
+  const setLivePlayerInstruction = <K extends keyof PlayerLiveInstructions>(
+    side: 'HOME' | 'AWAY',
+    playerId: string,
+    key: K,
+    value: PlayerLiveInstructions[K] | null
+  ) => {
+    if (side !== userSide) return;
+    setMatchState(prev => {
+      if (!prev) return prev;
+      const currentSideInstructions = side === 'HOME'
+        ? (prev.homeIndividualInstructions ?? {})
+        : (prev.awayIndividualInstructions ?? {});
+      const nextPlayerInstructions: PlayerLiveInstructions = { ...(currentSideInstructions[playerId] ?? {}) };
+      if (value === null) {
+        delete nextPlayerInstructions[key];
+      } else {
+        nextPlayerInstructions[key] = value;
+      }
+
+      const nextSideInstructions = { ...currentSideInstructions };
+      if (Object.keys(nextPlayerInstructions).length === 0) {
+        delete nextSideInstructions[playerId];
+      } else {
+        nextSideInstructions[playerId] = nextPlayerInstructions;
+      }
+
+      return side === 'HOME'
+        ? { ...prev, homeIndividualInstructions: nextSideInstructions }
+        : { ...prev, awayIndividualInstructions: nextSideInstructions };
+    });
+  };
+
+  const clearLivePlayerInstructions = (side: 'HOME' | 'AWAY', playerId: string) => {
+    if (side !== userSide) return;
+    setMatchState(prev => {
+      if (!prev) return prev;
+      const currentSideInstructions = side === 'HOME'
+        ? (prev.homeIndividualInstructions ?? {})
+        : (prev.awayIndividualInstructions ?? {});
+      if (!currentSideInstructions[playerId]) return prev;
+      const nextSideInstructions = { ...currentSideInstructions };
+      delete nextSideInstructions[playerId];
+      return side === 'HOME'
+        ? { ...prev, homeIndividualInstructions: nextSideInstructions }
+        : { ...prev, awayIndividualInstructions: nextSideInstructions };
+    });
+  };
+
+  const assignLiveSetPieceRole = (role: 'captain' | 'penalty' | 'freekick') => {
+    if (!playerInstructionMenu || !ctx) return;
+    const clubId = playerInstructionMenu.side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+    if (clubId !== userTeamId) return;
+    setClubs(prev => prev.map(c => {
+      if (c.id !== clubId) return c;
+      if (role === 'captain') return { ...c, captainId: playerInstructionMenu.playerId };
+      if (role === 'penalty') return { ...c, penaltyTakerId: playerInstructionMenu.playerId };
+      return { ...c, freeKickTakerId: playerInstructionMenu.playerId };
+    }));
+    setPlayerInstructionMenu(null);
   };
 
   const handleHalftimeTalk = (effect: TalkEffect) => {
@@ -2823,12 +2895,17 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         let nextUserInstructions = { ...prev.userInstructions };
         const uInstr = nextUserInstructions;
+        const userIndividualInstructions = userSide === 'HOME'
+          ? (prev.homeIndividualInstructions ?? {})
+          : (prev.awayIndividualInstructions ?? {});
         const isUserAttacking = activeSide === userSide;
         const _getXIAvgAttr = getLiveLineupAttributeAverage;
         const uPlayersList = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
         const uXIList      = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
         const oPlayersList = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
         const oXIList      = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
+        const uFatigueMap = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
+        const oFatigueMap = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const uAvgTech = _getXIAvgAttr(uPlayersList, uXIList, 'technique');
         const oAvgTech = _getXIAvgAttr(oPlayersList, oXIList, 'technique');
         const uAvgPace = _getXIAvgAttr(uPlayersList, uXIList, 'pace');
@@ -2911,6 +2988,27 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         shotThreshold += LiveMatchInstructionBalanceService.getCombinationModifier(
           uInstr.tempo, uInstr.mindset, uInstr.pressing, uInstr.counterAttack, isUserAttacking
         );
+        shotThreshold += LiveMatchInstructionBalanceService.getIndividualInstructionShotModifier({
+          players: uPlayersList,
+          startingXI: uXIList,
+          individualInstructions: userIndividualInstructions,
+          teamInstructions: {
+            tempo: uInstr.tempo,
+            mindset: uInstr.mindset,
+            passing: uInstr.passing,
+            pressing: uInstr.pressing,
+            counterAttack: uInstr.counterAttack,
+          },
+          opponentPlayers: oPlayersList,
+          opponentStartingXI: oXIList,
+          opponentTacticDefBias: oppTacticDefBias,
+          opponentTempo: prev.aiActiveShout?.tempo ?? 'NORMAL',
+          opponentPassing: prev.aiActiveShout?.passing ?? 'MIXED',
+          opponentMindset: prev.aiActiveShout?.mindset ?? 'NEUTRAL',
+          opponentPressing: prev.aiActiveShout?.pressing ?? 'NORMAL',
+          fatigueMap: uFatigueMap,
+          isAttacking: isUserAttacking,
+        });
         // ───────────────────────────────────────────────────────────────────────
 
         // ─── INSTRUKCJE TAKTYCZNE TRENERA AI → MODYFIKATORY SILNIKA ────────────
@@ -2947,6 +3045,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               intensity: 'NORMAL',
               pressing: 'NORMAL',
               counterAttack: 'NORMAL',
+              marking: 'NONE',
             };
           }
         }
@@ -3103,6 +3202,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
         const aiPressingRf  = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 804) * 0.8).toFixed(2)) : 1.0;
         const aiIntensityRf = nextAiActiveShout ? parseFloat(((0.6 + seededRng(currentSeed, aiShoutMinute, 805) * 0.8) * (nextAiActiveShout.intensityResponseFactor ?? 1.0)).toFixed(2)) : 1.0;
+        const aiMarkingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 806) * 0.8).toFixed(2)) : 1.0;
 
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
@@ -3167,9 +3267,57 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           if (isAiAttacking) shotThreshold += modifier;
           else shotThreshold -= modifier;
         }
+        /**
+         * Marking model note:
+         * Marking is a defensive instruction, so it is applied from the team currently
+         * defending against the active attack. The individual adjustment only exists for
+         * the user's players for now because only the user can set per-player live marking.
+         */
+        const userMarkingProfile = LiveMatchInstructionBalanceService.getMarkingProfile({
+          defendingPlayers: uPlayersList,
+          defendingStartingXI: uXIList,
+          attackingPlayers: oPlayersList,
+          attackingStartingXI: oXIList,
+          marking: uInstr.marking ?? 'NONE',
+          opponentPassing: nextAiActiveShout?.passing ?? 'MIXED',
+          opponentTempo: nextAiActiveShout?.tempo ?? 'NORMAL',
+          opponentMindset: nextAiActiveShout?.mindset ?? 'NEUTRAL',
+          fatigueMap: uFatigueMap,
+          responseFactor: uInstr.markingResponseFactor ?? 1.0,
+        });
+        const userIndividualMarkingAdjustment = LiveMatchInstructionBalanceService.getIndividualMarkingAdjustment({
+          players: uPlayersList,
+          startingXI: uXIList,
+          individualInstructions: userIndividualInstructions,
+          teamMarking: uInstr.marking ?? 'NONE',
+          attackingPlayers: oPlayersList,
+          attackingStartingXI: oXIList,
+          opponentPassing: nextAiActiveShout?.passing ?? 'MIXED',
+          opponentTempo: nextAiActiveShout?.tempo ?? 'NORMAL',
+          opponentMindset: nextAiActiveShout?.mindset ?? 'NEUTRAL',
+          fatigueMap: uFatigueMap,
+          responseFactor: uInstr.markingResponseFactor ?? 1.0,
+        });
+        const userEffectiveMarkingRisk = {
+          foulMultiplier: userMarkingProfile.foulMultiplier * userIndividualMarkingAdjustment.foulMultiplier,
+          penaltyMultiplier: userMarkingProfile.penaltyMultiplier * userIndividualMarkingAdjustment.penaltyMultiplier,
+        };
+        const aiMarkingProfile = LiveMatchInstructionBalanceService.getMarkingProfile({
+          defendingPlayers: oPlayersList,
+          defendingStartingXI: oXIList,
+          attackingPlayers: uPlayersList,
+          attackingStartingXI: uXIList,
+          marking: nextAiActiveShout?.marking ?? 'NONE',
+          opponentPassing: uInstr.passing,
+          opponentTempo: uInstr.tempo,
+          opponentMindset: uInstr.mindset,
+          fatigueMap: oFatigueMap,
+          responseFactor: aiMarkingRf,
+        });
+        shotThreshold += isUserAttacking
+          ? aiMarkingProfile.shotModifier
+          : userMarkingProfile.shotModifier + userIndividualMarkingAdjustment.shotModifier;
 
-        const uFatigueMap = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
-        const oFatigueMap = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const userBuildUpProfile = LiveMatchInstructionBalanceService.getBuildUpAccuracyProfile(
           uPlayersList,
           uXIList,
@@ -3191,11 +3339,31 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           oFatigueMap
         );
         const activeBuildUpProfile = isUserAttacking ? userBuildUpProfile : aiBuildUpProfile;
-        shotThreshold += activeBuildUpProfile.shotModifier;
+        const userIndividualBuildUp = LiveMatchInstructionBalanceService.getIndividualBuildUpAdjustment({
+          players: uPlayersList,
+          startingXI: uXIList,
+          individualInstructions: userIndividualInstructions,
+          teamInstructions: {
+            tempo: uInstr.tempo,
+            passing: uInstr.passing,
+          },
+          opponentPlayers: oPlayersList,
+          opponentStartingXI: oXIList,
+          opponentTempo: nextAiActiveShout?.tempo ?? 'NORMAL',
+          opponentPassing: nextAiActiveShout?.passing ?? 'MIXED',
+          opponentMindset: nextAiActiveShout?.mindset ?? 'NEUTRAL',
+          opponentPressing: nextAiActiveShout?.pressing ?? 'NORMAL',
+          fatigueMap: uFatigueMap,
+        });
+        const activeBuildUpShotModifier = isUserAttacking ? userIndividualBuildUp.shotModifier : 0;
+        const activeTurnoverRisk = isUserAttacking
+          ? Math.max(0, Math.min(1, activeBuildUpProfile.turnoverRisk + userIndividualBuildUp.turnoverRiskModifier))
+          : activeBuildUpProfile.turnoverRisk;
+        shotThreshold += activeBuildUpProfile.shotModifier + activeBuildUpShotModifier;
         const opponentPressingNow = isUserAttacking
           ? nextAiActiveShout?.pressing === 'PRESSING'
           : uInstr.pressing === 'PRESSING';
-        shotThreshold -= activeBuildUpProfile.turnoverRisk * (opponentPressingNow ? 0.006 : 0.002);
+        shotThreshold -= activeTurnoverRisk * (opponentPressingNow ? 0.006 : 0.002);
 
         const aiIntensityRisk = LiveMatchInstructionBalanceService.getIntensityRiskModifiers(
           nextAiActiveShout?.intensity ?? 'NORMAL', oPlayersList, oXIList, aiIntensityRf
@@ -3470,9 +3638,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           }
         };
 
+        /**
+         * Marking discipline note:
+         * The foul branch treats activeSide as the side committing the defensive action,
+         * so the marking discipline multiplier follows activeSide, not the attacking team.
+         */
+        const activeMarkingRisk = activeSide === userSide ? userEffectiveMarkingRisk : aiMarkingProfile;
         const activeIntensityRisk = isUserAttacking ? userIntensityRisk : aiIntensityRisk;
         const uFoulThreshold = calculateLiveFoulThreshold({
-          intensityFoulMultiplier: activeIntensityRisk.foul,
+          intensityFoulMultiplier: activeIntensityRisk.foul * activeMarkingRisk.foulMultiplier,
           pressureCardMultiplier: activePressureMods.cardMultiplier,
           rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1,
         });
@@ -3500,7 +3674,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const player = (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId)!;
            if (!player) return prev; // Jeśli zawodnik zniknął (np. czerwona kartka), przerwij akcję
            const isPenalty = seededRng(currentSeed, nextMinute, 1700) < calculateLivePenaltyIncidentChance({
-             intensityPenaltyMultiplier: activeIntensityRisk.penalty,
+             intensityPenaltyMultiplier: activeIntensityRisk.penalty * activeMarkingRisk.penaltyMultiplier,
              pressurePenaltyMultiplier: activePressureMods.penaltyMultiplier,
            });
 
@@ -4408,7 +4582,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           uInstr.pressing,
           uInstr.tempoResponseFactor ?? 1.0,
           uInstr.intensityResponseFactor ?? 1.0,
-          uInstr.pressingResponseFactor ?? 1.0
+          uInstr.pressingResponseFactor ?? 1.0,
+          uInstr.marking ?? 'NONE',
+          uInstr.markingResponseFactor ?? 1.0
         );
         if (uFatExtra !== 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
@@ -4430,6 +4606,49 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - (uFatExtra * uFatigueMultiplier)));
           });
         }
+        const userIndividualFatigueExtras = LiveMatchInstructionBalanceService.getIndividualInstructionFatigueExtras(
+          uPlayersList,
+          uXIList,
+          userIndividualInstructions,
+          {
+            tempo: uInstr.tempo,
+            passing: uInstr.passing,
+            pressing: uInstr.pressing,
+            marking: uInstr.marking ?? 'NONE',
+          },
+          {
+            opponentPlayers: oPlayersList,
+            opponentStartingXI: oXIList,
+            opponentTempo: nextAiActiveShout?.tempo ?? 'NORMAL',
+            opponentPassing: nextAiActiveShout?.passing ?? 'MIXED',
+            opponentMindset: nextAiActiveShout?.mindset ?? 'NEUTRAL',
+            opponentPressing: nextAiActiveShout?.pressing ?? 'NORMAL',
+            fatigueMap: uFatigueMap,
+          }
+        );
+        const userIndividualFatigueEntries = Object.entries(userIndividualFatigueExtras);
+        if (userIndividualFatigueEntries.length > 0) {
+          const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
+          const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+          const uSubsUsed = userSide === 'HOME' ? nextSubsCountHome : nextSubsCountAway;
+          const activeIds = new Set(uXIForFat.filter((id): id is string => id !== null));
+          userIndividualFatigueEntries.forEach(([id, extra]) => {
+            if (!activeIds.has(id)) return;
+            const multiplier = extra > 0
+              ? getLiveInstructionFatigueMultiplier(
+                  nextMinute,
+                  uInstr.tempo,
+                  uInstr.intensity,
+                  uInstr.pressing,
+                  env.weather,
+                  uSubsUsed,
+                  uXIForFat,
+                  uFatTarget
+                )
+              : 1;
+            uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - (extra * multiplier)));
+          });
+        }
         const aiFatExtra = nextAiActiveShout
           ? LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
               nextAiActiveShout.tempo,
@@ -4437,7 +4656,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               nextAiActiveShout.pressing ?? 'NORMAL',
               aiTempoRf,
               aiIntensityRf,
-              aiPressingRf
+              aiPressingRf,
+              nextAiActiveShout.marking ?? 'NONE',
+              aiMarkingRf
             )
           : 0;
         if (aiFatExtra !== 0) {
@@ -5200,6 +5421,9 @@ const summary: MatchSummary = {
 
   if (!matchState || !ctx || !env || !kitColors) return null;
 
+  const homeClubLogo = getClubLogo(ctx.homeClub.id) ?? (ctx.homeClub.logoFile ? new URL(`../../Graphic/logo/${ctx.homeClub.logoFile}`, import.meta.url).href : null);
+  const awayClubLogo = getClubLogo(ctx.awayClub.id) ?? (ctx.awayClub.logoFile ? new URL(`../../Graphic/logo/${ctx.awayClub.logoFile}`, import.meta.url).href : null);
+
   const renderTicker = (side: 'HOME' | 'AWAY') => {
     const goals = side === 'HOME' ? matchState.homeGoals : matchState.awayGoals;
     const rawCards = matchState.logs.filter(l => l.teamSide === side && (l.type === MatchEventType.YELLOW_CARD || l.type === MatchEventType.RED_CARD));
@@ -5308,16 +5532,51 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
   const isSevereInjured = injuryStatus === 'SEVERE';
   const isLightInjured = injuryStatus === 'LIGHT';
           const conditionColor = injuryStatus === 'LIGHT' ? 'bg-orange-500' : PlayerPresentationService.getConditionColorClass(f);
+          const individualInstructions = (side === 'HOME' ? matchState!.homeIndividualInstructions : matchState!.awayIndividualInstructions)?.[pid];
+          const hasIndividualInstructions = Boolean(individualInstructions && Object.keys(individualInstructions).length > 0);
+          const sideClub = side === 'HOME' ? ctx.homeClub : ctx.awayClub;
+          const roleBadges = (
+            <span className={`flex shrink-0 items-center gap-1 ${side === 'AWAY' ? 'flex-row-reverse' : ''}`}>
+              {sideClub.captainId === p.id && (
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-yellow-200/70 bg-yellow-300/20 text-[8px] font-black italic uppercase tracking-tighter text-yellow-100 shadow-[0_0_8px_rgba(250,204,21,0.22)]">C</span>
+              )}
+              {sideClub.penaltyTakerId === p.id && (
+                <span className="inline-flex h-4 min-w-6 items-center justify-center rounded-[3px] border border-emerald-200/60 bg-emerald-300/16 px-1 text-[7px] font-black italic uppercase tracking-tighter text-emerald-100 shadow-[0_0_8px_rgba(52,211,153,0.18)]">Kar</span>
+              )}
+              {sideClub.freeKickTakerId === p.id && (
+                <span className="inline-flex h-4 min-w-6 items-center justify-center rounded-[3px] border border-sky-200/60 bg-sky-300/16 px-1 text-[7px] font-black italic uppercase tracking-tighter text-sky-100 shadow-[0_0_8px_rgba(56,189,248,0.18)]">Wol</span>
+              )}
+            </span>
+          );
 
 
           return (
-            <div key={pid} onClick={() => handleOpenPlayerCard(p.id)} className={`group/playerrow relative overflow-hidden grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.28)] ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-400/40 hover:bg-orange-500/30' : 'bg-white/[0.055] border-white/[0.025] hover:border-white/20 hover:bg-white/[0.09]'}`}>
+            <div
+              key={pid}
+              onClick={() => handleOpenPlayerCard(p.id)}
+              onContextMenu={(event) => {
+                if (side !== userSide || isSentOff) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setOpenTacticalSelect(null);
+                setPlayerInstructionMenu({ x: event.clientX, y: event.clientY, side, playerId: p.id });
+              }}
+              className={`group/playerrow relative overflow-hidden grid ${side === 'HOME' ? 'grid-cols-[1fr_45px_35px_35px]' : 'grid-cols-[35px_35px_45px_1fr]'} gap-2 items-center py-2 px-3 rounded-2xl border transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.28)] ${isSentOff ? 'opacity-20 grayscale' : isSevereInjured ? 'bg-red-600/20 border-red-500/40 hover:bg-red-600/30' : isLightInjured ? 'bg-orange-500/20 border-orange-400/40 hover:bg-orange-500/30' : 'bg-white/[0.055] border-white/[0.025] hover:border-white/20 hover:bg-white/[0.09]'}`}
+            >
+              {hasIndividualInstructions && (
+                <span className={`absolute top-1 ${side === 'HOME' ? 'right-1.5' : 'left-1.5'} rounded-[4px] border border-yellow-300/40 bg-yellow-400/15 px-1 text-[7px] font-black italic uppercase tracking-tighter text-yellow-200 shadow-[0_0_10px_rgba(250,204,21,0.16)]`}>
+                  IND
+                </span>
+              )}
               {side === 'HOME' ? (
                 <>
                   <div className="min-w-0 flex items-center gap-3">
                     <span className={`w-8 font-mono font-black text-[9px] ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
                     <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="text-white font-black uppercase italic text-[10px] truncate">{nameWithInitial}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-white font-black uppercase italic text-[10px]">{nameWithInitial}</span>
+                        {roleBadges}
+                      </span>
                       <div className="w-full h-0.5 bg-black/40 rounded-full overflow-hidden mt-1 relative">
                           <div className="absolute inset-0 bg-red-900/30" style={{ left: `${100 - (p.fatigueDebt || 0)}%` }} />
                           <div className={`h-full ${conditionColor} transition-all duration-1000 relative z-10`} style={{ width: `${f}%` }} />
@@ -5336,7 +5595,10 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
                   <div className="min-w-0 flex items-center gap-3 flex-row-reverse">
                     <span className={`w-8 font-mono font-black text-[9px] text-right ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
                     <div className="flex-1 min-w-0 flex flex-col text-right">
-                      <span className="text-white font-black uppercase italic text-[10px] truncate">{nameWithInitial}</span>
+                      <span className="flex min-w-0 items-center justify-end gap-1.5">
+                        {roleBadges}
+                        <span className="truncate text-white font-black uppercase italic text-[10px]">{nameWithInitial}</span>
+                      </span>
                       <div className="w-full h-0.5 bg-black/40 rounded-full overflow-hidden mt-1 relative">
                           <div className="absolute inset-0 bg-red-900/30" style={{ left: `${100 - (p.fatigueDebt || 0)}%` }} />
                           <div className={`h-full ${conditionColor} transition-all duration-1000 relative z-10`} style={{ width: `${f}%` }} />
@@ -5390,12 +5652,14 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
     accent,
     options,
     onPick,
+    width,
   }: {
     value: T;
     locked: boolean;
     accent: string;
     options: { val: T; label: string }[];
     onPick: (value: T) => void;
+    width?: string;
   }) => {
     const widestLabelLength = Math.max(...options.map(option => option.label.length));
     const selectId = options.map(option => option.val).join('|');
@@ -5417,7 +5681,7 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       <div
         className="relative z-30"
         style={{
-          width: `calc(${widestLabelLength}ch + 42px)`,
+          width: width ?? `calc(${widestLabelLength}ch + 42px)`,
           minWidth: '70px',
         }}
         onClick={(event) => event.stopPropagation()}
@@ -5467,6 +5731,203 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
           </div>
         )}
       </div>
+    );
+  };
+
+  const renderPlayerInstructionMenu = () => {
+    if (!playerInstructionMenu || !ctx || !matchState || playerInstructionMenu.side !== userSide) return null;
+    const menuSide = playerInstructionMenu.side;
+    const squad = menuSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+    const club = menuSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
+    const player = squad.find(p => p.id === playerInstructionMenu.playerId);
+    if (!player) return null;
+
+    const currentInstructions = (menuSide === 'HOME'
+      ? matchState.homeIndividualInstructions
+      : matchState.awayIndividualInstructions)?.[player.id] ?? {};
+    const hasInstructions = Object.keys(currentInstructions).length > 0;
+    const menuWidth = 330;
+    const left = typeof window === 'undefined'
+      ? playerInstructionMenu.x
+      : Math.max(12, Math.min(playerInstructionMenu.x, window.innerWidth - menuWidth - 12));
+    const top = typeof window === 'undefined'
+      ? playerInstructionMenu.y
+      : Math.max(12, Math.min(playerInstructionMenu.y, window.innerHeight - 360));
+    const maxMenuHeight = typeof window === 'undefined' ? undefined : Math.max(280, window.innerHeight - top - 12);
+
+    const handleMenuDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const panel = event.currentTarget.closest('[data-player-instruction-panel]');
+      const rect = panel?.getBoundingClientRect();
+      if (!rect) return;
+      playerInstructionDragRef.current = {
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.userSelect = 'none';
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const drag = playerInstructionDragRef.current;
+        if (!drag) return;
+        const nextX = Math.max(12, Math.min(moveEvent.clientX - drag.offsetX, window.innerWidth - menuWidth - 12));
+        const nextY = Math.max(12, Math.min(moveEvent.clientY - drag.offsetY, window.innerHeight - 360));
+        setPlayerInstructionMenu(current => current ? { ...current, x: nextX, y: nextY } : current);
+      };
+
+      const handlePointerUp = () => {
+        playerInstructionDragRef.current = null;
+        document.body.style.userSelect = previousUserSelect;
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const tempoLabels: Record<InstructionTempo, string> = { SLOW: 'Wolno', NORMAL: 'Normalnie', FAST: 'Szybko' };
+    const mindsetLabels: Record<InstructionMindset, string> = { DEFENSIVE: 'Defensywna', NEUTRAL: 'Neutralna', OFFENSIVE: 'Ofensywna' };
+    const passingLabels: Record<InstructionPassing, string> = { SHORT: 'Krótkie', MIXED: 'Mieszane', LONG: 'Długie' };
+    const pressingLabels: Record<InstructionPressing, string> = { NORMAL: 'Normalnie', PRESSING: 'Pressing' };
+    const markingLabels: Record<InstructionMarking, string> = { ZONE: 'Strefa', MAN: '1-1', NONE: 'Brak instrukcji' };
+
+    const renderRoleButton = (role: 'captain' | 'penalty' | 'freekick', label: string, code: string, active: boolean, colorClass: string) => (
+      <button
+        type="button"
+        onClick={() => assignLiveSetPieceRole(role)}
+        className={`flex items-center gap-2 rounded-[6px] border-t border-x border-b px-3 py-2 transition-all hover:-translate-y-0.5 active:translate-y-[2px] ${active ? 'bg-white/12 border-t-white/35 border-x-white/20 border-b-black/65' : 'bg-white/[0.045] border-t-white/20 border-x-white/10 border-b-black/60 hover:bg-white/[0.08]'}`}
+        style={{ boxShadow: active ? '0 3px 0 rgba(0,0,0,0.55), 0 10px 18px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.14)' : '0 2px 0 rgba(0,0,0,0.5), 0 7px 14px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+      >
+        <span className={`min-w-7 rounded-[4px] px-1.5 py-1 text-center text-[8px] font-black italic uppercase tracking-tighter ${colorClass}`}>{code}</span>
+        <span className="text-[10px] text-white font-black italic uppercase tracking-tighter">{label}</span>
+      </button>
+    );
+
+    const renderInstructionGroup = <K extends keyof PlayerLiveInstructions>(
+      title: string,
+      key: K,
+      inheritedLabel: string,
+      accent: string,
+      options: Array<{ value: PlayerLiveInstructions[K] | null; label: string }>
+    ) => (
+      <div
+        className="space-y-1 rounded-[8px] border p-2"
+        style={{
+          background: `linear-gradient(180deg, ${hexToRgba(accent, 0.16)}, rgba(2,6,23,0.62))`,
+          borderColor: hexToRgba(accent, 0.34),
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.07), 0 10px 22px rgba(0,0,0,0.22), 0 0 16px ${hexToRgba(accent, 0.08)}`,
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[9px] font-black italic uppercase tracking-tighter" style={{ color: hexToRgba(accent, 0.96) }}>{title}</span>
+          <span className="text-[8px] text-slate-400 font-black italic uppercase tracking-tighter">Drużyna: {inheritedLabel}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1">
+          {options.map(option => {
+            const active = (currentInstructions[key] ?? null) === option.value;
+            return (
+              <button
+                key={`${String(key)}-${option.value ?? 'inherit'}`}
+                type="button"
+                onClick={() => setLivePlayerInstruction(menuSide, player.id, key, option.value)}
+                className={`h-8 rounded-[5px] border-t border-x border-b px-2 text-[10px] font-black italic uppercase tracking-tighter transition-all hover:-translate-y-0.5 active:translate-y-[2px] ${
+                  active
+                    ? 'text-yellow-50 border-t-white/28 border-x-white/16 border-b-black/65'
+                    : 'text-slate-200 border-t-white/14 border-x-white/[0.07] border-b-black/55 hover:text-white'
+                }`}
+                style={{
+                  background: active
+                    ? `linear-gradient(180deg, ${hexToRgba(accent, 0.44)}, ${hexToRgba(accent, 0.18)})`
+                    : `linear-gradient(180deg, rgba(255,255,255,0.055), ${hexToRgba(accent, 0.08)})`,
+                  boxShadow: active
+                    ? '0 3px 0 rgba(0,0,0,0.56), 0 8px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.18)'
+                    : '0 2px 0 rgba(0,0,0,0.48), 0 6px 12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-[1190]"
+          onClick={() => setPlayerInstructionMenu(null)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setPlayerInstructionMenu(null);
+          }}
+        />
+        <div
+          data-player-instruction-panel="true"
+          className="fixed z-[1200] w-[330px] rounded-[10px] border border-white/15 bg-slate-950/96 p-3 shadow-[0_30px_80px_rgba(0,0,0,0.75)] backdrop-blur-xl"
+          style={{ left, top, maxHeight: maxMenuHeight, overflowY: 'auto' }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div
+            className="mb-3 cursor-move select-none border-b border-white/10 pb-3"
+            onPointerDown={handleMenuDragStart}
+          >
+            <span className="block truncate text-[13px] text-white font-black italic uppercase tracking-tighter">{player.firstName.charAt(0)}. {player.lastName}</span>
+            <span className="text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Instrukcje indywidualne</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {renderRoleButton('captain', 'Kapitan', 'C', club.captainId === player.id, 'bg-yellow-400/20 text-yellow-200 border border-yellow-300/30')}
+            {renderRoleButton('penalty', 'Karne', 'PK', club.penaltyTakerId === player.id, 'bg-emerald-400/20 text-emerald-200 border border-emerald-300/30')}
+            {renderRoleButton('freekick', 'Wolne', 'FK', club.freeKickTakerId === player.id, 'bg-blue-400/20 text-blue-200 border border-blue-300/30')}
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {renderInstructionGroup('Podania', 'passing', passingLabels[matchState.userInstructions.passing], '#38bdf8', [
+              { value: null, label: 'Drużynowe' },
+              { value: 'SHORT', label: 'Krótkie' },
+              { value: 'MIXED', label: 'Mieszane' },
+              { value: 'LONG', label: 'Długie' },
+            ])}
+            {renderInstructionGroup('Tempo', 'tempo', tempoLabels[matchState.userInstructions.tempo], '#facc15', [
+              { value: null, label: 'Drużynowe' },
+              { value: 'SLOW', label: 'Wolno' },
+              { value: 'NORMAL', label: 'Normalnie' },
+              { value: 'FAST', label: 'Szybko' },
+            ])}
+            {renderInstructionGroup('Nastawienie', 'mindset', mindsetLabels[matchState.userInstructions.mindset], '#fb7185', [
+              { value: null, label: 'Drużynowe' },
+              { value: 'DEFENSIVE', label: 'Defensywna' },
+              { value: 'NEUTRAL', label: 'Neutralna' },
+              { value: 'OFFENSIVE', label: 'Ofensywna' },
+            ])}
+            {renderInstructionGroup('Pressing', 'pressing', pressingLabels[matchState.userInstructions.pressing], '#34d399', [
+              { value: null, label: 'Drużynowe' },
+              { value: 'NORMAL', label: 'Normalnie' },
+              { value: 'PRESSING', label: 'Pressing' },
+            ])}
+            {renderInstructionGroup('Krycie', 'marking', markingLabels[matchState.userInstructions.marking ?? 'NONE'], '#a78bfa', [
+              { value: null, label: 'Drużynowe' },
+              { value: 'ZONE', label: 'Strefa' },
+              { value: 'MAN', label: '1-1' },
+              { value: 'NONE', label: 'Brak instrukcji' },
+            ])}
+          </div>
+
+          {hasInstructions && (
+            <button
+              type="button"
+              onClick={() => clearLivePlayerInstructions(menuSide, player.id)}
+              className="mt-3 h-8 w-full rounded-[5px] border border-rose-300/25 bg-rose-500/10 text-[10px] text-rose-100 font-black italic uppercase tracking-tighter transition-colors hover:bg-rose-500/18"
+            >
+              Wyczyść instrukcje
+            </button>
+          )}
+        </div>
+      </>
     );
   };
 
@@ -5795,13 +6256,33 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
       transform: 'perspective(950px) rotateX(24deg) scale(1.19)',
       transformOrigin: 'top center',
       transformStyle: 'preserve-3d',
-      background: '#0f6b3d'
+      background: '#0a4f32'
     }}
   >
     {/* Tło trawy */}
     <div 
-      className="absolute inset-0 bg-[#0f6b3d]"
+      className="absolute inset-0 bg-[#0a4f32]"
     />
+
+    {awayClubLogo && (
+      <img
+        src={awayClubLogo}
+        alt=""
+        className="absolute left-[5%] top-[5%] h-[34%] w-[38%] object-contain opacity-[0.06] pointer-events-none select-none"
+        style={{ filter: 'grayscale(1) contrast(1.45) brightness(1.12) drop-shadow(0 0 14px rgba(255,255,255,0.16))' }}
+        aria-hidden="true"
+      />
+    )}
+
+    {homeClubLogo && (
+      <img
+        src={homeClubLogo}
+        alt=""
+        className="absolute bottom-[5%] right-[5%] h-[28%] w-[32%] object-contain opacity-[0.06] pointer-events-none select-none"
+        style={{ filter: 'grayscale(1) contrast(1.45) brightness(1.12) drop-shadow(0 0 14px rgba(255,255,255,0.16))' }}
+        aria-hidden="true"
+      />
+    )}
 
     <PitchBroadcastOverlay
       homeColor={kitColors.home.primary}
@@ -6117,7 +6598,7 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
       }}
     >
       {/* ── GÓRNY RZĄD: Tempo / Postawa / Styl gry ── */}
-      <div className="relative z-10 flex gap-[3px] justify-center">
+      <div className="relative z-10 flex flex-nowrap gap-[3px] justify-center">
       {/* ── TEMPO ── */}
       {(() => {
         const cd = matchState.userInstructions.tempoCooldown;
@@ -6176,7 +6657,7 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
             {renderTacticalSelect({
               value: cur,
               locked,
-              accent: '#facc15',
+              accent: '#fb7185',
               onPick: pick,
               options: [
                 { val: 'DEFENSIVE' as InstructionMindset, label: 'Defensywna' },
@@ -6211,7 +6692,7 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
             {renderTacticalSelect({
               value: cur,
               locked,
-              accent: '#facc15',
+              accent: '#f97316',
               onPick: pick,
               options: [
                 { val: 'CAUTIOUS' as InstructionIntensity, label: 'Ostrożnie' },
@@ -6246,7 +6727,7 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
             {renderTacticalSelect({
               value: cur,
               locked,
-              accent: '#facc15',
+              accent: '#38bdf8',
               onPick: pick,
               options: [
                 { val: 'SHORT' as InstructionPassing, label: 'Krótkie' },
@@ -6281,7 +6762,7 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
             {renderTacticalSelect({
               value: cur,
               locked,
-              accent: '#facc15',
+              accent: '#34d399',
               onPick: pick,
               options: [
                 { val: 'NORMAL' as InstructionPressing, label: 'Normalnie' },
@@ -6318,6 +6799,40 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
               options: [
                 { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie' },
                 { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak' },
+              ],
+            })}
+          </div>
+        );
+      })()}
+      {(() => {
+        const cd = matchState.userInstructions.markingCooldown ?? -1;
+        const locked = cd > 0 && matchState.minute < cd;
+        const remaining = locked ? cd - matchState.minute : 0;
+        const cur = matchState.userInstructions.marking ?? 'NONE';
+        const pick = (val: InstructionMarking) => setMatchState(s => {
+          if (!s) return s;
+          const c = s.userInstructions.markingCooldown ?? -1;
+          if (c > 0 && s.minute < c) return s;
+          if ((s.userInstructions.marking ?? 'NONE') === val) return s;
+          const rf = val === 'NONE' ? 1.0 : parseFloat((0.6 + Math.random() * 0.8).toFixed(2));
+          const cooldown = s.minute + 5 + Math.floor(Math.random() * 6);
+          return { ...s, userInstructions: { ...s.userInstructions, marking: val, markingCooldown: cooldown, markingResponseFactor: rf } };
+        });
+        return (
+          <div className={`relative flex flex-col items-center gap-0.5 px-0 py-1 transition-opacity ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+            <span className="text-[8px] text-yellow-500 font-black italic uppercase tracking-tighter">
+              {locked ? `Krycie - blokada ${remaining}'` : 'Krycie'}
+            </span>
+            {renderTacticalSelect({
+              value: cur,
+              locked,
+              accent: '#a78bfa',
+              width: '102px',
+              onPick: pick,
+              options: [
+                { val: 'ZONE' as InstructionMarking, label: 'Strefa' },
+                { val: 'MAN' as InstructionMarking, label: '1-1' },
+                { val: 'NONE' as InstructionMarking, label: 'Brak instrukcji' },
               ],
             })}
           </div>
@@ -6431,6 +6946,8 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         </div>
       </>
     )}
+
+      {renderPlayerInstructionMenu()}
 
 
       {showBriefing && ctx && matchState && (

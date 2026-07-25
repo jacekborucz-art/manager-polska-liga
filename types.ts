@@ -2199,6 +2199,7 @@ export type InstructionIntensity = 'CAUTIOUS' | 'NORMAL' | 'AGGRESSIVE';
 export type InstructionPassing = 'SHORT' | 'MIXED' | 'LONG';
 export type InstructionPressing = 'NORMAL' | 'PRESSING';
 export type InstructionCounterAttack = 'NORMAL' | 'COUNTER';
+export type InstructionMarking = 'ZONE' | 'MAN' | 'NONE';
 
 export type CupPowerScenario = 'MUCH_STRONGER' | 'STRONGER' | 'EQUAL' | 'WEAKER' | 'MUCH_WEAKER';
 export type CupScoreState = 'WINNING' | 'DRAWING' | 'LOSING';
@@ -2234,6 +2235,7 @@ export interface TacticalInstructions {
   passing: InstructionPassing;
   pressing: InstructionPressing;
   counterAttack?: InstructionCounterAttack;
+  marking?: InstructionMarking;
   lastChangeMinute: number;
   expiryMinute: number;
   tempoExpiry: number;
@@ -2245,12 +2247,22 @@ export interface TacticalInstructions {
   passingCooldown: number;
   pressingCooldown: number;
   counterAttackCooldown?: number;
+  markingCooldown?: number;
   tempoResponseFactor: number;
   mindsetResponseFactor: number;
   intensityResponseFactor: number;
   passingResponseFactor: number;
   pressingResponseFactor: number;
   counterAttackResponseFactor?: number;
+  markingResponseFactor?: number;
+}
+
+export interface PlayerLiveInstructions {
+  tempo?: InstructionTempo;
+  mindset?: InstructionMindset;
+  passing?: InstructionPassing;
+  pressing?: InstructionPressing;
+  marking?: InstructionMarking;
 }
 
 export type AiLeaguePlanSource = 'REPORT' | 'INTUITION';
@@ -2273,6 +2285,7 @@ export interface AiLeagueMatchPlan {
     passing?: InstructionPassing;
     pressing?: InstructionPressing;
     counterAttack?: InstructionCounterAttack;
+    marking?: InstructionMarking;
   };
   aiRank: number;
   userRank: number;
@@ -2373,10 +2386,12 @@ isPenalties?: boolean;
     pressing?: InstructionPressing;
     counterAttack?: InstructionCounterAttack;
     passing?: InstructionPassing;
+    marking?: InstructionMarking;
     // Mnozniki z odprawy AI w przerwie; lustrzane do reakcji gracza na rozmowe motywacyjna.
     tempoResponseFactor?: number;
     mindsetResponseFactor?: number;
     intensityResponseFactor?: number;
+    markingResponseFactor?: number;
     isExpired?: boolean;
   } | null;
   lastGoalBoostMinute: number;
@@ -2439,6 +2454,8 @@ isPenalties?: boolean;
   };
   aiCupMatchPlan?: AiCupMatchPlan;
   userInstructions: TacticalInstructions;
+  homeIndividualInstructions?: Record<string, PlayerLiveInstructions>;
+  awayIndividualInstructions?: Record<string, PlayerLiveInstructions>;
 }
 
 export interface MatchSummaryTeamStats {
