@@ -3366,9 +3366,16 @@ if (userTeamId) {
         coach.currentNationalTeamId ? loadedNtByCoachId.get(coach.id) ?? null : null
       ),
     ])) as Record<string, Coach>;
-    const repairedNationalData = repairNationalTeamSquadsForLoadedData(
+    const ensuredNationalCoachData = NationalTeamService.ensureNationalTeamCoaches(
       loadedNationalTeams,
       loadedCoaches,
+      loadedClubs,
+      data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate),
+      data.userTeamId
+    );
+    const repairedNationalData = repairNationalTeamSquadsForLoadedData(
+      ensuredNationalCoachData.updatedTeams,
+      ensuredNationalCoachData.updatedCoaches,
       data.players ?? {}
     );
     const retainedMessages = data.messages ?? [];
@@ -3378,7 +3385,7 @@ if (userTeamId) {
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
-    setClubs(loadedClubs);
+    setClubs(ensuredNationalCoachData.updatedClubs);
     setLeagues(data.leagues);
     setPlayers(repairedNationalData.players);
     setReserves(data.reserves);
@@ -3398,7 +3405,7 @@ if (userTeamId) {
     setSeasonTemplate(data.seasonTemplate);
     setLeagueSchedules(data.leagueSchedules);
     setLastRecoveryDate(data.lastRecoveryDate);
-    setCoaches(loadedCoaches);
+    setCoaches(ensuredNationalCoachData.updatedCoaches);
     setStaffMembers(data.staffMembers ?? {});
     setRoundResults(data.roundResults);
     setManagerProfile(data.managerProfile);
@@ -11052,6 +11059,40 @@ const finalResult: SimulationOutput = {
         if (newMails.length > 0) setMessages(prev => [...newMails, ...prev]);
       nextCoachesState = updatedCoaches;
       nextClubsState = updatedClubsList;
+      coachClubStateChanged = true;
+    }
+
+    const nationalCoachMaintenance = NationalTeamService.ensureNationalTeamCoaches(
+      nationalTeams,
+      nextCoachesState,
+      nextClubsState,
+      nextDay,
+      userTeamId
+    );
+    if (nationalCoachMaintenance.appointedCount > 0) {
+      nextCoachesState = nationalCoachMaintenance.updatedCoaches;
+      nextClubsState = nationalCoachMaintenance.updatedClubs;
+      setNationalTeams(nationalCoachMaintenance.updatedTeams);
+      const topNationalTeamCoachMails: MailMessage[] = nationalCoachMaintenance.appointments
+        .filter(appointment => appointment.teamReputation >= 15 && appointment.teamReputation <= 20)
+        .map(appointment => ({
+          id: `NT_COACH_APPOINTMENT_${appointment.teamId}_${appointment.coachId}_${nextDay.toISOString().split('T')[0]}`,
+          sender: 'Gazeta Sportowa',
+          role: 'Dziennikarz',
+          subject: `"${appointment.coachName}" nowym selekcjonerem reprezentacji ${appointment.teamName}`,
+          body: [
+            `Reprezentacja ${appointment.teamName} ma nowego selekcjonera.`,
+            '',
+            `Funkcję pierwszego trenera drużyny narodowej objął ${appointment.coachName}. Informacja została oficjalnie potwierdzona, a szkoleniowiec rozpoczyna przygotowania do pierwszych spotkań w nowej roli.`,
+          ].join('\n'),
+          date: new Date(nextDay),
+          isRead: false,
+          type: MailType.MEDIA,
+          priority: 68,
+        }));
+      if (topNationalTeamCoachMails.length > 0) {
+        setMessages(prev => [...topNationalTeamCoachMails, ...prev]);
+      }
       coachClubStateChanged = true;
     }
 

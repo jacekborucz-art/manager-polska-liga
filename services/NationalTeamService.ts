@@ -1,4 +1,4 @@
-import { NationalTeam, Coach, Player, Region, PlayerPosition, HealthStatus } from '../types';
+import { NationalTeam, Coach, Player, Region, PlayerPosition, HealthStatus, Club } from '../types';
 import { NT_SCHEDULE_BY_YEAR } from '../resources/NationalTeamSchedule';
 import { pickNationalityForRegion } from './NationalityService';
 import { NATIONAL_TEAMS_EUROPE } from '../resources/static_db/NationalTeams/NationalTeamsEurope';
@@ -278,6 +278,117 @@ const isEligibleForTeam = (
 
 const NT_FREEZE_DAYS = 7;
 
+const getNationalCoachExpRange = (rep: number): [number, number] => {
+  if (rep >= 18) return [85, 99];
+  if (rep >= 14) return [65, 84];
+  if (rep >= 10) return [40, 64];
+  if (rep >= 6) return [20, 39];
+  return [5, 19];
+};
+
+const NATIONAL_COACH_REGION_GROUPS: Region[][] = [
+  [Region.SPAIN, Region.IBERIA],
+  [Region.ENGLAND, Region.SCANDINAVIA, Region.SWEDEN],
+  [Region.GERMANY, Region.BENELUX, Region.HUNGARIAN],
+  [Region.ITALY, Region.MALTESE, Region.GREEK],
+  [Region.FRANCE, Region.BENELUX, Region.IBERIA],
+  [Region.BALKANS, Region.ALBANIA, Region.ROMANIA, Region.GREEK],
+  [Region.CZ_SK, Region.POLAND, Region.HUNGARIAN],
+  [Region.EX_USSR, Region.GEORGIA, Region.ARMENIA, Region.AZERBAIJANI, Region.KAZAKH],
+  [Region.TURKEY, Region.ARABIA, Region.AZERBAIJANI],
+  [Region.ARGENTINA, Region.BRAZIL, Region.SOUTH_AMERICAN, Region.IBERIA],
+  [Region.NORTH_AMERICA, Region.MEXICO],
+  [Region.JAPAN, Region.KOREA],
+  [Region.SSA, Region.ARABIA],
+  [Region.OCEANIA, Region.NORTH_AMERICA],
+];
+
+const getCompatibleNationalCoachRegions = (team: NationalTeam): Set<Region> => {
+  const compatible = new Set<Region>([team.region]);
+  NATIONAL_COACH_REGION_GROUPS.forEach(group => {
+    if (group.includes(team.region)) {
+      group.forEach(region => compatible.add(region));
+    }
+  });
+  return compatible;
+};
+
+const scoreNationalCoachCandidate = (
+  coach: Coach,
+  team: NationalTeam,
+  currentClub: Club | undefined,
+  hiredDate: Date,
+  source: 'FREE' | 'CLUB'
+): number => {
+  const [minExp, maxExp] = getNationalCoachExpRange(team.reputation);
+  const exp = coach.attributes.experience;
+  const quality =
+    exp * 1.2 +
+    coach.attributes.decisionMaking +
+    coach.attributes.motivation * 0.85 +
+    coach.attributes.training * 0.45 +
+    (coach.expPoints ?? 1) / 12;
+  const expFit = exp >= minExp && exp <= maxExp
+    ? 22
+    : -Math.min(30, Math.abs(exp < minExp ? minExp - exp : exp - maxExp) * 1.4);
+  const locality = coach.nationality === team.region
+    ? 70
+    : getCompatibleNationalCoachRegions(team).has(coach.nationality as Region)
+      ? 22
+      : -120;
+  const clubResistance = currentClub
+    ? Math.max(0, (currentClub.reputation ?? 1) - team.reputation) * 6 + 12
+    : 0;
+  const sourceBonus = source === 'FREE' ? 10 : 0;
+  const stableNoise = (coach.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) + hiredDate.getDate()) % 7;
+
+  return quality + expFit + locality + sourceBonus + stableNoise - clubResistance;
+};
+
+const createFallbackNationalCoach = (team: NationalTeam, hiredDate: Date): Coach => {
+  const [minExp, maxExp] = getNationalCoachExpRange(team.reputation);
+  const namePair = NameGeneratorService.getRandomName(team.region);
+  const exp = minExp + Math.floor(Math.random() * (Math.max(minExp, maxExp) - minExp + 1));
+
+  return {
+    id: `NT_COACH_LOCAL_${team.id}_${hiredDate.getTime()}_${Math.random().toString(36).slice(2, 7)}`,
+    firstName: namePair.firstName,
+    lastName: namePair.lastName,
+    age: 38 + Math.floor(Math.random() * 24),
+    nationality: team.region,
+    nationalityFlag: team.region === Region.POLAND ? 'PL' : 'INT',
+    currentClubId: null,
+    currentNationalTeamId: null,
+    isNationalTeamCoach: true,
+    hiredDate: hiredDate.toISOString(),
+    contractEndDate: CoachService.getDefaultContractEndDate(hiredDate.toISOString()),
+    annualSalary: 0,
+    expPoints: Math.max(1, team.reputation * 8),
+    blacklist: {},
+    attributes: {
+      experience: exp,
+      decisionMaking: Math.max(20, Math.min(99, exp - 8 + Math.floor(Math.random() * 22))),
+      motivation: Math.max(25, Math.min(99, exp - 5 + Math.floor(Math.random() * 25))),
+      training: Math.max(20, Math.min(99, exp - 12 + Math.floor(Math.random() * 24))),
+    },
+    favoriteTactics: {
+      offensive: '',
+      neutral: '',
+      defensive: '',
+    },
+    history: [],
+    seasonStats: [],
+  };
+};
+
+type NationalTeamCoachAppointment = {
+  teamId: string;
+  teamName: string;
+  teamReputation: number;
+  coachId: string;
+  coachName: string;
+};
+
 export const NationalTeamService = {
 
   // ─── 1. INICJALIZACJA ────────────────────────────────────────────────────────
@@ -434,6 +545,139 @@ export const NationalTeamService = {
   },
 
   // ─── 4. GENEROWANIE ZAWODNIKA NT ─────────────────────────────────────────────
+
+  ensureNationalTeamCoaches: (
+    nationalTeams: NationalTeam[],
+    coaches: Record<string, Coach>,
+    clubs: Club[],
+    hiredDate: Date,
+    userTeamId?: string | null
+  ): { updatedTeams: NationalTeam[]; updatedCoaches: Record<string, Coach>; updatedClubs: Club[]; appointedCount: number; appointments: NationalTeamCoachAppointment[] } => {
+    if (nationalTeams.length === 0) {
+      return { updatedTeams: nationalTeams, updatedCoaches: coaches, updatedClubs: clubs, appointedCount: 0, appointments: [] };
+    }
+
+    const updatedTeams = nationalTeams.map(team => ({ ...team }));
+    const updatedCoaches: Record<string, Coach> = { ...coaches };
+    const updatedClubs = clubs.map(club => ({ ...club }));
+    const teamIds = new Set(updatedTeams.map(team => team.id));
+    const teamByCoachId = new Map(updatedTeams.filter(team => team.coachId).map(team => [team.coachId!, team.id]));
+    const clubById = new Map(updatedClubs.map(club => [club.id, club]));
+    let appointedCount = 0;
+    const appointments: NationalTeamCoachAppointment[] = [];
+
+    Object.keys(updatedCoaches).forEach(id => {
+      const coach = updatedCoaches[id];
+      if (coach.currentNationalTeamId && (!teamIds.has(coach.currentNationalTeamId) || teamByCoachId.get(id) !== coach.currentNationalTeamId)) {
+        updatedCoaches[id] = { ...coach, currentNationalTeamId: null };
+      }
+    });
+
+    const findCandidate = (team: NationalTeam): { coach: Coach; source: 'FREE' | 'CLUB'; club?: Club } | null => {
+      const compatibleRegions = getCompatibleNationalCoachRegions(team);
+      const allAvailable = Object.values(updatedCoaches).filter(coach => !coach.currentNationalTeamId && coach.age < 70);
+
+      const freeSameRegion = allAvailable.filter(coach => !coach.currentClubId && coach.nationality === team.region);
+      const freeCompatible = allAvailable.filter(coach => !coach.currentClubId && compatibleRegions.has(coach.nationality as Region));
+      const clubSameRegion = allAvailable
+        .filter(coach => coach.currentClubId && coach.currentClubId !== userTeamId && coach.nationality === team.region)
+        .map(coach => ({ coach, club: clubById.get(coach.currentClubId!) }))
+        .filter((entry): entry is { coach: Coach; club: Club } => !!entry.club && entry.club.coachId === entry.coach.id);
+      const clubCompatible = allAvailable
+        .filter(coach => coach.currentClubId && coach.currentClubId !== userTeamId && compatibleRegions.has(coach.nationality as Region))
+        .map(coach => ({ coach, club: clubById.get(coach.currentClubId!) }))
+        .filter((entry): entry is { coach: Coach; club: Club } => !!entry.club && entry.club.coachId === entry.coach.id);
+
+      const rankFree = (pool: Coach[]): Coach | undefined =>
+        [...pool].sort((a, b) =>
+          scoreNationalCoachCandidate(b, team, undefined, hiredDate, 'FREE') -
+          scoreNationalCoachCandidate(a, team, undefined, hiredDate, 'FREE')
+        )[0];
+      const rankClub = (pool: { coach: Coach; club: Club }[]): { coach: Coach; club: Club } | undefined =>
+        [...pool].sort((a, b) =>
+          scoreNationalCoachCandidate(b.coach, team, b.club, hiredDate, 'CLUB') -
+          scoreNationalCoachCandidate(a.coach, team, a.club, hiredDate, 'CLUB')
+        )[0];
+
+      const freeLocal = rankFree(freeSameRegion);
+      if (freeLocal) return { coach: freeLocal, source: 'FREE' };
+
+      const clubLocal = rankClub(clubSameRegion);
+      if (clubLocal && scoreNationalCoachCandidate(clubLocal.coach, team, clubLocal.club, hiredDate, 'CLUB') >= 120) {
+        return { coach: clubLocal.coach, source: 'CLUB', club: clubLocal.club };
+      }
+
+      const freeNearby = rankFree(freeCompatible);
+      if (freeNearby) return { coach: freeNearby, source: 'FREE' };
+
+      const clubNearby = rankClub(clubCompatible);
+      if (clubNearby && scoreNationalCoachCandidate(clubNearby.coach, team, clubNearby.club, hiredDate, 'CLUB') >= 130) {
+        return { coach: clubNearby.coach, source: 'CLUB', club: clubNearby.club };
+      }
+
+      return null;
+    };
+
+    sortTeamsByPriority(updatedTeams).forEach(team => {
+      const currentCoach = team.coachId ? updatedCoaches[team.coachId] : null;
+      if (currentCoach?.currentNationalTeamId === team.id) return;
+
+      if (team.coachId && updatedCoaches[team.coachId]) {
+        updatedCoaches[team.coachId] = { ...updatedCoaches[team.coachId], currentNationalTeamId: null };
+      }
+
+      const candidate = findCandidate(team);
+      const coach = candidate?.coach ?? createFallbackNationalCoach(team, hiredDate);
+      if (!candidate) updatedCoaches[coach.id] = coach;
+
+      if (candidate?.club) {
+        const club = clubById.get(candidate.club.id);
+        if (club?.coachId === coach.id) club.coachId = undefined;
+      }
+
+      const closedHistory = (coach.history ?? []).map((entry, index, list) =>
+        index === list.length - 1 && entry.toYear === null
+          ? { ...entry, toYear: hiredDate.getFullYear(), toMonth: hiredDate.getMonth() + 1 }
+          : entry
+      );
+      const hiredDateIso = hiredDate.toISOString();
+      const appointedCoach: Coach = {
+        ...coach,
+        currentClubId: null,
+        currentNationalTeamId: team.id,
+        isNationalTeamCoach: true,
+        hiredDate: hiredDateIso,
+        contractEndDate: CoachService.getDefaultContractEndDate(hiredDateIso),
+        annualSalary: CoachService.calculateAnnualSalaryForNationalTeam(team, coach),
+        favoritePlayerIds: undefined,
+        history: [
+          ...closedHistory,
+          {
+            clubId: team.id,
+            clubName: `Reprezentacja ${team.name}`,
+            fromYear: hiredDate.getFullYear(),
+            fromMonth: hiredDate.getMonth() + 1,
+            toYear: null,
+            toMonth: null,
+          },
+        ],
+      };
+
+      updatedCoaches[appointedCoach.id] = CoachService.normalizeCoachContract(appointedCoach, null, team);
+      team.coachId = appointedCoach.id;
+      team.tacticId = NationalTeamService.selectTacticForCoach(appointedCoach);
+      appointedCount += 1;
+      appointments.push({
+        teamId: team.id,
+        teamName: team.name,
+        teamReputation: team.reputation,
+        coachId: appointedCoach.id,
+        coachName: `${appointedCoach.firstName} ${appointedCoach.lastName}`,
+      });
+    });
+
+    return { updatedTeams, updatedCoaches, updatedClubs, appointedCount, appointments };
+  },
 
   generatePlayerForNT: (
     teamId: string,
