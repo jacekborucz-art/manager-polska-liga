@@ -55,6 +55,7 @@ MysteryAgentOfferState,
 MysteryAgentContractOffer,
 MysteryAgentNegotiationResult,
 MysteryAgentBoardRequestResult,
+ReserveReleaseDirective,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { AiFriendlyGeneratorService } from '../services/AiFriendlyGeneratorService';
@@ -200,6 +201,41 @@ export interface ImportedSquadPlayer {
     mentality: number; workRate: number;
   };
 }
+
+const RESERVE_SQUAD_LIMIT = 30;
+const RESERVE_RELEASE_RESPONSE_DAYS = 7;
+
+const getReserveAverageMatchRatingForBoard = (player: Player): number => {
+  const stats = player.reserveStats;
+  if (!stats?.matches) return 6.5;
+  return stats.totalRatingPoints / Math.max(1, stats.matches);
+};
+
+const getReserveReleaseProtectionScore = (player: Player): number => {
+  const talent = player.attributes?.talent ?? player.overallRating;
+  const youngTalentBonus = player.age <= 19 ? Math.max(0, talent - player.overallRating) * 0.55 : 0;
+  const formBonus = Math.max(-1, getReserveAverageMatchRatingForBoard(player) - 6.5) * 4;
+  const wagePressure = Math.max(0, player.annualSalary ?? 0) / 120000;
+
+  return (
+    player.overallRating +
+    talent * 0.28 +
+    youngTalentBonus +
+    formBonus -
+    wagePressure -
+    Math.max(0, player.age - 22) * 0.35
+  );
+};
+
+const sortReserveReleaseCandidates = (squad: Player[]): Player[] => (
+  [...squad].sort((a, b) => (
+    getReserveReleaseProtectionScore(a) - getReserveReleaseProtectionScore(b) ||
+    a.overallRating - b.overallRating ||
+    (a.attributes?.talent ?? a.overallRating) - (b.attributes?.talent ?? b.overallRating) ||
+    b.age - a.age ||
+    a.lastName.localeCompare(b.lastName)
+  ))
+);
 
 const getAiFriendlyPlayedIds = (report: AiFriendlyMatchReport, teamId: string, startingXI: string[]): Set<string> => new Set([
   ...startingXI.filter(Boolean),
@@ -1099,6 +1135,9 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setEuroState: React.Dispatch<React.SetStateAction<WCState | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
+  reserveReleaseDirective: ReserveReleaseDirective | null;
+  setReserveReleaseDirective: React.Dispatch<React.SetStateAction<ReserveReleaseDirective | null>>;
+  resolveReserveReleaseDirective: (playerIds: string[]) => { success: boolean; message: string };
   reserveCoachId: string | null;
   reserveFixtures: ReserveFixture[];
   setReserveFixtures: React.Dispatch<React.SetStateAction<ReserveFixture[]>>;
@@ -1180,6 +1219,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
   const [reserves, setReserves] = useState<Player[]>([]);
+  const [reserveReleaseDirective, setReserveReleaseDirective] = useState<ReserveReleaseDirective | null>(null);
   const [reserveCoachId, setReserveCoachId] = useState<string | null>(null);
   const [reserveFixtures, setReserveFixtures] = useState<ReserveFixture[]>([]);
   const [reserveMatchResults, setReserveMatchResults] = useState<ReserveMatchResult[]>([]);
@@ -1550,6 +1590,136 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   const clearGameNotification = useCallback(() => {
     setGameNotification(null);
   }, []);
+
+  const releaseReservePlayersByBoard = useCallback((
+    playerIds: string[],
+    releaseDate: Date,
+    mode: 'MANAGER_CHOICE' | 'AUTO'
+  ): Player[] => {
+    if (!userTeamId || playerIds.length === 0) return [];
+    const releaseSet = new Set(playerIds);
+    const userClub = clubs.find(c => c.id === userTeamId);
+    const releasedPlayers = reserves.filter(player => releaseSet.has(player.id));
+    if (releasedPlayers.length === 0) return [];
+
+    const year = releaseDate.getFullYear();
+    const month = releaseDate.getMonth() + 1;
+    const freeAgents = releasedPlayers.map(player => ({
+      ...PlayerCareerService.resetClubStatsForNewEntry(player),
+      clubId: 'FREE_AGENTS' as const,
+      annualSalary: 0,
+      contractEndDate: '',
+      marketValue: 0,
+      loan: null,
+      isOnTransferList: false,
+      isAvailableForLoan: false,
+      interestedClubs: [],
+      transferPendingClubId: undefined,
+      transferPendingFee: undefined,
+      transferPendingSalary: undefined,
+      transferPendingBonus: undefined,
+      transferPendingContractYears: undefined,
+      transferReportDate: undefined,
+      negotiationStep: 0,
+      isNegotiationPermanentBlocked: false,
+      transferLockoutUntil: null,
+      freeAgentLockoutUntil: null,
+      history: PlayerCareerService.movePlayer(
+        player,
+        { clubName: 'BEZ KLUBU', clubId: 'FREE_AGENTS' },
+        year,
+        month,
+        { clubName: userClub?.name ?? 'Klub', clubId: userTeamId }
+      ),
+    }));
+
+    const severanceCost = Math.round(
+      releasedPlayers.reduce((sum, player) => sum + Math.max(0, player.annualSalary ?? 0) * 0.4, 0)
+    );
+    const previousBudget = userClub?.budget ?? 0;
+
+    setReserves(prev => prev.filter(player => !releaseSet.has(player.id)));
+    setPlayers(prev => ({
+      ...prev,
+      FREE_AGENTS: [...(prev.FREE_AGENTS ?? []), ...freeAgents],
+    }));
+    setLineups(prev => {
+      const lineup = prev[userTeamId];
+      if (!lineup) return prev;
+      return {
+        ...prev,
+        [userTeamId]: {
+          ...lineup,
+          startingXI: lineup.startingXI.map(id => (id && releaseSet.has(id) ? null : id)),
+          bench: lineup.bench.filter(id => !releaseSet.has(id)),
+          reserves: lineup.reserves.filter(id => !releaseSet.has(id)),
+        },
+      };
+    });
+
+    if (severanceCost > 0) {
+      setClubs(prev => prev.map(club => (
+        club.id === userTeamId
+          ? { ...club, budget: club.budget - severanceCost }
+          : club
+      )));
+      addFinanceLog(
+        userTeamId,
+        mode === 'AUTO' ? 'Zarządowe zwolnienia z rezerw' : 'Zwolnienia z rezerw po decyzji sztabu',
+        -severanceCost,
+        releaseDate,
+        previousBudget
+      );
+    }
+
+    const dateKey = releaseDate.toISOString().split('T')[0];
+    const names = releasedPlayers
+      .map(player => `- ${player.firstName} ${player.lastName} (OVR ${player.overallRating}, talent ${player.attributes?.talent ?? player.overallRating})`)
+      .join('\n');
+    const mail: MailMessage = {
+      id: `MAIL_RESERVE_BOARD_RELEASE_${dateKey}_${releasedPlayers.map(player => player.id).join('_')}`,
+      sender: 'Zarząd Klubu',
+      role: 'Prezes Zarządu',
+      subject: mode === 'AUTO' ? 'Rezerwy: zarząd zwolnił nadmiarowych zawodników' : 'Rezerwy: zatwierdzono zwolnienia',
+      body: mode === 'AUTO'
+        ? `Kadra rezerw przekraczała limit ${RESERVE_SQUAD_LIMIT} zawodników, a sztab nie wskazał wymaganej liczby odejść w terminie.\n\nZarząd rozwiązał kontrakty z następującymi zawodnikami:\n${names}\n\nKoszt odpraw: ${severanceCost.toLocaleString('pl-PL')} PLN.`
+        : `Zatwierdzono wskazaną przez sztab listę zawodników do zwolnienia z rezerw:\n${names}\n\nKadra rezerw została sprowadzona do limitu ${RESERVE_SQUAD_LIMIT} zawodników. Koszt odpraw: ${severanceCost.toLocaleString('pl-PL')} PLN.`,
+      date: new Date(releaseDate),
+      isRead: false,
+      type: MailType.BOARD,
+      priority: mode === 'AUTO' ? 92 : 75,
+    };
+    setMessages(prev => [mail, ...prev]);
+    setReserveReleaseDirective(null);
+    showGameNotification({
+      title: mode === 'AUTO' ? 'Zarząd zwolnił zawodników' : 'Zwolnienia zatwierdzone',
+      message: `Z rezerw odeszło ${releasedPlayers.length} zawodników. Odprawy: ${severanceCost.toLocaleString('pl-PL')} PLN.`,
+      tone: mode === 'AUTO' ? 'warning' : 'info',
+    });
+
+    return releasedPlayers;
+  }, [addFinanceLog, clubs, reserves, showGameNotification, userTeamId]);
+
+  const resolveReserveReleaseDirective = useCallback((playerIds: string[]) => {
+    if (!reserveReleaseDirective) {
+      return { success: false, message: 'Brak aktywnej dyrektywy zarządu.' };
+    }
+    if (playerIds.length !== reserveReleaseDirective.requiredCount) {
+      return {
+        success: false,
+        message: `Wskaż dokładnie ${reserveReleaseDirective.requiredCount} zawodników do zwolnienia.`,
+      };
+    }
+
+    const candidateSet = new Set(reserveReleaseDirective.candidateIds);
+    const uniqueIds = Array.from(new Set(playerIds));
+    if (uniqueIds.length !== playerIds.length || uniqueIds.some(id => !candidateSet.has(id))) {
+      return { success: false, message: 'Wybór musi pochodzić z listy kandydatów przedstawionej przez zarząd.' };
+    }
+
+    releaseReservePlayersByBoard(uniqueIds, currentDate, 'MANAGER_CHOICE');
+    return { success: true, message: 'Zarząd zaakceptował wskazane zwolnienia z rezerw.' };
+  }, [currentDate, releaseReservePlayersByBoard, reserveReleaseDirective]);
 
   useEffect(() => {
     if (!gameNotification) return;
@@ -1924,6 +2094,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setManagerJobOffers([]);
     setLineups({});
     setReserves([]);
+    setReserveReleaseDirective(null);
     setReserveCoachId(null);
     setReserveFixtures([]);
     setReserveMatchResults([]);
@@ -3021,6 +3192,7 @@ if (userTeamId) {
     leagues,
     players,
     reserves,
+    reserveReleaseDirective,
     reserveCoachId,
     reserveFixtures,
     reserveMatchResults,
@@ -3207,6 +3379,7 @@ if (userTeamId) {
     setLeagues(data.leagues);
     setPlayers(repairedNationalData.players);
     setReserves(data.reserves);
+    setReserveReleaseDirective(data.reserveReleaseDirective ?? null);
     setReserveCoachId(data.reserveCoachId);
     setReserveFixtures(data.reserveFixtures ?? []);
     setReserveMatchResults(retainedReserveResults);
@@ -3579,6 +3752,7 @@ if (userTeamId) {
     setWcState(null);
     setEuroState(null);
     setReserves([]);
+    setReserveReleaseDirective(null);
     setReserveCoachId(null);
     setReserveFixtures([]);
     setReserveMatchResults([]);
@@ -3620,6 +3794,7 @@ const selectUserTeam = (clubId: string) => {
     const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
     const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
     setReserves(generatedReserves);
+    setReserveReleaseDirective(null);
 
     // Generuj trenera rezerw: 75% szansy na Polaka, 25% na zagranicznego
     const isPolish = Math.random() < 0.75;
@@ -4878,16 +5053,10 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       currentDate,
       club?.reputation ?? 5,
       club?.tier ?? 1,
-      club?.country
+      club?.country,
+      academy.level
     );
-    const overallKeys: (keyof import('../types').PlayerAttributes)[] = [
-      'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
-      'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning',
-      'goalkeeping', 'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
-    ];
-    const overallRating = Math.round(
-      overallKeys.reduce((s, k) => s + youth.attributes[k], 0) / overallKeys.length
-    );
+    const overallRating = promoted.overallRating;
     if (target === 'RESERVES') {
       setReserves(prev => [...prev, promoted]);
     } else {
@@ -4924,7 +5093,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       priority: 60,
     };
     setMessages(prev => [infoMail, ...prev]);
-  }, [academy, userTeamId, currentDate]);
+  }, [academy, userTeamId, currentDate, clubs]);
 
   const dismissYouthPlayer = useCallback((youthId: string) => {
     if (!academy) return;
@@ -10221,6 +10390,79 @@ const finalResult: SimulationOutput = {
     nextDay.setDate(nextDay.getDate() + 1);
     const nextDayIso = nextDay.toISOString().split('T')[0];
 
+    if (userTeamId && !isResigned) {
+      const reserveOverflow = reserves.length - RESERVE_SQUAD_LIMIT;
+      if (reserveOverflow <= 0) {
+        if (reserveReleaseDirective) setReserveReleaseDirective(null);
+      } else {
+        const reserveIdSet = new Set(reserves.map(player => player.id));
+        const directiveDeadline = reserveReleaseDirective?.deadlineDate
+          ? new Date(reserveReleaseDirective.deadlineDate)
+          : null;
+        const deadlineReached = !!directiveDeadline && directiveDeadline.getTime() <= nextDay.getTime();
+
+        if (reserveReleaseDirective && deadlineReached) {
+          const fallbackIds = sortReserveReleaseCandidates(reserves).map(player => player.id);
+          const autoIds = Array.from(new Set([
+            ...reserveReleaseDirective.autoReleaseIds.filter(id => reserveIdSet.has(id)),
+            ...fallbackIds,
+          ])).slice(0, reserveOverflow);
+          releaseReservePlayersByBoard(autoIds, nextDay, 'AUTO');
+        } else {
+          const directiveNeedsRefresh =
+            !reserveReleaseDirective ||
+            reserveReleaseDirective.requiredCount !== reserveOverflow ||
+            reserveReleaseDirective.reserveCountAtCreation !== reserves.length ||
+            !reserveReleaseDirective.candidateIds.some(id => reserveIdSet.has(id));
+
+          if (directiveNeedsRefresh) {
+            const seed = sessionSeed + reserves.length * 37 + nextDay.getFullYear() * 1000 + nextDay.getMonth() * 50 + nextDay.getDate();
+            const extraCandidates = 2 + Math.floor(IncomingTransferService.seededRandom(seed) * 2);
+            const rankedCandidates = sortReserveReleaseCandidates(reserves);
+            const candidateIds = rankedCandidates
+              .slice(0, Math.min(reserves.length, reserveOverflow + extraCandidates))
+              .map(player => player.id);
+            const deadline = new Date(nextDay);
+            deadline.setDate(deadline.getDate() + RESERVE_RELEASE_RESPONSE_DAYS);
+            const directive: ReserveReleaseDirective = {
+              id: `RESERVE_RELEASE_${nextDayIso}_${reserves.length}_${reserveOverflow}`,
+              createdAt: nextDayIso,
+              deadlineDate: deadline.toISOString(),
+              requiredCount: reserveOverflow,
+              reserveCountAtCreation: reserves.length,
+              candidateIds,
+              autoReleaseIds: candidateIds.slice(0, reserveOverflow),
+            };
+            setReserveReleaseDirective(directive);
+
+            const candidateNames = rankedCandidates
+              .filter(player => candidateIds.includes(player.id))
+              .map(player => `- ${player.firstName} ${player.lastName} (OVR ${player.overallRating}, talent ${player.attributes?.talent ?? player.overallRating}, ${player.age} lat)`)
+              .join('\n');
+            const directiveMail: MailMessage = {
+              id: `MAIL_${directive.id}`,
+              sender: 'Zarząd Klubu',
+              role: 'Prezes Zarządu',
+              subject: 'Rezerwy: konieczne zmniejszenie kadry',
+              body: `Kadra rezerw liczy ${reserves.length} zawodników i przekracza limit ${RESERVE_SQUAD_LIMIT}.\n\nWskaż ${reserveOverflow} zawodników do zwolnienia z poniższej listy kandydatów. Lista jest szersza niż wymagane odejścia, aby sztab mógł ochronić wybranych piłkarzy i wskazać innych.\n\nKandydaci:\n${candidateNames}\n\nTermin decyzji: ${deadline.toLocaleDateString('pl-PL')}. Jeśli sztab nie podejmie decyzji, zarząd zwolni najsłabszych zawodników automatycznie.`,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.BOARD,
+              priority: 90,
+            };
+            setMessages(prev => [directiveMail, ...prev]);
+            showGameNotification({
+              title: 'Limit rezerw przekroczony',
+              message: `Zarząd wymaga zwolnienia ${reserveOverflow} zawodników z rezerw.`,
+              tone: 'warning',
+              actionLabel: 'Rezerwy',
+              onAction: () => navigateTo(ViewState.RESERVES_VIEW),
+            });
+          }
+        }
+      }
+    }
+
     // --- STAFF: miesięczny przegląd kończących się kontraktów ---
     if (userTeamId && !isResigned && nextDay.getDate() === 1) {
       const userClub = clubs.find(c => c.id === userTeamId);
@@ -11772,12 +12014,13 @@ const finalResult: SimulationOutput = {
       // 3b. Wyniki misji regionalnych — skaut może wrócić z pustymi rękami
       let finalYouthPlayers = [...updatedYouthPlayers];
       const regionalMissionResults = new Map<string, YouthPlayer[]>();
+      const academyClubReputation = clubs.find(c => c.id === userTeamId)?.reputation ?? 5;
       completedMissions.forEach(m => {
         if (!m.isRegionScouting) return;
         const scout = scoutPool.find(s => s.id === m.scoutId);
         const networkDepth = scout?.networkDepth ?? 10;
         const slotsLeft = ACADEMY_MAX_SLOTS[academy.level] - finalYouthPlayers.length;
-        const found = AcademyService.resolveRegionalScoutingResult(m, academy.level, slotsLeft, networkDepth, new Date(nextDay));
+        const found = AcademyService.resolveRegionalScoutingResult(m, academy.level, slotsLeft, networkDepth, new Date(nextDay), academyClubReputation);
         regionalMissionResults.set(m.id, found);
         finalYouthPlayers = [...finalYouthPlayers, ...found];
       });
@@ -11897,11 +12140,13 @@ const finalResult: SimulationOutput = {
     // ── AKADEMIA: nabór wychowanków (1 Sierpnia każdego roku) ─────────────────
     if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1
         && academy.lastIntakeYear < nextDay.getFullYear()) {
+      const academyClubReputation = clubs.find(c => c.id === userTeamId)?.reputation ?? 5;
       const newYouths = AcademyService.generateYouthIntake(
         academy.level,
         academy.regionFocus,
         nextDay.getFullYear(),
-        academy.youthPlayers.length
+        academy.youthPlayers.length,
+        academyClubReputation
       );
       if (newYouths.length > 0) {
         const intakeMail: MailMessage = {
@@ -12379,7 +12624,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();
@@ -17080,7 +17325,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
-    reserves, setReserves, reserveCoachId,
+    reserves, setReserves, reserveReleaseDirective, setReserveReleaseDirective, resolveReserveReleaseDirective, reserveCoachId,
     reserveFixtures, setReserveFixtures,
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,

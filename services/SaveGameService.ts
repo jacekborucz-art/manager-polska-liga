@@ -17,6 +17,7 @@ export interface SaveState {
   reserveCoachId: string | null;
   reserveFixtures: any[];
   reserveMatchResults: any[];
+  reserveReleaseDirective?: import('../types').ReserveReleaseDirective | null;
   academy: any;
   scoutPool: any[];
   scoutMarket: any[];
@@ -665,6 +666,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     reserves: asArray(data.reserves),
     reserveCoachId: data.reserveCoachId ?? null,
     academy: data.academy ?? null,
+    reserveReleaseDirective: (data as any).reserveReleaseDirective ?? null,
     scoutPool: asArray(data.scoutPool),
     scoutMarket: asArray(data.scoutMarket),
     scoutMarketRefreshDate: asDateOnlyString(data.scoutMarketRefreshDate),

@@ -214,9 +214,9 @@ const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap
     if (!mail.id.startsWith('SEASON_SUMMARY_')) return null;
     const lines = mail.body.split('\n').map(line => line.trim()).filter(Boolean);
     const championIndex = lines.findIndex(line => line.includes('MISTRZ POLSKI'));
-    const promotionIndex = lines.findIndex(line => line.includes('AWANSOWALI'));
+    const promotionIndex = lines.findIndex(line => line === 'AWANS' || line.includes('AWANSOWALI'));
     const relegationIndex = lines.findIndex(line => line.includes('SPADKOWICZE'));
-    const awardsIndex = lines.findIndex(line => line.includes('ZŁOTE BUTY'));
+    const awardsIndex = lines.findIndex(line => line.includes('NAGRODY INDYWIDUALNE') || line.includes('ZŁOTE BUTY'));
     const championName = championIndex >= 0 ? (lines[championIndex + 1] ?? '') : '';
     const promotionLines = promotionIndex >= 0
       ? lines.slice(promotionIndex + 1, relegationIndex >= 0 ? relegationIndex : undefined)
@@ -227,12 +227,17 @@ const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap
     const awardLines = awardsIndex >= 0 ? lines.slice(awardsIndex + 1) : [];
     const parseTeamLine = (line: string, mode: 'promotion' | 'relegation') => {
       const cleaned = line.replace(/^[-•\s]+/, '');
-      const [labelPart, teamsPart = ''] = cleaned.split(':');
+      const [labelPart, ...teamParts] = cleaned.split(':');
+      const teamsPart = teamParts.join(':');
       const label = labelPart.replace(/^Z\s+/i, '').trim();
+      const routeMatch = label.match(/^(.*?)\s*(?:->|→)\s*(.*?)$/);
       return {
-        from: mode === 'relegation' ? label : '',
-        to: mode === 'promotion' ? label : '',
-        teams: teamsPart.split(',').map(team => team.trim()).filter(Boolean),
+        from: routeMatch ? routeMatch[1].trim() : mode === 'relegation' ? label : '',
+        to: routeMatch ? routeMatch[2].trim() : mode === 'promotion' ? label : '',
+        teams: teamsPart
+          .split(',')
+          .map(team => team.trim())
+          .filter(team => team.length > 0 && team.toLocaleLowerCase('pl-PL') !== 'brak'),
       };
     };
     const parsedAwards: {
@@ -318,8 +323,65 @@ const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap
     );
   };
 
-  const promotionTeams = summary.promotions.flatMap(promotion => promotion.teams);
-  const relegationTeams = summary.relegations.flatMap(relegation => relegation.teams);
+  const movementLeagueDisplayName: Record<string, string> = {
+    'ekstraklasy': 'Ekstraklasa',
+    '1. ligi': '1. Liga',
+    '2. ligi': '2. Liga',
+    'regionalna': 'Liga Regionalna',
+    'regionalnej': 'Liga Regionalna',
+  };
+
+  const normalizeMovementLeagueName = (name: string): string =>
+    movementLeagueDisplayName[name.trim().toLocaleLowerCase('pl-PL')] ?? name;
+
+  const formatMovementRoute = (from?: string, to?: string): string => {
+    const fromLabel = from ? normalizeMovementLeagueName(from) : '';
+    const toLabel = to ? normalizeMovementLeagueName(to) : '';
+    if (fromLabel && toLabel) return `${fromLabel} -> ${toLabel}`;
+    if (toLabel) return `Do ${toLabel}`;
+    if (fromLabel) return `Z ${fromLabel}`;
+    return 'Ruch ligowy';
+  };
+
+  const formatClubCount = (count: number): string => {
+    const lastDigit = count % 10;
+    const lastTwoDigits = count % 100;
+    if (count === 1) return '1 klub';
+    if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)) return `${count} kluby`;
+    return `${count} klubów`;
+  };
+
+  const renderMovementGroup = (
+    movement: { from?: string; to?: string; teams: string[] },
+    tone: 'green' | 'red'
+  ) => {
+    const teams = [...new Set(movement.teams)].filter(Boolean);
+    if (teams.length === 0) return null;
+
+    const route = formatMovementRoute(movement.from, movement.to);
+    const toneClass = tone === 'green'
+      ? 'border-emerald-300/20 bg-emerald-500/[0.04] text-emerald-300'
+      : 'border-rose-300/20 bg-rose-500/[0.04] text-rose-300';
+
+    return (
+      <div key={`${tone}_${route}`} className={`border px-3 py-3 ${toneClass}`}>
+        <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-[10px] font-black italic uppercase tracking-tighter">{route}</p>
+          <span className="shrink-0 text-[8px] font-black italic uppercase tracking-tighter text-white/45">{formatClubCount(teams.length)}</span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {teams.map(team => renderTeamRow(team, tone))}
+        </div>
+      </div>
+    );
+  };
+
+  const promotionGroups = summary.promotions
+    .map(promotion => renderMovementGroup(promotion, 'green'))
+    .filter(Boolean);
+  const relegationGroups = summary.relegations
+    .map(relegation => renderMovementGroup(relegation, 'red'))
+    .filter(Boolean);
 
   const renderAwardRow = (
     label: string,
@@ -361,12 +423,8 @@ const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap
 
       <div>
         <p className="mb-4 text-[13px] font-black italic uppercase tracking-tighter text-emerald-300">Awans</p>
-        <div className="grid gap-2 md:grid-cols-2">
-          {promotionTeams.length > 0 ? promotionTeams.map(team => (
-            <div key={`promotion_${team}`}>
-              {renderTeamRow(team, 'green')}
-            </div>
-          )) : (
+        <div className="space-y-3">
+          {promotionGroups.length > 0 ? promotionGroups : (
             <p className="text-sm font-semibold text-slate-400">Brak awansów.</p>
           )}
         </div>
@@ -374,12 +432,8 @@ const SeasonSummaryMail: React.FC<{ mail: MailMessage; clubs: Club[]; playersMap
 
       <div>
         <p className="mb-4 text-[13px] font-black italic uppercase tracking-tighter text-rose-300">Spadkowicze</p>
-        <div className="grid gap-2 md:grid-cols-2">
-          {relegationTeams.length > 0 ? relegationTeams.map(team => (
-            <div key={`relegation_${team}`}>
-              {renderTeamRow(team, 'red')}
-            </div>
-          )) : (
+        <div className="space-y-3">
+          {relegationGroups.length > 0 ? relegationGroups : (
             <p className="text-sm font-semibold text-slate-400">Brak spadków.</p>
           )}
         </div>

@@ -1469,6 +1469,16 @@ export interface Player {
   lojalnosc?: number;
 }
 
+export interface ReserveReleaseDirective {
+  id: string;
+  createdAt: string;
+  deadlineDate: string;
+  requiredCount: number;
+  reserveCountAtCreation: number;
+  candidateIds: string[];
+  autoReleaseIds: string[];
+}
+
 export interface MysteryAgentContractOffer {
   signingFee: number;
   salary: number;

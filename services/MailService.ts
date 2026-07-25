@@ -19,6 +19,20 @@ export interface SeasonSummaryData {
   }[];
 }
 
+const formatSeasonMovementRoute = (from: string, to: string): string => {
+  const leagueDisplayName: Record<string, string> = {
+    'ekstraklasy': 'Ekstraklasa',
+    '1. ligi': '1. Liga',
+    '2. ligi': '2. Liga',
+    'regionalna': 'Liga Regionalna',
+    'regionalnej': 'Liga Regionalna',
+  };
+
+  const normalizeLeagueName = (name: string): string => leagueDisplayName[name.trim().toLocaleLowerCase('pl-PL')] ?? name;
+
+  return `${normalizeLeagueName(from)} -> ${normalizeLeagueName(to)}`;
+};
+
 type WCQPlayoffMailStage = 'SF' | 'FINAL';
 
 const getWCQPlayoffWinner = (result: WCQPlayoffMatchResult): string => {
@@ -485,9 +499,10 @@ generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
     body += `\n${separator}\n\n`;
 
     body += `AWANS\n`;
-    if (data.promotions.length > 0) {
-      data.promotions.forEach(p => {
-        body += `    ${p.to}: ${p.teams.join(', ')}\n`;
+    const promotionGroups = data.promotions.filter(p => p.teams.length > 0);
+    if (promotionGroups.length > 0) {
+      promotionGroups.forEach(p => {
+        body += `    ${formatSeasonMovementRoute(p.from, p.to)}: ${p.teams.join(', ')}\n`;
       });
     } else {
       body += `    Brak awansów\n`;
@@ -495,9 +510,14 @@ generateSeasonSummaryMail: (data: SeasonSummaryData): MailMessage => {
     body += `\n`;
 
     body += `SPADKOWICZE\n`;
-    data.relegations.forEach(r => {
-      body += `    Z ${r.from}: ${r.teams.join(', ')}\n`;
-    });
+    const relegationGroups = data.relegations.filter(r => r.teams.length > 0);
+    if (relegationGroups.length > 0) {
+      relegationGroups.forEach(r => {
+        body += `    ${formatSeasonMovementRoute(r.from, r.to)}: ${r.teams.join(', ')}\n`;
+      });
+    } else {
+      body += `    Brak spadków\n`;
+    }
     body += `\n${separator}\n\n`;
 
     body += `NAGRODY INDYWIDUALNE\n`;

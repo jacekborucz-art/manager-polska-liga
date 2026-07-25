@@ -7,6 +7,7 @@ import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { calcReputacja } from './SquadGeneratorService';
+import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 
 // ── Stałe konfiguracyjne ─────────────────────────────────────────────────────
 
@@ -91,6 +92,20 @@ const BUDGET_MULTIPLIERS: { min: number; max: number; multiplier: number }[] = [
   { min: 300_000, max: Infinity, multiplier: 1.40 },
 ];
 
+const YOUTH_ATTR_KEYS: (keyof PlayerAttributes)[] = [
+  'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking', 'finishing',
+  'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
+  'freeKicks', 'talent', 'penalties', 'corners', 'aggression', 'crossing',
+  'leadership', 'mentality', 'workRate',
+];
+
+const PROMOTION_CORE_KEYS: Record<PlayerPosition, (keyof PlayerAttributes)[]> = {
+  [PlayerPosition.GK]: ['goalkeeping', 'positioning', 'mentality', 'strength', 'defending', 'workRate'],
+  [PlayerPosition.DEF]: ['defending', 'positioning', 'strength', 'heading', 'stamina', 'workRate', 'mentality', 'aggression', 'pace'],
+  [PlayerPosition.MID]: ['passing', 'technique', 'dribbling', 'pace', 'vision', 'attacking', 'crossing', 'freeKicks', 'corners', 'stamina'],
+  [PlayerPosition.FWD]: ['finishing', 'attacking', 'pace', 'dribbling', 'positioning', 'heading', 'technique', 'mentality'],
+};
+
 // ── Pomocnicze losowanie ──────────────────────────────────────────────────────
 
 function seededRng(seed: number) {
@@ -109,6 +124,88 @@ function pick<T>(arr: T[], rng: () => number): T {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function getAcademyOverallFloor(level: ClubAcademy['level'], clubReputation: number): number {
+  const rep = clamp(clubReputation, 1, 10);
+  return Math.round(clamp(48 + level * 2 + (rep - 4) * 1.1, 50, 64));
+}
+
+function rollHiddenTalent(level: ClubAcademy['level'], clubReputation: number, rng: () => number): number {
+  const cap = INTAKE_TALENT_CAP[level];
+  const rep = clamp(clubReputation, 1, 10);
+  const floor = Math.round(clamp(44 + level * 2 + (rep - 4) * 0.8, 45, 62));
+  const base = floor + Math.pow(rng(), 1.12) * (cap - floor);
+  const lateBloomBonus = rng() < clamp(0.04 + level * 0.012 + (rep - 5) * 0.006, 0.03, 0.11)
+    ? 4 + rng() * 7
+    : 0;
+  return Math.round(clamp(base + lateBloomBonus, floor, cap));
+}
+
+function rollTargetYouthOverall(
+  level: ClubAcademy['level'],
+  clubReputation: number,
+  hiddenTalent: number,
+  rng: () => number
+): number {
+  const rep = clamp(clubReputation, 1, 10);
+  const floor = getAcademyOverallFloor(level, rep);
+  const commonCeiling = Math.round(clamp(floor + 8 + Math.floor(level / 2), 58, 70));
+  let target = floor + Math.floor(rng() * (commonCeiling - floor + 1));
+
+  const solidChance = clamp(0.10 + level * 0.035 + (rep - 5) * 0.012, 0.08, 0.34);
+  if (hiddenTalent >= 62 && rng() < solidChance) {
+    target = Math.max(target, 60 + Math.floor(rng() * 10)); // 60-69
+  }
+
+  const greatTalentChance = clamp(0.012 + level * 0.008 + (rep >= 8 ? 0.015 : 0) + (hiddenTalent >= 88 ? 0.015 : 0), 0.01, 0.08);
+  if (hiddenTalent >= 78 && rng() < greatTalentChance) {
+    target = Math.max(target, 70 + Math.floor(rng() * (level >= 4 ? 11 : 9))); // 70-80
+  }
+
+  const hardCap = level <= 1 ? 72 : level === 2 ? 75 : level === 3 ? 78 : 80;
+  return Math.round(clamp(target, floor, Math.min(hardCap, Math.max(floor, hiddenTalent + 6))));
+}
+
+function tuneAttributesTowardOverall(
+  attrs: PlayerAttributes,
+  position: PlayerPosition,
+  targetOverall: number,
+  cap: number
+): PlayerAttributes {
+  let tuned = { ...attrs };
+  const coreKeys = PROMOTION_CORE_KEYS[position];
+
+  for (let pass = 0; pass < 6; pass++) {
+    const current = PlayerAttributesGenerator.calculateOverall(tuned, position);
+    const diff = targetOverall - current;
+    if (Math.abs(diff) === 0) break;
+
+    coreKeys.forEach(key => {
+      const step = diff > 0
+        ? Math.ceil(diff * 0.85)
+        : Math.floor(diff * 0.65);
+      tuned[key] = Math.round(clamp(tuned[key] + step, 1, cap));
+    });
+  }
+
+  return tuned;
+}
+
+function getPromotionOverallTarget(
+  currentOverall: number,
+  hiddenTalent: number,
+  level: ClubAcademy['level'],
+  clubReputation: number
+): number {
+  let target = Math.max(currentOverall, getAcademyOverallFloor(level, clubReputation));
+  if (hiddenTalent >= 88) target = Math.max(target, 72);
+  else if (hiddenTalent >= 80) target = Math.max(target, 68);
+  else if (hiddenTalent >= 72) target = Math.max(target, 62);
+  else if (hiddenTalent >= 64) target = Math.max(target, 58);
+
+  const cap = level <= 1 ? 72 : level === 2 ? 75 : level === 3 ? 78 : 80;
+  return Math.round(clamp(target, 50, cap));
 }
 
 // ── Generowanie atrybutów wychowanka ─────────────────────────────────────────
@@ -147,27 +244,35 @@ const ATTR_PROFILES: Record<PlayerPosition, Partial<Record<keyof PlayerAttribute
 function generateYouthAttributes(
   position: PlayerPosition,
   hiddenTalent: number,
-  rng: () => number
+  rng: () => number,
+  targetOverall: number
 ): PlayerAttributes {
   const profile = ATTR_PROFILES[position];
-  const talentMod = 0.3 + (hiddenTalent / 100) * 0.5; // 0.30 – 0.80
-  const allKeys: (keyof PlayerAttributes)[] = [
-    'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking', 'finishing',
-    'technique', 'vision', 'dribbling', 'heading', 'positioning', 'goalkeeping',
-    'freeKicks', 'talent', 'penalties', 'corners', 'aggression', 'crossing',
-    'leadership', 'mentality', 'workRate',
-  ];
   const attrs: Partial<PlayerAttributes> = {};
-  allKeys.forEach(key => {
+  YOUTH_ATTR_KEYS.forEach(key => {
     if (key === 'talent') {
       attrs[key] = hiddenTalent;
       return;
     }
+
+    if (key === 'goalkeeping' && position !== PlayerPosition.GK) {
+      attrs[key] = Math.round(1 + rng() * 14);
+      return;
+    }
+
     const weight = profile[key] ?? 0.15;
-    const base = 12 + talentMod * 25 * weight + rng() * 12;
-    attrs[key] = Math.round(clamp(base, 8, 45));
+    const noise = (rng() - 0.5) * 10;
+    let value = targetOverall + (weight - 0.55) * 24 + noise;
+
+    if (weight >= 0.70) value += 3;
+    if (weight <= 0.20) value -= 8;
+    if (position === PlayerPosition.GK && ['dribbling', 'heading', 'attacking', 'finishing', 'crossing'].includes(key)) {
+      value = Math.min(value, 32 + rng() * 8);
+    }
+
+    attrs[key] = Math.round(clamp(value, 1, Math.min(82, hiddenTalent + 8)));
   });
-  return attrs as PlayerAttributes;
+  return tuneAttributesTowardOverall(attrs as PlayerAttributes, position, targetOverall, Math.min(84, hiddenTalent + 10));
 }
 
 // ── Region wychowanka (z uwzględnieniem regionFocus akademii) ─────────────────
@@ -254,7 +359,8 @@ export const AcademyService = {
     level: ClubAcademy['level'],
     regionFocus: Region | undefined,
     season: number,
-    existingCount: number
+    existingCount: number,
+    clubReputation: number = 5
   ): YouthPlayer[] {
     const seed = season * 7919 + level * 131 + Date.now() % 9999;
     const rng = seededRng(seed);
@@ -263,7 +369,6 @@ export const AcademyService = {
     const count = Math.min(slotsLeft, minC + Math.floor(rng() * (maxC - minC + 1)));
     if (count <= 0) return [];
 
-    const talentCap = INTAKE_TALENT_CAP[level];
     const positions = [
       PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.DEF,
       PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID,
@@ -278,9 +383,10 @@ export const AcademyService = {
       const pos = pick(positions, rng);
       const region = pickRegion(regionFocus, rng);
       const name = NameGeneratorService.getRandomName(region);
-      const hiddenTalent = Math.round(20 + rng() * talentCap);
+      const hiddenTalent = rollHiddenTalent(level, clubReputation, rng);
+      const targetOverall = rollTargetYouthOverall(level, clubReputation, hiddenTalent, rng);
       const age = 14 + Math.floor(rng() * 4); // 14–17
-      const attrs = generateYouthAttributes(pos, hiddenTalent, rng);
+      const attrs = generateYouthAttributes(pos, hiddenTalent, rng, targetOverall);
       result.push({
         id: `YOUTH_${season}_${i}_${Math.floor(rng() * 99999)}`,
         firstName: name.firstName,
@@ -329,7 +435,8 @@ export const AcademyService = {
       ];
       allKeys.forEach(key => {
         if (Math.random() < 0.04 + (youth.developmentFocus === key ? 0.05 : 0)) {
-          updatedAttrs[key] = Math.min(55, updatedAttrs[key] + 1);
+          const growthCap = Math.round(clamp(Math.max(62, youth.hiddenTalent + 4, 58 + level * 4), 62, 88));
+          updatedAttrs[key] = Math.min(growthCap, updatedAttrs[key] + 1);
         }
       });
 
@@ -349,18 +456,17 @@ export const AcademyService = {
     currentDate: Date,
     clubReputation: number = 5,
     clubTier: number = 1,
-    clubCountry?: string
+    clubCountry?: string,
+    academyLevel: ClubAcademy['level'] = 1
   ): Player {
     const contractEnd = new Date(currentDate);
     contractEnd.setFullYear(contractEnd.getFullYear() + 2);
-    const overallKeys: (keyof PlayerAttributes)[] = [
-      'strength', 'stamina', 'pace', 'defending', 'passing', 'attacking',
-      'finishing', 'technique', 'vision', 'dribbling', 'heading', 'positioning',
-      'goalkeeping', 'freeKicks', 'penalties', 'aggression', 'crossing', 'leadership', 'mentality', 'workRate',
-    ];
-    const overallRating = Math.round(
-      overallKeys.reduce((s, k) => s + youth.attributes[k], 0) / overallKeys.length
-    );
+    const currentOverall = PlayerAttributesGenerator.calculateOverall(youth.attributes, youth.position);
+    const targetOverall = getPromotionOverallTarget(currentOverall, youth.hiddenTalent, academyLevel, clubReputation);
+    const promotionAttributes = targetOverall > currentOverall
+      ? tuneAttributesTowardOverall(youth.attributes, youth.position, targetOverall, Math.min(88, Math.max(72, youth.hiddenTalent + 8)))
+      : { ...youth.attributes };
+    const overallRating = PlayerAttributesGenerator.calculateOverall(promotionAttributes, youth.position);
     const promotedPlayer = {
       id: `PROMOTED_${youth.id}`,
       firstName: youth.firstName,
@@ -371,7 +477,7 @@ export const AcademyService = {
       nationalityCountry: youth.nationalityCountry,
       position: youth.position,
       overallRating,
-      attributes: { ...youth.attributes },
+      attributes: promotionAttributes,
       stats: {
         goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0,
         matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [],
@@ -626,6 +732,7 @@ export const AcademyService = {
     slotsAvailable: number,
     networkDepth: number = 10,
     completionDate: Date,
+    clubReputation: number = 5,
   ): YouthPlayer[] {
     if (!mission.isRegionScouting || slotsAvailable <= 0) return [];
 
@@ -641,7 +748,6 @@ export const AcademyService = {
 
     const seed = completionDate.getTime() + Math.floor(Math.random() * 9999);
     const rng = seededRng(seed);
-    const talentCap = INTAKE_TALENT_CAP[academyLevel];
     const positionPool = [
       PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.DEF, PlayerPosition.DEF,
       PlayerPosition.MID, PlayerPosition.MID, PlayerPosition.MID,
@@ -658,8 +764,10 @@ export const AcademyService = {
       const ageMin = mission.ageMin ?? 15;
       const ageMax = mission.ageMax ?? 21;
       const age = ageMin + Math.floor(rng() * (ageMax - ageMin + 1));
-      const hiddenTalent = Math.round(20 + rng() * talentCap);
-      const attrs = generateYouthAttributes(pos, hiddenTalent, rng);
+      const hiddenTalent = rollHiddenTalent(academyLevel, clubReputation, rng);
+      const scoutBonus = Math.min(3, Math.max(0, Math.floor((networkDepth - 10) / 4)));
+      const targetOverall = rollTargetYouthOverall(academyLevel, clubReputation, hiddenTalent, rng) + scoutBonus;
+      const attrs = generateYouthAttributes(pos, hiddenTalent, rng, Math.min(80, targetOverall));
       result.push({
         id: `YOUTH_SCOUT_${completionDate.getTime()}_${i}_${Math.floor(rng() * 99999)}`,
         firstName: name.firstName,

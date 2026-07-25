@@ -479,7 +479,8 @@ export const ReservesView: React.FC = () => {
   const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, currentDate, seasonNumber,
           players, setPlayers, setReserves, lineups, updateLineup,
           coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory,
-          reserveFixtures, reserveMatchResults } = useGame();
+          reserveFixtures, reserveMatchResults, reserveReleaseDirective, resolveReserveReleaseDirective,
+          showGameNotification } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -487,6 +488,7 @@ export const ReservesView: React.FC = () => {
   const [progressRange, setProgressRange] = useState<ProgressRange>('DAY');
   const [progressWindowOffset, setProgressWindowOffset] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; player: Player } | null>(null);
+  const [selectedReleaseIds, setSelectedReleaseIds] = useState<Set<string>>(() => new Set());
 
   const moveToFirstTeam = (player: Player) => {
     if (!userTeamId) return;
@@ -524,6 +526,50 @@ export const ReservesView: React.FC = () => {
 
   const myClub = clubs.find(c => c.id === userTeamId);
   const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
+  const reserveReleaseCandidates = useMemo(() => {
+    if (!reserveReleaseDirective) return [];
+    const reserveMap = new Map(reserves.map(player => [player.id, player]));
+    return reserveReleaseDirective.candidateIds
+      .map(id => reserveMap.get(id))
+      .filter((player): player is Player => Boolean(player));
+  }, [reserveReleaseDirective, reserves]);
+  const activeReleaseDirective = reserveReleaseDirective && reserves.length > 30 && reserveReleaseCandidates.length > 0
+    ? reserveReleaseDirective
+    : null;
+  const validSelectedReleaseIds = useMemo(() => {
+    const candidateSet = new Set(reserveReleaseCandidates.map(player => player.id));
+    return Array.from(selectedReleaseIds).filter(id => candidateSet.has(id));
+  }, [reserveReleaseCandidates, selectedReleaseIds]);
+  const releaseDeadlineLabel = activeReleaseDirective
+    ? new Date(activeReleaseDirective.deadlineDate).toLocaleDateString('pl-PL')
+    : '';
+
+  const toggleReleaseCandidate = (playerId: string) => {
+    if (!activeReleaseDirective) return;
+    const candidateSet = new Set(reserveReleaseCandidates.map(player => player.id));
+    setSelectedReleaseIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => candidateSet.has(id)));
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else if (next.size < activeReleaseDirective.requiredCount) {
+        next.add(playerId);
+      }
+      return next;
+    });
+  };
+
+  const confirmReserveReleases = () => {
+    if (!activeReleaseDirective) return;
+    const result = resolveReserveReleaseDirective(validSelectedReleaseIds);
+    showGameNotification({
+      title: result.success ? 'Decyzja wysłana' : 'Niepełny wybór',
+      message: result.message,
+      tone: result.success ? 'success' : 'warning',
+    });
+    if (result.success) {
+      setSelectedReleaseIds(new Set());
+    }
+  };
 
   const weekKey = useMemo(
     () => Math.floor(currentDate.getTime() / (7 * 24 * 3600 * 1000)) + seasonNumber * 1000,
@@ -885,6 +931,79 @@ export const ReservesView: React.FC = () => {
           </div>
           </div>
         </div>
+
+        {activeReleaseDirective && (
+          <section className="mb-4 rounded-lg border border-rose-400/35 bg-rose-950/35 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-md">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <p className="font-black italic uppercase tracking-tighter text-[11px] text-rose-300">
+                  Dyrektywa zarządu
+                </p>
+                <h2 className="font-black italic uppercase tracking-tighter text-2xl leading-none text-white">
+                  Rezerwy ponad limitem 30 zawodników
+                </h2>
+                <p className="mt-2 max-w-4xl font-black italic uppercase tracking-tighter text-[11px] leading-relaxed text-slate-300">
+                  Wskaż dokładnie {activeReleaseDirective.requiredCount} zawodników do zwolnienia z listy kandydatów. Jeśli decyzja nie zapadnie do {releaseDeadlineLabel}, zarząd zwolni najsłabszych automatycznie.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <div className="rounded-lg border border-white/10 bg-black/25 px-4 py-2 text-center">
+                  <p className="font-black italic uppercase tracking-tighter text-[10px] text-slate-400">Wybrano</p>
+                  <p className="font-black italic uppercase tracking-tighter text-2xl leading-none text-white">
+                    {validSelectedReleaseIds.length}/{activeReleaseDirective.requiredCount}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={confirmReserveReleases}
+                  disabled={validSelectedReleaseIds.length !== activeReleaseDirective.requiredCount}
+                  className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-5 py-3 font-black italic uppercase tracking-tighter text-[12px] text-emerald-100 transition-colors hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-500"
+                >
+                  Zatwierdź zwolnienia
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {reserveReleaseCandidates.map(player => {
+                const selected = selectedReleaseIds.has(player.id);
+                return (
+                  <button
+                    key={player.id}
+                    type="button"
+                    onClick={() => toggleReleaseCandidate(player.id)}
+                    className={`flex min-h-[74px] items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                      selected
+                        ? 'border-rose-300/70 bg-rose-500/25'
+                        : 'border-white/10 bg-black/25 hover:border-rose-300/40 hover:bg-rose-500/10'
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-black italic uppercase tracking-tighter text-[13px] leading-tight text-white">
+                        {player.firstName} {player.lastName}
+                      </span>
+                      <span className="mt-1 block font-black italic uppercase tracking-tighter text-[10px] text-slate-400">
+                        {POSITION_FULL_NAME[player.position]} · {player.age} lat · pensja {(player.annualSalary ?? 0).toLocaleString('pl-PL')} PLN
+                      </span>
+                    </span>
+                    <span className="ml-3 flex shrink-0 items-center gap-2">
+                      <span className="rounded-md border border-white/10 bg-black/35 px-2 py-1 font-black italic uppercase tracking-tighter text-[11px] text-white">
+                        OVR {player.overallRating}
+                      </span>
+                      <span className="rounded-md border border-amber-300/20 bg-amber-400/10 px-2 py-1 font-black italic uppercase tracking-tighter text-[11px] text-amber-200">
+                        TAL {player.attributes?.talent ?? player.overallRating}
+                      </span>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-md border font-black italic uppercase tracking-tighter text-[12px] ${
+                        selected ? 'border-rose-200 bg-rose-300 text-rose-950' : 'border-white/15 bg-black/25 text-slate-500'
+                      }`}>
+                        {selected ? '✓' : ''}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_450px_360px]">
         <div className="min-w-0 overflow-x-auto rounded-lg border border-slate-700 bg-slate-950/20">
