@@ -6,6 +6,18 @@ import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
 import { ManagerNegotiationInfluenceService } from '../../services/ManagerNegotiationInfluenceService';
 
+const sanitizeAgentInterestMessage = (message: string): string => {
+  const normalized = message.toLowerCase();
+  const revealsReputationThreshold =
+    normalized.includes('reputacji co najmniej') ||
+    /klub(?:u|ami)? o reputacji\s+\d+/i.test(message) ||
+    /reputacji\s+\d+\+/i.test(message);
+
+  return revealsReputationThreshold
+    ? 'Na ten moment agent nie chce rozpoczynać rozmów w tym kierunku.'
+    : message;
+};
+
 export const FreeAgentNegotiationView: React.FC = () => {
   const {
     viewedPlayerId,
@@ -86,6 +98,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
   if (!player || !myClub) return null;
 
   const isInterested = agentInterest.interested;
+  const visibleAgentInterestMessage = sanitizeAgentInterestMessage(agentInterest.message);
   const availableBudget = spendableTransferBudget + extraBudget;
   const totalCostPreview = salary * years + bonus;
   const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
@@ -229,8 +242,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
               <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-4">
                 MOJ KLIENT NIE JEST ZAINTERESOWANY
               </h3>
-              <p className="text-slate-400 text-lg italic max-w-2xl mx-auto">
-                "{agentInterest.message || 'Szukamy klubu o wyzszej renomie.'}"
+              <p className="font-black italic uppercase tracking-tighter text-slate-400 text-lg max-w-2xl mx-auto">
+                "{visibleAgentInterestMessage || 'Na ten moment agent nie chce rozpoczynać rozmów w tym kierunku.'}"
               </p>
             </div>
           ) : (
