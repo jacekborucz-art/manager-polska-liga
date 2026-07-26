@@ -3151,8 +3151,9 @@ dynamicThreshold *= undedogThresholdMultiplier;
            dynamicThreshold *= (1 + nextPostGoalPenaltyPct);
         }
        
-       const thresholdPressureTax = isUnderdog ? 1.34 : 1.56;
-       const currentThreshold = Math.min(0.95, dynamicThreshold * thresholdPressureTax);
+       // dynamicThreshold zawiera już presję jakości, taktyki, formy, morale i wyniku.
+       // Dodatkowy globalny mnożnik wypychał próg pod 0.90+, przez co akcje rzadko kończyły się strzałem.
+       const currentThreshold = clamp(dynamicThreshold, 0.20, 0.92);
        if (forceZeroShotChance && successfulPasses / diceRolls <= currentThreshold) {
             successfulPasses = Math.min(diceRolls, Math.floor(diceRolls * currentThreshold) + 1);
        }
@@ -3467,13 +3468,13 @@ if (keeper.tier === 4 && seededRng(currentSeed, nextMinute, 8802) < 0.13) { // 1
                 }
             }
 
-            const noShotEventType = noShotRoll < 0.25
+            const noShotEventType = noShotRoll < 0.06
                 ? MatchEventType.OFFSIDE
-                : noShotRoll < 0.32
+                : noShotRoll < 0.20
                 ? MatchEventType.CORNER
                 : noShotRoll < 0.55
                 ? MatchEventType.WINGER_STOPPED
-                : noShotRoll < 0.72
+                : noShotRoll < 0.76
                 ? MatchEventType.DRIBBLING
                 : MatchEventType.PLAY_SIDE;
             const noShotPool = MATCH_COMMENTARY_DB[noShotEventType] || [];
