@@ -2146,6 +2146,7 @@ if (prev.isExtraTime && nextMinute >= 121) {
         const userXIForInstructions = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
         const opponentXIForInstructions = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
         const userFatigueForInstructions = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
+        const opponentFatigueForInstructions = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
         const userIndividualInstructions = userSide === 'HOME'
           ? (prev.homeIndividualInstructions ?? {})
           : (prev.awayIndividualInstructions ?? {});
@@ -2232,6 +2233,18 @@ if (prev.isExtraTime && nextMinute >= 121) {
               responseFactor: instr.markingResponseFactor ?? 1.0,
             })
           : { shotModifier: 0, foulMultiplier: 1, penaltyMultiplier: 1 };
+        const aiTeamMarking = LiveMatchInstructionBalanceService.getMarkingProfile({
+          defendingPlayers: opponentPlayersForInstructions,
+          defendingStartingXI: opponentXIForInstructions,
+          attackingPlayers: userPlayersForInstructions,
+          attackingStartingXI: userXIForInstructions,
+          marking: (currentAiShout?.marking ?? 'NONE') as InstructionMarking,
+          opponentPassing: instr.passing,
+          opponentTempo: instr.tempo,
+          opponentMindset: instr.mindset,
+          fatigueMap: opponentFatigueForInstructions,
+          responseFactor: (currentAiShout?.markingResponseFactor ?? 1.0) as number,
+        });
         let pActionMod = 1.0; 
         let pFatigueMod = 1.0;
         let pGoalMod = 1.0;
@@ -2302,6 +2315,7 @@ if (prev.isExtraTime && nextMinute >= 121) {
           pRiskMod *= 1 + clamp(userIndividualBuildUp.turnoverRiskModifier, -0.05, 0.12) * 0.18;
           pIncidentMod *= userIndividualMarking.foulMultiplier;
         }
+        pActionMod *= 1 + clamp(aiTeamMarking.shotModifier, -0.020, 0.010) * 1.10;
 
         // PRE-MATCH BRIEFING MOTIVATION — aktywne dopóki nie wygaśnie
         const userLeadershipMorale = userSide === 'HOME' ? homeLeadershipMorale : awayLeadershipMorale;

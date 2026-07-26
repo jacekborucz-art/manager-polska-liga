@@ -371,6 +371,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           passing: 'MIXED',
           pressing: 'NORMAL',
           counterAttack: 'NORMAL',
+          marking: 'NONE',
           expiryMinute: -1,
           tempoExpiry: -1,
           mindsetExpiry: -1,
@@ -381,12 +382,14 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           passingCooldown: -1,
           pressingCooldown: -1,
           counterAttackCooldown: -1,
+          markingCooldown: -1,
           tempoResponseFactor: 1.0,
           mindsetResponseFactor: 1.0,
           intensityResponseFactor: 1.0,
           passingResponseFactor: 1.0,
           pressingResponseFactor: 1.0,
           counterAttackResponseFactor: 1.0,
+          markingResponseFactor: 1.0,
          lastChangeMinute: -5,},
         playedPlayerIds: [],
         aiActiveShout: preMatchInstr ? { id: 'pre_match', ...preMatchInstr, expiryMinute: 999 } : null,
@@ -1424,6 +1427,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               userShotsOnTarget: userStats.shotsOnTarget,
               aiStakes: 'LOW_STAKES',
               userStakes: 'LOW_STAKES',
+              userTempo: uInstr.tempo,
               aiPaceAvg: oAvgPace,
               aiTechAvg: oAvgTech,
               userPaceAvg: uAvgPace,
@@ -1439,6 +1443,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           : 0;
         const aiPassingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 803) * 0.8).toFixed(2)) : 1.0;
         const aiPressingRf  = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 804) * 0.8).toFixed(2)) : 1.0;
+        const aiMarkingRf   = nextAiActiveShout ? parseFloat((0.6 + seededRng(currentSeed, aiShoutMinute, 806) * 0.8).toFixed(2)) : 1.0;
         const isAiAttacking = !isUserAttacking;
         if (nextAiActiveShout) {
           shotThreshold += LiveMatchInstructionBalanceService.getInstructionShotModifier(
@@ -1460,6 +1465,33 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
         const uFatigueMap = userSide === 'HOME' ? localHomeFatigue : localAwayFatigue;
         const oFatigueMap = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
+        const userMarkingProfile = LiveMatchInstructionBalanceService.getMarkingProfile({
+          defendingPlayers: uPlayersList,
+          defendingStartingXI: uXIList,
+          attackingPlayers: oPlayersList,
+          attackingStartingXI: oXIList,
+          marking: uInstr.marking ?? 'NONE',
+          opponentPassing: nextAiActiveShout?.passing ?? 'MIXED',
+          opponentTempo: nextAiActiveShout?.tempo ?? 'NORMAL',
+          opponentMindset: nextAiActiveShout?.mindset ?? 'NEUTRAL',
+          fatigueMap: uFatigueMap,
+          responseFactor: uInstr.markingResponseFactor ?? 1.0,
+        });
+        const aiMarkingProfile = LiveMatchInstructionBalanceService.getMarkingProfile({
+          defendingPlayers: oPlayersList,
+          defendingStartingXI: oXIList,
+          attackingPlayers: uPlayersList,
+          attackingStartingXI: uXIList,
+          marking: nextAiActiveShout?.marking ?? 'NONE',
+          opponentPassing: uInstr.passing,
+          opponentTempo: uInstr.tempo,
+          opponentMindset: uInstr.mindset,
+          fatigueMap: oFatigueMap,
+          responseFactor: aiMarkingRf,
+        });
+        shotThreshold += isUserAttacking
+          ? aiMarkingProfile.shotModifier
+          : userMarkingProfile.shotModifier;
         const userBuildUpProfile = LiveMatchInstructionBalanceService.getBuildUpAccuracyProfile(
           uPlayersList,
           uXIList,
