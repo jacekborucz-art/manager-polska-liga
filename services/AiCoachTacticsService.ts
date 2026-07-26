@@ -1,4 +1,4 @@
-import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack, InstructionPassing } from '../types';
+import { Club, Player, PlayerPosition, Coach, InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPressing, InstructionCounterAttack, InstructionPassing, InstructionMarking } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { AiOpponentMatchReport, isDefensiveStartJustified } from './AiOpponentAnalysisService';
 import { TacticalInstructionMatrixService } from './TacticalInstructionMatrixService';
@@ -11,6 +11,7 @@ type AiInstructions = {
   pressing?: InstructionPressing;
   counterAttack?: InstructionCounterAttack;
   passing?: InstructionPassing;
+  marking?: InstructionMarking;
   // AI Exploit Window:
   // Optional minute until which MatchLiveView may keep this in-match instruction active even
   // if the next AI decision tick returns null. This exists because a good coach should not
@@ -86,6 +87,165 @@ const getTopLineAvg = (players: Player[], pos: PlayerPosition, topN: number): nu
     .slice(0, topN);
   if (line.length === 0) return 60;
   return line.reduce((s, p) => s + p.overallRating, 0) / line.length;
+};
+
+const getTopPlayersByPosition = (
+  players: Player[],
+  positions: PlayerPosition[],
+  topN: number
+): Player[] => players
+  .filter(player => positions.includes(player.position))
+  .sort((a, b) => b.overallRating - a.overallRating)
+  .slice(0, topN);
+
+const getWeightedPlayerAverage = (
+  players: Player[],
+  weights: Partial<Record<keyof Player['attributes'], number>>
+): number => {
+  if (players.length === 0) return 60;
+  const entries = Object.entries(weights) as Array<[keyof Player['attributes'], number]>;
+  const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  if (totalWeight <= 0) return 60;
+
+  return players.reduce((teamSum, player) => {
+    const value = entries.reduce((sum, [attribute, weight]) => sum + player.attributes[attribute] * weight, 0) / totalWeight;
+    return teamSum + value;
+  }, 0) / players.length;
+};
+
+const getTopWeightedAverage = (
+  players: Player[],
+  positions: PlayerPosition[],
+  topN: number,
+  weights: Partial<Record<keyof Player['attributes'], number>>
+): number => getWeightedPlayerAverage(getTopPlayersByPosition(players, positions, topN), weights);
+
+const getAverageCondition = (players: Player[]): number => {
+  if (players.length === 0) return 80;
+  return players.reduce((sum, player) => sum + (player.condition ?? 80), 0) / players.length;
+};
+
+const pickPreMatchMarking = ({
+  ownPlayers,
+  userPlayers,
+  opponentReport,
+  coachScore,
+  seed,
+}: {
+  ownPlayers: Player[];
+  userPlayers: Player[];
+  opponentReport?: AiOpponentMatchReport;
+  coachScore: number;
+  seed: number;
+}): InstructionMarking => {
+  const blockPlayers = getTopPlayersByPosition(ownPlayers, [PlayerPosition.DEF, PlayerPosition.MID], 7);
+  const manQuality = getWeightedPlayerAverage(blockPlayers, {
+    defending: 0.30,
+    positioning: 0.24,
+    pace: 0.18,
+    mentality: 0.10,
+    strength: 0.10,
+    stamina: 0.08,
+  });
+  const zoneQuality = getWeightedPlayerAverage(blockPlayers, {
+    positioning: 0.34,
+    defending: 0.26,
+    mentality: 0.16,
+    workRate: 0.12,
+    stamina: 0.08,
+    pace: 0.04,
+  });
+  const blockCondition = getAverageCondition(blockPlayers);
+  const userDuelThreat = getTopWeightedAverage(userPlayers, [PlayerPosition.FWD, PlayerPosition.MID], 6, {
+    pace: 0.22,
+    dribbling: 0.18,
+    attacking: 0.18,
+    technique: 0.16,
+    positioning: 0.12,
+    finishing: 0.10,
+    strength: 0.04,
+  });
+  const userCreativeThreat = getTopWeightedAverage(userPlayers, [PlayerPosition.MID, PlayerPosition.FWD], 6, {
+    passing: 0.22,
+    vision: 0.20,
+    technique: 0.18,
+    positioning: 0.14,
+    attacking: 0.14,
+    pace: 0.08,
+    dribbling: 0.04,
+  });
+  const reportAttack = opponentReport?.perceivedLineStrengths.attack ?? userDuelThreat;
+  const reportBlend = opponentReport ? opponentReport.confidence * 0.35 : 0;
+  const perceivedDuelThreat = userDuelThreat * (1 - reportBlend) + reportAttack * reportBlend;
+  const perceivedCreativeThreat = userCreativeThreat * (1 - reportBlend) + reportAttack * reportBlend;
+  const reportStyle = opponentReport?.predictedStyle ?? 'BALANCED';
+  const reportApproach = opponentReport?.recommendedApproach ?? 'CONTROL';
+  const tiredBlockPenalty = blockCondition < 72 ? (72 - blockCondition) * 0.22 : 0;
+  const manStyleFit =
+    (reportStyle === 'OFFENSIVE' ? 1.2 : reportStyle === 'DEFENSIVE' ? -0.8 : 0) +
+    (reportApproach === 'COUNTER' || reportApproach === 'LOW_BLOCK' ? 0.7 : 0) +
+    (reportApproach === 'PRESS' ? -0.5 : 0);
+  const zoneStyleFit =
+    (reportStyle === 'OFFENSIVE' ? 0.8 : reportStyle === 'DEFENSIVE' ? 0.2 : 0) +
+    (reportApproach === 'PRESS' || reportApproach === 'CONTROL' ? 0.7 : 0) +
+    (reportApproach === 'DIRECT' ? -0.5 : 0);
+  const manEdge = manQuality - perceivedDuelThreat + manStyleFit - tiredBlockPenalty;
+  const zoneEdge = zoneQuality - perceivedCreativeThreat + zoneStyleFit - tiredBlockPenalty * 0.5;
+  const confidence = opponentReport?.confidence ?? 0.35;
+  const baseReadChance = Math.max(0.06, Math.min(0.88, 0.08 + coachScore * 0.48 + confidence * 0.24));
+
+  if (manEdge >= 3.0 && blockCondition >= 66) {
+    const chance = Math.max(0.08, Math.min(0.78, baseReadChance + Math.max(0, manEdge - 3) * 0.025));
+    if (seededRng(seed, 0, 305) < chance) return 'MAN';
+  }
+  if (zoneEdge >= 2.0) {
+    const chance = Math.max(0.06, Math.min(0.68, baseReadChance * 0.85 + Math.max(0, zoneEdge - 2) * 0.018));
+    if (seededRng(seed, 0, 306) < chance) return 'ZONE';
+  }
+  if (coachScore < 0.42 && seededRng(seed, 0, 307) < 0.05) {
+    return seededRng(seed, 0, 308) < 0.5 ? 'MAN' : 'ZONE';
+  }
+  return 'NONE';
+};
+
+const pickInMatchMarking = ({
+  coachScore,
+  seed,
+  minute,
+  aiScoreDiff,
+  aiAvgFatigue,
+  aiLowestFatigue,
+  paceGap,
+  techGap,
+  userMindset,
+  userTempo,
+  userTacticAttackBias,
+  aiTacticDefenseBias,
+}: {
+  coachScore: number;
+  seed: number;
+  minute: number;
+  aiScoreDiff: number;
+  aiAvgFatigue: number;
+  aiLowestFatigue: number;
+  paceGap: number;
+  techGap: number;
+  userMindset: InstructionMindset;
+  userTempo: InstructionTempo;
+  userTacticAttackBias: number;
+  aiTacticDefenseBias: number;
+}): InstructionMarking => {
+  if (aiAvgFatigue < 62 || aiLowestFatigue < 43) return 'NONE';
+
+  const userPushes = userMindset === 'OFFENSIVE' || userTempo === 'FAST' || userTacticAttackBias >= 64;
+  const canMatchDuels = paceGap >= 3 && techGap >= -4;
+  const wantsProtectiveShape = aiScoreDiff > 0 || aiTacticDefenseBias >= 62;
+  const readChance = Math.max(0.04, Math.min(0.72, 0.06 + coachScore * 0.42 + (userPushes ? 0.10 : 0)));
+
+  if (userPushes && canMatchDuels && seededRng(seed, minute, 607) < readChance) return 'MAN';
+  if ((wantsProtectiveShape || userPushes) && seededRng(seed, minute, 608) < readChance * 0.85) return 'ZONE';
+  if (coachScore < 0.42 && userPushes && seededRng(seed, minute, 609) < 0.04) return 'MAN';
+  return 'NONE';
 };
 
 const getStakesWeight = (stakes?: InMatchDecisionContext['aiStakes']): number => {
@@ -252,6 +412,13 @@ export const AiCoachTacticsService = {
       const opts: InstructionPassing[] = ['SHORT', 'MIXED', 'LONG'];
       prePassing = opts[Math.floor(seededRng(seed, 0, 304) * 3)];
     }
+    const preMarking = pickPreMatchMarking({
+      ownPlayers,
+      userPlayers,
+      opponentReport,
+      coachScore: preCoachScore,
+      seed,
+    });
     console.log(
       `[AI PRE] ${ownClub.name} | pace gap=${prePaceGap.toFixed(1)} tech gap=${preTechGap.toFixed(1)} ` +
       `heading gap=${preHeadingGap.toFixed(1)} agg gap=${preAggGap.toFixed(1)} ` +
@@ -263,6 +430,7 @@ export const AiCoachTacticsService = {
       pressing: wantsPressing ? 'PRESSING' : 'NORMAL',
       counterAttack: wantsCounter ? 'COUNTER' : 'NORMAL',
       passing: prePassing,
+      marking: preMarking,
     };
   },
 
@@ -305,7 +473,7 @@ export const AiCoachTacticsService = {
         passing = opts[Math.floor(seededRng(seed, minute, 704) * 3)];
       }
       const base = enforceConsistency(mindset, tempo, 'NORMAL');
-      return { ...base, pressing: 'NORMAL', counterAttack: 'COUNTER', passing };
+      return { ...base, pressing: 'NORMAL', counterAttack: 'COUNTER', passing, marking: mindset === 'DEFENSIVE' ? 'ZONE' : 'NONE' };
     }
 
     const isSecondHalfDecisionWindow = minute >= 46 && minute <= 75;
@@ -347,6 +515,20 @@ export const AiCoachTacticsService = {
     const coachScore = (experience * 0.55 + decisionMaking * 0.45) / 100;
     const coachAccuracy = 0.35 + coachScore * 0.50;
     const passingForExploit = pickInMatchPassing(seed, minute, coachAccuracy, paceGap, techGap, 601, 602);
+    const markingForDecision = pickInMatchMarking({
+      coachScore,
+      seed,
+      minute,
+      aiScoreDiff,
+      aiAvgFatigue,
+      aiLowestFatigue,
+      paceGap,
+      techGap,
+      userMindset,
+      userTempo,
+      userTacticAttackBias,
+      aiTacticDefenseBias,
+    });
 
     // AI Exploit Window scoring:
     // This block lets the AI identify and temporarily attack a player mistake instead of
@@ -410,6 +592,7 @@ export const AiCoachTacticsService = {
         pressing: aiAvgFatigue > 66 && coachScore >= 0.55 ? 'PRESSING' : 'NORMAL',
         counterAttack: 'NORMAL',
         passing: passingForExploit,
+        marking: markingForDecision,
         exploitUntilMinute: Math.min(90, minute + duration),
       };
     }
@@ -441,7 +624,7 @@ export const AiCoachTacticsService = {
     // Priorytet 1: Gol kontaktowy przy wyniku -1 → impuls
     const recentContactGoal = lastGoalBoostMinute >= 0 && (minute - lastGoalBoostMinute) < 10 && aiScoreDiff === -1;
     if (recentContactGoal) {
-      return enforceConsistency('OFFENSIVE', 'FAST', 'NORMAL');
+      return { ...enforceConsistency('OFFENSIVE', 'FAST', 'NORMAL'), marking: markingForDecision };
     }
 
     // Priorytet 1b: zarządzanie drugą połową do około 75 minuty.
@@ -644,6 +827,6 @@ export const AiCoachTacticsService = {
       `acc=${coachAccuracy.toFixed(2)} → ${passing} | mindset=${mindset} tempo=${tempo}`
     );
 
-    return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack, passing };
+    return { ...enforceConsistency(mindset, tempo, intensity), pressing, counterAttack, passing, marking: markingForDecision };
   },
 };

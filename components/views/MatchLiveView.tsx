@@ -3169,12 +3169,14 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               decision.tempo !== prev.aiActiveShout?.tempo ||
               decision.intensity !== prev.aiActiveShout?.intensity ||
               decision.pressing !== prev.aiActiveShout?.pressing ||
-              decision.counterAttack !== prev.aiActiveShout?.counterAttack;
+              decision.counterAttack !== prev.aiActiveShout?.counterAttack ||
+              decision.marking !== prev.aiActiveShout?.marking;
             const decisiveInstruction =
               decision.mindset === 'OFFENSIVE' ||
               decision.mindset === 'DEFENSIVE' ||
               decision.pressing === 'PRESSING' ||
-              decision.counterAttack === 'COUNTER';
+              decision.counterAttack === 'COUNTER' ||
+              (decision.marking !== undefined && decision.marking !== 'NONE');
             aiInstructionDecisionTrigger = instructionShifted && decisiveInstruction && nextMinute >= 60;
           }
           const coachReadiness = ((aiCoach?.attributes.decisionMaking ?? 50) + (aiCoach?.attributes.experience ?? 50)) / 2;
