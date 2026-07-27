@@ -300,10 +300,13 @@ const boardConfidence = useMemo(() => {
         // ── Superpuchar Polski ───────────────────────────────────────────────
         case EventKind.MATCH_SUPER_CUP:
           return {
-            text: 'SUPERPUCHAR POLSKI ✨',
-            action: () => navigateTo(ViewState.PRE_MATCH_CUP_STUDIO),
+            text: lineupValidation.valid ? 'SUPERPUCHAR POLSKI ✨' : 'BŁĄD SKŁADU ⚠️',
+            action: () => lineupValidation.valid
+              ? navigateTo(ViewState.PRE_MATCH_CUP_STUDIO)
+              : navigateTo(ViewState.SQUAD_VIEW),
             isMatch: true,
             disabled: isJumping,
+            error: lineupValidation.valid ? null : lineupValidation.error,
           };
 
         // ── Puchar Polski — mecz ─────────────────────────────────────────────
